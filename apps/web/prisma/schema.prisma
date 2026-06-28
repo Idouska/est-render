@@ -1,0 +1,198 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  plan      String   @default("FREE")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users           User[]
+  customers       Customer[]
+  tickets         Ticket[]
+  integrations    Integration[]
+  cannedResponses CannedResponse[]
+  tags            Tag[]
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String
+  role      String   @default("AGENT")
+  tenantId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  assignedTickets Ticket[] @relation("AssignedAgent")
+  messages        Message[]
+
+  @@index([tenantId])
+}
+
+model Customer {
+  id         String   @id @default(cuid())
+  email      String
+  firstName  String?
+  lastName   String?
+  phone      String?
+  tenantId   String
+  externalId String?
+  platform   String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tickets Ticket[]
+  orders  Order[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+}
+
+model Order {
+  id          String   @id @default(cuid())
+  externalId  String
+  orderNumber String
+  status      String
+  total       Float
+  currency    String   @default("EUR")
+  customerId  String
+  tenantId    String
+  platform    String
+  platformUrl String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  customer Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  items    OrderItem[]
+  tickets  Ticket[]
+
+  @@unique([tenantId, externalId, platform])
+  @@index([tenantId])
+  @@index([customerId])
+}
+
+model OrderItem {
+  id       String  @id @default(cuid())
+  orderId  String
+  name     String
+  sku      String?
+  quantity Int
+  price    Float
+  imageUrl String?
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model Ticket {
+  id         String    @id @default(cuid())
+  subject    String
+  status     String    @default("OPEN")
+  priority   String    @default("NORMAL")
+  category   String?
+  tenantId   String
+  customerId String
+  orderId    String?
+  agentId    String?
+  resolvedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer Customer  @relation(fields: [customerId], references: [id])
+  order    Order?    @relation(fields: [orderId], references: [id])
+  agent    User?     @relation("AssignedAgent", fields: [agentId], references: [id])
+  messages Message[]
+  tags     TicketTag[]
+
+  @@index([tenantId])
+  @@index([customerId])
+  @@index([status])
+}
+
+model Message {
+  id          String   @id @default(cuid())
+  content     String
+  type        String   @default("REPLY")
+  isPublic    Boolean  @default(true)
+  ticketId    String
+  authorId    String?
+  senderName  String?
+  senderEmail String?
+  createdAt   DateTime @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author User?  @relation(fields: [authorId], references: [id])
+
+  @@index([ticketId])
+}
+
+model Integration {
+  id         String    @id @default(cuid())
+  platform   String
+  status     String    @default("PENDING")
+  shopDomain String?
+  storeUrl   String?
+  accessToken String?
+  consumerKey    String?
+  consumerSecret String?
+  webhookSecret  String?
+  tenantId   String
+  lastSyncAt DateTime?
+  syncedOrders    Int @default(0)
+  syncedCustomers Int @default(0)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, platform])
+  @@index([tenantId])
+}
+
+model CannedResponse {
+  id        String   @id @default(cuid())
+  title     String
+  content   String
+  category  String?
+  tenantId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+model Tag {
+  id       String      @id @default(cuid())
+  name     String
+  color    String      @default("#6366f1")
+  tenantId String
+
+  tenant  Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tickets TicketTag[]
+
+  @@unique([tenantId, name])
+}
+
+model TicketTag {
+  ticketId String
+  tagId    String
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([ticketId, tagId])
+}
