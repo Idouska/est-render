@@ -1,0 +1,162 @@
+import type { Intent } from '@prisma/client';
+import type { OrderSummary } from '../shopify/orders.ts';
+import { anthropic, MODEL, textFromResponse } from './client.ts';
+
+export interface DraftGeneration {
+  body: string;
+  confidence: number;
+  /** Pourquoi ce niveau de confiance — affiché à l'agent dans le dashboard. */
+  reasoning: string;
+  /** L'IA estime qu'une intervention humaine est nécessaire avant envoi. */
+  needsHuman: boolean;
+}
+
+export interface GenerationContext {
+  merchantName: string;
+  intent: Intent;
+  customerName: string | null;
+  subject: string | null;
+  /** Fil du mail, du plus ancien au plus récent. */
+  thread: Array<{ role: 'customer' | 'merchant'; text: string; at: Date }>;
+  order: OrderSummary | null;
+  /** Renseigné quand plusieurs commandes correspondent au client. */
+  ambiguousOrders?: OrderSummary[];
+}
+
+const SYSTEM_PROMPT = `Tu rédiges des réponses de service après-vente pour une boutique en ligne.
+Tu écris à la place de l'équipe SAV ; un humain relit avant envoi.
+
+Style : français, vouvoiement, chaleureux mais bref. Pas de formule creuse
+("Nous comprenons votre frustration"), pas d'emoji, pas de titre ni de puce
+sauf si le contenu l'exige vraiment. Trois à six phrases suffisent presque
+toujours.
+
+Contraintes absolues :
+- N'affirme que ce qui figure dans les données de commande fournies. Aucun
+  numéro de suivi, aucune date de livraison, aucun montant inventé.
+- Ne promets ni remboursement, ni geste commercial, ni délai que tu ne peux
+  vérifier. Tu peux dire qu'un collègue revient vers le client.
+- Si aucune commande n'est rattachée, ou si plusieurs correspondent, demande
+  au client une précision (numéro de commande ou email utilisé à l'achat) au
+  lieu de supposer laquelle.
+- Signe du nom de la boutique, sans inventer de prénom d'agent.
+
+Réponds en JSON, sans texte autour.`;
+
+const SCHEMA = {
+  type: 'object',
+  properties: {
+    body: {
+      type: 'string',
+      description: 'Le corps du mail, texte brut, prêt à envoyer.',
+    },
+    confidence: {
+      type: 'number',
+      description:
+        'Ta confiance dans le fait que cette réponse peut partir telle quelle, entre 0 et 1.',
+    },
+    reasoning: {
+      type: 'string',
+      description: 'Une phrase expliquant ce qui limite ou soutient ta confiance.',
+    },
+    needsHuman: { type: 'boolean' },
+  },
+  required: ['body', 'confidence', 'reasoning', 'needsHuman'],
+  additionalProperties: false,
+} as const;
+
+function formatOrder(order: OrderSummary): string {
+  const lines = [
+    `Commande ${order.name} passée le ${order.createdAt}`,
+    `Montant : ${order.totalPrice} ${order.currency}`,
+    `Statut paiement : ${order.displayFinancialStatus ?? 'inconnu'}`,
+    `Statut préparation : ${order.displayFulfillmentStatus ?? 'inconnu'}`,
+    `Articles : ${order.lineItems
+      .map((item) => `${item.quantity} × ${item.title}${item.variantTitle ? ` (${item.variantTitle})` : ''}`)
+      .join(', ')}`,
+  ];
+
+  if (order.fulfillments.length === 0) {
+    lines.push('Livraison : aucun envoi enregistré pour le moment.');
+  } else {
+    for (const f of order.fulfillments) {
+      lines.push(
+        `Livraison : ${f.trackingCompany ?? 'transporteur non précisé'}` +
+          `${f.trackingNumber ? `, suivi ${f.trackingNumber}` : ', sans numéro de suivi'}` +
+          `, statut ${f.status}` +
+          `${f.estimatedDeliveryAt ? `, livraison estimée ${f.estimatedDeliveryAt}` : ''}` +
+          `${f.trackingUrl ? `, lien ${f.trackingUrl}` : ''}`,
+      );
+    }
+  }
+
+  if (order.customer) {
+    lines.push(
+      `Client : ${order.customer.displayName ?? 'inconnu'}, ` +
+        `${order.customer.numberOfOrders ?? 0} commande(s), ` +
+        `${order.customer.amountSpent ?? '0'} ${order.currency} dépensés, ` +
+        `client depuis ${order.customer.createdAt ?? 'date inconnue'}`,
+    );
+  }
+
+  return lines.join('\n');
+}
+
+function buildContextBlock(context: GenerationContext): string {
+  const parts = [`Boutique : ${context.merchantName}`, `Intention détectée : ${context.intent}`];
+
+  if (context.order) {
+    parts.push(`\n--- Données de commande (source de vérité) ---\n${formatOrder(context.order)}`);
+  } else if (context.ambiguousOrders?.length) {
+    parts.push(
+      `\n--- Plusieurs commandes correspondent à ce client, aucune n'est certaine ---\n` +
+        context.ambiguousOrders
+          .map((o) => `${o.name} du ${o.createdAt}, ${o.totalPrice} ${o.currency}`)
+          .join('\n') +
+        `\nDemande au client de préciser laquelle. Ne choisis pas à sa place.`,
+    );
+  } else {
+    parts.push(
+      `\n--- Aucune commande rattachée ---\n` +
+        `Demande au client son numéro de commande ou l'adresse email utilisée lors de l'achat.`,
+    );
+  }
+
+  const thread = context.thread
+    .map((m) => `[${m.role === 'customer' ? 'Client' : 'Boutique'}] ${m.text}`)
+    .join('\n\n');
+
+  parts.push(`\n--- Fil du mail ---\nObjet : ${context.subject ?? '(sans objet)'}\n\n${thread}`);
+
+  return parts.join('\n');
+}
+
+export async function generateReply(context: GenerationContext): Promise<DraftGeneration> {
+  const response = await anthropic.messages.create({
+    model: MODEL,
+    max_tokens: 2048,
+    system: SYSTEM_PROMPT,
+    output_config: {
+      effort: 'medium',
+      format: { type: 'json_schema', schema: SCHEMA },
+    },
+    messages: [{ role: 'user', content: buildContextBlock(context) }],
+  });
+
+  if (response.stop_reason === 'refusal') {
+    throw new Error('Génération refusée par le modèle');
+  }
+
+  const parsed = JSON.parse(textFromResponse(response.content)) as DraftGeneration;
+
+  // Garde-fou : sans commande rattachée, aucune réponse ne peut être
+  // considérée comme sûre, quoi qu'en dise le modèle.
+  const hasOrder = context.order !== null;
+  const confidence = Math.max(0, Math.min(1, parsed.confidence));
+
+  return {
+    ...parsed,
+    confidence: hasOrder ? confidence : Math.min(confidence, 0.5),
+    needsHuman: parsed.needsHuman || !hasOrder,
+  };
+}

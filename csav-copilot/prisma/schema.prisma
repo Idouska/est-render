@@ -1,0 +1,301 @@
+// cSAV Copilot — schéma multi-tenant.
+//
+// Règle d'or : toute table métier porte `merchantId` et toute requête applicative
+// filtre dessus. Aucune requête ne doit traverser deux marchands.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Tenant
+// ---------------------------------------------------------------------------
+
+model Merchant {
+  id         String         @id @default(cuid())
+  shopDomain String         @unique // ex. ma-boutique.myshopify.com
+  name       String?
+  status     MerchantStatus @default(ACTIVE)
+
+  // Seuil de confiance à partir duquel une réponse peut partir sans validation.
+  // autoSendEnabled reste false en phase 1 : on ne produit que des brouillons.
+  autoSendEnabled   Boolean @default(false)
+  autoSendThreshold Float   @default(0.9)
+
+  // Base légale RGPD : durée de conservation des mails ingérés, en jours.
+  retentionDays Int @default(365)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  shopify   ShopifyConnection?
+  gmail     GmailConnection?
+  users     User[]
+  tickets   Ticket[]
+  refunds   Refund[]
+  auditLogs AuditLog[]
+}
+
+enum MerchantStatus {
+  ACTIVE
+  SUSPENDED
+  UNINSTALLED
+}
+
+// Multi-utilisateurs prévu dès le schéma (fonctionnalité post-MVP),
+// mais un seul utilisateur par marchand en pratique au départ.
+model User {
+  id         String   @id @default(cuid())
+  merchantId String
+  email      String
+  name       String?
+  role       UserRole @default(AGENT)
+  createdAt  DateTime @default(now())
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@unique([merchantId, email])
+  @@index([merchantId])
+}
+
+enum UserRole {
+  OWNER
+  AGENT
+}
+
+// ---------------------------------------------------------------------------
+// Connexions OAuth (tokens chiffrés au repos, jamais en clair en base)
+// ---------------------------------------------------------------------------
+
+model ShopifyConnection {
+  id             String    @id @default(cuid())
+  merchantId     String    @unique
+  accessTokenEnc String // AES-256-GCM, cf. src/lib/crypto.ts
+  scopes         String
+  installedAt    DateTime  @default(now())
+  uninstalledAt  DateTime?
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+}
+
+model GmailConnection {
+  id           String @id @default(cuid())
+  merchantId   String @unique
+  emailAddress String
+
+  refreshTokenEnc      String
+  accessTokenEnc       String?
+  accessTokenExpiresAt DateTime?
+
+  // Curseur d'ingestion incrémentale (Gmail History API).
+  lastHistoryId   String?
+  watchExpiration DateTime? // le watch Gmail expire après 7 jours, à renouveler
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------------------------
+// SAV
+// ---------------------------------------------------------------------------
+
+model Ticket {
+  id            String @id @default(cuid())
+  merchantId    String
+  gmailThreadId String
+
+  subject       String?
+  customerEmail String
+  customerName  String?
+
+  intent           Intent?
+  intentConfidence Float?
+  status           TicketStatus @default(NEW)
+
+  // Rattachement à la commande Shopify. Aucune valeur ici tant que
+  // l'association n'est pas fiable — on ne devine jamais silencieusement.
+  shopifyOrderId    String? // GID Shopify, ex. gid://shopify/Order/123
+  orderName         String? // ex. #1042
+  orderMatchMethod  OrderMatchMethod?
+  orderMatchScore   Float?
+
+  lastMessageAt DateTime
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  merchant Merchant  @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  messages Message[]
+  drafts   Draft[]
+  refunds  Refund[]
+
+  @@unique([merchantId, gmailThreadId])
+  @@index([merchantId, status])
+  @@index([merchantId, lastMessageAt])
+}
+
+enum Intent {
+  WISMO // où est ma commande
+  RETURN
+  DISPUTE
+  REFUND
+  PRODUCT_QUESTION
+  POSITIVE
+  OTHER
+}
+
+enum TicketStatus {
+  NEW           // ingéré, pas encore traité
+  PROCESSING    // en cours de traitement par un worker
+  DRAFT_READY   // brouillon Gmail créé, en attente de validation
+  NEEDS_REVIEW  // ambiguïté (commande non identifiée, intention peu sûre)
+  AUTO_SENT     // envoyé automatiquement (phase 3)
+  CLOSED
+  FAILED
+}
+
+enum OrderMatchMethod {
+  ORDER_NUMBER_IN_BODY
+  CUSTOMER_EMAIL
+  NAME_AND_RECENT_DATE
+  MANUAL
+}
+
+model Message {
+  id             String           @id @default(cuid())
+  merchantId     String
+  ticketId       String
+  gmailMessageId String
+  direction      MessageDirection
+
+  fromEmail String
+  toEmail   String?
+  subject   String?
+  bodyText  String  @db.Text
+  snippet   String?
+
+  receivedAt DateTime
+  createdAt  DateTime @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  // Idempotence de l'ingestion : Pub/Sub garantit at-least-once.
+  @@unique([merchantId, gmailMessageId])
+  @@index([ticketId, receivedAt])
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+model Draft {
+  id           String  @id @default(cuid())
+  merchantId   String
+  ticketId     String
+  gmailDraftId String?
+
+  body       String      @db.Text
+  model      String
+  confidence Float
+  reasoning  String?     @db.Text
+  status     DraftStatus @default(PENDING_REVIEW)
+  createdBy  DraftAuthor @default(AI)
+
+  createdAt DateTime  @default(now())
+  sentAt    DateTime?
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId, status])
+  @@index([ticketId])
+}
+
+enum DraftStatus {
+  PENDING_REVIEW
+  EDITED
+  SENT
+  DISCARDED
+}
+
+enum DraftAuthor {
+  AI
+  HUMAN
+}
+
+// ---------------------------------------------------------------------------
+// Remboursements — action financière irréversible : traçabilité obligatoire
+// ---------------------------------------------------------------------------
+
+model Refund {
+  id         String @id @default(cuid())
+  merchantId String
+  ticketId   String?
+
+  shopifyOrderId  String
+  shopifyRefundId String?
+  amount          Decimal      @db.Decimal(12, 2)
+  currency        String
+  reason          String
+  kind            RefundKind
+  status          RefundStatus @default(PENDING)
+  errorMessage    String?
+
+  // Qui a cliqué. Jamais l'IA : le remboursement est toujours humain.
+  requestedByUserId String
+
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  ticket   Ticket?  @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+
+  @@index([merchantId, createdAt])
+}
+
+enum RefundKind {
+  FULL
+  PARTIAL
+}
+
+enum RefundStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+// ---------------------------------------------------------------------------
+// Journal d'audit — append-only, jamais modifié ni supprimé par l'application
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id         String @id @default(cuid())
+  merchantId String
+
+  actorType  ActorType
+  actorId    String? // userId, ou identifiant du worker
+  action     String // ex. refund.created, draft.sent, gmail.disconnected
+  targetType String? // ex. Refund, Ticket
+  targetId   String?
+  metadata   Json?
+  ipAddress  String?
+
+  createdAt DateTime @default(now())
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId, createdAt])
+  @@index([merchantId, action])
+}
+
+enum ActorType {
+  USER
+  SYSTEM
+  AI
+}

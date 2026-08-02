@@ -1,0 +1,39 @@
+{
+  "name": "csav-copilot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SAV automatisé pour marchands Shopify : ingestion Gmail, classification et rédaction par l'API Claude.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev:api": "node --watch --experimental-strip-types src/index.ts",
+    "dev:worker": "node --watch --experimental-strip-types src/worker.ts",
+    "start:api": "node dist/index.js",
+    "start:worker": "node dist/worker.js",
+    "test": "node --experimental-strip-types --test tests/**/*.test.ts",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.115.0",
+    "@fastify/cookie": "^11.0.2",
+    "@prisma/client": "^6.2.1",
+    "bullmq": "^5.34.6",
+    "fastify": "^5.2.1",
+    "google-auth-library": "^9.15.0",
+    "googleapis": "^144.0.0",
+    "ioredis": "^5.4.2",
+    "pino": "^9.6.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "prisma": "^6.2.1",
+    "typescript": "^5.7.3"
+  }
+}
