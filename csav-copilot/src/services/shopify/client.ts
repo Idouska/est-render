@@ -3,13 +3,17 @@ import { decryptSecret } from '../../lib/crypto.ts';
 import { prisma } from '../../lib/prisma.ts';
 
 export class ShopifyError extends Error {
-  constructor(
-    message: string,
-    readonly status?: number,
-    readonly details?: unknown,
-  ) {
+  // Champs déclarés explicitement : la syntaxe raccourcie de TypeScript
+  // (propriétés de constructeur) n'est pas comprise par `node --strip-types`,
+  // et on veut pouvoir exécuter les sources sans étape de compilation.
+  readonly status: number | undefined;
+  readonly details: unknown;
+
+  constructor(message: string, status?: number, details?: unknown) {
     super(message);
     this.name = 'ShopifyError';
+    this.status = status;
+    this.details = details;
   }
 }
 
@@ -27,6 +31,15 @@ export async function getShopifyClient(merchantId: string): Promise<ShopifyClien
     where: { merchantId },
     include: { merchant: { select: { shopDomain: true } } },
   });
+
+  if (env.SHOPIFY_MOCK) {
+    const { createMockShopifyClient } = await import('./mock.ts');
+    const merchant = await prisma.merchant.findUnique({
+      where: { id: merchantId },
+      select: { shopDomain: true },
+    });
+    return createMockShopifyClient(merchant?.shopDomain ?? 'boutique-fictive.myshopify.com');
+  }
 
   if (!connection || connection.uninstalledAt) {
     throw new ShopifyError(`Aucune connexion Shopify active pour le marchand ${merchantId}`);

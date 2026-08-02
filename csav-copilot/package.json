@@ -10,18 +10,21 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "dev:api": "node --watch --experimental-strip-types src/index.ts",
-    "dev:worker": "node --watch --experimental-strip-types src/worker.ts",
-    "start:api": "node dist/index.js",
-    "start:worker": "node dist/worker.js",
+    "dev:api": "node --watch --experimental-strip-types --env-file-if-exists=.env src/index.ts",
+    "dev:worker": "node --watch --experimental-strip-types --env-file-if-exists=.env src/worker.ts",
+    "start:api": "node --env-file-if-exists=.env dist/index.js",
+    "start:worker": "node --env-file-if-exists=.env dist/worker.js",
     "test": "node --experimental-strip-types --test tests/**/*.test.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
-    "db:deploy": "prisma migrate deploy"
+    "db:deploy": "prisma migrate deploy",
+    "db:seed": "node --experimental-strip-types --env-file-if-exists=.env prisma/seed.ts",
+    "db:reset": "prisma migrate reset --force && npm run db:seed"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
     "@fastify/cookie": "^11.0.2",
+    "@fastify/static": "^8.3.0",
     "@prisma/client": "^6.2.1",
     "bullmq": "^5.34.6",
     "fastify": "^5.2.1",

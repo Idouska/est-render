@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>cSAV Copilot</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%230b5e6b'/%3E%3Cpath d='M3 5.5h10v6H3z' fill='none' stroke='%23fff' stroke-width='1.2'/%3E%3Cpath d='M3 5.8l5 3.4 5-3.4' fill='none' stroke='%23fff' stroke-width='1.2'/%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div id="gate" class="gate" hidden>
+      <h1>Session expirée</h1>
+      <p id="gate-text">Connectez-vous pour accéder au SAV.</p>
+      <a class="btn btn-primary" href="/dev/login">Ouvrir une session de développement</a>
+    </div>
+
+    <div class="shell" id="app" hidden>
+      <header class="topbar">
+        <div class="brand">
+          <strong id="merchant-name">cSAV Copilot</strong>
+          <span id="merchant-shop"></span>
+        </div>
+        <div class="conn" id="conn"></div>
+      </header>
+
+      <div class="notice" id="mock-notice" hidden>
+        <span class="notice-mark">Simulation</span>
+        <div>
+          <b>Données fictives.</b>
+          Shopify et Gmail sont simulés (<code>SHOPIFY_MOCK</code> /
+          <code>GMAIL_MOCK</code>). Aucun mail n'est lu ni envoyé, aucun remboursement
+          n'est réellement exécuté. Tout le reste — file, rattachement, brouillons,
+          journal d'audit — passe par la vraie base de données.
+        </div>
+      </div>
+
+      <section class="kpis" aria-label="Indicateurs des 30 derniers jours">
+        <div class="kpi">
+          <span class="kpi-label">Traités · 30 jours</span>
+          <span class="kpi-value" id="kpi-done">—</span>
+          <span class="kpi-note">réponses envoyées</span>
+        </div>
+        <div class="kpi">
+          <span class="kpi-label">En attente de vous</span>
+          <span class="kpi-value" id="kpi-pending">—</span>
+          <span class="kpi-note" id="kpi-pending-note">brouillons à relire</span>
+        </div>
+        <div class="kpi">
+          <span class="kpi-label">Taux d'automatisation</span>
+          <span class="kpi-value" id="kpi-rate">—</span>
+          <span class="kpi-note">brouillons effectivement envoyés</span>
+        </div>
+        <div class="kpi">
+          <span class="kpi-label">Envoi automatique</span>
+          <span class="kpi-value" id="kpi-auto">—</span>
+          <span class="kpi-note" id="kpi-auto-note"></span>
+        </div>
+      </section>
+
+      <main class="workspace">
+        <section class="panel" aria-label="File de tickets">
+          <div class="filters" id="filters">
+            <button class="chip" data-filter="" aria-pressed="true">Tous</button>
+            <button class="chip" data-filter="DRAFT_READY" aria-pressed="false">Brouillon prêt</button>
+            <button class="chip" data-filter="NEEDS_REVIEW" aria-pressed="false">À valider</button>
+            <button class="chip" data-filter="NEW" aria-pressed="false">Nouveaux</button>
+            <button class="chip" data-filter="CLOSED" aria-pressed="false">Clos</button>
+          </div>
+          <ul class="queue-list" id="queue">
+            <li class="empty" style="padding: 16px 14px">Chargement…</li>
+          </ul>
+        </section>
+
+        <section class="panel" aria-label="Détail du ticket">
+          <div class="thread-head">
+            <h1 class="thread-subject" id="d-subject">Sélectionnez un ticket</h1>
+            <div class="thread-meta" id="d-meta"></div>
+          </div>
+          <div class="messages" id="d-messages"></div>
+          <div class="draft" id="draft-zone" hidden>
+            <div class="draft-bar">
+              <span class="panel-title">Brouillon proposé</span>
+              <span class="conf">
+                confiance
+                <span class="conf-track"><span class="conf-fill" id="d-conf-fill"></span></span>
+                <span class="conf-num" id="d-conf-num">—</span>
+              </span>
+            </div>
+            <textarea id="d-body" aria-label="Corps du brouillon"></textarea>
+            <p class="reasoning"><span>Pourquoi</span><span id="d-reason"></span></p>
+            <div class="actions">
+              <button class="btn btn-primary" id="btn-send">Envoyer la réponse</button>
+              <button class="btn" id="btn-save">Enregistrer les modifications</button>
+              <button class="btn btn-danger" id="btn-refund">Rembourser…</button>
+              <span class="hint">Rien ne part sans ce clic.</span>
+            </div>
+          </div>
+          <div class="draft" id="no-draft" hidden>
+            <span class="panel-title">Aucun brouillon</span>
+            <p class="empty" id="no-draft-text">
+              Ce message n'a pas appelé de réponse automatique.
+            </p>
+          </div>
+        </section>
+
+        <aside class="context">
+          <div class="panel">
+            <div class="panel-head"><span class="panel-title">Client</span></div>
+            <div class="card-body" id="c-customer">
+              <p class="empty">—</p>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><span class="panel-title">Commande</span></div>
+            <div class="card-body" id="c-order">
+              <p class="empty">—</p>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><span class="panel-title">Livraison</span></div>
+            <div class="card-body" id="c-ship">
+              <p class="empty">—</p>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><span class="panel-title">Journal d'audit</span></div>
+            <ul class="journal" id="c-audit"></ul>
+          </div>
+        </aside>
+      </main>
+    </div>
+
+    <div
+      class="backdrop"
+      id="refund-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="refund-title"
+    >
+      <div class="modal">
+        <div class="modal-head">
+          <h2 id="refund-title">Rembourser la commande <span id="r-order">—</span></h2>
+          <p>Action définitive. Elle sera consignée à votre nom dans le journal d'audit.</p>
+        </div>
+        <div class="modal-body">
+          <div class="field">
+            <label for="r-amount">Montant à rembourser</label>
+            <input type="text" id="r-amount" value="0.00" inputmode="decimal" />
+            <small>Remboursable au maximum : <span id="r-max">—</span></small>
+          </div>
+          <div class="field">
+            <label for="r-reason">Motif</label>
+            <select id="r-reason">
+              <option>Article endommagé à la réception</option>
+              <option>Colis perdu par le transporteur</option>
+              <option>Erreur de préparation</option>
+              <option>Geste commercial</option>
+              <option>Retour reçu et accepté</option>
+            </select>
+          </div>
+          <div class="warnbox">
+            <b>!</b>
+            <div>
+              Le montant sera recrédité sur le moyen de paiement d'origine. Aucun
+              remboursement n'est réversible depuis cette interface.
+            </div>
+          </div>
+          <label class="confirm">
+            <input type="checkbox" id="r-check" />
+            <span>Je confirme rembourser <b id="r-echo">0,00 €</b> à ce client.</span>
+          </label>
+        </div>
+        <div class="modal-foot">
+          <button class="btn" id="r-cancel">Annuler</button>
+          <button class="btn btn-primary" id="r-go" disabled>Rembourser</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="toast" id="toast" role="status"></div>
+
+    <script type="module" src="/static/app.js"></script>
+  </body>
+</html>

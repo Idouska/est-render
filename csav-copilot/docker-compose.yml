@@ -1,0 +1,38 @@
+# Base de données et file d'attente pour le développement local.
+#
+#   docker compose up -d
+#
+# Rien d'autre à installer : les identifiants correspondent au DATABASE_URL et
+# au REDIS_URL de .env.example.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: csav-postgres
+    environment:
+      POSTGRES_USER: csav
+      POSTGRES_PASSWORD: csav
+      POSTGRES_DB: csav
+    ports:
+      - '5432:5432'
+    volumes:
+      - csav-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U csav']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: csav-redis
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  csav-postgres:

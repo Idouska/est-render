@@ -1,13 +1,21 @@
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import cookie from '@fastify/cookie';
+import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyError } from 'fastify';
-import { env } from './config/env.ts';
+import { devMode, env } from './config/env.ts';
 import { logger } from './lib/logger.ts';
 import { prisma } from './lib/prisma.ts';
 import { googleAuthRoutes } from './routes/auth.google.ts';
 import { shopifyAuthRoutes } from './routes/auth.shopify.ts';
+import { devRoutes } from './routes/dev.ts';
 import { refundRoutes } from './routes/refunds.ts';
 import { ticketRoutes } from './routes/tickets.ts';
 import { gmailWebhookRoutes } from './routes/webhooks.gmail.ts';
+
+// `public/` est à la racine du projet, hors de `src/` : le chemin est donc le
+// même que l'on exécute les sources TypeScript ou le build dans `dist/`.
+const projectRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -41,11 +49,27 @@ export async function buildServer() {
     return { status: 'ok' };
   });
 
+  await app.register(fastifyStatic, {
+    root: join(projectRoot, 'public'),
+    prefix: '/static/',
+  });
+
+  // Le dashboard est une page unique servie par l'API : pas de second serveur
+  // à lancer, pas de CORS, pas d'étape de build.
+  app.get('/', async (request, reply) => reply.redirect('/dashboard'));
+  app.get('/dashboard', async (request, reply) =>
+    reply.type('text/html').sendFile('dashboard.html'),
+  );
+
   await app.register(shopifyAuthRoutes);
   await app.register(googleAuthRoutes);
   await app.register(gmailWebhookRoutes);
   await app.register(ticketRoutes);
   await app.register(refundRoutes);
+
+  if (devMode) {
+    await app.register(devRoutes);
+  }
 
   app.setErrorHandler((error: FastifyError, request, reply) => {
     request.log.error({ err: error }, 'Erreur non gérée');

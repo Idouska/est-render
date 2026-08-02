@@ -4,39 +4,87 @@ SAV automatisé pour marchands Shopify. L'IA lit les mails entrants, les enrichi
 avec les données de commande Shopify et prépare une réponse ; le marchand relit
 et envoie depuis un dashboard.
 
-**État : squelette Phase 1 (WISMO en brouillon).** L'ingestion, la
-classification, le rattachement de commande, la génération et la création du
-brouillon Gmail sont implémentés et vérifiés par `tsc` et les tests unitaires.
-Le dashboard React et le cron ne sont pas écrits — voir
-[docs/07-roadmap.md](docs/07-roadmap.md).
-
 Aucune réponse ne part automatiquement : la phase 1 ne produit que des
-brouillons Gmail.
+brouillons, validés par un humain.
 
-## Démarrer
+---
+
+## Voir tourner en 3 commandes
+
+Prérequis : **Node.js 22+** et **Docker** (pour la base de données).
 
 ```bash
+docker compose up -d      # PostgreSQL + Redis
 npm install
-cp .env.example .env          # puis remplir
-node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"  # ENCRYPTION_KEY
-
-npm run db:generate
-npx prisma migrate dev --name init
-
-npm run dev:api               # API + webhooks, port 3000
-npm run dev:worker            # workers d'ingestion et de traitement
+cp .env.example .env      # SHOPIFY_MOCK=1 et GMAIL_MOCK=1 sont déjà activés
 ```
 
-Vérifications :
+Générez la clé de chiffrement et collez-la dans `.env` à la ligne `ENCRYPTION_KEY=` :
 
 ```bash
-npm run typecheck
-npm test
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ```
+
+Puis :
+
+```bash
+npx prisma migrate deploy   # crée les tables
+npm run db:seed             # boutique de démonstration + 6 tickets
+npm run dev:api             # démarre l'application
+```
+
+Ouvrez **http://localhost:3000/dev/login** — le dashboard s'affiche avec une
+session de démonstration.
+
+En mode démonstration, Shopify et Gmail sont simulés : les commandes, clients et
+livraisons sont fictifs, aucun mail n'est lu ni envoyé, aucun remboursement
+n'est réellement exécuté. **Tout le reste est vrai** : la base de données, la
+file de tickets, le rattachement de commande, l'édition de brouillon, le
+journal d'audit et les garde-fous du remboursement.
+
+`npm run db:reset` remet la démonstration à zéro.
+
+### Ce qu'il faut regarder
+
+| Ticket | Ce qu'il démontre |
+|---|---|
+| **Léa Fontaine** | Cas nominal : commande identifiée par le numéro cité, suivi et ETA remontés de Shopify dans le brouillon |
+| **Julien Meyer** | Trois commandes correspondent à son adresse. L'IA refuse de choisir : elle demande une précision, et vous propose de rattacher vous-même |
+| **Amélie Rousseau** | Remboursement : bouton → modale obligatoire → confiance explicite → journal d'audit |
+| **Thomas Girard** | Un remerciement ne déclenche aucune réponse automatique |
+
+---
+
+## Passer en conditions réelles
+
+Le mode démonstration existe pour développer sans dépendances externes. Pour
+brancher une vraie boutique, il faut trois comptes et retirer les simulations :
+
+1. **Shopify Partners** — créer une app publique, récupérer `SHOPIFY_API_KEY` et
+   `SHOPIFY_API_SECRET`, déclarer l'URL de redirection `<APP_URL>/auth/shopify/callback`.
+2. **Google Cloud** — créer un projet, activer l'API Gmail, créer des
+   identifiants OAuth, créer le topic et la souscription Pub/Sub
+   (voir [docs/03-ingestion.md](docs/03-ingestion.md)).
+3. **Anthropic** — créer une clé API sur console.anthropic.com.
+
+Puis `SHOPIFY_MOCK=0`, `GMAIL_MOCK=0`, et l'installation se fait par
+`/auth/shopify?shop=votre-boutique.myshopify.com`.
+
+Il faut aussi lancer les workers (`npm run dev:worker`) : c'est eux qui
+classent les mails et rédigent. Ils ne servent à rien en mode démonstration,
+puisque aucun mail n'entre.
+
+**Délai à anticiper** : Google exige un audit de sécurité (CASA) avant
+d'autoriser une application à lire les Gmail de vrais clients — 6 à 10 semaines.
+À lancer tôt, c'est le chemin critique. Détails dans
+[docs/02-oauth.md](docs/02-oauth.md).
+
+---
 
 ## Structure
 
 ```
+public/                     dashboard (HTML/CSS/JS servis par l'API, sans build)
 src/
   config/env.ts             validation de la configuration au démarrage
   lib/                      chiffrement, session signée, audit, logger, Prisma
@@ -45,41 +93,55 @@ src/
     auth.shopify.ts         OAuth Shopify (state + HMAC)
     auth.google.ts          OAuth Google + activation du watch Gmail
     webhooks.gmail.ts       push Pub/Sub (JWT vérifié) + désinstallation Shopify
-    tickets.ts              file, détail, indicateurs, édition et envoi de brouillon
+    tickets.ts              file, détail, indicateurs, rattachement, brouillons
     refunds.ts              aperçu + remboursement confirmé
+    dev.ts                  connexion de développement (jamais en production)
   services/
     gmail/                  client, parsing, sync incrémentale, brouillons, watch
-    shopify/                client GraphQL, commandes, remboursements
+    shopify/                client GraphQL, commandes, remboursements, simulation
     ai/                     classification et rédaction (API Claude)
     matching/orderMatcher   rattachement mail ↔ commande
     tickets/                ingestion et traitement de bout en bout
   queue/                    files BullMQ
-  server.ts / index.ts      API
+  server.ts / index.ts      API + dashboard
   worker.ts                 workers
-prisma/schema.prisma        modèle multi-tenant
+prisma/                     schéma multi-tenant, migration, données de démo
 docs/                       architecture, OAuth, ingestion, IA, remboursement, RGPD, roadmap
 tests/                      logique pure : matcher, parsing Gmail, chiffrement
 ```
 
+Le dashboard est une page unique servie par l'API : pas de second serveur à
+lancer, pas d'étape de build, pas de CORS. Il consomme les mêmes endpoints
+`/api/*` qu'un futur front React, qui pourra le remplacer sans toucher au
+backend.
+
+## Vérifications
+
+```bash
+npm run typecheck
+npm test
+```
+
 ## Trois invariants
 
-Ils sont tenus par le code, pas seulement par l'interface :
+Tenus par le code, pas seulement par l'interface :
 
 1. **Isolation tenant** — le `merchantId` d'une requête vient de la session
    signée, jamais du corps ni de l'URL.
 2. **Pas de rattachement deviné** — si plusieurs commandes correspondent, ou
-   aucune, le brouillon demande une précision au client et le ticket part en
-   relecture. La confiance est plafonnée à 0.5 sans commande rattachée, quel
-   que soit l'avis du modèle.
-3. **Pas de remboursement en un clic** — deux appels, jeton de confirmation
-   signé, audit écrit avant l'appel Shopify, `requestedByUserId` obligatoire.
+   aucune, le brouillon demande une précision et le ticket part en relecture.
+   La confiance est plafonnée à 0,5 sans commande rattachée, quel que soit
+   l'avis du modèle.
+3. **Pas de remboursement en un clic** — l'aperçu délivre un jeton signé que le
+   POST exige ; l'audit est écrit avant l'appel Shopify ; `requestedByUserId`
+   est obligatoire en base.
 
-## Points de vigilance
+## Ce qui manque encore
 
-- **Vérification OAuth Google** : `gmail.readonly` et `gmail.send` sont des
-  scopes restreints. Audit CASA obligatoire avant ouverture publique, 6 à
-  10 semaines. À lancer en phase 1, c'est le chemin critique de la phase 3.
-- **Scope Shopify** : `write_refunds` n'existe pas ; le remboursement exige
-  `write_orders`, plus large. D'où le verrouillage applicatif du bouton.
-- **Watch Gmail** : expire à 7 jours, en silence. Le cron de renouvellement
-  reste à écrire — c'est le mode de panne le plus discret de l'intégration.
+Suivi dans [docs/07-roadmap.md](docs/07-roadmap.md). Les trois plus urgents :
+
+- **`src/cron.ts`** — renouvellement des watch Gmail (ils expirent à 7 jours, en
+  silence) et purge RGPD.
+- **Régénérer un brouillon** après rattachement manuel d'une commande.
+- **Webhooks `shop/redact` / `customers/redact`** — obligation Shopify pour
+  publier l'app.

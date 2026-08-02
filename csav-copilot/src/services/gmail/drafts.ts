@@ -1,3 +1,5 @@
+import { env } from '../../config/env.ts';
+import { logger } from '../../lib/logger.ts';
 import { getGmailClient } from './client.ts';
 
 function encodeHeaderValue(value: string): string {
@@ -52,6 +54,11 @@ export async function createReplyDraft(params: {
   body: string;
   inReplyToMessageId?: string | null;
 }): Promise<{ draftId: string }> {
+  if (env.GMAIL_MOCK) {
+    logger.info({ threadId: params.threadId }, 'Gmail simulé : brouillon non écrit');
+    return { draftId: `mock-draft-${Date.now()}` };
+  }
+
   const { gmail, emailAddress } = await getGmailClient(params.merchantId);
 
   const subject = params.subject.toLowerCase().startsWith('re:')
@@ -89,6 +96,8 @@ export async function updateDraftBody(params: {
   subject: string;
   body: string;
 }): Promise<void> {
+  if (env.GMAIL_MOCK) return;
+
   const { gmail, emailAddress } = await getGmailClient(params.merchantId);
 
   await gmail.users.drafts.update({
@@ -110,6 +119,11 @@ export async function updateDraftBody(params: {
 
 /** Envoie un brouillon existant. Déclenché uniquement par une action humaine. */
 export async function sendDraft(merchantId: string, draftId: string): Promise<void> {
+  if (env.GMAIL_MOCK) {
+    logger.info({ draftId }, 'Gmail simulé : aucun mail envoyé');
+    return;
+  }
+
   const { gmail } = await getGmailClient(merchantId);
   await gmail.users.drafts.send({ userId: 'me', requestBody: { id: draftId } });
 }

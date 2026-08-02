@@ -1,11 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { env } from '../config/env.ts';
 import { recordAudit } from '../lib/audit.ts';
 import { prisma } from '../lib/prisma.ts';
 import { requireSession } from '../plugins/auth.ts';
 import { sendDraft, updateDraftBody } from '../services/gmail/drafts.ts';
-import { getShopifyClient } from '../services/shopify/client.ts';
-import { getOrderById } from '../services/shopify/orders.ts';
+import { getShopifyClient, ShopifyError } from '../services/shopify/client.ts';
+import { getOrderById, quoteSearchValue, searchOrders } from '../services/shopify/orders.ts';
 
 const listQuery = z.object({
   status: z
@@ -17,6 +18,47 @@ const listQuery = z.object({
 
 export async function ticketRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', requireSession);
+
+  // Identité du marchand connecté et état des deux intégrations : c'est ce que
+  // le dashboard affiche en barre haute.
+  app.get('/api/me', async (request, reply) => {
+    const { merchantId, userId } = request.session;
+
+    const merchant = await prisma.merchant.findUnique({
+      where: { id: merchantId },
+      include: {
+        shopify: { select: { installedAt: true, uninstalledAt: true, scopes: true } },
+        gmail: { select: { emailAddress: true, watchExpiration: true } },
+        users: { where: { id: userId }, select: { email: true, name: true, role: true } },
+      },
+    });
+
+    if (!merchant) return reply.code(404).send({ error: 'Marchand introuvable' });
+
+    return reply.send({
+      merchant: {
+        id: merchant.id,
+        shopDomain: merchant.shopDomain,
+        name: merchant.name,
+        autoSendEnabled: merchant.autoSendEnabled,
+        autoSendThreshold: merchant.autoSendThreshold,
+      },
+      user: merchant.users[0] ?? null,
+      shopify: {
+        connected: Boolean(merchant.shopify && !merchant.shopify.uninstalledAt),
+        simulated: env.SHOPIFY_MOCK,
+      },
+      gmail: {
+        connected: Boolean(merchant.gmail),
+        emailAddress: merchant.gmail?.emailAddress ?? null,
+        // Un watch expiré signifie que plus rien n'entre : c'est l'information
+        // la plus utile de tout le tableau de bord.
+        watchActive: Boolean(
+          merchant.gmail?.watchExpiration && merchant.gmail.watchExpiration > new Date(),
+        ),
+      },
+    });
+  });
 
   // File de tickets + indicateurs du dashboard.
   app.get('/api/tickets', async (request, reply) => {
@@ -94,13 +136,126 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
 
     if (!ticket) return reply.code(404).send({ error: 'Ticket introuvable' });
 
+    // Les données de commande viennent de Shopify en direct. Si la boutique
+    // n'est pas connectée ou répond mal, on sert quand même le ticket : perdre
+    // la sidebar est gênant, perdre le mail est inacceptable.
     let order = null;
+    let orderError: string | null = null;
+
     if (ticket.shopifyOrderId) {
-      const shopify = await getShopifyClient(merchantId);
-      order = await getOrderById(shopify, ticket.shopifyOrderId);
+      try {
+        const shopify = await getShopifyClient(merchantId);
+        order = await getOrderById(shopify, ticket.shopifyOrderId);
+      } catch (error) {
+        orderError =
+          error instanceof ShopifyError
+            ? 'Détails indisponibles : boutique Shopify non connectée.'
+            : 'Détails indisponibles : Shopify n’a pas répondu.';
+        request.log.warn({ err: error, ticketId: ticket.id }, 'Lecture commande Shopify en échec');
+      }
     }
 
-    return reply.send({ ticket, order });
+    return reply.send({ ticket, order, orderError });
+  });
+
+  /**
+   * Commandes candidates pour un rattachement manuel : c'est la sortie de
+   * secours quand l'association automatique a refusé de trancher.
+   */
+  app.get<{ Params: { id: string }; Querystring: { q?: string } }>(
+    '/api/tickets/:id/order-candidates',
+    async (request, reply) => {
+      const { merchantId } = request.session;
+
+      const ticket = await prisma.ticket.findFirst({
+        where: { id: request.params.id, merchantId },
+        select: { customerEmail: true, customerName: true },
+      });
+
+      if (!ticket) return reply.code(404).send({ error: 'Ticket introuvable' });
+
+      const search = request.query.q?.trim();
+      const query = search
+        ? search.startsWith('#')
+          ? `name:${quoteSearchValue(search)}`
+          : quoteSearchValue(search)
+        : `email:${quoteSearchValue(ticket.customerEmail)}`;
+
+      try {
+        const shopify = await getShopifyClient(merchantId);
+        const orders = await searchOrders(shopify, query, 10);
+        return reply.send({ orders });
+      } catch (error) {
+        request.log.warn({ err: error }, 'Recherche de commandes en échec');
+        return reply.code(503).send({ error: 'Boutique Shopify indisponible' });
+      }
+    },
+  );
+
+  /** Rattachement manuel : l'agent tranche là où l'automatisme s'est abstenu. */
+  app.post<{ Params: { id: string }; Body: { orderId?: string } }>(
+    '/api/tickets/:id/order',
+    async (request, reply) => {
+      const { merchantId, userId } = request.session;
+      const orderId = z.string().min(1).safeParse(request.body?.orderId);
+
+      if (!orderId.success) return reply.code(400).send({ error: 'orderId requis' });
+
+      const ticket = await prisma.ticket.findFirst({
+        where: { id: request.params.id, merchantId },
+        select: { id: true },
+      });
+
+      if (!ticket) return reply.code(404).send({ error: 'Ticket introuvable' });
+
+      const shopify = await getShopifyClient(merchantId);
+      const order = await getOrderById(shopify, orderId.data);
+
+      if (!order) return reply.code(404).send({ error: 'Commande introuvable' });
+
+      const updated = await prisma.ticket.update({
+        where: { id: ticket.id },
+        data: {
+          shopifyOrderId: order.id,
+          orderName: order.name,
+          orderMatchMethod: 'MANUAL',
+          orderMatchScore: 1,
+        },
+      });
+
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId: userId,
+        action: 'ticket.order_attached',
+        targetType: 'Ticket',
+        targetId: ticket.id,
+        metadata: { orderName: order.name },
+        ipAddress: request.ip,
+      });
+
+      return reply.send({ ticket: updated, order });
+    },
+  );
+
+  /** Journal d'audit du marchand, affiché en colonne de droite. */
+  app.get('/api/audit', async (request, reply) => {
+    const { merchantId } = request.session;
+    const entries = await prisma.auditLog.findMany({
+      where: { merchantId },
+      orderBy: { createdAt: 'desc' },
+      take: 30,
+      select: {
+        id: true,
+        action: true,
+        actorType: true,
+        targetType: true,
+        targetId: true,
+        metadata: true,
+        createdAt: true,
+      },
+    });
+    return reply.send({ entries });
   });
 
   // Édition du brouillon par l'agent avant envoi.

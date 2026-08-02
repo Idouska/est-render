@@ -26,11 +26,18 @@ Reste à faire avant de brancher un vrai marchand :
 
 - [x] API de la file de tickets, du détail, des indicateurs
 - [x] API de remboursement en deux temps (aperçu + confirmation signée)
-- [ ] Interface React : file, détail ticket, sidebar client/commande/livraison
-- [ ] Modale de confirmation de remboursement
-- [ ] Rattachement manuel d'une commande depuis le détail
+- [x] Dashboard : file, détail ticket, sidebar client/commande/livraison,
+      édition et envoi de brouillon, journal d'audit
+- [x] Modale de confirmation de remboursement
+- [x] Rattachement manuel d'une commande depuis le détail
+- [x] Mode démonstration (`SHOPIFY_MOCK` / `GMAIL_MOCK`) pour développer
+      l'interface sans boutique ni boîte connectée
+- [ ] Régénérer un brouillon après rattachement manuel d'une commande — sans
+      ça, la réponse continue de demander une précision déjà obtenue
 - [ ] Remboursement ligne par ligne, restockage
 - [ ] Plafonds de remboursement par utilisateur et par jour
+- [ ] Pagination de la file au-delà de 25 tickets (le curseur existe côté API,
+      le dashboard ne l'utilise pas encore)
 
 ## Phase 3 — Multi-tenant réel
 
