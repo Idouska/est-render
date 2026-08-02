@@ -93,10 +93,20 @@ async function api(path, options = {}) {
   return payload;
 }
 
-function showGate(message) {
+async function showGate(message) {
   $('gate-text').textContent = message;
   $('gate').hidden = false;
   $('app').hidden = true;
+
+  // En production, le raccourci de développement n'existe pas : on renvoie
+  // vers l'installation Shopify plutôt que vers un lien mort.
+  try {
+    const config = await fetch('/api/config').then((r) => r.json());
+    $('gate-dev').hidden = !config.devMode;
+    $('gate-prod').hidden = config.devMode;
+  } catch {
+    $('gate-prod').hidden = false;
+  }
 }
 
 /* ------------------------------------------------------------- barre haute */

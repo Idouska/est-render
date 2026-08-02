@@ -15,11 +15,15 @@ Livré dans ce dépôt :
 - [x] Création de brouillon Gmail, jamais d'envoi automatique
 - [x] Schéma multi-tenant, tokens chiffrés, journal d'audit
 
+- [x] `src/cron.ts` : renouvellement des watch Gmail + purge RGPD
+- [x] Migration Prisma initiale
+- [x] Déploiement : Dockerfile, `render.yaml`, guide pas à pas
+      ([08-mise-en-ligne.md](08-mise-en-ligne.md))
+
 Reste à faire avant de brancher un vrai marchand :
 
-- [ ] `src/cron.ts` : renouvellement des watch Gmail + purge RGPD
-- [ ] Migration Prisma initiale (`prisma migrate dev --name init`)
-- [ ] Supervision : alerte si un watch expire ou si une file s'accumule
+- [ ] Supervision : alerte si un watch expire, si le cron échoue, ou si une
+      file s'accumule. Le cron corrige, mais rien ne prévient quand il tombe.
 - [ ] Lancer la vérification OAuth Google (6 à 10 semaines de délai)
 
 ## Phase 2 — Dashboard et remboursement

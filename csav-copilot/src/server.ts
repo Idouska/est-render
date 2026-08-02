@@ -49,6 +49,10 @@ export async function buildServer() {
     return { status: 'ok' };
   });
 
+  // Lue par le dashboard avant toute session, pour proposer le bon chemin de
+  // connexion : installation Shopify en production, raccourci en local.
+  app.get('/api/config', async () => ({ devMode }));
+
   await app.register(fastifyStatic, {
     root: join(projectRoot, 'public'),
     prefix: '/static/',

@@ -55,29 +55,30 @@ journal d'audit et les garde-fous du remboursement.
 
 ---
 
-## Passer en conditions réelles
+## Mettre en ligne
 
-Le mode démonstration existe pour développer sans dépendances externes. Pour
-brancher une vraie boutique, il faut trois comptes et retirer les simulations :
+Guide complet pas à pas : **[docs/08-mise-en-ligne.md](docs/08-mise-en-ligne.md)**
+— création des comptes Shopify Partners, Google Cloud et Anthropic, déploiement,
+puis branchement sur une vraie boutique. Comptez une demi-journée.
 
-1. **Shopify Partners** — créer une app publique, récupérer `SHOPIFY_API_KEY` et
-   `SHOPIFY_API_SECRET`, déclarer l'URL de redirection `<APP_URL>/auth/shopify/callback`.
-2. **Google Cloud** — créer un projet, activer l'API Gmail, créer des
-   identifiants OAuth, créer le topic et la souscription Pub/Sub
-   (voir [docs/03-ingestion.md](docs/03-ingestion.md)).
-3. **Anthropic** — créer une clé API sur console.anthropic.com.
+Le projet se déploie en trois processus qui partagent la même image Docker :
 
-Puis `SHOPIFY_MOCK=0`, `GMAIL_MOCK=0`, et l'installation se fait par
-`/auth/shopify?shop=votre-boutique.myshopify.com`.
+| Processus | Commande | Rôle |
+|---|---|---|
+| API | `node dist/index.js` | Dashboard, OAuth, webhooks, API |
+| Workers | `node dist/worker.js` | Ingestion, classification, rédaction |
+| Cron | `node dist/cron.js` | Renouvellement du watch Gmail, purge RGPD |
 
-Il faut aussi lancer les workers (`npm run dev:worker`) : c'est eux qui
-classent les mails et rédigent. Ils ne servent à rien en mode démonstration,
-puisque aucun mail n'entre.
+`render.yaml` crée les quatre services d'un coup sur Render (API, workers, cron,
+plus PostgreSQL et Redis). Le `Dockerfile` fonctionne sur n'importe quel
+hébergeur de conteneurs.
+
+**Le cron n'est pas optionnel** : le watch Gmail expire au bout de 7 jours sans
+lever d'erreur. Sans lui, l'ingestion s'arrête en silence.
 
 **Délai à anticiper** : Google exige un audit de sécurité (CASA) avant
 d'autoriser une application à lire les Gmail de vrais clients — 6 à 10 semaines.
-À lancer tôt, c'est le chemin critique. Détails dans
-[docs/02-oauth.md](docs/02-oauth.md).
+À lancer dès que l'application tourne, c'est le chemin critique.
 
 ---
 
@@ -140,8 +141,9 @@ Tenus par le code, pas seulement par l'interface :
 
 Suivi dans [docs/07-roadmap.md](docs/07-roadmap.md). Les trois plus urgents :
 
-- **`src/cron.ts`** — renouvellement des watch Gmail (ils expirent à 7 jours, en
-  silence) et purge RGPD.
-- **Régénérer un brouillon** après rattachement manuel d'une commande.
-- **Webhooks `shop/redact` / `customers/redact`** — obligation Shopify pour
-  publier l'app.
+- **Webhooks `customers/redact`, `shop/redact`, `customers/data_request`** —
+  obligation Shopify pour publier l'application sur l'App Store.
+- **Régénérer un brouillon** après rattachement manuel d'une commande : la
+  réponse continue sinon de demander une précision déjà obtenue.
+- **Supervision** — alerte si un watch Gmail expire ou si la file s'accumule.
+  Le cron corrige, mais rien ne prévient encore quand il échoue.

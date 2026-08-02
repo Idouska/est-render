@@ -14,7 +14,13 @@
     <div id="gate" class="gate" hidden>
       <h1>Session expirée</h1>
       <p id="gate-text">Connectez-vous pour accéder au SAV.</p>
-      <a class="btn btn-primary" href="/dev/login">Ouvrir une session de développement</a>
+      <p id="gate-prod" hidden>
+        Installez l'application depuis votre administration Shopify, ou ouvrez
+        <code>/auth/shopify?shop=votre-boutique.myshopify.com</code>.
+      </p>
+      <a class="btn btn-primary" id="gate-dev" href="/dev/login" hidden>
+        Ouvrir une session de développement
+      </a>
     </div>
 
     <div class="shell" id="app" hidden>
