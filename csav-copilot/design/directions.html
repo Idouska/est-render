@@ -1,0 +1,897 @@
+<title>cSAV Copilot — 5 directions visuelles</title>
+
+<style>
+  /* ============================================================ page ==== */
+
+  .page {
+    --bg: #eef1f0;
+    --fg: #14191b;
+    --fg-mute: #64726f;
+    --edge: #d7ded9;
+    --card: #ffffff;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh;
+    margin: 0;
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+
+  :focus-visible { outline: 2px solid #0b5e6b; outline-offset: 2px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+
+  .inner { max-width: 1180px; margin: 0 auto; padding: 30px 20px 70px; }
+
+  .lede h1 {
+    font-size: 25px;
+    letter-spacing: -0.02em;
+    margin: 0 0 7px;
+    text-wrap: balance;
+  }
+
+  .lede p {
+    margin: 0;
+    color: var(--fg-mute);
+    font-size: 14.5px;
+    max-width: 62ch;
+  }
+
+  .picker {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    display: flex;
+    gap: 7px;
+    flex-wrap: wrap;
+    padding: 16px 0 14px;
+    background: linear-gradient(var(--bg) 72%, transparent);
+    margin: 22px 0 0;
+  }
+
+  .pick {
+    appearance: none;
+    font: inherit;
+    font-size: 13px;
+    padding: 8px 15px;
+    border: 1px solid var(--edge);
+    border-radius: 999px;
+    background: var(--card);
+    color: var(--fg);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: border-color 0.12s ease;
+  }
+
+  .pick:hover { border-color: var(--fg-mute); }
+
+  .pick[aria-pressed="true"] {
+    background: var(--fg);
+    border-color: var(--fg);
+    color: var(--bg);
+    font-weight: 600;
+  }
+
+  .pick .swat {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 1px solid rgba(0, 0, 0, 0.2);
+  }
+
+  .stage {
+    border: 1px solid var(--edge);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--card);
+    box-shadow: 0 1px 2px rgba(20, 25, 27, 0.05), 0 18px 40px -26px rgba(20, 25, 27, 0.4);
+  }
+
+  .caption {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 20px 2px 12px;
+  }
+
+  .caption h2 { margin: 0; font-size: 17px; letter-spacing: -0.01em; }
+  .caption span { color: var(--fg-mute); font-size: 13.5px; }
+
+  .spec {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 14px;
+    margin-top: 16px;
+  }
+
+  .spec-card {
+    border: 1px solid var(--edge);
+    border-radius: 8px;
+    background: var(--card);
+    padding: 13px 14px;
+  }
+
+  .spec-card h3 {
+    margin: 0 0 9px;
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--fg-mute);
+    font-weight: 600;
+  }
+
+  .spec-card p { margin: 0; font-size: 13px; line-height: 1.5; }
+
+  .ramp { display: flex; gap: 5px; flex-wrap: wrap; }
+
+  .ramp i {
+    width: 30px;
+    height: 30px;
+    border-radius: 5px;
+    border: 1px solid rgba(0, 0, 0, 0.14);
+    display: block;
+  }
+
+  /* ====================================================== l'écran ======= */
+  /* Une seule structure, cinq habillages : tout passe par les variables
+     redéfinies sous [data-ds]. Rien n'est stylé en dur ici. */
+
+  .ds {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--f-ui);
+    font-size: var(--size);
+    line-height: 1.5;
+  }
+
+  .ds-bar {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    flex-wrap: wrap;
+    padding: var(--pad-sm) var(--pad);
+    border-bottom: var(--bw) solid var(--line);
+    background: var(--surface);
+  }
+
+  .ds-brand {
+    font-weight: var(--w-strong);
+    letter-spacing: var(--track-title);
+    margin-right: auto;
+    font-size: calc(var(--size) + 1px);
+  }
+
+  .ds-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 9px;
+    border: var(--bw) solid var(--line);
+    border-radius: var(--r-pill);
+    font-size: 11.5px;
+    color: var(--ink-soft);
+    background: var(--surface);
+    font-family: var(--f-meta);
+  }
+
+  .ds-pill::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--age-0);
+  }
+
+  .ds-tabs {
+    display: flex;
+    gap: var(--tab-gap);
+    padding: 0 var(--pad);
+    border-bottom: var(--bw) solid var(--line);
+    background: var(--surface);
+    overflow-x: auto;
+  }
+
+  .ds-tab {
+    font: inherit;
+    appearance: none;
+    border: 0;
+    background: none;
+    color: var(--ink-mute);
+    padding: 10px 13px 11px;
+    border-bottom: var(--under) solid transparent;
+    margin-bottom: calc(-1 * var(--bw));
+    white-space: nowrap;
+    font-size: 13px;
+    cursor: default;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    letter-spacing: var(--track-tab);
+    text-transform: var(--case-tab);
+  }
+
+  .ds-tab.on {
+    color: var(--accent);
+    font-weight: var(--w-strong);
+    border-bottom-color: var(--accent);
+  }
+
+  .ds-tab b {
+    font-family: var(--f-meta);
+    font-weight: 600;
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: var(--r-pill);
+    background: var(--sunk);
+    color: var(--ink-mute);
+  }
+
+  .ds-tab.on b { background: var(--accent-soft); color: var(--accent); }
+
+  .ds-tools {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex-wrap: wrap;
+    padding: var(--pad-sm) var(--pad);
+    background: var(--ground);
+    border-bottom: var(--bw) solid var(--line);
+  }
+
+  .ds-chip {
+    font: inherit;
+    font-size: 12.5px;
+    padding: 4px 11px;
+    border: var(--bw) solid var(--line);
+    border-radius: var(--r-pill);
+    background: var(--surface);
+    color: var(--ink-soft);
+    font-family: var(--f-meta);
+    letter-spacing: var(--track-tab);
+    text-transform: var(--case-tab);
+  }
+
+  .ds-chip.on {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--on-accent);
+    font-weight: var(--w-strong);
+  }
+
+  .ds-grid {
+    display: grid;
+    grid-template-columns: minmax(300px, 396px) 1fr;
+  }
+
+  @media (max-width: 940px) {
+    .ds-grid { grid-template-columns: 1fr; }
+  }
+
+  .ds-queue {
+    border-right: var(--bw) solid var(--line);
+    background: var(--surface);
+  }
+
+  .ds-row {
+    display: grid;
+    grid-template-columns: var(--stripe) 1fr;
+    border-bottom: var(--bw) solid var(--line-soft);
+  }
+
+  .ds-row .bar { background: var(--age); }
+
+  .ds-row .in {
+    padding: var(--pad-sm) var(--pad);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .ds-row.sel .in { background: var(--accent-soft); }
+
+  .ds-line { display: flex; align-items: center; gap: 8px; }
+
+  .ds-num {
+    font-family: var(--f-meta);
+    font-variant-numeric: tabular-nums;
+    font-weight: var(--w-strong);
+    font-size: 13.5px;
+    letter-spacing: var(--track-num);
+  }
+
+  .ds-state {
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: var(--r-badge);
+    letter-spacing: 0.04em;
+    text-transform: var(--case-badge);
+    border: var(--badge-bw) solid transparent;
+  }
+
+  .ds-state.todo { background: var(--crit-soft); color: var(--crit); border-color: var(--crit); }
+  .ds-state.wait { background: var(--warn-soft); color: var(--warn); border-color: var(--warn); }
+
+  .ds-age {
+    margin-left: auto;
+    font-family: var(--f-meta);
+    font-variant-numeric: tabular-nums;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--age);
+    background: color-mix(in srgb, var(--age) 13%, transparent);
+    padding: 2px 8px;
+    border-radius: var(--r-badge);
+  }
+
+  .ds-what { font-weight: var(--w-strong); font-size: 13.5px; line-height: 1.35; }
+
+  .ds-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--ink-mute);
+    flex-wrap: wrap;
+  }
+
+  .ds-src {
+    padding: 1px 8px;
+    border: var(--bw) solid var(--line);
+    border-radius: var(--r-pill);
+    font-size: 10.5px;
+    letter-spacing: 0.04em;
+    text-transform: var(--case-badge);
+    font-family: var(--f-meta);
+  }
+
+  .ds-thumbs { display: flex; gap: 4px; }
+
+  .ds-thumb {
+    width: 28px;
+    height: 28px;
+    border: var(--bw) solid var(--line);
+    border-radius: var(--r-thumb);
+    background: var(--sunk);
+    display: grid;
+    place-items: center;
+  }
+
+  .ds-thumb svg { width: 19px; height: 19px; }
+
+  /* fiche */
+
+  .ds-sheet { background: var(--surface); }
+
+  .ds-head {
+    padding: var(--pad) var(--pad);
+    border-bottom: var(--bw) solid var(--line);
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .ds-order {
+    font-family: var(--f-meta);
+    font-variant-numeric: tabular-nums;
+    font-size: 21px;
+    font-weight: var(--w-strong);
+    letter-spacing: var(--track-num);
+    line-height: 1.1;
+  }
+
+  .ds-who { font-size: 12.5px; color: var(--ink-mute); margin-top: 3px; }
+
+  .ds-body {
+    padding: var(--pad);
+    display: grid;
+    grid-template-columns: 1fr 216px;
+    gap: 18px;
+    align-items: start;
+  }
+
+  @media (max-width: 760px) {
+    .ds-body { grid-template-columns: 1fr; }
+  }
+
+  .ds-label {
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    margin: 0 0 8px;
+    font-family: var(--f-meta);
+  }
+
+  .ds-quote {
+    background: var(--sunk);
+    border-left: 2px solid var(--line);
+    border-radius: var(--r-box);
+    padding: 9px 12px;
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+
+  .ds-acts {
+    margin-top: 15px;
+    border: var(--bw) solid var(--line);
+    border-radius: var(--r-box);
+    overflow: hidden;
+  }
+
+  .ds-acts-head {
+    display: flex;
+    gap: var(--tab-gap);
+    background: var(--sunk);
+    border-bottom: var(--bw) solid var(--line);
+    padding: 0 5px;
+    overflow-x: auto;
+  }
+
+  .ds-acts-head .ds-tab { font-size: 12.5px; padding: 8px 11px; }
+
+  .ds-acts-body { padding: 12px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+  .ds-btn {
+    font: inherit;
+    font-size: 12.5px;
+    padding: 7px 13px;
+    border: var(--bw) solid var(--line);
+    border-radius: var(--r-btn);
+    background: var(--surface);
+    color: var(--ink);
+    letter-spacing: var(--track-tab);
+    text-transform: var(--case-btn);
+  }
+
+  .ds-btn.main {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--on-accent);
+    font-weight: var(--w-strong);
+  }
+
+  .ds-note { font-size: 12px; color: var(--ink-mute); }
+
+  .ds-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 9px;
+    border: var(--bw) solid var(--line-soft);
+    border-radius: var(--r-box);
+    background: var(--sunk);
+  }
+
+  .ds-item.bad { border-color: var(--crit); background: var(--crit-soft); }
+
+  .ds-photo {
+    width: 40px;
+    height: 40px;
+    border: var(--bw) solid var(--line);
+    border-radius: var(--r-thumb);
+    background: var(--surface);
+    display: grid;
+    place-items: center;
+    flex: none;
+  }
+
+  .ds-photo svg { width: 28px; height: 28px; }
+
+  .ds-item-n { font-weight: var(--w-strong); font-size: 12.5px; }
+  .ds-item-v { font-size: 11.5px; color: var(--ink-mute); display: flex; align-items: center; gap: 5px; }
+
+  .ds-sw {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    border: 1px solid rgba(0, 0, 0, 0.2);
+  }
+
+  .ds-track { margin-top: 16px; }
+
+  .ds-leg {
+    display: grid;
+    grid-template-columns: 16px 1fr auto;
+    gap: 9px;
+    padding-bottom: 11px;
+    position: relative;
+  }
+
+  .ds-leg:last-child { padding-bottom: 0; }
+
+  .ds-leg::before {
+    content: "";
+    position: absolute;
+    left: 7px;
+    top: 14px;
+    bottom: 0;
+    width: 2px;
+    background: var(--line);
+  }
+
+  .ds-leg:last-child::before { display: none; }
+
+  .ds-bead {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    border: 2px solid var(--line);
+    background: var(--surface);
+    margin: 3px 0 0 3px;
+    z-index: 1;
+  }
+
+  .ds-leg.done .ds-bead { background: var(--ink-mute); border-color: var(--ink-mute); }
+  .ds-leg.done::before { background: var(--ink-mute); }
+  .ds-leg.now .ds-bead { background: var(--accent); border-color: var(--accent); }
+  .ds-leg.now .t { font-weight: var(--w-strong); }
+  .ds-leg.todo .t { color: var(--ink-mute); }
+  .ds-leg .t { font-size: 12.5px; }
+  .ds-leg .p { font-size: 11px; color: var(--ink-mute); }
+  .ds-leg .d { font-family: var(--f-meta); font-size: 11px; color: var(--ink-mute); white-space: nowrap; }
+
+  /* ================================================= les 5 systèmes ==== */
+
+  /* 1 — CLINIQUE : instrument de précision. Filets d'un cheveu, aucune
+     ombre, indigo unique, densité maximale. */
+  [data-ds="clinique"] {
+    --ground: #f6f8fa; --surface: #ffffff; --sunk: #eef2f6;
+    --ink: #0f1922; --ink-soft: #43535f; --ink-mute: #788794;
+    --line: #dbe3ea; --line-soft: #ecf0f4;
+    --accent: #2f4dcc; --accent-soft: #e8ecfb; --on-accent: #ffffff;
+    --crit: #b3271f; --crit-soft: #fbeae8;
+    --warn: #8a5c10; --warn-soft: #fbf1dd;
+    --age-0: #15795a; --age-1: #8a5c10; --age-2: #b0511d; --age-3: #b3271f;
+    --f-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --f-meta: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --size: 13px; --pad: 13px; --pad-sm: 9px;
+    --r-pill: 999px; --r-badge: 3px; --r-box: 4px; --r-btn: 4px; --r-thumb: 3px;
+    --bw: 1px; --badge-bw: 0; --stripe: 3px; --under: 2px; --tab-gap: 1px;
+    --w-strong: 600; --track-title: -0.01em; --track-num: -0.01em;
+    --track-tab: 0; --case-tab: none; --case-badge: none; --case-btn: none;
+  }
+
+  /* 2 — BORDEREAU : le vocabulaire du transit. Papier, chiffres partout,
+     tampons rectangulaires, filets pointillés. */
+  [data-ds="bordereau"] {
+    --ground: #f1efe8; --surface: #fbfaf6; --sunk: #eae7dd;
+    --ink: #1c1a14; --ink-soft: #4f493d; --ink-mute: #857d6d;
+    --line: #d3ccbc; --line-soft: #e2ddd0;
+    --accent: #274b8c; --accent-soft: #e2e7f2; --on-accent: #fbfaf6;
+    --crit: #9c3327; --crit-soft: #f5e3df;
+    --warn: #86601a; --warn-soft: #f3e9d5;
+    --age-0: #2b6b4a; --age-1: #86601a; --age-2: #a95c1c; --age-3: #9c3327;
+    --f-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --f-meta: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --size: 13px; --pad: 14px; --pad-sm: 10px;
+    --r-pill: 2px; --r-badge: 2px; --r-box: 2px; --r-btn: 2px; --r-thumb: 2px;
+    --bw: 1px; --badge-bw: 1px; --stripe: 5px; --under: 2px; --tab-gap: 2px;
+    --w-strong: 700; --track-title: 0.01em; --track-num: 0.02em;
+    --track-tab: 0.07em; --case-tab: uppercase; --case-badge: uppercase; --case-btn: uppercase;
+  }
+
+  [data-ds="bordereau"] .ds-row { border-bottom-style: dashed; }
+  [data-ds="bordereau"] .ds-quote { border-left-style: dashed; border-left-width: 3px; }
+
+  /* 3 — ATELIER CLAIR : l'identité actuelle, éclaircie et aérée. Teal,
+     angles doux, plus d'air entre les blocs. */
+  [data-ds="atelier"] {
+    --ground: #f4f7f6; --surface: #ffffff; --sunk: #eef3f1;
+    --ink: #12191b; --ink-soft: #445055; --ink-mute: #6e7c80;
+    --line: #dde5e2; --line-soft: #ebf0ee;
+    --accent: #0b5e6b; --accent-soft: #e0f0f1; --on-accent: #ffffff;
+    --crit: #9e3a32; --crit-soft: #f8e5e2;
+    --warn: #92601a; --warn-soft: #f7edd9;
+    --age-0: #2c6e4f; --age-1: #92601a; --age-2: #b4531f; --age-3: #9e3a32;
+    --f-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --f-meta: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --size: 14px; --pad: 17px; --pad-sm: 13px;
+    --r-pill: 999px; --r-badge: 999px; --r-box: 8px; --r-btn: 7px; --r-thumb: 5px;
+    --bw: 1px; --badge-bw: 0; --stripe: 4px; --under: 2px; --tab-gap: 2px;
+    --w-strong: 600; --track-title: -0.01em; --track-num: -0.01em;
+    --track-tab: 0; --case-tab: none; --case-badge: none; --case-btn: none;
+  }
+
+  /* 4 — SIGNAL : lecture à distance. Angles vifs, barres épaisses, orange
+     de sécurité, graisses lourdes. Pensé pour un poste debout. */
+  [data-ds="signal"] {
+    --ground: #ffffff; --surface: #ffffff; --sunk: #f1f3f4;
+    --ink: #0a0d0e; --ink-soft: #3b4345; --ink-mute: #6d7679;
+    --line: #cdd3d5; --line-soft: #e3e7e8;
+    --accent: #d9480f; --accent-soft: #fdeae1; --on-accent: #ffffff;
+    --crit: #c1121f; --crit-soft: #fbe4e6;
+    --warn: #8a6100; --warn-soft: #fcf0d6;
+    --age-0: #14713f; --age-1: #8a6100; --age-2: #c25e00; --age-3: #c1121f;
+    --f-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --f-meta: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --size: 13.5px; --pad: 14px; --pad-sm: 10px;
+    --r-pill: 0; --r-badge: 0; --r-box: 0; --r-btn: 0; --r-thumb: 0;
+    --bw: 1px; --badge-bw: 0; --stripe: 7px; --under: 3px; --tab-gap: 0;
+    --w-strong: 700; --track-title: -0.02em; --track-num: -0.02em;
+    --track-tab: 0.03em; --case-tab: uppercase; --case-badge: uppercase; --case-btn: uppercase;
+  }
+
+  [data-ds="signal"] .ds-what { font-size: 14.5px; }
+  [data-ds="signal"] .ds-order { font-size: 25px; }
+
+  /* 5 — ENCRE : noir, blanc, un rouge. Tout est règle et blanc tournant ;
+     la couleur ne sert qu'à l'urgence. */
+  [data-ds="encre"] {
+    --ground: #ffffff; --surface: #ffffff; --sunk: #f4f4f4;
+    --ink: #0a0a0a; --ink-soft: #3a3a3a; --ink-mute: #767676;
+    --line: #d6d6d6; --line-soft: #e8e8e8;
+    --accent: #0a0a0a; --accent-soft: #f0f0f0; --on-accent: #ffffff;
+    --crit: #d81f26; --crit-soft: #fbe9ea;
+    --warn: #8a6a00; --warn-soft: #f7f0dc;
+    --age-0: #2f7a55; --age-1: #8a6a00; --age-2: #c2661c; --age-3: #d81f26;
+    --f-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --f-meta: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --size: 13.5px; --pad: 18px; --pad-sm: 12px;
+    --r-pill: 0; --r-badge: 0; --r-box: 0; --r-btn: 0; --r-thumb: 0;
+    --bw: 1px; --badge-bw: 0; --stripe: 2px; --under: 2px; --tab-gap: 4px;
+    --w-strong: 600; --track-title: -0.015em; --track-num: -0.015em;
+    --track-tab: 0.04em; --case-tab: none; --case-badge: uppercase; --case-btn: none;
+  }
+
+  [data-ds="encre"] .ds-quote { border-left-width: 3px; border-left-color: var(--ink); }
+</style>
+
+<div class="page">
+  <div class="inner">
+    <div class="lede">
+      <h1>Cinq directions pour le poste de travail</h1>
+      <p>
+        Le même écran, cinq systèmes complets : palette, typographie, formes, densité.
+        Toutes les propositions sont claires. Clique pour comparer.
+      </p>
+    </div>
+
+    <div class="picker" id="picker" role="group" aria-label="Direction visuelle"></div>
+
+    <div class="caption">
+      <h2 id="ds-name"></h2>
+      <span id="ds-line"></span>
+    </div>
+
+    <div class="stage"><div class="ds" id="stage" data-ds="clinique"></div></div>
+
+    <div class="spec" id="spec"></div>
+  </div>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+
+  const SYSTEMS = [
+    {
+      key: 'clinique',
+      name: 'Clinique',
+      dot: '#2f4dcc',
+      line: 'Instrument de précision — filets fins, aucune ombre, densité maximale.',
+      palette: ['#f6f8fa', '#ffffff', '#2f4dcc', '#0f1922', '#dbe3ea'],
+      type: 'Sans système en 13 px, chiffres en chasse fixe. Rien d’ornemental.',
+      forme: 'Rayons de 3-4 px, filets d’un pixel, pas d’ombre portée.',
+      pour: 'Traiter beaucoup de lignes vite, sur grand écran, toute la journée.',
+    },
+    {
+      key: 'bordereau',
+      name: 'Bordereau',
+      dot: '#274b8c',
+      line: 'Le vocabulaire du transit — papier, tampons, filets pointillés.',
+      palette: ['#f1efe8', '#fbfaf6', '#274b8c', '#1c1a14', '#d3ccbc'],
+      type: 'Chasse fixe pour toute donnée, libellés en capitales espacées.',
+      forme: 'Angles à 2 px, séparateurs pointillés, badges encadrés comme un tampon.',
+      pour: 'Assumer le métier : douane, colis, numéros de suivi, paperasse.',
+    },
+    {
+      key: 'atelier',
+      name: 'Atelier clair',
+      dot: '#0b5e6b',
+      line: 'L’identité actuelle, éclaircie et aérée.',
+      palette: ['#f4f7f6', '#ffffff', '#0b5e6b', '#12191b', '#dde5e2'],
+      type: 'Sans système en 14 px, plus de respiration entre les blocs.',
+      forme: 'Rayons de 7-8 px, pastilles arrondies, ombres douces.',
+      pour: 'Garder le teal déjà en place sans repartir de zéro.',
+    },
+    {
+      key: 'signal',
+      name: 'Signal',
+      dot: '#d9480f',
+      line: 'Lecture à distance — angles vifs, barres épaisses, graisses lourdes.',
+      palette: ['#ffffff', '#f1f3f4', '#d9480f', '#0a0d0e', '#cdd3d5'],
+      type: 'Sans système en 700, capitales espacées, numéros de commande en 25 px.',
+      forme: 'Aucun arrondi, bande d’urgence de 7 px, soulignés de 3 px.',
+      pour: 'Repérer l’urgent en une seconde, même sans lire.',
+    },
+    {
+      key: 'encre',
+      name: 'Encre',
+      dot: '#d81f26',
+      line: 'Noir, blanc, un rouge — la couleur ne sert qu’à l’urgence.',
+      palette: ['#ffffff', '#f4f4f4', '#d81f26', '#0a0a0a', '#d6d6d6'],
+      type: 'Sans système resserré, hiérarchie portée par les règles et le blanc.',
+      forme: 'Aucun arrondi, filets nets, marges généreuses.',
+      pour: 'Un outil sobre qui ne fatigue pas et vieillit bien.',
+    },
+  ];
+
+  const LAMP = (shade) => `<svg viewBox="0 0 32 32" aria-hidden="true">
+    <path d="M16 2.5 V7" stroke="#7d8a8c" stroke-width="1.6" stroke-linecap="round"/>
+    <path d="M6 18 L11.5 7 H20.5 L26 18 Z" fill="${shade}" stroke="rgba(0,0,0,.28)"
+      stroke-width="1" stroke-linejoin="round"/>
+    <ellipse cx="16" cy="18" rx="10" ry="1.7" fill="rgba(0,0,0,.13)"/>
+    <path d="M11 22.5 Q16 27.5 21 22.5" fill="none" stroke="${shade}" stroke-width="1.5"
+      opacity=".5" stroke-linecap="round"/>
+  </svg>`;
+
+  const ROWS = [
+    { n: '10344', s: 'todo', age: '8 jours', v: 'var(--age-3)', what: 'Produit indisponible — Lampadaire Sillage',
+      src: 'Fournisseur', who: 'Julien Meyer', shades: ['#c19a6b'] },
+    { n: '10428', s: 'todo', age: '6 jours', v: 'var(--age-3)', what: 'Couleur Laiton en rupture définitive',
+      src: 'Fournisseur', who: 'Léa Fontaine', shades: ['#b08d3f', '#e8c88a'], sel: true },
+    { n: '10391', s: 'todo', age: '4 jours', v: 'var(--age-2)', what: 'Adresse incomplète — numéro manquant',
+      src: 'Fournisseur', who: 'Marc Delaunay', shades: ['#2b2b2b'] },
+    { n: '10412', s: 'todo', age: '2 jours', v: 'var(--age-1)', what: 'Réclamation — produit non reçu',
+      src: 'Litige Shopify', who: 'Karim Benali', shades: ['#b08d3f'] },
+    { n: '10402', s: 'wait', age: "aujourd'hui", v: 'var(--age-0)', what: 'Où en est ma commande ?',
+      src: 'Client', who: 'Thomas Girard', shades: ['#e9e4dc'] },
+  ];
+
+  const LEGS = [
+    ['Pris en charge par le fournisseur', 'Shenzhen, CN', '26 juil.', 'done'],
+    ['Transit à l’export', 'Aéroport de Shenzhen', '28 juil.', 'now'],
+    ['Transit à l’import', 'Aéroport de Paris-CDG', '—', 'todo'],
+    ['Dédouanement', 'Douane française', '—', 'todo'],
+  ];
+
+  function screen() {
+    return `
+      <div class="ds-bar">
+        <span class="ds-brand">cSAV Copilot</span>
+        <span class="ds-pill">Shopify</span>
+        <span class="ds-pill">17TRACK</span>
+        <span class="ds-pill">Shenzhen Lumi</span>
+      </div>
+
+      <div class="ds-tabs">
+        <button class="ds-tab on">Tout <b>6</b></button>
+        <button class="ds-tab">Client <b>2</b></button>
+        <button class="ds-tab">Fournisseur <b>3</b></button>
+        <button class="ds-tab">Litige Shopify <b>1</b></button>
+      </div>
+
+      <div class="ds-tools">
+        <button class="ds-chip on">Tout</button>
+        <button class="ds-chip">À traiter</button>
+        <button class="ds-chip">En attente</button>
+        <button class="ds-chip">Traité</button>
+      </div>
+
+      <div class="ds-grid">
+        <div class="ds-queue">
+          ${ROWS.map(
+            (r) => `<div class="ds-row ${r.sel ? 'sel' : ''}" style="--age: ${r.v}">
+              <span class="bar"></span>
+              <span class="in">
+                <span class="ds-line">
+                  <span class="ds-num">#${r.n}</span>
+                  <span class="ds-state ${r.s}">${r.s === 'todo' ? 'À traiter' : 'En attente'}</span>
+                  <span class="ds-age">${r.age}</span>
+                </span>
+                <span class="ds-what">${r.what}</span>
+                <span class="ds-meta">
+                  <span class="ds-src">${r.src}</span><span>${r.who}</span>
+                </span>
+                <span class="ds-thumbs">
+                  ${r.shades.map((s) => `<span class="ds-thumb">${LAMP(s)}</span>`).join('')}
+                </span>
+              </span>
+            </div>`,
+          ).join('')}
+        </div>
+
+        <div class="ds-sheet">
+          <div class="ds-head">
+            <div>
+              <div class="ds-order">#10428</div>
+              <div class="ds-who">Léa Fontaine · lea.fontaine@gmail.com</div>
+            </div>
+            <div style="margin-left:auto;text-align:right">
+              <span class="ds-state todo">À traiter</span>
+              <div class="ds-who" style="margin-top:5px">Ouvert depuis 6 jours</div>
+            </div>
+          </div>
+
+          <div class="ds-body">
+            <div>
+              <p class="ds-label">Problème signalé</p>
+              <div class="ds-quote">
+                Order #10428 — the Brass finish is discontinued by our factory,
+                no restock planned. We can ship Black Matte or Brushed Copper instead.
+              </div>
+
+              <div class="ds-acts">
+                <div class="ds-acts-head">
+                  <button class="ds-tab on">Substitution</button>
+                  <button class="ds-tab">Rembourser</button>
+                  <button class="ds-tab">Écrire au client</button>
+                </div>
+                <div class="ds-acts-body">
+                  <button class="ds-btn main">Proposer au client</button>
+                  <button class="ds-btn">Remplacer</button>
+                  <span class="ds-note">Met à jour Shopify et prévient le fournisseur.</span>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <p class="ds-label">Articles</p>
+              <div class="ds-item bad">
+                <span class="ds-photo">${LAMP('#b08d3f')}</span>
+                <span>
+                  <span class="ds-item-n">Lampe Perce-neige</span><br />
+                  <span class="ds-item-v"><span class="ds-sw" style="background:#b08d3f"></span>Laiton</span>
+                </span>
+              </div>
+
+              <div class="ds-track">
+                <p class="ds-label">Suivi · 17TRACK</p>
+                ${LEGS.map(
+                  ([t, p, d, cls]) => `<div class="ds-leg ${cls}">
+                    <span class="ds-bead"></span>
+                    <span><span class="t">${t}</span><br /><span class="p">${p}</span></span>
+                    <span class="d">${d}</span>
+                  </div>`,
+                ).join('')}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function renderSpec(sys) {
+    $('ds-name').textContent = sys.name;
+    $('ds-line').textContent = sys.line;
+
+    $('spec').innerHTML = `
+      <div class="spec-card">
+        <h3>Palette</h3>
+        <div class="ramp">${sys.palette.map((c) => `<i style="background:${c}"></i>`).join('')}</div>
+      </div>
+      <div class="spec-card"><h3>Typographie</h3><p>${sys.type}</p></div>
+      <div class="spec-card"><h3>Formes</h3><p>${sys.forme}</p></div>
+      <div class="spec-card"><h3>Ce que ça sert</h3><p>${sys.pour}</p></div>`;
+  }
+
+  function select(key) {
+    $('stage').dataset.ds = key;
+    $('picker').querySelectorAll('.pick').forEach((b) =>
+      b.setAttribute('aria-pressed', String(b.dataset.key === key)),
+    );
+    renderSpec(SYSTEMS.find((s) => s.key === key));
+  }
+
+  $('picker').innerHTML = SYSTEMS.map(
+    (s) => `<button class="pick" data-key="${s.key}" aria-pressed="${s.key === 'clinique'}">
+      <span class="swat" style="background:${s.dot}"></span>${s.name}
+    </button>`,
+  ).join('');
+
+  $('picker').querySelectorAll('.pick').forEach((b) =>
+    b.addEventListener('click', () => select(b.dataset.key)),
+  );
+
+  $('stage').innerHTML = screen();
+  select('clinique');
+</script>
