@@ -10,10 +10,10 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "dev:api": "node --watch --experimental-strip-types --env-file-if-exists=.env src/index.ts",
-    "dev:worker": "node --watch --experimental-strip-types --env-file-if-exists=.env src/worker.ts",
-    "start:api": "node --env-file-if-exists=.env dist/index.js",
-    "start:worker": "node --env-file-if-exists=.env dist/worker.js",
+    "dev:api": "NODE_USE_ENV_PROXY=1 node --watch --experimental-strip-types --env-file-if-exists=.env src/index.ts",
+    "dev:worker": "NODE_USE_ENV_PROXY=1 node --watch --experimental-strip-types --env-file-if-exists=.env src/worker.ts",
+    "start:api": "NODE_USE_ENV_PROXY=1 node --env-file-if-exists=.env dist/index.js",
+    "start:worker": "NODE_USE_ENV_PROXY=1 node --env-file-if-exists=.env dist/worker.js",
     "test": "node --experimental-strip-types --test tests/**/*.test.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
@@ -21,7 +21,7 @@
     "db:seed": "node --experimental-strip-types --env-file-if-exists=.env prisma/seed.ts",
     "db:reset": "prisma migrate reset --force && npm run db:seed",
     "build:demo": "node scripts/build-demo.mjs",
-    "check:ai": "node --experimental-strip-types --env-file-if-exists=.env scripts/check-ai.ts"
+    "check:ai": "NODE_USE_ENV_PROXY=1 node --experimental-strip-types --env-file-if-exists=.env scripts/check-ai.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",

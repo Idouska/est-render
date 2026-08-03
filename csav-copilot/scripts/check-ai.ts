@@ -4,23 +4,63 @@
  *   npm run check:ai
  *
  * Envoie une toute petite requête au fournisseur actif (`AI_PROVIDER`) et
- * rapporte le résultat. La clé n'est jamais affichée : seuls sa présence, sa
- * longueur et ses quatre derniers caractères sont montrés, de quoi vérifier
- * qu'on a bien collé la bonne sans jamais l'exposer dans un terminal ou un
- * journal partagé.
+ * rapporte le résultat. La clé n'est jamais affichée : seuls sa longueur et
+ * ses quatre derniers caractères le sont, de quoi vérifier qu'on a collé la
+ * bonne sans jamais l'exposer dans un terminal ou un journal partagé.
+ *
+ * Volontairement autonome : ce script lit `process.env` directement au lieu de
+ * passer par `config/env.ts`. Sur un dépôt fraîchement cloné il n'y a pas de
+ * `.env` (il est ignoré par git), donc la validation complète échouerait sur
+ * l'absence de base de données — un échec sans rapport avec la clé qu'on teste.
+ * Ici, deux variables suffisent : AI_PROVIDER et la clé du fournisseur.
  */
 
-import { env } from '../src/config/env.ts';
-import { aiProvider } from '../src/services/ai/factory.ts';
+import { createAnthropicProvider } from '../src/services/ai/providers/anthropic.ts';
+import { createOpenAiCompatibleProvider } from '../src/services/ai/providers/openaiCompatible.ts';
+import type { AiProvider } from '../src/services/ai/provider.ts';
 
-const KEYS = {
-  anthropic: env.ANTHROPIC_API_KEY,
-  deepseek: env.DEEPSEEK_API_KEY,
-} as const;
+const provider = (process.env.AI_PROVIDER ?? 'anthropic').trim();
+const anthropicKey = process.env.ANTHROPIC_API_KEY?.trim();
+const deepseekKey = process.env.DEEPSEEK_API_KEY?.trim();
 
 function fingerprint(key: string | undefined): string {
   if (!key) return 'absente';
   return `${key.length} caractères, se termine par …${key.slice(-4)}`;
+}
+
+function build(): { client: AiProvider; key: string | undefined; host: string } {
+  if (provider === 'deepseek') {
+    const baseUrl = process.env.DEEPSEEK_BASE_URL?.trim() || 'https://api.deepseek.com/v1';
+    if (!deepseekKey) {
+      throw new Error('AI_PROVIDER=deepseek mais DEEPSEEK_API_KEY est absente.');
+    }
+    return {
+      client: createOpenAiCompatibleProvider({
+        name: 'deepseek',
+        baseUrl,
+        apiKey: deepseekKey,
+        model: process.env.DEEPSEEK_MODEL?.trim() || 'deepseek-chat',
+      }),
+      key: deepseekKey,
+      host: new URL(baseUrl).hostname,
+    };
+  }
+
+  if (provider === 'anthropic') {
+    if (!anthropicKey) {
+      throw new Error('AI_PROVIDER=anthropic mais ANTHROPIC_API_KEY est absente.');
+    }
+    return {
+      client: createAnthropicProvider({
+        apiKey: anthropicKey,
+        model: process.env.ANTHROPIC_MODEL?.trim() || 'claude-opus-5',
+      }),
+      key: anthropicKey,
+      host: 'api.anthropic.com',
+    };
+  }
+
+  throw new Error(`AI_PROVIDER inconnu : « ${provider} ». Valeurs acceptées : anthropic, deepseek.`);
 }
 
 const SCHEMA = {
@@ -36,9 +76,7 @@ interface Probe {
 }
 
 function validate(value: unknown): Probe {
-  if (typeof value !== 'object' || value === null) {
-    throw new TypeError('objet attendu');
-  }
+  if (typeof value !== 'object' || value === null) throw new TypeError('objet attendu');
   const v = value as Record<string, unknown>;
   if (typeof v.ok !== 'boolean' || typeof v.langue !== 'string') {
     throw new TypeError('champs ok/langue manquants');
@@ -47,15 +85,34 @@ function validate(value: unknown): Probe {
 }
 
 async function main(): Promise<void> {
-  console.log('Fournisseur configuré :', env.AI_PROVIDER);
-  console.log('Modèle               :', aiProvider.model);
-  console.log('Clé                  :', fingerprint(KEYS[env.AI_PROVIDER]));
+  let client: AiProvider;
+  let key: string | undefined;
+  let host: string;
+
+  try {
+    ({ client, key, host } = build());
+  } catch (error) {
+    console.error('✗ Configuration incomplète.\n');
+    console.error('  ', error instanceof Error ? error.message : String(error));
+    console.error('\n  AI_PROVIDER        :', process.env.AI_PROVIDER ?? '(absent)');
+    console.error('  ANTHROPIC_API_KEY  :', fingerprint(anthropicKey));
+    console.error('  DEEPSEEK_API_KEY   :', fingerprint(deepseekKey));
+    console.error('\n  → Ces variables se règlent dans les réglages de l’environnement cloud,');
+    console.error('    et ne sont lues qu’au démarrage d’une session : ouvrez-en une nouvelle');
+    console.error('    après les avoir enregistrées.');
+    process.exitCode = 1;
+    return;
+  }
+
+  console.log('Fournisseur :', provider);
+  console.log('Modèle      :', client.model);
+  console.log('Clé         :', fingerprint(key));
   console.log('\nEnvoi d’une requête de test…\n');
 
   const started = Date.now();
 
   try {
-    const result = await aiProvider.completeJson<Probe>({
+    const result = await client.completeJson<Probe>({
       system: 'Tu réponds uniquement en JSON, sans texte autour.',
       user: 'Réponds exactement {"ok": true, "langue": "français"}.',
       effort: 'low',
@@ -64,8 +121,6 @@ async function main(): Promise<void> {
       validate,
     });
 
-    const ms = Date.now() - started;
-
     if (result.refused) {
       console.error('✗ Le modèle a refusé de répondre. Clé valide, mais réponse inattendue.');
       process.exitCode = 1;
@@ -73,7 +128,7 @@ async function main(): Promise<void> {
     }
 
     console.log('✓ La clé fonctionne.');
-    console.log(`  Réponse reçue en ${ms} ms`);
+    console.log(`  Réponse reçue en ${Date.now() - started} ms`);
     console.log(`  Modèle ayant répondu : ${result.model}`);
     if (result.retries > 0) {
       console.log(`  ${result.retries} nouvelle(s) tentative(s) — JSON non conforme au premier essai.`);
@@ -91,14 +146,11 @@ async function main(): Promise<void> {
 
     // Traduction des erreurs les plus fréquentes en action concrète.
     if (/not in allowlist|egress/i.test(full)) {
-      const host = new URL(
-        env.AI_PROVIDER === 'deepseek' ? env.DEEPSEEK_BASE_URL : 'https://api.anthropic.com',
-      ).hostname;
       console.error(`\n  → Le réseau de cet environnement bloque ${host}.`);
-      console.error('    Ce n’est pas un problème de clé : l’hôte doit être ajouté aux règles');
-      console.error('    de sortie réseau de l’environnement avant que l’appel puisse aboutir.');
+      console.error('    Ce n’est pas un problème de clé : passez l’accès réseau en « Personnalisé »');
+      console.error(`    et ajoutez ${host} aux domaines autorisés.`);
     } else if (/401|invalid|unauthor/i.test(full)) {
-      console.error('\n  → La clé est refusée. Vérifiez qu’elle est complète et copiée sans espace,');
+      console.error('\n  → La clé est refusée. Vérifiez qu’elle est complète, copiée sans espace,');
       console.error('    et qu’elle correspond bien au fournisseur choisi dans AI_PROVIDER.');
     } else if (/402|balance|quota|insufficient/i.test(full)) {
       console.error('\n  → La clé est valide mais le compte n’a pas de crédit. Rechargez le solde.');
