@@ -76,9 +76,19 @@ canal de notification qui prévient l'application qu'un mail est arrivé.
    - `https://www.googleapis.com/auth/gmail.readonly`
    - `https://www.googleapis.com/auth/gmail.compose`
    - `https://www.googleapis.com/auth/gmail.send`
-4. Restez en mode **Testing** et ajoutez votre propre adresse Gmail comme
-   utilisateur de test. Ce mode plafonne à 100 utilisateurs — largement assez
+4. Restez en mode **Testing** et ajoutez l'adresse Gmail de test comme
+   utilisateur autorisé. Ce mode plafonne à 100 utilisateurs — largement assez
    pour la phase pilote, et il évite d'attendre la vérification pour commencer.
+
+> ⚠️ **En mode Testing, les refresh tokens Google expirent au bout de 7 jours.**
+> Passé ce délai, l'application perd l'accès à la boîte connectée et
+> l'ingestion s'arrête, sans que rien ne l'annonce autrement que par des
+> erreurs d'authentification dans les journaux. Ce n'est pas un bug du projet :
+> c'est une limite du mode test de Google.
+>
+> Pendant la phase de test, il suffit de repasser par
+> `/auth/google` pour reconnecter la boîte. Cette expiration disparaît une fois
+> l'application vérifiée (publiée en **In production**).
 
 ### 3c. Identifiants OAuth
 
@@ -104,6 +114,27 @@ sera ajoutée à l'étape 5.
 ---
 
 ## Étape 4 — Déployer
+
+> **Alternative pour la seule phase de test : un tunnel vers votre machine.**
+>
+> Shopify et Google exigent une adresse HTTPS publique, mais celle-ci peut
+> pointer vers votre ordinateur plutôt que vers un hébergeur :
+>
+> ```bash
+> cloudflared tunnel --url http://localhost:3000    # ou : ngrok http 3000
+> ```
+>
+> Vous obtenez une URL du type `https://xxx.trycloudflare.com` à utiliser comme
+> `APP_URL` partout où le guide dit « votre adresse ». Vous ne payez rien
+> pendant les essais, et vous voyez les journaux en direct dans votre terminal.
+>
+> Deux limites : l'URL change à chaque redémarrage du tunnel — il faut alors la
+> remettre à jour chez Shopify **et** chez Google, ce qui est vite fastidieux —
+> et rien ne tourne quand votre machine est éteinte. Pour un aller-retour rapide
+> c'est confortable ; dès que le test s'étale sur plusieurs jours, déployez.
+>
+> N'oubliez pas de lancer aussi `npm run dev:worker` : sans les workers, les
+> mails entrent en base mais ne sont ni classés ni rédigés.
 
 1. Poussez le projet sur un dépôt GitHub auquel Render a accès.
 2. Sur **render.com** : **New → Blueprint**, sélectionnez le dépôt. Render lit
@@ -169,9 +200,53 @@ Si l'audience ne correspond pas exactement, les notifications sont rejetées en
 
 ---
 
-## Étape 6 — Installer sur la boutique de test
+## Étape 6 — Préparer le jeu de test
 
-Ouvrez dans votre navigateur :
+L'application ne peut rattacher un mail à une commande que si les données
+existent. Une boutique de développement vide donnera systématiquement
+« aucune commande rattachée » — ce qui est le bon comportement, mais ne teste
+rien d'intéressant.
+
+Il vous faut **trois adresses email distinctes** :
+
+| Rôle | Exemple | Usage |
+|---|---|---|
+| Boîte SAV | `sav.test@gmail.com` | Celle que vous connectez à l'application |
+| Client A | `client.a@gmail.com` | Email du client sur les commandes de test, et expéditeur des mails |
+| Client B | `client.b@gmail.com` | Pour tester le cas ambigu (plusieurs commandes) |
+
+Seule la boîte SAV doit être un compte **Gmail** (c'est elle qu'on connecte).
+Les deux adresses client peuvent être n'importe quelles adresses depuis
+lesquelles vous savez envoyer un mail : une perso, un autre fournisseur, peu
+importe. Évitez en revanche les alias en `+` : Gmail sait les recevoir mais pas
+envoyer depuis, et ici vous devez envoyer.
+
+Ce qui compte : **l'adresse d'expédition du mail de test doit être exactement
+celle enregistrée comme email client sur la commande Shopify.** C'est sur cette
+égalité que repose le rattachement.
+
+Enfin, n'envoyez jamais le mail de test depuis la boîte SAV elle-même :
+l'application ignore ses propres messages, sinon elle se répondrait en boucle.
+
+### Monter la boutique de test
+
+1. **Activer les paiements de test.** Boutique → *Settings → Payments →
+   (Bogus Gateway / passerelle de test)*. Sans paiement enregistré, la commande
+   n'a aucune transaction remboursable et le bouton rembourser renverra
+   « aucune transaction remboursable ».
+2. **Créer deux ou trois produits** avec des noms reconnaissables.
+3. **Passer les commandes de test depuis la vitrine**, en payant avec la carte
+   de test (numéro `1`, date future, CVV `111`). À la caisse, saisissez comme
+   email client **`client.a@gmail.com`** — c'est cette adresse qui permettra le
+   rattachement.
+4. **Ajouter un suivi sur une commande.** *Orders → la commande → Fulfill item*,
+   puis renseignez un transporteur et un numéro de suivi. Sans ça, le brouillon
+   WISMO n'a rien à annoncer et se contentera de dire que la commande n'est pas
+   encore expédiée.
+5. **Pour le cas ambigu** : passez **trois commandes** avec l'adresse
+   `client.b@gmail.com`.
+
+### Installer
 
 ```
 https://votre-app.onrender.com/auth/shopify?shop=votre-boutique-test.myshopify.com
@@ -179,10 +254,22 @@ https://votre-app.onrender.com/auth/shopify?shop=votre-boutique-test.myshopify.c
 
 Le parcours enchaîne : autorisation Shopify → autorisation Google → dashboard.
 
-Envoyez ensuite un mail à l'adresse Gmail connectée, depuis l'adresse d'un
-client ayant passé une commande de test, avec un objet du genre « Où en est ma
-commande #1001 ? ». Dans la minute, le ticket doit apparaître dans la file avec
-son brouillon.
+### Les trois mails à envoyer
+
+Envoyez-les **à** la boîte SAV connectée, **depuis** l'adresse client concernée.
+
+| Depuis | Objet / contenu | Ce que ça doit produire |
+|---|---|---|
+| `client.a@…` | « Où en est ma commande #1001 ? » (mettez le vrai numéro) | Rattachement direct par le numéro cité, confiance élevée, brouillon citant le transporteur et le suivi |
+| `client.a@…` | « Bonjour, je n'ai toujours rien reçu, pouvez-vous m'aider ? » | Rattachement par l'adresse email — une seule commande, donc pas d'ambiguïté |
+| `client.b@…` | Le même message, sans numéro | **Trois commandes correspondent** : le brouillon doit demander une précision, et la colonne de droite doit proposer de rattacher à la main |
+
+Le troisième est le plus important : c'est le comportement sur lequel repose la
+confiance dans l'outil. S'il choisit une commande au lieu de demander, il y a un
+problème.
+
+Comptez une à deux minutes entre l'envoi et l'apparition du ticket : Gmail
+notifie, la file traite, l'API Claude répond.
 
 ### Si rien n'arrive
 
@@ -196,8 +283,16 @@ Dans l'ordre, sur les journaux Render :
 3. **Dashboard** — la pastille en haut à droite indique « écoute inactive » si
    le watch Gmail n'est pas actif.
 
-Le mail que vous envoyez ne doit pas venir de l'adresse connectée elle-même :
-l'application ignore ses propres messages, sinon elle se répondrait en boucle.
+Trois causes reviennent le plus souvent :
+
+- **Le mail vient de la boîte connectée elle-même.** L'application ignore ses
+  propres messages, sinon elle se répondrait en boucle.
+- **Ça marchait, et ça s'est arrêté au bout d'une semaine.** C'est l'expiration
+  des refresh tokens en mode Testing chez Google (voir étape 3b). Repassez par
+  `/auth/google` pour reconnecter la boîte.
+- **Le ticket apparaît mais sans commande.** L'adresse d'expédition ne
+  correspond pas à l'email client de la commande Shopify. Vérifiez-la dans
+  *Orders → la commande → Contact information*.
 
 ---
 
