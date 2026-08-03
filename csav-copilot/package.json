@@ -20,7 +20,8 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "node --experimental-strip-types --env-file-if-exists=.env prisma/seed.ts",
     "db:reset": "prisma migrate reset --force && npm run db:seed",
-    "build:demo": "node scripts/build-demo.mjs"
+    "build:demo": "node scripts/build-demo.mjs",
+    "check:ai": "node --experimental-strip-types --env-file-if-exists=.env scripts/check-ai.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
