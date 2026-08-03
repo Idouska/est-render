@@ -1074,3 +1074,86 @@ dl {
     width: auto;
   }
 }
+
+/* ---------- réglages ---------- */
+
+/* Plus large que la modale de remboursement : trois groupes de réglages y
+   tiennent sans que les lignes de connexion se replient. */
+.modal-wide {
+  width: min(620px, 100%);
+}
+
+.set-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.set-group:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.set-group h3 {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+.set-help {
+  margin: -4px 0 0;
+  font-size: 12.5px;
+  color: var(--ink-mute);
+}
+
+.set-conn {
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r);
+  padding: 10px 12px;
+  background: var(--surface-sunk);
+}
+
+.set-conn-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.set-conn-actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* Les actions de connexion sont des liens (navigation OAuth), pas des boutons :
+   on leur redonne l'alignement vertical que `.btn` suppose. */
+.set-conn-actions a.btn {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.set-conn-detail {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.set-conn-detail code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.set-alert {
+  color: var(--crit);
+}
+
+.field input[type="range"] {
+  accent-color: var(--accent);
+  width: 100%;
+}

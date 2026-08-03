@@ -10,6 +10,7 @@ import { googleAuthRoutes } from './routes/auth.google.ts';
 import { shopifyAuthRoutes } from './routes/auth.shopify.ts';
 import { devRoutes } from './routes/dev.ts';
 import { refundRoutes } from './routes/refunds.ts';
+import { settingsRoutes } from './routes/settings.ts';
 import { supplierPortalRoutes } from './routes/supplierPortal.ts';
 import { supplierRoutes } from './routes/suppliers.ts';
 import { ticketRoutes } from './routes/tickets.ts';
@@ -79,6 +80,7 @@ export async function buildServer() {
   await app.register(gmailWebhookRoutes);
   await app.register(ticketRoutes);
   await app.register(refundRoutes);
+  await app.register(settingsRoutes);
   await app.register(supplierRoutes);
   await app.register(supplierPortalRoutes);
 

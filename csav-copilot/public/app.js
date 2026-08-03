@@ -15,6 +15,7 @@ const state = {
   detail: null,
   refund: null,
   supplier: null,
+  settings: null,
 };
 
 /* ------------------------------------------------------------------ outils */
@@ -528,6 +529,146 @@ $('sup-save').addEventListener('click', async () => {
   }
 });
 
+/* --------------------------------------------------------------- réglages */
+
+/**
+ * Une ligne de connexion : état, détail, et le bouton qui va avec.
+ *
+ * Connecter Shopify ou Gmail est une navigation OAuth, pas un appel d'API —
+ * d'où les liens plutôt que des `fetch`. Seule la déconnexion Gmail est un
+ * POST, parce qu'elle détruit des données.
+ */
+function renderConnection(el, { label, connected, simulated, detail, actions }) {
+  const dot = simulated ? 'warn' : connected ? '' : 'off';
+  const status = simulated ? 'simulé' : connected ? 'connecté' : 'non connecté';
+
+  el.innerHTML = `
+    <div class="set-conn-head">
+      <span class="conn-pill"><span class="dot ${dot}"></span> ${esc(label)} ${esc(status)}</span>
+      <span class="set-conn-actions">${actions}</span>
+    </div>
+    <p class="set-conn-detail">${detail}</p>`;
+}
+
+function renderSettings() {
+  const { merchant, connections } = state.settings;
+
+  renderConnection($('set-shopify'), {
+    label: 'Shopify',
+    connected: connections.shopify.connected,
+    simulated: connections.shopify.simulated,
+    detail: connections.shopify.connected
+      ? `Boutique <code>${esc(merchant.shopDomain)}</code> · autorisations : ${
+          connections.shopify.scopes.map(esc).join(', ') || '—'
+        }`
+      : "L'accès Shopify vient de l'installation de l'application depuis votre administration.",
+    // Se déconnecter de Shopify, c'est désinstaller l'app côté Shopify : le
+    // faire depuis ici laisserait les deux côtés en désaccord.
+    actions: connections.shopify.connected
+      ? `<a class="btn btn-small" href="https://${esc(
+          merchant.shopDomain,
+        )}/admin/settings/apps" target="_blank" rel="noopener">Gérer sur Shopify</a>`
+      : `<a class="btn btn-small btn-primary" href="/auth/shopify?shop=${encodeURIComponent(
+          merchant.shopDomain,
+        )}">Connecter</a>`,
+  });
+
+  const gmail = connections.gmail;
+  let gmailDetail;
+  if (!gmail.connected) {
+    gmailDetail = 'Aucune boîte connectée — rien n’est ingéré.';
+  } else if (gmail.watchActive) {
+    gmailDetail = `<code>${esc(gmail.emailAddress)}</code> · écoute active jusqu’au ${fullDate(
+      gmail.watchExpiration,
+    )}`;
+  } else {
+    // Le watch Gmail expire au bout de 7 jours et rien ne le signale ailleurs :
+    // c'est la panne silencieuse la plus probable du produit.
+    gmailDetail = `<code>${esc(
+      gmail.emailAddress,
+    )}</code> · <b class="set-alert">écoute expirée</b> — reconnectez la boîte pour relancer l’ingestion.`;
+  }
+
+  renderConnection($('set-gmail'), {
+    label: 'Gmail',
+    connected: gmail.connected,
+    simulated: gmail.simulated,
+    detail: gmailDetail,
+    actions: gmail.connected
+      ? `<a class="btn btn-small" href="/auth/google">Reconnecter</a>
+         <button class="btn btn-small btn-danger" id="set-gmail-off">Déconnecter</button>`
+      : '<a class="btn btn-small btn-primary" href="/auth/google">Connecter</a>',
+  });
+
+  $('set-autosend').checked = merchant.autoSendEnabled;
+  $('set-threshold').value = merchant.autoSendThreshold;
+  $('set-threshold-echo').textContent = `${Math.round(merchant.autoSendThreshold * 100)} %`;
+  $('set-retention').value = String(merchant.retentionDays);
+
+  const off = $('set-gmail-off');
+  if (off) {
+    off.addEventListener('click', async () => {
+      if (!confirm('Déconnecter la boîte Gmail ? L’ingestion des nouveaux mails s’arrête.')) return;
+      try {
+        await api('/auth/google/disconnect', { method: 'POST' });
+        toast('Boîte Gmail déconnectée.');
+        await Promise.all([openSettings(), loadAudit()]);
+      } catch (error) {
+        toast(error.message, true);
+      }
+    });
+  }
+}
+
+async function openSettings() {
+  state.settings = await api('/api/settings');
+  renderSettings();
+  $('settings-modal').classList.add('open');
+}
+
+$('settings-open').addEventListener('click', async () => {
+  try {
+    await openSettings();
+  } catch (error) {
+    toast(error.message, true);
+  }
+});
+
+$('set-cancel').addEventListener('click', () => $('settings-modal').classList.remove('open'));
+
+$('settings-modal').addEventListener('click', (event) => {
+  if (event.target === $('settings-modal')) $('settings-modal').classList.remove('open');
+});
+
+$('set-threshold').addEventListener('input', (event) => {
+  $('set-threshold-echo').textContent = `${Math.round(Number(event.target.value) * 100)} %`;
+});
+
+$('set-save').addEventListener('click', async () => {
+  try {
+    const { merchant } = await api('/api/settings', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        autoSendEnabled: $('set-autosend').checked,
+        autoSendThreshold: Number($('set-threshold').value),
+        retentionDays: Number($('set-retention').value),
+      }),
+    });
+
+    // La barre haute et l'indicateur « envoi automatique » affichent ces
+    // valeurs : les rafraîchir évite un écran qui se contredit.
+    state.me.merchant.autoSendEnabled = merchant.autoSendEnabled;
+    state.me.merchant.autoSendThreshold = merchant.autoSendThreshold;
+    renderMe();
+    await Promise.all([loadMetrics(), loadAudit()]);
+
+    toast('Réglages enregistrés.');
+    $('settings-modal').classList.remove('open');
+  } catch (error) {
+    toast(error.message, true);
+  }
+});
+
 async function loadEscalations(ticketId) {
   const container = $('escalations');
   const data = await api(`/api/tickets/${ticketId}/escalations`);
@@ -662,6 +803,7 @@ const AUDIT_LABELS = {
   'refund.requested': 'Remboursement demandé',
   'refund.completed': 'Remboursement effectué',
   'refund.failed': 'Remboursement en échec',
+  'merchant.settings_updated': 'Réglages modifiés',
   'supplier.configured': 'Fournisseur configuré',
   'supplier.escalation_created': 'Escalade fournisseur rédigée',
   'supplier.notified': 'Fournisseur notifié',

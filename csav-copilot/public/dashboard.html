@@ -30,6 +30,7 @@
           <span id="merchant-shop"></span>
         </div>
         <div class="conn" id="conn"></div>
+        <button class="btn btn-small" id="settings-open">Réglages</button>
       </header>
 
       <div class="notice" id="mock-notice" hidden>
@@ -160,6 +161,75 @@
           </div>
         </aside>
       </main>
+    </div>
+
+    <div
+      class="backdrop"
+      id="settings-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="settings-title"
+    >
+      <div class="modal modal-wide">
+        <div class="modal-head">
+          <h2 id="settings-title">Réglages</h2>
+          <p>Connexions de votre boutique, autonomie de l'IA et conservation des données.</p>
+        </div>
+        <div class="modal-body">
+          <section class="set-group">
+            <h3>Connexions</h3>
+            <p class="set-help">
+              Aucune clé d'API à saisir : l'accès passe par une autorisation que vous
+              donnez, et que vous pouvez retirer à tout moment.
+            </p>
+            <div class="set-conn" id="set-shopify"></div>
+            <div class="set-conn" id="set-gmail"></div>
+          </section>
+
+          <section class="set-group">
+            <h3>Réponses automatiques</h3>
+            <label class="confirm">
+              <input type="checkbox" id="set-autosend" />
+              <span>
+                <b>Envoyer sans relecture</b> les réponses dont la confiance dépasse le
+                seuil ci-dessous. Désactivé, tout reste en brouillon.
+              </span>
+            </label>
+            <div class="field">
+              <label for="set-threshold">Seuil de confiance</label>
+              <input type="range" id="set-threshold" min="0.5" max="1" step="0.01" />
+              <small>
+                À <b id="set-threshold-echo">—</b>. Plus le seuil est haut, moins de
+                réponses partent seules.
+              </small>
+            </div>
+          </section>
+
+          <section class="set-group">
+            <h3>Conservation des données</h3>
+            <div class="field">
+              <label for="set-retention">Durée de conservation des mails ingérés</label>
+              <select id="set-retention">
+                <option value="30">30 jours</option>
+                <option value="90">90 jours</option>
+                <option value="180">6 mois</option>
+                <option value="365">1 an</option>
+                <option value="730">2 ans</option>
+                <option value="1095">3 ans</option>
+              </select>
+              <small>
+                Passé ce délai, les messages et leurs pièces sont purgés
+                automatiquement. Base légale RGPD — voir la politique de
+                confidentialité.
+              </small>
+            </div>
+          </section>
+        </div>
+        <div class="modal-foot">
+          <button class="btn" id="set-cancel">Fermer</button>
+          <button class="btn btn-primary" id="set-save">Enregistrer</button>
+        </div>
+      </div>
     </div>
 
     <div
