@@ -12,13 +12,10 @@
     --frame: #6d5ae6;
   }
 
-  /* Répété en sélecteur d'attribut pour que les vignettes de la galerie
-     puissent porter la palette par défaut comme les sept autres. */
   [data-accent="violet"] {
     --accent: #6c5ce7; --accent-strong: #5b4bd6; --accent-soft: #efedfe;
     --accent-ink: #4c3fc4; --on-accent: #ffffff; --frame: #6d5ae6;
   }
-
   [data-accent="indigo"] {
     --accent: #4f46e5; --accent-strong: #4338ca; --accent-soft: #eceafd;
     --accent-ink: #3f37bd; --on-accent: #ffffff; --frame: #4f46e5;
@@ -67,6 +64,10 @@
 
     --age-0: #10b981; --age-1: #f59e0b; --age-2: #f97316; --age-3: #ef4444;
 
+    /* Barres de charge : neutre + état, jamais deux couleurs d'âge côte à
+       côte (leur écart est trop faible en segments adjacents). */
+    --bar-rest: #b9bdcc;
+
     --r-lg: 15px;
     --r-md: 11px;
     --r-sm: 9px;
@@ -95,6 +96,7 @@
     --ok-soft: #102c23; --warn-soft: #2d2313; --crit-soft: #331d1e;
     --accent-soft: color-mix(in srgb, var(--accent) 20%, #1b1e26);
     --accent-ink: color-mix(in srgb, var(--accent) 62%, #ffffff);
+    --bar-rest: #4a5060;
 
     --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 30px -20px rgba(0, 0, 0, 0.8);
     --shadow-pop: 0 10px 34px -8px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.35);
@@ -138,9 +140,9 @@
     border-radius: 20px;
     padding: 13px;
     display: grid;
-    grid-template-columns: 244px 1fr;
+    grid-template-columns: 248px 1fr;
     gap: 13px;
-    max-width: 1580px;
+    max-width: 1600px;
     margin: 0 auto;
     min-height: 88vh;
     transition: background 0.2s ease;
@@ -157,7 +159,7 @@
     padding: 15px 12px;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 14px;
   }
 
   @media (max-width: 1080px) { .side { display: none; } }
@@ -180,6 +182,28 @@
 
   .logo b { display: block; font-size: 14.5px; font-weight: 600; letter-spacing: -0.01em; }
   .logo span { display: block; font-size: 11.5px; color: var(--ink-mute); }
+
+  .shop-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    padding: 0 4px 5px;
+    margin: 0;
+  }
+
+  .shop-select {
+    width: 100%;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    background: var(--inset);
+    color: var(--ink);
+  }
 
   .search {
     display: flex;
@@ -204,7 +228,7 @@
     border: 1px solid var(--line);
   }
 
-  .nav-group + .nav-group { margin-top: 15px; }
+  .nav-group + .nav-group { margin-top: 13px; }
 
   .nav-title {
     font-size: 10px;
@@ -305,7 +329,7 @@
     text-wrap: balance;
   }
 
-  .head-acts { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .head-acts { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
   .btn {
     appearance: none;
@@ -336,8 +360,6 @@
 
   .btn-main:hover { border-color: transparent; filter: brightness(1.05); }
 
-  .btn-danger { color: var(--crit); border-color: var(--crit-soft); background: var(--crit-soft); }
-
   /* sélecteur de palette */
 
   .palette-wrap { position: relative; }
@@ -357,8 +379,6 @@
     box-shadow: var(--shadow-pop);
     padding: 14px;
   }
-
-  .pop[hidden] { display: none; }
 
   .pop h4 {
     margin: 0 0 10px;
@@ -428,9 +448,129 @@
     box-shadow: 0 1px 3px rgba(20, 20, 40, 0.1);
   }
 
+  /* ===================================================== barre de tri == */
+
+  .toolbar {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-card);
+    padding: 12px 13px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .tb-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+  .tb-search {
+    flex: 1 1 210px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 11px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    background: var(--inset);
+  }
+
+  .tb-search svg { width: 15px; height: 15px; color: var(--ink-mute); flex: none; }
+
+  .tb-search input {
+    flex: 1;
+    border: 0;
+    background: none;
+    font: inherit;
+    font-size: 13px;
+    color: var(--ink);
+    outline: none;
+    min-width: 0;
+  }
+
+  .chip {
+    appearance: none;
+    font: inherit;
+    font-size: 12.5px;
+    padding: 6px 12px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--ink-soft);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: border-color 0.12s ease, background 0.12s ease;
+  }
+
+  .chip:hover { border-color: var(--ink-mute); }
+
+  .chip[aria-pressed="true"] {
+    background: linear-gradient(150deg, var(--accent), var(--accent-strong));
+    border-color: transparent;
+    color: var(--on-accent);
+    font-weight: 600;
+  }
+
+  .chip b {
+    font-family: var(--f-mono);
+    font-weight: 600;
+    font-size: 10.5px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: var(--inset);
+    color: var(--ink-mute);
+  }
+
+  .chip[aria-pressed="true"] b { background: rgba(255, 255, 255, 0.22); color: var(--on-accent); }
+
+  .quick[aria-pressed="true"] {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent-ink);
+  }
+
+  .tb-sep { width: 1px; align-self: stretch; background: var(--line-soft); margin: 0 3px; }
+
+  .tb-field { display: flex; align-items: center; gap: 7px; }
+
+  .tb-field label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+  }
+
+  .tb-field select {
+    font: inherit;
+    font-size: 12.5px;
+    padding: 6px 9px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
+    background: var(--surface);
+    color: var(--ink);
+    max-width: 172px;
+  }
+
+  .tb-count { margin-left: auto; font-size: 12.5px; color: var(--ink-mute); }
+  .tb-count b { color: var(--ink); }
+
+  .tb-reset {
+    appearance: none;
+    border: 0;
+    background: none;
+    font: inherit;
+    font-size: 12.5px;
+    color: var(--accent-ink);
+    font-weight: 600;
+    cursor: pointer;
+    padding: 4px 6px;
+  }
+
   /* ===================================================== workspace ===== */
 
-  .work { display: grid; grid-template-columns: 356px 1fr; gap: 13px; align-items: start; min-width: 0; }
+  .work { display: grid; grid-template-columns: 372px 1fr; gap: 13px; align-items: start; min-width: 0; }
 
   @media (max-width: 1240px) { .work { grid-template-columns: 1fr; } }
 
@@ -441,20 +581,26 @@
     box-shadow: var(--shadow-card);
   }
 
-  .queue-top { padding: 13px 13px 11px; border-bottom: 1px solid var(--line-soft); }
+  .rows { list-style: none; margin: 0; padding: 7px; max-height: 64vh; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; }
 
-  .tally-line {
+  .group-head {
     display: flex;
     align-items: center;
-    gap: 7px;
-    font-size: 12px;
+    gap: 8px;
+    padding: 10px 8px 4px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
     color: var(--ink-mute);
-    margin-top: 10px;
   }
 
-  .tally-line b { color: var(--ink); font-weight: 600; }
-
-  .rows { list-style: none; margin: 0; padding: 7px; max-height: 66vh; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; }
+  .group-head b {
+    font-family: var(--f-mono);
+    padding: 0 7px;
+    border-radius: 999px;
+    background: var(--inset);
+  }
 
   .row {
     appearance: none;
@@ -524,8 +670,27 @@
   .tag-todo { background: var(--crit-soft); color: var(--crit); }
   .tag-wait { background: var(--warn-soft); color: var(--warn); }
   .tag-done { background: var(--ok-soft); color: var(--ok); }
+  .tag-shop { background: var(--inset); color: var(--ink-soft); }
+  .tag-role { background: var(--accent-soft); color: var(--accent-ink); }
+  .tag-role-muted { background: var(--inset); color: var(--ink-mute); }
 
   .row-who { font-size: 12px; color: var(--ink-mute); }
+
+  .mini {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--inset);
+    border: 1px solid var(--line);
+    color: var(--ink-soft);
+    display: grid;
+    place-items: center;
+    font-size: 9px;
+    font-weight: 600;
+    flex: none;
+  }
+
+  .mini.none { border-style: dashed; color: var(--ink-mute); }
 
   .thumbs { display: flex; gap: 4px; }
 
@@ -565,6 +730,18 @@
 
   .sheet-sub { font-size: 12.5px; color: var(--ink-mute); margin-top: 4px; }
 
+  .assign { display: flex; align-items: center; gap: 8px; }
+
+  .assign select {
+    font: inherit;
+    font-size: 12.5px;
+    padding: 6px 9px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
+    background: var(--surface);
+    color: var(--ink);
+  }
+
   .sect { padding: 15px 17px; }
   .sect + .sect { border-top: 1px solid var(--line-soft); }
 
@@ -575,11 +752,7 @@
     letter-spacing: -0.015em;
   }
 
-  .field-label {
-    font-size: 12px;
-    color: var(--ink-mute);
-    margin: 0 0 6px;
-  }
+  .field-label { font-size: 12px; color: var(--ink-mute); margin: 0 0 6px; }
 
   .inset {
     background: var(--inset);
@@ -587,8 +760,6 @@
     border-radius: var(--r-md);
     padding: 12px 13px;
   }
-
-  .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 11px; }
 
   .control {
     width: 100%;
@@ -625,13 +796,6 @@
     color: var(--on-accent);
     font-weight: 600;
     box-shadow: 0 4px 14px -7px var(--accent);
-  }
-
-  .opt.danger[aria-pressed="true"] {
-    background: var(--crit-soft);
-    border-color: var(--crit);
-    color: var(--crit);
-    box-shadow: none;
   }
 
   .quote {
@@ -675,11 +839,7 @@
   }
 
   .sub:hover { border-color: var(--accent); }
-
-  .sub[aria-pressed="true"] {
-    border-color: var(--accent);
-    background: var(--accent-soft);
-  }
+  .sub[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
 
   .sub-photo {
     width: 34px;
@@ -735,8 +895,6 @@
   .kv dt { color: var(--ink-mute); flex: none; }
   .kv dd { margin: 0 0 0 auto; text-align: right; }
 
-  /* suivi */
-
   .leg { display: grid; grid-template-columns: 16px 1fr auto; gap: 11px; padding-bottom: 15px; position: relative; }
   .leg:last-child { padding-bottom: 0; }
 
@@ -780,14 +938,7 @@
 
   .events { display: flex; flex-direction: column; }
 
-  .event {
-    display: flex;
-    align-items: center;
-    gap: 11px;
-    padding: 11px 0;
-    font-size: 13px;
-  }
-
+  .event { display: flex; align-items: center; gap: 11px; padding: 11px 0; font-size: 13px; }
   .event + .event { border-top: 1px solid var(--line-soft); }
   .event i { width: 7px; height: 7px; border-radius: 50%; background: var(--c); flex: none; }
   .event b { font-weight: 600; }
@@ -798,15 +949,148 @@
 
   .note { font-size: 12.5px; color: var(--ink-mute); }
 
-  /* ====================================================== galerie ====== */
+  .empty { padding: 34px 16px; text-align: center; color: var(--ink-mute); font-size: 13px; }
 
-  .gallery {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(268px, 1fr));
-    gap: 13px;
+  /* ================================================== statistiques ===== */
+
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(196px, 1fr)); gap: 13px; }
+
+  .kpi { padding: 15px 16px; }
+
+  .kpi-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    display: block;
   }
 
-  .gallery[hidden] { display: none; }
+  .kpi-value {
+    font-size: 26px;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+    display: block;
+    margin-top: 4px;
+    line-height: 1.15;
+  }
+
+  .kpi-note { font-size: 12px; color: var(--ink-mute); display: block; margin-top: 3px; }
+  .kpi-note.bad { color: var(--crit); font-weight: 600; }
+  .kpi-note.good { color: var(--ok); font-weight: 600; }
+
+  .loadbars { display: flex; flex-direction: column; gap: 13px; }
+
+  .loadbar { display: grid; grid-template-columns: 168px 1fr auto; gap: 12px; align-items: center; }
+
+  @media (max-width: 760px) { .loadbar { grid-template-columns: 1fr; gap: 5px; } }
+
+  .loadbar .who { display: flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 600; }
+
+  .track-bar { display: flex; gap: 2px; height: 16px; align-items: stretch; }
+
+  .track-bar i { border-radius: 4px; display: block; }
+  .track-bar .rest { background: var(--bar-rest); }
+  .track-bar .late { background: var(--age-3); }
+
+  .loadbar .nums { font-size: 12px; color: var(--ink-mute); white-space: nowrap; }
+  .loadbar .nums b { color: var(--ink); font-family: var(--f-mono); }
+  .loadbar .nums .late-n { color: var(--age-3); font-weight: 600; }
+
+  .agechips { display: flex; gap: 5px; margin-top: 4px; }
+
+  .agechip {
+    font-family: var(--f-mono);
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 1px 7px;
+    border-radius: 999px;
+    color: var(--c);
+    background: color-mix(in srgb, var(--c) 14%, transparent);
+  }
+
+  .table-wrap { overflow-x: auto; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+
+  th {
+    text-align: left;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 11px 12px;
+    border-bottom: 1px solid var(--line-soft);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  tr:last-child td { border-bottom: 0; }
+  td.num { font-family: var(--f-mono); }
+  td .who { display: flex; align-items: center; gap: 9px; font-weight: 600; }
+
+  .spark { display: block; }
+  .spark polyline { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .spark .fill { fill: color-mix(in srgb, var(--accent) 13%, transparent); stroke: none; }
+  .spark circle { fill: var(--accent); }
+
+  .legend { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--ink-mute); margin-top: 12px; }
+  .legend i { display: inline-flex; align-items: center; gap: 6px; font-style: normal; }
+  .legend i::before { content: ""; width: 10px; height: 10px; border-radius: 3px; background: var(--c); }
+
+  /* ======================================================= équipe ====== */
+
+  .team-grid { display: grid; grid-template-columns: 1fr; gap: 13px; }
+
+  .member-line td:first-child { min-width: 190px; }
+
+  .conn-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink-soft);
+  }
+
+  .conn-chip svg { width: 12px; height: 12px; }
+
+  .sup-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+
+  .sup-card {
+    border: 1px solid var(--line-soft);
+    border-radius: var(--r-md);
+    background: var(--inset);
+    padding: 13px 14px;
+  }
+
+  .sup-card .top { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; }
+  .sup-card .top b { font-size: 13.5px; font-weight: 600; }
+
+  .matrix-note {
+    font-size: 12.5px;
+    color: var(--ink-mute);
+    margin: 12px 0 0;
+  }
+
+  td.ok-cell { color: var(--ok); font-weight: 700; text-align: center; }
+  td.no-cell { color: var(--line); text-align: center; }
+  th.center, td.center { text-align: center; }
+
+  /* ====================================================== galerie ====== */
+
+  .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(268px, 1fr)); gap: 13px; }
 
   .tile {
     appearance: none;
@@ -825,11 +1109,8 @@
   }
 
   .tile:hover { transform: translateY(-2px); box-shadow: var(--shadow-pop); }
-
   .tile[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 
-  /* Le cadre coloré rejoue la mise en scène de l'app pour que la palette se
-     lise d'un coup d'œil, sans avoir à l'appliquer. */
   .tile-app { display: block; background: var(--frame); padding: 9px; }
 
   .tile-inner {
@@ -881,12 +1162,7 @@
 
   .tile-row.sel { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 32%, transparent); }
 
-  .tile-num {
-    font-family: var(--f-mono);
-    font-size: 10.5px;
-    font-weight: 600;
-    color: var(--ink);
-  }
+  .tile-num { font-family: var(--f-mono); font-size: 10.5px; font-weight: 600; color: var(--ink); }
 
   .tile-age {
     font-family: var(--f-mono);
@@ -921,42 +1197,15 @@
     font-weight: 600;
   }
 
-  .tile-track {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    padding: 6px 8px;
-    border-radius: 8px;
-    background: var(--surface);
-  }
-
-  .tile-track i {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    border: 1.5px solid var(--line);
-    flex: none;
-  }
-
+  .tile-track { display: flex; align-items: center; gap: 5px; padding: 6px 8px; border-radius: 8px; background: var(--surface); }
+  .tile-track i { width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid var(--line); flex: none; }
   .tile-track i.done { background: var(--ink-mute); border-color: var(--ink-mute); }
   .tile-track i.now { background: var(--accent); border-color: var(--accent); }
   .tile-track span { font-size: 9.5px; color: var(--ink-soft); margin-left: 3px; }
 
-  .tile-foot {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 11px 13px;
-  }
-
+  .tile-foot { display: flex; align-items: center; gap: 8px; padding: 11px 13px; }
   .tile-foot b { font-size: 13px; font-weight: 600; }
-
-  .tile-foot code {
-    margin-left: auto;
-    font-family: var(--f-mono);
-    font-size: 11px;
-    color: var(--ink-mute);
-  }
+  .tile-foot code { margin-left: auto; font-family: var(--f-mono); font-size: 11px; color: var(--ink-mute); }
 
   .tile-swatch {
     width: 16px;
@@ -967,12 +1216,7 @@
     box-shadow: inset 0 -1px 2px rgba(0, 0, 0, 0.15);
   }
 
-  .gallery-note {
-    grid-column: 1 / -1;
-    font-size: 13px;
-    color: var(--ink-mute);
-    padding: 2px 2px 6px;
-  }
+  .view-note { font-size: 13px; color: var(--ink-mute); padding: 0 2px; margin: 0; max-width: 78ch; }
 </style>
 
 <div class="frame">
@@ -987,6 +1231,16 @@
         </span>
       </div>
 
+      <div>
+        <p class="shop-label">Boutique</p>
+        <select class="shop-select" id="shop-select" aria-label="Boutique active">
+          <option value="all">Toutes les boutiques</option>
+          <option value="lumen">Atelier Lumen</option>
+          <option value="calin">Maison Câlin</option>
+          <option value="luma">Luma Déco</option>
+        </select>
+      </div>
+
       <div class="search">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
           <circle cx="7.2" cy="7.2" r="4.6" /><path d="M10.6 10.6 13.5 13.5" stroke-linecap="round" />
@@ -998,10 +1252,10 @@
       <nav id="nav"></nav>
 
       <div class="me">
-        <span class="avatar">CM</span>
+        <span class="avatar">RI</span>
         <span>
-          <b>Claire Mercier</b>
-          <span>claire@atelier-lumen.fr</span>
+          <b>Rachid I.</b>
+          <span>Propriétaire · 3 boutiques</span>
         </span>
       </div>
     </aside>
@@ -1009,19 +1263,10 @@
     <!-- ==================================== zone principale ==================== -->
     <div class="main">
       <header class="head">
-        <span class="crumb">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M2.5 5.5h11v8h-11z" /><path d="M2.5 5.5 4 2.5h8l1.5 3" /><path d="M8 2.5v3" />
-          </svg>
-          Traitement
-        </span>
-        <h1>File de traitement</h1>
+        <span class="crumb" id="crumb"></span>
+        <h1 id="view-title"></h1>
 
         <div class="head-acts">
-          <div class="seg" id="mode-seg">
-            <button data-mode="one" aria-pressed="true">Aperçu</button>
-            <button data-mode="all" aria-pressed="false">Les 8 palettes</button>
-          </div>
           <div class="palette-wrap">
             <button class="btn" id="palette-btn" aria-expanded="false" aria-haspopup="dialog">
               <span class="dot-row" id="palette-dots"></span>
@@ -1047,26 +1292,161 @@
         </div>
       </header>
 
-      <div class="work">
-        <!-- file -->
-        <section class="card" aria-label="File de traitement">
-          <div class="queue-top">
-            <div class="search">
+      <!-- ================================ vue : file ================================ -->
+      <div id="view-file">
+        <div class="toolbar" style="margin-bottom:13px">
+          <div class="tb-row">
+            <div class="tb-search">
               <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
                 <circle cx="7.2" cy="7.2" r="4.6" /><path d="M10.6 10.6 13.5 13.5" stroke-linecap="round" />
               </svg>
-              Commande, client…
+              <input id="f-q" type="search" placeholder="N° de commande, client, problème…" aria-label="Rechercher" />
             </div>
-            <div class="tally-line"><b>8 commandes</b> · 6 à traiter</div>
+            <div id="quick-chips" role="group" aria-label="Vues rapides"></div>
+            <button class="tb-reset" id="f-reset">Réinitialiser</button>
           </div>
-          <ul class="rows" id="rows"></ul>
-        </section>
 
-        <!-- fiche -->
-        <section class="sheet" id="sheet" aria-label="Fiche commande"></section>
+          <div class="tb-row">
+            <div id="src-chips" role="group" aria-label="Source"></div>
+            <span class="tb-sep"></span>
+            <div id="st-chips" role="group" aria-label="Statut"></div>
+          </div>
+
+          <div class="tb-row">
+            <span class="tb-field">
+              <label for="f-sort">Trier</label>
+              <select id="f-sort">
+                <option value="age-desc">Plus ancien d'abord</option>
+                <option value="age-asc">Plus récent d'abord</option>
+                <option value="amount-desc">Montant décroissant</option>
+                <option value="amount-asc">Montant croissant</option>
+                <option value="order">N° de commande</option>
+                <option value="client">Client A → Z</option>
+              </select>
+            </span>
+            <span class="tb-field">
+              <label for="f-group">Grouper</label>
+              <select id="f-group">
+                <option value="none">Aucun</option>
+                <option value="st">Par statut</option>
+                <option value="src">Par source</option>
+                <option value="shop">Par boutique</option>
+                <option value="assignee">Par assigné</option>
+                <option value="kind">Par motif</option>
+              </select>
+            </span>
+            <span class="tb-field">
+              <label for="f-assignee">Assigné</label>
+              <select id="f-assignee">
+                <option value="all">Tous</option>
+                <option value="claire">Claire M.</option>
+                <option value="yasmine">Yasmine K.</option>
+                <option value="theo">Théo B.</option>
+                <option value="none">Non assigné</option>
+              </select>
+            </span>
+            <span class="tb-field">
+              <label for="f-kind">Motif</label>
+              <select id="f-kind">
+                <option value="all">Tous</option>
+                <option value="stock">Rupture de stock</option>
+                <option value="color">Couleur indisponible</option>
+                <option value="address">Adresse incorrecte</option>
+                <option value="email">Email invalide</option>
+                <option value="dispute">Litige</option>
+                <option value="refund">Remboursement</option>
+                <option value="wismo">Suivi demandé</option>
+              </select>
+            </span>
+            <span class="tb-count" id="f-count"></span>
+          </div>
+        </div>
+
+        <div class="work">
+          <section class="card" aria-label="File de traitement">
+            <ul class="rows" id="rows"></ul>
+          </section>
+          <section class="sheet" id="sheet" aria-label="Fiche commande"></section>
+        </div>
       </div>
 
-      <div class="gallery" id="gallery" hidden></div>
+      <!-- ============================ vue : statistiques ============================ -->
+      <div id="view-stats" hidden>
+        <div class="kpis" id="kpis" style="margin-bottom:13px"></div>
+
+        <div class="card" style="margin-bottom:13px">
+          <div class="sect">
+            <h3>Charge actuelle par employé</h3>
+            <div class="loadbars" id="loadbars"></div>
+            <div class="legend">
+              <i style="--c: var(--bar-rest)">tickets dans les temps</i>
+              <i style="--c: var(--age-3)">en retard (3 j et plus)</i>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:13px">
+          <div class="sect">
+            <h3>Efficacité — 30 derniers jours</h3>
+            <div class="table-wrap">
+              <table id="stats-table"></table>
+            </div>
+            <p class="matrix-note">Médianes, pas moyennes : un ticket oublié ne fausse pas la mesure.
+              Le taux de réouverture compte les clients qui reviennent après une réponse — c'est
+              l'indicateur de qualité, les autres mesurent la vitesse.</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="sect">
+            <h3>Activité récente — tout ce qui se fait, en direct</h3>
+            <div class="events" id="activity"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================== vue : équipe ============================== -->
+      <div id="view-team" hidden>
+        <div class="card" style="margin-bottom:13px">
+          <div class="sect">
+            <h3 style="display:flex;align-items:center;gap:10px">
+              Employés
+              <button class="btn" style="margin-left:auto">Inviter un employé</button>
+            </h3>
+            <div class="table-wrap"><table id="team-table"></table></div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:13px">
+          <div class="sect">
+            <h3 style="display:flex;align-items:center;gap:10px">
+              Comptes fournisseurs
+              <button class="btn" style="margin-left:auto">Inviter un fournisseur</button>
+            </h3>
+            <div class="sup-cards" id="sup-cards"></div>
+            <p class="matrix-note">Un compte fournisseur est cloisonné : il ne voit que les commandes
+              qui le concernent, sur ses boutiques — jamais vos clients, vos montants globaux ni les
+              autres fournisseurs.</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="sect">
+            <h3>Rôles &amp; permissions</h3>
+            <div class="table-wrap"><table id="matrix-table"></table></div>
+            <p class="matrix-note">Double authentification <b>obligatoire</b> pour Propriétaire et
+              Superviseur — ces rôles engagent de l'argent. Recommandée pour les autres.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================= vue : palettes ============================= -->
+      <div id="view-palettes" hidden>
+        <p class="view-note" style="margin-bottom:13px">Les huit palettes sont livrées dans le
+          produit : chaque employé choisit la sienne dans Réglages, le choix est enregistré sur son
+          compte. Clique sur une vignette pour l'appliquer.</p>
+        <div class="gallery" id="gallery"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -1106,6 +1486,9 @@
     $('swatches').querySelectorAll('.swatch').forEach((b) =>
       b.setAttribute('aria-pressed', String(b.dataset.key === key)),
     );
+    document.querySelectorAll('.tile').forEach((t) =>
+      t.setAttribute('aria-pressed', String(t.dataset.key === key)),
+    );
   }
 
   $('swatches').querySelectorAll('.swatch').forEach((b) =>
@@ -1142,7 +1525,7 @@
     }
   });
 
-  /* ------------------------------------------------------------ menu */
+  /* -------------------------------------------------------------- icônes */
 
   const ICONS = {
     grid: '<path d="M2.5 2.5h4.5v4.5H2.5zM9 2.5h4.5v4.5H9zM2.5 9h4.5v4.5H2.5zM9 9h4.5v4.5H9z"/>',
@@ -1156,34 +1539,25 @@
     shield: '<path d="M8 2 13 4v4.2c0 3-2.1 5-5 5.8-2.9-.8-5-2.8-5-5.8V4z"/><path d="M8 6v2.6"/><circle cx="8" cy="10.8" r=".5" fill="currentColor" stroke="none"/>',
     pin: '<circle cx="8" cy="7" r="2.2"/><path d="M8 1.8c2.6 0 4.6 2 4.6 4.6 0 3.2-4.6 7.8-4.6 7.8S3.4 9.6 3.4 6.4C3.4 3.8 5.4 1.8 8 1.8z"/>',
     gear: '<circle cx="8" cy="8" r="2.2"/><path d="M8 1.8v1.8M8 12.4v1.8M14.2 8h-1.8M3.6 8H1.8M12.4 3.6l-1.3 1.3M4.9 11.1l-1.3 1.3M12.4 12.4l-1.3-1.3M4.9 4.9 3.6 3.6"/>',
+    swatch: '<circle cx="8" cy="8" r="5.6"/><circle cx="8" cy="5.6" r=".8" fill="currentColor" stroke="none"/><circle cx="10.4" cy="7.6" r=".8" fill="currentColor" stroke="none"/><circle cx="5.6" cy="7.6" r=".8" fill="currentColor" stroke="none"/>',
+    google: '<path d="M13.6 8.1c0-.4 0-.7-.1-1.1H8v2.1h3.1c-.1.7-.5 1.3-1.1 1.7v1.4h1.8c1.1-1 1.8-2.4 1.8-4.1z" fill="#4285F4" stroke="none"/><path d="M8 13.8c1.6 0 2.9-.5 3.8-1.4L10 11c-.5.3-1.2.6-2 .6-1.5 0-2.9-1-3.3-2.5H2.8v1.5c.9 1.9 2.9 3.2 5.2 3.2z" fill="#34A853" stroke="none"/><path d="M4.7 9.1c-.1-.4-.2-.7-.2-1.1s.1-.8.2-1.1V5.4H2.8C2.4 6.2 2.2 7.1 2.2 8s.2 1.8.6 2.6l1.9-1.5z" fill="#FBBC04" stroke="none"/><path d="M8 4.4c.9 0 1.6.3 2.2.9l1.6-1.6C10.9 2.8 9.6 2.2 8 2.2c-2.3 0-4.3 1.3-5.2 3.2l1.9 1.5C5.1 5.4 6.5 4.4 8 4.4z" fill="#EA4335" stroke="none"/>',
+    key: '<circle cx="5.5" cy="10.5" r="3"/><path d="M7.8 8.2 13.5 2.5M11 5l2 2M9 7l1.5 1.5"/>',
   };
 
   const ico = (k) => `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"
     stroke-linejoin="round" stroke-linecap="round">${ICONS[k]}</svg>`;
 
-  const NAV = [
-    ['Pilotage', [['grid', "Vue d'ensemble"], ['inbox', 'File de traitement', 6, true], ['chart', 'Statistiques']]],
-    ['Commerce', [['bag', 'Commandes'], ['users', 'Clients'], ['box', 'Catalogue']]],
-    ['Fournisseur', [['truck', 'Ruptures & escalades', 3], ['pin', 'Suivi 17TRACK']]],
-    ['Finance', [['euro', 'Remboursements'], ['shield', 'Litiges Shopify', 1]]],
-    ['Plateforme', [['gear', 'Réglages']]],
-  ];
+  /* ------------------------------------------------------------- données */
 
-  $('nav').innerHTML = NAV.map(
-    ([title, items]) => `<div class="nav-group">
-      <p class="nav-title">${esc(title)}</p>
-      ${items
-        .map(
-          ([icon, label, tally, on]) => `<button class="nav-item ${on ? 'on' : ''}">
-            ${ico(icon)}${esc(label)}
-            ${tally ? `<span class="tally">${tally}</span>` : ''}
-          </button>`,
-        )
-        .join('')}
-    </div>`,
-  ).join('');
+  const SHOPS = { lumen: 'Atelier Lumen', calin: 'Maison Câlin', luma: 'Luma Déco' };
 
-  /* ------------------------------------------------------------ données */
+  const EMP = {
+    rachid: { name: 'Rachid I.', ini: 'RI', role: 'Propriétaire' },
+    claire: { name: 'Claire Mercier', ini: 'CM', role: 'Superviseure' },
+    yasmine: { name: 'Yasmine Kaddour', ini: 'YK', role: 'Agent SAV' },
+    theo: { name: 'Théo Bernard', ini: 'TB', role: 'Agent SAV' },
+    nadia: { name: 'Nadia Rousseau', ini: 'NR', role: 'Lecture seule' },
+  };
 
   const LAMP = (shade) => `<svg viewBox="0 0 32 32" aria-hidden="true">
     <path d="M16 2.5 V7" stroke="#8b93a5" stroke-width="1.6" stroke-linecap="round"/>
@@ -1203,11 +1577,16 @@
 
   const SRC = { client: 'Client', fournisseur: 'Fournisseur', litige: 'Litige Shopify' };
   const ST = { todo: 'À traiter', wait: 'En attente', done: 'Traité' };
+  const KINDS = {
+    stock: 'Rupture de stock', color: 'Couleur indisponible', address: 'Adresse incorrecte',
+    email: 'Email invalide', dispute: 'Litige', refund: 'Remboursement', wismo: 'Suivi demandé',
+    return: 'Retour',
+  };
 
   const ORDERS = [
     {
-      id: '10344', src: 'fournisseur', st: 'todo', days: 8,
-      what: 'Produit indisponible — Lampadaire Sillage', kind: 'stock',
+      id: '10344', shop: 'lumen', src: 'fournisseur', st: 'todo', days: 8, amount: 156,
+      assignee: null, what: 'Produit indisponible — Lampadaire Sillage', kind: 'stock',
       who: 'Julien Meyer', mail: 'julien.meyer91@gmail.com', total: '156,00 €',
       addr: '8 impasse Victor Hugo, 33000 Bordeaux', placed: '10 juil. 2026',
       items: [{ n: 'Lampadaire Sillage', v: 'Chêne', hex: '#c19a6b', q: 1, bad: true }],
@@ -1216,8 +1595,8 @@
       msg: "Order #10344 cannot ship. Oak version out of stock since 3 weeks, our factory closed this line. Refund or replace?",
     },
     {
-      id: '10428', src: 'fournisseur', st: 'todo', days: 6,
-      what: 'Couleur Laiton en rupture définitive', kind: 'color',
+      id: '10428', shop: 'lumen', src: 'fournisseur', st: 'todo', days: 6, amount: 128.4,
+      assignee: 'claire', what: 'Couleur Laiton en rupture définitive', kind: 'color',
       who: 'Léa Fontaine', mail: 'lea.fontaine@gmail.com', total: '128,40 €',
       addr: '14 rue des Cordeliers, 69002 Lyon', placed: '13 juil. 2026',
       items: [
@@ -1229,8 +1608,8 @@
       msg: "Order #10428 — the Brass finish is discontinued by our factory, no restock planned. We can ship Black Matte or Brushed Copper instead. Please confirm within 48h or we hold the parcel.",
     },
     {
-      id: '10391', src: 'fournisseur', st: 'todo', days: 4,
-      what: 'Adresse incomplète — numéro de rue manquant', kind: 'address',
+      id: '10391', shop: 'lumen', src: 'fournisseur', st: 'todo', days: 4, amount: 74,
+      assignee: 'yasmine', what: 'Adresse incomplète — numéro de rue manquant', kind: 'address',
       who: 'Marc Delaunay', mail: 'm.delaunay@orange.fr', total: '74,00 €',
       addr: 'Résidence Les Tilleuls, 69003 Lyon', placed: '22 juil. 2026',
       items: [{ n: 'Applique Halo', v: 'Noir mat', hex: '#2b2b2b', q: 1 }],
@@ -1239,8 +1618,18 @@
       msg: "Order #10391 — address has no street number, courier refused pickup. Please send full address.",
     },
     {
-      id: '10410', src: 'fournisseur', st: 'wait', days: 3,
-      what: 'Email client invalide — rebond à la livraison', kind: 'email',
+      id: 'C2210', shop: 'calin', src: 'fournisseur', st: 'todo', days: 5, amount: 89,
+      assignee: null, what: 'Rupture — Plaid Angora, réassort inconnu', kind: 'stock',
+      who: 'Élodie Vasseur', mail: 'elodie.vasseur@gmail.com', total: '89,00 €',
+      addr: '5 rue des Carmes, 45000 Orléans', placed: '18 juil. 2026',
+      items: [{ n: 'Plaid Angora', v: 'Écru', hex: '#e8e0d2', q: 1, bad: true }],
+      track: null,
+      from: 'Guangzhou Homeware', at: 'il y a 5 jours',
+      msg: "Order #C2210 — Angora plaid ecru out of stock, factory says maybe 4 weeks. Advise customer?",
+    },
+    {
+      id: '10410', shop: 'lumen', src: 'fournisseur', st: 'wait', days: 3, amount: 89.9,
+      assignee: 'claire', what: 'Email client invalide — rebond à la livraison', kind: 'email',
       who: 'Sophie Nguyen', mail: 'sophie.nguyen@laposte.ne', total: '89,90 €',
       addr: '27 avenue Jean Jaurès, 44000 Nantes', placed: '25 juil. 2026',
       items: [{ n: 'Suspension Brume', v: 'Opaline', hex: '#e9e4dc', q: 1 }],
@@ -1249,8 +1638,8 @@
       msg: "Order #10410 — customer email bounced, cannot send tracking. Typo in domain?",
     },
     {
-      id: '10412', src: 'litige', st: 'todo', days: 2,
-      what: 'Réclamation — produit non reçu', kind: 'dispute',
+      id: '10412', shop: 'lumen', src: 'litige', st: 'todo', days: 2, amount: 212,
+      assignee: 'claire', what: 'Réclamation — produit non reçu', kind: 'dispute',
       who: 'Karim Benali', mail: 'k.benali@gmail.com', total: '212,00 €',
       addr: '3 place du Marché, 59000 Lille', placed: '26 juin 2026',
       deadline: 'Réponse à Shopify avant le 9 août',
@@ -1261,8 +1650,20 @@
       msg: "A chargeback was opened on order #10412 for 212,00 EUR. Reason: product not received. Submit your evidence before August 9 or the amount will be debited automatically.",
     },
     {
-      id: '10375', src: 'client', st: 'todo', days: 1,
-      what: 'Abat-jour fêlé — demande de remboursement', kind: 'refund',
+      id: 'L1084', shop: 'luma', src: 'litige', st: 'wait', days: 1, amount: 147.5,
+      assignee: 'theo', what: 'Réclamation — produit endommagé', kind: 'dispute',
+      who: 'Paul Charrier', mail: 'p.charrier@outlook.fr', total: '147,50 €',
+      addr: '18 cours Berriat, 38000 Grenoble', placed: '8 juil. 2026',
+      deadline: 'Réponse à Shopify avant le 12 août',
+      items: [{ n: 'Miroir Onde', v: 'Doré', hex: '#c9a44a', q: 1 }],
+      track: { no: 'LP00108433276CN', by: 'Cainiao · Colissimo', leg: 5,
+        dates: ['9 juil.', '11 juil.', '14 juil.', '16 juil.', '18 juil.', '21 juil.'] },
+      from: 'Shopify Payments', at: 'hier',
+      msg: "A chargeback was opened on order #L1084 for 147,50 EUR. Reason: product damaged. Evidence due August 12.",
+    },
+    {
+      id: '10375', shop: 'lumen', src: 'client', st: 'todo', days: 1, amount: 96,
+      assignee: 'yasmine', what: 'Abat-jour fêlé — demande de remboursement', kind: 'refund',
       who: 'Amélie Rousseau', mail: 'a.rousseau@free.fr', total: '96,00 €',
       addr: '61 rue Sainte-Catherine, 33000 Bordeaux', placed: '20 juil. 2026',
       items: [{ n: 'Lampe Rosée', v: 'Verre soufflé', hex: '#dcc9c2', q: 1 }],
@@ -1272,19 +1673,41 @@
       msg: "Bonjour,\n\nJ'ai reçu ma lampe hier, l'abat-jour en verre est fêlé sur tout un côté. Le carton était intact. Je ne souhaite pas d'échange, je préfère être remboursée.",
     },
     {
-      id: '10402', src: 'client', st: 'todo', days: 0,
-      what: 'Où en est ma commande ?', kind: 'wismo',
+      id: 'C2187', shop: 'calin', src: 'client', st: 'todo', days: 0, amount: 54,
+      assignee: 'theo', what: 'Où en est ma commande ?', kind: 'wismo',
+      who: 'Lucie Perrot', mail: 'lucie.perrot@gmail.com', total: '54,00 €',
+      addr: '31 rue de la Paix, 10000 Troyes', placed: '24 juil. 2026',
+      items: [{ n: 'Coussin Nuage', v: 'Terracotta', hex: '#c96f4a', q: 2 }],
+      track: { no: 'LP00218755432CN', by: 'Cainiao · Colissimo', leg: 2,
+        dates: ['25 juil.', '27 juil.', '30 juil.'] },
+      from: 'Lucie Perrot', at: 'il y a 2 h',
+      msg: "Bonjour, le suivi de ma commande n'a pas bougé depuis quelques jours, pouvez-vous me dire où elle en est ?",
+    },
+    {
+      id: '10402', shop: 'lumen', src: 'client', st: 'todo', days: 0, amount: 62,
+      assignee: null, what: 'Où en est ma commande ?', kind: 'wismo',
       who: 'Thomas Girard', mail: 'thomas.girard@gmail.com', total: '62,00 €',
       addr: '9 rue du Bac, 75007 Paris', placed: '23 juil. 2026',
       items: [{ n: 'Applique Halo', v: 'Laiton', hex: '#b08d3f', q: 1 }],
       track: { no: 'LP00402118876CN', by: 'Cainiao · Colissimo', leg: 3,
         dates: ['24 juil.', '26 juil.', '29 juil.', '31 juil.'] },
-      from: 'Thomas Girard', at: "il y a 3 h",
+      from: 'Thomas Girard', at: 'il y a 3 h',
       msg: "Bonjour, ma commande est partie il y a 11 jours et le suivi ne bouge plus depuis une semaine. C'est normal ?",
     },
     {
-      id: '10298', src: 'client', st: 'done', days: 2,
-      what: 'Retour — mauvaise finition commandée', kind: 'return',
+      id: 'L1071', shop: 'luma', src: 'fournisseur', st: 'done', days: 2, amount: 76,
+      assignee: 'yasmine', what: 'Adresse corrigée — colis reparti', kind: 'address',
+      who: 'Nora Hadji', mail: 'nora.hadji@gmail.com', total: '76,00 €',
+      addr: '2 allée des Platanes, 34000 Montpellier', placed: '15 juil. 2026',
+      items: [{ n: 'Vase Strate', v: 'Sable', hex: '#d9c9a8', q: 1 }],
+      track: { no: 'LP00107122908CN', by: 'Cainiao · Colissimo', leg: 4,
+        dates: ['16 juil.', '18 juil.', '21 juil.', '23 juil.', '30 juil.'] },
+      from: 'Shenzhen Lumi', at: 'il y a 2 jours',
+      msg: "Order #L1071 — new address received, parcel re-dispatched. Thanks.",
+    },
+    {
+      id: '10298', shop: 'lumen', src: 'client', st: 'done', days: 2, amount: 42.5,
+      assignee: 'theo', what: 'Retour — mauvaise finition commandée', kind: 'return',
       who: 'Inès Lambert', mail: 'ines.lambert@free.fr', total: '42,50 €',
       addr: '12 boulevard Gambetta, 06000 Nice', placed: '4 juil. 2026',
       items: [{ n: 'Ampoule E27 ambrée', v: null, hex: '#e8c88a', q: 3, bulb: true }],
@@ -1297,7 +1720,7 @@
 
   const LEGS = [
     ['Pris en charge par le fournisseur', 'Shenzhen, CN'],
-    ['Transit à l’export', 'Aéroport de Shenzhen (SZX)'],
+    ['Transit à l’export', 'Aéroport de départ'],
     ['Transit à l’import', 'Aéroport de Paris-CDG'],
     ['Dédouanement', 'Douane française'],
     ['En cours de livraison', 'Transporteur local'],
@@ -1310,44 +1733,189 @@
     { n: 'Lampe Congère', v: 'Laiton', hex: '#b08d3f', s: '7 en stock' },
   ];
 
-  const EVENTS = [
-    ['Message du fournisseur reçu', 'Rupture signalée sur la référence Laiton', "Aujourd'hui, 08:14", 'var(--age-3)'],
-    ['Suivi mis à jour', 'Transit à l’export — Aéroport de Shenzhen', 'Hier, 14:02', 'var(--accent)'],
-    ['Commande rattachée', 'Rapprochée par l’adresse du client', '28 juil., 09:45', 'var(--age-0)'],
-  ];
-
   const ageVar = (d) => (d < 1 ? 'var(--age-0)' : d <= 2 ? 'var(--age-1)' : d <= 4 ? 'var(--age-2)' : 'var(--age-3)');
   const ageText = (d) => (d < 1 ? "aujourd'hui" : d === 1 ? '1 jour' : `${d} jours`);
 
-  let selected = '10428';
-  let action = null;
+  /* ---------------------------------------------------------------- état */
 
-  /* ------------------------------------------------------------- rendu */
+  const state = {
+    view: 'file',
+    shop: 'all',
+    q: '',
+    src: 'all',
+    st: 'all',
+    sort: 'age-desc',
+    group: 'none',
+    assignee: 'all',
+    kind: 'all',
+    quick: null,
+    selected: '10428',
+    action: null,
+  };
+
+  const QUICK = {
+    urgent: { label: 'Urgents 3 j+', test: (o) => o.days >= 3 && o.st !== 'done' },
+    litige: { label: 'Litiges à échéance', test: (o) => o.src === 'litige' && o.st !== 'done' },
+    nonassign: { label: 'Non assignés', test: (o) => !o.assignee && o.st !== 'done' },
+    montant: { label: 'Montant > 100 €', test: (o) => o.amount > 100 },
+  };
+
+  /* ----------------------------------------------------------- filtrage */
+
+  const byShop = (list) => (state.shop === 'all' ? list : list.filter((o) => o.shop === state.shop));
+
+  function filtered() {
+    let list = byShop(ORDERS).filter((o) => {
+      if (state.src !== 'all' && o.src !== state.src) return false;
+      if (state.st !== 'all' && o.st !== state.st) return false;
+      if (state.assignee !== 'all' && (o.assignee ?? 'none') !== state.assignee) return false;
+      if (state.kind !== 'all' && o.kind !== state.kind) return false;
+      if (state.quick && !QUICK[state.quick].test(o)) return false;
+      if (state.q) {
+        const hay = `${o.id} ${o.who} ${o.what} ${o.mail}`.toLowerCase();
+        if (!hay.includes(state.q.toLowerCase())) return false;
+      }
+      return true;
+    });
+
+    const sorts = {
+      'age-desc': (a, b) => b.days - a.days,
+      'age-asc': (a, b) => a.days - b.days,
+      'amount-desc': (a, b) => b.amount - a.amount,
+      'amount-asc': (a, b) => a.amount - b.amount,
+      order: (a, b) => a.id.localeCompare(b.id),
+      client: (a, b) => a.who.localeCompare(b.who, 'fr'),
+    };
+    return list.sort(sorts[state.sort]);
+  }
+
+  const GROUPS = {
+    st: { of: (o) => o.st, label: (k) => ST[k], order: ['todo', 'wait', 'done'] },
+    src: { of: (o) => o.src, label: (k) => SRC[k], order: ['fournisseur', 'litige', 'client'] },
+    shop: { of: (o) => o.shop, label: (k) => SHOPS[k], order: ['lumen', 'calin', 'luma'] },
+    assignee: {
+      of: (o) => o.assignee ?? 'none',
+      label: (k) => (k === 'none' ? 'Non assigné' : EMP[k].name),
+      order: ['claire', 'yasmine', 'theo', 'none'],
+    },
+    kind: {
+      of: (o) => o.kind, label: (k) => KINDS[k],
+      order: ['stock', 'color', 'address', 'email', 'dispute', 'refund', 'wismo', 'return'],
+    },
+  };
+
+  /* ------------------------------------------------------------- rendus */
+
+  function chipRow(el, items, current, onPick) {
+    el.innerHTML = items
+      .map(
+        ([key, label, count]) => `<button class="chip" data-key="${key}"
+          aria-pressed="${key === current}">${esc(label)}${count != null ? ` <b>${count}</b>` : ''}</button>`,
+      )
+      .join(' ');
+    el.querySelectorAll('.chip').forEach((b) => b.addEventListener('click', () => onPick(b.dataset.key)));
+  }
+
+  function renderToolbar() {
+    const base = byShop(ORDERS);
+
+    chipRow(
+      $('src-chips'),
+      [
+        ['all', 'Tout', base.length],
+        ['client', 'Client', base.filter((o) => o.src === 'client').length],
+        ['fournisseur', 'Fournisseur', base.filter((o) => o.src === 'fournisseur').length],
+        ['litige', 'Litige', base.filter((o) => o.src === 'litige').length],
+      ],
+      state.src,
+      (k) => { state.src = k; renderFile(); },
+    );
+
+    chipRow(
+      $('st-chips'),
+      [
+        ['all', 'Tous statuts'],
+        ['todo', 'À traiter', base.filter((o) => o.st === 'todo').length],
+        ['wait', 'En attente', base.filter((o) => o.st === 'wait').length],
+        ['done', 'Traité', base.filter((o) => o.st === 'done').length],
+      ],
+      state.st,
+      (k) => { state.st = k; renderFile(); },
+    );
+
+    $('quick-chips').innerHTML = Object.entries(QUICK)
+      .map(
+        ([key, q]) => `<button class="chip quick" data-key="${key}"
+          aria-pressed="${state.quick === key}">${esc(q.label)}</button>`,
+      )
+      .join(' ');
+    $('quick-chips').querySelectorAll('.chip').forEach((b) =>
+      b.addEventListener('click', () => {
+        state.quick = state.quick === b.dataset.key ? null : b.dataset.key;
+        renderFile();
+      }),
+    );
+
+    $('f-sort').value = state.sort;
+    $('f-group').value = state.group;
+    $('f-assignee').value = state.assignee;
+    $('f-kind').value = state.kind;
+  }
+
+  function rowHtml(o) {
+    const emp = o.assignee ? EMP[o.assignee] : null;
+    return `<li><button class="row" data-id="${o.id}" aria-current="${o.id === state.selected}"
+      style="--age: ${ageVar(o.days)}">
+      <span class="row-top">
+        <span class="row-num">#${o.id}</span>
+        <span class="tag tag-${o.st}">${ST[o.st]}</span>
+        <span class="age">${ageText(o.days)}</span>
+      </span>
+      <span class="row-what">${esc(o.what)}</span>
+      <span class="row-meta">
+        <span class="tag tag-${o.src}">${SRC[o.src]}</span>
+        ${state.shop === 'all' ? `<span class="tag tag-shop">${SHOPS[o.shop]}</span>` : ''}
+        <span class="row-who">${esc(o.who)}</span>
+        <span style="margin-left:auto;display:flex;align-items:center;gap:6px">
+          <span class="mini${emp ? '' : ' none'}" title="${emp ? esc(emp.name) : 'Non assigné'}">${emp ? emp.ini : '—'}</span>
+          <span class="thumbs">${o.items.map((i) => `<span class="thumb">${pic(i)}</span>`).join('')}</span>
+        </span>
+      </span>
+    </button></li>`;
+  }
 
   function renderRows() {
-    $('rows').innerHTML = ORDERS.map(
-      (o) => `<li><button class="row" data-id="${o.id}" aria-current="${o.id === selected}"
-        style="--age: ${ageVar(o.days)}">
-        <span class="row-top">
-          <span class="row-num">#${o.id}</span>
-          <span class="tag tag-${o.st}">${ST[o.st]}</span>
-          <span class="age">${ageText(o.days)}</span>
-        </span>
-        <span class="row-what">${esc(o.what)}</span>
-        <span class="row-meta">
-          <span class="tag tag-${o.src}">${SRC[o.src]}</span>
-          <span class="row-who">${esc(o.who)}</span>
-          <span class="thumbs" style="margin-left:auto">
-            ${o.items.map((i) => `<span class="thumb">${pic(i)}</span>`).join('')}
-          </span>
-        </span>
-      </button></li>`,
-    ).join('');
+    const list = filtered();
+    $('f-count').innerHTML = `<b>${list.length}</b> résultat${list.length > 1 ? 's' : ''}`;
+
+    if (list.length === 0) {
+      $('rows').innerHTML = '<li class="empty">Rien avec ces filtres. « Réinitialiser » pour repartir.</li>';
+      return;
+    }
+
+    if (state.group === 'none') {
+      $('rows').innerHTML = list.map(rowHtml).join('');
+    } else {
+      const g = GROUPS[state.group];
+      const buckets = new Map();
+      for (const o of list) {
+        const k = g.of(o);
+        if (!buckets.has(k)) buckets.set(k, []);
+        buckets.get(k).push(o);
+      }
+      $('rows').innerHTML = g.order
+        .filter((k) => buckets.has(k))
+        .map(
+          (k) => `<li class="group-head">${esc(g.label(k))} <b>${buckets.get(k).length}</b></li>` +
+            buckets.get(k).map(rowHtml).join(''),
+        )
+        .join('');
+    }
 
     $('rows').querySelectorAll('.row').forEach((b) =>
       b.addEventListener('click', () => {
-        selected = b.dataset.id;
-        action = null;
+        state.selected = b.dataset.id;
+        state.action = null;
         renderRows();
         renderSheet();
       }),
@@ -1384,7 +1952,8 @@
             <div class="kv"><dt>Remboursable</dt><dd class="mono">${esc(o.total)}</dd></div>
           </dl>
         </div>
-        <p class="note" style="margin:10px 0 0">Confirmation obligatoire, consignée au journal d'audit.</p>`;
+        <p class="note" style="margin:10px 0 0">Confirmation obligatoire, consignée au journal
+          d'audit. Les agents SAV sont plafonnés ; au-delà, validation Superviseur.</p>`;
 
     if (key === 'address')
       return `<p class="field-label">Corrigée ici, l'adresse part vers Shopify et vers le fournisseur en une fois.</p>
@@ -1405,29 +1974,43 @@
 
     if (key === 'client')
       return `<textarea class="control" rows="4" placeholder="Votre réponse au client…"></textarea>
-        <p class="note" style="margin:9px 0 0">Part depuis sav@atelier-lumen.fr, dans le fil d'origine.</p>`;
+        <p class="note" style="margin:9px 0 0">Part depuis la boîte SAV de la boutique, dans le fil d'origine.</p>`;
 
     return `<textarea class="control" rows="4" placeholder="Votre message au fournisseur…"></textarea>
-      <p class="note" style="margin:9px 0 0">Shenzhen Lumi — réponse moyenne sous 14 h.</p>`;
+      <p class="note" style="margin:9px 0 0">Réponse moyenne du fournisseur : 14 h.</p>`;
   }
 
   function renderSheet() {
-    const o = ORDERS.find((x) => x.id === selected);
+    const o = ORDERS.find((x) => x.id === state.selected) ?? filtered()[0];
+    if (!o) { $('sheet').innerHTML = '<div class="card"><p class="empty">Sélectionnez une commande.</p></div>'; return; }
+    state.selected = o.id;
+
     const acts = actionsFor(o);
-    const current = action ?? acts[0][0];
+    const current = state.action ?? acts[0][0];
 
     $('sheet').innerHTML = `
       <div class="card">
         <div class="sheet-head">
           <div>
             <div class="sheet-num">#${o.id}</div>
-            <div class="sheet-sub">${esc(o.who)} · ${esc(o.mail)}</div>
+            <div class="sheet-sub">${esc(o.who)} · ${esc(o.mail)} · ${SHOPS[o.shop]}</div>
           </div>
-          <div style="margin-left:auto;text-align:right">
-            <span class="tag tag-${o.st}">${ST[o.st]}</span>
-            <div class="sheet-sub" style="margin-top:6px">
-              Ouvert depuis <b style="color:${ageVar(o.days)}">${ageText(o.days)}</b>
-            </div>
+          <div style="margin-left:auto;text-align:right;display:flex;flex-direction:column;gap:7px;align-items:flex-end">
+            <span>
+              <span class="tag tag-${o.st}">${ST[o.st]}</span>
+              <span class="sheet-sub" style="display:inline;margin-left:8px">
+                Ouvert depuis <b style="color:${ageVar(o.days)}">${ageText(o.days)}</b>
+              </span>
+            </span>
+            <span class="assign">
+              <span class="note">Assigné à</span>
+              <select aria-label="Assigné à">
+                <option${!o.assignee ? ' selected' : ''}>Non assigné</option>
+                <option${o.assignee === 'claire' ? ' selected' : ''}>Claire Mercier</option>
+                <option${o.assignee === 'yasmine' ? ' selected' : ''}>Yasmine Kaddour</option>
+                <option${o.assignee === 'theo' ? ' selected' : ''}>Théo Bernard</option>
+              </select>
+            </span>
           </div>
         </div>
 
@@ -1443,8 +2026,8 @@
           <div class="options" style="margin-bottom:14px">
             ${acts
               .map(
-                ([k, label]) => `<button class="opt${k === 'refund' ? ' danger' : ''}"
-                  data-act="${k}" aria-pressed="${k === current}">${esc(label)}</button>`,
+                ([k, label]) => `<button class="opt" data-act="${k}"
+                  aria-pressed="${k === current}">${esc(label)}</button>`,
               )
               .join('')}
           </div>
@@ -1506,30 +2089,15 @@
               : `<p class="note">Aucun numéro de suivi : le colis n'a jamais été expédié.</p>`
           }
         </div>
-
-        <div class="sect">
-          <h3>Historique</h3>
-          <div class="events">
-            ${EVENTS.map(
-              ([t, d, when, c]) => `<div class="event" style="--c:${c}">
-                <i></i><span><b>${esc(t)}</b> — ${esc(d)}</span><time>${esc(when)}</time>
-              </div>`,
-            ).join('')}
-          </div>
-        </div>
       </div>`;
 
     $('sheet').querySelectorAll('.opt').forEach((b) =>
       b.addEventListener('click', () => {
-        action = b.dataset.act;
+        state.action = b.dataset.act;
         renderSheet();
       }),
     );
 
-    bindSubs();
-  }
-
-  function bindSubs() {
     const subs = $('sheet').querySelectorAll('.sub');
     subs.forEach((b) =>
       b.addEventListener('click', () => {
@@ -1538,74 +2106,370 @@
     );
   }
 
-  /* ------------------------------------------------------------ galerie */
+  function renderFile() {
+    renderToolbar();
+    renderRows();
+    renderSheet();
+  }
 
-  function renderGallery() {
-    $('gallery').innerHTML =
-      `<p class="gallery-note">Les huit palettes sont livrées dans le produit : chaque agent
-        choisit la sienne dans Réglages, le choix est enregistré sur son compte.
-        Clique sur une vignette pour l'appliquer.</p>` +
-      PALETTES.map(
-        (p) => `<button class="tile" data-accent="${p.key}" data-key="${p.key}"
-          aria-pressed="${p.key === accent}">
-          <span class="tile-app">
-            <span class="tile-inner">
-              <span class="tile-bar">
-                <span class="tile-mark">cS</span>
-                <span class="tile-name">cSAV Copilot</span>
-                <span class="tile-btn">Escalade</span>
-              </span>
-              <span class="tile-row sel">
-                <span class="tile-num">#10428</span>
-                <span class="tile-age" style="--age: var(--age-3)">6 j</span>
-                <span class="tile-what">Couleur Laiton en rupture</span>
-              </span>
-              <span class="tile-row">
-                <span class="tile-num">#10391</span>
-                <span class="tile-age" style="--age: var(--age-2)">4 j</span>
-                <span class="tile-what">Adresse incomplète</span>
-              </span>
-              <span class="tile-opts">
-                <span class="tile-opt on">Substitution</span>
-                <span class="tile-opt">Rembourser</span>
-              </span>
-              <span class="tile-track">
-                <i class="done"></i><i class="now"></i><i></i><i></i>
-                <span>Transit à l’export</span>
-              </span>
+  /* -------------------------------------------------------- statistiques */
+
+  const STATS = {
+    claire: { closed: 4.6, first: '1 h 50', res: '0,9 j', reopen: '2,4 %', refunds: '3 · 212 €', trend: [3, 4, 5, 4, 5, 5, 6] },
+    yasmine: { closed: 3.8, first: '2 h 20', res: '1,2 j', reopen: '3,1 %', refunds: '2 · 138 €', trend: [2, 3, 3, 4, 4, 3, 4] },
+    theo: { closed: 2.9, first: '3 h 40', res: '1,8 j', reopen: '6,8 %', refunds: '4 · 288 €', trend: [3, 3, 2, 3, 2, 3, 3] },
+  };
+
+  function spark(values) {
+    const w = 92, h = 26, max = Math.max(...values), min = Math.min(...values);
+    const pts = values.map((v, i) => [
+      3 + (i * (w - 6)) / (values.length - 1),
+      h - 4 - ((v - min) / (max - min || 1)) * (h - 9),
+    ]);
+    const line = pts.map((p) => p.map((n) => n.toFixed(1)).join(',')).join(' ');
+    const [ex, ey] = pts[pts.length - 1];
+    return `<svg class="spark" width="${w}" height="${h}" role="img" aria-label="Tendance sur 7 jours">
+      <polygon class="fill" points="3,${h - 3} ${line} ${w - 3},${h - 3}" />
+      <polyline points="${line}" />
+      <circle cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="2.6" />
+    </svg>`;
+  }
+
+  function renderStats() {
+    const base = byShop(ORDERS);
+    const open = base.filter((o) => o.st !== 'done');
+    const late = open.filter((o) => o.days >= 3);
+
+    $('kpis').innerHTML = [
+      ['À traiter maintenant', String(open.length),
+        late.length ? `dont ${late.length} en retard (3 j+)` : 'rien en retard', late.length ? 'bad' : 'good'],
+      ['1re réponse (méd.)', '2 h 40', 'objectif : sous 4 h', 'good'],
+      ['Résolution (méd.)', '1,4 j', 'objectif : sous 2 j', 'good'],
+      ['Taux de réouverture', '4,1 %', 'le client revient — qualité', ''],
+      ['Remboursé · 30 j', '638 €', '9 remboursements', ''],
+    ]
+      .map(
+        ([label, value, note, cls]) => `<div class="card kpi">
+          <span class="kpi-label">${esc(label)}</span>
+          <span class="kpi-value">${esc(value)}</span>
+          <span class="kpi-note ${cls}">${esc(note)}</span>
+        </div>`,
+      )
+      .join('');
+
+    const perEmp = ['claire', 'yasmine', 'theo'].map((k) => {
+      const mine = open.filter((o) => o.assignee === k);
+      const mineLate = mine.filter((o) => o.days >= 3);
+      return { k, open: mine.length, late: mineLate.length, ages: mine.map((o) => o.days) };
+    });
+    const unassigned = open.filter((o) => !o.assignee);
+    perEmp.push({ k: 'none', open: unassigned.length, late: unassigned.filter((o) => o.days >= 3).length, ages: unassigned.map((o) => o.days) });
+
+    const maxOpen = Math.max(...perEmp.map((e) => e.open), 1);
+
+    $('loadbars').innerHTML = perEmp
+      .map((e) => {
+        const emp = e.k === 'none' ? { name: 'Non assigné', ini: '—' } : EMP[e.k];
+        const rest = e.open - e.late;
+        const chips = [
+          [e.ages.filter((d) => d < 1).length, 'var(--age-0)', '< 24 h'],
+          [e.ages.filter((d) => d >= 1 && d <= 2).length, 'var(--age-1)', '1-2 j'],
+          [e.ages.filter((d) => d >= 3 && d <= 4).length, 'var(--age-2)', '3-4 j'],
+          [e.ages.filter((d) => d >= 5).length, 'var(--age-3)', '5 j+'],
+        ].filter(([n]) => n > 0);
+
+        return `<div class="loadbar">
+          <span class="who"><span class="mini${e.k === 'none' ? ' none' : ''}">${emp.ini}</span>${esc(emp.name)}</span>
+          <span>
+            <span class="track-bar" aria-hidden="true">
+              ${rest ? `<i class="rest" style="flex:${rest}"></i>` : ''}
+              ${e.late ? `<i class="late" style="flex:${e.late}"></i>` : ''}
+              <i style="flex:${Math.max(maxOpen - e.open, 0)}"></i>
+            </span>
+            <span class="agechips">
+              ${chips.map(([n, c, l]) => `<span class="agechip" style="--c:${c}">${n} × ${l}</span>`).join('')}
             </span>
           </span>
-          <span class="tile-foot">
-            <span class="tile-swatch"></span>
-            <b>${esc(p.name)}</b>
-            <code>${esc(p.hex)}</code>
+          <span class="nums"><b>${e.open}</b> ouvert${e.open > 1 ? 's' : ''}${
+            e.late ? ` · <span class="late-n">${e.late} en retard</span>` : ''}</span>
+        </div>`;
+      })
+      .join('');
+
+    $('stats-table').innerHTML =
+      `<thead><tr>
+        <th>Employé</th><th>Rôle</th><th>Ouverts</th><th>En retard</th><th>Clos / jour</th>
+        <th>1re réponse</th><th>Résolution</th><th>Réouverture</th><th>Remboursés</th><th>Tendance 7 j</th>
+      </tr></thead><tbody>` +
+      ['claire', 'yasmine', 'theo']
+        .map((k) => {
+          const e = perEmp.find((x) => x.k === k);
+          const s = STATS[k];
+          return `<tr>
+            <td><span class="who"><span class="mini">${EMP[k].ini}</span>${esc(EMP[k].name)}</span></td>
+            <td><span class="tag ${EMP[k].role === 'Lecture seule' ? 'tag-role-muted' : 'tag-role'}">${EMP[k].role}</span></td>
+            <td class="num">${e.open}</td>
+            <td class="num">${e.late ? `<span style="color:var(--age-3);font-weight:600">${e.late}</span>` : '0'}</td>
+            <td class="num">${String(s.closed).replace('.', ',')}</td>
+            <td class="num">${s.first}</td>
+            <td class="num">${s.res}</td>
+            <td class="num">${s.reopen}</td>
+            <td class="num">${s.refunds}</td>
+            <td>${spark(s.trend)}</td>
+          </tr>`;
+        })
+        .join('') +
+      '</tbody>';
+
+    $('activity').innerHTML = [
+      ['Claire Mercier', 'a répondu à Shopify sur le litige', '#10412', 'il y a 12 min', 'var(--accent)'],
+      ['Yasmine Kaddour', 'a corrigé l’adresse et relancé le fournisseur', '#10391', 'il y a 34 min', 'var(--accent)'],
+      ['Théo Bernard', 'a remboursé 42,50 €', '#10298', 'il y a 1 h', 'var(--age-3)'],
+      ['Shenzhen Lumi', 'a signalé une rupture de couleur', '#10428', 'il y a 2 h', 'var(--warn)'],
+      ['Claire Mercier', 'a proposé une substitution au client', '#C2210', 'il y a 3 h', 'var(--accent)'],
+      ['Guangzhou Homeware', 'a répondu dans son fil', '#C2210', 'hier, 18:40', 'var(--warn)'],
+      ['Rachid I.', 'a modifié le rôle de Théo Bernard', 'Équipe', 'hier, 09:15', 'var(--age-0)'],
+    ]
+      .map(
+        ([who, what, target, when, c]) => `<div class="event" style="--c:${c}">
+          <i></i><span><b>${esc(who)}</b> ${esc(what)} — <span class="mono">${esc(target)}</span></span>
+          <time>${esc(when)}</time>
+        </div>`,
+      )
+      .join('');
+  }
+
+  /* -------------------------------------------------------------- équipe */
+
+  function renderTeam() {
+    const members = [
+      { k: 'rachid', mail: 'rachid@atelier-lumen.fr', conn: 'google', tfa: 'on', shops: 'Toutes' },
+      { k: 'claire', mail: 'claire@atelier-lumen.fr', conn: 'password', tfa: 'on', shops: 'Toutes' },
+      { k: 'yasmine', mail: 'yasmine@atelier-lumen.fr', conn: 'google', tfa: 'on', shops: 'Atelier Lumen, Luma Déco' },
+      { k: 'theo', mail: 'theo@atelier-lumen.fr', conn: 'password', tfa: 'off', shops: 'Maison Câlin' },
+      { k: 'nadia', mail: 'nadia@cabinet-comptable.fr', conn: 'google', tfa: 'off', shops: 'Toutes' },
+    ];
+
+    $('team-table').innerHTML =
+      `<thead><tr>
+        <th>Employé</th><th>Rôle</th><th>Connexion</th><th>2FA</th><th>Boutiques</th><th>Charge</th><th></th>
+      </tr></thead><tbody>` +
+      members
+        .map((m) => {
+          const e = EMP[m.k];
+          const open = ORDERS.filter((o) => o.assignee === m.k && o.st !== 'done').length;
+          return `<tr class="member-line">
+            <td><span class="who"><span class="mini">${e.ini}</span>
+              <span>${esc(e.name)}<br /><span class="note">${esc(m.mail)}</span></span></span></td>
+            <td><span class="tag ${e.role === 'Lecture seule' ? 'tag-role-muted' : 'tag-role'}">${e.role}</span></td>
+            <td><span class="conn-chip">${m.conn === 'google' ? ico('google') + ' Google' : ico('key') + ' Mot de passe'}</span></td>
+            <td>${
+              m.tfa === 'on'
+                ? '<span class="tag tag-done">Activée</span>'
+                : '<span class="tag tag-wait">À activer</span>'
+            }</td>
+            <td class="note">${esc(m.shops)}</td>
+            <td class="num">${open ? `${open} ticket${open > 1 ? 's' : ''}` : '—'}</td>
+            <td><button class="btn" style="padding:5px 11px;font-size:12px">Modifier</button></td>
+          </tr>`;
+        })
+        .join('') +
+      '</tbody>';
+
+    $('sup-cards').innerHTML = [
+      {
+        name: 'Shenzhen Lumi', ini: 'SL', mail: 'ops@shenzhen-lumi.example',
+        shops: 'Atelier Lumen · Luma Déco', last: 'dernier message il y a 2 h', open: 4,
+      },
+      {
+        name: 'Guangzhou Homeware', ini: 'GH', mail: 'sav@gz-homeware.example',
+        shops: 'Maison Câlin', last: 'dernier message hier', open: 1,
+      },
+    ]
+      .map(
+        (s) => `<div class="sup-card">
+          <div class="top">
+            <span class="mini">${s.ini}</span>
+            <b>${esc(s.name)}</b>
+            <span class="tag tag-fournisseur" style="margin-left:auto">${s.open} en cours</span>
+          </div>
+          <dl style="margin:0">
+            <div class="kv"><dt>Contact</dt><dd class="mono" style="font-size:12px">${esc(s.mail)}</dd></div>
+            <div class="kv"><dt>Boutiques</dt><dd>${esc(s.shops)}</dd></div>
+            <div class="kv"><dt>Activité</dt><dd>${esc(s.last)}</dd></div>
+          </dl>
+        </div>`,
+      )
+      .join('');
+
+    const PERMS = [
+      ['Voir toutes les boutiques', 1, 1, 0, 1, 0],
+      ['Traiter et répondre au client', 1, 1, 1, 0, 0],
+      ['Escalader au fournisseur', 1, 1, 1, 0, 0],
+      ['Rembourser (plafonné)', 1, 1, 1, 0, 0],
+      ['Rembourser sans plafond', 1, 1, 0, 0, 0],
+      ['Corriger adresse et commande', 1, 1, 1, 0, 0],
+      ['Voir les statistiques d’équipe', 1, 1, 0, 1, 0],
+      ['Gérer comptes et rôles', 1, 0, 0, 0, 0],
+      ['Connexions et facturation', 1, 0, 0, 0, 0],
+      ['Signaler un problème commande', 0, 0, 0, 0, 1],
+      ['Répondre dans son fil', 0, 0, 0, 0, 1],
+    ];
+
+    $('matrix-table').innerHTML =
+      `<thead><tr><th>Permission</th>
+        <th class="center">Propriétaire</th><th class="center">Superviseur</th>
+        <th class="center">Agent SAV</th><th class="center">Lecture seule</th>
+        <th class="center">Fournisseur</th></tr></thead><tbody>` +
+      PERMS.map(
+        ([label, ...cols]) => `<tr><td style="white-space:normal">${esc(label)}</td>${cols
+          .map((c) => (c ? '<td class="ok-cell">✓</td>' : '<td class="no-cell">·</td>'))
+          .join('')}</tr>`,
+      ).join('') +
+      '</tbody>';
+  }
+
+  /* ------------------------------------------------------------- galerie */
+
+  function renderGallery() {
+    $('gallery').innerHTML = PALETTES.map(
+      (p) => `<button class="tile" data-accent="${p.key}" data-key="${p.key}"
+        aria-pressed="${p.key === accent}">
+        <span class="tile-app">
+          <span class="tile-inner">
+            <span class="tile-bar">
+              <span class="tile-mark">cS</span>
+              <span class="tile-name">cSAV Copilot</span>
+              <span class="tile-btn">Escalade</span>
+            </span>
+            <span class="tile-row sel">
+              <span class="tile-num">#10428</span>
+              <span class="tile-age" style="--age: var(--age-3)">6 j</span>
+              <span class="tile-what">Couleur Laiton en rupture</span>
+            </span>
+            <span class="tile-row">
+              <span class="tile-num">#10391</span>
+              <span class="tile-age" style="--age: var(--age-2)">4 j</span>
+              <span class="tile-what">Adresse incomplète</span>
+            </span>
+            <span class="tile-opts">
+              <span class="tile-opt on">Substitution</span>
+              <span class="tile-opt">Rembourser</span>
+            </span>
+            <span class="tile-track">
+              <i class="done"></i><i class="now"></i><i></i><i></i>
+              <span>Transit à l’export</span>
+            </span>
           </span>
-        </button>`,
-      ).join('');
+        </span>
+        <span class="tile-foot">
+          <span class="tile-swatch"></span>
+          <b>${esc(p.name)}</b>
+          <code>${esc(p.hex)}</code>
+        </span>
+      </button>`,
+    ).join('');
 
     $('gallery').querySelectorAll('.tile').forEach((t) =>
-      t.addEventListener('click', () => {
-        setAccent(t.dataset.key);
-        setMode('one');
-      }),
+      t.addEventListener('click', () => setAccent(t.dataset.key)),
     );
   }
 
-  function setMode(mode) {
-    $('gallery').hidden = mode !== 'all';
-    document.querySelector('.work').hidden = mode === 'all';
-    $('mode-seg').querySelectorAll('button').forEach((b) =>
-      b.setAttribute('aria-pressed', String(b.dataset.mode === mode)),
+  /* ---------------------------------------------------------- navigation */
+
+  const VIEWS = {
+    file: { title: 'File de traitement', crumb: 'Traitement', icon: 'inbox' },
+    stats: { title: "Statistiques d'équipe", crumb: 'Pilotage', icon: 'chart' },
+    team: { title: 'Équipe & rôles', crumb: 'Plateforme', icon: 'users' },
+    palettes: { title: 'Palettes', crumb: 'Plateforme', icon: 'swatch' },
+  };
+
+  const NAV = [
+    ['Pilotage', [
+      ['grid', "Vue d'ensemble", null, null],
+      ['inbox', 'File de traitement', 'file', () => byShop(ORDERS).filter((o) => o.st === 'todo').length],
+      ['chart', "Statistiques d'équipe", 'stats', null],
+    ]],
+    ['Commerce', [
+      ['bag', 'Commandes', null, null],
+      ['users', 'Clients', null, null],
+      ['box', 'Catalogue', null, null],
+    ]],
+    ['Fournisseur', [
+      ['truck', 'Ruptures & escalades', null, () => byShop(ORDERS).filter((o) => o.src === 'fournisseur' && o.st === 'todo').length],
+      ['pin', 'Suivi 17TRACK', null, null],
+    ]],
+    ['Finance', [
+      ['euro', 'Remboursements', null, null],
+      ['shield', 'Litiges Shopify', null, () => byShop(ORDERS).filter((o) => o.src === 'litige' && o.st === 'todo').length],
+    ]],
+    ['Plateforme', [
+      ['users', 'Équipe & rôles', 'team', null],
+      ['swatch', 'Palettes', 'palettes', null],
+      ['gear', 'Réglages', null, null],
+    ]],
+  ];
+
+  function renderNav() {
+    $('nav').innerHTML = NAV.map(
+      ([title, items]) => `<div class="nav-group">
+        <p class="nav-title">${esc(title)}</p>
+        ${items
+          .map(([icon, label, view, tally]) => {
+            const n = tally ? tally() : 0;
+            return `<button class="nav-item ${view === state.view ? 'on' : ''}" ${view ? `data-view="${view}"` : ''}>
+              ${ico(icon)}${esc(label)}
+              ${n ? `<span class="tally">${n}</span>` : ''}
+            </button>`;
+          })
+          .join('')}
+      </div>`,
+    ).join('');
+
+    $('nav').querySelectorAll('[data-view]').forEach((b) =>
+      b.addEventListener('click', () => setView(b.dataset.view)),
     );
-    if (mode === 'all') renderGallery();
   }
 
-  $('mode-seg').querySelectorAll('button').forEach((b) =>
-    b.addEventListener('click', () => setMode(b.dataset.mode)),
-  );
+  function setView(view) {
+    state.view = view;
+    for (const key of Object.keys(VIEWS)) $(`view-${key}`).hidden = key !== view;
+    $('view-title').textContent = VIEWS[view].title;
+    $('crumb').innerHTML = `${ico(VIEWS[view].icon)} ${esc(VIEWS[view].crumb)}`;
+    renderNav();
+    if (view === 'file') renderFile();
+    if (view === 'stats') renderStats();
+    if (view === 'team') renderTeam();
+    if (view === 'palettes') renderGallery();
+  }
+
+  /* ------------------------------------------------------------ écouteurs */
+
+  $('shop-select').addEventListener('change', (e) => {
+    state.shop = e.target.value;
+    renderNav();
+    if (state.view === 'file') renderFile();
+    if (state.view === 'stats') renderStats();
+  });
+
+  $('f-q').addEventListener('input', (e) => { state.q = e.target.value; renderRows(); });
+  $('f-sort').addEventListener('change', (e) => { state.sort = e.target.value; renderRows(); });
+  $('f-group').addEventListener('change', (e) => { state.group = e.target.value; renderRows(); });
+  $('f-assignee').addEventListener('change', (e) => { state.assignee = e.target.value; renderFile(); });
+  $('f-kind').addEventListener('change', (e) => { state.kind = e.target.value; renderFile(); });
+
+  $('f-reset').addEventListener('click', () => {
+    Object.assign(state, {
+      q: '', src: 'all', st: 'all', sort: 'age-desc', group: 'none',
+      assignee: 'all', kind: 'all', quick: null,
+    });
+    $('f-q').value = '';
+    renderFile();
+  });
+
+  /* ---------------------------------------------------------- démarrage */
 
   setAccent('violet');
   document.documentElement.dataset.theme = 'light';
-  renderRows();
-  renderSheet();
+  setView('file');
 </script>
