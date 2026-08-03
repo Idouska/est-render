@@ -1,4 +1,4 @@
-<title>cSAV Copilot — poste de travail</title>
+<title>SAV Running Upscale — poste de travail</title>
 
 <style>
   /* ===================================================== palettes ====== */
@@ -702,40 +702,129 @@
   .crossed { color: var(--ink-mute); font-size: 12.5px; }
 
   /* ----------------------------------------------------- horloges ------ */
+  /* Trois horloges, trois pays : chaque carte porte le drapeau, les couleurs
+     nationales en fond, et un liseré aux couleurs du drapeau. */
 
-  .clocks {
-    display: flex;
-    align-items: stretch;
-    gap: 1px;
-    background: var(--line);
-    border: 1px solid var(--line);
-    border-radius: var(--r-md);
+  .clocks { display: flex; gap: 8px; }
+
+  .clock {
+    position: relative;
     overflow: hidden;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 14px 9px 10px;
+    border-radius: var(--r-md);
+    border: 1px solid var(--ck-line);
+    background: var(--ck-bg);
+    box-shadow: 0 1px 3px rgba(20, 20, 40, 0.07);
   }
 
-  .clock { background: var(--surface); padding: 5px 12px 6px; text-align: center; min-width: 76px; }
+  .clock::after {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 3px;
+    background: var(--ck-ribbon);
+  }
+
+  .clock .flag {
+    width: 27px;
+    height: 19px;
+    border-radius: 4px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+    flex: none;
+  }
+
+  .clock .flag svg { display: block; width: 100%; height: 100%; }
+
+  .clock .deco {
+    position: absolute;
+    right: -7px;
+    top: -7px;
+    width: 34px;
+    height: 34px;
+    opacity: 0.16;
+    pointer-events: none;
+  }
 
   .clock .c-city {
     display: block;
     font-size: 9.5px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
+    font-weight: 700;
+    letter-spacing: 0.09em;
     text-transform: uppercase;
-    color: var(--ink-mute);
+    color: var(--ck-mute);
   }
 
   .clock .c-time {
     display: block;
     font-family: var(--f-mono);
     font-variant-numeric: tabular-nums;
-    font-size: 15px;
+    font-size: 16.5px;
     font-weight: 600;
     letter-spacing: -0.01em;
-    line-height: 1.2;
+    line-height: 1.15;
+    color: var(--ck-ink);
   }
 
-  .clock .c-note { display: inline-flex; align-items: center; gap: 4px; font-size: 9.5px; color: var(--ink-mute); }
+  .clock .c-note { display: inline-flex; align-items: center; gap: 4px; font-size: 9.5px; color: var(--ck-mute); }
   .clock .c-note i { width: 5px; height: 5px; border-radius: 50%; background: var(--c); }
+
+  .clock-ma {
+    --ck-bg: linear-gradient(135deg, #fdf3ec, #fbe3d8);
+    --ck-line: #ecc9b8;
+    --ck-ink: #7c2d12;
+    --ck-mute: #b0633f;
+    --ck-ribbon: linear-gradient(90deg, #c1272d 55%, #006233 55%);
+  }
+
+  .clock-fr {
+    --ck-bg: linear-gradient(135deg, #f2f6fe, #e3ebfb);
+    --ck-line: #c3d2f0;
+    --ck-ink: #1e3a8a;
+    --ck-mute: #5b74b8;
+    --ck-ribbon: linear-gradient(90deg, #002395 33%, #ffffff 33% 66%, #ed2939 66%);
+  }
+
+  .clock-cn {
+    --ck-bg: linear-gradient(135deg, #fdf0ee, #fbdad4);
+    --ck-line: #eec2b6;
+    --ck-ink: #9f1d17;
+    --ck-mute: #c05a44;
+    --ck-ribbon: linear-gradient(90deg, #de2910 55%, #ffde00 55%);
+  }
+
+  [data-theme="dark"] .clock-ma { --ck-bg: linear-gradient(135deg, #2e211a, #3a2317); --ck-line: #55352a; --ck-ink: #f3c9a8; --ck-mute: #c08a68; }
+  [data-theme="dark"] .clock-fr { --ck-bg: linear-gradient(135deg, #1c2233, #202c48); --ck-line: #35446b; --ck-ink: #b9c9f2; --ck-mute: #7a8fc4; }
+  [data-theme="dark"] .clock-cn { --ck-bg: linear-gradient(135deg, #301b18, #3e1e17); --ck-line: #5c3128; --ck-ink: #f4b8a6; --ck-mute: #c27a62; }
+
+  /* ------------------------------------------------ risque litiges ----- */
+
+  .risk { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .risk .note { flex: none; }
+
+  .riskbar {
+    position: relative;
+    flex: 1;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--inset);
+  }
+
+  .riskbar i { display: block; height: 100%; border-radius: 999px; background: var(--rc); }
+
+  .riskbar u {
+    position: absolute;
+    left: 50%;
+    top: -3px;
+    bottom: -3px;
+    width: 2px;
+    background: var(--ink-mute);
+    border-radius: 1px;
+    opacity: 0.55;
+  }
 
   /* ------------------------------------------- résumé + fil récent ----- */
 
@@ -1383,10 +1472,12 @@
     <!-- ============================= barre latérale ============================= -->
     <aside class="side">
       <div class="logo">
-        <span class="logo-mark">cS</span>
+        <span class="logo-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"
+          style="width:19px;height:19px"><path d="M4.5 5.5 11 12l-6.5 6.5M12.5 5.5 19 12l-6.5 6.5"/></svg></span>
         <span>
-          <b>cSAV Copilot</b>
-          <span>Poste de travail SAV</span>
+          <b>SAV Running Upscale</b>
+          <span>runningupscale.com</span>
         </span>
       </div>
 
@@ -1427,22 +1518,6 @@
 
         <div class="head-acts">
           <div class="clocks" id="clocks" aria-label="Heure à Agadir, Paris et en Chine"></div>
-          <div class="palette-wrap">
-            <button class="btn" id="palette-btn" aria-expanded="false" aria-haspopup="dialog">
-              <span class="dot-row" id="palette-dots"></span>
-              Apparence
-            </button>
-            <div class="pop" id="pop" role="dialog" aria-label="Apparence" hidden>
-              <h4>Couleur d'accent</h4>
-              <div class="swatches" id="swatches"></div>
-              <div class="pop-sep"></div>
-              <h4>Thème</h4>
-              <div class="seg" id="theme-seg">
-                <button data-theme="light" aria-pressed="true">Clair</button>
-                <button data-theme="dark" aria-pressed="false">Sombre</button>
-              </div>
-            </div>
-          </div>
           <button class="btn btn-main" id="new-esc">
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
               <path d="M8 3.5v9M3.5 8h9" />
@@ -1689,20 +1764,12 @@
 
   let accent = 'violet';
 
-  $('swatches').innerHTML = PALETTES.map(
-    (p) => `<button class="swatch" data-key="${p.key}" aria-pressed="${p.key === accent}">
-      <i style="background:${p.hex}"></i>${esc(p.name)}
-    </button>`,
-  ).join('');
-
-  $('palette-dots').innerHTML = PALETTES.slice(0, 4)
-    .map((p) => `<i style="background:${p.hex}"></i>`)
-    .join('');
+  let theme = 'light';
 
   function setAccent(key) {
     accent = key;
     document.documentElement.dataset.accent = key;
-    $('swatches').querySelectorAll('.swatch').forEach((b) =>
+    document.querySelectorAll('.swatch').forEach((b) =>
       b.setAttribute('aria-pressed', String(b.dataset.key === key)),
     );
     document.querySelectorAll('.tile').forEach((t) =>
@@ -1710,39 +1777,13 @@
     );
   }
 
-  $('swatches').querySelectorAll('.swatch').forEach((b) =>
-    b.addEventListener('click', () => setAccent(b.dataset.key)),
-  );
-
-  $('theme-seg').querySelectorAll('button').forEach((b) =>
-    b.addEventListener('click', () => {
-      document.documentElement.dataset.theme = b.dataset.theme;
-      $('theme-seg').querySelectorAll('button').forEach((o) =>
-        o.setAttribute('aria-pressed', String(o === b)),
-      );
-    }),
-  );
-
-  $('palette-btn').addEventListener('click', () => {
-    const open = $('pop').hidden;
-    $('pop').hidden = !open;
-    $('palette-btn').setAttribute('aria-expanded', String(open));
-  });
-
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('.palette-wrap') && !$('pop').hidden) {
-      $('pop').hidden = true;
-      $('palette-btn').setAttribute('aria-expanded', 'false');
-    }
-  });
-
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !$('pop').hidden) {
-      $('pop').hidden = true;
-      $('palette-btn').setAttribute('aria-expanded', 'false');
-      $('palette-btn').focus();
-    }
-  });
+  function setTheme(t) {
+    theme = t;
+    document.documentElement.dataset.theme = t;
+    document.querySelectorAll('#theme-seg button').forEach((b) =>
+      b.setAttribute('aria-pressed', String(b.dataset.theme === t)),
+    );
+  }
 
   /* -------------------------------------------------------------- icônes */
 
@@ -1773,6 +1814,10 @@
   /* Code couleur par boutique — modifiable dans Réglages, suivi partout. */
   const SHOP_COLORS = { lumen: '#0284c7', calin: '#db2777', luma: '#9333ea' };
   const COLOR_CHOICES = ['#0284c7', '#db2777', '#9333ea', '#059669', '#d97706', '#dc2626'];
+  /* Taux de chargebacks 30 j par boutique — seuil Shopify Payments : 1 %. */
+  const DISPUTE_RATE = { lumen: 0.6, calin: 0.3, luma: 1.1 };
+  const riskColor = (r) => (r >= 1 ? 'var(--crit)' : r >= 0.7 ? 'var(--warn)' : 'var(--ok)');
+
   const shopTag = (s) => `<span class="tag tag-shop" style="--c:${SHOP_COLORS[s]}">${SHOPS[s]}</span>`;
 
   const EMP = {
@@ -2553,6 +2598,14 @@
       ['Résolution (méd.)', '1,4 j', 'objectif : sous 2 j', 'good'],
       ['Taux de réouverture', '4,1 %', 'le client revient — qualité', ''],
       ['Remboursé · 30 j', '638 €', '9 remboursements', ''],
+      ...(state.shop === 'all'
+        ? [['Taux de litige · 30 j', '0,6 %', 'Urban Pace à 1,1 % — seuil 1 % dépassé', 'bad']]
+        : [[
+            'Taux de litige · 30 j',
+            `${String(DISPUTE_RATE[state.shop]).replace('.', ',')} %`,
+            DISPUTE_RATE[state.shop] >= 1 ? 'seuil Shopify 1 % dépassé' : 'sous le seuil Shopify de 1 %',
+            DISPUTE_RATE[state.shop] >= 1 ? 'bad' : 'good',
+          ]]),
     ]
       .map(
         ([label, value, note, cls]) => `<div class="card kpi">
@@ -2741,7 +2794,26 @@
         const prods = PRODUCTS.filter(([, , , s]) => shops.includes(s));
         $('sup-title').textContent = `Portail — ${b.dataset.name}`;
         $('sup-body').innerHTML = `
-          <p class="field-label" style="margin-top:4px">Commandes actives (${actives.length})</p>
+          <p class="field-label" style="margin-top:4px">Export quotidien — commandes de la veille (${actives.length})</p>
+          <div class="table-wrap" style="margin-bottom:8px"><table>
+            <thead><tr><th>Order</th><th>Item</th><th>Qty</th><th>Size</th><th>Customer</th><th>Link</th></tr></thead>
+            <tbody>${actives
+              .map(
+                (o) => `<tr>
+                  <td class="num">#${o.id}</td>
+                  <td><span style="display:inline-flex;align-items:center;gap:7px">
+                    <span class="thumb">${o.items[0] ? pic(o.items[0]) : '—'}</span>${esc(o.items[0]?.n ?? '—')}</span></td>
+                  <td class="num">${o.items.reduce((n, i) => n + i.q, 0)}</td>
+                  <td class="num">${esc(o.items[0]?.v ?? '—')}</td>
+                  <td style="white-space:normal;min-width:150px">${esc(o.who)}<br />
+                    <span class="note" style="font-size:11px">${esc(o.addr)}</span></td>
+                  <td><a href="#" class="prod-link" style="color:var(--accent-ink)">View product</a></td>
+                </tr>`,
+              )
+              .join('')}</tbody>
+          </table></div>
+          <button class="btn btn-main" id="sup-csv" style="margin-bottom:14px">Télécharger le CSV (${actives.length} commandes)</button>
+          <p class="field-label">Commandes actives (${actives.length})</p>
           ${actives
             .map(
               (o) => `<div class="item" style="margin-bottom:8px">
@@ -2758,6 +2830,35 @@
           <p class="crossed" style="margin:14px 0 0">Il ne voit pas : montants · commandes annulées
             ou remboursées · litiges · statistiques · les autres boutiques et fournisseurs.</p>`;
         $('sup-modal').hidden = false;
+
+        $('sup-body').querySelectorAll('.prod-link').forEach((a) =>
+          a.addEventListener('click', (e) => {
+            e.preventDefault();
+            toast('Ouvrirait la fiche produit sur runningupscale.com.');
+          }),
+        );
+
+        $('sup-csv').addEventListener('click', () => {
+          const header = ['Order', 'Item', 'Quantity', 'Size', 'Customer', 'Address', 'Email', 'Note', 'Product Link'];
+          const lines = actives.map((o) => [
+            `#${o.id}`,
+            o.items.map((i) => `${i.n}${i.v ? ` (${i.v})` : ''}`).join(' + '),
+            o.items.reduce((n, i) => n + i.q, 0),
+            o.items[0]?.v ?? '',
+            o.who, o.addr, o.mail, o.what,
+            `https://runningupscale.com/products/${(o.items[0]?.n ?? '').toLowerCase().replace(/\s+/g, '-')}`,
+          ]);
+          const csv = [header, ...lines]
+            .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))
+            .join('\n');
+          const a = document.createElement('a');
+          a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent('\ufeff' + csv);
+          a.download = 'running-upscale-commandes-veille.csv';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          toast(`CSV de ${actives.length} commandes de la veille téléchargé.`);
+        });
       }),
     );
 
@@ -2776,6 +2877,7 @@
       ['Connexions et facturation', 1, 0, 0, 0, 0],
       ['Signaler un problème commande', 0, 0, 0, 0, 1],
       ['Répondre dans son fil', 0, 0, 0, 0, 1],
+      ['Exporter les commandes de la veille (CSV)', 0, 0, 0, 0, 1],
     ];
 
     $('matrix-table').innerHTML =
@@ -2800,8 +2902,8 @@
         <span class="tile-app">
           <span class="tile-inner">
             <span class="tile-bar">
-              <span class="tile-mark">cS</span>
-              <span class="tile-name">cSAV Copilot</span>
+              <span class="tile-mark">RU</span>
+              <span class="tile-name">Running Upscale</span>
               <span class="tile-btn">Escalade</span>
             </span>
             <span class="tile-row sel">
@@ -2955,6 +3057,12 @@
               : `<span class="agechip" style="--c:var(--age-0)">rien en retard</span>`}
             ${disputes ? `<span class="agechip" style="--c:var(--crit)">${disputes} litige${disputes > 1 ? 's' : ''}</span>` : ''}
           </div>
+          <div class="risk">
+            <span class="note">Litiges 30 j</span>
+            <span class="riskbar"><i style="width:${Math.min((DISPUTE_RATE[s] / 2) * 100, 100)}%;--rc:${riskColor(DISPUTE_RATE[s])}"></i><u title="Seuil Shopify : 1 %"></u></span>
+            <b class="mono" style="color:${riskColor(DISPUTE_RATE[s])};font-size:12px">${String(DISPUTE_RATE[s]).replace('.', ',')} %</b>
+          </div>
+          ${DISPUTE_RATE[s] >= 1 ? '<p class="field-label" style="color:var(--crit);font-weight:600;margin:7px 0 0">Seuil Shopify dépassé — risque de gel des paiements</p>' : ''}
           <div style="margin-top:13px"><button class="btn go-file" data-shop="${s}">Ouvrir la file</button></div>
         </div></div>`;
       })
@@ -3195,8 +3303,18 @@
       </div></div>
       <div class="card"><div class="sect">
         <h3>Apparence</h3>
-        <p class="note" style="margin:0 0 11px">Huit palettes livrées — chaque employé garde la sienne.</p>
-        <button class="btn" id="open-palettes">Ouvrir les palettes</button>
+        <p class="field-label">Couleur d'accent — chaque employé garde la sienne</p>
+        <div class="swatches">${PALETTES.map(
+          (pal) => `<button class="swatch" data-key="${pal.key}" aria-pressed="${pal.key === accent}">
+            <i style="background:${pal.hex}"></i>${esc(pal.name)}
+          </button>`,
+        ).join('')}</div>
+        <p class="field-label" style="margin-top:13px">Thème</p>
+        <div class="seg" id="theme-seg" style="max-width:220px">
+          <button data-theme="light" aria-pressed="${theme === 'light'}">Clair</button>
+          <button data-theme="dark" aria-pressed="${theme === 'dark'}">Sombre</button>
+        </div>
+        <div style="margin-top:13px"><button class="btn" id="open-palettes">Voir les 8 palettes en grand</button></div>
       </div></div>
       <div class="card"><div class="sect">
         <h3>Notifications</h3>
@@ -3213,6 +3331,12 @@
     </div>`;
 
     $('open-palettes').addEventListener('click', () => setView('palettes', 'palettes'));
+    $('view-settings').querySelectorAll('.swatch').forEach((b) =>
+      b.addEventListener('click', () => setAccent(b.dataset.key)),
+    );
+    $('theme-seg').querySelectorAll('button').forEach((b) =>
+      b.addEventListener('click', () => setTheme(b.dataset.theme)),
+    );
     $('force-2fa').addEventListener('click', () =>
       toast("2FA exigée pour toute l'équipe — chacun devra l'activer à sa prochaine connexion."),
     );
@@ -3324,25 +3448,50 @@
 
   /* ---------------------------------------------------------- horloges */
 
+  const FLAGS = {
+    ma: `<svg viewBox="0 0 30 20"><rect width="30" height="20" fill="#c1272d"/>
+      <path d="M15 5.2 16.5 9.4 21 9.4 17.4 12 18.8 16.2 15 13.6 11.2 16.2 12.6 12 9 9.4 13.5 9.4 Z"
+        fill="none" stroke="#006233" stroke-width="1.1"/></svg>`,
+    fr: `<svg viewBox="0 0 30 20"><rect width="10" height="20" fill="#002395"/>
+      <rect x="10" width="10" height="20" fill="#ffffff"/>
+      <rect x="20" width="10" height="20" fill="#ed2939"/></svg>`,
+    cn: `<svg viewBox="0 0 30 20"><rect width="30" height="20" fill="#de2910"/>
+      <path d="M6 3.2 7.1 6.4 10.4 6.4 7.7 8.3 8.7 11.4 6 9.5 3.3 11.4 4.3 8.3 1.6 6.4 4.9 6.4 Z" fill="#ffde00"/>
+      <circle cx="12.5" cy="3.4" r="1" fill="#ffde00"/><circle cx="14" cy="6" r="1" fill="#ffde00"/>
+      <circle cx="14" cy="9" r="1" fill="#ffde00"/><circle cx="12.5" cy="11.6" r="1" fill="#ffde00"/></svg>`,
+  };
+
+  const DECOS = {
+    /* Étoile à huit branches — motif zellige marocain. */
+    ma: `<svg class="deco" viewBox="0 0 34 34"><g fill="none" stroke="#006233" stroke-width="2">
+      <rect x="7" y="7" width="20" height="20"/><rect x="7" y="7" width="20" height="20"
+        transform="rotate(45 17 17)"/></g></svg>`,
+    fr: '',
+    cn: `<svg class="deco" viewBox="0 0 34 34"><path d="M17 3 20.4 12.6 30.6 12.6 22.4 18.6 25.4 28.2 17 22.4 8.6 28.2 11.6 18.6 3.4 12.6 13.6 12.6 Z" fill="#de2910"/></svg>`,
+  };
+
   const ZONES = [
-    ['Agadir', 'Africa/Casablanca'],
-    ['Paris', 'Europe/Paris'],
-    ['Chine', 'Asia/Shanghai'],
+    ['Agadir', 'Africa/Casablanca', 'ma'],
+    ['Paris', 'Europe/Paris', 'fr'],
+    ['Chine', 'Asia/Shanghai', 'cn'],
   ];
 
   function renderClocks() {
     const now = new Date();
-    $('clocks').innerHTML = ZONES.map(([city, tz]) => {
+    $('clocks').innerHTML = ZONES.map(([city, tz, cc]) => {
       const time = new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: tz }).format(now);
       let note = '';
-      if (city === 'Chine') {
+      if (cc === 'cn') {
         const h = Number(new Intl.DateTimeFormat('fr-FR', { hour: 'numeric', hourCycle: 'h23', timeZone: tz }).format(now));
         const open = h >= 9 && h < 19;
         note = `<span class="c-note" style="--c:${open ? 'var(--age-0)' : 'var(--age-1)'}">
           <i></i>${open ? 'joignable' : 'hors horaires'}</span>`;
       }
-      return `<span class="clock"><span class="c-city">${city}</span>
-        <span class="c-time">${time}</span>${note}</span>`;
+      return `<span class="clock clock-${cc}">${DECOS[cc]}
+        <span class="flag">${FLAGS[cc]}</span>
+        <span><span class="c-city">${city}</span>
+        <span class="c-time">${time}</span>${note}</span>
+      </span>`;
     }).join('');
   }
 
