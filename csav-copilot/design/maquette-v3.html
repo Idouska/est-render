@@ -1217,6 +1217,68 @@
   }
 
   .view-note { font-size: 13px; color: var(--ink-mute); padding: 0 2px; margin: 0; max-width: 78ch; }
+
+  /* ------------------------------------------------- toast + modale ---- */
+
+  .toast {
+    position: fixed;
+    left: 50%;
+    bottom: 26px;
+    transform: translateX(-50%) translateY(12px);
+    background: var(--ink);
+    color: var(--ground);
+    padding: 10px 18px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s ease, transform 0.18s ease;
+    z-index: 60;
+    box-shadow: var(--shadow-pop);
+    max-width: min(92vw, 520px);
+  }
+
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  .backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(10, 10, 20, 0.45);
+    z-index: 50;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+  }
+
+  .modal {
+    width: min(440px, 100%);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-pop);
+    padding: 18px;
+  }
+
+  .modal h3 { margin: 0 0 4px; font-size: 16px; }
+  .modal > .note { margin: 0 0 14px; display: block; }
+  .modal .field { margin-bottom: 12px; }
+  .modal label { display: block; font-size: 12px; color: var(--ink-mute); margin-bottom: 5px; }
+  .modal-foot { display: flex; justify-content: flex-end; gap: 9px; margin-top: 4px; }
+
+  /* -------------------------------------------------- vues annexes ----- */
+
+  tr.clickable-row { cursor: pointer; }
+  tr.clickable-row:hover td { background: var(--inset); }
+
+  .shopcards { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 13px; }
+  .shopcard .big { font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+
+  .settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 13px; }
+
+  .srow { display: flex; align-items: center; gap: 10px; font-size: 13px; margin-top: 9px; }
+  .srow .n { color: var(--ink-soft); }
+  .srow .v { margin-left: auto; }
 </style>
 
 <div class="frame">
@@ -1241,13 +1303,13 @@
         </select>
       </div>
 
-      <div class="search">
+      <button class="search" id="side-search" style="cursor:pointer;font:inherit;width:100%;text-align:left">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
           <circle cx="7.2" cy="7.2" r="4.6" /><path d="M10.6 10.6 13.5 13.5" stroke-linecap="round" />
         </svg>
         Rechercher…
         <kbd>⌘K</kbd>
-      </div>
+      </button>
 
       <nav id="nav"></nav>
 
@@ -1283,7 +1345,7 @@
               </div>
             </div>
           </div>
-          <button class="btn btn-main">
+          <button class="btn btn-main" id="new-esc">
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
               <path d="M8 3.5v9M3.5 8h9" />
             </svg>
@@ -1411,7 +1473,7 @@
           <div class="sect">
             <h3 style="display:flex;align-items:center;gap:10px">
               Employés
-              <button class="btn" style="margin-left:auto">Inviter un employé</button>
+              <button class="btn" style="margin-left:auto" id="invite-emp">Inviter un employé</button>
             </h3>
             <div class="table-wrap"><table id="team-table"></table></div>
           </div>
@@ -1421,7 +1483,7 @@
           <div class="sect">
             <h3 style="display:flex;align-items:center;gap:10px">
               Comptes fournisseurs
-              <button class="btn" style="margin-left:auto">Inviter un fournisseur</button>
+              <button class="btn" style="margin-left:auto" id="invite-sup">Inviter un fournisseur</button>
             </h3>
             <div class="sup-cards" id="sup-cards"></div>
             <p class="matrix-note">Un compte fournisseur est cloisonné : il ne voit que les commandes
@@ -1446,6 +1508,54 @@
           produit : chaque employé choisit la sienne dans Réglages, le choix est enregistré sur son
           compte. Clique sur une vignette pour l'appliquer.</p>
         <div class="gallery" id="gallery"></div>
+      </div>
+
+      <!-- vues rendues à la demande -->
+      <div id="view-overview" hidden></div>
+      <div id="view-orders" hidden></div>
+      <div id="view-clients" hidden></div>
+      <div id="view-catalog" hidden></div>
+      <div id="view-track" hidden></div>
+      <div id="view-refunds" hidden></div>
+      <div id="view-settings" hidden></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status"></div>
+
+  <div class="backdrop" id="esc-modal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="esc-title">
+      <h3 id="esc-title">Nouvelle escalade fournisseur</h3>
+      <span class="note">Décrivez le problème — le brouillon sera prêt à relire dans la file.</span>
+      <div class="field">
+        <label for="esc-shop">Boutique</label>
+        <select class="control" id="esc-shop">
+          <option value="lumen">Atelier Lumen</option>
+          <option value="calin">Maison Câlin</option>
+          <option value="luma">Luma Déco</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="esc-order">N° de commande</label>
+        <input class="control" id="esc-order" placeholder="#10430" />
+      </div>
+      <div class="field">
+        <label for="esc-kind">Motif</label>
+        <select class="control" id="esc-kind">
+          <option value="stock">Rupture de stock</option>
+          <option value="color">Couleur indisponible</option>
+          <option value="address">Adresse incorrecte</option>
+          <option value="email">Email invalide</option>
+          <option value="other">Autre problème</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="esc-note">Note (facultatif)</label>
+        <textarea class="control" id="esc-note" rows="3" placeholder="Contexte pour le fournisseur…"></textarea>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" id="esc-cancel">Annuler</button>
+        <button class="btn btn-main" id="esc-create">Créer le brouillon</button>
       </div>
     </div>
   </div>
@@ -1580,7 +1690,7 @@
   const KINDS = {
     stock: 'Rupture de stock', color: 'Couleur indisponible', address: 'Adresse incorrecte',
     email: 'Email invalide', dispute: 'Litige', refund: 'Remboursement', wismo: 'Suivi demandé',
-    return: 'Retour',
+    return: 'Retour', other: 'Autre problème',
   };
 
   const ORDERS = [
@@ -1740,6 +1850,7 @@
 
   const state = {
     view: 'file',
+    navKey: 'file',
     shop: 'all',
     q: '',
     src: 'all',
@@ -1800,7 +1911,7 @@
     },
     kind: {
       of: (o) => o.kind, label: (k) => KINDS[k],
-      order: ['stock', 'color', 'address', 'email', 'dispute', 'refund', 'wismo', 'return'],
+      order: ['stock', 'color', 'address', 'email', 'dispute', 'refund', 'wismo', 'return', 'other'],
     },
   };
 
@@ -2004,11 +2115,11 @@
             </span>
             <span class="assign">
               <span class="note">Assigné à</span>
-              <select aria-label="Assigné à">
-                <option${!o.assignee ? ' selected' : ''}>Non assigné</option>
-                <option${o.assignee === 'claire' ? ' selected' : ''}>Claire Mercier</option>
-                <option${o.assignee === 'yasmine' ? ' selected' : ''}>Yasmine Kaddour</option>
-                <option${o.assignee === 'theo' ? ' selected' : ''}>Théo Bernard</option>
+              <select id="a-select" aria-label="Assigné à">
+                <option value=""${!o.assignee ? ' selected' : ''}>Non assigné</option>
+                <option value="claire"${o.assignee === 'claire' ? ' selected' : ''}>Claire Mercier</option>
+                <option value="yasmine"${o.assignee === 'yasmine' ? ' selected' : ''}>Yasmine Kaddour</option>
+                <option value="theo"${o.assignee === 'theo' ? ' selected' : ''}>Théo Bernard</option>
               </select>
             </span>
           </div>
@@ -2035,8 +2146,8 @@
         </div>
 
         <div class="foot">
-          <button class="btn">Marquer résolu</button>
-          <button class="btn btn-main">Valider et envoyer</button>
+          <button class="btn" id="btn-resolve">Marquer résolu</button>
+          <button class="btn btn-main" id="btn-send">Valider et envoyer</button>
         </div>
       </div>
 
@@ -2104,6 +2215,35 @@
         subs.forEach((s) => s.setAttribute('aria-pressed', String(s === b)));
       }),
     );
+
+    $('a-select').addEventListener('change', (e) => {
+      o.assignee = e.target.value || null;
+      toast(o.assignee ? `#${o.id} assigné à ${EMP[o.assignee].name}.` : `#${o.id} laissé non assigné.`);
+      renderRows();
+    });
+
+    $('btn-resolve').addEventListener('click', () => {
+      o.st = 'done';
+      toast(`#${o.id} marqué résolu.`);
+      renderFile();
+      renderNav();
+    });
+
+    $('btn-send').addEventListener('click', () => {
+      const SENT = {
+        sub: 'Substitution proposée au client.',
+        refund: `Remboursement de ${o.total} enregistré — consigné au journal d'audit.`,
+        address: 'Adresse corrigée — transmise à Shopify et au fournisseur.',
+        email: 'Email corrigé — le suivi repart vers le client.',
+        evidence: 'Preuves envoyées à Shopify.',
+        client: 'Réponse envoyée au client.',
+        supplier: 'Message envoyé au fournisseur.',
+      };
+      if (o.st === 'todo') o.st = 'wait';
+      toast(SENT[current] ?? 'Envoyé.');
+      renderFile();
+      renderNav();
+    });
   }
 
   function renderFile() {
@@ -2231,12 +2371,20 @@
       ['Rachid I.', 'a modifié le rôle de Théo Bernard', 'Équipe', 'hier, 09:15', 'var(--age-0)'],
     ]
       .map(
-        ([who, what, target, when, c]) => `<div class="event" style="--c:${c}">
+        ([who, what, target, when, c]) => `<div class="event" data-t="${esc(target)}"
+          style="--c:${c}${String(target).startsWith('#') ? ';cursor:pointer' : ''}">
           <i></i><span><b>${esc(who)}</b> ${esc(what)} — <span class="mono">${esc(target)}</span></span>
           <time>${esc(when)}</time>
         </div>`,
       )
       .join('');
+
+    // Un clic sur un événement ouvre la commande concernée dans la file.
+    $('activity').querySelectorAll('.event').forEach((el) =>
+      el.addEventListener('click', () => {
+        if (el.dataset.t.startsWith('#')) openOrder(el.dataset.t.slice(1));
+      }),
+    );
   }
 
   /* -------------------------------------------------------------- équipe */
@@ -2270,11 +2418,18 @@
             }</td>
             <td class="note">${esc(m.shops)}</td>
             <td class="num">${open ? `${open} ticket${open > 1 ? 's' : ''}` : '—'}</td>
-            <td><button class="btn" style="padding:5px 11px;font-size:12px">Modifier</button></td>
+            <td><button class="btn btn-edit" data-n="${esc(e.name)}"
+              style="padding:5px 11px;font-size:12px">Modifier</button></td>
           </tr>`;
         })
         .join('') +
       '</tbody>';
+
+    $('team-table').querySelectorAll('.btn-edit').forEach((b) =>
+      b.addEventListener('click', () =>
+        toast(`Compte de ${b.dataset.n} — rôle, boutiques et 2FA se modifieront ici.`),
+      ),
+    );
 
     $('sup-cards').innerHTML = [
       {
@@ -2378,35 +2533,44 @@
   /* ---------------------------------------------------------- navigation */
 
   const VIEWS = {
-    file: { title: 'File de traitement', crumb: 'Traitement', icon: 'inbox' },
-    stats: { title: "Statistiques d'équipe", crumb: 'Pilotage', icon: 'chart' },
-    team: { title: 'Équipe & rôles', crumb: 'Plateforme', icon: 'users' },
-    palettes: { title: 'Palettes', crumb: 'Plateforme', icon: 'swatch' },
+    overview: { title: "Vue d'ensemble", crumb: 'Pilotage', icon: 'grid', render: () => renderOverview() },
+    file: { title: 'File de traitement', crumb: 'Traitement', icon: 'inbox', render: () => renderFile() },
+    stats: { title: "Statistiques d'équipe", crumb: 'Pilotage', icon: 'chart', render: () => renderStats() },
+    orders: { title: 'Commandes', crumb: 'Commerce', icon: 'bag', render: () => renderOrders() },
+    clients: { title: 'Clients', crumb: 'Commerce', icon: 'users', render: () => renderClients() },
+    catalog: { title: 'Catalogue', crumb: 'Commerce', icon: 'box', render: () => renderCatalog() },
+    track: { title: 'Suivi 17TRACK', crumb: 'Fournisseur', icon: 'pin', render: () => renderTrack() },
+    refunds: { title: 'Remboursements', crumb: 'Finance', icon: 'euro', render: () => renderRefunds() },
+    team: { title: 'Équipe & rôles', crumb: 'Plateforme', icon: 'users', render: () => renderTeam() },
+    palettes: { title: 'Palettes', crumb: 'Plateforme', icon: 'swatch', render: () => renderGallery() },
+    settings: { title: 'Réglages', crumb: 'Plateforme', icon: 'gear', render: () => renderSettings() },
   };
 
+  /* Les entrées « Ruptures » et « Litiges » ouvrent la file déjà filtrée :
+     même écran, préréglage différent — noté `file@<source>`. */
   const NAV = [
     ['Pilotage', [
-      ['grid', "Vue d'ensemble", null, null],
+      ['grid', "Vue d'ensemble", 'overview', null],
       ['inbox', 'File de traitement', 'file', () => byShop(ORDERS).filter((o) => o.st === 'todo').length],
       ['chart', "Statistiques d'équipe", 'stats', null],
     ]],
     ['Commerce', [
-      ['bag', 'Commandes', null, null],
-      ['users', 'Clients', null, null],
-      ['box', 'Catalogue', null, null],
+      ['bag', 'Commandes', 'orders', null],
+      ['users', 'Clients', 'clients', null],
+      ['box', 'Catalogue', 'catalog', null],
     ]],
     ['Fournisseur', [
-      ['truck', 'Ruptures & escalades', null, () => byShop(ORDERS).filter((o) => o.src === 'fournisseur' && o.st === 'todo').length],
-      ['pin', 'Suivi 17TRACK', null, null],
+      ['truck', 'Ruptures & escalades', 'file@fournisseur', () => byShop(ORDERS).filter((o) => o.src === 'fournisseur' && o.st === 'todo').length],
+      ['pin', 'Suivi 17TRACK', 'track', null],
     ]],
     ['Finance', [
-      ['euro', 'Remboursements', null, null],
-      ['shield', 'Litiges Shopify', null, () => byShop(ORDERS).filter((o) => o.src === 'litige' && o.st === 'todo').length],
+      ['euro', 'Remboursements', 'refunds', null],
+      ['shield', 'Litiges Shopify', 'file@litige', () => byShop(ORDERS).filter((o) => o.src === 'litige' && o.st === 'todo').length],
     ]],
     ['Plateforme', [
       ['users', 'Équipe & rôles', 'team', null],
       ['swatch', 'Palettes', 'palettes', null],
-      ['gear', 'Réglages', null, null],
+      ['gear', 'Réglages', 'settings', null],
     ]],
   ];
 
@@ -2415,9 +2579,9 @@
       ([title, items]) => `<div class="nav-group">
         <p class="nav-title">${esc(title)}</p>
         ${items
-          .map(([icon, label, view, tally]) => {
+          .map(([icon, label, navKey, tally]) => {
             const n = tally ? tally() : 0;
-            return `<button class="nav-item ${view === state.view ? 'on' : ''}" ${view ? `data-view="${view}"` : ''}>
+            return `<button class="nav-item ${navKey === state.navKey ? 'on' : ''}" data-nav="${navKey}">
               ${ico(icon)}${esc(label)}
               ${n ? `<span class="tally">${n}</span>` : ''}
             </button>`;
@@ -2426,30 +2590,326 @@
       </div>`,
     ).join('');
 
-    $('nav').querySelectorAll('[data-view]').forEach((b) =>
-      b.addEventListener('click', () => setView(b.dataset.view)),
+    $('nav').querySelectorAll('[data-nav]').forEach((b) =>
+      b.addEventListener('click', () => goNav(b.dataset.nav)),
     );
   }
 
-  function setView(view) {
+  function goNav(navKey) {
+    const [view, preset] = navKey.split('@');
+    if (view === 'file') {
+      Object.assign(state, {
+        q: '', st: 'all', quick: null, assignee: 'all', kind: 'all',
+        src: preset ?? 'all',
+      });
+      $('f-q').value = '';
+    }
+    setView(view, navKey);
+  }
+
+  function setView(view, navKey = view) {
     state.view = view;
+    state.navKey = navKey;
     for (const key of Object.keys(VIEWS)) $(`view-${key}`).hidden = key !== view;
     $('view-title').textContent = VIEWS[view].title;
     $('crumb').innerHTML = `${ico(VIEWS[view].icon)} ${esc(VIEWS[view].crumb)}`;
     renderNav();
-    if (view === 'file') renderFile();
-    if (view === 'stats') renderStats();
-    if (view === 'team') renderTeam();
-    if (view === 'palettes') renderGallery();
+    VIEWS[view].render();
+  }
+
+  /* Ouvre une commande précise dans la file, filtres remis à zéro. */
+  function openOrder(id) {
+    Object.assign(state, {
+      q: '', src: 'all', st: 'all', quick: null, assignee: 'all', kind: 'all',
+      selected: id, action: null,
+    });
+    $('f-q').value = '';
+    setView('file', 'file');
+  }
+
+  /* ------------------------------------------------- vues secondaires -- */
+
+  function renderOverview() {
+    const el = $('view-overview');
+    const shops = state.shop === 'all' ? Object.keys(SHOPS) : [state.shop];
+
+    const cards = shops
+      .map((s) => {
+        const list = ORDERS.filter((o) => o.shop === s && o.st !== 'done');
+        const late = list.filter((o) => o.days >= 3).length;
+        const disputes = list.filter((o) => o.src === 'litige').length;
+        return `<div class="card shopcard"><div class="sect">
+          <h3>${SHOPS[s]}</h3>
+          <span class="big">${list.length}</span> <span class="note">à traiter</span>
+          <div class="agechips" style="margin-top:9px">
+            ${late
+              ? `<span class="agechip" style="--c:var(--age-3)">${late} en retard</span>`
+              : `<span class="agechip" style="--c:var(--age-0)">rien en retard</span>`}
+            ${disputes ? `<span class="agechip" style="--c:var(--crit)">${disputes} litige${disputes > 1 ? 's' : ''}</span>` : ''}
+          </div>
+          <div style="margin-top:13px"><button class="btn go-file" data-shop="${s}">Ouvrir la file</button></div>
+        </div></div>`;
+      })
+      .join('');
+
+    const oldest = byShop(ORDERS)
+      .filter((o) => o.st !== 'done')
+      .sort((a, b) => b.days - a.days)
+      .slice(0, 4);
+
+    el.innerHTML = `<div class="shopcards" style="margin-bottom:13px">${cards}</div>
+      <div class="card"><div class="sect">
+        <h3>À traiter en priorité — les plus anciens d'abord</h3>
+        <ul class="rows" style="max-height:none;padding:0">${oldest.map(rowHtml).join('')}</ul>
+      </div></div>`;
+
+    el.querySelectorAll('.go-file').forEach((b) =>
+      b.addEventListener('click', () => {
+        state.shop = b.dataset.shop;
+        $('shop-select').value = b.dataset.shop;
+        const first = ORDERS.find((o) => o.shop === b.dataset.shop && o.st !== 'done');
+        openOrder(first ? first.id : state.selected);
+      }),
+    );
+    el.querySelectorAll('.row').forEach((b) => b.addEventListener('click', () => openOrder(b.dataset.id)));
+  }
+
+  function renderOrders() {
+    const list = byShop(ORDERS);
+    $('view-orders').innerHTML = `<div class="card"><div class="sect">
+      <h3>Commandes suivies (${list.length})</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>N°</th><th>Boutique</th><th>Client</th><th>Passée le</th>
+          <th>Montant</th><th>Colis</th><th>Ticket</th></tr></thead>
+        <tbody>${list
+          .map(
+            (o) => `<tr class="clickable-row" data-id="${o.id}">
+              <td class="num">#${o.id}</td>
+              <td>${SHOPS[o.shop]}</td>
+              <td>${esc(o.who)}</td>
+              <td class="num">${esc(o.placed)}</td>
+              <td class="num">${esc(o.total)}</td>
+              <td>${o.track ? LEGS[o.track.leg][0] : '—'}</td>
+              <td><span class="tag tag-${o.st}">${ST[o.st]}</span></td>
+            </tr>`,
+          )
+          .join('')}</tbody>
+      </table></div>
+      <p class="matrix-note">Une ligne = une commande à problème. Clique pour l'ouvrir dans la file.</p>
+    </div></div>`;
+    $('view-orders').querySelectorAll('.clickable-row').forEach((r) =>
+      r.addEventListener('click', () => openOrder(r.dataset.id)),
+    );
+  }
+
+  function renderClients() {
+    const map = new Map();
+    for (const o of byShop(ORDERS)) {
+      if (!map.has(o.mail)) map.set(o.mail, { who: o.who, mail: o.mail, shops: new Set(), n: 0, total: 0, last: o.id });
+      const c = map.get(o.mail);
+      c.shops.add(SHOPS[o.shop]);
+      c.n += 1;
+      c.total += o.amount;
+    }
+    const rows = [...map.values()].sort((a, b) => b.total - a.total);
+
+    $('view-clients').innerHTML = `<div class="card"><div class="sect">
+      <h3>Clients avec un dossier en cours (${rows.length})</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Client</th><th>Email</th><th>Boutique</th><th>Dossiers</th><th>Total</th></tr></thead>
+        <tbody>${rows
+          .map(
+            (c) => `<tr class="clickable-row" data-id="${c.last}">
+              <td style="font-weight:600">${esc(c.who)}</td>
+              <td class="num" style="font-size:12px">${esc(c.mail)}</td>
+              <td>${esc([...c.shops].join(', '))}</td>
+              <td class="num">${c.n}</td>
+              <td class="num">${c.total.toFixed(2).replace('.', ',')} €</td>
+            </tr>`,
+          )
+          .join('')}</tbody>
+      </table></div>
+      <p class="matrix-note">Clique un client pour ouvrir son dernier dossier.</p>
+    </div></div>`;
+    $('view-clients').querySelectorAll('.clickable-row').forEach((r) =>
+      r.addEventListener('click', () => openOrder(r.dataset.id)),
+    );
+  }
+
+  const PRODUCTS = [
+    ['Lampe Perce-neige', 'Laiton', '#b08d3f', 'lumen', 0, 'out'],
+    ['Lampe Perce-neige', 'Noir mat', '#2b2b2b', 'lumen', 42, 'ok'],
+    ['Lampe Perce-neige', 'Cuivre brossé', '#a5673f', 'lumen', 18, 'ok'],
+    ['Lampadaire Sillage', 'Chêne', '#c19a6b', 'lumen', 0, 'out'],
+    ['Suspension Brume', 'Opaline', '#e9e4dc', 'lumen', 26, 'ok'],
+    ['Applique Halo', 'Noir mat', '#2b2b2b', 'lumen', 31, 'ok'],
+    ['Plaid Angora', 'Écru', '#e8e0d2', 'calin', 0, 'out'],
+    ['Coussin Nuage', 'Terracotta', '#c96f4a', 'calin', 54, 'ok'],
+    ['Miroir Onde', 'Doré', '#c9a44a', 'luma', 6, 'low'],
+    ['Vase Strate', 'Sable', '#d9c9a8', 'luma', 12, 'ok'],
+  ];
+
+  function renderCatalog() {
+    const STOCK = { ok: ['En stock', 'done'], low: ['Stock faible', 'wait'], out: ['En rupture', 'todo'] };
+    const list = PRODUCTS.filter(([, , , s]) => state.shop === 'all' || s === state.shop);
+
+    $('view-catalog').innerHTML = `<div class="card"><div class="sect">
+      <h3>Catalogue (${list.length} références)</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Produit</th><th>Variante</th><th>Boutique</th><th>Stock fournisseur</th><th>État</th></tr></thead>
+        <tbody>${list
+          .map(
+            ([n, v, hex, s, stock, st]) => `<tr class="clickable-row" data-q="${esc(n)}">
+              <td style="font-weight:600">${esc(n)}</td>
+              <td><span class="item-var"><span class="sw" style="background:${hex}"></span>${esc(v)}</span></td>
+              <td>${SHOPS[s]}</td>
+              <td class="num">${stock}</td>
+              <td><span class="tag tag-${STOCK[st][1]}">${STOCK[st][0]}</span></td>
+            </tr>`,
+          )
+          .join('')}</tbody>
+      </table></div>
+      <p class="matrix-note">Le stock vient du fournisseur. Clique une référence pour voir ses dossiers dans la file.</p>
+    </div></div>`;
+
+    $('view-catalog').querySelectorAll('.clickable-row').forEach((r) =>
+      r.addEventListener('click', () => {
+        Object.assign(state, { src: 'all', st: 'all', quick: null, assignee: 'all', kind: 'all', q: r.dataset.q });
+        setView('file', 'file');
+        $('f-q').value = r.dataset.q;
+        renderRows();
+      }),
+    );
+  }
+
+  function renderTrack() {
+    const list = byShop(ORDERS).filter((o) => o.track);
+    $('view-track').innerHTML = `<div class="card"><div class="sect">
+      <h3>Colis suivis via 17TRACK (${list.length})</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>N°</th><th>Boutique</th><th>Transporteur</th><th>N° de suivi</th>
+          <th>Étape actuelle</th><th>Depuis le</th></tr></thead>
+        <tbody>${list
+          .map(
+            (o) => `<tr class="clickable-row" data-id="${o.id}">
+              <td class="num">#${o.id}</td>
+              <td>${SHOPS[o.shop]}</td>
+              <td>${esc(o.track.by)}</td>
+              <td class="num" style="font-size:12px">${esc(o.track.no)}</td>
+              <td>${o.track.leg >= 5 ? `<span class="tag tag-done">${LEGS[5][0]}</span>` : LEGS[o.track.leg][0]}</td>
+              <td class="num">${esc(o.track.dates[o.track.leg] ?? '—')}</td>
+            </tr>`,
+          )
+          .join('')}</tbody>
+      </table></div>
+      <p class="matrix-note">Transit à l'export = aéroport du pays de départ · transit à l'import =
+        aéroport du pays d'arrivée. Clique un colis pour ouvrir sa commande.</p>
+    </div></div>`;
+    $('view-track').querySelectorAll('.clickable-row').forEach((r) =>
+      r.addEventListener('click', () => openOrder(r.dataset.id)),
+    );
+  }
+
+  const REFUNDS = [
+    ['1 août', '10298', 'Inès Lambert', '42,50 €', 'Retour accepté', 'Théo Bernard', 'done'],
+    ['31 juil.', 'L1071', 'Nora Hadji', '12,00 €', 'Geste commercial — retard', 'Yasmine Kaddour', 'done'],
+    ['30 juil.', 'C2180', 'Camille Roy', '54,00 €', 'Colis perdu', 'Claire Mercier', 'done'],
+    ['29 juil.', '10375', 'Amélie Rousseau', '96,00 €', 'Produit cassé', 'Claire Mercier', 'wait'],
+  ];
+
+  function renderRefunds() {
+    $('view-refunds').innerHTML = `<div class="card"><div class="sect">
+      <h3>Remboursements — 30 derniers jours</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Date</th><th>Commande</th><th>Client</th><th>Montant</th>
+          <th>Motif</th><th>Par</th><th>Statut</th></tr></thead>
+        <tbody>${REFUNDS.map(
+          ([d, id, who, amt, why, by, st]) => `<tr class="clickable-row" data-id="${id}">
+            <td class="num">${d}</td>
+            <td class="num">#${id}</td>
+            <td>${esc(who)}</td>
+            <td class="num">${amt}</td>
+            <td>${esc(why)}</td>
+            <td>${esc(by)}</td>
+            <td><span class="tag tag-${st}">${st === 'done' ? 'Effectué' : 'En attente'}</span></td>
+          </tr>`,
+        ).join('')}</tbody>
+      </table></div>
+      <p class="matrix-note">Chaque remboursement est signé par son auteur et consigné au journal
+        d'audit — impossible d'en faire un anonymement.</p>
+    </div></div>`;
+    $('view-refunds').querySelectorAll('.clickable-row').forEach((r) =>
+      r.addEventListener('click', () => {
+        if (ORDERS.some((o) => o.id === r.dataset.id)) openOrder(r.dataset.id);
+        else toast('Commande archivée — hors de la file de démonstration.');
+      }),
+    );
+  }
+
+  function renderSettings() {
+    $('view-settings').innerHTML = `<div class="settings-grid">
+      <div class="card"><div class="sect">
+        <h3>Connexions</h3>
+        ${[
+          ['Shopify — Atelier Lumen', 'Connectée', 'done'],
+          ['Shopify — Maison Câlin', 'Connectée', 'done'],
+          ['Shopify — Luma Déco', 'Connectée', 'done'],
+          ['Boîte SAV Gmail', 'Écoute active', 'done'],
+          ['17TRACK', 'Clé API active', 'done'],
+        ]
+          .map(([n, s, t]) => `<div class="srow"><span class="n">${n}</span>
+            <span class="v"><span class="tag tag-${t}">${s}</span></span></div>`)
+          .join('')}
+      </div></div>
+      <div class="card"><div class="sect">
+        <h3>Sécurité</h3>
+        <div class="srow"><span class="n">2FA Propriétaire &amp; Superviseur</span>
+          <span class="v"><span class="tag tag-done">Obligatoire</span></span></div>
+        <div class="srow"><span class="n">2FA Agents &amp; lecture seule</span>
+          <span class="v"><span class="tag tag-wait">Recommandée</span></span></div>
+        <div style="margin-top:13px"><button class="btn" id="force-2fa">Exiger la 2FA pour toute l'équipe</button></div>
+      </div></div>
+      <div class="card"><div class="sect">
+        <h3>Apparence</h3>
+        <p class="note" style="margin:0 0 11px">Huit palettes livrées — chaque employé garde la sienne.</p>
+        <button class="btn" id="open-palettes">Ouvrir les palettes</button>
+      </div></div>
+      <div class="card"><div class="sect">
+        <h3>Notifications</h3>
+        ${[
+          ['Litige ouvert', true],
+          ['Réponse d’un fournisseur', true],
+          ['Ticket en retard (3 j+)', true],
+          ['Résumé quotidien par email', false],
+        ]
+          .map(([n, on]) => `<label class="srow" style="cursor:pointer"><span class="n">${n}</span>
+            <span class="v"><input type="checkbox"${on ? ' checked' : ''}></span></label>`)
+          .join('')}
+      </div></div>
+    </div>`;
+
+    $('open-palettes').addEventListener('click', () => setView('palettes', 'palettes'));
+    $('force-2fa').addEventListener('click', () =>
+      toast("2FA exigée pour toute l'équipe — chacun devra l'activer à sa prochaine connexion."),
+    );
+  }
+
+  /* --------------------------------------------------------------- toast */
+
+  let toastTimer;
+  function toast(message) {
+    const el = $('toast');
+    el.textContent = message;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
   }
 
   /* ------------------------------------------------------------ écouteurs */
 
   $('shop-select').addEventListener('change', (e) => {
     state.shop = e.target.value;
-    renderNav();
-    if (state.view === 'file') renderFile();
-    if (state.view === 'stats') renderStats();
+    setView(state.view, state.navKey); // re-rend la vue courante avec la boutique choisie
   });
 
   $('f-q').addEventListener('input', (e) => { state.q = e.target.value; renderRows(); });
@@ -2467,9 +2927,63 @@
     renderFile();
   });
 
+  /* --------------------------------------------- escalade manuelle ----- */
+
+  $('new-esc').addEventListener('click', () => {
+    $('esc-modal').hidden = false;
+    $('esc-order').focus();
+  });
+  $('esc-cancel').addEventListener('click', () => { $('esc-modal').hidden = true; });
+  $('esc-modal').addEventListener('click', (e) => {
+    if (e.target === $('esc-modal')) $('esc-modal').hidden = true;
+  });
+
+  $('esc-create').addEventListener('click', () => {
+    const id = $('esc-order').value.trim().replace(/^#/, '') || `N${String(Date.now()).slice(-4)}`;
+    const kind = $('esc-kind').value;
+    const note = $('esc-note').value.trim();
+    ORDERS.unshift({
+      id, shop: $('esc-shop').value, src: 'fournisseur', st: 'todo', days: 0, amount: 0,
+      assignee: null, what: `${KINDS[kind]} — escalade manuelle`, kind,
+      who: 'Client à rattacher', mail: '—', total: '—', addr: '—', placed: "aujourd'hui",
+      items: [], track: null, from: 'Vous', at: "à l'instant",
+      msg: note || "Escalade créée à la main — complétez le contexte avant l'envoi.",
+    });
+    $('esc-modal').hidden = true;
+    $('esc-order').value = '';
+    $('esc-note').value = '';
+    toast(`Brouillon d'escalade créé pour #${id}.`);
+    openOrder(id);
+  });
+
+  /* -------------------------------------------- recherche + raccourci -- */
+
+  $('side-search').addEventListener('click', () => {
+    setView('file', 'file');
+    $('f-q').focus();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      setView('file', 'file');
+      $('f-q').focus();
+    }
+    if (e.key === 'Escape' && !$('esc-modal').hidden) $('esc-modal').hidden = true;
+  });
+
+  /* ------------------------------------------------ invitations équipe -- */
+
+  $('invite-emp').addEventListener('click', () =>
+    toast("Invitation employé préparée — la maquette n'envoie pas d'email."),
+  );
+  $('invite-sup').addEventListener('click', () =>
+    toast("Invitation fournisseur préparée — la maquette n'envoie pas d'email."),
+  );
+
   /* ---------------------------------------------------------- démarrage */
 
   setAccent('violet');
   document.documentElement.dataset.theme = 'light';
-  setView('file');
+  setView('file', 'file');
 </script>
