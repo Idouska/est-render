@@ -22,6 +22,9 @@ Livré dans ce dépôt :
 - [x] Fournisseur d'IA interchangeable (Anthropic ou DeepSeek) derrière une
       abstraction commune, bascule par variable d'environnement
       ([09-fournisseur-ia.md](09-fournisseur-ia.md))
+- [x] Modèles de politique de confidentialité et CGU (`/privacy`, `/terms`),
+      exigés tels quels par l'écran de consentement Google et la fiche
+      Shopify Partners — **à faire relire par un juriste avant usage réel**
 
 Reste à faire avant de brancher un vrai marchand :
 

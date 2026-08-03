@@ -115,6 +115,13 @@ canal de notification qui prévient l'application qu'un mail est arrivé.
 2. Renseignez le nom de l'application, votre email de contact, et les liens vers
    votre politique de confidentialité et vos conditions d'utilisation. Ces deux
    pages doivent exister et être en ligne : Google les vérifie.
+
+   L'application sert un modèle pour les deux, à l'adresse
+   `https://votre-app.onrender.com/privacy` et `/terms` (fichiers
+   `public/privacy.html` et `public/terms.html`). **Ouvrez-les d'abord** :
+   remplacez les champs entre crochets (raison sociale, adresse, contact) et
+   retirez le bandeau d'avertissement une fois le contenu validé — Shopify
+   demandera les mêmes URL à l'étape de publication.
 3. Ajoutez les trois scopes :
    - `https://www.googleapis.com/auth/gmail.readonly`
    - `https://www.googleapis.com/auth/gmail.compose`

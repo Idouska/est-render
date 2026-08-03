@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Politique de confidentialité — cSAV Copilot</title>
+    <link rel="stylesheet" href="/static/legal.css" />
+  </head>
+  <body>
+    <div class="page">
+      <div class="draft-banner">
+        <b>⚠</b>
+        <div>
+          <b>Modèle de départ, pas un document validé.</b>
+          Ce texte décrit fidèlement ce que l'application fait techniquement des
+          données (voir le code source), mais les champs entre crochets sont à
+          compléter et l'ensemble doit être relu par un juriste avant toute
+          publication ou usage réel — notamment pour confirmer la base légale
+          retenue et les obligations propres à votre structure. Retirez ce
+          bandeau une fois le document validé.
+        </div>
+      </div>
+
+      <h1>Politique de confidentialité</h1>
+      <p class="meta">
+        cSAV Copilot — dernière mise à jour : <mark>[à compléter]</mark>
+      </p>
+
+      <p>
+        cSAV Copilot (« l'Application ») est un service qui aide les marchands
+        utilisant Shopify à traiter les messages de service après-vente reçus sur
+        leur boîte Gmail : lecture des mails entrants, enrichissement avec les
+        données de commande, proposition de réponse relue par le marchand avant
+        envoi.
+      </p>
+
+      <h2>Qui fait quoi</h2>
+      <p>
+        Le marchand qui connecte sa boutique et sa boîte mail est
+        <strong>responsable du traitement</strong> des données de ses propres
+        clients, au sens du Règlement Général sur la Protection des Données
+        (RGPD). <mark>[Nom de la société éditrice]</mark> agit comme
+        <strong>sous-traitant</strong> au sens de l'article 28 du RGPD, dans le
+        cadre défini par le contrat de sous-traitance signé avec chaque
+        marchand.
+      </p>
+      <p>
+        Cette page décrit le traitement réalisé par l'Application. Elle ne
+        remplace pas la politique de confidentialité propre à la boutique du
+        marchand, à laquelle ses clients restent également soumis.
+      </p>
+
+      <h2>Données traitées</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Donnée</th>
+            <th>Origine</th>
+            <th>Finalité</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Adresse email, nom</td>
+            <td>En-têtes des messages Gmail</td>
+            <td>Identifier le client, rattacher sa commande</td>
+          </tr>
+          <tr>
+            <td>Corps du message</td>
+            <td>Gmail</td>
+            <td>Classer la demande, rédiger une proposition de réponse</td>
+          </tr>
+          <tr>
+            <td>Commande, montant, adresse de livraison</td>
+            <td>Shopify</td>
+            <td>Fournir un contexte exact à la réponse proposée</td>
+          </tr>
+          <tr>
+            <td>Historique d'achat (ancienneté, nombre de commandes)</td>
+            <td>Shopify</td>
+            <td>Fournir un contexte exact à la réponse proposée</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        L'Application ne recherche aucune donnée sensible au sens de l'article 9
+        du RGPD. Si un client en mentionne spontanément dans un message, cette
+        donnée suit le même sort que le reste du message : elle n'est pas
+        traitée différemment, mais elle est effacée selon la durée de
+        conservation ci-dessous.
+      </p>
+
+      <h2>Base légale</h2>
+      <p>
+        Le traitement des messages entrants repose sur l'intérêt légitime du
+        marchand à répondre aux demandes de ses clients (article 6.1.f du
+        RGPD). <mark>[Compléter avec l'analyse de balance des intérêts propre à
+        votre structure, ou la base légale retenue après conseil juridique.]</mark>
+      </p>
+
+      <h2>Accès à Gmail</h2>
+      <p>
+        L'Application demande, via le protocole OAuth de Google, les
+        autorisations suivantes sur la boîte Gmail que le marchand connecte
+        explicitement :
+      </p>
+      <ul>
+        <li><code>gmail.readonly</code> — lire les messages entrants, pour les classer et y répondre ;</li>
+        <li><code>gmail.compose</code> — préparer des brouillons de réponse ;</li>
+        <li><code>gmail.send</code> — envoyer une réponse, uniquement après validation explicite du marchand dans son tableau de bord.</li>
+      </ul>
+      <p>
+        L'Application n'envoie jamais de message sans une action explicite du
+        marchand. Aucun message n'est lu à des fins autres que le traitement du
+        service après-vente.
+      </p>
+
+      <h2>Sous-traitants ultérieurs</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Sous-traitant</th>
+            <th>Rôle</th>
+            <th>Localisation</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Anthropic (ou le fournisseur d'IA actif — voir <mark>[compléter selon configuration]</mark>)</td>
+            <td>Classification et rédaction des propositions de réponse</td>
+            <td><mark>[États-Unis, ou autre selon le fournisseur retenu]</mark></td>
+          </tr>
+          <tr>
+            <td><mark>[Hébergeur retenu]</mark></td>
+            <td>Hébergement de l'application et de la base de données</td>
+            <td><mark>[région d'hébergement]</mark></td>
+          </tr>
+          <tr>
+            <td>Google LLC</td>
+            <td>Accès à la boîte Gmail connectée (API Gmail, Pub/Sub)</td>
+            <td>États-Unis</td>
+          </tr>
+          <tr>
+            <td>Shopify Inc.</td>
+            <td>Accès aux données de commande de la boutique connectée</td>
+            <td><mark>[selon la région de la boutique]</mark></td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        Le contenu des messages n'est jamais utilisé pour entraîner un modèle
+        d'intelligence artificielle.
+      </p>
+
+      <h2>Durée de conservation</h2>
+      <p>
+        Chaque marchand définit sa propre durée de conservation, avec 365 jours
+        par défaut. Passé ce délai, les messages et brouillons sont supprimés
+        automatiquement ; les tickets correspondants sont conservés sous forme
+        anonymisée (adresse et nom effacés) à des fins statistiques uniquement.
+      </p>
+      <p>
+        Les remboursements effectués via l'Application sont journalisés
+        (montant, motif, auteur, horodatage) et conservés plus longtemps, à des
+        fins de traçabilité comptable et financière.
+      </p>
+
+      <h2>Sécurité</h2>
+      <ul>
+        <li>Les identifiants d'accès à Shopify et Gmail sont chiffrés au repos (AES-256-GCM) et ne sont jamais stockés en clair.</li>
+        <li>Le contenu des messages n'apparaît jamais dans les journaux techniques de l'Application.</li>
+        <li>Les données de chaque marchand sont strictement cloisonnées : aucune requête ne peut porter sur les données d'un autre marchand.</li>
+        <li>Toute action de remboursement fait l'objet d'une confirmation explicite et d'un enregistrement horodaté (qui, quand, montant, motif).</li>
+      </ul>
+
+      <h2>Droits des personnes concernées</h2>
+      <p>
+        Le client d'une boutique souhaitant exercer un droit d'accès, de
+        rectification, d'effacement ou d'opposition doit s'adresser directement
+        au marchand concerné, responsable du traitement de ses données. Le
+        marchand dispose des moyens techniques pour déconnecter sa boîte Gmail
+        à tout moment, ou pour désinstaller l'Application, ce qui interrompt
+        immédiatement tout traitement nouveau.
+      </p>
+      <p>
+        Pour toute question relative au traitement réalisé par l'Application
+        elle-même, contactez <mark>[adresse email de contact]</mark>.
+      </p>
+
+      <h2>Contact</h2>
+      <p>
+        <mark>[Nom de la société éditrice]</mark><br />
+        <mark>[Adresse du siège]</mark><br />
+        <mark>[Email de contact]</mark>
+      </p>
+
+      <footer>
+        Voir aussi les <a href="/terms">conditions générales d'utilisation</a>.
+      </footer>
+    </div>
+  </body>
+</html>

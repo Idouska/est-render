@@ -102,6 +102,13 @@ lever d'erreur. Sans lui, l'ingestion s'arrête en silence.
 d'autoriser une application à lire les Gmail de vrais clients — 6 à 10 semaines.
 À lancer dès que l'application tourne, c'est le chemin critique.
 
+**Pages légales** : `/privacy` et `/terms`, servies par l'application elle-même
+(`public/privacy.html`, `public/terms.html`) — Google et Shopify exigent ces
+deux URL avant de laisser configurer OAuth ou publier l'app. Ce sont des
+modèles à compléter (champs entre crochets) et à faire relire avant tout usage
+réel, pas des documents juridiques validés — le bandeau sur chaque page le
+rappelle.
+
 ---
 
 ## Structure

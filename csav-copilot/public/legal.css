@@ -1,0 +1,136 @@
+:root {
+  --ground: #f2f5f4;
+  --surface: #ffffff;
+  --ink: #12191b;
+  --ink-soft: #445055;
+  --ink-mute: #6e7c80;
+  --line: #d9e0dd;
+  --accent: #0b5e6b;
+  --warn: #92601a;
+  --warn-soft: #f7edd9;
+  --warn-line: #e4c98a;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #0e1315;
+    --surface: #161c1f;
+    --ink: #e6edeb;
+    --ink-soft: #afbdbc;
+    --ink-mute: #7e8d8e;
+    --line: #26302f;
+    --accent: #5bc3d0;
+    --warn: #d9a648;
+    --warn-soft: #2e2413;
+    --warn-line: #4a3a1c;
+    color-scheme: dark;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.6;
+}
+
+.page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 40px 20px 80px;
+}
+
+.draft-banner {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  margin-bottom: 32px;
+  background: var(--warn-soft);
+  border: 1px solid var(--warn-line);
+  border-radius: 6px;
+  font-size: 13.5px;
+  color: var(--ink-soft);
+}
+
+.draft-banner b {
+  color: var(--warn);
+}
+
+h1 {
+  font-size: 26px;
+  letter-spacing: -0.02em;
+  margin: 0 0 6px;
+}
+
+.meta {
+  color: var(--ink-mute);
+  font-size: 13px;
+  margin-bottom: 36px;
+}
+
+h2 {
+  font-size: 17px;
+  margin: 36px 0 10px;
+  letter-spacing: -0.01em;
+}
+
+p,
+li {
+  color: var(--ink-soft);
+  font-size: 15px;
+}
+
+ul,
+ol {
+  padding-left: 22px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-soft);
+}
+
+th {
+  color: var(--ink-mute);
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+mark {
+  background: var(--warn-soft);
+  color: var(--ink);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-weight: 600;
+}
+
+a {
+  color: var(--accent);
+}
+
+footer {
+  margin-top: 48px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--ink-mute);
+}

@@ -65,6 +65,13 @@ export async function buildServer() {
     reply.type('text/html').sendFile('dashboard.html'),
   );
 
+  // Politique de confidentialité et CGU : URL stables, exigées telles quelles
+  // par l'écran de consentement OAuth Google et par la fiche Shopify Partners.
+  // Contenu à faire valider avant tout usage réel — voir le bandeau sur ces
+  // pages et docs/08-mise-en-ligne.md.
+  app.get('/privacy', async (request, reply) => reply.type('text/html').sendFile('privacy.html'));
+  app.get('/terms', async (request, reply) => reply.type('text/html').sendFile('terms.html'));
+
   await app.register(shopifyAuthRoutes);
   await app.register(googleAuthRoutes);
   await app.register(gmailWebhookRoutes);
