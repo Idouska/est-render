@@ -33,12 +33,14 @@ model Merchant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  shopify   ShopifyConnection?
-  gmail     GmailConnection?
-  users     User[]
-  tickets   Ticket[]
-  refunds   Refund[]
-  auditLogs AuditLog[]
+  shopify             ShopifyConnection?
+  gmail               GmailConnection?
+  users               User[]
+  tickets             Ticket[]
+  refunds             Refund[]
+  auditLogs           AuditLog[]
+  supplier            Supplier?
+  supplierEscalations SupplierEscalation[]
 }
 
 enum MerchantStatus {
@@ -121,19 +123,20 @@ model Ticket {
 
   // Rattachement à la commande Shopify. Aucune valeur ici tant que
   // l'association n'est pas fiable — on ne devine jamais silencieusement.
-  shopifyOrderId    String? // GID Shopify, ex. gid://shopify/Order/123
-  orderName         String? // ex. #1042
-  orderMatchMethod  OrderMatchMethod?
-  orderMatchScore   Float?
+  shopifyOrderId   String? // GID Shopify, ex. gid://shopify/Order/123
+  orderName        String? // ex. #1042
+  orderMatchMethod OrderMatchMethod?
+  orderMatchScore  Float?
 
   lastMessageAt DateTime
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  merchant Merchant  @relation(fields: [merchantId], references: [id], onDelete: Cascade)
-  messages Message[]
-  drafts   Draft[]
-  refunds  Refund[]
+  merchant    Merchant             @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  messages    Message[]
+  drafts      Draft[]
+  refunds     Refund[]
+  escalations SupplierEscalation[]
 
   @@unique([merchantId, gmailThreadId])
   @@index([merchantId, status])
@@ -151,11 +154,12 @@ enum Intent {
 }
 
 enum TicketStatus {
-  NEW           // ingéré, pas encore traité
-  PROCESSING    // en cours de traitement par un worker
-  DRAFT_READY   // brouillon Gmail créé, en attente de validation
-  NEEDS_REVIEW  // ambiguïté (commande non identifiée, intention peu sûre)
-  AUTO_SENT     // envoyé automatiquement (phase 3)
+  NEW // ingéré, pas encore traité
+  PROCESSING // en cours de traitement par un worker
+  DRAFT_READY // brouillon Gmail créé, en attente de validation
+  NEEDS_REVIEW // ambiguïté (commande non identifiée, intention peu sûre)
+  AWAITING_SUPPLIER // escalade envoyée, en attente de réponse du fournisseur
+  AUTO_SENT // envoyé automatiquement (phase 3)
   CLOSED
   FAILED
 }
@@ -234,7 +238,7 @@ enum DraftAuthor {
 // ---------------------------------------------------------------------------
 
 model Refund {
-  id         String @id @default(cuid())
+  id         String  @id @default(cuid())
   merchantId String
   ticketId   String?
 
@@ -271,6 +275,96 @@ enum RefundStatus {
 }
 
 // ---------------------------------------------------------------------------
+// Fournisseur — escalade des tickets qu'un agent ne peut pas résoudre seul
+// (rupture de stock, adresse de livraison incorrecte, article manquant...).
+//
+// Un fournisseur par marchand en phase 1 (contrainte @unique sur merchantId).
+// Le fournisseur n'a pas de mot de passe : il accède à ses échanges via un
+// lien signé envoyé par email, propre à chaque escalade. Voir lib/supplierToken.ts.
+// Aucune ingestion email côté fournisseur : il répond depuis le portail, pas
+// par mail — ce qui évite de dupliquer le pipeline Gmail pour un second canal.
+// ---------------------------------------------------------------------------
+
+model Supplier {
+  id           String @id @default(cuid())
+  merchantId   String @unique
+  name         String
+  contactEmail String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  merchant    Merchant             @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  escalations SupplierEscalation[]
+}
+
+model SupplierEscalation {
+  id         String @id @default(cuid())
+  merchantId String
+  ticketId   String
+  supplierId String
+
+  reason EscalationReason
+  // Note libre de l'agent au moment de l'escalade — contexte pour le
+  // fournisseur en plus de ce que l'IA rédige.
+  note   String?          @db.Text
+  status EscalationStatus @default(DRAFTING)
+
+  createdAt  DateTime  @default(now())
+  notifiedAt DateTime? // email de notification envoyé au fournisseur
+  resolvedAt DateTime?
+
+  merchant Merchant          @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  ticket   Ticket            @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  supplier Supplier          @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  messages SupplierMessage[]
+
+  @@index([merchantId, status])
+  @@index([ticketId])
+}
+
+enum EscalationReason {
+  OUT_OF_STOCK
+  INCORRECT_ADDRESS
+  MISSING_ITEM
+  OTHER
+}
+
+enum EscalationStatus {
+  DRAFTING // message vers le fournisseur généré, pas encore envoyé
+  OPEN // envoyé, en attente de réponse
+  ANSWERED // le fournisseur a répondu, en attente de traitement par l'agent
+  RESOLVED // clôturée par l'agent
+}
+
+model SupplierMessage {
+  id           String @id @default(cuid())
+  merchantId   String
+  escalationId String
+
+  direction  SupplierMessageDirection
+  authorType SupplierMessageAuthor
+  body       String                   @db.Text
+
+  createdAt DateTime @default(now())
+
+  escalation SupplierEscalation @relation(fields: [escalationId], references: [id], onDelete: Cascade)
+
+  @@index([escalationId, createdAt])
+}
+
+enum SupplierMessageDirection {
+  TO_SUPPLIER
+  FROM_SUPPLIER
+}
+
+enum SupplierMessageAuthor {
+  AI
+  HUMAN // l'agent, côté marchand
+  SUPPLIER
+}
+
+// ---------------------------------------------------------------------------
 // Journal d'audit — append-only, jamais modifié ni supprimé par l'application
 // ---------------------------------------------------------------------------
 
@@ -298,4 +392,5 @@ enum ActorType {
   USER
   SYSTEM
   AI
+  SUPPLIER
 }

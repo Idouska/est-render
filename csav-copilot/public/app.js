@@ -14,6 +14,7 @@ const state = {
   currentId: null,
   detail: null,
   refund: null,
+  supplier: null,
 };
 
 /* ------------------------------------------------------------------ outils */
@@ -222,6 +223,7 @@ const STATUS_LABELS = {
   PROCESSING: 'En traitement',
   DRAFT_READY: 'Brouillon prêt',
   NEEDS_REVIEW: 'À valider',
+  AWAITING_SUPPLIER: 'Chez le fournisseur',
   AUTO_SENT: 'Envoyé auto',
   CLOSED: 'Clos',
   FAILED: 'Échec',
@@ -234,7 +236,7 @@ async function selectTicket(id) {
   const detail = await api(`/api/tickets/${id}`);
   state.detail = detail;
   renderDetail();
-  await loadQueue();
+  await Promise.all([loadQueue(), loadEscalations(id)]);
 }
 
 function renderDetail() {
@@ -468,6 +470,184 @@ function renderShipping(order) {
     '</div>';
 }
 
+/* ------------------------------------------------------------- fournisseur */
+
+const ESCALATION_REASON_LABELS = {
+  OUT_OF_STOCK: 'Rupture de stock',
+  INCORRECT_ADDRESS: 'Adresse incorrecte ou incomplète',
+  MISSING_ITEM: 'Article manquant',
+  OTHER: 'Autre',
+};
+
+const ESCALATION_STATUS_LABELS = {
+  DRAFTING: 'brouillon',
+  OPEN: 'en attente du fournisseur',
+  ANSWERED: 'fournisseur a répondu',
+  RESOLVED: 'résolu',
+};
+
+async function loadSupplier() {
+  const { supplier } = await api('/api/suppliers');
+  state.supplier = supplier;
+  renderSupplierSummary();
+}
+
+function renderSupplierSummary() {
+  const summary = $('supplier-summary');
+  if (state.supplier) {
+    summary.innerHTML = `<p>Contact : <b>${esc(state.supplier.name)}</b> · <code>${esc(
+      state.supplier.contactEmail,
+    )}</code></p>`;
+    $('sup-name').value = state.supplier.name;
+    $('sup-email').value = state.supplier.contactEmail;
+  } else {
+    summary.innerHTML =
+      '<p class="empty">Aucun fournisseur configuré — les escalades sont indisponibles.</p>';
+  }
+}
+
+$('supplier-edit-toggle').addEventListener('click', () => {
+  $('supplier-config').hidden = !$('supplier-config').hidden;
+});
+
+$('sup-save').addEventListener('click', async () => {
+  const name = $('sup-name').value.trim();
+  const contactEmail = $('sup-email').value.trim();
+  if (!name || !contactEmail) return;
+
+  try {
+    await api('/api/suppliers', {
+      method: 'PUT',
+      body: JSON.stringify({ name, contactEmail }),
+    });
+    toast('Fournisseur enregistré.');
+    $('supplier-config').hidden = true;
+    await Promise.all([loadSupplier(), loadAudit()]);
+  } catch (error) {
+    toast(error.message, true);
+  }
+});
+
+async function loadEscalations(ticketId) {
+  const container = $('escalations');
+  const data = await api(`/api/tickets/${ticketId}/escalations`);
+  const escalations = data.escalations ?? [];
+
+  const newForm = state.supplier
+    ? `<div class="escalation" id="new-escalation">
+        <div class="field">
+          <label for="esc-reason">Motif</label>
+          <select id="esc-reason">
+            <option value="OUT_OF_STOCK">Rupture de stock</option>
+            <option value="INCORRECT_ADDRESS">Adresse incorrecte ou incomplète</option>
+            <option value="MISSING_ITEM">Article manquant</option>
+            <option value="OTHER">Autre</option>
+          </select>
+        </div>
+        <div class="field" style="margin-top:8px">
+          <label for="esc-note">Note pour l'IA (facultatif)</label>
+          <textarea id="esc-note" placeholder="Contexte à transmettre au fournisseur…"></textarea>
+        </div>
+        <div class="actions" style="margin-top:8px">
+          <button class="btn" id="esc-create">Rédiger un message fournisseur</button>
+        </div>
+      </div>`
+    : '';
+
+  container.innerHTML =
+    newForm +
+    escalations
+      .map((escalation) => {
+        const draft = escalation.status === 'DRAFTING';
+        const messages = escalation.messages
+          .map(
+            (message) => `<div class="msg${message.direction === 'FROM_SUPPLIER' ? ' out' : ''}">
+              <div class="msg-head">
+                <b>${message.direction === 'FROM_SUPPLIER' ? 'Fournisseur' : 'Vous'}</b>
+                <span>${shortTime(message.createdAt)}</span>
+              </div>
+              ${
+                draft && message === escalation.messages[escalation.messages.length - 1]
+                  ? `<textarea class="esc-body" data-id="${escalation.id}">${esc(message.body)}</textarea>`
+                  : `<div class="msg-body">${esc(message.body)}</div>`
+              }
+            </div>`,
+          )
+          .join('');
+
+        const actions = draft
+          ? `<div class="actions" style="margin-top:8px">
+              <button class="btn btn-primary esc-send" data-id="${escalation.id}">Envoyer au fournisseur</button>
+            </div>`
+          : escalation.status !== 'RESOLVED'
+            ? `<div class="actions" style="margin-top:8px">
+                <button class="btn esc-resolve" data-id="${escalation.id}">Marquer résolu</button>
+              </div>`
+            : '';
+
+        return `<div class="escalation">
+          <div class="escalation-head">
+            <b>${ESCALATION_REASON_LABELS[escalation.reason] ?? escalation.reason}</b>
+            <span>${ESCALATION_STATUS_LABELS[escalation.status] ?? escalation.status}</span>
+          </div>
+          ${messages}
+          ${actions}
+        </div>`;
+      })
+      .join('');
+
+  $('esc-create')?.addEventListener('click', () => createEscalation(ticketId));
+  container.querySelectorAll('.esc-send').forEach((button) => {
+    button.addEventListener('click', () => sendEscalation(ticketId, button.dataset.id));
+  });
+  container.querySelectorAll('.esc-resolve').forEach((button) => {
+    button.addEventListener('click', () => resolveEscalation(ticketId, button.dataset.id));
+  });
+}
+
+async function createEscalation(ticketId) {
+  try {
+    await api(`/api/tickets/${ticketId}/escalations`, {
+      method: 'POST',
+      body: JSON.stringify({
+        reason: $('esc-reason').value,
+        note: $('esc-note').value.trim() || undefined,
+      }),
+    });
+    toast('Brouillon fournisseur rédigé.');
+    await loadEscalations(ticketId);
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+async function sendEscalation(ticketId, escalationId) {
+  const textarea = document.querySelector(`.esc-body[data-id="${escalationId}"]`);
+  try {
+    if (textarea) {
+      await api(`/api/escalations/${escalationId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ body: textarea.value }),
+      });
+    }
+    await api(`/api/escalations/${escalationId}/send`, { method: 'POST' });
+    toast('Fournisseur notifié.');
+    await Promise.all([loadAudit(), selectTicket(ticketId)]);
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+async function resolveEscalation(ticketId, escalationId) {
+  try {
+    await api(`/api/escalations/${escalationId}/resolve`, { method: 'POST' });
+    toast('Escalade clôturée.');
+    await Promise.all([loadEscalations(ticketId), loadAudit()]);
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
 /* ------------------------------------------------------------------ audit */
 
 const AUDIT_LABELS = {
@@ -482,6 +662,11 @@ const AUDIT_LABELS = {
   'refund.requested': 'Remboursement demandé',
   'refund.completed': 'Remboursement effectué',
   'refund.failed': 'Remboursement en échec',
+  'supplier.configured': 'Fournisseur configuré',
+  'supplier.escalation_created': 'Escalade fournisseur rédigée',
+  'supplier.notified': 'Fournisseur notifié',
+  'supplier.replied': 'Réponse du fournisseur',
+  'supplier.escalation_resolved': 'Escalade fournisseur clôturée',
 };
 
 async function loadAudit() {
@@ -664,7 +849,7 @@ async function boot() {
   $('app').hidden = false;
 
   renderMe();
-  await Promise.all([loadMetrics(), loadQueue(), loadAudit()]);
+  await Promise.all([loadMetrics(), loadQueue(), loadAudit(), loadSupplier()]);
 
   if (state.tickets.length > 0) {
     await selectTicket(state.tickets[0].id);

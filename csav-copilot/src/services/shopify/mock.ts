@@ -30,6 +30,16 @@ interface MockOrder {
     company: string;
     number: string;
   }>;
+  address?: {
+    name: string;
+    address1: string;
+    address2?: string;
+    city: string;
+    zip: string;
+    province: string;
+    country: string;
+    phone?: string;
+  };
 }
 
 const ORDERS: MockOrder[] = [
@@ -83,6 +93,17 @@ const ORDERS: MockOrder[] = [
         number: '84921047',
       },
     ],
+    // Adresse volontairement incomplète (numéro et bâtiment manquants) —
+    // sert la démo du cas « adresse incorrecte » remonté au fournisseur.
+    address: {
+      name: 'Marc Delaunay',
+      address1: 'Résidence Les Tilleuls',
+      city: 'Lyon',
+      zip: '69003',
+      province: 'FR-69',
+      country: 'FR',
+      phone: '+33 6 12 34 56 78',
+    },
   },
   {
     id: 'gid://shopify/Order/10375',
@@ -231,6 +252,18 @@ function toGraphQL(order: MockOrder) {
       estimatedDeliveryAt: f.estimatedDeliveryAt,
       trackingInfo: [{ company: f.company, number: f.number, url: `https://suivi.example/${f.number}` }],
     })),
+    shippingAddress: order.address
+      ? {
+          name: order.address.name,
+          address1: order.address.address1,
+          address2: order.address.address2 ?? null,
+          city: order.address.city,
+          zip: order.address.zip,
+          provinceCode: order.address.province,
+          countryCodeV2: order.address.country,
+          phone: order.address.phone ?? null,
+        }
+      : null,
   };
 }
 

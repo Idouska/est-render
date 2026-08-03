@@ -132,6 +132,29 @@
             </div>
           </div>
           <div class="panel">
+            <div class="panel-head">
+              <span class="panel-title">Fournisseur</span>
+              <button class="btn btn-small" id="supplier-edit-toggle">Configurer</button>
+            </div>
+            <div class="card-body" id="supplier-config" hidden>
+              <div class="field">
+                <label for="sup-name">Nom du fournisseur</label>
+                <input type="text" id="sup-name" placeholder="Atelier Nord" />
+              </div>
+              <div class="field">
+                <label for="sup-email">Email de contact</label>
+                <input type="email" id="sup-email" placeholder="contact@fournisseur.example" />
+              </div>
+              <div class="actions">
+                <button class="btn btn-primary" id="sup-save">Enregistrer</button>
+              </div>
+            </div>
+            <div class="card-body" id="supplier-summary">
+              <p class="empty">Aucun fournisseur configuré.</p>
+            </div>
+            <div class="card-body" id="escalations"></div>
+          </div>
+          <div class="panel">
             <div class="panel-head"><span class="panel-title">Journal d'audit</span></div>
             <ul class="journal" id="c-audit"></ul>
           </div>

@@ -42,12 +42,18 @@ Reste à faire avant de brancher un vrai marchand :
 - [x] Rattachement manuel d'une commande depuis le détail
 - [x] Mode démonstration (`SHOPIFY_MOCK` / `GMAIL_MOCK`) pour développer
       l'interface sans boutique ni boîte connectée
+- [x] Escalade fournisseur : portail par lien signé, brouillon IA relu avant
+      envoi, cycle de vie complet et audité
+      ([10-escalade-fournisseur.md](10-escalade-fournisseur.md))
 - [ ] Régénérer un brouillon après rattachement manuel d'une commande — sans
       ça, la réponse continue de demander une précision déjà obtenue
 - [ ] Remboursement ligne par ligne, restockage
 - [ ] Plafonds de remboursement par utilisateur et par jour
 - [ ] Pagination de la file au-delà de 25 tickets (le curseur existe côté API,
       le dashboard ne l'utilise pas encore)
+- [ ] Notifier l'agent quand le fournisseur répond, plutôt que de compter sur
+      lui pour rouvrir le ticket
+- [ ] Relance automatique d'une escalade fournisseur restée sans réponse
 
 ## Phase 3 — Multi-tenant réel
 

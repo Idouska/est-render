@@ -9,7 +9,8 @@ function encodeHeaderValue(value: string): string {
     : `=?UTF-8?B?${Buffer.from(value, 'utf8').toString('base64')}?=`;
 }
 
-function buildRawEmail(params: {
+/** Exporté pour services/gmail/send.ts — même encodage MIME, pas de brouillon. */
+export function buildRawEmail(params: {
   to: string;
   from: string;
   subject: string;

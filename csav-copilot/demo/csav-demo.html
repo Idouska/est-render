@@ -394,7 +394,8 @@ a {
   color: var(--ok);
 }
 
-.st-NEEDS_REVIEW {
+.st-NEEDS_REVIEW,
+.st-AWAITING_SUPPLIER {
   background: var(--warn-soft);
   color: var(--warn);
 }
@@ -896,16 +897,49 @@ dl {
 }
 
 .field input[type="text"],
-.field select {
+.field input[type="email"],
+.field select,
+.field textarea {
   padding: 9px 11px;
   border: 1px solid var(--line);
   border-radius: var(--r);
   background: var(--surface);
+  font: inherit;
 }
 
 .field input[type="text"] {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
+}
+
+.field textarea {
+  min-height: 70px;
+  resize: vertical;
+}
+
+.btn-small {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.escalation {
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r);
+  padding: 10px 12px;
+  margin-top: 10px;
+}
+
+.escalation-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--ink-mute);
+  margin-bottom: 6px;
+}
+
+.escalation-head b {
+  color: var(--ink);
 }
 
 .field small {
@@ -1073,6 +1107,8 @@ dl {
         À essayer : <b>Julien Meyer</b> — trois commandes correspondent à son
         adresse, l'IA refuse de choisir et demande une précision.
         <b>Amélie Rousseau</b> — le bouton rembourser, et sa confirmation obligatoire.
+        <b>Marc Delaunay</b> — une escalade fournisseur déjà en cours dans le
+        panneau « Fournisseur », pour l'adresse de livraison incomplète.
         Modifiez un brouillon, envoyez-le, regardez le journal d'audit à droite.
       </div>
     </div>
@@ -1197,6 +1233,29 @@ dl {
             <div class="card-body" id="c-ship">
               <p class="empty">—</p>
             </div>
+          </div>
+          <div class="panel">
+            <div class="panel-head">
+              <span class="panel-title">Fournisseur</span>
+              <button class="btn btn-small" id="supplier-edit-toggle">Configurer</button>
+            </div>
+            <div class="card-body" id="supplier-config" hidden>
+              <div class="field">
+                <label for="sup-name">Nom du fournisseur</label>
+                <input type="text" id="sup-name" placeholder="Atelier Nord" />
+              </div>
+              <div class="field">
+                <label for="sup-email">Email de contact</label>
+                <input type="email" id="sup-email" placeholder="contact@fournisseur.example" />
+              </div>
+              <div class="actions">
+                <button class="btn btn-primary" id="sup-save">Enregistrer</button>
+              </div>
+            </div>
+            <div class="card-body" id="supplier-summary">
+              <p class="empty">Aucun fournisseur configuré.</p>
+            </div>
+            <div class="card-body" id="escalations"></div>
           </div>
           <div class="panel">
             <div class="panel-head"><span class="panel-title">Journal d'audit</span></div>
@@ -1355,7 +1414,7 @@ const db = {
         body: "Bonjour Léa,\n\nVotre commande #10428 a bien été expédiée le 5 février par Colissimo, sous le numéro de suivi 6A18492037561. Le dernier passage enregistré date du 8 février au centre de tri, et la livraison est estimée au 12 février.\n\nCe type d'arrêt d'affichage est fréquent entre deux passages en centre de tri. Si rien ne bouge d'ici le 13, écrivez-nous : nous ouvrirons une enquête auprès de Colissimo et vous renverrons la commande sans frais.\n\nBien à vous,\nL'équipe Atelier Lumen" }] },
 
     { id: 't2', subject: "Colis annoncé livré mais je n'ai rien", customerEmail: 'm.delaunay@orange.fr',
-      customerName: 'Marc Delaunay', intent: 'DISPUTE', intentConfidence: 0.88, status: 'NEEDS_REVIEW',
+      customerName: 'Marc Delaunay', intent: 'DISPUTE', intentConfidence: 0.88, status: 'AWAITING_SUPPLIER',
       shopifyOrderId: 'gid://shopify/Order/10391', orderName: '#10391', lastMessageAt: minutesAgo(38),
       messages: [{ id: 'm2', direction: 'INBOUND', fromEmail: 'm.delaunay@orange.fr',
         receivedAt: minutesAgo(38), bodyText:
@@ -1409,6 +1468,34 @@ const db = {
     { id: 'a2', action: 'gmail.connected', actorType: 'SYSTEM', createdAt: minutesAgo(2880), metadata: {} },
     { id: 'a1', action: 'shopify.connected', actorType: 'SYSTEM', createdAt: minutesAgo(2881), metadata: {} },
   ],
+
+  supplier: { id: 'sup1', name: 'Atelier Nord', contactEmail: 'contact@atelier-nord.example' },
+
+  // Escalade déjà en cours sur le ticket Marc Delaunay (#10391) : c'est la
+  // commande dont l'adresse est volontairement incomplète dans cette démo.
+  escalations: [
+    { id: 'esc1', ticketId: 't2', reason: 'INCORRECT_ADDRESS', note:
+      'Le numéro de rue manque, à confirmer avant réexpédition.', status: 'OPEN',
+      createdAt: minutesAgo(25), notifiedAt: minutesAgo(20), resolvedAt: null,
+      supplier: { name: 'Atelier Nord', contactEmail: 'contact@atelier-nord.example' },
+      messages: [{ id: 'esm1', direction: 'TO_SUPPLIER', authorType: 'AI', createdAt: minutesAgo(25),
+        body: "Bonjour,\n\nPouvez-vous confirmer le numéro de rue pour la commande #10391 (Applique Halo) avant réexpédition ? L'adresse actuelle indique « Résidence Les Tilleuls » sans numéro.\n\nMerci,\nAtelier Lumen" }] },
+  ],
+};
+
+const ESCALATION_REASON_BODIES = {
+  OUT_OF_STOCK: (order) =>
+    'Bonjour,\n\nLa commande ' + (order ? order.name : '') +
+    ' semble bloquée par une rupture de stock. Pouvez-vous confirmer une date de réassort ?\n\nMerci,\nAtelier Lumen',
+  INCORRECT_ADDRESS: (order) =>
+    "Bonjour,\n\nL'adresse de livraison de la commande " + (order ? order.name : '') +
+    ' semble incomplète. Pouvez-vous vérifier avant réexpédition ?\n\nMerci,\nAtelier Lumen',
+  MISSING_ITEM: (order) =>
+    'Bonjour,\n\nUn article manque à la réception de la commande ' + (order ? order.name : '') +
+    ". Pouvez-vous renvoyer l'article manquant ?\n\nMerci,\nAtelier Lumen",
+  OTHER: (order) =>
+    'Bonjour,\n\nUn point reste à éclaircir sur la commande ' + (order ? order.name : '') +
+    ' ? Pouvez-vous nous éclairer ?\n\nMerci,\nAtelier Lumen',
 };
 
 const json = (data, status = 200) => ({
@@ -1560,6 +1647,69 @@ window.fetch = async (input, options = {}) => {
 
   if (path === '/api/audit') return json({ entries: db.audit.slice(0, 30) });
 
+  if (path === '/api/suppliers' && method === 'GET') return json({ supplier: db.supplier });
+
+  if (path === '/api/suppliers' && method === 'PUT') {
+    db.supplier = { id: db.supplier?.id ?? 'sup1', name: payload.name, contactEmail: payload.contactEmail };
+    logAudit('supplier.configured', { name: db.supplier.name });
+    return json({ supplier: db.supplier });
+  }
+
+  const escList = path.match(/^\/api\/tickets\/([^/]+)\/escalations$/);
+  if (escList && method === 'GET') {
+    return json({ escalations: db.escalations.filter((e) => e.ticketId === escList[1]) });
+  }
+
+  if (escList && method === 'POST') {
+    if (!db.supplier) return json({ error: 'Configurez un fournisseur avant de pouvoir escalader un ticket.' }, 409);
+    const ticket = findTicket(escList[1]);
+    const order = ticket?.shopifyOrderId ? ORDERS[ticket.shopifyOrderId] : null;
+    const body = (ESCALATION_REASON_BODIES[payload.reason] ?? ESCALATION_REASON_BODIES.OTHER)(order);
+    const escalation = {
+      id: 'esc' + Date.now(), ticketId: escList[1], reason: payload.reason,
+      note: payload.note ?? null, status: 'DRAFTING', createdAt: new Date().toISOString(),
+      notifiedAt: null, resolvedAt: null,
+      supplier: { name: db.supplier.name, contactEmail: db.supplier.contactEmail },
+      messages: [{ id: 'esm' + Date.now(), direction: 'TO_SUPPLIER', authorType: 'AI',
+        createdAt: new Date().toISOString(), body }],
+    };
+    db.escalations.push(escalation);
+    logAudit('supplier.escalation_created', { reason: payload.reason, orderName: order?.name ?? null });
+    return json({ escalation });
+  }
+
+  const escPatch = path.match(/^\/api\/escalations\/([^/]+)$/);
+  if (escPatch && method === 'PATCH') {
+    const escalation = db.escalations.find((e) => e.id === escPatch[1]);
+    if (!escalation) return json({ error: 'Escalade introuvable' }, 404);
+    const last = escalation.messages[escalation.messages.length - 1];
+    last.body = payload.body;
+    last.authorType = 'HUMAN';
+    return json({ message: last });
+  }
+
+  const escSend = path.match(/^\/api\/escalations\/([^/]+)\/send$/);
+  if (escSend && method === 'POST') {
+    const escalation = db.escalations.find((e) => e.id === escSend[1]);
+    if (!escalation) return json({ error: 'Escalade introuvable' }, 404);
+    escalation.status = 'OPEN';
+    escalation.notifiedAt = new Date().toISOString();
+    const ticket = findTicket(escalation.ticketId);
+    if (ticket) ticket.status = 'AWAITING_SUPPLIER';
+    logAudit('supplier.notified', { supplierEmail: escalation.supplier.contactEmail });
+    return json({ ok: true });
+  }
+
+  const escResolve = path.match(/^\/api\/escalations\/([^/]+)\/resolve$/);
+  if (escResolve && method === 'POST') {
+    const escalation = db.escalations.find((e) => e.id === escResolve[1]);
+    if (!escalation) return json({ error: 'Escalade introuvable' }, 404);
+    escalation.status = 'RESOLVED';
+    escalation.resolvedAt = new Date().toISOString();
+    logAudit('supplier.escalation_resolved');
+    return json({ ok: true });
+  }
+
   if (path.startsWith('/api/')) return json({ error: 'Route inconnue en démonstration' }, 404);
 
   return realFetch(input, options);
@@ -1584,6 +1734,7 @@ const state = {
   currentId: null,
   detail: null,
   refund: null,
+  supplier: null,
 };
 
 /* ------------------------------------------------------------------ outils */
@@ -1792,6 +1943,7 @@ const STATUS_LABELS = {
   PROCESSING: 'En traitement',
   DRAFT_READY: 'Brouillon prêt',
   NEEDS_REVIEW: 'À valider',
+  AWAITING_SUPPLIER: 'Chez le fournisseur',
   AUTO_SENT: 'Envoyé auto',
   CLOSED: 'Clos',
   FAILED: 'Échec',
@@ -1804,7 +1956,7 @@ async function selectTicket(id) {
   const detail = await api(`/api/tickets/${id}`);
   state.detail = detail;
   renderDetail();
-  await loadQueue();
+  await Promise.all([loadQueue(), loadEscalations(id)]);
 }
 
 function renderDetail() {
@@ -2038,6 +2190,184 @@ function renderShipping(order) {
     '</div>';
 }
 
+/* ------------------------------------------------------------- fournisseur */
+
+const ESCALATION_REASON_LABELS = {
+  OUT_OF_STOCK: 'Rupture de stock',
+  INCORRECT_ADDRESS: 'Adresse incorrecte ou incomplète',
+  MISSING_ITEM: 'Article manquant',
+  OTHER: 'Autre',
+};
+
+const ESCALATION_STATUS_LABELS = {
+  DRAFTING: 'brouillon',
+  OPEN: 'en attente du fournisseur',
+  ANSWERED: 'fournisseur a répondu',
+  RESOLVED: 'résolu',
+};
+
+async function loadSupplier() {
+  const { supplier } = await api('/api/suppliers');
+  state.supplier = supplier;
+  renderSupplierSummary();
+}
+
+function renderSupplierSummary() {
+  const summary = $('supplier-summary');
+  if (state.supplier) {
+    summary.innerHTML = `<p>Contact : <b>${esc(state.supplier.name)}</b> · <code>${esc(
+      state.supplier.contactEmail,
+    )}</code></p>`;
+    $('sup-name').value = state.supplier.name;
+    $('sup-email').value = state.supplier.contactEmail;
+  } else {
+    summary.innerHTML =
+      '<p class="empty">Aucun fournisseur configuré — les escalades sont indisponibles.</p>';
+  }
+}
+
+$('supplier-edit-toggle').addEventListener('click', () => {
+  $('supplier-config').hidden = !$('supplier-config').hidden;
+});
+
+$('sup-save').addEventListener('click', async () => {
+  const name = $('sup-name').value.trim();
+  const contactEmail = $('sup-email').value.trim();
+  if (!name || !contactEmail) return;
+
+  try {
+    await api('/api/suppliers', {
+      method: 'PUT',
+      body: JSON.stringify({ name, contactEmail }),
+    });
+    toast('Fournisseur enregistré.');
+    $('supplier-config').hidden = true;
+    await Promise.all([loadSupplier(), loadAudit()]);
+  } catch (error) {
+    toast(error.message, true);
+  }
+});
+
+async function loadEscalations(ticketId) {
+  const container = $('escalations');
+  const data = await api(`/api/tickets/${ticketId}/escalations`);
+  const escalations = data.escalations ?? [];
+
+  const newForm = state.supplier
+    ? `<div class="escalation" id="new-escalation">
+        <div class="field">
+          <label for="esc-reason">Motif</label>
+          <select id="esc-reason">
+            <option value="OUT_OF_STOCK">Rupture de stock</option>
+            <option value="INCORRECT_ADDRESS">Adresse incorrecte ou incomplète</option>
+            <option value="MISSING_ITEM">Article manquant</option>
+            <option value="OTHER">Autre</option>
+          </select>
+        </div>
+        <div class="field" style="margin-top:8px">
+          <label for="esc-note">Note pour l'IA (facultatif)</label>
+          <textarea id="esc-note" placeholder="Contexte à transmettre au fournisseur…"></textarea>
+        </div>
+        <div class="actions" style="margin-top:8px">
+          <button class="btn" id="esc-create">Rédiger un message fournisseur</button>
+        </div>
+      </div>`
+    : '';
+
+  container.innerHTML =
+    newForm +
+    escalations
+      .map((escalation) => {
+        const draft = escalation.status === 'DRAFTING';
+        const messages = escalation.messages
+          .map(
+            (message) => `<div class="msg${message.direction === 'FROM_SUPPLIER' ? ' out' : ''}">
+              <div class="msg-head">
+                <b>${message.direction === 'FROM_SUPPLIER' ? 'Fournisseur' : 'Vous'}</b>
+                <span>${shortTime(message.createdAt)}</span>
+              </div>
+              ${
+                draft && message === escalation.messages[escalation.messages.length - 1]
+                  ? `<textarea class="esc-body" data-id="${escalation.id}">${esc(message.body)}</textarea>`
+                  : `<div class="msg-body">${esc(message.body)}</div>`
+              }
+            </div>`,
+          )
+          .join('');
+
+        const actions = draft
+          ? `<div class="actions" style="margin-top:8px">
+              <button class="btn btn-primary esc-send" data-id="${escalation.id}">Envoyer au fournisseur</button>
+            </div>`
+          : escalation.status !== 'RESOLVED'
+            ? `<div class="actions" style="margin-top:8px">
+                <button class="btn esc-resolve" data-id="${escalation.id}">Marquer résolu</button>
+              </div>`
+            : '';
+
+        return `<div class="escalation">
+          <div class="escalation-head">
+            <b>${ESCALATION_REASON_LABELS[escalation.reason] ?? escalation.reason}</b>
+            <span>${ESCALATION_STATUS_LABELS[escalation.status] ?? escalation.status}</span>
+          </div>
+          ${messages}
+          ${actions}
+        </div>`;
+      })
+      .join('');
+
+  $('esc-create')?.addEventListener('click', () => createEscalation(ticketId));
+  container.querySelectorAll('.esc-send').forEach((button) => {
+    button.addEventListener('click', () => sendEscalation(ticketId, button.dataset.id));
+  });
+  container.querySelectorAll('.esc-resolve').forEach((button) => {
+    button.addEventListener('click', () => resolveEscalation(ticketId, button.dataset.id));
+  });
+}
+
+async function createEscalation(ticketId) {
+  try {
+    await api(`/api/tickets/${ticketId}/escalations`, {
+      method: 'POST',
+      body: JSON.stringify({
+        reason: $('esc-reason').value,
+        note: $('esc-note').value.trim() || undefined,
+      }),
+    });
+    toast('Brouillon fournisseur rédigé.');
+    await loadEscalations(ticketId);
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+async function sendEscalation(ticketId, escalationId) {
+  const textarea = document.querySelector(`.esc-body[data-id="${escalationId}"]`);
+  try {
+    if (textarea) {
+      await api(`/api/escalations/${escalationId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ body: textarea.value }),
+      });
+    }
+    await api(`/api/escalations/${escalationId}/send`, { method: 'POST' });
+    toast('Fournisseur notifié.');
+    await Promise.all([loadAudit(), selectTicket(ticketId)]);
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+async function resolveEscalation(ticketId, escalationId) {
+  try {
+    await api(`/api/escalations/${escalationId}/resolve`, { method: 'POST' });
+    toast('Escalade clôturée.');
+    await Promise.all([loadEscalations(ticketId), loadAudit()]);
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
 /* ------------------------------------------------------------------ audit */
 
 const AUDIT_LABELS = {
@@ -2052,6 +2382,11 @@ const AUDIT_LABELS = {
   'refund.requested': 'Remboursement demandé',
   'refund.completed': 'Remboursement effectué',
   'refund.failed': 'Remboursement en échec',
+  'supplier.configured': 'Fournisseur configuré',
+  'supplier.escalation_created': 'Escalade fournisseur rédigée',
+  'supplier.notified': 'Fournisseur notifié',
+  'supplier.replied': 'Réponse du fournisseur',
+  'supplier.escalation_resolved': 'Escalade fournisseur clôturée',
 };
 
 async function loadAudit() {
@@ -2234,7 +2569,7 @@ async function boot() {
   $('app').hidden = false;
 
   renderMe();
-  await Promise.all([loadMetrics(), loadQueue(), loadAudit()]);
+  await Promise.all([loadMetrics(), loadQueue(), loadAudit(), loadSupplier()]);
 
   if (state.tickets.length > 0) {
     await selectTicket(state.tickets[0].id);

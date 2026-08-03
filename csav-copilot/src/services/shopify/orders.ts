@@ -15,6 +15,17 @@ export interface Fulfillment {
   updatedAt: string;
 }
 
+export interface ShippingAddress {
+  name: string | null;
+  address1: string | null;
+  address2: string | null;
+  city: string | null;
+  zip: string | null;
+  province: string | null;
+  country: string | null;
+  phone: string | null;
+}
+
 export interface OrderSummary {
   id: string;
   name: string; // ex. #1042
@@ -33,6 +44,23 @@ export interface OrderSummary {
   } | null;
   lineItems: OrderLineItem[];
   fulfillments: Fulfillment[];
+  // Adresse au moment de la commande — utile pour vérifier une livraison en
+  // litige, distincte de l'adresse actuelle du client s'il en a changé depuis.
+  shippingAddress: ShippingAddress | null;
+}
+
+/** Représentation courte, sur une ligne — usage : messages, portail fournisseur. */
+export function formatAddress(address: ShippingAddress | null): string | null {
+  if (!address) return null;
+  return [
+    address.name,
+    [address.address1, address.address2].filter(Boolean).join(' '),
+    [address.zip, address.city].filter(Boolean).join(' '),
+    address.province,
+    address.country,
+  ]
+    .filter((part) => part && part.trim() !== '')
+    .join(', ');
 }
 
 const ORDER_FIELDS = /* GraphQL */ `
@@ -75,6 +103,16 @@ const ORDER_FIELDS = /* GraphQL */ `
         url
       }
     }
+    shippingAddress {
+      name
+      address1
+      address2
+      city
+      zip
+      provinceCode
+      countryCodeV2
+      phone
+    }
   }
 `;
 
@@ -100,6 +138,16 @@ interface RawOrder {
     estimatedDeliveryAt: string | null;
     trackingInfo: Array<{ company: string | null; number: string | null; url: string | null }>;
   }>;
+  shippingAddress: {
+    name: string | null;
+    address1: string | null;
+    address2: string | null;
+    city: string | null;
+    zip: string | null;
+    provinceCode: string | null;
+    countryCodeV2: string | null;
+    phone: string | null;
+  } | null;
 }
 
 function toSummary(order: RawOrder): OrderSummary {
@@ -133,6 +181,18 @@ function toSummary(order: RawOrder): OrderSummary {
       trackingNumber: f.trackingInfo[0]?.number ?? null,
       trackingUrl: f.trackingInfo[0]?.url ?? null,
     })),
+    shippingAddress: order.shippingAddress
+      ? {
+          name: order.shippingAddress.name,
+          address1: order.shippingAddress.address1,
+          address2: order.shippingAddress.address2,
+          city: order.shippingAddress.city,
+          zip: order.shippingAddress.zip,
+          province: order.shippingAddress.provinceCode,
+          country: order.shippingAddress.countryCodeV2,
+          phone: order.shippingAddress.phone,
+        }
+      : null,
   };
 }
 

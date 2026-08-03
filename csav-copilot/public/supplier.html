@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>cSAV Copilot — Demande fournisseur</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%230b5e6b'/%3E%3Cpath d='M3 5.5h10v6H3z' fill='none' stroke='%23fff' stroke-width='1.2'/%3E%3Cpath d='M3 5.8l5 3.4 5-3.4' fill='none' stroke='%23fff' stroke-width='1.2'/%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="/static/styles.css" />
+    <style>
+      .portal {
+        max-width: 640px;
+        margin: 40px auto;
+        padding: 0 16px 60px;
+      }
+      .portal-head {
+        margin-bottom: 20px;
+      }
+      .portal-head h1 {
+        font-size: 20px;
+        margin: 0 0 4px;
+      }
+      .portal-head p {
+        margin: 0;
+        color: var(--muted, #666);
+      }
+      .reply-box {
+        margin-top: 16px;
+      }
+      .reply-box textarea {
+        width: 100%;
+        min-height: 120px;
+        box-sizing: border-box;
+        font: inherit;
+        padding: 10px;
+      }
+      .reply-box .actions {
+        margin-top: 10px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .status-tag {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        background: #eee;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="portal">
+      <div id="gate" class="gate" hidden>
+        <h1>Lien invalide ou expiré</h1>
+        <p id="gate-error"></p>
+        <p>Demandez au marchand de renvoyer une notification.</p>
+      </div>
+
+      <div id="app" hidden>
+        <div class="portal-head">
+          <h1 id="p-subject">Demande fournisseur</h1>
+          <p>
+            Commande <span id="p-order">—</span> · statut
+            <span class="status-tag" id="p-status">—</span>
+          </p>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><span class="panel-title">Échange</span></div>
+          <div class="messages" id="p-messages"></div>
+        </div>
+
+        <div class="reply-box" id="reply-box">
+          <textarea id="p-reply" placeholder="Votre réponse…"></textarea>
+          <div class="actions">
+            <button class="btn btn-primary" id="p-send">Envoyer la réponse</button>
+            <span class="hint" id="p-hint"></span>
+          </div>
+        </div>
+        <p class="empty" id="resolved-note" hidden>
+          Cette demande est clôturée : aucune nouvelle réponse n'est nécessaire.
+        </p>
+      </div>
+    </div>
+
+    <div class="toast" id="toast" role="status"></div>
+
+    <script type="module" src="/static/supplier.js"></script>
+  </body>
+</html>

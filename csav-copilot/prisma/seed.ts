@@ -265,6 +265,54 @@ async function main(): Promise<void> {
     }
   }
 
+  // Fournisseur unique + une escalade déjà en cours, sur le ticket Marc
+  // Delaunay (#10391) — c'est la commande dont l'adresse mock est
+  // volontairement incomplète (voir services/shopify/mock.ts).
+  const supplier = await prisma.supplier.upsert({
+    where: { merchantId: merchant.id },
+    create: {
+      merchantId: merchant.id,
+      name: 'Atelier Nord',
+      contactEmail: 'contact@atelier-nord.example',
+    },
+    update: {},
+  });
+
+  const disputeTicket = await prisma.ticket.findFirst({
+    where: { merchantId: merchant.id, gmailThreadId: 'thread-10391' },
+  });
+
+  if (disputeTicket) {
+    const existingEscalation = await prisma.supplierEscalation.findFirst({
+      where: { ticketId: disputeTicket.id },
+    });
+
+    if (!existingEscalation) {
+      await prisma.supplierEscalation.create({
+        data: {
+          merchantId: merchant.id,
+          ticketId: disputeTicket.id,
+          supplierId: supplier.id,
+          reason: 'INCORRECT_ADDRESS',
+          note: 'Le numéro de rue manque, à confirmer avant réexpédition.',
+          status: 'OPEN',
+          notifiedAt: minutesAgo(20),
+          messages: {
+            create: {
+              merchantId: merchant.id,
+              direction: 'TO_SUPPLIER',
+              authorType: 'AI',
+              body:
+                'Bonjour,\n\nPouvez-vous confirmer le numéro de rue pour la commande #10391 ' +
+                '(Applique Halo) avant réexpédition ? L\'adresse actuelle indique ' +
+                '« Résidence Les Tilleuls » sans numéro.\n\nMerci,\nAtelier Lumen',
+            },
+          },
+        },
+      });
+    }
+  }
+
   const auditCount = await prisma.auditLog.count({ where: { merchantId: merchant.id } });
   if (auditCount === 0) {
     await prisma.auditLog.createMany({
