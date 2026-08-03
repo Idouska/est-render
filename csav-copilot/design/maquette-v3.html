@@ -167,18 +167,17 @@
   .logo { display: flex; align-items: center; gap: 11px; padding: 2px 4px; }
 
   .logo-mark {
-    width: 38px;
-    height: 38px;
+    width: 40px;
+    height: 40px;
     border-radius: 11px;
-    background: linear-gradient(150deg, var(--accent), var(--accent-strong));
-    color: var(--on-accent);
+    background: #ffffff;
+    border: 1px solid var(--line);
     display: grid;
     place-items: center;
-    font-weight: 600;
-    font-size: 15px;
-    letter-spacing: -0.02em;
     flex: none;
   }
+
+  .logo-mark svg { width: 32px; height: 22px; display: block; }
 
   .logo b { display: block; font-size: 14.5px; font-weight: 600; letter-spacing: -0.01em; }
   .logo span { display: block; font-size: 11.5px; color: var(--ink-mute); }
@@ -1314,12 +1313,14 @@
     width: 21px;
     height: 21px;
     border-radius: 6px;
-    background: linear-gradient(150deg, var(--accent), var(--accent-strong));
-    color: var(--on-accent);
+    background: #ffffff;
+    border: 1px solid var(--line);
+    color: #0d0d0d;
     display: grid;
     place-items: center;
     font-size: 9px;
-    font-weight: 600;
+    font-weight: 900;
+    font-style: italic;
     flex: none;
   }
 
@@ -1472,9 +1473,17 @@
     <!-- ============================= barre latérale ============================= -->
     <aside class="side">
       <div class="logo">
-        <span class="logo-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"
-          stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"
-          style="width:19px;height:19px"><path d="M4.5 5.5 11 12l-6.5 6.5M12.5 5.5 19 12l-6.5 6.5"/></svg></span>
+        <span class="logo-mark" aria-hidden="true"><svg viewBox="0 0 46 30">
+          <g font-family="'Arial Black', 'Segoe UI', Arial, sans-serif" font-weight="900"
+            font-style="italic" fill="#0d0d0d">
+            <text x="1" y="24" font-size="26">R</text>
+            <text x="25" y="24" font-size="26">U</text>
+          </g>
+          <circle cx="22.5" cy="20.5" r="3.2" fill="#f6a51f"/>
+          <g stroke="#ffffff" stroke-width="2.4" stroke-linecap="round">
+            <path d="M2 8h10" /><path d="M0 13h7" /><path d="M27 6h12" />
+          </g>
+        </svg></span>
         <span>
           <b>SAV Running Upscale</b>
           <span>runningupscale.com</span>
@@ -2902,7 +2911,7 @@
         <span class="tile-app">
           <span class="tile-inner">
             <span class="tile-bar">
-              <span class="tile-mark">RU</span>
+              <span class="tile-mark">R·U</span>
               <span class="tile-name">Running Upscale</span>
               <span class="tile-btn">Escalade</span>
             </span>
