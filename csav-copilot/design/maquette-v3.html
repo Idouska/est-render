@@ -1466,6 +1466,123 @@
   .srow { display: flex; align-items: center; gap: 10px; font-size: 13px; margin-top: 9px; }
   .srow .n { color: var(--ink-soft); }
   .srow .v { margin-left: auto; }
+
+  /* ---------- réglages : curseur, bascule, conservation ---------- */
+
+  .srow .btn-mini {
+    appearance: none;
+    font: inherit;
+    font-size: 11.5px;
+    padding: 3px 9px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--ink-soft);
+    cursor: pointer;
+  }
+
+  .srow .btn-mini:hover { border-color: var(--ink-mute); color: var(--ink); }
+
+  .switch-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 13px;
+    color: var(--ink-soft);
+    cursor: pointer;
+    line-height: 1.45;
+  }
+
+  .switch-row input { margin-top: 2px; accent-color: var(--accent); flex: none; }
+  .switch-row b { color: var(--ink); }
+
+  .slider {
+    width: 100%;
+    accent-color: var(--accent);
+    margin: 4px 0 2px;
+  }
+
+  .slider-echo { font-size: 12px; color: var(--ink-mute); }
+  .slider-echo b { color: var(--ink); font-variant-numeric: tabular-nums; }
+
+  .picker {
+    appearance: none;
+    font: inherit;
+    font-size: 13px;
+    width: 100%;
+    padding: 8px 11px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    background: var(--surface);
+    color: var(--ink);
+  }
+
+  /* ---------- console d'administration ---------- */
+
+  .admin-grid { display: grid; gap: 13px; max-width: 760px; }
+
+  .adm-field { padding-top: 12px; border-top: 1px solid var(--line-soft); margin-top: 12px; }
+  .adm-field:first-of-type { border-top: none; }
+
+  .adm-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+    color: var(--ink);
+    margin: 0 0 6px;
+  }
+
+  .adm-input { display: flex; gap: 7px; align-items: center; }
+
+  .adm-input input, .adm-input select {
+    appearance: none;
+    font: inherit;
+    flex: 1;
+    min-width: 0;
+    font-size: 12.5px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    padding: 8px 11px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    background: var(--surface);
+    color: var(--ink);
+  }
+
+  .adm-var {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 10.5px;
+    color: var(--ink-mute);
+    margin: 5px 0 0;
+  }
+
+  .adm-print { font-size: 11.5px; color: var(--ink-mute); margin: 3px 0 0; }
+
+  /* D'où vient la valeur : réglée ici, héritée du déploiement, ou absente. */
+  .src { font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 999px; }
+  .src-db { background: var(--ok-soft); color: var(--ok); }
+  .src-env { background: var(--warn-soft); color: var(--warn); }
+  .src-none { background: var(--crit-soft); color: var(--crit); }
+
+  .probe {
+    margin-top: 11px;
+    padding: 10px 12px;
+    border-radius: var(--r-md);
+    border: 1px solid var(--line-soft);
+    background: var(--sunk);
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .probe b { font-size: 13px; }
+  .probe.ok { background: var(--ok-soft); border-color: transparent; }
+  .probe.ok b { color: var(--ok); }
+  .probe.ko { background: var(--crit-soft); border-color: transparent; }
+  .probe.ko b { color: var(--crit); }
+  .probe .fine { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; color: var(--ink-mute); }
 </style>
 
 <div class="frame">
@@ -1702,6 +1819,7 @@
       <div id="view-track" hidden></div>
       <div id="view-refunds" hidden></div>
       <div id="view-settings" hidden></div>
+      <div id="view-admin" hidden></div>
     </div>
   </div>
 
@@ -2051,6 +2169,92 @@
     selected: '10428',
     action: null,
   };
+
+  /* ------------------------------------------------------- configuration */
+
+  /* Réglages de la boutique : ce que le marchand décide du degré d'autonomie
+     laissé à l'IA, et de la durée pendant laquelle ses mails sont conservés. */
+  const SETTINGS = {
+    autoSend: false,
+    threshold: 0.9,
+    retention: 365,
+  };
+
+  const RETENTIONS = [
+    [30, '30 jours'], [90, '90 jours'], [180, '6 mois'],
+    [365, '1 an'], [730, '2 ans'], [1095, '3 ans'],
+  ];
+
+  /* État des intégrations. Chacune s'obtient par autorisation — aucune clé
+     n'est jamais collée à la main sur cet écran, c'est justement ce que
+     l'OAuth évite. `watch` porte l'expiration de l'écoute Gmail, qui tombe
+     au bout de sept jours et arrête l'ingestion sans le moindre message. */
+  const LINKS = [
+    { id: 'shop-ru', label: 'Shopify — Running Upscale', on: true, kind: 'shopify' },
+    { id: 'shop-to', label: 'Shopify — Trail Origins', on: true, kind: 'shopify' },
+    { id: 'shop-up', label: 'Shopify — Urban Pace', on: true, kind: 'shopify' },
+    { id: 'gmail', label: 'Boîte SAV Gmail', on: true, kind: 'gmail', watch: 6 },
+    { id: 'track', label: '17TRACK', on: true, kind: 'track' },
+  ];
+
+  /* Identifiants de la plateforme — ceux de l'éditeur, pas ceux d'un marchand.
+     `src` dit d'où vient la valeur : 'db' réglée ici, 'env' héritée du
+     déploiement, 'none' absente. Un réglage saisi ici prime sur le
+     déploiement ; l'effacer rend la main à ce dernier.
+     `secret: true` ne ressort jamais en clair : seule une empreinte. */
+  const PLATFORM = {
+    AI_PROVIDER: { value: 'deepseek', src: 'db' },
+    ANTHROPIC_API_KEY: { value: '', src: 'none', secret: true },
+    ANTHROPIC_MODEL: { value: 'claude-opus-5', src: 'env' },
+    DEEPSEEK_API_KEY: { value: 'sk-••••••••••••••••••••••••••••37c9', src: 'db', secret: true, print: '35 caractères · …37c9' },
+    DEEPSEEK_MODEL: { value: 'deepseek-chat', src: 'env' },
+    SHOPIFY_API_KEY: { value: '7f3c2ab91e4d5068', src: 'env' },
+    SHOPIFY_API_SECRET: { value: 'secret', src: 'env', secret: true, print: '32 caractères · …a41b' },
+    GOOGLE_CLIENT_ID: { value: '48210-9qk3.apps.googleusercontent.com', src: 'env' },
+    GOOGLE_CLIENT_SECRET: { value: 'secret', src: 'env', secret: true, print: '35 caractères · …Xm7Q' },
+    TRACK17_API_KEY: { value: 'secret', src: 'db', secret: true, print: '32 caractères · …0c5e' },
+  };
+
+  const ADMIN_GROUPS = [
+    {
+      id: 'ai',
+      title: 'Intelligence artificielle',
+      help: "Le fournisseur qui classe les mails et rédige les réponses. Un seul est actif à la fois ; le reste du produit ignore lequel.",
+      fields: [
+        { key: 'AI_PROVIDER', label: 'Fournisseur actif', choices: [['anthropic', 'Anthropic (Claude)'], ['deepseek', 'DeepSeek']] },
+        { key: 'ANTHROPIC_API_KEY', label: 'Clé API Anthropic', hint: 'sk-ant-…' },
+        { key: 'ANTHROPIC_MODEL', label: 'Modèle Anthropic' },
+        { key: 'DEEPSEEK_API_KEY', label: 'Clé API DeepSeek', hint: 'sk-…' },
+        { key: 'DEEPSEEK_MODEL', label: 'Modèle DeepSeek' },
+      ],
+    },
+    {
+      id: 'shopify',
+      title: 'Application Shopify',
+      help: "Identifiants de votre app dans Shopify Partners. Ils servent à l'installation des boutiques et à vérifier la signature des webhooks.",
+      fields: [
+        { key: 'SHOPIFY_API_KEY', label: 'Clé API (client ID)' },
+        { key: 'SHOPIFY_API_SECRET', label: 'Secret API' },
+      ],
+    },
+    {
+      id: 'google',
+      title: 'Google / Gmail',
+      help: "Identifiants OAuth du projet Google Cloud. Ils autorisent chaque marchand à connecter sa boîte SAV.",
+      fields: [
+        { key: 'GOOGLE_CLIENT_ID', label: 'Client ID OAuth' },
+        { key: 'GOOGLE_CLIENT_SECRET', label: 'Secret client OAuth' },
+      ],
+    },
+    {
+      id: 'track',
+      title: 'Suivi 17TRACK',
+      help: "Clé du service de suivi colis, partagée par les trois boutiques.",
+      fields: [{ key: 'TRACK17_API_KEY', label: 'Clé API 17TRACK' }],
+    },
+  ];
+
+  const SRC_LABELS = { db: 'réglé ici', env: 'hérité du déploiement', none: 'non réglé' };
 
   const QUICK = {
     urgent: { label: 'Urgents 3 j+', test: (o) => o.days >= 3 && o.st !== 'done' },
@@ -2962,6 +3166,7 @@
     team: { title: 'Équipe & rôles', crumb: 'Plateforme', icon: 'users', render: () => renderTeam() },
     palettes: { title: 'Palettes', crumb: 'Plateforme', icon: 'swatch', render: () => renderGallery() },
     settings: { title: 'Réglages', crumb: 'Plateforme', icon: 'gear', render: () => renderSettings() },
+    admin: { title: 'Administration', crumb: 'Plateforme', icon: 'shield', render: () => renderAdmin() },
   };
 
   /* Les entrées « Ruptures » et « Litiges » ouvrent la file déjà filtrée :
@@ -2989,6 +3194,7 @@
       ['users', 'Équipe & rôles', 'team', null],
       ['swatch', 'Palettes', 'palettes', null],
       ['gear', 'Réglages', 'settings', null],
+      ['shield', 'Administration', 'admin', null],
     ]],
   ];
 
@@ -3272,6 +3478,8 @@
   }
 
   function renderSettings() {
+    const pct = Math.round(SETTINGS.threshold * 100);
+
     $('view-settings').innerHTML = `<div class="settings-grid">
       <div class="card"><div class="sect">
         <h3>Boutiques &amp; couleurs</h3>
@@ -3289,19 +3497,58 @@
           .join('')}
         <p class="matrix-note">La couleur suit la boutique partout : file, fiches, commandes, suivi, équipe.</p>
       </div></div>
+
       <div class="card"><div class="sect">
         <h3>Connexions</h3>
-        ${[
-          ['Shopify — Running Upscale', 'Connectée', 'done'],
-          ['Shopify — Trail Origins', 'Connectée', 'done'],
-          ['Shopify — Urban Pace', 'Connectée', 'done'],
-          ['Boîte SAV Gmail', 'Écoute active', 'done'],
-          ['17TRACK', 'Clé API active', 'done'],
-        ]
-          .map(([n, s, t]) => `<div class="srow"><span class="n">${n}</span>
-            <span class="v"><span class="tag tag-${t}">${s}</span></span></div>`)
-          .join('')}
+        ${LINKS.map((l) => {
+          const tag = l.on
+            ? l.kind === 'gmail'
+              ? l.watch > 0
+                ? ['Écoute active', 'done']
+                : ['Écoute expirée', 'todo']
+              : [l.kind === 'track' ? 'Clé API active' : 'Connectée', 'done']
+            : ['Déconnectée', 'todo'];
+          return `<div class="srow">
+            <span class="n">${esc(l.label)}</span>
+            <span class="v" style="display:flex;align-items:center;gap:8px">
+              <span class="tag tag-${tag[1]}">${tag[0]}</span>
+              <button class="btn-mini" data-link="${l.id}">${l.on ? 'Déconnecter' : 'Connecter'}</button>
+            </span>
+          </div>`;
+        }).join('')}
+        <p class="matrix-note">
+          Aucune clé d'API ici : chaque accès vient d'une autorisation que vous donnez et
+          pouvez retirer. Les identifiants de la plateforme sont dans
+          <b>Administration</b>.
+        </p>
       </div></div>
+
+      <div class="card"><div class="sect">
+        <h3>Réponses automatiques</h3>
+        <label class="switch-row">
+          <input type="checkbox" id="set-auto"${SETTINGS.autoSend ? ' checked' : ''}>
+          <span><b>Envoyer sans relecture</b> les réponses dont la confiance dépasse le
+          seuil ci-dessous. Désactivé, tout reste en brouillon.</span>
+        </label>
+        <p class="field-label" style="margin:13px 0 0">Seuil de confiance</p>
+        <input type="range" class="slider" id="set-seuil" min="50" max="100" value="${pct}">
+        <p class="slider-echo">À <b id="set-seuil-echo">${pct} %</b> — plus le seuil est haut,
+          moins de réponses partent seules.</p>
+      </div></div>
+
+      <div class="card"><div class="sect">
+        <h3>Conservation des données</h3>
+        <p class="field-label">Durée de conservation des mails ingérés</p>
+        <select class="picker" id="set-retention">
+          ${RETENTIONS.map(
+            ([d, label]) =>
+              `<option value="${d}"${d === SETTINGS.retention ? ' selected' : ''}>${label}</option>`,
+          ).join('')}
+        </select>
+        <p class="matrix-note">Passé ce délai, les messages et leurs pièces sont purgés
+          automatiquement. Base légale RGPD.</p>
+      </div></div>
+
       <div class="card"><div class="sect">
         <h3>Sécurité</h3>
         <div class="srow"><span class="n">2FA Propriétaire &amp; Superviseur</span>
@@ -3310,6 +3557,7 @@
           <span class="v"><span class="tag tag-wait">Recommandée</span></span></div>
         <div style="margin-top:13px"><button class="btn" id="force-2fa">Exiger la 2FA pour toute l'équipe</button></div>
       </div></div>
+
       <div class="card"><div class="sect">
         <h3>Apparence</h3>
         <p class="field-label">Couleur d'accent — chaque employé garde la sienne</p>
@@ -3325,6 +3573,7 @@
         </div>
         <div style="margin-top:13px"><button class="btn" id="open-palettes">Voir les 8 palettes en grand</button></div>
       </div></div>
+
       <div class="card"><div class="sect">
         <h3>Notifications</h3>
         ${[
@@ -3357,6 +3606,235 @@
         renderSettings();
       }),
     );
+
+    /* Connecter / déconnecter. Couper Gmail arrête l'ingestion : on le dit
+       plutôt que de laisser la file se tarir en silence. */
+    $('view-settings').querySelectorAll('[data-link]').forEach((b) =>
+      b.addEventListener('click', () => {
+        const link = LINKS.find((l) => l.id === b.dataset.link);
+        link.on = !link.on;
+        if (link.kind === 'gmail') link.watch = link.on ? 7 : 0;
+        toast(
+          link.on
+            ? `${link.label} — autorisation accordée.`
+            : link.kind === 'gmail'
+              ? `${link.label} déconnectée : plus aucun mail n'entre.`
+              : `${link.label} déconnectée.`,
+        );
+        renderSettings();
+      }),
+    );
+
+    /* L'envoi automatique fait partir des mails sans relecture : on refuse de
+       l'activer si aucune boîte n'est connectée, sinon le réglage promet un
+       comportement que rien ne peut exécuter. */
+    $('set-auto').addEventListener('change', (e) => {
+      const gmail = LINKS.find((l) => l.id === 'gmail');
+      if (e.target.checked && !gmail.on) {
+        e.target.checked = false;
+        toast("Connectez la boîte SAV Gmail avant d'activer l'envoi automatique.");
+        return;
+      }
+      SETTINGS.autoSend = e.target.checked;
+      toast(
+        SETTINGS.autoSend
+          ? `Envoi automatique activé au-dessus de ${Math.round(SETTINGS.threshold * 100)} % de confiance.`
+          : 'Envoi automatique désactivé — tout repasse en brouillon.',
+      );
+    });
+
+    $('set-seuil').addEventListener('input', (e) => {
+      SETTINGS.threshold = Number(e.target.value) / 100;
+      $('set-seuil-echo').textContent = `${e.target.value} %`;
+    });
+
+    $('set-retention').addEventListener('change', (e) => {
+      SETTINGS.retention = Number(e.target.value);
+      const label = RETENTIONS.find(([d]) => d === SETTINGS.retention)[1];
+      toast(`Conservation portée à ${label}. Les mails plus anciens seront purgés.`);
+    });
+  }
+
+  /* ------------------------------------------------------- administration */
+
+  function renderAdmin() {
+    $('view-admin').innerHTML = `<div class="admin-grid">
+      <div class="card"><div class="sect">
+        <h3>Identifiants de la plateforme</h3>
+        <p class="matrix-note" style="margin-top:8px">
+          Ce sont les vôtres, pas ceux d'un marchand : une seule app Shopify, un seul projet
+          Google, un seul fournisseur d'IA pour les trois boutiques. Une valeur réglée ici
+          <b>prime sur celle du déploiement</b> et s'applique en quelques secondes, sans
+          remise en ligne. Vider un champ rend la main au déploiement.
+        </p>
+      </div></div>
+
+      ${ADMIN_GROUPS.map(
+        (g) => `<div class="card"><div class="sect">
+          <div style="display:flex;align-items:center;gap:10px">
+            <h3 style="margin:0">${esc(g.title)}</h3>
+            <button class="btn" data-probe="${g.id}" style="margin-left:auto;padding:5px 11px;font-size:12px">
+              Tester la connexion
+            </button>
+          </div>
+          <p class="matrix-note" style="margin-top:8px">${esc(g.help)}</p>
+          <div class="probe" id="probe-${g.id}" hidden></div>
+          ${g.fields.map(admField).join('')}
+          <div style="margin-top:14px"><button class="btn btn-main" data-save="${g.id}">Enregistrer</button></div>
+        </div></div>`,
+      ).join('')}
+    </div>`;
+
+    $('view-admin').querySelectorAll('[data-probe]').forEach((b) =>
+      b.addEventListener('click', () => probe(b.dataset.probe, b)),
+    );
+    $('view-admin').querySelectorAll('[data-save]').forEach((b) =>
+      b.addEventListener('click', () => saveGroup(b.dataset.save)),
+    );
+    $('view-admin').querySelectorAll('[data-clear]').forEach((b) =>
+      b.addEventListener('click', () => {
+        const entry = PLATFORM[b.dataset.clear];
+        entry.value = '';
+        entry.src = 'none';
+        entry.print = null;
+        toast(`${b.dataset.clear} effacé — la valeur du déploiement reprend la main.`);
+        renderAdmin();
+      }),
+    );
+  }
+
+  function admField(f) {
+    const entry = PLATFORM[f.key];
+    const badge = `<span class="src src-${entry.src}">${SRC_LABELS[entry.src]}</span>`;
+
+    let input;
+    if (f.choices) {
+      input = `<select data-key="${f.key}">${f.choices
+        .map(([v, label]) => `<option value="${v}"${v === entry.value ? ' selected' : ''}>${esc(label)}</option>`)
+        .join('')}</select>`;
+    } else if (entry.secret) {
+      /* Un secret enregistré n'est jamais réaffiché : le champ reste vide, et
+         l'empreinte suffit à reconnaître qu'on a collé la bonne clé. Laisser
+         le champ vide veut donc dire « ne change rien ». */
+      input = `<input type="password" data-key="${f.key}" placeholder="${
+        entry.src === 'none' ? esc(f.hint ?? '') : 'inchangée'
+      }">`;
+    } else {
+      input = `<input type="text" data-key="${f.key}" value="${esc(entry.value)}" placeholder="${esc(f.hint ?? '')}">`;
+    }
+
+    const clear =
+      entry.src === 'db'
+        ? `<button class="btn-mini" data-clear="${f.key}">Effacer</button>`
+        : '';
+
+    return `<div class="adm-field">
+      <p class="adm-label">${esc(f.label)} ${badge}</p>
+      <div class="adm-input">${input}${clear}</div>
+      <p class="adm-var">${f.key}</p>
+      ${entry.secret && entry.print ? `<p class="adm-print">Actuellement : ${esc(entry.print)}</p>` : ''}
+    </div>`;
+  }
+
+  function saveGroup(id) {
+    const group = ADMIN_GROUPS.find((g) => g.id === id);
+    let touched = 0;
+
+    for (const f of group.fields) {
+      const el = $('view-admin').querySelector(`[data-key="${f.key}"]`);
+      if (!el) continue;
+      const entry = PLATFORM[f.key];
+
+      // Champ secret laissé vide : l'utilisateur n'a pas retapé la clé, il ne
+      // demande pas de l'effacer.
+      if (entry.secret && el.value === '') continue;
+      if (!entry.secret && el.value === entry.value) continue;
+
+      entry.value = el.value;
+      entry.src = el.value === '' ? 'none' : 'db';
+      if (entry.secret && el.value) {
+        entry.print = `${el.value.length} caractères · …${el.value.slice(-4)}`;
+      }
+      touched += 1;
+    }
+
+    if (!touched) {
+      toast('Aucune modification à enregistrer.');
+      return;
+    }
+
+    toast(`${touched} réglage${touched > 1 ? 's' : ''} enregistré${touched > 1 ? 's' : ''} — testez la connexion pour vérifier.`);
+    renderAdmin();
+  }
+
+  /* Le test fait un aller-retour réel dans l'application ; ici il est simulé,
+     mais son verdict suit les mêmes règles : une clé « présente » ne prouve
+     rien, c'est la réponse du service qui compte. */
+  const PROBES = {
+    ai: () => {
+      const provider = PLATFORM.AI_PROVIDER.value;
+      const key = provider === 'deepseek' ? PLATFORM.DEEPSEEK_API_KEY : PLATFORM.ANTHROPIC_API_KEY;
+      const model = provider === 'deepseek' ? PLATFORM.DEEPSEEK_MODEL.value : PLATFORM.ANTHROPIC_MODEL.value;
+      if (!key.value) {
+        return {
+          ok: false,
+          message: `Aucune clé pour ${provider}.`,
+          hint: 'Renseignez la clé du fournisseur sélectionné, puis réessayez.',
+        };
+      }
+      return {
+        ok: true,
+        message: `${provider} a répondu en 1 196 ms.`,
+        fine: `modèle ${model} · 100 jetons entrée / 5 sortie · 0 réessai`,
+      };
+    },
+    shopify: () => {
+      if (!PLATFORM.SHOPIFY_API_KEY.value || !PLATFORM.SHOPIFY_API_SECRET.value) {
+        return { ok: false, message: "Identifiants de l'app Shopify incomplets.", hint: 'Reprenez-les depuis Shopify Partners.' };
+      }
+      return {
+        ok: true,
+        message: 'Appel Admin API réussi sur les 3 boutiques.',
+        fine: 'runningupscale · trail-origins · urban-pace',
+      };
+    },
+    google: () => {
+      if (!PLATFORM.GOOGLE_CLIENT_ID.value || !PLATFORM.GOOGLE_CLIENT_SECRET.value) {
+        return { ok: false, message: 'Identifiants OAuth Google incomplets.', hint: 'Google Cloud → Identifiants.' };
+      }
+      return {
+        ok: true,
+        message: "Google reconnaît l'application : identifiants valides.",
+        fine: 'sonde invalid_grant — aucun compte marchand touché',
+      };
+    },
+    track: () => {
+      if (!PLATFORM.TRACK17_API_KEY.value) {
+        return { ok: false, message: 'Clé 17TRACK absente.', hint: 'Le suivi colis restera vide sans elle.' };
+      }
+      return { ok: true, message: '17TRACK répond.', fine: '4 colis interrogés · quota 812/2000' };
+    },
+  };
+
+  function probe(id, button) {
+    const box = $(`probe-${id}`);
+    const label = button.textContent.trim();
+
+    button.disabled = true;
+    button.textContent = 'Test en cours…';
+    box.hidden = false;
+    box.className = 'probe';
+    box.innerHTML = '<b>Appel en cours…</b>';
+
+    setTimeout(() => {
+      const r = PROBES[id]();
+      box.className = `probe ${r.ok ? 'ok' : 'ko'}`;
+      box.innerHTML = `<b>${r.ok ? '✓' : '✗'} ${esc(r.message)}</b>
+        ${r.hint ? `<span>${esc(r.hint)}</span>` : ''}
+        ${r.fine ? `<span class="fine">${esc(r.fine)}</span>` : ''}`;
+      button.disabled = false;
+      button.textContent = label;
+    }, 900);
   }
 
   /* --------------------------------------------------------------- toast */
