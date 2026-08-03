@@ -670,7 +670,36 @@
   .tag-todo { background: var(--crit-soft); color: var(--crit); }
   .tag-wait { background: var(--warn-soft); color: var(--warn); }
   .tag-done { background: var(--ok-soft); color: var(--ok); }
-  .tag-shop { background: var(--inset); color: var(--ink-soft); }
+  .tag-shop {
+    background: color-mix(in srgb, var(--c, var(--ink-mute)) 13%, transparent);
+    color: var(--c, var(--ink-soft));
+  }
+
+  .shop-dot {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    border-radius: 3px;
+    background: var(--c);
+    flex: none;
+  }
+
+  .mini-swatches { display: flex; gap: 6px; }
+
+  .mini-swatch {
+    appearance: none;
+    border: 2px solid transparent;
+    padding: 0;
+    width: 22px;
+    height: 22px;
+    border-radius: 7px;
+    cursor: pointer;
+    box-shadow: inset 0 -1px 2px rgba(0, 0, 0, 0.15);
+  }
+
+  .mini-swatch[aria-pressed="true"] { border-color: var(--ink); }
+
+  .crossed { color: var(--ink-mute); font-size: 12.5px; }
   .tag-role { background: var(--accent-soft); color: var(--accent-ink); }
   .tag-role-muted { background: var(--inset); color: var(--ink-mute); }
 
@@ -1486,9 +1515,10 @@
               <button class="btn" style="margin-left:auto" id="invite-sup">Inviter un fournisseur</button>
             </h3>
             <div class="sup-cards" id="sup-cards"></div>
-            <p class="matrix-note">Un compte fournisseur est cloisonné : il ne voit que les commandes
-              qui le concernent, sur ses boutiques — jamais vos clients, vos montants globaux ni les
-              autres fournisseurs.</p>
+            <p class="matrix-note">Un compte fournisseur est cloisonné : il ne voit que les
+              <b>commandes actives</b> de ses boutiques et le <b>catalogue produits</b> — jamais les
+              commandes annulées ou remboursées, les montants, les statistiques, ni les autres
+              fournisseurs. Il ne peut rien rembourser.</p>
           </div>
         </div>
 
@@ -1497,7 +1527,8 @@
             <h3>Rôles &amp; permissions</h3>
             <div class="table-wrap"><table id="matrix-table"></table></div>
             <p class="matrix-note">Double authentification <b>obligatoire</b> pour Propriétaire et
-              Superviseur — ces rôles engagent de l'argent. Recommandée pour les autres.</p>
+              Superviseur — ces rôles engagent de l'argent. Et un remboursement exige toujours
+              <b>deux personnes</b> : celui qui demande ne peut jamais valider sa propre demande.</p>
           </div>
         </div>
       </div>
@@ -1557,6 +1588,15 @@
         <button class="btn" id="esc-cancel">Annuler</button>
         <button class="btn btn-main" id="esc-create">Créer le brouillon</button>
       </div>
+    </div>
+  </div>
+
+  <div class="backdrop" id="sup-modal" hidden>
+    <div class="modal" style="width:min(580px,100%)" role="dialog" aria-modal="true" aria-labelledby="sup-title">
+      <h3 id="sup-title">Portail fournisseur</h3>
+      <span class="note">Exactement ce que ce compte voit en se connectant — rien d'autre.</span>
+      <div id="sup-body"></div>
+      <div class="modal-foot"><button class="btn" id="sup-close">Fermer</button></div>
     </div>
   </div>
 </div>
@@ -1660,6 +1700,11 @@
   /* ------------------------------------------------------------- données */
 
   const SHOPS = { lumen: 'Atelier Lumen', calin: 'Maison Câlin', luma: 'Luma Déco' };
+
+  /* Code couleur par boutique — modifiable dans Réglages, suivi partout. */
+  const SHOP_COLORS = { lumen: '#0284c7', calin: '#db2777', luma: '#9333ea' };
+  const COLOR_CHOICES = ['#0284c7', '#db2777', '#9333ea', '#059669', '#d97706', '#dc2626'];
+  const shopTag = (s) => `<span class="tag tag-shop" style="--c:${SHOP_COLORS[s]}">${SHOPS[s]}</span>`;
 
   const EMP = {
     rachid: { name: 'Rachid I.', ini: 'RI', role: 'Propriétaire' },
@@ -1773,6 +1818,7 @@
     },
     {
       id: '10375', shop: 'lumen', src: 'client', st: 'todo', days: 1, amount: 96,
+      refund: 'requested', refundBy: 'Yasmine Kaddour',
       assignee: 'yasmine', what: 'Abat-jour fêlé — demande de remboursement', kind: 'refund',
       who: 'Amélie Rousseau', mail: 'a.rousseau@free.fr', total: '96,00 €',
       addr: '61 rue Sainte-Catherine, 33000 Bordeaux', placed: '20 juil. 2026',
@@ -1985,7 +2031,7 @@
       <span class="row-what">${esc(o.what)}</span>
       <span class="row-meta">
         <span class="tag tag-${o.src}">${SRC[o.src]}</span>
-        ${state.shop === 'all' ? `<span class="tag tag-shop">${SHOPS[o.shop]}</span>` : ''}
+        ${state.shop === 'all' ? shopTag(o.shop) : ''}
         <span class="row-who">${esc(o.who)}</span>
         <span style="margin-left:auto;display:flex;align-items:center;gap:6px">
           <span class="mini${emp ? '' : ' none'}" title="${emp ? esc(emp.name) : 'Non assigné'}">${emp ? emp.ini : '—'}</span>
@@ -2056,15 +2102,46 @@
           ).join('')}
         </div>`;
 
-    if (key === 'refund')
-      return `<div class="inset">
-          <dl style="margin:0">
-            <div class="kv"><dt>Montant payé</dt><dd class="mono">${esc(o.total)}</dd></div>
-            <div class="kv"><dt>Remboursable</dt><dd class="mono">${esc(o.total)}</dd></div>
-          </dl>
-        </div>
-        <p class="note" style="margin:10px 0 0">Confirmation obligatoire, consignée au journal
-          d'audit. Les agents SAV sont plafonnés ; au-delà, validation Superviseur.</p>`;
+    if (key === 'refund') {
+      if (o.refund === 'done')
+        return `<div class="inset"><dl style="margin:0">
+            <div class="kv"><dt>Statut</dt><dd><span class="tag tag-done">Remboursé</span></dd></div>
+            <div class="kv"><dt>Montant</dt><dd class="mono">${esc(o.total)}</dd></div>
+            <div class="kv"><dt>Demandé par</dt><dd>${esc(o.refundBy)}</dd></div>
+            <div class="kv"><dt>Validé par</dt><dd>Vous (Rachid I.)</dd></div>
+          </dl></div>
+          <p class="note" style="margin:10px 0 0">Les deux validations sont consignées au journal d'audit.</p>`;
+
+      if (o.refund === 'requested') {
+        const own = o.refundBy === 'Vous';
+        return `<div class="inset" style="margin-bottom:11px"><dl style="margin:0">
+            <div class="kv"><dt>Étape 1</dt><dd><span class="tag tag-done">Demande enregistrée</span></dd></div>
+            <div class="kv"><dt>Demandé par</dt><dd>${esc(o.refundBy)}</dd></div>
+            <div class="kv"><dt>Montant</dt><dd class="mono">${esc(o.total)}</dd></div>
+            <div class="kv"><dt>Étape 2</dt><dd><span class="tag tag-wait">Validation attendue</span></dd></div>
+          </dl></div>
+          ${own
+            ? `<p class="note">Vous avez fait la demande : <b>vous ne pouvez pas la valider
+                vous-même</b>. Un autre Superviseur ou le Propriétaire doit donner la seconde
+                validation.</p>`
+            : `<label class="srow" style="cursor:pointer;margin:0 0 11px">
+                 <input type="checkbox" id="r-check" />
+                 <span class="n">Je confirme rembourser <b>${esc(o.total)}</b> — seconde validation</span>
+               </label>
+               <div style="display:flex;gap:9px;flex-wrap:wrap">
+                 <button class="btn btn-main" id="r-approve" disabled>Valider le remboursement</button>
+                 <button class="btn" id="r-reject">Refuser la demande</button>
+               </div>`}`;
+      }
+
+      return `<div class="inset" style="margin-bottom:11px"><dl style="margin:0">
+          <div class="kv"><dt>Montant payé</dt><dd class="mono">${esc(o.total)}</dd></div>
+          <div class="kv"><dt>Remboursable</dt><dd class="mono">${esc(o.total)}</dd></div>
+        </dl></div>
+        <p class="note" style="margin:0 0 11px">Règle maison : <b>deux personnes</b> pour tout
+          remboursement. Celui qui demande ne valide jamais lui-même.</p>
+        <button class="btn btn-main" id="r-request">Étape 1 — Demander le remboursement</button>`;
+    }
 
     if (key === 'address')
       return `<p class="field-label">Corrigée ici, l'adresse part vers Shopify et vers le fournisseur en une fois.</p>
@@ -2104,7 +2181,9 @@
         <div class="sheet-head">
           <div>
             <div class="sheet-num">#${o.id}</div>
-            <div class="sheet-sub">${esc(o.who)} · ${esc(o.mail)} · ${SHOPS[o.shop]}</div>
+            <div class="sheet-sub">${esc(o.who)} · ${esc(o.mail)} ·
+              <span class="shop-dot" style="--c:${SHOP_COLORS[o.shop]};vertical-align:-1px"></span>
+              ${SHOPS[o.shop]}</div>
           </div>
           <div style="margin-left:auto;text-align:right;display:flex;flex-direction:column;gap:7px;align-items:flex-end">
             <span>
@@ -2147,7 +2226,7 @@
 
         <div class="foot">
           <button class="btn" id="btn-resolve">Marquer résolu</button>
-          <button class="btn btn-main" id="btn-send">Valider et envoyer</button>
+          ${current === 'refund' ? '' : '<button class="btn btn-main" id="btn-send">Valider et envoyer</button>'}
         </div>
       </div>
 
@@ -2229,10 +2308,9 @@
       renderNav();
     });
 
-    $('btn-send').addEventListener('click', () => {
+    $('btn-send')?.addEventListener('click', () => {
       const SENT = {
         sub: 'Substitution proposée au client.',
-        refund: `Remboursement de ${o.total} enregistré — consigné au journal d'audit.`,
         address: 'Adresse corrigée — transmise à Shopify et au fournisseur.',
         email: 'Email corrigé — le suivi repart vers le client.',
         evidence: 'Preuves envoyées à Shopify.',
@@ -2243,6 +2321,28 @@
       toast(SENT[current] ?? 'Envoyé.');
       renderFile();
       renderNav();
+    });
+
+    // Remboursement en deux temps : demande, puis validation par quelqu'un d'autre.
+    $('r-request')?.addEventListener('click', () => {
+      o.refund = 'requested';
+      o.refundBy = 'Vous';
+      toast(`Demande de remboursement de ${o.total} enregistrée — seconde validation attendue.`);
+      renderSheet();
+    });
+    $('r-check')?.addEventListener('change', (e) => {
+      $('r-approve').disabled = !e.target.checked;
+    });
+    $('r-approve')?.addEventListener('click', () => {
+      o.refund = 'done';
+      toast(`Remboursement de ${o.total} validé — deux validations consignées à l'audit.`);
+      renderSheet();
+    });
+    $('r-reject')?.addEventListener('click', () => {
+      o.refund = null;
+      o.refundBy = null;
+      toast('Demande de remboursement refusée — le demandeur est prévenu.');
+      renderSheet();
     });
   }
 
@@ -2391,11 +2491,11 @@
 
   function renderTeam() {
     const members = [
-      { k: 'rachid', mail: 'rachid@atelier-lumen.fr', conn: 'google', tfa: 'on', shops: 'Toutes' },
-      { k: 'claire', mail: 'claire@atelier-lumen.fr', conn: 'password', tfa: 'on', shops: 'Toutes' },
-      { k: 'yasmine', mail: 'yasmine@atelier-lumen.fr', conn: 'google', tfa: 'on', shops: 'Atelier Lumen, Luma Déco' },
-      { k: 'theo', mail: 'theo@atelier-lumen.fr', conn: 'password', tfa: 'off', shops: 'Maison Câlin' },
-      { k: 'nadia', mail: 'nadia@cabinet-comptable.fr', conn: 'google', tfa: 'off', shops: 'Toutes' },
+      { k: 'rachid', mail: 'rachid@atelier-lumen.fr', conn: 'google', tfa: 'on', shops: 'all' },
+      { k: 'claire', mail: 'claire@atelier-lumen.fr', conn: 'password', tfa: 'on', shops: 'all' },
+      { k: 'yasmine', mail: 'yasmine@atelier-lumen.fr', conn: 'google', tfa: 'on', shops: ['lumen', 'luma'] },
+      { k: 'theo', mail: 'theo@atelier-lumen.fr', conn: 'password', tfa: 'off', shops: ['calin'] },
+      { k: 'nadia', mail: 'nadia@cabinet-comptable.fr', conn: 'google', tfa: 'off', shops: 'all' },
     ];
 
     $('team-table').innerHTML =
@@ -2416,7 +2516,9 @@
                 ? '<span class="tag tag-done">Activée</span>'
                 : '<span class="tag tag-wait">À activer</span>'
             }</td>
-            <td class="note">${esc(m.shops)}</td>
+            <td>${m.shops === 'all'
+              ? '<span class="note">Toutes</span>'
+              : m.shops.map(shopTag).join(' ')}</td>
             <td class="num">${open ? `${open} ticket${open > 1 ? 's' : ''}` : '—'}</td>
             <td><button class="btn btn-edit" data-n="${esc(e.name)}"
               style="padding:5px 11px;font-size:12px">Modifier</button></td>
@@ -2434,11 +2536,11 @@
     $('sup-cards').innerHTML = [
       {
         name: 'Shenzhen Lumi', ini: 'SL', mail: 'ops@shenzhen-lumi.example',
-        shops: 'Atelier Lumen · Luma Déco', last: 'dernier message il y a 2 h', open: 4,
+        keys: ['lumen', 'luma'], last: 'dernier message il y a 2 h', open: 4,
       },
       {
         name: 'Guangzhou Homeware', ini: 'GH', mail: 'sav@gz-homeware.example',
-        shops: 'Maison Câlin', last: 'dernier message hier', open: 1,
+        keys: ['calin'], last: 'dernier message hier', open: 1,
       },
     ]
       .map(
@@ -2450,21 +2552,58 @@
           </div>
           <dl style="margin:0">
             <div class="kv"><dt>Contact</dt><dd class="mono" style="font-size:12px">${esc(s.mail)}</dd></div>
-            <div class="kv"><dt>Boutiques</dt><dd>${esc(s.shops)}</dd></div>
             <div class="kv"><dt>Activité</dt><dd>${esc(s.last)}</dd></div>
           </dl>
+          <div style="margin-top:11px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            ${s.keys.map(shopTag).join(' ')}
+            <button class="btn sup-view" data-name="${esc(s.name)}" data-shops="${s.keys.join(',')}"
+              style="margin-left:auto;padding:5px 11px;font-size:12px">Voir son portail</button>
+          </div>
         </div>`,
       )
       .join('');
 
+    // Aperçu exact de ce qu'un compte fournisseur voit — et rien d'autre.
+    $('sup-cards').querySelectorAll('.sup-view').forEach((b) =>
+      b.addEventListener('click', () => {
+        const shops = b.dataset.shops.split(',');
+        const actives = ORDERS.filter(
+          (o) => shops.includes(o.shop) && o.st !== 'done' && !['refund', 'dispute'].includes(o.kind),
+        );
+        const prods = PRODUCTS.filter(([, , , s]) => shops.includes(s));
+        $('sup-title').textContent = `Portail — ${b.dataset.name}`;
+        $('sup-body').innerHTML = `
+          <p class="field-label" style="margin-top:4px">Commandes actives (${actives.length})</p>
+          ${actives
+            .map(
+              (o) => `<div class="item" style="margin-bottom:8px">
+                <span class="thumbs">${o.items.map((i) => `<span class="thumb">${pic(i)}</span>`).join('') || '<span class="thumb">—</span>'}</span>
+                <span><b>#${o.id}</b><br /><span class="item-var">${esc(o.what)}</span></span>
+                <span style="margin-left:auto"><span class="tag tag-${o.st}">${ST[o.st]}</span></span>
+              </div>`,
+            )
+            .join('')}
+          <p class="field-label" style="margin-top:13px">Catalogue (${prods.length} références)</p>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            ${prods.map(([n, v]) => `<span class="conn-chip">${esc(n)} · ${esc(v)}</span>`).join('')}
+          </div>
+          <p class="crossed" style="margin:14px 0 0">Il ne voit pas : montants · commandes annulées
+            ou remboursées · litiges · statistiques · les autres boutiques et fournisseurs.</p>`;
+        $('sup-modal').hidden = false;
+      }),
+    );
+
     const PERMS = [
       ['Voir toutes les boutiques', 1, 1, 0, 1, 0],
+      ['Voir les commandes actives', 1, 1, 1, 1, 1],
+      ['Voir commandes annulées et remboursées', 1, 1, 1, 1, 0],
+      ['Voir montants et statistiques', 1, 1, 0, 1, 0],
+      ['Voir le catalogue produits', 1, 1, 1, 1, 1],
       ['Traiter et répondre au client', 1, 1, 1, 0, 0],
       ['Escalader au fournisseur', 1, 1, 1, 0, 0],
-      ['Rembourser (plafonné)', 1, 1, 1, 0, 0],
-      ['Rembourser sans plafond', 1, 1, 0, 0, 0],
+      ['Demander un remboursement', 1, 1, 1, 0, 0],
+      ['Valider un remboursement (2e validation)', 1, 1, 0, 0, 0],
       ['Corriger adresse et commande', 1, 1, 1, 0, 0],
-      ['Voir les statistiques d’équipe', 1, 1, 0, 1, 0],
       ['Gérer comptes et rôles', 1, 0, 0, 0, 0],
       ['Connexions et facturation', 1, 0, 0, 0, 0],
       ['Signaler un problème commande', 0, 0, 0, 0, 1],
@@ -2639,7 +2778,8 @@
         const late = list.filter((o) => o.days >= 3).length;
         const disputes = list.filter((o) => o.src === 'litige').length;
         return `<div class="card shopcard"><div class="sect">
-          <h3>${SHOPS[s]}</h3>
+          <h3 style="display:flex;align-items:center;gap:8px">
+            <span class="shop-dot" style="--c:${SHOP_COLORS[s]}"></span>${SHOPS[s]}</h3>
           <span class="big">${list.length}</span> <span class="note">à traiter</span>
           <div class="agechips" style="margin-top:9px">
             ${late
@@ -2685,7 +2825,7 @@
           .map(
             (o) => `<tr class="clickable-row" data-id="${o.id}">
               <td class="num">#${o.id}</td>
-              <td>${SHOPS[o.shop]}</td>
+              <td>${shopTag(o.shop)}</td>
               <td>${esc(o.who)}</td>
               <td class="num">${esc(o.placed)}</td>
               <td class="num">${esc(o.total)}</td>
@@ -2762,7 +2902,7 @@
             ([n, v, hex, s, stock, st]) => `<tr class="clickable-row" data-q="${esc(n)}">
               <td style="font-weight:600">${esc(n)}</td>
               <td><span class="item-var"><span class="sw" style="background:${hex}"></span>${esc(v)}</span></td>
-              <td>${SHOPS[s]}</td>
+              <td>${shopTag(s)}</td>
               <td class="num">${stock}</td>
               <td><span class="tag tag-${STOCK[st][1]}">${STOCK[st][0]}</span></td>
             </tr>`,
@@ -2793,7 +2933,7 @@
           .map(
             (o) => `<tr class="clickable-row" data-id="${o.id}">
               <td class="num">#${o.id}</td>
-              <td>${SHOPS[o.shop]}</td>
+              <td>${shopTag(o.shop)}</td>
               <td>${esc(o.track.by)}</td>
               <td class="num" style="font-size:12px">${esc(o.track.no)}</td>
               <td>${o.track.leg >= 5 ? `<span class="tag tag-done">${LEGS[5][0]}</span>` : LEGS[o.track.leg][0]}</td>
@@ -2849,6 +2989,22 @@
   function renderSettings() {
     $('view-settings').innerHTML = `<div class="settings-grid">
       <div class="card"><div class="sect">
+        <h3>Boutiques &amp; couleurs</h3>
+        ${Object.keys(SHOPS)
+          .map(
+            (s) => `<div class="srow">
+              <span class="shop-dot" style="--c:${SHOP_COLORS[s]}"></span>
+              <span class="n">${SHOPS[s]}</span>
+              <span class="v mini-swatches">${COLOR_CHOICES.map(
+                (c) => `<button class="mini-swatch" style="background:${c}" data-shop="${s}" data-c="${c}"
+                  aria-pressed="${SHOP_COLORS[s] === c}" aria-label="${SHOPS[s]} — ${c}"></button>`,
+              ).join('')}</span>
+            </div>`,
+          )
+          .join('')}
+        <p class="matrix-note">La couleur suit la boutique partout : file, fiches, commandes, suivi, équipe.</p>
+      </div></div>
+      <div class="card"><div class="sect">
         <h3>Connexions</h3>
         ${[
           ['Shopify — Atelier Lumen', 'Connectée', 'done'],
@@ -2891,6 +3047,14 @@
     $('open-palettes').addEventListener('click', () => setView('palettes', 'palettes'));
     $('force-2fa').addEventListener('click', () =>
       toast("2FA exigée pour toute l'équipe — chacun devra l'activer à sa prochaine connexion."),
+    );
+
+    $('view-settings').querySelectorAll('.mini-swatch').forEach((b) =>
+      b.addEventListener('click', () => {
+        SHOP_COLORS[b.dataset.shop] = b.dataset.c;
+        toast(`${SHOPS[b.dataset.shop]} change de couleur — appliquée partout.`);
+        renderSettings();
+      }),
     );
   }
 
@@ -2969,7 +3133,15 @@
       setView('file', 'file');
       $('f-q').focus();
     }
-    if (e.key === 'Escape' && !$('esc-modal').hidden) $('esc-modal').hidden = true;
+    if (e.key === 'Escape') {
+      if (!$('esc-modal').hidden) $('esc-modal').hidden = true;
+      if (!$('sup-modal').hidden) $('sup-modal').hidden = true;
+    }
+  });
+
+  $('sup-close').addEventListener('click', () => { $('sup-modal').hidden = true; });
+  $('sup-modal').addEventListener('click', (e) => {
+    if (e.target === $('sup-modal')) $('sup-modal').hidden = true;
   });
 
   /* ------------------------------------------------ invitations équipe -- */
