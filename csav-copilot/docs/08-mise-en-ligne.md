@@ -80,6 +80,10 @@ de sous-traitance qu'un traitement chez Anthropic aux États-Unis).
 
 C'est la seule des intégrations qui se règle en deux minutes.
 
+Cette clé n'est pas figée au déploiement : elle se change aussi depuis la
+console d'administration une fois l'application en ligne, avec un bouton qui
+vérifie qu'elle fonctionne. Voir [11-console-admin.md](11-console-admin.md).
+
 ---
 
 ## Étape 2 — Application Shopify
@@ -188,19 +192,32 @@ sera ajoutée à l'étape 5.
 
 1. Poussez le projet sur un dépôt GitHub auquel Render a accès.
 2. Sur **render.com** : **New → Blueprint**, sélectionnez le dépôt. Render lit
-   `render.yaml` et propose de créer les quatre services d'un coup.
+   `render.yaml` et crée les cinq composants d'un coup : l'API, les workers, le
+   cron, la base PostgreSQL et le Redis.
 3. Render demandera les valeurs marquées comme secrètes. Renseignez :
    `SHOPIFY_API_KEY`, `SHOPIFY_API_SECRET`, `GOOGLE_CLIENT_ID`,
    `GOOGLE_CLIENT_SECRET`, `GOOGLE_PUBSUB_TOPIC`,
-   `GOOGLE_PUBSUB_SERVICE_ACCOUNT`, `ANTHROPIC_API_KEY`.
-   Laissez `APP_URL` vide pour l'instant. Pour basculer sur DeepSeek,
-   ajoutez `AI_PROVIDER=deepseek` et `DEEPSEEK_API_KEY` — `render.yaml` ne
-   les déclare pas par défaut, ils sont à ajouter à la main dans l'interface
-   Render sur les trois services (API, workers, cron).
+   `GOOGLE_PUBSUB_SERVICE_ACCOUNT`, et la clé du fournisseur d'IA choisi.
+   Laissez `APP_URL` vide pour l'instant.
+
+   Deux d'entre elles méritent une note :
+
+   - **`ADMIN_PASSWORD`** (12 caractères minimum) ouvre la console
+     d'administration. Sans elle, la console n'existe pas et tous les
+     identifiants ci-dessus ne se règlent que par cet écran Render.
+     Générez-la : `node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"`.
+   - **`AI_PROVIDER`** vaut `anthropic` par défaut. Pour DeepSeek, passez-la à
+     `deepseek` sur le service `csav-api` — le worker et le cron en héritent —
+     et renseignez `DEEPSEEK_API_KEY`.
+
+   Rien de tout cela n'est définitif : une fois l'application en ligne, ces
+   identifiants se modifient depuis `/admin` sans redéploiement. Seules
+   `DATABASE_URL`, `REDIS_URL`, `APP_URL`, `ENCRYPTION_KEY` et `ADMIN_PASSWORD`
+   restent obligatoirement des variables Render.
 4. `ENCRYPTION_KEY` est générée automatiquement par Render, et recopiée dans les
    workers et le cron. **Ne la changez jamais après coup** : elle déchiffre les
-   tokens Shopify et Google déjà en base. La modifier revient à déconnecter
-   tous les marchands.
+   tokens Shopify et Google déjà en base, ainsi que les identifiants réglés
+   depuis la console. La modifier revient à déconnecter tous les marchands.
 5. Lancez le déploiement. Les migrations de base s'appliquent automatiquement
    avant la mise en service (`preDeployCommand`).
 
@@ -250,6 +267,24 @@ et au cron.
 L'application vérifie l'émetteur et l'audience du jeton à chaque notification.
 Si l'audience ne correspond pas exactement, les notifications sont rejetées en
 401 — c'est voulu, mais c'est aussi une source classique de confusion.
+
+---
+
+## Étape 5 bis — Vérifier les branchements avant de tester
+
+Ouvrez `https://votre-app.onrender.com/admin` et entrez `ADMIN_PASSWORD`. Chaque
+groupe a un bouton **Tester la connexion** qui fait un vrai appel :
+
+| Groupe | Ce que le test prouve |
+|---|---|
+| Intelligence artificielle | La clé est acceptée et le modèle répond. Distingue une clé refusée (401) d'un compte sans crédit (402) et d'un domaine bloqué par le réseau. |
+| Google / Gmail | Google reconnaît votre application OAuth. Aucun compte marchand n'est touché. |
+| Shopify | Les identifiants sont présents ; dès qu'une boutique est installée, le test appelle réellement son Admin API. |
+
+Faire ces trois tests prend une minute et évite de chercher une panne d'ingestion
+alors que le problème est une clé mal collée. En ligne de commande, l'équivalent
+pour l'IA seule est `npm run check:ai` — mais il lit les variables
+d'environnement, pas les réglages de la console.
 
 ---
 
@@ -379,6 +414,9 @@ Quatre chantiers, indépendants les uns des autres :
   l'application refuse de démarrer, c'est délibéré.
 - **Surveillez la file Redis.** Si les jobs s'accumulent, c'est que les workers
   sont tombés ou que l'API Claude répond en erreur.
+- **`ADMIN_PASSWORD` protège tous les identifiants de la plateforme.** Traitez-la
+  comme un secret de production : longue, unique, hors du dépôt. Les connexions
+  réussies et refusées sont journalisées avec l'IP.
 - **Le plan gratuit de Render met les services en veille** après inactivité. Un
   service web endormi ne répond pas assez vite à Pub/Sub, qui abandonne la
   notification. Prenez un plan payant pour l'API et le worker.
