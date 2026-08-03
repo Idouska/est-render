@@ -23,9 +23,38 @@ somme des offres d'entrée de gamme se situe autour de 30 à 40 $ par mois.
 Vérifiez les tarifs en vigueur, ils bougent.
 
 Render n'a rien d'obligatoire : le `Dockerfile` fonctionne sur n'importe quel
-hébergeur qui sait lancer un conteneur (Fly.io, Railway, Scaleway, un VPS avec
-Docker Compose). Le fichier `render.yaml` fourni est un raccourci, pas une
-dépendance.
+hébergeur qui sait lancer un conteneur (Fly.io, Railway, Scaleway, Clever Cloud,
+un VPS avec Docker Compose). Le fichier `render.yaml` fourni est un raccourci,
+pas une dépendance.
+
+### Où héberger, et pourquoi ça compte
+
+L'application stocke des mails de clients : des données personnelles au sens du
+RGPD. Le lieu de stockage n'est donc pas un détail technique, il détermine ce
+que vous devrez écrire dans le contrat de sous-traitance signé avec chaque
+marchand.
+
+| Option | Données | Effort |
+|---|---|---|
+| **Render, région Frankfurt** | Union européenne, éditeur américain | Le plus simple : `render.yaml` fait tout |
+| **Scaleway ou Clever Cloud** | France, éditeur français | Un peu plus de configuration, meilleur argument commercial |
+| **VPS (OVH, Hetzner, Scaleway)** | France ou Allemagne | Le moins cher, mais base, sauvegardes et mises à jour à votre charge |
+
+`render.yaml` fixe `region: frankfurt` sur les cinq composants. **Sans ce champ,
+Render déploie en Oregon** et les mails de vos clients français partent aux
+États-Unis. Si vous changez d'avis, changez-le partout : services et base
+doivent partager la même région pour se voir sur le réseau privé.
+
+Un hébergeur français (Scaleway, Clever Cloud, OVH) simplifie encore le
+discours : « vos données restent en France » se vend mieux auprès d'un marchand
+que « elles restent en Europe chez un prestataire américain ». C'est un
+argument commercial autant que juridique.
+
+> **Un transfert reste inévitable, quel que soit l'hébergeur.** Le contenu des
+> mails part chez Anthropic pour être classé et rédigé. C'est un sous-traitant
+> ultérieur situé hors de l'Union : il doit être nommé dans votre contrat de
+> sous-traitance, avec les garanties contractuelles associées. Héberger en
+> France ne dispense pas de le déclarer — voir [06-rgpd.md](06-rgpd.md).
 
 ---
 

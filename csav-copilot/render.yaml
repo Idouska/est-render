@@ -7,12 +7,20 @@
 #
 # Le champ `rootDir` suppose que le projet est dans le sous-dossier
 # `csav-copilot`. À retirer si vous déplacez le projet à la racine du dépôt.
+#
+# `region: frankfurt` place l'ensemble dans l'Union européenne. Sans ce champ,
+# Render déploie en Oregon : les mails de clients français partiraient aux
+# États-Unis, ce qui vous obligerait à documenter un transfert hors UE dans le
+# contrat de sous-traitance signé avec chaque marchand. Tous les services et la
+# base doivent partager la même région, sinon ils ne se voient pas sur le
+# réseau privé.
 
 databases:
   - name: csav-db
     databaseName: csav
     user: csav
     plan: basic-256mb
+    region: frankfurt
 
 services:
   # --- API + dashboard -------------------------------------------------------
@@ -22,6 +30,7 @@ services:
     rootDir: csav-copilot
     dockerfilePath: ./Dockerfile
     plan: starter
+    region: frankfurt
     healthCheckPath: /health
     # Les migrations tournent avant la bascule du trafic, une seule fois par
     # déploiement — surtout pas au démarrage de chaque processus.
@@ -76,6 +85,7 @@ services:
     rootDir: csav-copilot
     dockerfilePath: ./Dockerfile
     plan: starter
+    region: frankfurt
     dockerCommand: node dist/worker.js
     envVars:
       # ENCRYPTION_KEY doit être identique à celle de l'API : les workers
@@ -155,6 +165,7 @@ services:
     rootDir: csav-copilot
     dockerfilePath: ./Dockerfile
     plan: starter
+    region: frankfurt
     schedule: '0 4 * * *' # tous les jours à 4 h UTC
     dockerCommand: node dist/cron.js
     envVars:
@@ -227,5 +238,6 @@ services:
   - type: keyvalue
     name: csav-redis
     plan: starter
+    region: frankfurt
     maxmemoryPolicy: noeviction # BullMQ ne tolère pas la perte de jobs
     ipAllowList: [] # accessible uniquement depuis les services Render
