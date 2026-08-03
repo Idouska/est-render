@@ -1,6 +1,6 @@
 import type { Intent } from '@prisma/client';
 import type { OrderSummary } from '../shopify/orders.ts';
-import { anthropic, MODEL, textFromResponse } from './client.ts';
+import { aiProvider } from './factory.ts';
 
 export interface DraftGeneration {
   body: string;
@@ -131,32 +131,57 @@ function buildContextBlock(context: GenerationContext): string {
   return parts.join('\n');
 }
 
-export async function generateReply(context: GenerationContext): Promise<DraftGeneration> {
-  const response = await anthropic.messages.create({
-    model: MODEL,
-    max_tokens: 2048,
-    system: SYSTEM_PROMPT,
-    output_config: {
-      effort: 'medium',
-      format: { type: 'json_schema', schema: SCHEMA },
-    },
-    messages: [{ role: 'user', content: buildContextBlock(context) }],
-  });
-
-  if (response.stop_reason === 'refusal') {
-    throw new Error('Génération refusée par le modèle');
+function validate(value: unknown): DraftGeneration {
+  if (typeof value !== 'object' || value === null) {
+    throw new TypeError('Réponse de génération : objet attendu');
   }
 
-  const parsed = JSON.parse(textFromResponse(response.content)) as DraftGeneration;
+  const v = value as Record<string, unknown>;
 
-  // Garde-fou : sans commande rattachée, aucune réponse ne peut être
-  // considérée comme sûre, quoi qu'en dise le modèle.
-  const hasOrder = context.order !== null;
-  const confidence = Math.max(0, Math.min(1, parsed.confidence));
+  if (typeof v.body !== 'string' || v.body.trim() === '') {
+    throw new TypeError('Réponse de génération : body doit être une chaîne non vide');
+  }
+  if (typeof v.confidence !== 'number') {
+    throw new TypeError('Réponse de génération : confidence doit être un nombre');
+  }
+  if (typeof v.reasoning !== 'string') {
+    throw new TypeError('Réponse de génération : reasoning doit être une chaîne');
+  }
+  if (typeof v.needsHuman !== 'boolean') {
+    throw new TypeError('Réponse de génération : needsHuman doit être un booléen');
+  }
 
   return {
-    ...parsed,
+    body: v.body,
+    confidence: v.confidence,
+    reasoning: v.reasoning,
+    needsHuman: v.needsHuman,
+  };
+}
+
+export async function generateReply(context: GenerationContext): Promise<DraftGeneration> {
+  const result = await aiProvider.completeJson<DraftGeneration>({
+    system: SYSTEM_PROMPT,
+    effort: 'medium',
+    maxTokens: 2048,
+    schema: SCHEMA,
+    validate,
+    user: buildContextBlock(context),
+  });
+
+  if (result.refused) {
+    throw new Error(`Génération refusée par le modèle (${aiProvider.name})`);
+  }
+
+  // Garde-fou : sans commande rattachée, aucune réponse ne peut être
+  // considérée comme sûre, quoi qu'en dise le modèle. Appliqué après
+  // validation, donc identique quel que soit le fournisseur.
+  const hasOrder = context.order !== null;
+  const confidence = Math.max(0, Math.min(1, result.data.confidence));
+
+  return {
+    ...result.data,
     confidence: hasOrder ? confidence : Math.min(confidence, 0.5),
-    needsHuman: parsed.needsHuman || !hasOrder,
+    needsHuman: result.data.needsHuman || !hasOrder,
   };
 }

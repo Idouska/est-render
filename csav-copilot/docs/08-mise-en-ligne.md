@@ -12,7 +12,7 @@ dernière section.
 
 | Où | Quoi | Coût |
 |---|---|---|
-| console.anthropic.com | Une clé API | à l'usage, ~0,05 $ par ticket traité |
+| console.anthropic.com (ou platform.deepseek.com) | Une clé API | à l'usage — voir [09-fournisseur-ia.md](09-fournisseur-ia.md) pour le choix |
 | partners.shopify.com | Une application publique | gratuit |
 | console.cloud.google.com | Identifiants OAuth + topic Pub/Sub | gratuit à ce volume |
 | render.com | L'hébergement | quelques dizaines d'euros par mois |
@@ -58,13 +58,27 @@ argument commercial autant que juridique.
 
 ---
 
-## Étape 1 — Clé Anthropic
+## Étape 1 — Clé du fournisseur d'IA
+
+L'application supporte deux fournisseurs, bascule par une variable
+d'environnement : voir [09-fournisseur-ia.md](09-fournisseur-ia.md) pour ce que
+ce choix implique (coût, et surtout localisation des données — DeepSeek
+traite les mails en Chine, ce qui se documente différemment dans votre contrat
+de sous-traitance qu'un traitement chez Anthropic aux États-Unis).
+
+**Anthropic (par défaut) :**
 
 1. Créez un compte sur **console.anthropic.com**.
 2. Ajoutez un moyen de paiement, puis créez une clé API.
-3. Gardez-la de côté : ce sera `ANTHROPIC_API_KEY`.
+3. Gardez-la de côté : ce sera `ANTHROPIC_API_KEY`. Laissez `AI_PROVIDER=anthropic`.
 
-C'est la seule des trois intégrations qui se règle en deux minutes.
+**DeepSeek :**
+
+1. Créez un compte sur **platform.deepseek.com**, ajoutez un moyen de
+   paiement, créez une clé.
+2. Ce sera `DEEPSEEK_API_KEY`. Mettez `AI_PROVIDER=deepseek`.
+
+C'est la seule des intégrations qui se règle en deux minutes.
 
 ---
 
@@ -172,7 +186,10 @@ sera ajoutée à l'étape 5.
    `SHOPIFY_API_KEY`, `SHOPIFY_API_SECRET`, `GOOGLE_CLIENT_ID`,
    `GOOGLE_CLIENT_SECRET`, `GOOGLE_PUBSUB_TOPIC`,
    `GOOGLE_PUBSUB_SERVICE_ACCOUNT`, `ANTHROPIC_API_KEY`.
-   Laissez `APP_URL` vide pour l'instant.
+   Laissez `APP_URL` vide pour l'instant. Pour basculer sur DeepSeek,
+   ajoutez `AI_PROVIDER=deepseek` et `DEEPSEEK_API_KEY` — `render.yaml` ne
+   les déclare pas par défaut, ils sont à ajouter à la main dans l'interface
+   Render sur les trois services (API, workers, cron).
 4. `ENCRYPTION_KEY` est générée automatiquement par Render, et recopiée dans les
    workers et le cron. **Ne la changez jamais après coup** : elle déchiffre les
    tokens Shopify et Google déjà en base. La modifier revient à déconnecter

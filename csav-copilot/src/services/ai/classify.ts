@@ -1,5 +1,5 @@
 import type { Intent } from '@prisma/client';
-import { anthropic, MODEL, textFromResponse } from './client.ts';
+import { aiProvider } from './factory.ts';
 
 export interface Classification {
   intent: Intent;
@@ -57,43 +57,66 @@ const SCHEMA = {
   additionalProperties: false,
 } as const;
 
+function validate(value: unknown): Classification {
+  if (typeof value !== 'object' || value === null) {
+    throw new TypeError('Réponse de classification : objet attendu');
+  }
+
+  const v = value as Record<string, unknown>;
+
+  if (typeof v.intent !== 'string' || !INTENTS.includes(v.intent as Intent)) {
+    throw new TypeError(`Réponse de classification : intent invalide (${String(v.intent)})`);
+  }
+  if (typeof v.confidence !== 'number') {
+    throw new TypeError('Réponse de classification : confidence doit être un nombre');
+  }
+  if (v.mentionedOrderNumber !== null && typeof v.mentionedOrderNumber !== 'string') {
+    throw new TypeError('Réponse de classification : mentionedOrderNumber invalide');
+  }
+  if (v.urgency !== 'low' && v.urgency !== 'normal' && v.urgency !== 'high') {
+    throw new TypeError(`Réponse de classification : urgency invalide (${String(v.urgency)})`);
+  }
+  if (typeof v.summary !== 'string') {
+    throw new TypeError('Réponse de classification : summary doit être une chaîne');
+  }
+
+  return {
+    intent: v.intent as Intent,
+    confidence: Math.max(0, Math.min(1, v.confidence)),
+    mentionedOrderNumber: v.mentionedOrderNumber,
+    urgency: v.urgency,
+    summary: v.summary,
+  };
+}
+
 export async function classifyEmail(input: {
   subject: string | null;
   bodyText: string;
 }): Promise<Classification> {
-  const response = await anthropic.messages.create({
-    model: MODEL,
-    max_tokens: 1024,
+  const result = await aiProvider.completeJson<Classification>({
     system: SYSTEM_PROMPT,
-    // Tâche courte et cadrée : effort bas suffit et réduit coût et latence.
-    output_config: {
-      effort: 'low',
-      format: { type: 'json_schema', schema: SCHEMA },
-    },
-    messages: [
-      {
-        role: 'user',
-        content: `Objet : ${input.subject ?? '(sans objet)'}\n\nMessage :\n${input.bodyText.slice(0, 8000)}`,
-      },
-    ],
+    // Tâche courte et cadrée : effort bas suffit et réduit coût et latence
+    // (ignoré par les fournisseurs qui n'exposent pas ce réglage).
+    effort: 'low',
+    maxTokens: 1024,
+    schema: SCHEMA,
+    validate,
+    user: `Objet : ${input.subject ?? '(sans objet)'}\n\nMessage :\n${input.bodyText.slice(0, 8000)}`,
   });
 
-  if (response.stop_reason === 'refusal') {
+  if (result.refused) {
     // Rare, mais ne doit jamais faire tomber l'ingestion : on remonte le
-    // ticket à un humain.
+    // ticket à un humain plutôt que de laisser une exception le bloquer.
+    // Une vraie panne (réseau, clé invalide), elle, doit lever : c'est ce qui
+    // fait échouer le job BullMQ et déclenche son réessai avec backoff.
     return {
       intent: 'OTHER',
       confidence: 0,
       mentionedOrderNumber: null,
       urgency: 'normal',
-      summary: 'Classification indisponible, relecture humaine requise.',
+      summary: 'Classification refusée par le modèle, relecture humaine requise.',
     };
   }
 
-  const parsed = JSON.parse(textFromResponse(response.content)) as Classification;
-
-  return {
-    ...parsed,
-    confidence: Math.max(0, Math.min(1, parsed.confidence)),
-  };
+  return result.data;
 }

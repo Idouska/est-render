@@ -33,8 +33,19 @@ const schema = z.object({
   GOOGLE_PUBSUB_TOPIC: z.string().min(1),
   GOOGLE_PUBSUB_SERVICE_ACCOUNT: z.string().min(1),
 
-  ANTHROPIC_API_KEY: z.string().min(1),
+  // Fournisseur actif : un seul point de bascule, lu uniquement par
+  // services/ai/factory.ts. Ni classify.ts ni generate.ts ne savent lequel
+  // tourne.
+  AI_PROVIDER: z.enum(['anthropic', 'deepseek']).default('anthropic'),
+
+  // Optionnelles au niveau du schéma : la présence requise dépend du
+  // AI_PROVIDER choisi, vérifiée explicitement plus bas.
+  ANTHROPIC_API_KEY: z.string().optional(),
   ANTHROPIC_MODEL: z.string().default('claude-opus-5'),
+
+  DEEPSEEK_API_KEY: z.string().optional(),
+  DEEPSEEK_MODEL: z.string().default('deepseek-chat'),
+  DEEPSEEK_BASE_URL: z.string().default('https://api.deepseek.com/v1'),
 
   // Développement uniquement : remplace les appels Shopify par un jeu de
   // commandes fictives, pour travailler l'interface sans boutique réelle.
@@ -65,6 +76,14 @@ export const env = parsed.data;
 
 if (env.NODE_ENV === 'production' && (env.SHOPIFY_MOCK || env.GMAIL_MOCK)) {
   throw new Error('SHOPIFY_MOCK et GMAIL_MOCK ne peuvent pas être activés en production');
+}
+
+if (env.AI_PROVIDER === 'deepseek' && !env.DEEPSEEK_API_KEY) {
+  throw new Error('AI_PROVIDER=deepseek nécessite DEEPSEEK_API_KEY');
+}
+
+if (env.AI_PROVIDER === 'anthropic' && !env.ANTHROPIC_API_KEY) {
+  throw new Error('AI_PROVIDER=anthropic (par défaut) nécessite ANTHROPIC_API_KEY');
 }
 
 /** Les raccourcis de développement (connexion sans OAuth, données fictives). */

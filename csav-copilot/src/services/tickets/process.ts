@@ -2,6 +2,7 @@ import { recordAudit } from '../../lib/audit.ts';
 import { logger } from '../../lib/logger.ts';
 import { prisma } from '../../lib/prisma.ts';
 import { classifyEmail } from '../ai/classify.ts';
+import { aiProvider } from '../ai/factory.ts';
 import { generateReply, type GenerationContext } from '../ai/generate.ts';
 import { createReplyDraft } from '../gmail/drafts.ts';
 import { matchOrder } from '../matching/orderMatcher.ts';
@@ -126,7 +127,9 @@ export async function processTicket(merchantId: string, ticketId: string): Promi
         ticketId: ticket.id,
         gmailDraftId: draftId,
         body: generated.body,
-        model: process.env.ANTHROPIC_MODEL ?? 'claude-opus-5',
+        // Modèle réellement interrogé, pas une constante : indispensable pour
+        // comparer deux fournisseurs sur le même trafic.
+        model: `${aiProvider.name}:${aiProvider.model}`,
         confidence: generated.confidence,
         reasoning: generated.reasoning,
         status: 'PENDING_REVIEW',

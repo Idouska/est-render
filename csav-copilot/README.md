@@ -65,6 +65,18 @@ journal d'audit et les garde-fous du remboursement.
 
 ---
 
+## Fournisseur d'IA
+
+Anthropic par défaut. DeepSeek est supporté comme alternative moins chère, avec
+une réserve importante : DeepSeek traite les mails en Chine, ce qui a des
+implications RGPD à documenter dans votre contrat de sous-traitance. Détails
+et comparatif : **[docs/09-fournisseur-ia.md](docs/09-fournisseur-ia.md)**.
+
+```bash
+AI_PROVIDER=deepseek   # ou anthropic (par défaut)
+DEEPSEEK_API_KEY=sk-...
+```
+
 ## Mettre en ligne
 
 Guide complet pas à pas : **[docs/08-mise-en-ligne.md](docs/08-mise-en-ligne.md)**

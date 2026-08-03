@@ -19,6 +19,9 @@ Livré dans ce dépôt :
 - [x] Migration Prisma initiale
 - [x] Déploiement : Dockerfile, `render.yaml`, guide pas à pas
       ([08-mise-en-ligne.md](08-mise-en-ligne.md))
+- [x] Fournisseur d'IA interchangeable (Anthropic ou DeepSeek) derrière une
+      abstraction commune, bascule par variable d'environnement
+      ([09-fournisseur-ia.md](09-fournisseur-ia.md))
 
 Reste à faire avant de brancher un vrai marchand :
 

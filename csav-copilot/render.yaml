@@ -73,10 +73,22 @@ services:
         sync: false
       - key: GOOGLE_PUBSUB_SERVICE_ACCOUNT
         sync: false
+      # Fournisseur d'IA : "anthropic" (défaut, ligne ci-dessous absente =
+      # anthropic) ou "deepseek". Pour DeepSeek, décommentez AI_PROVIDER et
+      # renseignez DEEPSEEK_API_KEY dans les trois services (API, worker,
+      # cron) — voir docs/09-fournisseur-ia.md.
+      # - key: AI_PROVIDER
+      #   value: deepseek
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: ANTHROPIC_MODEL
         value: claude-opus-5
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: DEEPSEEK_MODEL
+        value: deepseek-chat
+      - key: DEEPSEEK_BASE_URL
+        value: https://api.deepseek.com/v1
 
   # --- Workers : classification, rédaction, ingestion ------------------------
   - type: worker
@@ -155,6 +167,17 @@ services:
           envVarKey: ANTHROPIC_API_KEY
       - key: ANTHROPIC_MODEL
         value: claude-opus-5
+      # - key: AI_PROVIDER
+      #   fromService: { name: csav-api, type: web, envVarKey: AI_PROVIDER }
+      - key: DEEPSEEK_API_KEY
+        fromService:
+          name: csav-api
+          type: web
+          envVarKey: DEEPSEEK_API_KEY
+      - key: DEEPSEEK_MODEL
+        value: deepseek-chat
+      - key: DEEPSEEK_BASE_URL
+        value: https://api.deepseek.com/v1
 
   # --- Tâches planifiées : watch Gmail + purge RGPD --------------------------
   # Sans ce cron, l'écoute Gmail expire au bout de 7 jours et l'ingestion
@@ -233,6 +256,17 @@ services:
           envVarKey: ANTHROPIC_API_KEY
       - key: ANTHROPIC_MODEL
         value: claude-opus-5
+      # - key: AI_PROVIDER
+      #   fromService: { name: csav-api, type: web, envVarKey: AI_PROVIDER }
+      - key: DEEPSEEK_API_KEY
+        fromService:
+          name: csav-api
+          type: web
+          envVarKey: DEEPSEEK_API_KEY
+      - key: DEEPSEEK_MODEL
+        value: deepseek-chat
+      - key: DEEPSEEK_BASE_URL
+        value: https://api.deepseek.com/v1
 
   # --- File d'attente --------------------------------------------------------
   - type: keyvalue
