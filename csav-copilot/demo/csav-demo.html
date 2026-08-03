@@ -1,0 +1,2246 @@
+<title>cSAV Copilot — l'application en démonstration</title>
+
+<style>
+:root {
+  --ground: #f2f5f4;
+  --surface: #ffffff;
+  --surface-sunk: #eaeeec;
+  --ink: #12191b;
+  --ink-soft: #445055;
+  --ink-mute: #6e7c80;
+  --line: #d9e0dd;
+  --line-soft: #e7ecea;
+  --accent: #0b5e6b;
+  --accent-soft: #e0f0f1;
+  --accent-ink: #ffffff;
+  --ok: #2c6e4f;
+  --ok-soft: #e1f0e7;
+  --warn: #92601a;
+  --warn-soft: #f7edd9;
+  --crit: #9e3a32;
+  --crit-soft: #f8e5e2;
+  --shadow: 0 1px 2px rgba(18, 25, 27, 0.06), 0 8px 24px -12px rgba(18, 25, 27, 0.18);
+
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  --r: 6px;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #0e1315;
+    --surface: #161c1f;
+    --surface-sunk: #11171a;
+    --ink: #e6edeb;
+    --ink-soft: #afbdbc;
+    --ink-mute: #7e8d8e;
+    --line: #26302f;
+    --line-soft: #1e2629;
+    --accent: #5bc3d0;
+    --accent-soft: #143036;
+    --accent-ink: #06272c;
+    --ok: #6dc59a;
+    --ok-soft: #142c22;
+    --warn: #d9a648;
+    --warn-soft: #2e2413;
+    --crit: #e58579;
+    --crit-soft: #33201d;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 10px 28px -14px rgba(0, 0, 0, 0.8);
+    color-scheme: dark;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* L'attribut `hidden` masque via `display: none` dans la feuille du
+   navigateur, ce qu'une règle d'auteur comme `.draft { display: flex }`
+   écrase silencieusement. Sans cette ligne, les blocs masqués restent
+   visibles. */
+[hidden] {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+:where(a, button, input, textarea, select, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+a {
+  color: var(--accent);
+}
+
+.shell {
+  max-width: 1500px;
+  margin: 0 auto;
+  padding: 0 20px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ---------- barre haute ---------- */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 18px 0 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-right: auto;
+}
+
+.brand strong {
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.brand span {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-mute);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.conn {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.conn-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 11px 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: 100px;
+  background: var(--surface);
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ok);
+  flex: none;
+}
+
+.dot.warn {
+  background: var(--warn);
+}
+
+.dot.off {
+  background: var(--crit);
+}
+
+/* ---------- bandeau ---------- */
+
+.notice {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  border-radius: var(--r);
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.notice b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.notice-mark {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+  padding-top: 1px;
+  white-space: nowrap;
+}
+
+/* ---------- indicateurs ---------- */
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+
+.kpi {
+  background: var(--surface);
+  padding: 14px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.kpi-label {
+  font-size: 11px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+.kpi-value {
+  font-family: var(--font-mono);
+  font-size: 26px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.kpi-note {
+  font-size: 12px;
+  color: var(--ink-mute);
+}
+
+/* ---------- espace de travail ---------- */
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(300px, 360px) minmax(0, 1fr) minmax(280px, 320px);
+  gap: 16px;
+  align-items: start;
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.panel-head {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line-soft);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.panel-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  margin-right: auto;
+}
+
+/* ---------- file de tickets ---------- */
+
+.filters {
+  display: flex;
+  gap: 6px;
+  padding: 10px 14px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--surface-sunk);
+}
+
+.chip {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-soft);
+  border-radius: 100px;
+  padding: 4px 11px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.chip:hover {
+  border-color: var(--ink-mute);
+}
+
+.chip[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.queue-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 620px;
+  overflow-y: auto;
+}
+
+.queue-item {
+  width: 100%;
+  display: block;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  border-left: 3px solid transparent;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.queue-item:hover {
+  background: var(--surface-sunk);
+}
+
+.queue-item[aria-current="true"] {
+  background: var(--accent-soft);
+  border-left-color: var(--accent);
+}
+
+.queue-top {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.queue-who {
+  font-weight: 600;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queue-time {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-mute);
+  white-space: nowrap;
+}
+
+.queue-subject {
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin: 2px 0 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queue-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.tag {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 3px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.tag-intent {
+  background: var(--surface-sunk);
+  border-color: var(--line);
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  letter-spacing: 0.03em;
+}
+
+.tag-status {
+  font-weight: 600;
+}
+
+.st-DRAFT_READY {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.st-NEEDS_REVIEW {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.st-NEW,
+.st-PROCESSING {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.st-FAILED {
+  background: var(--crit-soft);
+  color: var(--crit);
+}
+
+.st-CLOSED,
+.st-AUTO_SENT {
+  background: var(--surface-sunk);
+  color: var(--ink-mute);
+}
+
+.tag-order {
+  font-family: var(--font-mono);
+  color: var(--ink-mute);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- fil et brouillon ---------- */
+
+.thread-head {
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.thread-subject {
+  margin: 0 0 6px;
+  font-size: 17px;
+  font-weight: 620;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.thread-meta {
+  font-size: 13px;
+  color: var(--ink-mute);
+}
+
+.thread-meta code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.messages {
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.msg {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.msg-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--ink-mute);
+}
+
+.msg-head b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.msg-body {
+  background: var(--surface-sunk);
+  border-radius: var(--r);
+  border-left: 2px solid var(--line);
+  padding: 10px 12px;
+  white-space: pre-wrap;
+  font-size: 13.5px;
+  color: var(--ink-soft);
+}
+
+.msg.out .msg-body {
+  background: var(--accent-soft);
+  border-left-color: var(--accent);
+}
+
+.draft {
+  border-top: 1px solid var(--line);
+  background: var(--surface-sunk);
+  padding: 14px 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.draft-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.conf {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--ink-mute);
+}
+
+.conf-track {
+  width: 68px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.conf-fill {
+  height: 100%;
+  background: var(--ok);
+  transition: width 0.3s ease;
+}
+
+.conf-fill.low {
+  background: var(--warn);
+}
+
+.conf-fill.bad {
+  background: var(--crit);
+}
+
+.conf-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.draft textarea {
+  width: 100%;
+  min-height: 180px;
+  resize: vertical;
+  padding: 13px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.reasoning {
+  font-size: 12.5px;
+  color: var(--ink-mute);
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 0;
+}
+
+.reasoning > span:first-child {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  padding-top: 1px;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.btn {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  padding: 8px 14px;
+  border-radius: var(--r);
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--ink-mute);
+}
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+.btn-primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.btn-danger {
+  color: var(--crit);
+  border-color: color-mix(in srgb, var(--crit) 40%, transparent);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: var(--crit-soft);
+  border-color: var(--crit);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--ink-mute);
+  margin-left: auto;
+}
+
+/* ---------- colonne contexte ---------- */
+
+.context {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: sticky;
+  top: 16px;
+}
+
+.card-body {
+  padding: 12px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.row {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  font-size: 13px;
+}
+
+.row dt {
+  color: var(--ink-mute);
+  flex: none;
+  width: 96px;
+}
+
+.row dd {
+  margin: 0 0 0 auto;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.row dd.mono {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+dl {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.items {
+  list-style: none;
+  margin: 0;
+  padding: 10px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px dashed var(--line);
+}
+
+.items li {
+  display: flex;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.items span:first-child {
+  font-family: var(--font-mono);
+  color: var(--ink-mute);
+  flex: none;
+}
+
+.empty {
+  padding: 4px 0;
+  font-size: 13px;
+  color: var(--ink-mute);
+}
+
+.track {
+  display: flex;
+  gap: 0;
+  padding: 4px 0 2px;
+}
+
+.track-step {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  font-size: 10.5px;
+  color: var(--ink-mute);
+  text-align: center;
+}
+
+.track-bead {
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+}
+
+.track-step.done .track-bead {
+  background: var(--accent);
+}
+
+.track-step.done {
+  color: var(--ink-soft);
+}
+
+.journal {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.journal li {
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  display: flex;
+  gap: 10px;
+}
+
+.journal li:last-child {
+  border-bottom: 0;
+}
+
+.journal time {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--ink-mute);
+  flex: none;
+}
+
+.journal b {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* ---------- rattachement de commande ---------- */
+
+.attach {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.attach-row {
+  display: flex;
+  gap: 6px;
+}
+
+.attach-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface);
+}
+
+.candidates {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.candidate {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: var(--r);
+  padding: 8px 10px;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  font-size: 13px;
+}
+
+.candidate:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.candidate b {
+  font-family: var(--font-mono);
+}
+
+.candidate span {
+  margin-left: auto;
+  color: var(--ink-mute);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- modale ---------- */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 14, 16, 0.55);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 50;
+}
+
+.backdrop.open {
+  display: flex;
+}
+
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.5);
+  width: min(460px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-head {
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.modal-head h2 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 620;
+  letter-spacing: -0.01em;
+}
+
+.modal-head p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-mute);
+}
+
+.modal-body {
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.field label {
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+.field input[type="text"],
+.field select {
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface);
+}
+
+.field input[type="text"] {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.field small {
+  font-size: 12px;
+  color: var(--ink-mute);
+}
+
+.warnbox {
+  display: flex;
+  gap: 10px;
+  padding: 11px 12px;
+  background: var(--crit-soft);
+  border: 1px solid color-mix(in srgb, var(--crit) 35%, transparent);
+  border-radius: var(--r);
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.warnbox b {
+  color: var(--crit);
+}
+
+.confirm {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  font-size: 13px;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.confirm input {
+  margin-top: 3px;
+  accent-color: var(--accent);
+}
+
+.modal-foot {
+  padding: 14px 18px;
+  border-top: 1px solid var(--line-soft);
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  background: var(--surface-sunk);
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translate(-50%, 16px);
+  background: var(--ink);
+  color: var(--ground);
+  padding: 11px 18px;
+  border-radius: var(--r);
+  font-size: 13px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 60;
+  max-width: min(520px, calc(100vw - 40px));
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.toast.error {
+  background: var(--crit);
+  color: #fff;
+}
+
+/* ---------- écran de connexion ---------- */
+
+.gate {
+  max-width: 520px;
+  margin: 80px auto;
+  padding: 28px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.gate h1 {
+  margin: 0 0 10px;
+  font-size: 19px;
+  letter-spacing: -0.02em;
+}
+
+.gate p {
+  color: var(--ink-soft);
+  margin: 0 0 16px;
+}
+
+.gate code {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  background: var(--surface-sunk);
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+@media (max-width: 1180px) {
+  .workspace {
+    grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  }
+
+  .context {
+    grid-column: 1 / -1;
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    align-items: start;
+  }
+}
+
+@media (max-width: 760px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .queue-list {
+    max-height: 320px;
+  }
+
+  .row dt {
+    width: auto;
+  }
+}
+
+
+/* La page de démonstration suit le thème du lecteur, y compris son bouton. */
+:root[data-theme='light'] { color-scheme: light; }
+:root[data-theme='dark'] {
+  --ground: #0e1315; --surface: #161c1f; --surface-sunk: #11171a;
+  --ink: #e6edeb; --ink-soft: #afbdbc; --ink-mute: #7e8d8e;
+  --line: #26302f; --line-soft: #1e2629;
+  --accent: #5bc3d0; --accent-soft: #143036; --accent-ink: #06272c;
+  --ok: #6dc59a; --ok-soft: #142c22; --warn: #d9a648; --warn-soft: #2e2413;
+  --crit: #e58579; --crit-soft: #33201d;
+  --shadow: 0 1px 2px rgba(0,0,0,.5), 0 10px 28px -14px rgba(0,0,0,.8);
+  color-scheme: dark;
+}
+
+</style>
+
+
+  <div class="shell" style="padding-bottom:0">
+    <div class="notice" style="margin-top:16px">
+      <span class="notice-mark">Démo</span>
+      <div>
+        <b>Voici l'interface réelle de cSAV Copilot, avec des données fictives.</b>
+        Le code affiché ici est exactement celui de l'application ; seul le serveur
+        est remplacé par une version en mémoire, le temps de cette page. Aucun mail
+        n'est lu ni envoyé, aucun euro ne bouge.
+        <br /><br />
+        À essayer : <b>Julien Meyer</b> — trois commandes correspondent à son
+        adresse, l'IA refuse de choisir et demande une précision.
+        <b>Amélie Rousseau</b> — le bouton rembourser, et sa confirmation obligatoire.
+        Modifiez un brouillon, envoyez-le, regardez le journal d'audit à droite.
+      </div>
+    </div>
+  </div>
+
+<div id="gate" class="gate" hidden>
+      <h1>Session expirée</h1>
+      <p id="gate-text">Connectez-vous pour accéder au SAV.</p>
+      <p id="gate-prod" hidden>
+        Installez l'application depuis votre administration Shopify, ou ouvrez
+        <code>/auth/shopify?shop=votre-boutique.myshopify.com</code>.
+      </p>
+      <a class="btn btn-primary" id="gate-dev" href="/dev/login" hidden>
+        Ouvrir une session de développement
+      </a>
+    </div>
+
+    <div class="shell" id="app" hidden>
+      <header class="topbar">
+        <div class="brand">
+          <strong id="merchant-name">cSAV Copilot</strong>
+          <span id="merchant-shop"></span>
+        </div>
+        <div class="conn" id="conn"></div>
+      </header>
+
+      <div class="notice" id="mock-notice" hidden>
+        <span class="notice-mark">Simulation</span>
+        <div>
+          <b>Données fictives.</b>
+          Shopify et Gmail sont simulés (<code>SHOPIFY_MOCK</code> /
+          <code>GMAIL_MOCK</code>). Aucun mail n'est lu ni envoyé, aucun remboursement
+          n'est réellement exécuté. Tout le reste — file, rattachement, brouillons,
+          journal d'audit — passe par la vraie base de données.
+        </div>
+      </div>
+
+      <section class="kpis" aria-label="Indicateurs des 30 derniers jours">
+        <div class="kpi">
+          <span class="kpi-label">Traités · 30 jours</span>
+          <span class="kpi-value" id="kpi-done">—</span>
+          <span class="kpi-note">réponses envoyées</span>
+        </div>
+        <div class="kpi">
+          <span class="kpi-label">En attente de vous</span>
+          <span class="kpi-value" id="kpi-pending">—</span>
+          <span class="kpi-note" id="kpi-pending-note">brouillons à relire</span>
+        </div>
+        <div class="kpi">
+          <span class="kpi-label">Taux d'automatisation</span>
+          <span class="kpi-value" id="kpi-rate">—</span>
+          <span class="kpi-note">brouillons effectivement envoyés</span>
+        </div>
+        <div class="kpi">
+          <span class="kpi-label">Envoi automatique</span>
+          <span class="kpi-value" id="kpi-auto">—</span>
+          <span class="kpi-note" id="kpi-auto-note"></span>
+        </div>
+      </section>
+
+      <main class="workspace">
+        <section class="panel" aria-label="File de tickets">
+          <div class="filters" id="filters">
+            <button class="chip" data-filter="" aria-pressed="true">Tous</button>
+            <button class="chip" data-filter="DRAFT_READY" aria-pressed="false">Brouillon prêt</button>
+            <button class="chip" data-filter="NEEDS_REVIEW" aria-pressed="false">À valider</button>
+            <button class="chip" data-filter="NEW" aria-pressed="false">Nouveaux</button>
+            <button class="chip" data-filter="CLOSED" aria-pressed="false">Clos</button>
+          </div>
+          <ul class="queue-list" id="queue">
+            <li class="empty" style="padding: 16px 14px">Chargement…</li>
+          </ul>
+        </section>
+
+        <section class="panel" aria-label="Détail du ticket">
+          <div class="thread-head">
+            <h1 class="thread-subject" id="d-subject">Sélectionnez un ticket</h1>
+            <div class="thread-meta" id="d-meta"></div>
+          </div>
+          <div class="messages" id="d-messages"></div>
+          <div class="draft" id="draft-zone" hidden>
+            <div class="draft-bar">
+              <span class="panel-title">Brouillon proposé</span>
+              <span class="conf">
+                confiance
+                <span class="conf-track"><span class="conf-fill" id="d-conf-fill"></span></span>
+                <span class="conf-num" id="d-conf-num">—</span>
+              </span>
+            </div>
+            <textarea id="d-body" aria-label="Corps du brouillon"></textarea>
+            <p class="reasoning"><span>Pourquoi</span><span id="d-reason"></span></p>
+            <div class="actions">
+              <button class="btn btn-primary" id="btn-send">Envoyer la réponse</button>
+              <button class="btn" id="btn-save">Enregistrer les modifications</button>
+              <button class="btn btn-danger" id="btn-refund">Rembourser…</button>
+              <span class="hint">Rien ne part sans ce clic.</span>
+            </div>
+          </div>
+          <div class="draft" id="no-draft" hidden>
+            <span class="panel-title">Aucun brouillon</span>
+            <p class="empty" id="no-draft-text">
+              Ce message n'a pas appelé de réponse automatique.
+            </p>
+          </div>
+        </section>
+
+        <aside class="context">
+          <div class="panel">
+            <div class="panel-head"><span class="panel-title">Client</span></div>
+            <div class="card-body" id="c-customer">
+              <p class="empty">—</p>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><span class="panel-title">Commande</span></div>
+            <div class="card-body" id="c-order">
+              <p class="empty">—</p>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><span class="panel-title">Livraison</span></div>
+            <div class="card-body" id="c-ship">
+              <p class="empty">—</p>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><span class="panel-title">Journal d'audit</span></div>
+            <ul class="journal" id="c-audit"></ul>
+          </div>
+        </aside>
+      </main>
+    </div>
+
+    <div
+      class="backdrop"
+      id="refund-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="refund-title"
+    >
+      <div class="modal">
+        <div class="modal-head">
+          <h2 id="refund-title">Rembourser la commande <span id="r-order">—</span></h2>
+          <p>Action définitive. Elle sera consignée à votre nom dans le journal d'audit.</p>
+        </div>
+        <div class="modal-body">
+          <div class="field">
+            <label for="r-amount">Montant à rembourser</label>
+            <input type="text" id="r-amount" value="0.00" inputmode="decimal" />
+            <small>Remboursable au maximum : <span id="r-max">—</span></small>
+          </div>
+          <div class="field">
+            <label for="r-reason">Motif</label>
+            <select id="r-reason">
+              <option>Article endommagé à la réception</option>
+              <option>Colis perdu par le transporteur</option>
+              <option>Erreur de préparation</option>
+              <option>Geste commercial</option>
+              <option>Retour reçu et accepté</option>
+            </select>
+          </div>
+          <div class="warnbox">
+            <b>!</b>
+            <div>
+              Le montant sera recrédité sur le moyen de paiement d'origine. Aucun
+              remboursement n'est réversible depuis cette interface.
+            </div>
+          </div>
+          <label class="confirm">
+            <input type="checkbox" id="r-check" />
+            <span>Je confirme rembourser <b id="r-echo">0,00 €</b> à ce client.</span>
+          </label>
+        </div>
+        <div class="modal-foot">
+          <button class="btn" id="r-cancel">Annuler</button>
+          <button class="btn btn-primary" id="r-go" disabled>Rembourser</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="toast" id="toast" role="status"></div>
+
+<script>
+
+const minutesAgo = (n) => new Date(Date.now() - n * 60000).toISOString();
+
+const ORDERS = {
+  'gid://shopify/Order/10428': {
+    id: 'gid://shopify/Order/10428', name: '#10428', createdAt: '2026-02-03T10:12:00Z',
+    displayFinancialStatus: 'PAID', displayFulfillmentStatus: 'IN_TRANSIT',
+    totalPrice: '128.40', currency: 'EUR',
+    customer: { displayName: 'Léa Fontaine', email: 'lea.fontaine@gmail.com',
+      numberOfOrders: 4, amountSpent: '512.60', createdAt: '2024-03-11T09:00:00Z' },
+    lineItems: [
+      { title: 'Lampe Perce-neige', quantity: 1, variantTitle: 'Laiton' },
+      { title: 'Ampoule E27 ambrée 4 W', quantity: 2, variantTitle: null },
+    ],
+    fulfillments: [{ status: 'IN_TRANSIT', trackingCompany: 'Colissimo',
+      trackingNumber: '6A18492037561', trackingUrl: null,
+      estimatedDeliveryAt: '2026-02-12T00:00:00Z', updatedAt: '2026-02-08T16:30:00Z' }],
+  },
+  'gid://shopify/Order/10391': {
+    id: 'gid://shopify/Order/10391', name: '#10391', createdAt: '2026-01-28T14:45:00Z',
+    displayFinancialStatus: 'PAID', displayFulfillmentStatus: 'FULFILLED',
+    totalPrice: '74.00', currency: 'EUR',
+    customer: { displayName: 'Marc Delaunay', email: 'm.delaunay@orange.fr',
+      numberOfOrders: 7, amountSpent: '931.20', createdAt: '2023-11-02T09:00:00Z' },
+    lineItems: [{ title: 'Applique Halo', quantity: 1, variantTitle: 'Noir mat' }],
+    fulfillments: [{ status: 'DELIVERED', trackingCompany: 'Mondial Relay',
+      trackingNumber: '84921047', trackingUrl: null, estimatedDeliveryAt: null,
+      updatedAt: '2026-02-09T14:02:00Z' }],
+  },
+  'gid://shopify/Order/10375': {
+    id: 'gid://shopify/Order/10375', name: '#10375', createdAt: '2026-01-25T11:20:00Z',
+    displayFinancialStatus: 'PAID', displayFulfillmentStatus: 'FULFILLED',
+    totalPrice: '96.00', currency: 'EUR',
+    customer: { displayName: 'Amélie Rousseau', email: 'a.rousseau@free.fr',
+      numberOfOrders: 12, amountSpent: '1840.75', createdAt: '2022-06-14T09:00:00Z' },
+    lineItems: [{ title: 'Lampe Rosée', quantity: 1, variantTitle: 'Verre soufflé' }],
+    fulfillments: [{ status: 'DELIVERED', trackingCompany: 'Colissimo',
+      trackingNumber: '6A18471120043', trackingUrl: null, estimatedDeliveryAt: null,
+      updatedAt: '2026-02-08T09:15:00Z' }],
+  },
+  'gid://shopify/Order/10402': {
+    id: 'gid://shopify/Order/10402', name: '#10402', createdAt: '2026-01-30T08:05:00Z',
+    displayFinancialStatus: 'PAID', displayFulfillmentStatus: 'FULFILLED',
+    totalPrice: '62.00', currency: 'EUR',
+    customer: { displayName: 'Sophie Nguyen', email: 'sophie.nguyen@laposte.net',
+      numberOfOrders: 2, amountSpent: '148.00', createdAt: '2025-09-19T09:00:00Z' },
+    lineItems: [{ title: 'Applique Halo', quantity: 1, variantTitle: 'Laiton' }],
+    fulfillments: [{ status: 'DELIVERED', trackingCompany: 'Colissimo',
+      trackingNumber: '6A18468823901', trackingUrl: null, estimatedDeliveryAt: null,
+      updatedAt: '2026-02-07T11:40:00Z' }],
+  },
+  'gid://shopify/Order/10410': {
+    id: 'gid://shopify/Order/10410', name: '#10410', createdAt: '2026-02-02T17:30:00Z',
+    displayFinancialStatus: 'PAID', displayFulfillmentStatus: 'IN_TRANSIT',
+    totalPrice: '89.90', currency: 'EUR',
+    customer: { displayName: 'Julien Meyer', email: 'julien.meyer91@gmail.com',
+      numberOfOrders: 3, amountSpent: '288.40', createdAt: '2025-12-05T09:00:00Z' },
+    lineItems: [{ title: 'Suspension Brume', quantity: 1, variantTitle: 'Opaline' }],
+    fulfillments: [{ status: 'IN_TRANSIT', trackingCompany: 'Colissimo',
+      trackingNumber: '6A18490011223', trackingUrl: null,
+      estimatedDeliveryAt: '2026-02-11T00:00:00Z', updatedAt: '2026-02-09T08:00:00Z' }],
+  },
+  'gid://shopify/Order/10344': {
+    id: 'gid://shopify/Order/10344', name: '#10344', createdAt: '2026-01-14T09:15:00Z',
+    displayFinancialStatus: 'PAID', displayFulfillmentStatus: 'FULFILLED',
+    totalPrice: '156.00', currency: 'EUR',
+    customer: { displayName: 'Julien Meyer', email: 'julien.meyer91@gmail.com',
+      numberOfOrders: 3, amountSpent: '288.40', createdAt: '2025-12-05T09:00:00Z' },
+    lineItems: [{ title: 'Lampadaire Sillage', quantity: 1, variantTitle: 'Chêne' }],
+    fulfillments: [{ status: 'DELIVERED', trackingCompany: 'Colissimo',
+      trackingNumber: '6A18412299001', trackingUrl: null, estimatedDeliveryAt: null,
+      updatedAt: '2026-01-18T13:00:00Z' }],
+  },
+  'gid://shopify/Order/10298': {
+    id: 'gid://shopify/Order/10298', name: '#10298', createdAt: '2025-12-21T19:40:00Z',
+    displayFinancialStatus: 'PAID', displayFulfillmentStatus: 'FULFILLED',
+    totalPrice: '42.50', currency: 'EUR',
+    customer: { displayName: 'Julien Meyer', email: 'julien.meyer91@gmail.com',
+      numberOfOrders: 3, amountSpent: '288.40', createdAt: '2025-12-05T09:00:00Z' },
+    lineItems: [{ title: 'Ampoule E27 ambrée 4 W', quantity: 3, variantTitle: null }],
+    fulfillments: [{ status: 'DELIVERED', trackingCompany: 'Colissimo',
+      trackingNumber: '6A18333044556', trackingUrl: null, estimatedDeliveryAt: null,
+      updatedAt: '2025-12-24T10:00:00Z' }],
+  },
+};
+
+const db = {
+  tickets: [
+    { id: 't1', subject: 'Toujours pas reçu ma commande', customerEmail: 'lea.fontaine@gmail.com',
+      customerName: 'Léa Fontaine', intent: 'WISMO', intentConfidence: 0.93, status: 'DRAFT_READY',
+      shopifyOrderId: 'gid://shopify/Order/10428', orderName: '#10428', lastMessageAt: minutesAgo(12),
+      messages: [{ id: 'm1', direction: 'INBOUND', fromEmail: 'lea.fontaine@gmail.com',
+        receivedAt: minutesAgo(12), bodyText:
+        "Bonjour,\n\nJ'ai commandé le 3 février et je n'ai toujours rien reçu. Le suivi n'a pas bougé depuis une semaine. Pouvez-vous me dire où en est ma commande #10428 ?\n\nMerci,\nLéa" }],
+      drafts: [{ id: 'd1', status: 'PENDING_REVIEW', confidence: 0.93,
+        reasoning: "Commande identifiée par le numéro cité et confirmée par l'adresse de l'expéditrice. Suivi et estimation issus de Shopify.",
+        body: "Bonjour Léa,\n\nVotre commande #10428 a bien été expédiée le 5 février par Colissimo, sous le numéro de suivi 6A18492037561. Le dernier passage enregistré date du 8 février au centre de tri, et la livraison est estimée au 12 février.\n\nCe type d'arrêt d'affichage est fréquent entre deux passages en centre de tri. Si rien ne bouge d'ici le 13, écrivez-nous : nous ouvrirons une enquête auprès de Colissimo et vous renverrons la commande sans frais.\n\nBien à vous,\nL'équipe Atelier Lumen" }] },
+
+    { id: 't2', subject: "Colis annoncé livré mais je n'ai rien", customerEmail: 'm.delaunay@orange.fr',
+      customerName: 'Marc Delaunay', intent: 'DISPUTE', intentConfidence: 0.88, status: 'NEEDS_REVIEW',
+      shopifyOrderId: 'gid://shopify/Order/10391', orderName: '#10391', lastMessageAt: minutesAgo(38),
+      messages: [{ id: 'm2', direction: 'INBOUND', fromEmail: 'm.delaunay@orange.fr',
+        receivedAt: minutesAgo(38), bodyText:
+        "Bonjour, le suivi indique « livré » depuis hier 14h mais je n'ai rien reçu, ni dans la boîte aux lettres ni chez les voisins. J'étais chez moi toute la journée. Que fait-on ?" }],
+      drafts: [{ id: 'd2', status: 'PENDING_REVIEW', confidence: 0.62,
+        reasoning: "Litige transporteur : la suite dépend d'une réclamation et éventuellement d'un geste commercial. Ces décisions ne s'automatisent pas.",
+        body: "Bonjour Marc,\n\nJe comprends, le suivi de votre commande #10391 indique bien une livraison hier à 14 h 02 par Mondial Relay.\n\nAvant d'aller plus loin, deux vérifications utiles : le colis a-t-il pu être déposé en point relais plutôt qu'à votre adresse, et avez-vous reçu un avis de passage ? Si ce n'est pas le cas, nous ouvrons dès aujourd'hui une réclamation auprès du transporteur.\n\nDites-nous ce qu'il en est et nous enchaînons immédiatement.\n\nBien à vous,\nL'équipe Atelier Lumen" }] },
+
+    { id: 't3', subject: 'Où en est ma commande ?', customerEmail: 'julien.meyer91@gmail.com',
+      customerName: 'Julien Meyer', intent: 'WISMO', intentConfidence: 0.91, status: 'NEEDS_REVIEW',
+      shopifyOrderId: null, orderName: null, lastMessageAt: minutesAgo(64),
+      messages: [{ id: 'm3', direction: 'INBOUND', fromEmail: 'julien.meyer91@gmail.com',
+        receivedAt: minutesAgo(64),
+        bodyText: "Bonjour, je voudrais savoir où en est ma commande s'il vous plaît. Merci d'avance." }],
+      drafts: [{ id: 'd3', status: 'PENDING_REVIEW', confidence: 0.42,
+        reasoning: "Trois commandes correspondent à cette adresse et aucune n'est certaine. Le brouillon demande une précision plutôt que de choisir à la place du client.",
+        body: "Bonjour Julien,\n\nJe retrouve trois commandes à votre nom et je préfère ne pas me tromper : pouvez-vous m'indiquer le numéro figurant dans votre e-mail de confirmation, ou l'adresse utilisée lors de l'achat ?\n\nJe vous réponds dès réception.\n\nBien à vous,\nL'équipe Atelier Lumen" }] },
+
+    { id: 't4', subject: 'Abat-jour fêlé — remboursement', customerEmail: 'a.rousseau@free.fr',
+      customerName: 'Amélie Rousseau', intent: 'REFUND', intentConfidence: 0.94, status: 'NEEDS_REVIEW',
+      shopifyOrderId: 'gid://shopify/Order/10375', orderName: '#10375', lastMessageAt: minutesAgo(124),
+      messages: [{ id: 'm4', direction: 'INBOUND', fromEmail: 'a.rousseau@free.fr',
+        receivedAt: minutesAgo(124), bodyText:
+        "Bonjour,\n\nJ'ai reçu ma lampe hier, l'abat-jour en verre est fêlé sur tout un côté. Le carton était intact. Je ne souhaite pas d'échange, je préfère être remboursée.\n\nPhotos en pièce jointe.\n\nAmélie Rousseau" }],
+      drafts: [{ id: 'd4', status: 'PENDING_REVIEW', confidence: 0.71,
+        reasoning: "Le remboursement paraît justifié mais il engage de l'argent : le brouillon l'annonce, c'est à vous de déclencher l'opération.",
+        body: "Bonjour Amélie,\n\nMerci pour les photos, la fêlure est nette et il n'y a pas de discussion à avoir : nous vous remboursons la commande #10375, soit 96,00 €.\n\nLe remboursement part sur votre carte aujourd'hui et met deux à cinq jours ouvrés à apparaître selon votre banque. Vous n'avez pas besoin de nous renvoyer la lampe.\n\nDésolés pour ce défaut, et merci de nous l'avoir signalé si clairement.\n\nBien à vous,\nL'équipe Atelier Lumen" }] },
+
+    { id: 't5', subject: 'Retour — mauvaise finition commandée', customerEmail: 'sophie.nguyen@laposte.net',
+      customerName: 'Sophie Nguyen', intent: 'RETURN', intentConfidence: 0.9, status: 'DRAFT_READY',
+      shopifyOrderId: 'gid://shopify/Order/10402', orderName: '#10402', lastMessageAt: minutesAgo(190),
+      messages: [{ id: 'm5', direction: 'INBOUND', fromEmail: 'sophie.nguyen@laposte.net',
+        receivedAt: minutesAgo(190), bodyText:
+        "Bonjour, je me suis trompée de finition, j'ai pris le laiton alors que je voulais le noir. Comment faire pour l'échanger ? Commande 10402." }],
+      drafts: [{ id: 'd5', status: 'PENDING_REVIEW', confidence: 0.88,
+        reasoning: 'Commande identifiée par le numéro cité, dans les délais de retour. Réponse standard sans engagement financier.',
+        body: "Bonjour Sophie,\n\nAucun problème. Votre commande #10402 a été livrée le 7 février, vous êtes donc dans les délais de retour.\n\nRenvoyez-nous l'applique dans son emballage d'origine à l'adresse indiquée sur votre bon de livraison. Dès réception, nous expédions la version noir mat ; s'il reste une différence de prix, nous l'ajustons à ce moment-là.\n\nBien à vous,\nL'équipe Atelier Lumen" }] },
+
+    { id: 't6', subject: 'Merci pour la rapidité', customerEmail: 'thomas.girard@gmail.com',
+      customerName: 'Thomas Girard', intent: 'POSITIVE', intentConfidence: 0.97, status: 'NEEDS_REVIEW',
+      shopifyOrderId: null, orderName: null, lastMessageAt: minutesAgo(1080),
+      messages: [{ id: 'm6', direction: 'INBOUND', fromEmail: 'thomas.girard@gmail.com',
+        receivedAt: minutesAgo(1080), bodyText:
+        "Juste un mot pour vous remercier, commande reçue en 48 h et l'emballage était impeccable. Bravo !" }],
+      drafts: [] },
+  ],
+
+  audit: [
+    { id: 'a3', action: 'draft.created', actorType: 'AI', createdAt: minutesAgo(12),
+      metadata: { intent: 'WISMO', orderName: '#10428' } },
+    { id: 'a2', action: 'gmail.connected', actorType: 'SYSTEM', createdAt: minutesAgo(2880), metadata: {} },
+    { id: 'a1', action: 'shopify.connected', actorType: 'SYSTEM', createdAt: minutesAgo(2881), metadata: {} },
+  ],
+};
+
+const json = (data, status = 200) => ({
+  ok: status < 400, status,
+  json: async () => data,
+  text: async () => JSON.stringify(data),
+});
+
+const findTicket = (id) => db.tickets.find((t) => t.id === id);
+const findDraft = (id) => {
+  for (const t of db.tickets) {
+    const d = t.drafts.find((x) => x.id === id);
+    if (d) return { ticket: t, draft: d };
+  }
+  return null;
+};
+
+const logAudit = (action, metadata = {}) => {
+  db.audit.unshift({ id: 'a' + Date.now(), action, actorType: 'USER',
+    createdAt: new Date().toISOString(), metadata });
+};
+
+// Jeton de confirmation : ici une simple valeur opaque. Dans l'application
+// réelle il est signé côté serveur, ce qui rend impossible de rembourser sans
+// être passé par cette modale.
+let refundToken = null;
+
+const realFetch = window.fetch.bind(window);
+
+window.fetch = async (input, options = {}) => {
+  const url = new URL(String(input), 'https://demo.local');
+  const path = url.pathname;
+  const method = (options.method ?? 'GET').toUpperCase();
+  const payload = options.body ? JSON.parse(options.body) : {};
+
+  // Latence légère : sans elle l'interface paraît figée plutôt que réactive.
+  await new Promise((r) => setTimeout(r, 90));
+
+  if (path === '/api/config') return json({ devMode: false });
+
+  if (path === '/api/me')
+    return json({
+      merchant: { id: 'demo', shopDomain: 'atelier-lumen.myshopify.com',
+        name: 'Atelier Lumen', autoSendEnabled: false, autoSendThreshold: 0.9 },
+      user: { email: 'claire@atelier-lumen.fr', name: 'Claire Mercier', role: 'OWNER' },
+      shopify: { connected: true, simulated: true },
+      gmail: { connected: true, emailAddress: 'sav@atelier-lumen.fr', watchActive: true },
+    });
+
+  if (path === '/api/metrics') {
+    const counts = {};
+    for (const t of db.tickets) counts[t.status] = (counts[t.status] ?? 0) + 1;
+    const drafts = db.tickets.flatMap((t) => t.drafts);
+    const sent = drafts.filter((d) => d.status === 'SENT').length;
+    return json({ window: '30j', tickets: counts,
+      pending: (counts.NEEDS_REVIEW ?? 0) + (counts.DRAFT_READY ?? 0),
+      automationRate: drafts.length ? sent / drafts.length : 0 });
+  }
+
+  if (path === '/api/tickets' && method === 'GET') {
+    const status = url.searchParams.get('status');
+    const tickets = db.tickets
+      .filter((t) => !status || t.status === status)
+      .sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt))
+      .map(({ id, subject, customerEmail, customerName, intent, intentConfidence, status: s, orderName, lastMessageAt }) =>
+        ({ id, subject, customerEmail, customerName, intent, intentConfidence, status: s, orderName, lastMessageAt }));
+    return json({ tickets, nextCursor: null });
+  }
+
+  const candidates = path.match(/^\/api\/tickets\/([^/]+)\/order-candidates$/);
+  if (candidates) {
+    const ticket = findTicket(candidates[1]);
+    const q = (url.searchParams.get('q') ?? '').trim().toLowerCase();
+    const all = Object.values(ORDERS);
+    const orders = q
+      ? all.filter((o) => o.name.toLowerCase().includes(q.replace('#', '')) ||
+          (o.customer?.displayName ?? '').toLowerCase().includes(q))
+      : all.filter((o) => o.customer?.email === ticket?.customerEmail);
+    return json({ orders: orders.sort((a, b) => b.createdAt.localeCompare(a.createdAt)) });
+  }
+
+  const attach = path.match(/^\/api\/tickets\/([^/]+)\/order$/);
+  if (attach && method === 'POST') {
+    const ticket = findTicket(attach[1]);
+    const order = ORDERS[payload.orderId];
+    if (!ticket || !order) return json({ error: 'Commande introuvable' }, 404);
+    ticket.shopifyOrderId = order.id;
+    ticket.orderName = order.name;
+    logAudit('ticket.order_attached', { orderName: order.name });
+    return json({ ticket, order });
+  }
+
+  const detail = path.match(/^\/api\/tickets\/([^/]+)$/);
+  if (detail && method === 'GET') {
+    const ticket = findTicket(detail[1]);
+    if (!ticket) return json({ error: 'Ticket introuvable' }, 404);
+    return json({ ticket, order: ticket.shopifyOrderId ? ORDERS[ticket.shopifyOrderId] : null,
+      orderError: null });
+  }
+
+  const patch = path.match(/^\/api\/drafts\/([^/]+)$/);
+  if (patch && method === 'PATCH') {
+    const found = findDraft(patch[1]);
+    if (!found) return json({ error: 'Brouillon introuvable' }, 404);
+    if (found.draft.status === 'SENT') return json({ error: 'Brouillon déjà envoyé' }, 409);
+    found.draft.body = payload.body;
+    found.draft.status = 'EDITED';
+    logAudit('draft.edited');
+    return json(found.draft);
+  }
+
+  const send = path.match(/^\/api\/drafts\/([^/]+)\/send$/);
+  if (send && method === 'POST') {
+    const found = findDraft(send[1]);
+    if (!found) return json({ error: 'Brouillon introuvable' }, 404);
+    if (found.draft.status === 'SENT') return json({ error: 'Déjà envoyé' }, 409);
+    found.draft.status = 'SENT';
+    found.ticket.status = 'CLOSED';
+    found.ticket.messages.push({ id: 'out' + Date.now(), direction: 'OUTBOUND',
+      fromEmail: 'sav@atelier-lumen.fr', receivedAt: new Date().toISOString(),
+      bodyText: found.draft.body });
+    logAudit('draft.sent', { ticketId: found.ticket.id });
+    return json({ ok: true });
+  }
+
+  if (path === '/api/refunds/preview') {
+    const order = ORDERS[url.searchParams.get('orderId')];
+    if (!order) return json({ error: 'Commande introuvable' }, 404);
+    refundToken = 'jeton-' + Date.now();
+    return json({ refundableAmount: order.totalPrice, currency: order.currency,
+      transactions: [{ id: 'tx', gateway: 'bogus', maximumRefundableAmount: order.totalPrice,
+        currency: order.currency }], confirmationToken: refundToken });
+  }
+
+  if (path === '/api/refunds' && method === 'POST') {
+    const order = ORDERS[payload.orderId];
+    if (payload.confirmationToken !== refundToken)
+      return json({ error: 'Confirmation manquante ou expirée. Rouvrez la modale de remboursement.' }, 400);
+    const amount = Number(payload.amount);
+    if (!(amount > 0) || amount > Number(order.totalPrice))
+      return json({ error: 'Montant hors limites (max ' + order.totalPrice + ' ' + order.currency + ')' }, 400);
+    refundToken = null;
+    logAudit('refund.requested', { orderName: order.name, amount: payload.amount,
+      currency: order.currency, reason: payload.reason });
+    logAudit('refund.completed', { orderName: order.name, amount: payload.amount,
+      currency: order.currency });
+    return json({ id: 'r1', status: 'COMPLETED' });
+  }
+
+  if (path === '/api/audit') return json({ entries: db.audit.slice(0, 30) });
+
+  if (path.startsWith('/api/')) return json({ error: 'Route inconnue en démonstration' }, 404);
+
+  return realFetch(input, options);
+};
+
+</script>
+
+<script type="module">
+/**
+ * Dashboard cSAV Copilot.
+ *
+ * Page unique servie par l'API : aucune étape de build, aucun second serveur.
+ * Tout l'état vient des endpoints `/api/*` ; rien n'est stocké côté client.
+ */
+
+const $ = (id) => document.getElementById(id);
+
+const state = {
+  me: null,
+  filter: '',
+  tickets: [],
+  currentId: null,
+  detail: null,
+  refund: null,
+};
+
+/* ------------------------------------------------------------------ outils */
+
+const euro = (amount, currency = 'EUR') =>
+  Number(amount).toLocaleString('fr-FR', {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: 2,
+  });
+
+function relativeTime(iso) {
+  const minutes = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (minutes < 1) return "à l'instant";
+  if (minutes < 60) return `il y a ${minutes} min`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `il y a ${hours} h`;
+  const days = Math.round(hours / 24);
+  return days === 1 ? 'hier' : `il y a ${days} j`;
+}
+
+function shortTime(iso) {
+  return new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+}
+
+function fullDate(iso) {
+  return new Date(iso).toLocaleDateString('fr-FR', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
+/** Échappe le texte avant insertion : les mails viennent de l'extérieur. */
+function esc(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function toast(message, isError = false) {
+  const el = $('toast');
+  el.textContent = message;
+  el.classList.toggle('error', isError);
+  el.classList.add('show');
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => el.classList.remove('show'), 4000);
+}
+
+class ApiError extends Error {
+  constructor(message, status) {
+    super(message);
+    this.status = status;
+  }
+}
+
+async function api(path, options = {}) {
+  const response = await fetch(path, {
+    credentials: 'same-origin',
+    headers: options.body ? { 'Content-Type': 'application/json' } : {},
+    ...options,
+  });
+
+  if (response.status === 401) {
+    showGate('Votre session a expiré ou n’a jamais été ouverte.');
+    throw new ApiError('non authentifié', 401);
+  }
+
+  const payload = response.status === 204 ? null : await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new ApiError(payload?.error ?? `Erreur ${response.status}`, response.status);
+  }
+
+  return payload;
+}
+
+async function showGate(message) {
+  $('gate-text').textContent = message;
+  $('gate').hidden = false;
+  $('app').hidden = true;
+
+  // En production, le raccourci de développement n'existe pas : on renvoie
+  // vers l'installation Shopify plutôt que vers un lien mort.
+  try {
+    const config = await fetch('/api/config').then((r) => r.json());
+    $('gate-dev').hidden = !config.devMode;
+    $('gate-prod').hidden = config.devMode;
+  } catch {
+    $('gate-prod').hidden = false;
+  }
+}
+
+/* ------------------------------------------------------------- barre haute */
+
+function renderMe() {
+  const me = state.me;
+  $('merchant-name').textContent = me.merchant.name ?? 'cSAV Copilot';
+  $('merchant-shop').textContent = me.merchant.shopDomain;
+
+  const pills = [];
+
+  pills.push(
+    me.shopify.connected || me.shopify.simulated
+      ? `<span class="conn-pill"><span class="dot${me.shopify.simulated ? ' warn' : ''}"></span> Shopify ${
+          me.shopify.simulated ? 'simulé' : 'connecté'
+        }</span>`
+      : '<span class="conn-pill"><span class="dot off"></span> Shopify non connecté</span>',
+  );
+
+  if (me.gmail.connected) {
+    // Un watch expiré veut dire que plus aucun mail n'entre : c'est l'alerte
+    // la plus importante de l'écran, elle passe avant tout le reste.
+    pills.push(
+      `<span class="conn-pill"><span class="dot${me.gmail.watchActive ? '' : ' warn'}"></span> ${esc(
+        me.gmail.emailAddress,
+      )}${me.gmail.watchActive ? '' : ' — écoute inactive'}</span>`,
+    );
+  } else {
+    pills.push(
+      '<span class="conn-pill"><span class="dot off"></span> Gmail non connecté</span>',
+    );
+  }
+
+  pills.push(
+    `<span class="conn-pill"><span class="dot${
+      me.merchant.autoSendEnabled ? '' : ' warn'
+    }"></span> Envoi auto ${me.merchant.autoSendEnabled ? 'activé' : 'désactivé'}</span>`,
+  );
+
+  if (me.user) {
+    pills.push(`<span class="conn-pill">${esc(me.user.name ?? me.user.email)}</span>`);
+  }
+
+  $('conn').innerHTML = pills.join('');
+  $('mock-notice').hidden = !me.shopify.simulated;
+}
+
+/* ------------------------------------------------------------ indicateurs */
+
+async function loadMetrics() {
+  const metrics = await api('/api/metrics');
+  const counts = metrics.tickets ?? {};
+
+  $('kpi-done').textContent = String((counts.CLOSED ?? 0) + (counts.AUTO_SENT ?? 0));
+  $('kpi-pending').textContent = String(metrics.pending ?? 0);
+  $('kpi-pending-note').textContent = `${counts.NEEDS_REVIEW ?? 0} à valider · ${
+    counts.DRAFT_READY ?? 0
+  } prêts`;
+  $('kpi-rate').textContent = `${Math.round((metrics.automationRate ?? 0) * 100)} %`;
+
+  const auto = state.me.merchant.autoSendEnabled;
+  $('kpi-auto').textContent = auto ? 'Actif' : 'Inactif';
+  $('kpi-auto-note').textContent = auto
+    ? `seuil ${state.me.merchant.autoSendThreshold}`
+    : 'toute réponse passe par vous';
+}
+
+/* -------------------------------------------------------- file de tickets */
+
+async function loadQueue() {
+  const query = state.filter ? `?status=${encodeURIComponent(state.filter)}` : '';
+  const data = await api(`/api/tickets${query}`);
+  state.tickets = data.tickets;
+
+  const list = $('queue');
+
+  if (state.tickets.length === 0) {
+    list.innerHTML = '<li class="empty" style="padding:16px 14px">Aucun ticket ici.</li>';
+    return;
+  }
+
+  list.innerHTML = state.tickets
+    .map((ticket) => {
+      const label = STATUS_LABELS[ticket.status] ?? ticket.status;
+      return `<li>
+        <button class="queue-item" data-id="${ticket.id}" aria-current="${
+          ticket.id === state.currentId
+        }">
+          <span class="queue-top">
+            <span class="queue-who">${esc(ticket.customerName ?? ticket.customerEmail)}</span>
+            <span class="queue-time">${relativeTime(ticket.lastMessageAt)}</span>
+          </span>
+          <div class="queue-subject">${esc(ticket.subject ?? '(sans objet)')}</div>
+          <span class="queue-tags">
+            ${ticket.intent ? `<span class="tag tag-intent">${ticket.intent}</span>` : ''}
+            <span class="tag tag-status st-${ticket.status}">${label}</span>
+            <span class="tag tag-order">${
+              ticket.orderName ? esc(ticket.orderName) : 'commande ?'
+            }</span>
+          </span>
+        </button>
+      </li>`;
+    })
+    .join('');
+
+  list.querySelectorAll('.queue-item').forEach((button) => {
+    button.addEventListener('click', () => selectTicket(button.dataset.id));
+  });
+}
+
+const STATUS_LABELS = {
+  NEW: 'Nouveau',
+  PROCESSING: 'En traitement',
+  DRAFT_READY: 'Brouillon prêt',
+  NEEDS_REVIEW: 'À valider',
+  AUTO_SENT: 'Envoyé auto',
+  CLOSED: 'Clos',
+  FAILED: 'Échec',
+};
+
+/* ------------------------------------------------------- détail du ticket */
+
+async function selectTicket(id) {
+  state.currentId = id;
+  const detail = await api(`/api/tickets/${id}`);
+  state.detail = detail;
+  renderDetail();
+  await loadQueue();
+}
+
+function renderDetail() {
+  const { ticket, order, orderError } = state.detail;
+
+  $('d-subject').textContent = ticket.subject ?? '(sans objet)';
+  $('d-meta').innerHTML =
+    `${esc(ticket.customerName ?? '')} · <code>${esc(ticket.customerEmail)}</code>` +
+    (ticket.intent
+      ? ` · intention <b>${ticket.intent}</b>${
+          ticket.intentConfidence != null
+            ? ` (${ticket.intentConfidence.toFixed(2).replace('.', ',')})`
+            : ''
+        }`
+      : '');
+
+  $('d-messages').innerHTML = ticket.messages
+    .map(
+      (message) => `<div class="msg${message.direction === 'OUTBOUND' ? ' out' : ''}">
+        <div class="msg-head">
+          <b>${esc(message.fromEmail)}</b>
+          <span>${shortTime(message.receivedAt)}</span>
+        </div>
+        <div class="msg-body">${esc(message.bodyText)}</div>
+      </div>`,
+    )
+    .join('');
+
+  const draft = ticket.drafts?.[0] ?? null;
+  renderDraft(draft, ticket);
+  renderCustomer(order);
+  renderOrder(ticket, order, orderError);
+  renderShipping(order);
+}
+
+function renderDraft(draft, ticket) {
+  const zone = $('draft-zone');
+  const none = $('no-draft');
+
+  if (!draft) {
+    zone.hidden = true;
+    none.hidden = false;
+    $('no-draft-text').textContent =
+      ticket.intent === 'POSITIVE' || ticket.intent === 'OTHER'
+        ? "Ce message n'appelle pas de réponse automatique — il a été classé sans action."
+        : 'Aucun brouillon n’a encore été généré pour ce ticket.';
+    return;
+  }
+
+  zone.hidden = false;
+  none.hidden = true;
+
+  $('d-body').value = draft.body;
+  $('d-reason').textContent = draft.reasoning ?? '—';
+
+  const fill = $('d-conf-fill');
+  fill.style.width = `${Math.round(draft.confidence * 100)}%`;
+  fill.className =
+    'conf-fill' + (draft.confidence < 0.5 ? ' bad' : draft.confidence < 0.8 ? ' low' : '');
+  $('d-conf-num').textContent = draft.confidence.toFixed(2).replace('.', ',');
+
+  const sent = draft.status === 'SENT';
+  $('btn-send').disabled = sent;
+  $('btn-send').textContent = sent ? 'Réponse envoyée' : 'Envoyer la réponse';
+  $('btn-save').disabled = sent;
+  $('btn-refund').disabled = !ticket.shopifyOrderId;
+  $('btn-refund').title = ticket.shopifyOrderId
+    ? ''
+    : 'Rattachez d’abord une commande à ce ticket.';
+}
+
+function row(label, value, mono = false) {
+  return `<div class="row"><dt>${label}</dt><dd${
+    mono ? ' class="mono"' : ''
+  }>${esc(value)}</dd></div>`;
+}
+
+function renderCustomer(order) {
+  const customer = order?.customer;
+
+  if (!customer) {
+    $('c-customer').innerHTML =
+      '<p class="empty">Fiche client indisponible sans commande rattachée.</p>';
+    return;
+  }
+
+  $('c-customer').innerHTML =
+    '<dl>' +
+    row('Nom', customer.displayName ?? '—') +
+    (customer.createdAt ? row('Client depuis', fullDate(customer.createdAt)) : '') +
+    row('Commandes', String(customer.numberOfOrders ?? 0), true) +
+    (customer.amountSpent
+      ? row('Total dépensé', euro(customer.amountSpent, order.currency), true)
+      : '') +
+    '</dl>';
+}
+
+function renderOrder(ticket, order, orderError) {
+  const container = $('c-order');
+
+  if (order) {
+    container.innerHTML =
+      '<dl>' +
+      row('Numéro', order.name, true) +
+      row('Passée le', fullDate(order.createdAt)) +
+      row('Montant', euro(order.totalPrice, order.currency), true) +
+      row('Paiement', order.displayFinancialStatus ?? '—') +
+      row('Préparation', order.displayFulfillmentStatus ?? '—') +
+      '</dl>' +
+      '<ul class="items">' +
+      order.lineItems
+        .map(
+          (item) =>
+            `<li><span>${item.quantity} ×</span><span>${esc(item.title)}${
+              item.variantTitle ? ` — ${esc(item.variantTitle)}` : ''
+            }</span></li>`,
+        )
+        .join('') +
+      '</ul>';
+    return;
+  }
+
+  if (orderError) {
+    container.innerHTML = `<p class="empty">${esc(orderError)}</p>`;
+    return;
+  }
+
+  // Cas central du produit : l'association n'a pas été tranchée automatiquement,
+  // on propose à l'agent de le faire lui-même.
+  container.innerHTML = `
+    <p class="empty">Aucune commande rattachée — l'association n'était pas certaine.</p>
+    <div class="attach">
+      <div class="attach-row">
+        <input type="text" id="attach-q" placeholder="N° de commande ou nom" />
+        <button class="btn" id="attach-search">Chercher</button>
+      </div>
+      <ul class="candidates" id="attach-results"></ul>
+    </div>`;
+
+  $('attach-search').addEventListener('click', () => searchCandidates(ticket.id));
+  $('attach-q').addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') searchCandidates(ticket.id);
+  });
+
+  searchCandidates(ticket.id);
+}
+
+async function searchCandidates(ticketId) {
+  const list = $('attach-results');
+  if (!list) return;
+
+  const query = $('attach-q')?.value.trim() ?? '';
+  list.innerHTML = '<li class="empty">Recherche…</li>';
+
+  try {
+    const data = await api(
+      `/api/tickets/${ticketId}/order-candidates${query ? `?q=${encodeURIComponent(query)}` : ''}`,
+    );
+
+    if (data.orders.length === 0) {
+      list.innerHTML = '<li class="empty">Aucune commande trouvée.</li>';
+      return;
+    }
+
+    list.innerHTML = data.orders
+      .map(
+        (order) => `<li>
+          <button class="candidate" data-order="${esc(order.id)}">
+            <b>${esc(order.name)}</b>
+            <span>${fullDate(order.createdAt)} · ${euro(order.totalPrice, order.currency)}</span>
+          </button>
+        </li>`,
+      )
+      .join('');
+
+    list.querySelectorAll('.candidate').forEach((button) => {
+      button.addEventListener('click', () => attachOrder(ticketId, button.dataset.order));
+    });
+  } catch (error) {
+    list.innerHTML = `<li class="empty">${esc(error.message)}</li>`;
+  }
+}
+
+async function attachOrder(ticketId, orderId) {
+  try {
+    await api(`/api/tickets/${ticketId}/order`, {
+      method: 'POST',
+      body: JSON.stringify({ orderId }),
+    });
+    toast('Commande rattachée.');
+    await selectTicket(ticketId);
+    await loadAudit();
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+function renderShipping(order) {
+  const container = $('c-ship');
+  const fulfillment = order?.fulfillments?.[0];
+
+  if (!fulfillment) {
+    container.innerHTML = order
+      ? '<p class="empty">Aucune expédition enregistrée pour cette commande.</p>'
+      : '<p class="empty">—</p>';
+    return;
+  }
+
+  const steps = ['Préparée', 'Expédiée', 'En transit', 'Livrée'];
+  const status = (fulfillment.status ?? '').toUpperCase();
+  const reached = status.includes('DELIVER') ? 3 : status.includes('TRANSIT') ? 2 : 1;
+
+  container.innerHTML =
+    '<dl>' +
+    row('Transporteur', fulfillment.trackingCompany ?? 'non précisé') +
+    row('Suivi', fulfillment.trackingNumber ?? '—', true) +
+    row('Statut', fulfillment.status) +
+    (fulfillment.estimatedDeliveryAt
+      ? row('Estimation', fullDate(fulfillment.estimatedDeliveryAt))
+      : '') +
+    '</dl>' +
+    '<div class="track">' +
+    steps
+      .map(
+        (label, index) =>
+          `<span class="track-step${index <= reached ? ' done' : ''}">
+             <span class="track-bead"></span>${label}
+           </span>`,
+      )
+      .join('') +
+    '</div>';
+}
+
+/* ------------------------------------------------------------------ audit */
+
+const AUDIT_LABELS = {
+  'shopify.connected': 'Boutique Shopify connectée',
+  'shopify.uninstalled': 'Application désinstallée',
+  'gmail.connected': 'Boîte Gmail connectée',
+  'gmail.disconnected': 'Boîte Gmail déconnectée',
+  'draft.created': 'Brouillon généré',
+  'draft.edited': 'Brouillon modifié',
+  'draft.sent': 'Réponse envoyée',
+  'ticket.order_attached': 'Commande rattachée',
+  'refund.requested': 'Remboursement demandé',
+  'refund.completed': 'Remboursement effectué',
+  'refund.failed': 'Remboursement en échec',
+};
+
+async function loadAudit() {
+  const data = await api('/api/audit');
+
+  $('c-audit').innerHTML =
+    data.entries
+      .map((entry) => {
+        const meta = entry.metadata ?? {};
+        const detail = [
+          meta.orderName,
+          meta.amount ? euro(meta.amount, meta.currency ?? 'EUR') : null,
+          meta.reason,
+          meta.intent,
+        ]
+          .filter(Boolean)
+          .join(' · ');
+
+        return `<li>
+          <time>${shortTime(entry.createdAt)}</time>
+          <span><b>${esc(AUDIT_LABELS[entry.action] ?? entry.action)}</b>${
+            detail ? `<br>${esc(detail)}` : ''
+          }</span>
+        </li>`;
+      })
+      .join('') || '<li class="empty" style="padding:12px 14px">Aucune action enregistrée.</li>';
+}
+
+/* ------------------------------------------------------------ actions IHM */
+
+$('filters').addEventListener('click', async (event) => {
+  const chip = event.target.closest('.chip');
+  if (!chip) return;
+
+  state.filter = chip.dataset.filter;
+  $('filters')
+    .querySelectorAll('.chip')
+    .forEach((other) => other.setAttribute('aria-pressed', String(other === chip)));
+
+  await loadQueue();
+});
+
+$('btn-save').addEventListener('click', async () => {
+  const draft = state.detail?.ticket.drafts?.[0];
+  if (!draft) return;
+
+  try {
+    await api(`/api/drafts/${draft.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ body: $('d-body').value }),
+    });
+    toast('Brouillon enregistré.');
+    await Promise.all([selectTicket(state.currentId), loadAudit()]);
+  } catch (error) {
+    toast(error.message, true);
+  }
+});
+
+$('btn-send').addEventListener('click', async () => {
+  const draft = state.detail?.ticket.drafts?.[0];
+  if (!draft) return;
+
+  const edited = $('d-body').value !== draft.body;
+
+  try {
+    // On enregistre avant d'envoyer : sinon les retouches de l'agent seraient
+    // perdues et le mail partirait dans sa version générée.
+    if (edited) {
+      await api(`/api/drafts/${draft.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ body: $('d-body').value }),
+      });
+    }
+
+    await api(`/api/drafts/${draft.id}/send`, { method: 'POST' });
+    toast('Réponse envoyée.');
+    await Promise.all([selectTicket(state.currentId), loadMetrics(), loadAudit()]);
+  } catch (error) {
+    toast(error.message, true);
+  }
+});
+
+/* ---------------------------------------------------------- remboursement */
+
+const modal = $('refund-modal');
+
+function closeModal() {
+  modal.classList.remove('open');
+  state.refund = null;
+}
+
+$('btn-refund').addEventListener('click', async () => {
+  const ticket = state.detail?.ticket;
+  if (!ticket?.shopifyOrderId) return;
+
+  try {
+    // L'aperçu délivre le jeton de confirmation : sans lui, le POST est refusé.
+    // C'est ce qui garantit qu'aucun remboursement ne part en un clic.
+    const preview = await api(
+      `/api/refunds/preview?orderId=${encodeURIComponent(ticket.shopifyOrderId)}`,
+    );
+
+    state.refund = { ticket, preview };
+
+    $('r-order').textContent = ticket.orderName ?? '';
+    $('r-max').textContent = euro(preview.refundableAmount, preview.currency);
+    $('r-amount').value = Number(preview.refundableAmount).toFixed(2);
+    $('r-echo').textContent = euro(preview.refundableAmount, preview.currency);
+    $('r-check').checked = false;
+    $('r-go').disabled = true;
+
+    modal.classList.add('open');
+    $('r-amount').focus();
+  } catch (error) {
+    toast(error.message, true);
+  }
+});
+
+$('r-amount').addEventListener('input', () => {
+  const value = Number($('r-amount').value.replace(',', '.')) || 0;
+  $('r-echo').textContent = euro(value, state.refund?.preview.currency ?? 'EUR');
+});
+
+$('r-check').addEventListener('change', () => {
+  $('r-go').disabled = !$('r-check').checked;
+});
+
+$('r-cancel').addEventListener('click', closeModal);
+
+modal.addEventListener('click', (event) => {
+  if (event.target === modal) closeModal();
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && modal.classList.contains('open')) closeModal();
+});
+
+$('r-go').addEventListener('click', async () => {
+  if (!state.refund) return;
+
+  const { ticket, preview } = state.refund;
+  const amount = $('r-amount').value.replace(',', '.');
+
+  $('r-go').disabled = true;
+
+  try {
+    await api('/api/refunds', {
+      method: 'POST',
+      body: JSON.stringify({
+        ticketId: ticket.id,
+        orderId: ticket.shopifyOrderId,
+        amount,
+        reason: $('r-reason').value,
+        confirmationToken: preview.confirmationToken,
+      }),
+    });
+
+    closeModal();
+    toast(`Remboursement de ${euro(amount, preview.currency)} effectué.`);
+    await loadAudit();
+  } catch (error) {
+    $('r-go').disabled = false;
+    toast(error.message, true);
+  }
+});
+
+/* ------------------------------------------------------------- démarrage */
+
+async function boot() {
+  try {
+    state.me = await api('/api/me');
+  } catch (error) {
+    if (error.status !== 401) {
+      showGate(error.message);
+    }
+    return;
+  }
+
+  $('gate').hidden = true;
+  $('app').hidden = false;
+
+  renderMe();
+  await Promise.all([loadMetrics(), loadQueue(), loadAudit()]);
+
+  if (state.tickets.length > 0) {
+    await selectTicket(state.tickets[0].id);
+  }
+}
+
+boot();
+
+</script>

@@ -9,6 +9,16 @@ brouillons, validés par un humain.
 
 ---
 
+## Voir sans rien installer
+
+`npm run build:demo` produit **`demo/csav-demo.html`** : un fichier unique,
+ouvrable dans n'importe quel navigateur, envoyable par mail. C'est l'interface
+réelle — mêmes fichiers `public/`, même code — avec un faux serveur en mémoire
+à la place de l'API. Aucun mail lu ni envoyé, aucun euro déplacé.
+
+Pratique pour montrer le produit à un marchand pilote avant d'avoir déployé
+quoi que ce soit. À régénérer après toute modification de l'interface.
+
 ## Voir tourner en 3 commandes
 
 Prérequis : **Node.js 22+** et **Docker** (pour la base de données).
