@@ -1,0 +1,1440 @@
+<title>cSAV Copilot — poste de travail</title>
+
+<style>
+  :root {
+    --ground: #f2f5f4;
+    --surface: #ffffff;
+    --surface-sunk: #eaeeec;
+    --ink: #12191b;
+    --ink-soft: #445055;
+    --ink-mute: #6e7c80;
+    --line: #d9e0dd;
+    --line-soft: #e7ecea;
+    --accent: #0b5e6b;
+    --accent-soft: #e0f0f1;
+    --accent-ink: #ffffff;
+    --ok: #2c6e4f;
+    --ok-soft: #e1f0e7;
+    --warn: #92601a;
+    --warn-soft: #f7edd9;
+    --crit: #9e3a32;
+    --crit-soft: #f8e5e2;
+
+    /* Échelle d'ancienneté — le seul signal saturé d'une ligne. */
+    --age-0: #2c6e4f;
+    --age-1: #92601a;
+    --age-2: #b4531f;
+    --age-3: #9e3a32;
+
+    --shadow: 0 1px 2px rgba(18, 25, 27, 0.06), 0 8px 24px -12px rgba(18, 25, 27, 0.18);
+    --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --r: 6px;
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #0e1315;
+      --surface: #161c1f;
+      --surface-sunk: #11171a;
+      --ink: #e6edeb;
+      --ink-soft: #afbdbc;
+      --ink-mute: #7e8d8e;
+      --line: #26302f;
+      --line-soft: #1e2629;
+      --accent: #5bc3d0;
+      --accent-soft: #143036;
+      --accent-ink: #06272c;
+      --ok: #6dc59a;
+      --ok-soft: #142c22;
+      --warn: #d9a648;
+      --warn-soft: #2e2413;
+      --crit: #e58579;
+      --crit-soft: #33201d;
+      --age-0: #6dc59a;
+      --age-1: #d9a648;
+      --age-2: #e08a4d;
+      --age-3: #e58579;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 10px 28px -14px rgba(0, 0, 0, 0.8);
+      color-scheme: dark;
+    }
+  }
+
+  :root[data-theme="light"] {
+    --ground: #f2f5f4;
+    --surface: #ffffff;
+    --surface-sunk: #eaeeec;
+    --ink: #12191b;
+    --ink-soft: #445055;
+    --ink-mute: #6e7c80;
+    --line: #d9e0dd;
+    --line-soft: #e7ecea;
+    --accent: #0b5e6b;
+    --accent-soft: #e0f0f1;
+    --accent-ink: #ffffff;
+    --ok: #2c6e4f;
+    --ok-soft: #e1f0e7;
+    --warn: #92601a;
+    --warn-soft: #f7edd9;
+    --crit: #9e3a32;
+    --crit-soft: #f8e5e2;
+    --age-0: #2c6e4f;
+    --age-1: #92601a;
+    --age-2: #b4531f;
+    --age-3: #9e3a32;
+    --shadow: 0 1px 2px rgba(18, 25, 27, 0.06), 0 8px 24px -12px rgba(18, 25, 27, 0.18);
+    color-scheme: light;
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #0e1315;
+    --surface: #161c1f;
+    --surface-sunk: #11171a;
+    --ink: #e6edeb;
+    --ink-soft: #afbdbc;
+    --ink-mute: #7e8d8e;
+    --line: #26302f;
+    --line-soft: #1e2629;
+    --accent: #5bc3d0;
+    --accent-soft: #143036;
+    --accent-ink: #06272c;
+    --ok: #6dc59a;
+    --ok-soft: #142c22;
+    --warn: #d9a648;
+    --warn-soft: #2e2413;
+    --crit: #e58579;
+    --crit-soft: #33201d;
+    --age-0: #6dc59a;
+    --age-1: #d9a648;
+    --age-2: #e08a4d;
+    --age-3: #e58579;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 10px 28px -14px rgba(0, 0, 0, 0.8);
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--font-ui);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+
+  .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+  /* ---------------- ossature ---------------- */
+
+  .wrap {
+    max-width: 1560px;
+    margin: 0 auto;
+    padding: 0 20px 48px;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding: 14px 0 12px;
+  }
+
+  .brand {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-right: auto;
+  }
+
+  .brand strong { font-size: 15px; letter-spacing: -0.01em; }
+
+  .brand span {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--ink-mute);
+    letter-spacing: 0.02em;
+  }
+
+  .conn-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
+  .dot.warn { background: var(--warn); }
+
+  /* ---------------- onglets de source ---------------- */
+
+  .sections {
+    display: flex;
+    gap: 2px;
+    border-bottom: 1px solid var(--line);
+    overflow-x: auto;
+  }
+
+  .section-tab {
+    appearance: none;
+    border: 0;
+    background: none;
+    font: inherit;
+    color: var(--ink-mute);
+    padding: 10px 16px 12px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+    transition: color 0.12s ease;
+  }
+
+  .section-tab:hover { color: var(--ink); }
+
+  .section-tab[aria-selected="true"] {
+    color: var(--ink);
+    font-weight: 600;
+    border-bottom-color: var(--accent);
+  }
+
+  .section-tab .count {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: var(--surface-sunk);
+    color: var(--ink-mute);
+  }
+
+  .section-tab[aria-selected="true"] .count {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+
+  /* ---------------- barre de tri ---------------- */
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 12px 0;
+  }
+
+  .chip {
+    appearance: none;
+    font: inherit;
+    font-size: 12.5px;
+    padding: 5px 11px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--ink-soft);
+    cursor: pointer;
+    transition: border-color 0.12s ease, color 0.12s ease;
+  }
+
+  .chip:hover { border-color: var(--ink-mute); color: var(--ink); }
+
+  .chip[aria-pressed="true"] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 600;
+  }
+
+  .toolbar .spacer { margin-left: auto; }
+
+  .toolbar label {
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+  }
+
+  .toolbar select,
+  .toolbar input[type="search"] {
+    font: inherit;
+    font-size: 13px;
+    padding: 6px 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    background: var(--surface);
+    color: var(--ink);
+  }
+
+  /* ---------------- disposition liste / fiche ---------------- */
+
+  .work {
+    display: grid;
+    grid-template-columns: minmax(360px, 460px) 1fr;
+    gap: 16px;
+    align-items: start;
+  }
+
+  @media (max-width: 1100px) {
+    .work { grid-template-columns: 1fr; }
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+
+  .panel-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+
+  .panel-title {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    margin-right: auto;
+  }
+
+  /* ---------------- lignes de la file ---------------- */
+
+  .rows { list-style: none; margin: 0; padding: 0; max-height: 74vh; overflow-y: auto; }
+
+  .row {
+    display: grid;
+    grid-template-columns: 4px 1fr;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: 0;
+    border-bottom: 1px solid var(--line-soft);
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    padding: 0;
+  }
+
+  .row:hover .row-body { background: var(--surface-sunk); }
+
+  .row[aria-current="true"] .row-body {
+    background: var(--accent-soft);
+    box-shadow: inset 0 0 0 1px var(--accent);
+  }
+
+  .row-stripe { background: var(--age); }
+
+  .row-body {
+    padding: 11px 13px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    transition: background 0.12s ease;
+  }
+
+  .row-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .row-order {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    font-size: 13.5px;
+    letter-spacing: -0.01em;
+  }
+
+  .age {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--age) 14%, transparent);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--age);
+  }
+
+  .age::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--age);
+  }
+
+  .row-problem { font-size: 13.5px; font-weight: 600; line-height: 1.35; }
+
+  .row-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-size: 12px;
+    color: var(--ink-mute);
+  }
+
+  .src {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    font-size: 11px;
+    letter-spacing: 0.03em;
+    color: var(--ink-soft);
+    background: var(--surface);
+    white-space: nowrap;
+  }
+
+  .src svg { width: 11px; height: 11px; flex: none; }
+
+  .state {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    padding: 2px 8px;
+    border-radius: 999px;
+  }
+
+  .state-todo { background: var(--crit-soft); color: var(--crit); }
+  .state-wait { background: var(--warn-soft); color: var(--warn); }
+  .state-done { background: var(--ok-soft); color: var(--ok); }
+
+  .thumbs { display: flex; gap: 4px; }
+
+  .thumb {
+    width: 30px;
+    height: 30px;
+    border-radius: 4px;
+    border: 1px solid var(--line);
+    background: var(--surface-sunk);
+    display: grid;
+    place-items: center;
+    flex: none;
+  }
+
+  .thumb svg { width: 20px; height: 20px; }
+
+  /* ---------------- fiche commande ---------------- */
+
+  .sheet { display: flex; flex-direction: column; }
+
+  .sheet-head {
+    padding: 15px 18px;
+    border-bottom: 1px solid var(--line-soft);
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+
+  .sheet-order {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+  }
+
+  .sheet-sub { font-size: 12.5px; color: var(--ink-mute); margin-top: 3px; }
+
+  .sheet-head .right { margin-left: auto; text-align: right; }
+
+  .sheet-body {
+    padding: 16px 18px 20px;
+    display: grid;
+    grid-template-columns: 1fr 268px;
+    gap: 20px;
+    align-items: start;
+  }
+
+  @media (max-width: 900px) {
+    .sheet-body { grid-template-columns: 1fr; }
+  }
+
+  .block + .block { margin-top: 20px; }
+
+  .block-title {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    margin: 0 0 9px;
+  }
+
+  /* produits */
+
+  .items { display: flex; flex-direction: column; gap: 8px; }
+
+  .item {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 8px 10px;
+    border: 1px solid var(--line-soft);
+    border-radius: var(--r);
+    background: var(--surface-sunk);
+  }
+
+  .item-photo {
+    width: 46px;
+    height: 46px;
+    border-radius: 4px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    display: grid;
+    place-items: center;
+    flex: none;
+  }
+
+  .item-photo svg { width: 32px; height: 32px; }
+
+  .item-name { font-weight: 600; font-size: 13.5px; }
+
+  .item-variant { font-size: 12px; color: var(--ink-mute); display: flex; align-items: center; gap: 6px; }
+
+  .swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 1px solid rgba(0, 0, 0, 0.18);
+    flex: none;
+  }
+
+  .item-qty {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+
+  .item.flagged {
+    border-color: var(--crit);
+    background: var(--crit-soft);
+  }
+
+  .item-flag {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--crit);
+    letter-spacing: 0.03em;
+  }
+
+  /* suivi international */
+
+  .track { display: flex; flex-direction: column; gap: 0; }
+
+  .leg {
+    display: grid;
+    grid-template-columns: 18px 1fr auto;
+    gap: 10px;
+    align-items: start;
+    padding: 0 0 14px;
+    position: relative;
+  }
+
+  .leg:last-child { padding-bottom: 0; }
+
+  .leg::before {
+    content: "";
+    position: absolute;
+    left: 8px;
+    top: 15px;
+    bottom: -1px;
+    width: 2px;
+    background: var(--line);
+  }
+
+  .leg:last-child::before { display: none; }
+
+  .leg-bead {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid var(--line);
+    background: var(--surface);
+    margin: 3px 0 0 3px;
+    z-index: 1;
+  }
+
+  .leg.done .leg-bead { background: var(--ink-mute); border-color: var(--ink-mute); }
+  .leg.done::before { background: var(--ink-mute); }
+
+  .leg.current .leg-bead {
+    background: var(--accent);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+
+  .leg-label { font-size: 13px; }
+  .leg.current .leg-label { font-weight: 600; }
+  .leg.todo .leg-label { color: var(--ink-mute); }
+
+  .leg-place { font-size: 11.5px; color: var(--ink-mute); }
+
+  .leg-date {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 11.5px;
+    color: var(--ink-mute);
+    white-space: nowrap;
+  }
+
+  /* fil de messages */
+
+  .msgs { display: flex; flex-direction: column; gap: 12px; }
+
+  .msg { display: flex; flex-direction: column; gap: 5px; }
+
+  .msg-head {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 11.5px;
+    color: var(--ink-mute);
+  }
+
+  .msg-head b { color: var(--ink); font-weight: 600; font-size: 12.5px; }
+
+  .msg-head .who {
+    font-size: 10.5px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 1px 6px;
+    border-radius: 3px;
+    background: var(--surface-sunk);
+    color: var(--ink-mute);
+  }
+
+  .msg-body {
+    background: var(--surface-sunk);
+    border-left: 2px solid var(--line);
+    border-radius: var(--r);
+    padding: 9px 12px;
+    font-size: 13.5px;
+    color: var(--ink-soft);
+    white-space: pre-wrap;
+  }
+
+  .msg.out .msg-body { background: var(--accent-soft); border-left-color: var(--accent); }
+
+  /* zone d'action */
+
+  .actions-zone {
+    margin-top: 16px;
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    overflow: hidden;
+  }
+
+  .actions-head {
+    display: flex;
+    gap: 2px;
+    background: var(--surface-sunk);
+    border-bottom: 1px solid var(--line);
+    padding: 0 4px;
+    overflow-x: auto;
+  }
+
+  .act-tab {
+    appearance: none;
+    border: 0;
+    background: none;
+    font: inherit;
+    font-size: 12.5px;
+    color: var(--ink-mute);
+    padding: 9px 12px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    white-space: nowrap;
+  }
+
+  .act-tab[aria-selected="true"] {
+    color: var(--ink);
+    font-weight: 600;
+    border-bottom-color: var(--accent);
+  }
+
+  .act-pane { padding: 13px 14px; }
+
+  .act-pane textarea {
+    width: 100%;
+    min-height: 92px;
+    font: inherit;
+    font-size: 13.5px;
+    padding: 10px 11px;
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    background: var(--surface);
+    color: var(--ink);
+    resize: vertical;
+  }
+
+  .act-row { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-top: 10px; }
+
+  .btn {
+    appearance: none;
+    font: inherit;
+    font-size: 13px;
+    padding: 7px 13px;
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    background: var(--surface);
+    color: var(--ink);
+    cursor: pointer;
+    transition: border-color 0.12s ease;
+  }
+
+  .btn:hover { border-color: var(--ink-mute); }
+
+  .btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 600;
+  }
+
+  .btn-danger { color: var(--crit); border-color: var(--crit); }
+
+  .hint { font-size: 12px; color: var(--ink-mute); }
+
+  /* substitution */
+
+  .subs { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 9px; }
+
+  .sub {
+    appearance: none;
+    font: inherit;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 8px 9px;
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    background: var(--surface);
+    color: var(--ink);
+    cursor: pointer;
+  }
+
+  .sub:hover { border-color: var(--accent); }
+
+  .sub[aria-pressed="true"] {
+    border-color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent);
+    background: var(--accent-soft);
+  }
+
+  .sub-photo {
+    width: 34px;
+    height: 34px;
+    border-radius: 4px;
+    border: 1px solid var(--line);
+    display: grid;
+    place-items: center;
+    flex: none;
+    background: var(--surface-sunk);
+  }
+
+  .sub-photo svg { width: 24px; height: 24px; }
+
+  .sub-name { font-size: 12.5px; font-weight: 600; line-height: 1.25; }
+  .sub-stock { font-size: 11px; color: var(--ok); }
+
+  /* colonne contexte */
+
+  .aside { display: flex; flex-direction: column; gap: 16px; }
+
+  .card {
+    border: 1px solid var(--line-soft);
+    border-radius: var(--r);
+    background: var(--surface-sunk);
+    padding: 12px 13px;
+  }
+
+  dl { margin: 0; display: flex; flex-direction: column; gap: 7px; }
+
+  .kv { display: flex; align-items: baseline; gap: 10px; font-size: 12.5px; }
+  .kv dt { color: var(--ink-mute); flex: none; min-width: 92px; }
+  .kv dd { margin: 0; text-align: right; margin-left: auto; }
+
+  .deadline {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 10px 12px;
+    margin-bottom: 16px;
+    border-radius: var(--r);
+    background: var(--crit-soft);
+    color: var(--crit);
+    font-size: 12.5px;
+    font-weight: 600;
+  }
+
+  /* Sans cette contrainte l'icône hérite de la taille du bloc et remplit la
+     colonne — les SVG en ligne n'ont pas de dimension intrinsèque ici. */
+  .deadline svg {
+    width: 15px;
+    height: 15px;
+    flex: none;
+  }
+
+  .empty { color: var(--ink-mute); font-size: 13px; padding: 40px 18px; text-align: center; }
+
+  .legend {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    font-size: 11.5px;
+    color: var(--ink-mute);
+    padding: 10px 2px 0;
+  }
+
+  .legend i { display: inline-flex; align-items: center; gap: 5px; font-style: normal; }
+  .legend i::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--c); }
+</style>
+
+<div class="wrap">
+  <header class="topbar">
+    <div class="brand">
+      <strong>cSAV Copilot</strong>
+      <span>atelier-lumen.myshopify.com</span>
+    </div>
+    <span class="conn-pill"><span class="dot"></span> Shopify</span>
+    <span class="conn-pill"><span class="dot"></span> sav@atelier-lumen.fr</span>
+    <span class="conn-pill"><span class="dot"></span> 17TRACK</span>
+    <span class="conn-pill"><span class="dot warn"></span> Fournisseur — Shenzhen Lumi</span>
+  </header>
+
+  <nav class="sections" id="sections" aria-label="Source du problème"></nav>
+
+  <div class="toolbar">
+    <div id="states" role="group" aria-label="Statut de traitement"></div>
+    <div class="spacer"></div>
+    <label for="sort">Trier</label>
+    <select id="sort">
+      <option value="age-desc">Le plus ancien d'abord</option>
+      <option value="age-asc">Le plus récent d'abord</option>
+      <option value="order">N° de commande</option>
+    </select>
+    <input type="search" id="search" placeholder="N° de commande, client…" aria-label="Rechercher" />
+  </div>
+
+  <div class="work">
+    <section class="panel" aria-label="File de traitement">
+      <div class="panel-head">
+        <span class="panel-title">À traiter</span>
+        <span class="hint mono" id="row-count"></span>
+      </div>
+      <ul class="rows" id="rows"></ul>
+    </section>
+
+    <section class="panel sheet" id="sheet" aria-label="Fiche commande"></section>
+  </div>
+
+  <div class="legend">
+    <span>Ancienneté du ticket :</span>
+    <i style="--c: var(--age-0)">moins de 24 h</i>
+    <i style="--c: var(--age-1)">1 à 2 jours</i>
+    <i style="--c: var(--age-2)">3 à 4 jours</i>
+    <i style="--c: var(--age-3)">5 jours et plus</i>
+  </div>
+</div>
+
+<script>
+  /* ------------------------------------------------------------------ data */
+
+  /* Suspension : l'abat-jour porte la couleur de la variante, c'est elle
+     qu'on doit reconnaître d'un coup d'œil (rupture de couleur = cas courant). */
+  const LAMP = (body, shade) => `<svg viewBox="0 0 32 32" aria-hidden="true">
+    <path d="M16 2.5 V7" stroke="${body}" stroke-width="1.6" stroke-linecap="round"/>
+    <path d="M6 18 L11.5 7 H20.5 L26 18 Z" fill="${shade}" stroke="rgba(0,0,0,.28)"
+      stroke-width="1" stroke-linejoin="round"/>
+    <ellipse cx="16" cy="18" rx="10" ry="1.7" fill="rgba(0,0,0,.13)"/>
+    <path d="M11 22.5 Q16 27.5 21 22.5" fill="none" stroke="${shade}" stroke-width="1.5"
+      opacity=".5" stroke-linecap="round"/>
+  </svg>`;
+
+  const BULB = (c) => `<svg viewBox="0 0 32 32" aria-hidden="true">
+    <circle cx="16" cy="13" r="8" fill="${c}" stroke="rgba(0,0,0,.25)" stroke-width="1"/>
+    <rect x="12" y="21" width="8" height="6" rx="1.5" fill="#9aa3a5"/>
+  </svg>`;
+
+  const ICON = {
+    client: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.5" y="3.5" width="13" height="9" rx="1.5"/><path d="M2 4.5 8 9l6-4.5"/></svg>',
+    fournisseur: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1.5 6.5h13v6.5h-13z"/><path d="M1.5 6.5 3 3h10l1.5 3.5"/><path d="M8 3v3.5"/></svg>',
+    litige: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 2.2 14.5 13.5h-13z"/><path d="M8 6.6v3.1"/><circle cx="8" cy="11.5" r=".6" fill="currentColor" stroke="none"/></svg>',
+  };
+
+  const SOURCES = {
+    client: 'Client',
+    fournisseur: 'Fournisseur',
+    litige: 'Litige Shopify',
+  };
+
+  const STATES = {
+    todo: 'À traiter',
+    wait: 'En attente',
+    done: 'Traité',
+  };
+
+  const day = 86400000;
+  const ago = (d) => new Date(Date.now() - d * day).toISOString();
+
+  const ORDERS = [
+    {
+      id: '10428', source: 'fournisseur', state: 'todo', days: 6,
+      problem: 'Couleur Laiton en rupture définitive',
+      reason: 'color', customer: 'Léa Fontaine', email: 'lea.fontaine@gmail.com',
+      placed: ago(21), total: '128,40 €',
+      address: '14 rue des Cordeliers, 69002 Lyon, France',
+      items: [
+        { name: 'Lampe Perce-neige', variant: 'Laiton', hex: '#b08d3f', qty: 1, flagged: true },
+        { name: 'Ampoule E27 ambrée 4 W', variant: null, hex: '#e8c88a', qty: 2, bulb: true },
+      ],
+      tracking: { number: 'LP00427819923CN', carrier: 'Cainiao · Colissimo', leg: 1 },
+      messages: [
+        { who: 'fournisseur', from: 'Shenzhen Lumi', at: ago(6),
+          text: "Hello, order #10428 — the Brass finish is discontinued by our factory, no restock planned. We can ship Black Matte or Brushed Copper instead. Please confirm within 48h or we hold the parcel." },
+      ],
+    },
+    {
+      id: '10344', source: 'fournisseur', state: 'todo', days: 8,
+      problem: 'Produit indisponible — Lampadaire Sillage',
+      reason: 'stock', customer: 'Julien Meyer', email: 'julien.meyer91@gmail.com',
+      placed: ago(24), total: '156,00 €',
+      address: '8 impasse Victor Hugo, 33000 Bordeaux, France',
+      items: [{ name: 'Lampadaire Sillage', variant: 'Chêne', hex: '#c19a6b', qty: 1, flagged: true }],
+      tracking: null,
+      messages: [
+        { who: 'fournisseur', from: 'Shenzhen Lumi', at: ago(8),
+          text: "Order #10344 cannot ship. Oak version out of stock since 3 weeks, supplier factory closed this line. Refund or replace?" },
+      ],
+    },
+    {
+      id: '10391', source: 'fournisseur', state: 'todo', days: 4,
+      problem: 'Adresse incomplète — numéro de rue manquant',
+      reason: 'address', customer: 'Marc Delaunay', email: 'm.delaunay@orange.fr',
+      placed: ago(12), total: '74,00 €',
+      address: 'Résidence Les Tilleuls, 69003 Lyon, France',
+      items: [{ name: 'Applique Halo', variant: 'Noir mat', hex: '#2b2b2b', qty: 1 }],
+      tracking: { number: 'LP00391220041CN', carrier: 'Cainiao · Mondial Relay', leg: 0 },
+      messages: [
+        { who: 'fournisseur', from: 'Shenzhen Lumi', at: ago(4),
+          text: "Order #10391 — address has no street number, courier refused pickup. Please send full address." },
+      ],
+    },
+    {
+      id: '10410', source: 'fournisseur', state: 'wait', days: 3,
+      problem: 'Email client invalide — rebond à la livraison',
+      reason: 'email', customer: 'Sophie Nguyen', email: 'sophie.nguyen@laposte.ne',
+      placed: ago(9), total: '89,90 €',
+      address: '27 avenue Jean Jaurès, 44000 Nantes, France',
+      items: [{ name: 'Suspension Brume', variant: 'Opaline', hex: '#e9e4dc', qty: 1 }],
+      tracking: { number: 'LP00410771120CN', carrier: 'Cainiao · Colissimo', leg: 2 },
+      messages: [
+        { who: 'fournisseur', from: 'Shenzhen Lumi', at: ago(3),
+          text: "Order #10410 — customer email bounced, cannot send tracking. Typo in domain?" },
+        { who: 'agent', from: 'Claire Mercier', at: ago(2),
+          text: "Bonjour, l'adresse correcte est sophie.nguyen@laposte.net (il manquait le t). Merci de renvoyer le suivi." },
+      ],
+    },
+    {
+      id: '10412', source: 'litige', state: 'todo', days: 2,
+      problem: 'Réclamation — produit non reçu',
+      reason: 'dispute', customer: 'Karim Benali', email: 'k.benali@gmail.com',
+      placed: ago(38), total: '212,00 €',
+      address: '3 place du Marché, 59000 Lille, France',
+      deadline: 'Réponse à Shopify avant le 9 août',
+      items: [{ name: 'Suspension Brume', variant: 'Laiton', hex: '#b08d3f', qty: 2 }],
+      tracking: { number: 'LP00412009984CN', carrier: 'Cainiao · Colissimo', leg: 5 },
+      messages: [
+        { who: 'shopify', from: 'Shopify Payments', at: ago(2),
+          text: "A chargeback was opened on order #10412 for 212,00 EUR. Reason: product not received. Submit your evidence before August 9 or the amount will be debited automatically." },
+      ],
+    },
+    {
+      id: '10375', source: 'client', state: 'todo', days: 1,
+      problem: 'Abat-jour fêlé — demande de remboursement',
+      reason: 'refund', customer: 'Amélie Rousseau', email: 'a.rousseau@free.fr',
+      placed: ago(14), total: '96,00 €',
+      address: '61 rue Sainte-Catherine, 33000 Bordeaux, France',
+      items: [{ name: 'Lampe Rosée', variant: 'Verre soufflé', hex: '#dcc9c2', qty: 1 }],
+      tracking: { number: 'LP00375441203CN', carrier: 'Cainiao · Colissimo', leg: 5 },
+      messages: [
+        { who: 'client', from: 'Amélie Rousseau', at: ago(1),
+          text: "Bonjour,\n\nJ'ai reçu ma lampe hier, l'abat-jour en verre est fêlé sur tout un côté. Le carton était intact. Je ne souhaite pas d'échange, je préfère être remboursée.\n\nPhotos en pièce jointe." },
+      ],
+    },
+    {
+      id: '10402', source: 'client', state: 'todo', days: 0,
+      problem: 'Où en est ma commande ?',
+      reason: 'wismo', customer: 'Thomas Girard', email: 'thomas.girard@gmail.com',
+      placed: ago(11), total: '62,00 €',
+      address: '9 rue du Bac, 75007 Paris, France',
+      items: [{ name: 'Applique Halo', variant: 'Laiton', hex: '#b08d3f', qty: 1 }],
+      tracking: { number: 'LP00402118876CN', carrier: 'Cainiao · Colissimo', leg: 3 },
+      messages: [
+        { who: 'client', from: 'Thomas Girard', at: ago(0.2),
+          text: "Bonjour, ma commande est partie il y a 11 jours et le suivi ne bouge plus depuis une semaine. C'est normal ?" },
+      ],
+    },
+    {
+      id: '10298', source: 'client', state: 'done', days: 2,
+      problem: 'Retour — mauvaise finition commandée',
+      reason: 'return', customer: 'Inès Lambert', email: 'ines.lambert@free.fr',
+      placed: ago(30), total: '42,50 €',
+      address: '12 boulevard Gambetta, 06000 Nice, France',
+      items: [{ name: 'Ampoule E27 ambrée 4 W', variant: null, hex: '#e8c88a', qty: 3, bulb: true }],
+      tracking: { number: 'LP00298330445CN', carrier: 'Cainiao · Colissimo', leg: 5 },
+      messages: [
+        { who: 'client', from: 'Inès Lambert', at: ago(4),
+          text: "Je me suis trompée de finition, comment faire pour l'échanger ?" },
+        { who: 'agent', from: 'Claire Mercier', at: ago(2),
+          text: "Bonjour Inès, aucun problème — un bon de retour prépayé vient de vous être envoyé." },
+      ],
+    },
+  ];
+
+  /* Étapes réelles d'un colis expédié depuis la Chine. */
+  const LEGS = [
+    { label: 'Pris en charge par le fournisseur', place: 'Shenzhen, CN' },
+    { label: 'Transit à l’export', place: 'Aéroport de Shenzhen (SZX)' },
+    { label: 'Transit à l’import', place: 'Aéroport de Paris-CDG' },
+    { label: 'Dédouanement', place: 'Douane française' },
+    { label: 'En cours de livraison', place: 'Transporteur local' },
+    { label: 'Livré', place: 'Remis au client' },
+  ];
+
+  const SUBSTITUTES = [
+    { name: 'Lampe Perce-neige', variant: 'Noir mat', hex: '#2b2b2b', stock: '42 en stock' },
+    { name: 'Lampe Perce-neige', variant: 'Cuivre brossé', hex: '#a5673f', stock: '18 en stock' },
+    { name: 'Lampe Congère', variant: 'Laiton', hex: '#b08d3f', stock: '7 en stock' },
+  ];
+
+  /* ----------------------------------------------------------------- state */
+
+  const view = { source: 'all', state: 'all', sort: 'age-desc', q: '', selected: '10428' };
+
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  const ageVar = (d) => (d < 1 ? 'var(--age-0)' : d <= 2 ? 'var(--age-1)' : d <= 4 ? 'var(--age-2)' : 'var(--age-3)');
+  const ageText = (d) => (d < 1 ? "aujourd'hui" : d === 1 ? '1 jour' : `${d} jours`);
+
+  const photo = (item) => (item.bulb ? BULB(item.hex) : LAMP('#7d8a8c', item.hex));
+
+  const fmtDate = (iso) =>
+    new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+
+  const fmtDateTime = (iso) =>
+    new Date(iso).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+
+  function filtered() {
+    let list = ORDERS.filter((o) => {
+      if (view.source !== 'all' && o.source !== view.source) return false;
+      if (view.state !== 'all' && o.state !== view.state) return false;
+      if (view.q) {
+        const hay = `${o.id} ${o.customer} ${o.problem} ${o.email}`.toLowerCase();
+        if (!hay.includes(view.q.toLowerCase())) return false;
+      }
+      return true;
+    });
+
+    if (view.sort === 'age-desc') list.sort((a, b) => b.days - a.days);
+    if (view.sort === 'age-asc') list.sort((a, b) => a.days - b.days);
+    if (view.sort === 'order') list.sort((a, b) => a.id.localeCompare(b.id));
+    return list;
+  }
+
+  /* ---------------------------------------------------------------- render */
+
+  function renderSections() {
+    const counts = { all: ORDERS.length };
+    for (const key of Object.keys(SOURCES)) counts[key] = ORDERS.filter((o) => o.source === key).length;
+
+    const tabs = [['all', 'Tout'], ...Object.entries(SOURCES)];
+    $('sections').innerHTML = tabs
+      .map(([key, label]) => {
+        const todo = key === 'all'
+          ? ORDERS.filter((o) => o.state === 'todo').length
+          : ORDERS.filter((o) => o.source === key && o.state === 'todo').length;
+        return `<button class="section-tab" role="tab" data-source="${key}"
+          aria-selected="${view.source === key}">
+          ${key === 'all' ? '' : ICON[key]}${esc(label)}
+          <span class="count">${todo}</span>
+        </button>`;
+      })
+      .join('');
+
+    $('sections').querySelectorAll('.section-tab').forEach((b) =>
+      b.addEventListener('click', () => {
+        view.source = b.dataset.source;
+        renderAll();
+      }),
+    );
+  }
+
+  function renderStates() {
+    const tabs = [['all', 'Tout'], ...Object.entries(STATES)];
+    $('states').innerHTML = tabs
+      .map(
+        ([key, label]) =>
+          `<button class="chip" data-state="${key}" aria-pressed="${view.state === key}">${esc(label)}</button>`,
+      )
+      .join(' ');
+
+    $('states').querySelectorAll('.chip').forEach((b) =>
+      b.addEventListener('click', () => {
+        view.state = b.dataset.state;
+        renderAll();
+      }),
+    );
+  }
+
+  function renderRows() {
+    const list = filtered();
+    $('row-count').textContent = `${list.length} commande${list.length > 1 ? 's' : ''}`;
+
+    if (list.length === 0) {
+      $('rows').innerHTML = '<li class="empty">Rien à traiter avec ces filtres.</li>';
+      return;
+    }
+
+    $('rows').innerHTML = list
+      .map(
+        (o) => `<li><button class="row" data-id="${o.id}" aria-current="${o.id === view.selected}"
+          style="--age: ${ageVar(o.days)}">
+        <span class="row-stripe"></span>
+        <span class="row-body">
+          <span class="row-top">
+            <span class="row-order">#${o.id}</span>
+            <span class="state state-${o.state}">${STATES[o.state]}</span>
+            <span class="age">${ageText(o.days)}</span>
+          </span>
+          <span class="row-problem">${esc(o.problem)}</span>
+          <span class="row-meta">
+            <span class="src">${ICON[o.source]}${SOURCES[o.source]}</span>
+            <span>${esc(o.customer)}</span>
+          </span>
+          <span class="thumbs">
+            ${o.items.map((i) => `<span class="thumb">${photo(i)}</span>`).join('')}
+          </span>
+        </span>
+      </button></li>`,
+      )
+      .join('');
+
+    $('rows').querySelectorAll('.row').forEach((b) =>
+      b.addEventListener('click', () => {
+        view.selected = b.dataset.id;
+        renderRows();
+        renderSheet();
+      }),
+    );
+  }
+
+  function trackingBlock(o) {
+    if (!o.tracking) {
+      return `<div class="block">
+        <h3 class="block-title">Suivi</h3>
+        <p class="hint">Aucun numéro de suivi — le colis n'a jamais été expédié.</p>
+      </div>`;
+    }
+
+    return `<div class="block">
+      <h3 class="block-title">Suivi · 17TRACK</h3>
+      <div class="card" style="margin-bottom:11px">
+        <dl>
+          <div class="kv"><dt>Transporteur</dt><dd>${esc(o.tracking.carrier)}</dd></div>
+          <div class="kv"><dt>N° de suivi</dt><dd class="mono">${esc(o.tracking.number)}</dd></div>
+        </dl>
+      </div>
+      <div class="track">
+        ${LEGS.map((leg, i) => {
+          const cls = i < o.tracking.leg ? 'done' : i === o.tracking.leg ? 'current' : 'todo';
+          return `<div class="leg ${cls}">
+            <span class="leg-bead"></span>
+            <span>
+              <span class="leg-label">${leg.label}</span><br />
+              <span class="leg-place">${leg.place}</span>
+            </span>
+            <span class="leg-date">${i <= o.tracking.leg ? fmtDate(ago(o.days + (o.tracking.leg - i) * 2)) : '—'}</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }
+
+  /** Les actions proposées dépendent du problème : on ne rembourse pas une
+   *  adresse incomplète, on ne corrige pas l'adresse d'une rupture de stock. */
+  function tabsFor(o) {
+    const tabs = [];
+
+    if (o.reason === 'stock' || o.reason === 'color') {
+      tabs.push(['sub', 'Produit de substitution']);
+      tabs.push(['refund', 'Rembourser']);
+    }
+    if (o.reason === 'address') tabs.push(['address', "Corriger l'adresse"]);
+    if (o.reason === 'email') tabs.push(['email', "Corriger l'email"]);
+    if (o.reason === 'refund') tabs.push(['refund', 'Rembourser']);
+    if (o.reason === 'dispute') tabs.push(['evidence', 'Répondre à Shopify']);
+
+    tabs.push(['client', 'Écrire au client']);
+    tabs.push(['supplier', 'Écrire au fournisseur']);
+
+    return tabs;
+  }
+
+  function actionsFor(o) {
+    const tabs = tabsFor(o);
+
+    return `<div class="actions-zone">
+      <div class="actions-head" role="tablist">
+        ${tabs
+          .map(
+            ([key, label], i) =>
+              `<button class="act-tab" role="tab" data-pane="${key}" aria-selected="${i === 0}">${esc(label)}</button>`,
+          )
+          .join('')}
+      </div>
+      <div class="act-pane" id="act-pane">${PANES(o)[tabs[0][0]]}</div>
+    </div>`;
+  }
+
+  function renderSheet() {
+    const o = ORDERS.find((x) => x.id === view.selected);
+    const sheet = $('sheet');
+
+    if (!o) {
+      sheet.innerHTML = '<p class="empty">Sélectionnez une commande.</p>';
+      return;
+    }
+
+    sheet.innerHTML = `
+      <div class="sheet-head">
+        <div>
+          <div class="sheet-order">#${o.id}</div>
+          <div class="sheet-sub">${esc(o.customer)} · ${esc(o.email)}</div>
+        </div>
+        <div class="right">
+          <span class="state state-${o.state}">${STATES[o.state]}</span>
+          <div class="sheet-sub" style="margin-top:6px">
+            Ouvert depuis <b style="color:${ageVar(o.days)}">${ageText(o.days)}</b>
+          </div>
+        </div>
+      </div>
+
+      <div class="sheet-body">
+        <div>
+          ${o.deadline ? `<div class="deadline">${ICON.litige}${esc(o.deadline)}</div>` : ''}
+
+          <div class="block">
+            <h3 class="block-title">Problème signalé</h3>
+            <div class="msgs">
+              ${o.messages
+                .map(
+                  (m) => `<div class="msg${m.who === 'agent' ? ' out' : ''}">
+                    <div class="msg-head">
+                      <b>${esc(m.from)}</b>
+                      <span class="who">${m.who === 'agent' ? 'vous' : m.who}</span>
+                      <span>${fmtDateTime(m.at)}</span>
+                    </div>
+                    <div class="msg-body">${esc(m.text)}</div>
+                  </div>`,
+                )
+                .join('')}
+            </div>
+          </div>
+
+          ${actionsFor(o)}
+        </div>
+
+        <div class="aside">
+          <div>
+            <h3 class="block-title">Articles</h3>
+            <div class="items">
+              ${o.items
+                .map(
+                  (i) => `<div class="item${i.flagged ? ' flagged' : ''}">
+                    <span class="item-photo">${photo(i)}</span>
+                    <span>
+                      <span class="item-name">${esc(i.name)}</span><br />
+                      <span class="item-variant">
+                        ${i.variant ? `<span class="swatch" style="background:${i.hex}"></span>${esc(i.variant)}` : 'Sans variante'}
+                      </span>
+                      ${i.flagged ? '<br /><span class="item-flag">Indisponible</span>' : ''}
+                    </span>
+                    <span class="item-qty">×${i.qty}</span>
+                  </div>`,
+                )
+                .join('')}
+            </div>
+          </div>
+
+          <div>
+            <h3 class="block-title">Commande</h3>
+            <div class="card">
+              <dl>
+                <div class="kv"><dt>Passée le</dt><dd class="mono">${fmtDate(o.placed)}</dd></div>
+                <div class="kv"><dt>Montant</dt><dd class="mono">${esc(o.total)}</dd></div>
+                <div class="kv"><dt>Livraison</dt><dd style="text-align:right">${esc(o.address)}</dd></div>
+              </dl>
+            </div>
+          </div>
+
+          ${trackingBlock(o)}
+        </div>
+      </div>`;
+
+    sheet.querySelectorAll('.act-tab').forEach((tab) =>
+      tab.addEventListener('click', () => {
+        sheet.querySelectorAll('.act-tab').forEach((t) => t.setAttribute('aria-selected', String(t === tab)));
+        renderPane(o, tab.dataset.pane);
+      }),
+    );
+
+    bindSubstitutes();
+  }
+
+  function renderPane(o, key) {
+    $('act-pane').innerHTML = PANES(o)[key] ?? '';
+    bindSubstitutes();
+  }
+
+  /** Sélection d'un produit de substitution — un seul choix à la fois. */
+  function bindSubstitutes() {
+    const subs = $('sheet').querySelectorAll('.sub');
+    subs.forEach((b) =>
+      b.addEventListener('click', () => {
+        subs.forEach((s) => s.setAttribute('aria-pressed', String(s === b)));
+      }),
+    );
+  }
+
+  /* Les volets d'action, rendus à la demande. */
+  function PANES(o) {
+    return {
+      sub: `<p class="hint" style="margin:0 0 10px">Le client garde sa commande, on remplace la référence indisponible. Il sera prévenu avant tout changement.</p>
+        <div class="subs">
+          ${SUBSTITUTES.map(
+            (s, i) => `<button class="sub" aria-pressed="${i === 0}">
+              <span class="sub-photo">${LAMP('#7d8a8c', s.hex)}</span>
+              <span>
+                <span class="sub-name">${esc(s.name)}<br />${esc(s.variant)}</span><br />
+                <span class="sub-stock">${esc(s.stock)}</span>
+              </span>
+            </button>`,
+          ).join('')}
+        </div>
+        <div class="act-row">
+          <button class="btn btn-primary">Proposer au client</button>
+          <button class="btn">Remplacer sans demander</button>
+          <span class="hint">Met à jour la commande Shopify et prévient le fournisseur.</span>
+        </div>`,
+
+      refund: `<dl style="margin-bottom:11px">
+          <div class="kv"><dt>Montant payé</dt><dd class="mono">${esc(o.total)}</dd></div>
+          <div class="kv"><dt>Remboursable</dt><dd class="mono">${esc(o.total)}</dd></div>
+        </dl>
+        <div class="act-row">
+          <button class="btn btn-danger">Rembourser ${esc(o.total)}</button>
+          <button class="btn">Remboursement partiel…</button>
+          <span class="hint">Confirmation obligatoire. Consigné au journal d'audit.</span>
+        </div>`,
+
+      address: `<p class="hint" style="margin:0 0 9px">Corrigée ici, l'adresse part vers Shopify et vers le fournisseur en une fois.</p>
+        <textarea>${esc(o.address)}</textarea>
+        <div class="act-row">
+          <button class="btn btn-primary">Enregistrer et transmettre</button>
+          <button class="btn">Demander au client</button>
+        </div>`,
+
+      email: `<p class="hint" style="margin:0 0 9px">L'adresse actuelle rebondit. La corriger relance l'envoi du suivi.</p>
+        <textarea style="min-height:44px">${esc(o.email)}</textarea>
+        <div class="act-row">
+          <button class="btn btn-primary">Enregistrer et renvoyer le suivi</button>
+        </div>`,
+
+      evidence: `<p class="hint" style="margin:0 0 10px">Shopify attend une preuve de livraison. Le suivi 17TRACK et l'adresse sont joints automatiquement.</p>
+        <dl style="margin-bottom:11px">
+          <div class="kv"><dt>Preuve de suivi</dt><dd class="mono">${esc(o.tracking ? o.tracking.number : '—')}</dd></div>
+          <div class="kv"><dt>Statut colis</dt><dd>${o.tracking ? LEGS[o.tracking.leg].label : '—'}</dd></div>
+          <div class="kv"><dt>Adresse livrée</dt><dd>${esc(o.address)}</dd></div>
+        </dl>
+        <textarea>Le colis a été remis à l'adresse de facturation le ${fmtDate(ago(3))}, signature du transporteur à l'appui. Suivi complet joint.</textarea>
+        <div class="act-row">
+          <button class="btn btn-primary">Envoyer les preuves à Shopify</button>
+          <button class="btn btn-danger">Accepter le litige</button>
+        </div>`,
+
+      client: `<textarea placeholder="Votre réponse au client…"></textarea>
+        <div class="act-row">
+          <button class="btn btn-primary">Envoyer au client</button>
+          <button class="btn">Proposer un brouillon IA</button>
+          <span class="hint">Part depuis sav@atelier-lumen.fr, dans le fil d'origine.</span>
+        </div>`,
+
+      supplier: `<textarea placeholder="Votre message au fournisseur…"></textarea>
+        <div class="act-row">
+          <button class="btn btn-primary">Envoyer au fournisseur</button>
+          <span class="hint">Shenzhen Lumi — réponse moyenne sous 14 h.</span>
+        </div>`,
+    };
+  }
+
+  function renderAll() {
+    renderSections();
+    renderStates();
+    renderRows();
+    renderSheet();
+  }
+
+  $('sort').addEventListener('change', (e) => {
+    view.sort = e.target.value;
+    renderRows();
+  });
+
+  $('search').addEventListener('input', (e) => {
+    view.q = e.target.value;
+    renderRows();
+  });
+
+  renderAll();
+</script>
