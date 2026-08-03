@@ -700,6 +700,74 @@
   .mini-swatch[aria-pressed="true"] { border-color: var(--ink); }
 
   .crossed { color: var(--ink-mute); font-size: 12.5px; }
+
+  /* ----------------------------------------------------- horloges ------ */
+
+  .clocks {
+    display: flex;
+    align-items: stretch;
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    overflow: hidden;
+  }
+
+  .clock { background: var(--surface); padding: 5px 12px 6px; text-align: center; min-width: 76px; }
+
+  .clock .c-city {
+    display: block;
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+  }
+
+  .clock .c-time {
+    display: block;
+    font-family: var(--f-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+  }
+
+  .clock .c-note { display: inline-flex; align-items: center; gap: 4px; font-size: 9.5px; color: var(--ink-mute); }
+  .clock .c-note i { width: 5px; height: 5px; border-radius: 50%; background: var(--c); }
+
+  /* ------------------------------------------- résumé + fil récent ----- */
+
+  .sum {
+    display: flex;
+    gap: 9px;
+    align-items: baseline;
+    background: var(--accent-soft);
+    border-radius: var(--r-md);
+    padding: 8px 12px;
+    font-size: 13px;
+    color: var(--accent-ink);
+    margin-bottom: 9px;
+  }
+
+  .sum b { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; flex: none; }
+
+  .newer {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    flex-wrap: wrap;
+    background: var(--crit-soft);
+    color: var(--crit);
+    border-radius: var(--r-md);
+    padding: 9px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 11px;
+  }
+
+  .newer .btn { margin-left: auto; padding: 4px 10px; font-size: 12px; }
   .tag-role { background: var(--accent-soft); color: var(--accent-ink); }
   .tag-role-muted { background: var(--inset); color: var(--ink-mute); }
 
@@ -1326,9 +1394,9 @@
         <p class="shop-label">Boutique</p>
         <select class="shop-select" id="shop-select" aria-label="Boutique active">
           <option value="all">Toutes les boutiques</option>
-          <option value="lumen">Atelier Lumen</option>
-          <option value="calin">Maison Câlin</option>
-          <option value="luma">Luma Déco</option>
+          <option value="lumen">Running Upscale</option>
+          <option value="calin">Trail Origins</option>
+          <option value="luma">Urban Pace</option>
         </select>
       </div>
 
@@ -1358,6 +1426,7 @@
         <h1 id="view-title"></h1>
 
         <div class="head-acts">
+          <div class="clocks" id="clocks" aria-label="Heure à Agadir, Paris et en Chine"></div>
           <div class="palette-wrap">
             <button class="btn" id="palette-btn" aria-expanded="false" aria-haspopup="dialog">
               <span class="dot-row" id="palette-dots"></span>
@@ -1441,7 +1510,7 @@
               <select id="f-kind">
                 <option value="all">Tous</option>
                 <option value="stock">Rupture de stock</option>
-                <option value="color">Couleur indisponible</option>
+                <option value="color">Pointure / coloris indisponible</option>
                 <option value="address">Adresse incorrecte</option>
                 <option value="email">Email invalide</option>
                 <option value="dispute">Litige</option>
@@ -1561,9 +1630,9 @@
       <div class="field">
         <label for="esc-shop">Boutique</label>
         <select class="control" id="esc-shop">
-          <option value="lumen">Atelier Lumen</option>
-          <option value="calin">Maison Câlin</option>
-          <option value="luma">Luma Déco</option>
+          <option value="lumen">Running Upscale</option>
+          <option value="calin">Trail Origins</option>
+          <option value="luma">Urban Pace</option>
         </select>
       </div>
       <div class="field">
@@ -1574,7 +1643,7 @@
         <label for="esc-kind">Motif</label>
         <select class="control" id="esc-kind">
           <option value="stock">Rupture de stock</option>
-          <option value="color">Couleur indisponible</option>
+          <option value="color">Pointure / coloris indisponible</option>
           <option value="address">Adresse incorrecte</option>
           <option value="email">Email invalide</option>
           <option value="other">Autre problème</option>
@@ -1699,7 +1768,7 @@
 
   /* ------------------------------------------------------------- données */
 
-  const SHOPS = { lumen: 'Atelier Lumen', calin: 'Maison Câlin', luma: 'Luma Déco' };
+  const SHOPS = { lumen: 'Running Upscale', calin: 'Trail Origins', luma: 'Urban Pace' };
 
   /* Code couleur par boutique — modifiable dans Réglages, suivi partout. */
   const SHOP_COLORS = { lumen: '#0284c7', calin: '#db2777', luma: '#9333ea' };
@@ -1714,140 +1783,157 @@
     nadia: { name: 'Nadia Rousseau', ini: 'NR', role: 'Lecture seule' },
   };
 
-  const LAMP = (shade) => `<svg viewBox="0 0 32 32" aria-hidden="true">
-    <path d="M16 2.5 V7" stroke="#8b93a5" stroke-width="1.6" stroke-linecap="round"/>
-    <path d="M6 18 L11.5 7 H20.5 L26 18 Z" fill="${shade}" stroke="rgba(0,0,0,.24)"
-      stroke-width="1" stroke-linejoin="round"/>
-    <ellipse cx="16" cy="18" rx="10" ry="1.7" fill="rgba(0,0,0,.11)"/>
-    <path d="M11 22.5 Q16 27.5 21 22.5" fill="none" stroke="${shade}" stroke-width="1.5"
-      opacity=".5" stroke-linecap="round"/>
+  /* Chaussure de running vue de profil — la tige porte le coloris. */
+  const SHOE = (c) => `<svg viewBox="0 0 32 32" aria-hidden="true">
+    <path d="M3.5 20.5c0-1.1.8-2 1.9-2.3l6.4-1.8c1.5-.4 2.8-1.3 3.8-2.5l1.4-1.7c.5-.6 1.4-.7 2-.2l7.6 5.6c.9.6 1.4 1.6 1.4 2.7v.7H3.5z"
+      fill="${c}" stroke="rgba(0,0,0,.28)" stroke-width="1" stroke-linejoin="round"/>
+    <path d="M3.5 21h25v1.6c0 1-.8 1.9-1.9 1.9H5.4c-1 0-1.9-.9-1.9-1.9z" fill="#2a2f38"/>
+    <path d="M13 16.2l1.5 1.7M15.5 14.8l1.5 1.7" stroke="rgba(255,255,255,.75)"
+      stroke-width="1.1" stroke-linecap="round"/>
   </svg>`;
 
-  const BULB = (c) => `<svg viewBox="0 0 32 32" aria-hidden="true">
-    <circle cx="16" cy="13" r="8" fill="${c}" stroke="rgba(0,0,0,.24)" stroke-width="1"/>
-    <rect x="12" y="21" width="8" height="6" rx="1.6" fill="#9aa3b2"/>
+  /* Semelle intérieure — pour les accessoires. */
+  const INSOLE = (c) => `<svg viewBox="0 0 32 32" aria-hidden="true">
+    <path d="M13 3.5c4.2 0 7.5 3.2 7.5 7.2 0 3-1.6 4.7-3.2 6.3-1.9 1.9-3.1 3.6-3.1 6.2 0 2.6-1.9 4.8-4.4 4.8-2.6 0-4.3-2-4.3-4.6C5.5 15 8 3.5 13 3.5z"
+      fill="${c}" stroke="rgba(0,0,0,.22)" stroke-width="1"/>
   </svg>`;
 
-  const pic = (i) => (i.bulb ? BULB(i.hex) : LAMP(i.hex));
+  const pic = (i) => (i.acc ? INSOLE(i.hex) : SHOE(i.hex));
 
   const SRC = { client: 'Client', fournisseur: 'Fournisseur', litige: 'Litige Shopify' };
   const ST = { todo: 'À traiter', wait: 'En attente', done: 'Traité' };
   const KINDS = {
-    stock: 'Rupture de stock', color: 'Couleur indisponible', address: 'Adresse incorrecte',
+    stock: 'Rupture de stock', color: 'Pointure / coloris indisponible', address: 'Adresse incorrecte',
     email: 'Email invalide', dispute: 'Litige', refund: 'Remboursement', wismo: 'Suivi demandé',
     return: 'Retour', other: 'Autre problème',
   };
 
   const ORDERS = [
     {
-      id: '10344', shop: 'lumen', src: 'fournisseur', st: 'todo', days: 8, amount: 156,
-      assignee: null, what: 'Produit indisponible — Lampadaire Sillage', kind: 'stock',
-      who: 'Julien Meyer', mail: 'julien.meyer91@gmail.com', total: '156,00 €',
+      id: '10344', shop: 'lumen', src: 'fournisseur', st: 'todo', days: 8, amount: 149,
+      assignee: null, what: 'Pointure 44 épuisée — Terra Motion 3', kind: 'stock',
+      who: 'Julien Meyer', mail: 'julien.meyer91@gmail.com', total: '149,00 €',
       addr: '8 impasse Victor Hugo, 33000 Bordeaux', placed: '10 juil. 2026',
-      items: [{ n: 'Lampadaire Sillage', v: 'Chêne', hex: '#c19a6b', q: 1, bad: true }],
+      items: [{ n: 'Terra Motion 3', v: '44 · Kaki', hex: '#6b7a4e', q: 1, bad: true }],
       track: null,
-      from: 'Shenzhen Lumi', at: 'il y a 8 jours',
-      msg: "Order #10344 cannot ship. Oak version out of stock since 3 weeks, our factory closed this line. Refund or replace?",
+      from: 'Quanzhou FlexSole', at: 'il y a 8 jours',
+      newer: [
+        { at: 'il y a 3 jours', sum: 'Relance du client : toujours aucune nouvelle, demande une date ferme.',
+          text: "Bonjour, toujours aucune nouvelle de mes chaussures. Pouvez-vous me donner une date ferme ?" },
+        { at: 'hier', sum: "Menace d'annulation et d'avis négatif sans réponse sous 48 h.",
+          text: "Sans réponse de votre part sous 48 h, j'annule ma commande et je laisse un avis en conséquence." },
+      ],
+      sum: "Le fournisseur ne peut pas expédier : Terra Motion 3 en 44 épuisée, ligne arrêtée. Rembourser ou remplacer ?",
+      msg: "Order #10344 cannot ship. Terra Motion 3 size 44 out of stock for 3 weeks, factory closed this line. Refund or replace?",
     },
     {
-      id: '10428', shop: 'lumen', src: 'fournisseur', st: 'todo', days: 6, amount: 128.4,
-      assignee: 'claire', what: 'Couleur Laiton en rupture définitive', kind: 'color',
-      who: 'Léa Fontaine', mail: 'lea.fontaine@gmail.com', total: '128,40 €',
+      id: '10428', shop: 'lumen', src: 'fournisseur', st: 'todo', days: 6, amount: 129.9,
+      assignee: 'claire', what: 'Coloris Sable épuisé — Aero Glide 2 (42)', kind: 'color',
+      who: 'Léa Fontaine', mail: 'lea.fontaine@gmail.com', total: '129,90 €',
       addr: '14 rue des Cordeliers, 69002 Lyon', placed: '13 juil. 2026',
       items: [
-        { n: 'Lampe Perce-neige', v: 'Laiton', hex: '#b08d3f', q: 1, bad: true },
-        { n: 'Ampoule E27 ambrée', v: null, hex: '#e8c88a', q: 2, bulb: true },
+        { n: 'Aero Glide 2', v: '42 · Sable', hex: '#d9c9a8', q: 1, bad: true },
+        { n: 'Semelles Confort', v: null, hex: '#e8c88a', q: 1, acc: true },
       ],
       track: { no: 'LP00427819923CN', by: 'Cainiao · Colissimo', leg: 1, dates: ['26 juil.', '28 juil.'] },
-      from: 'Shenzhen Lumi', at: 'il y a 6 jours',
-      msg: "Order #10428 — the Brass finish is discontinued by our factory, no restock planned. We can ship Black Matte or Brushed Copper instead. Please confirm within 48h or we hold the parcel.",
+      from: 'Quanzhou FlexSole', at: 'il y a 6 jours',
+      sum: "Coloris Sable abandonné par l'usine — propose Noir ou Bleu glacier, réponse exigée sous 48 h.",
+      msg: "Order #10428 — Aero Glide 2 in Sand is discontinued by our factory, no restock planned. We can ship Black or Glacier Blue instead. Please confirm within 48h or we hold the parcel.",
     },
     {
-      id: '10391', shop: 'lumen', src: 'fournisseur', st: 'todo', days: 4, amount: 74,
+      id: '10391', shop: 'lumen', src: 'fournisseur', st: 'todo', days: 4, amount: 89.9,
       assignee: 'yasmine', what: 'Adresse incomplète — numéro de rue manquant', kind: 'address',
-      who: 'Marc Delaunay', mail: 'm.delaunay@orange.fr', total: '74,00 €',
+      who: 'Marc Delaunay', mail: 'm.delaunay@orange.fr', total: '89,90 €',
       addr: 'Résidence Les Tilleuls, 69003 Lyon', placed: '22 juil. 2026',
-      items: [{ n: 'Applique Halo', v: 'Noir mat', hex: '#2b2b2b', q: 1 }],
+      items: [{ n: 'Pulse Runner', v: '41 · Noir', hex: '#2b2b2b', q: 1 }],
       track: { no: 'LP00391220041CN', by: 'Cainiao · Mondial Relay', leg: 0, dates: ['30 juil.'] },
-      from: 'Shenzhen Lumi', at: 'il y a 4 jours',
+      from: 'Quanzhou FlexSole', at: 'il y a 4 jours',
+      sum: "Transporteur bloqué : numéro de rue manquant, le fournisseur attend l'adresse complète.",
       msg: "Order #10391 — address has no street number, courier refused pickup. Please send full address.",
     },
     {
-      id: 'C2210', shop: 'calin', src: 'fournisseur', st: 'todo', days: 5, amount: 89,
-      assignee: null, what: 'Rupture — Plaid Angora, réassort inconnu', kind: 'stock',
-      who: 'Élodie Vasseur', mail: 'elodie.vasseur@gmail.com', total: '89,00 €',
+      id: 'C2210', shop: 'calin', src: 'fournisseur', st: 'todo', days: 5, amount: 119,
+      assignee: null, what: 'Rupture — Trail Grip X (43), réassort inconnu', kind: 'stock',
+      who: 'Élodie Vasseur', mail: 'elodie.vasseur@gmail.com', total: '119,00 €',
       addr: '5 rue des Carmes, 45000 Orléans', placed: '18 juil. 2026',
-      items: [{ n: 'Plaid Angora', v: 'Écru', hex: '#e8e0d2', q: 1, bad: true }],
+      items: [{ n: 'Trail Grip X', v: '43 · Orage', hex: '#4a5568', q: 1, bad: true }],
       track: null,
-      from: 'Guangzhou Homeware', at: 'il y a 5 jours',
-      msg: "Order #C2210 — Angora plaid ecru out of stock, factory says maybe 4 weeks. Advise customer?",
+      from: 'Quanzhou FlexSole', at: 'il y a 5 jours',
+      sum: "Trail Grip X en 43 épuisée, réassort incertain (~4 semaines). Que répondre à la cliente ?",
+      msg: "Order #C2210 — Trail Grip X size 43 out of stock, factory says maybe 4 weeks. Advise customer?",
     },
     {
-      id: '10410', shop: 'lumen', src: 'fournisseur', st: 'wait', days: 3, amount: 89.9,
+      id: '10410', shop: 'lumen', src: 'fournisseur', st: 'wait', days: 3, amount: 99.9,
       assignee: 'claire', what: 'Email client invalide — rebond à la livraison', kind: 'email',
-      who: 'Sophie Nguyen', mail: 'sophie.nguyen@laposte.ne', total: '89,90 €',
+      who: 'Sophie Nguyen', mail: 'sophie.nguyen@laposte.ne', total: '99,90 €',
       addr: '27 avenue Jean Jaurès, 44000 Nantes', placed: '25 juil. 2026',
-      items: [{ n: 'Suspension Brume', v: 'Opaline', hex: '#e9e4dc', q: 1 }],
+      items: [{ n: 'Aero Glide 2', v: '39 · Blanc', hex: '#e9e4dc', q: 1 }],
       track: { no: 'LP00410771120CN', by: 'Cainiao · Colissimo', leg: 2, dates: ['22 juil.', '24 juil.', '27 juil.'] },
-      from: 'Shenzhen Lumi', at: 'il y a 3 jours',
+      from: 'Quanzhou FlexSole', at: 'il y a 3 jours',
+      sum: "L'email de la cliente rebondit, impossible de lui envoyer le suivi — faute de frappe probable.",
       msg: "Order #10410 — customer email bounced, cannot send tracking. Typo in domain?",
     },
     {
-      id: '10412', shop: 'lumen', src: 'litige', st: 'todo', days: 2, amount: 212,
+      id: '10412', shop: 'lumen', src: 'litige', st: 'todo', days: 2, amount: 189,
       assignee: 'claire', what: 'Réclamation — produit non reçu', kind: 'dispute',
-      who: 'Karim Benali', mail: 'k.benali@gmail.com', total: '212,00 €',
+      who: 'Karim Benali', mail: 'k.benali@gmail.com', total: '189,00 €',
       addr: '3 place du Marché, 59000 Lille', placed: '26 juin 2026',
       deadline: 'Réponse à Shopify avant le 9 août',
-      items: [{ n: 'Suspension Brume', v: 'Laiton', hex: '#b08d3f', q: 2 }],
+      items: [{ n: 'Pulse Runner', v: '44 · Noir', hex: '#2b2b2b', q: 2 }],
       track: { no: 'LP00412009984CN', by: 'Cainiao · Colissimo', leg: 5,
         dates: ['27 juin', '29 juin', '2 juil.', '4 juil.', '6 juil.', '8 juil.'] },
       from: 'Shopify Payments', at: 'il y a 2 jours',
-      msg: "A chargeback was opened on order #10412 for 212,00 EUR. Reason: product not received. Submit your evidence before August 9 or the amount will be debited automatically.",
+      sum: "Litige 189 € « produit non reçu » — preuves avant le 9 août, sinon débit automatique.",
+      msg: "A chargeback was opened on order #10412 for 189,00 EUR. Reason: product not received. Submit your evidence before August 9 or the amount will be debited automatically.",
     },
     {
-      id: 'L1084', shop: 'luma', src: 'litige', st: 'wait', days: 1, amount: 147.5,
+      id: 'L1084', shop: 'luma', src: 'litige', st: 'wait', days: 1, amount: 139.9,
       assignee: 'theo', what: 'Réclamation — produit endommagé', kind: 'dispute',
-      who: 'Paul Charrier', mail: 'p.charrier@outlook.fr', total: '147,50 €',
+      who: 'Paul Charrier', mail: 'p.charrier@outlook.fr', total: '139,90 €',
       addr: '18 cours Berriat, 38000 Grenoble', placed: '8 juil. 2026',
       deadline: 'Réponse à Shopify avant le 12 août',
-      items: [{ n: 'Miroir Onde', v: 'Doré', hex: '#c9a44a', q: 1 }],
+      items: [{ n: 'City Flow', v: '42 · Beige', hex: '#c9a44a', q: 1 }],
       track: { no: 'LP00108433276CN', by: 'Cainiao · Colissimo', leg: 5,
         dates: ['9 juil.', '11 juil.', '14 juil.', '16 juil.', '18 juil.', '21 juil.'] },
       from: 'Shopify Payments', at: 'hier',
-      msg: "A chargeback was opened on order #L1084 for 147,50 EUR. Reason: product damaged. Evidence due August 12.",
+      sum: "Litige 139,90 € « produit endommagé » — preuves attendues avant le 12 août.",
+      msg: "A chargeback was opened on order #L1084 for 139,90 EUR. Reason: product damaged. Evidence due August 12.",
     },
     {
       id: '10375', shop: 'lumen', src: 'client', st: 'todo', days: 1, amount: 96,
       refund: 'requested', refundBy: 'Yasmine Kaddour',
-      assignee: 'yasmine', what: 'Abat-jour fêlé — demande de remboursement', kind: 'refund',
+      assignee: 'yasmine', what: 'Semelle décollée — demande de remboursement', kind: 'refund',
       who: 'Amélie Rousseau', mail: 'a.rousseau@free.fr', total: '96,00 €',
       addr: '61 rue Sainte-Catherine, 33000 Bordeaux', placed: '20 juil. 2026',
-      items: [{ n: 'Lampe Rosée', v: 'Verre soufflé', hex: '#dcc9c2', q: 1 }],
+      items: [{ n: 'Aero Glide 2', v: '38 · Rose', hex: '#dcc9c2', q: 1 }],
       track: { no: 'LP00375441203CN', by: 'Cainiao · Colissimo', leg: 5,
         dates: ['21 juil.', '23 juil.', '26 juil.', '27 juil.', '29 juil.', '1 août'] },
       from: 'Amélie Rousseau', at: 'hier',
-      msg: "Bonjour,\n\nJ'ai reçu ma lampe hier, l'abat-jour en verre est fêlé sur tout un côté. Le carton était intact. Je ne souhaite pas d'échange, je préfère être remboursée.",
+      sum: "Chaussures reçues avec la semelle droite qui se décolle. Refuse l'échange, veut un remboursement.",
+      msg: "Bonjour,\n\nJ'ai reçu mes chaussures hier et la semelle droite se décolle déjà. Le carton était intact. Je ne souhaite pas d'échange, je préfère être remboursée.",
     },
     {
-      id: 'C2187', shop: 'calin', src: 'client', st: 'todo', days: 0, amount: 54,
+      id: 'C2187', shop: 'calin', src: 'client', st: 'todo', days: 0, amount: 84,
       assignee: 'theo', what: 'Où en est ma commande ?', kind: 'wismo',
-      who: 'Lucie Perrot', mail: 'lucie.perrot@gmail.com', total: '54,00 €',
+      who: 'Lucie Perrot', mail: 'lucie.perrot@gmail.com', total: '84,00 €',
       addr: '31 rue de la Paix, 10000 Troyes', placed: '24 juil. 2026',
-      items: [{ n: 'Coussin Nuage', v: 'Terracotta', hex: '#c96f4a', q: 2 }],
+      items: [{ n: 'Trail Grip X', v: '40 · Corail', hex: '#c96f4a', q: 1 }],
       track: { no: 'LP00218755432CN', by: 'Cainiao · Colissimo', leg: 2,
         dates: ['25 juil.', '27 juil.', '30 juil.'] },
       from: 'Lucie Perrot', at: 'il y a 2 h',
+      sum: "Suivi immobile depuis plusieurs jours — la cliente demande où en est sa commande.",
       msg: "Bonjour, le suivi de ma commande n'a pas bougé depuis quelques jours, pouvez-vous me dire où elle en est ?",
     },
     {
-      id: '10402', shop: 'lumen', src: 'client', st: 'todo', days: 0, amount: 62,
+      id: '10402', shop: 'lumen', src: 'client', st: 'todo', days: 0, amount: 109,
       assignee: null, what: 'Où en est ma commande ?', kind: 'wismo',
-      who: 'Thomas Girard', mail: 'thomas.girard@gmail.com', total: '62,00 €',
+      who: 'Thomas Girard', mail: 'thomas.girard@gmail.com', total: '109,00 €',
       addr: '9 rue du Bac, 75007 Paris', placed: '23 juil. 2026',
-      items: [{ n: 'Applique Halo', v: 'Laiton', hex: '#b08d3f', q: 1 }],
+      items: [{ n: 'Pulse Runner', v: '43 · Gris', hex: '#8a8f98', q: 1 }],
       track: { no: 'LP00402118876CN', by: 'Cainiao · Colissimo', leg: 3,
         dates: ['24 juil.', '26 juil.', '29 juil.', '31 juil.'] },
       from: 'Thomas Girard', at: 'il y a 3 h',
+      sum: "Suivi figé depuis une semaine après 11 jours de transit — demande si c'est normal.",
       msg: "Bonjour, ma commande est partie il y a 11 jours et le suivi ne bouge plus depuis une semaine. C'est normal ?",
     },
     {
@@ -1855,27 +1941,29 @@
       assignee: 'yasmine', what: 'Adresse corrigée — colis reparti', kind: 'address',
       who: 'Nora Hadji', mail: 'nora.hadji@gmail.com', total: '76,00 €',
       addr: '2 allée des Platanes, 34000 Montpellier', placed: '15 juil. 2026',
-      items: [{ n: 'Vase Strate', v: 'Sable', hex: '#d9c9a8', q: 1 }],
+      items: [{ n: 'City Flow', v: '41 · Sable', hex: '#d9c9a8', q: 1 }],
       track: { no: 'LP00107122908CN', by: 'Cainiao · Colissimo', leg: 4,
         dates: ['16 juil.', '18 juil.', '21 juil.', '23 juil.', '30 juil.'] },
-      from: 'Shenzhen Lumi', at: 'il y a 2 jours',
+      from: 'Quanzhou FlexSole', at: 'il y a 2 jours',
+      sum: "Adresse corrigée bien reçue — le fournisseur a réexpédié le colis.",
       msg: "Order #L1071 — new address received, parcel re-dispatched. Thanks.",
     },
     {
-      id: '10298', shop: 'lumen', src: 'client', st: 'done', days: 2, amount: 42.5,
-      assignee: 'theo', what: 'Retour — mauvaise finition commandée', kind: 'return',
-      who: 'Inès Lambert', mail: 'ines.lambert@free.fr', total: '42,50 €',
+      id: '10298', shop: 'lumen', src: 'client', st: 'done', days: 2, amount: 89.9,
+      assignee: 'theo', what: 'Retour — mauvaise pointure commandée', kind: 'return',
+      who: 'Inès Lambert', mail: 'ines.lambert@free.fr', total: '89,90 €',
       addr: '12 boulevard Gambetta, 06000 Nice', placed: '4 juil. 2026',
-      items: [{ n: 'Ampoule E27 ambrée', v: null, hex: '#e8c88a', q: 3, bulb: true }],
+      items: [{ n: 'Aero Glide 2', v: '42 · Noir', hex: '#2b2b2b', q: 1 }],
       track: { no: 'LP00298330445CN', by: 'Cainiao · Colissimo', leg: 5,
         dates: ['5 juil.', '7 juil.', '10 juil.', '11 juil.', '13 juil.', '15 juil.'] },
       from: 'Inès Lambert', at: 'il y a 4 jours',
-      msg: "Je me suis trompée de finition, comment faire pour l'échanger ?",
+      sum: "S'est trompée de pointure (42 au lieu de 41), demande comment procéder à l'échange.",
+      msg: "Bonjour, je me suis trompée de pointure, il me faut du 41. Comment faire pour l'échanger ?",
     },
   ];
 
   const LEGS = [
-    ['Pris en charge par le fournisseur', 'Shenzhen, CN'],
+    ['Pris en charge par le fournisseur', 'Quanzhou, CN'],
     ['Transit à l’export', 'Aéroport de départ'],
     ['Transit à l’import', 'Aéroport de Paris-CDG'],
     ['Dédouanement', 'Douane française'],
@@ -1884,9 +1972,9 @@
   ];
 
   const SUBS = [
-    { n: 'Lampe Perce-neige', v: 'Noir mat', hex: '#2b2b2b', s: '42 en stock' },
-    { n: 'Lampe Perce-neige', v: 'Cuivre brossé', hex: '#a5673f', s: '18 en stock' },
-    { n: 'Lampe Congère', v: 'Laiton', hex: '#b08d3f', s: '7 en stock' },
+    { n: 'Aero Glide 2', v: '42 · Noir', hex: '#2b2b2b', s: '38 en stock' },
+    { n: 'Aero Glide 2', v: '42 · Bleu glacier', hex: '#9db8d2', s: '21 en stock' },
+    { n: 'Pulse Runner', v: '42 · Sable', hex: '#d9c9a8', s: '9 en stock' },
   ];
 
   const ageVar = (d) => (d < 1 ? 'var(--age-0)' : d <= 2 ? 'var(--age-1)' : d <= 4 ? 'var(--age-2)' : 'var(--age-3)');
@@ -2084,7 +2172,8 @@
     if (o.kind === 'stock' || o.kind === 'color') list.push(['sub', 'Substitution'], ['refund', 'Rembourser']);
     if (o.kind === 'address') list.push(['address', "Corriger l'adresse"]);
     if (o.kind === 'email') list.push(['email', "Corriger l'email"]);
-    if (o.kind === 'refund') list.push(['refund', 'Rembourser']);
+    if (o.kind === 'refund') list.push(['refund', 'Rembourser'], ['slip', 'Bon de retour']);
+    if (o.kind === 'return') list.push(['slip', 'Bon de retour']);
     if (o.kind === 'dispute') list.push(['evidence', 'Répondre à Shopify']);
     list.push(['client', 'Écrire au client'], ['supplier', 'Écrire au fournisseur']);
     return list;
@@ -2096,7 +2185,7 @@
         <div class="subs">
           ${SUBS.map(
             (s, i) => `<button class="sub" aria-pressed="${i === 0}">
-              <span class="sub-photo">${LAMP(s.hex)}</span>
+              <span class="sub-photo">${SHOE(s.hex)}</span>
               <span><b>${esc(s.n)}<br />${esc(s.v)}</b><span>${esc(s.s)}</span></span>
             </button>`,
           ).join('')}
@@ -2160,12 +2249,46 @@
           </dl>
         </div>`;
 
+    if (key === 'slip')
+      return `<p class="field-label">Où le client renvoie-t-il le colis ?</p>
+        <div class="options" style="margin-bottom:11px" id="slip-dest">
+          <button class="opt" data-d="fr" aria-pressed="true">Adresse de retour France</button>
+          <button class="opt" data-d="cn" aria-pressed="false">Entrepôt fournisseur — Chine</button>
+        </div>
+        <div class="inset"><dl style="margin:0">
+          <div class="kv"><dt>N° de retour</dt><dd class="mono">RMA-${o.id}</dd></div>
+          <div class="kv"><dt>Commande</dt><dd class="mono">#${o.id}</dd></div>
+          <div class="kv"><dt>Articles</dt><dd>${o.items.map((i) => esc(i.n)).join(', ') || '—'}</dd></div>
+          <div class="kv"><dt>Renvoyer à</dt>
+            <dd id="slip-addr">cSAV Retours — 18 rue des Entrepôts, 69200 Vénissieux, France</dd></div>
+        </dl></div>
+        <p class="note" style="margin:9px 0 11px">Retour en France recommandé : un renvoi vers la Chine
+          coûte souvent plus cher que le produit et se perd en douane.</p>
+        <div style="display:flex;gap:9px;flex-wrap:wrap">
+          <button class="btn btn-main" id="slip-gen">Générer le bon (PDF)</button>
+          <button class="btn" id="slip-send">Envoyer au client</button>
+        </div>`;
+
     if (key === 'client')
       return `<textarea class="control" rows="4" placeholder="Votre réponse au client…"></textarea>
         <p class="note" style="margin:9px 0 0">Part depuis la boîte SAV de la boutique, dans le fil d'origine.</p>`;
 
+    const cn = new Intl.DateTimeFormat('fr-FR', {
+      hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Shanghai',
+    }).format(new Date());
+    const cnHour = Number(new Intl.DateTimeFormat('fr-FR', {
+      hour: 'numeric', hourCycle: 'h23', timeZone: 'Asia/Shanghai',
+    }).format(new Date()));
+    const open = cnHour >= 9 && cnHour < 19;
+
     return `<textarea class="control" rows="4" placeholder="Votre message au fournisseur…"></textarea>
-      <p class="note" style="margin:9px 0 0">Réponse moyenne du fournisseur : 14 h.</p>`;
+      <div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:10px">
+        <a class="btn" id="wa-link" href="https://wa.me/8613912345678" target="_blank" rel="noopener">
+          Relancer sur WhatsApp</a>
+        <span class="note">Il est <b class="mono">${cn}</b> en Chine — ${
+          open ? "l'agent est joignable, réponse rapide probable." : 'hors horaires, réponse probable demain matin.'
+        }</span>
+      </div>`;
   }
 
   function renderSheet() {
@@ -2206,8 +2329,27 @@
 
         <div class="sect">
           <h3>Problème signalé</h3>
+          ${o.newer?.length
+            ? `<div class="newer">
+                ${o.newer.length} message${o.newer.length > 1 ? 's' : ''} plus récent${o.newer.length > 1 ? 's' : ''}
+                dans ce fil — dernier ${esc(o.newer[o.newer.length - 1].at)}
+                <button class="btn" id="newer-toggle">Afficher</button>
+              </div>
+              <div id="newer-list" hidden>
+                ${o.newer
+                  .map(
+                    (m) => `<div style="margin-bottom:11px">
+                      <div class="quote-head"><b>${esc(o.who)}</b><span>${esc(m.at)}</span></div>
+                      <div class="sum"><b>Résumé</b>${esc(m.sum)}</div>
+                      <div class="quote">${esc(m.text)}</div>
+                    </div>`,
+                  )
+                  .join('')}
+              </div>`
+            : ''}
           ${o.deadline ? `<p class="field-label" style="color:var(--crit);font-weight:600">${esc(o.deadline)}</p>` : ''}
           <div class="quote-head"><b>${esc(o.from)}</b><span>${esc(o.at)}</span></div>
+          ${o.sum ? `<div class="sum"><b>Résumé</b>${esc(o.sum)}</div>` : ''}
           <div class="quote">${esc(o.msg)}</div>
         </div>
 
@@ -2344,6 +2486,30 @@
       toast('Demande de remboursement refusée — le demandeur est prévenu.');
       renderSheet();
     });
+
+    // Bon de retour : destination + génération.
+    $('slip-dest')?.querySelectorAll('.opt').forEach((b) =>
+      b.addEventListener('click', () => {
+        $('slip-dest').querySelectorAll('.opt').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+        $('slip-addr').textContent = b.dataset.d === 'cn'
+          ? 'Quanzhou FlexSole — No. 88, Export Processing Zone, Quanzhou, Fujian, CN'
+          : 'cSAV Retours — 18 rue des Entrepôts, 69200 Vénissieux, France';
+      }),
+    );
+    $('slip-gen')?.addEventListener('click', () => toast(`Bon de retour RMA-${o.id} généré (PDF).`));
+    $('slip-send')?.addEventListener('click', () =>
+      toast('Bon de retour envoyé au client avec les instructions de renvoi.'),
+    );
+
+    // Fil récent + WhatsApp.
+    $('newer-toggle')?.addEventListener('click', () => {
+      const list = $('newer-list');
+      list.hidden = !list.hidden;
+      $('newer-toggle').textContent = list.hidden ? 'Afficher' : 'Masquer';
+    });
+    $('wa-link')?.addEventListener('click', () =>
+      toast("Ouverture de WhatsApp — le message part vers l'agent avec le lien du dossier."),
+    );
   }
 
   function renderFile() {
@@ -2465,9 +2631,9 @@
       ['Claire Mercier', 'a répondu à Shopify sur le litige', '#10412', 'il y a 12 min', 'var(--accent)'],
       ['Yasmine Kaddour', 'a corrigé l’adresse et relancé le fournisseur', '#10391', 'il y a 34 min', 'var(--accent)'],
       ['Théo Bernard', 'a remboursé 42,50 €', '#10298', 'il y a 1 h', 'var(--age-3)'],
-      ['Shenzhen Lumi', 'a signalé une rupture de couleur', '#10428', 'il y a 2 h', 'var(--warn)'],
+      ['Quanzhou FlexSole', 'a signalé une rupture de coloris', '#10428', 'il y a 2 h', 'var(--warn)'],
       ['Claire Mercier', 'a proposé une substitution au client', '#C2210', 'il y a 3 h', 'var(--accent)'],
-      ['Guangzhou Homeware', 'a répondu dans son fil', '#C2210', 'hier, 18:40', 'var(--warn)'],
+      ['Putian SportSource', 'a répondu dans son fil', '#C2210', 'hier, 18:40', 'var(--warn)'],
       ['Rachid I.', 'a modifié le rôle de Théo Bernard', 'Équipe', 'hier, 09:15', 'var(--age-0)'],
     ]
       .map(
@@ -2491,10 +2657,10 @@
 
   function renderTeam() {
     const members = [
-      { k: 'rachid', mail: 'rachid@atelier-lumen.fr', conn: 'google', tfa: 'on', shops: 'all' },
-      { k: 'claire', mail: 'claire@atelier-lumen.fr', conn: 'password', tfa: 'on', shops: 'all' },
-      { k: 'yasmine', mail: 'yasmine@atelier-lumen.fr', conn: 'google', tfa: 'on', shops: ['lumen', 'luma'] },
-      { k: 'theo', mail: 'theo@atelier-lumen.fr', conn: 'password', tfa: 'off', shops: ['calin'] },
+      { k: 'rachid', mail: 'rachid@runningupscale.com', conn: 'google', tfa: 'on', shops: 'all' },
+      { k: 'claire', mail: 'claire@runningupscale.com', conn: 'password', tfa: 'on', shops: 'all' },
+      { k: 'yasmine', mail: 'yasmine@runningupscale.com', conn: 'google', tfa: 'on', shops: ['lumen', 'luma'] },
+      { k: 'theo', mail: 'theo@runningupscale.com', conn: 'password', tfa: 'off', shops: ['calin'] },
       { k: 'nadia', mail: 'nadia@cabinet-comptable.fr', conn: 'google', tfa: 'off', shops: 'all' },
     ];
 
@@ -2535,11 +2701,11 @@
 
     $('sup-cards').innerHTML = [
       {
-        name: 'Shenzhen Lumi', ini: 'SL', mail: 'ops@shenzhen-lumi.example',
+        name: 'Quanzhou FlexSole', ini: 'QF', mail: 'ops@qz-flexsole.example', wa: '8613912345678',
         keys: ['lumen', 'luma'], last: 'dernier message il y a 2 h', open: 4,
       },
       {
-        name: 'Guangzhou Homeware', ini: 'GH', mail: 'sav@gz-homeware.example',
+        name: 'Putian SportSource', ini: 'PS', mail: 'sav@pt-sportsource.example', wa: '8613698765432',
         keys: ['calin'], last: 'dernier message hier', open: 1,
       },
     ]
@@ -2556,8 +2722,10 @@
           </dl>
           <div style="margin-top:11px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
             ${s.keys.map(shopTag).join(' ')}
+            <a class="btn wa-sup" href="https://wa.me/${s.wa}" target="_blank" rel="noopener"
+              style="margin-left:auto;padding:5px 11px;font-size:12px">WhatsApp</a>
             <button class="btn sup-view" data-name="${esc(s.name)}" data-shops="${s.keys.join(',')}"
-              style="margin-left:auto;padding:5px 11px;font-size:12px">Voir son portail</button>
+              style="padding:5px 11px;font-size:12px">Voir son portail</button>
           </div>
         </div>`,
       )
@@ -2639,7 +2807,7 @@
             <span class="tile-row sel">
               <span class="tile-num">#10428</span>
               <span class="tile-age" style="--age: var(--age-3)">6 j</span>
-              <span class="tile-what">Couleur Laiton en rupture</span>
+              <span class="tile-what">Pointure 44 en rupture</span>
             </span>
             <span class="tile-row">
               <span class="tile-num">#10391</span>
@@ -2877,16 +3045,16 @@
   }
 
   const PRODUCTS = [
-    ['Lampe Perce-neige', 'Laiton', '#b08d3f', 'lumen', 0, 'out'],
-    ['Lampe Perce-neige', 'Noir mat', '#2b2b2b', 'lumen', 42, 'ok'],
-    ['Lampe Perce-neige', 'Cuivre brossé', '#a5673f', 'lumen', 18, 'ok'],
-    ['Lampadaire Sillage', 'Chêne', '#c19a6b', 'lumen', 0, 'out'],
-    ['Suspension Brume', 'Opaline', '#e9e4dc', 'lumen', 26, 'ok'],
-    ['Applique Halo', 'Noir mat', '#2b2b2b', 'lumen', 31, 'ok'],
-    ['Plaid Angora', 'Écru', '#e8e0d2', 'calin', 0, 'out'],
-    ['Coussin Nuage', 'Terracotta', '#c96f4a', 'calin', 54, 'ok'],
-    ['Miroir Onde', 'Doré', '#c9a44a', 'luma', 6, 'low'],
-    ['Vase Strate', 'Sable', '#d9c9a8', 'luma', 12, 'ok'],
+    ['Aero Glide 2', '42 · Sable', '#d9c9a8', 'lumen', 0, 'out'],
+    ['Aero Glide 2', '42 · Noir', '#2b2b2b', 'lumen', 38, 'ok'],
+    ['Aero Glide 2', '42 · Bleu glacier', '#9db8d2', 'lumen', 21, 'ok'],
+    ['Terra Motion 3', '44 · Kaki', '#6b7a4e', 'lumen', 0, 'out'],
+    ['Pulse Runner', '43 · Gris', '#8a8f98', 'lumen', 26, 'ok'],
+    ['Pulse Runner', '41 · Noir', '#2b2b2b', 'lumen', 31, 'ok'],
+    ['Trail Grip X', '43 · Orage', '#4a5568', 'calin', 0, 'out'],
+    ['Trail Grip X', '40 · Corail', '#c96f4a', 'calin', 44, 'ok'],
+    ['City Flow', '42 · Beige', '#c9a44a', 'luma', 6, 'low'],
+    ['City Flow', '41 · Sable', '#d9c9a8', 'luma', 12, 'ok'],
   ];
 
   function renderCatalog() {
@@ -3007,9 +3175,9 @@
       <div class="card"><div class="sect">
         <h3>Connexions</h3>
         ${[
-          ['Shopify — Atelier Lumen', 'Connectée', 'done'],
-          ['Shopify — Maison Câlin', 'Connectée', 'done'],
-          ['Shopify — Luma Déco', 'Connectée', 'done'],
+          ['Shopify — Running Upscale', 'Connectée', 'done'],
+          ['Shopify — Trail Origins', 'Connectée', 'done'],
+          ['Shopify — Urban Pace', 'Connectée', 'done'],
           ['Boîte SAV Gmail', 'Écoute active', 'done'],
           ['17TRACK', 'Clé API active', 'done'],
         ]
@@ -3111,6 +3279,7 @@
       assignee: null, what: `${KINDS[kind]} — escalade manuelle`, kind,
       who: 'Client à rattacher', mail: '—', total: '—', addr: '—', placed: "aujourd'hui",
       items: [], track: null, from: 'Vous', at: "à l'instant",
+      sum: 'Escalade manuelle — contexte à compléter avant envoi au fournisseur.',
       msg: note || "Escalade créée à la main — complétez le contexte avant l'envoi.",
     });
     $('esc-modal').hidden = true;
@@ -3152,6 +3321,33 @@
   $('invite-sup').addEventListener('click', () =>
     toast("Invitation fournisseur préparée — la maquette n'envoie pas d'email."),
   );
+
+  /* ---------------------------------------------------------- horloges */
+
+  const ZONES = [
+    ['Agadir', 'Africa/Casablanca'],
+    ['Paris', 'Europe/Paris'],
+    ['Chine', 'Asia/Shanghai'],
+  ];
+
+  function renderClocks() {
+    const now = new Date();
+    $('clocks').innerHTML = ZONES.map(([city, tz]) => {
+      const time = new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: tz }).format(now);
+      let note = '';
+      if (city === 'Chine') {
+        const h = Number(new Intl.DateTimeFormat('fr-FR', { hour: 'numeric', hourCycle: 'h23', timeZone: tz }).format(now));
+        const open = h >= 9 && h < 19;
+        note = `<span class="c-note" style="--c:${open ? 'var(--age-0)' : 'var(--age-1)'}">
+          <i></i>${open ? 'joignable' : 'hors horaires'}</span>`;
+      }
+      return `<span class="clock"><span class="c-city">${city}</span>
+        <span class="c-time">${time}</span>${note}</span>`;
+    }).join('');
+  }
+
+  renderClocks();
+  setInterval(renderClocks, 30000);
 
   /* ---------------------------------------------------------- démarrage */
 
