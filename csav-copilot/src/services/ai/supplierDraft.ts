@@ -1,5 +1,5 @@
 import type { EscalationReason } from '@prisma/client';
-import { aiProvider } from './factory.ts';
+import { getAiProvider } from './factory.ts';
 
 export interface SupplierDraftContext {
   merchantName: string;
@@ -87,7 +87,9 @@ function buildContextBlock(context: SupplierDraftContext): string {
 export async function generateSupplierDraft(
   context: SupplierDraftContext,
 ): Promise<SupplierDraft> {
-  const result = await aiProvider.completeJson<SupplierDraft>({
+  const provider = await getAiProvider();
+
+  const result = await provider.completeJson<SupplierDraft>({
     system: SYSTEM_PROMPT,
     effort: 'low',
     maxTokens: 1024,
@@ -97,7 +99,7 @@ export async function generateSupplierDraft(
   });
 
   if (result.refused) {
-    throw new Error(`Rédaction du message fournisseur refusée par le modèle (${aiProvider.name})`);
+    throw new Error(`Rédaction du message fournisseur refusée par le modèle (${provider.name})`);
   }
 
   return result.data;

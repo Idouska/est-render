@@ -22,30 +22,40 @@ const schema = z.object({
       message: 'ENCRYPTION_KEY doit être 32 octets encodés en base64',
     }),
 
-  SHOPIFY_API_KEY: z.string().min(1),
-  SHOPIFY_API_SECRET: z.string().min(1),
+  // Identifiants de plateforme : optionnels ici, car ils peuvent aussi venir
+  // de la table `PlatformSetting` réglée depuis la console d'administration.
+  // La présence est vérifiée au moment de l'usage (services/platform/
+  // credentials.ts), pas au démarrage — sinon un déploiement neuf, dont la
+  // configuration se fait justement par la console, ne pourrait pas démarrer.
+  SHOPIFY_API_KEY: z.string().optional(),
+  SHOPIFY_API_SECRET: z.string().optional(),
   SHOPIFY_SCOPES: z.string().transform(csv),
   SHOPIFY_API_VERSION: z.string().default('2025-01'),
 
-  GOOGLE_CLIENT_ID: z.string().min(1),
-  GOOGLE_CLIENT_SECRET: z.string().min(1),
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
   GOOGLE_SCOPES: z.string().transform(csv),
-  GOOGLE_PUBSUB_TOPIC: z.string().min(1),
-  GOOGLE_PUBSUB_SERVICE_ACCOUNT: z.string().min(1),
+  GOOGLE_PUBSUB_TOPIC: z.string().optional(),
+  GOOGLE_PUBSUB_SERVICE_ACCOUNT: z.string().optional(),
 
-  // Fournisseur actif : un seul point de bascule, lu uniquement par
-  // services/ai/factory.ts. Ni classify.ts ni generate.ts ne savent lequel
+  // Fournisseur actif. Repli seulement : la valeur effective vient de
+  // services/platform/credentials.ts, qui donne la priorité au réglage de la
+  // console d'administration. Un seul point de bascule, lu uniquement par
+  // services/ai/factory.ts — ni classify.ts ni generate.ts ne savent lequel
   // tourne.
-  AI_PROVIDER: z.enum(['anthropic', 'deepseek']).default('anthropic'),
+  AI_PROVIDER: z.enum(['anthropic', 'deepseek']).optional(),
 
-  // Optionnelles au niveau du schéma : la présence requise dépend du
-  // AI_PROVIDER choisi, vérifiée explicitement plus bas.
   ANTHROPIC_API_KEY: z.string().optional(),
-  ANTHROPIC_MODEL: z.string().default('claude-opus-5'),
+  ANTHROPIC_MODEL: z.string().optional(),
 
   DEEPSEEK_API_KEY: z.string().optional(),
-  DEEPSEEK_MODEL: z.string().default('deepseek-chat'),
-  DEEPSEEK_BASE_URL: z.string().default('https://api.deepseek.com/v1'),
+  DEEPSEEK_MODEL: z.string().optional(),
+  DEEPSEEK_BASE_URL: z.string().optional(),
+
+  // Mot de passe de la console d'administration. Absent, la console est
+  // désactivée : pas de page, pas de route — plutôt qu'un écran protégé par
+  // un mot de passe vide.
+  ADMIN_PASSWORD: z.string().min(12).optional(),
 
   // Développement uniquement : remplace les appels Shopify par un jeu de
   // commandes fictives, pour travailler l'interface sans boutique réelle.
@@ -76,14 +86,6 @@ export const env = parsed.data;
 
 if (env.NODE_ENV === 'production' && (env.SHOPIFY_MOCK || env.GMAIL_MOCK)) {
   throw new Error('SHOPIFY_MOCK et GMAIL_MOCK ne peuvent pas être activés en production');
-}
-
-if (env.AI_PROVIDER === 'deepseek' && !env.DEEPSEEK_API_KEY) {
-  throw new Error('AI_PROVIDER=deepseek nécessite DEEPSEEK_API_KEY');
-}
-
-if (env.AI_PROVIDER === 'anthropic' && !env.ANTHROPIC_API_KEY) {
-  throw new Error('AI_PROVIDER=anthropic (par défaut) nécessite ANTHROPIC_API_KEY');
 }
 
 /** Les raccourcis de développement (connexion sans OAuth, données fictives). */

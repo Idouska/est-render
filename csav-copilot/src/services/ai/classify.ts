@@ -1,5 +1,5 @@
 import type { Intent } from '@prisma/client';
-import { aiProvider } from './factory.ts';
+import { getAiProvider } from './factory.ts';
 
 export interface Classification {
   intent: Intent;
@@ -93,7 +93,9 @@ export async function classifyEmail(input: {
   subject: string | null;
   bodyText: string;
 }): Promise<Classification> {
-  const result = await aiProvider.completeJson<Classification>({
+  const provider = await getAiProvider();
+
+  const result = await provider.completeJson<Classification>({
     system: SYSTEM_PROMPT,
     // Tâche courte et cadrée : effort bas suffit et réduit coût et latence
     // (ignoré par les fournisseurs qui n'exposent pas ce réglage).

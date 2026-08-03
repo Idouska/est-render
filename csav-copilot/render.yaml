@@ -5,6 +5,11 @@
 # Les variables marquées `sync: false` sont à saisir dans l'interface après la
 # première création : ce sont des secrets, ils n'ont rien à faire dans le dépôt.
 #
+# Les identifiants de plateforme (clés Shopify, Google, IA) peuvent aussi se
+# régler depuis la console d'administration `/admin`, qui prime sur ce fichier
+# et évite un redéploiement à chaque rotation de clé. Ce qui est déclaré ici
+# reste le repli. Voir docs/11-console-admin.md.
+#
 # Le champ `rootDir` suppose que le projet est dans le sous-dossier
 # `csav-copilot`. À retirer si vous déplacez le projet à la racine du dépôt.
 #
@@ -73,12 +78,19 @@ services:
         sync: false
       - key: GOOGLE_PUBSUB_SERVICE_ACCOUNT
         sync: false
-      # Fournisseur d'IA : "anthropic" (défaut, ligne ci-dessous absente =
-      # anthropic) ou "deepseek". Pour DeepSeek, décommentez AI_PROVIDER et
-      # renseignez DEEPSEEK_API_KEY dans les trois services (API, worker,
-      # cron) — voir docs/09-fournisseur-ia.md.
-      # - key: AI_PROVIDER
-      #   value: deepseek
+      # Mot de passe de la console d'administration (/admin), 12 caractères
+      # minimum. Absent, la console est désactivée et les identifiants
+      # ci-dessous restent lus uniquement depuis ces variables.
+      # Génération : node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"
+      # Seul le service web en a besoin : le worker et le cron n'exposent
+      # aucune interface HTTP.
+      - key: ADMIN_PASSWORD
+        sync: false
+      # Fournisseur d'IA : "anthropic" ou "deepseek". Réglable aussi depuis la
+      # console d'administration, qui prime sur cette valeur — voir
+      # docs/11-console-admin.md et docs/09-fournisseur-ia.md.
+      - key: AI_PROVIDER
+        value: anthropic
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: ANTHROPIC_MODEL
@@ -167,8 +179,11 @@ services:
           envVarKey: ANTHROPIC_API_KEY
       - key: ANTHROPIC_MODEL
         value: claude-opus-5
-      # - key: AI_PROVIDER
-      #   fromService: { name: csav-api, type: web, envVarKey: AI_PROVIDER }
+      - key: AI_PROVIDER
+        fromService:
+          name: csav-api
+          type: web
+          envVarKey: AI_PROVIDER
       - key: DEEPSEEK_API_KEY
         fromService:
           name: csav-api
@@ -256,8 +271,11 @@ services:
           envVarKey: ANTHROPIC_API_KEY
       - key: ANTHROPIC_MODEL
         value: claude-opus-5
-      # - key: AI_PROVIDER
-      #   fromService: { name: csav-api, type: web, envVarKey: AI_PROVIDER }
+      - key: AI_PROVIDER
+        fromService:
+          name: csav-api
+          type: web
+          envVarKey: AI_PROVIDER
       - key: DEEPSEEK_API_KEY
         fromService:
           name: csav-api

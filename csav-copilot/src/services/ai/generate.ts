@@ -1,6 +1,6 @@
 import type { Intent } from '@prisma/client';
 import type { OrderSummary } from '../shopify/orders.ts';
-import { aiProvider } from './factory.ts';
+import { getAiProvider } from './factory.ts';
 
 export interface DraftGeneration {
   body: string;
@@ -160,7 +160,9 @@ function validate(value: unknown): DraftGeneration {
 }
 
 export async function generateReply(context: GenerationContext): Promise<DraftGeneration> {
-  const result = await aiProvider.completeJson<DraftGeneration>({
+  const provider = await getAiProvider();
+
+  const result = await provider.completeJson<DraftGeneration>({
     system: SYSTEM_PROMPT,
     effort: 'medium',
     maxTokens: 2048,
@@ -170,7 +172,7 @@ export async function generateReply(context: GenerationContext): Promise<DraftGe
   });
 
   if (result.refused) {
-    throw new Error(`Génération refusée par le modèle (${aiProvider.name})`);
+    throw new Error(`Génération refusée par le modèle (${provider.name})`);
   }
 
   // Garde-fou : sans commande rattachée, aucune réponse ne peut être

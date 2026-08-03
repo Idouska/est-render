@@ -542,6 +542,10 @@ function renderConnection(el, { label, connected, simulated, detail, actions }) 
   const dot = simulated ? 'warn' : connected ? '' : 'off';
   const status = simulated ? 'simulé' : connected ? 'connecté' : 'non connecté';
 
+  // En mode simulé, aucune autorisation réelle n'est en jeu : proposer de
+  // connecter ou de déconnecter promettrait un effet qui n'aura pas lieu.
+  if (simulated) actions = '';
+
   el.innerHTML = `
     <div class="set-conn-head">
       <span class="conn-pill"><span class="dot ${dot}"></span> ${esc(label)} ${esc(status)}</span>

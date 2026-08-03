@@ -24,7 +24,9 @@ export async function googleAuthRoutes(app: FastifyInstance): Promise<void> {
       maxAge: 600,
     });
 
-    const url = createOAuthClient().generateAuthUrl({
+    const client = await createOAuthClient();
+
+    const url = client.generateAuthUrl({
       access_type: 'offline',
       scope: env.GOOGLE_SCOPES,
       // `consent` force la délivrance d'un refresh token, y compris lors d'une
@@ -55,7 +57,7 @@ export async function googleAuthRoutes(app: FastifyInstance): Promise<void> {
 
       reply.clearCookie(STATE_COOKIE, { path: '/' });
 
-      const auth = createOAuthClient();
+      const auth = await createOAuthClient();
       const { tokens } = await auth.getToken(code);
 
       if (!tokens.refresh_token) {

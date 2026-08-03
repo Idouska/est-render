@@ -1,11 +1,25 @@
 import { google, type gmail_v1 } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library';
-import { env, googleRedirectUri } from '../../config/env.ts';
+import { googleRedirectUri } from '../../config/env.ts';
 import { decryptSecret, encryptSecret } from '../../lib/crypto.ts';
 import { prisma } from '../../lib/prisma.ts';
+import { requireCredential } from '../platform/credentials.ts';
 
-export function createOAuthClient(): OAuth2Client {
-  return new google.auth.OAuth2(env.GOOGLE_CLIENT_ID, env.GOOGLE_CLIENT_SECRET, googleRedirectUri);
+/**
+ * Client OAuth Google de la plateforme.
+ *
+ * Asynchrone parce que les identifiants peuvent venir de la base : les exiger
+ * explicitement évite de construire un client avec `undefined`, qui échouerait
+ * plus tard sur une erreur Google incompréhensible plutôt qu'ici sur un
+ * message qui dit quoi régler.
+ */
+export async function createOAuthClient(): Promise<OAuth2Client> {
+  const [clientId, clientSecret] = await Promise.all([
+    requireCredential('GOOGLE_CLIENT_ID', 'Nécessaire pour connecter une boîte Gmail.'),
+    requireCredential('GOOGLE_CLIENT_SECRET', 'Nécessaire pour connecter une boîte Gmail.'),
+  ]);
+
+  return new google.auth.OAuth2(clientId, clientSecret, googleRedirectUri);
 }
 
 export class GmailNotConnectedError extends Error {
@@ -29,7 +43,7 @@ export async function getGmailClient(merchantId: string): Promise<{
     throw new GmailNotConnectedError(merchantId);
   }
 
-  const auth = createOAuthClient();
+  const auth = await createOAuthClient();
   auth.setCredentials({
     refresh_token: decryptSecret(connection.refreshTokenEnc),
     access_token: connection.accessTokenEnc ? decryptSecret(connection.accessTokenEnc) : undefined,

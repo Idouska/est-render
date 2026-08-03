@@ -5,6 +5,7 @@ import { hmacSha256Base64, safeEqual } from '../lib/crypto.ts';
 import { logger } from '../lib/logger.ts';
 import { prisma } from '../lib/prisma.ts';
 import { enqueueIngest } from '../queue/index.ts';
+import { requireCredential } from '../services/platform/credentials.ts';
 
 interface PubSubPushBody {
   message?: {
@@ -36,7 +37,14 @@ async function verifyPubSubToken(authorization: string | undefined): Promise<boo
       audience: `${env.APP_URL}/webhooks/gmail`,
     });
     const payload = ticket.getPayload();
-    return payload?.email === env.GOOGLE_PUBSUB_SERVICE_ACCOUNT && payload.email_verified === true;
+    if (!payload) return false;
+
+    const expected = await requireCredential(
+      'GOOGLE_PUBSUB_SERVICE_ACCOUNT',
+      'Nécessaire pour authentifier les notifications Gmail.',
+    );
+
+    return payload.email === expected && payload.email_verified === true;
   } catch (error) {
     logger.warn({ err: error }, 'JWT Pub/Sub invalide');
     return false;
@@ -91,7 +99,16 @@ export async function gmailWebhookRoutes(app: FastifyInstance): Promise<void> {
     if (
       typeof signature !== 'string' ||
       !request.rawBody ||
-      !safeEqual(signature, hmacSha256Base64(env.SHOPIFY_API_SECRET, request.rawBody))
+      !safeEqual(
+        signature,
+        hmacSha256Base64(
+          await requireCredential(
+            'SHOPIFY_API_SECRET',
+            'Nécessaire pour vérifier la signature des webhooks Shopify.',
+          ),
+          request.rawBody,
+        ),
+      )
     ) {
       return reply.code(401).send({ error: 'Signature Shopify invalide' });
     }

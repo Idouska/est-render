@@ -1,6 +1,6 @@
-import { env } from '../../config/env.ts';
 import { logger } from '../../lib/logger.ts';
 import { prisma } from '../../lib/prisma.ts';
+import { requireCredential } from '../platform/credentials.ts';
 import { getGmailClient } from './client.ts';
 
 /**
@@ -10,10 +10,15 @@ import { getGmailClient } from './client.ts';
 export async function startWatch(merchantId: string): Promise<void> {
   const { gmail } = await getGmailClient(merchantId);
 
+  const topicName = await requireCredential(
+    'GOOGLE_PUBSUB_TOPIC',
+    'Nécessaire pour abonner une boîte Gmail aux notifications.',
+  );
+
   const response = await gmail.users.watch({
     userId: 'me',
     requestBody: {
-      topicName: env.GOOGLE_PUBSUB_TOPIC,
+      topicName,
       labelIds: ['INBOX'],
       labelFilterBehavior: 'include',
     },

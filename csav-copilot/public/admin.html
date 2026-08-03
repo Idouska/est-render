@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Administration — cSAV Copilot</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%230b5e6b'/%3E%3Cpath d='M8 3.5l4 1.8v3.1c0 2.2-1.7 3.6-4 4.1-2.3-.5-4-1.9-4-4.1V5.3z' fill='none' stroke='%23fff' stroke-width='1.2'/%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div id="login" class="gate" hidden>
+      <h1>Console d'administration</h1>
+      <p>
+        Réservée à l'éditeur. Les identifiants réglés ici valent pour toute la
+        plateforme, pas pour un marchand.
+      </p>
+      <div class="field">
+        <label for="login-password">Mot de passe</label>
+        <input type="password" id="login-password" autocomplete="current-password" />
+      </div>
+      <div class="actions" style="margin-top: 14px">
+        <button class="btn btn-primary" id="login-go">Entrer</button>
+      </div>
+    </div>
+
+    <div class="admin" id="console" hidden>
+      <header class="topbar">
+        <div class="brand">
+          <strong>Administration</strong>
+          <span>identifiants de la plateforme</span>
+        </div>
+        <div class="conn">
+          <a class="btn btn-small" href="/dashboard">Dashboard</a>
+          <button class="btn btn-small" id="logout">Fermer la session</button>
+        </div>
+      </header>
+
+      <div class="notice">
+        <span class="notice-mark">Priorité</span>
+        <div>
+          Un réglage enregistré ici <b>prime sur la variable d'environnement</b> du même
+          nom. Vider un champ supprime le réglage et rend la main à l'environnement.
+          Les changements sont pris en compte par l'API, le worker et le cron en une
+          trentaine de secondes, sans redéploiement.
+        </div>
+      </div>
+
+      <main class="admin-main" id="groups"></main>
+    </div>
+
+    <div class="toast" id="toast" role="status"></div>
+
+    <script type="module" src="/static/admin.js"></script>
+  </body>
+</html>

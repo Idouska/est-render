@@ -394,3 +394,25 @@ enum ActorType {
   AI
   SUPPLIER
 }
+
+// ---------------------------------------------------------------------------
+// Configuration de la plateforme
+// ---------------------------------------------------------------------------
+
+// Identifiants de l'éditeur (clés Shopify, Google, IA) réglables depuis la
+// console d'administration, sans redéploiement.
+//
+// Volontairement sans `merchantId` : c'est la seule table du schéma qui n'est
+// pas multi-tenant, parce que son contenu appartient à la plateforme et non à
+// un marchand. Toute valeur est chiffrée au repos, y compris celles qui n'en
+// auraient pas besoin (nom de modèle, URL) : une seule règle vaut mieux qu'une
+// liste d'exceptions à tenir à jour.
+//
+// Ces réglages priment sur les variables d'environnement du même nom, qui
+// restent le repli — une base vide se comporte exactement comme avant.
+model PlatformSetting {
+  key       String   @id
+  valueEnc  String
+  updatedAt DateTime @updatedAt
+  updatedBy String? // identifiant libre de l'administrateur, pour le journal
+}

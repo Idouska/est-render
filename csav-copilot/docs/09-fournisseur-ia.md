@@ -40,6 +40,16 @@ un modèle ou un prompt mal calibrés pour de la sortie structurée.
 
 ## Basculer
 
+Deux chemins, au même effet.
+
+**Depuis la console d'administration** — `/admin`, groupe « Intelligence
+artificielle » : choisir le fournisseur, coller la clé, cliquer sur « Tester la
+connexion ». Le changement est pris en compte par l'API, le worker et le cron
+en une trentaine de secondes, sans redéploiement. Voir
+[11-console-admin.md](11-console-admin.md).
+
+**Par variables d'environnement** — le repli, toujours valable :
+
 ```bash
 # .env
 AI_PROVIDER=deepseek
@@ -51,10 +61,14 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
 Aucune autre variable ne change. `ANTHROPIC_API_KEY` devient inutile mais peut
 rester renseignée sans effet — seul `AI_PROVIDER` décide.
 
-Le démarrage refuse explicitement une configuration incohérente :
-`AI_PROVIDER=deepseek` sans `DEEPSEEK_API_KEY` (ou l'inverse) arrête
-l'application avec un message clair plutôt que d'échouer plus tard sur le
-premier mail.
+Un réglage saisi dans la console **prime** sur la variable d'environnement du
+même nom. Effacer le réglage rend la main à l'environnement.
+
+Une configuration incohérente — `AI_PROVIDER=deepseek` sans clé DeepSeek — ne
+bloque plus le démarrage, parce que la clé peut arriver ensuite par la console.
+Elle échoue au premier appel de modèle, avec un message qui dit quoi régler et
+où. Le bouton « Tester la connexion » de la console, et `npm run check:ai` en
+ligne de commande, existent pour ne pas découvrir ça sur un vrai mail.
 
 ## Comparer les deux sur les mêmes mails
 

@@ -13,6 +13,12 @@
  * `.env` (il est ignoré par git), donc la validation complète échouerait sur
  * l'absence de base de données — un échec sans rapport avec la clé qu'on teste.
  * Ici, deux variables suffisent : AI_PROVIDER et la clé du fournisseur.
+ *
+ * Corollaire à connaître : cette autonomie signifie que le script ignore les
+ * réglages de la console d'administration, qui vivent en base et priment sur
+ * l'environnement. Il teste donc la configuration de repli, pas forcément
+ * celle qui tourne. Pour vérifier la configuration réellement active, utiliser
+ * le bouton « Tester la connexion » de /admin — voir docs/11-console-admin.md.
  */
 
 import { createAnthropicProvider } from '../src/services/ai/providers/anthropic.ts';
@@ -107,6 +113,8 @@ async function main(): Promise<void> {
   console.log('Fournisseur :', provider);
   console.log('Modèle      :', client.model);
   console.log('Clé         :', fingerprint(key));
+  console.log('Source      : variables d’environnement');
+  console.log('              (les réglages de /admin, en base, ne sont pas lus ici)');
   console.log('\nEnvoi d’une requête de test…\n');
 
   const started = Date.now();

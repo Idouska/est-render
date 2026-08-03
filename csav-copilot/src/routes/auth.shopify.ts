@@ -6,6 +6,7 @@ import { encryptSecret, hmacSha256Hex, safeEqual } from '../lib/crypto.ts';
 import { logger } from '../lib/logger.ts';
 import { prisma } from '../lib/prisma.ts';
 import { SESSION_COOKIE, signSession } from '../lib/session.ts';
+import { requireCredential } from '../services/platform/credentials.ts';
 
 const STATE_COOKIE = 'csav_shopify_state';
 
@@ -18,16 +19,21 @@ function isValidShopDomain(shop: string): boolean {
  * Vérifie le HMAC du callback OAuth Shopify : tous les paramètres sauf `hmac`,
  * triés par clé, concaténés en query string.
  */
-function verifyShopifyHmac(query: Record<string, string>): boolean {
+async function verifyShopifyHmac(query: Record<string, string>): Promise<boolean> {
   const { hmac, ...rest } = query;
   if (!hmac) return false;
+
+  const secret = await requireCredential(
+    'SHOPIFY_API_SECRET',
+    'Nécessaire pour vérifier la signature des callbacks Shopify.',
+  );
 
   const message = Object.keys(rest)
     .sort()
     .map((key) => `${key}=${rest[key]}`)
     .join('&');
 
-  return safeEqual(hmac, hmacSha256Hex(env.SHOPIFY_API_SECRET, message));
+  return safeEqual(hmac, hmacSha256Hex(secret, message));
 }
 
 export async function shopifyAuthRoutes(app: FastifyInstance): Promise<void> {
@@ -49,8 +55,13 @@ export async function shopifyAuthRoutes(app: FastifyInstance): Promise<void> {
       maxAge: 600,
     });
 
+    const clientId = await requireCredential(
+      'SHOPIFY_API_KEY',
+      'Nécessaire pour lancer l’installation d’une boutique.',
+    );
+
     const url = new URL(`https://${shop}/admin/oauth/authorize`);
-    url.searchParams.set('client_id', env.SHOPIFY_API_KEY);
+    url.searchParams.set('client_id', clientId);
     url.searchParams.set('scope', env.SHOPIFY_SCOPES.join(','));
     url.searchParams.set('redirect_uri', shopifyRedirectUri);
     url.searchParams.set('state', state);
@@ -73,7 +84,7 @@ export async function shopifyAuthRoutes(app: FastifyInstance): Promise<void> {
         return reply.code(400).send({ error: 'State OAuth invalide' });
       }
 
-      if (!verifyShopifyHmac(request.query)) {
+      if (!(await verifyShopifyHmac(request.query))) {
         return reply.code(400).send({ error: 'Signature HMAC invalide' });
       }
 
@@ -83,8 +94,11 @@ export async function shopifyAuthRoutes(app: FastifyInstance): Promise<void> {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          client_id: env.SHOPIFY_API_KEY,
-          client_secret: env.SHOPIFY_API_SECRET,
+          client_id: await requireCredential('SHOPIFY_API_KEY', 'Nécessaire pour l’échange de token.'),
+          client_secret: await requireCredential(
+            'SHOPIFY_API_SECRET',
+            'Nécessaire pour l’échange de token.',
+          ),
           code,
         }),
       });
