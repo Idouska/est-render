@@ -1,0 +1,1352 @@
+<title>cSAV Copilot — poste de travail</title>
+
+<style>
+  /* ===================================================== palettes ====== */
+
+  :root {
+    --accent: #6c5ce7;
+    --accent-strong: #5b4bd6;
+    --accent-soft: #efedfe;
+    --accent-ink: #4c3fc4;
+    --on-accent: #ffffff;
+    --frame: #6d5ae6;
+  }
+
+  [data-accent="indigo"] {
+    --accent: #4f46e5; --accent-strong: #4338ca; --accent-soft: #eceafd;
+    --accent-ink: #3f37bd; --on-accent: #ffffff; --frame: #4f46e5;
+  }
+  [data-accent="bleu"] {
+    --accent: #2563eb; --accent-strong: #1d4ed8; --accent-soft: #e8f0fe;
+    --accent-ink: #1d4ed8; --on-accent: #ffffff; --frame: #2f6fe4;
+  }
+  [data-accent="cyan"] {
+    --accent: #0891b2; --accent-strong: #0e7490; --accent-soft: #e0f5fa;
+    --accent-ink: #0e7490; --on-accent: #ffffff; --frame: #0e9ec2;
+  }
+  [data-accent="emeraude"] {
+    --accent: #059669; --accent-strong: #047857; --accent-soft: #e0f5ee;
+    --accent-ink: #047857; --on-accent: #ffffff; --frame: #0aa473;
+  }
+  [data-accent="ambre"] {
+    --accent: #d97706; --accent-strong: #b45309; --accent-soft: #fdf0dd;
+    --accent-ink: #b45309; --on-accent: #ffffff; --frame: #e08a1e;
+  }
+  [data-accent="corail"] {
+    --accent: #e11d48; --accent-strong: #be123c; --accent-soft: #fdeaef;
+    --accent-ink: #be123c; --on-accent: #ffffff; --frame: #e63b60;
+  }
+  [data-accent="graphite"] {
+    --accent: #475569; --accent-strong: #334155; --accent-soft: #eef1f5;
+    --accent-ink: #334155; --on-accent: #ffffff; --frame: #526175;
+  }
+
+  /* ======================================================= thèmes ====== */
+
+  :root {
+    --ground: #f4f4f7;
+    --surface: #ffffff;
+    --sunk: #fafafc;
+    --inset: #f5f5f8;
+    --ink: #14141b;
+    --ink-soft: #4a4a5c;
+    --ink-mute: #83839a;
+    --line: #e9e9f0;
+    --line-soft: #f1f1f6;
+
+    --ok: #059669; --ok-soft: #e3f6ef;
+    --warn: #d97706; --warn-soft: #fdf1de;
+    --crit: #e5484d; --crit-soft: #fdeaea;
+
+    --age-0: #10b981; --age-1: #f59e0b; --age-2: #f97316; --age-3: #ef4444;
+
+    --r-lg: 15px;
+    --r-md: 11px;
+    --r-sm: 9px;
+
+    --shadow-card: 0 1px 2px rgba(20, 20, 40, 0.04), 0 12px 28px -20px rgba(20, 20, 40, 0.3);
+    --shadow-pop: 0 8px 32px -8px rgba(20, 20, 40, 0.22), 0 2px 8px rgba(20, 20, 40, 0.06);
+
+    --f-ui: "Segoe UI Variable Display", "SF Pro Display", system-ui, -apple-system,
+      "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    --f-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+    color-scheme: light;
+  }
+
+  [data-theme="dark"] {
+    --ground: #14161c;
+    --surface: #1b1e26;
+    --sunk: #20242d;
+    --inset: #232733;
+    --ink: #eef0f5;
+    --ink-soft: #b3b8c6;
+    --ink-mute: #848b9d;
+    --line: #2b303b;
+    --line-soft: #242832;
+
+    --ok-soft: #102c23; --warn-soft: #2d2313; --crit-soft: #331d1e;
+    --accent-soft: color-mix(in srgb, var(--accent) 20%, #1b1e26);
+    --accent-ink: color-mix(in srgb, var(--accent) 62%, #ffffff);
+
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 30px -20px rgba(0, 0, 0, 0.8);
+    --shadow-pop: 0 10px 34px -8px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.35);
+
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--frame);
+    font-family: var(--f-ui);
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    transition: background 0.25s ease;
+  }
+
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, body { transition: none !important; animation: none !important; }
+  }
+
+  .mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+
+  /* ======================================================== shell ====== */
+
+  .frame { padding: 26px; }
+
+  @media (max-width: 700px) { .frame { padding: 10px; } }
+
+  .app {
+    background: var(--ground);
+    border-radius: 20px;
+    padding: 13px;
+    display: grid;
+    grid-template-columns: 244px 1fr;
+    gap: 13px;
+    max-width: 1580px;
+    margin: 0 auto;
+    min-height: 88vh;
+    transition: background 0.2s ease;
+  }
+
+  @media (max-width: 1080px) { .app { grid-template-columns: 1fr; } }
+
+  /* ====================================================== sidebar ====== */
+
+  .side {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    padding: 15px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  @media (max-width: 1080px) { .side { display: none; } }
+
+  .logo { display: flex; align-items: center; gap: 11px; padding: 2px 4px; }
+
+  .logo-mark {
+    width: 38px;
+    height: 38px;
+    border-radius: 11px;
+    background: linear-gradient(150deg, var(--accent), var(--accent-strong));
+    color: var(--on-accent);
+    display: grid;
+    place-items: center;
+    font-weight: 600;
+    font-size: 15px;
+    letter-spacing: -0.02em;
+    flex: none;
+  }
+
+  .logo b { display: block; font-size: 14.5px; font-weight: 600; letter-spacing: -0.01em; }
+  .logo span { display: block; font-size: 11.5px; color: var(--ink-mute); }
+
+  .search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 11px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    background: var(--inset);
+    color: var(--ink-mute);
+    font-size: 13px;
+  }
+
+  .search svg { width: 15px; height: 15px; flex: none; }
+  .search kbd {
+    margin-left: auto;
+    font-family: var(--f-ui);
+    font-size: 10.5px;
+    padding: 2px 6px;
+    border-radius: 5px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+  }
+
+  .nav-group + .nav-group { margin-top: 15px; }
+
+  .nav-title {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    padding: 0 8px 7px;
+    margin: 0;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 8px 9px;
+    border: 0;
+    border-radius: var(--r-sm);
+    background: none;
+    font: inherit;
+    font-size: 13.5px;
+    color: var(--ink-soft);
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.12s ease, color 0.12s ease;
+  }
+
+  .nav-item svg { width: 17px; height: 17px; flex: none; opacity: 0.75; }
+  .nav-item:hover { background: var(--inset); color: var(--ink); }
+
+  .nav-item.on {
+    background: var(--accent-soft);
+    color: var(--accent-ink);
+    font-weight: 600;
+  }
+
+  .nav-item.on svg { opacity: 1; }
+
+  .nav-item .tally {
+    margin-left: auto;
+    font-family: var(--f-mono);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: var(--crit-soft);
+    color: var(--crit);
+  }
+
+  .me {
+    margin-top: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 8px 2px;
+    border-top: 1px solid var(--line-soft);
+  }
+
+  .avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: linear-gradient(150deg, var(--accent), var(--accent-strong));
+    color: var(--on-accent);
+    display: grid;
+    place-items: center;
+    font-size: 12.5px;
+    font-weight: 600;
+    flex: none;
+  }
+
+  .me b { display: block; font-size: 13px; font-weight: 600; }
+  .me span { display: block; font-size: 11.5px; color: var(--ink-mute); }
+
+  /* ========================================================= main ====== */
+
+  .main { display: flex; flex-direction: column; gap: 13px; min-width: 0; }
+
+  .head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 4px 2px 0; }
+
+  .crumb {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12.5px;
+    color: var(--ink-mute);
+  }
+
+  .crumb svg { width: 15px; height: 15px; }
+
+  .head h1 {
+    width: 100%;
+    margin: 0;
+    font-size: 25px;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    text-wrap: balance;
+  }
+
+  .head-acts { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+  .btn {
+    appearance: none;
+    font: inherit;
+    font-size: 13px;
+    padding: 8px 14px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    background: var(--surface);
+    color: var(--ink);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    transition: border-color 0.12s ease, background 0.12s ease;
+  }
+
+  .btn:hover { border-color: var(--ink-mute); }
+  .btn svg { width: 15px; height: 15px; }
+
+  .btn-main {
+    background: linear-gradient(150deg, var(--accent), var(--accent-strong));
+    border-color: transparent;
+    color: var(--on-accent);
+    font-weight: 600;
+    box-shadow: 0 4px 14px -6px var(--accent);
+  }
+
+  .btn-main:hover { border-color: transparent; filter: brightness(1.05); }
+
+  .btn-danger { color: var(--crit); border-color: var(--crit-soft); background: var(--crit-soft); }
+
+  /* sélecteur de palette */
+
+  .palette-wrap { position: relative; }
+
+  .dot-row { display: flex; gap: 3px; }
+  .dot-row i { width: 9px; height: 9px; border-radius: 50%; display: block; }
+
+  .pop {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 8px);
+    z-index: 20;
+    width: 268px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-pop);
+    padding: 14px;
+  }
+
+  .pop[hidden] { display: none; }
+
+  .pop h4 {
+    margin: 0 0 10px;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+  }
+
+  .swatches { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+
+  .swatch {
+    appearance: none;
+    border: 2px solid transparent;
+    border-radius: var(--r-sm);
+    background: var(--inset);
+    padding: 7px 4px 6px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    font: inherit;
+    font-size: 10px;
+    color: var(--ink-mute);
+    transition: border-color 0.12s ease;
+  }
+
+  .swatch i {
+    width: 24px;
+    height: 24px;
+    border-radius: 8px;
+    display: block;
+    box-shadow: inset 0 -1px 2px rgba(0, 0, 0, 0.12);
+  }
+
+  .swatch[aria-pressed="true"] { border-color: var(--ink); color: var(--ink); font-weight: 600; }
+
+  .pop-sep { height: 1px; background: var(--line-soft); margin: 13px 0; }
+
+  .seg {
+    display: grid;
+    grid-auto-flow: column;
+    gap: 5px;
+    padding: 4px;
+    background: var(--inset);
+    border-radius: var(--r-md);
+  }
+
+  .seg button {
+    appearance: none;
+    font: inherit;
+    font-size: 12.5px;
+    padding: 6px 10px;
+    border: 0;
+    border-radius: 8px;
+    background: none;
+    color: var(--ink-mute);
+    cursor: pointer;
+  }
+
+  .seg button[aria-pressed="true"] {
+    background: var(--surface);
+    color: var(--ink);
+    font-weight: 600;
+    box-shadow: 0 1px 3px rgba(20, 20, 40, 0.1);
+  }
+
+  /* ===================================================== workspace ===== */
+
+  .work { display: grid; grid-template-columns: 356px 1fr; gap: 13px; align-items: start; min-width: 0; }
+
+  @media (max-width: 1240px) { .work { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-card);
+  }
+
+  .queue-top { padding: 13px 13px 11px; border-bottom: 1px solid var(--line-soft); }
+
+  .tally-line {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    color: var(--ink-mute);
+    margin-top: 10px;
+  }
+
+  .tally-line b { color: var(--ink); font-weight: 600; }
+
+  .rows { list-style: none; margin: 0; padding: 7px; max-height: 66vh; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; }
+
+  .row {
+    appearance: none;
+    font: inherit;
+    text-align: left;
+    width: 100%;
+    border: 1px solid transparent;
+    border-radius: var(--r-md);
+    background: none;
+    color: inherit;
+    padding: 10px 11px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: background 0.12s ease, border-color 0.12s ease;
+  }
+
+  .row:hover { background: var(--inset); }
+
+  .row[aria-current="true"] {
+    background: var(--accent-soft);
+    border-color: color-mix(in srgb, var(--accent) 32%, transparent);
+  }
+
+  .row-top { display: flex; align-items: center; gap: 8px; }
+
+  .row-num {
+    font-family: var(--f-mono);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    font-size: 13px;
+    letter-spacing: -0.01em;
+  }
+
+  .age {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: var(--f-mono);
+    padding: 2px 8px;
+    border-radius: 999px;
+    color: var(--age);
+    background: color-mix(in srgb, var(--age) 14%, transparent);
+  }
+
+  .age::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--age); }
+
+  .row-what { font-size: 13.5px; font-weight: 600; line-height: 1.35; letter-spacing: -0.01em; }
+
+  .row-meta { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+
+  .tag {
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 999px;
+    letter-spacing: 0.01em;
+  }
+
+  .tag-client { background: var(--accent-soft); color: var(--accent-ink); }
+  .tag-fournisseur { background: var(--warn-soft); color: var(--warn); }
+  .tag-litige { background: var(--crit-soft); color: var(--crit); }
+  .tag-todo { background: var(--crit-soft); color: var(--crit); }
+  .tag-wait { background: var(--warn-soft); color: var(--warn); }
+  .tag-done { background: var(--ok-soft); color: var(--ok); }
+
+  .row-who { font-size: 12px; color: var(--ink-mute); }
+
+  .thumbs { display: flex; gap: 4px; }
+
+  .thumb {
+    width: 27px;
+    height: 27px;
+    border-radius: 7px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    display: grid;
+    place-items: center;
+    flex: none;
+  }
+
+  .thumb svg { width: 18px; height: 18px; }
+
+  /* ======================================================== fiche ====== */
+
+  .sheet { display: flex; flex-direction: column; gap: 13px; min-width: 0; }
+
+  .sheet-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    flex-wrap: wrap;
+    padding: 16px 17px;
+  }
+
+  .sheet-num {
+    font-family: var(--f-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+  }
+
+  .sheet-sub { font-size: 12.5px; color: var(--ink-mute); margin-top: 4px; }
+
+  .sect { padding: 15px 17px; }
+  .sect + .sect { border-top: 1px solid var(--line-soft); }
+
+  .sect h3 {
+    margin: 0 0 12px;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+  }
+
+  .field-label {
+    font-size: 12px;
+    color: var(--ink-mute);
+    margin: 0 0 6px;
+  }
+
+  .inset {
+    background: var(--inset);
+    border: 1px solid var(--line-soft);
+    border-radius: var(--r-md);
+    padding: 12px 13px;
+  }
+
+  .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 11px; }
+
+  .control {
+    width: 100%;
+    font: inherit;
+    font-size: 13.5px;
+    padding: 9px 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    background: var(--surface);
+    color: var(--ink);
+  }
+
+  .options { display: grid; grid-template-columns: repeat(auto-fit, minmax(126px, 1fr)); gap: 10px; }
+
+  .opt {
+    appearance: none;
+    font: inherit;
+    font-size: 13px;
+    padding: 11px 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    background: var(--surface);
+    color: var(--ink-soft);
+    cursor: pointer;
+    text-align: center;
+    transition: border-color 0.12s ease, background 0.12s ease, color 0.12s ease;
+  }
+
+  .opt:hover { border-color: var(--ink-mute); }
+
+  .opt[aria-pressed="true"] {
+    background: linear-gradient(150deg, var(--accent), var(--accent-strong));
+    border-color: transparent;
+    color: var(--on-accent);
+    font-weight: 600;
+    box-shadow: 0 4px 14px -7px var(--accent);
+  }
+
+  .opt.danger[aria-pressed="true"] {
+    background: var(--crit-soft);
+    border-color: var(--crit);
+    color: var(--crit);
+    box-shadow: none;
+  }
+
+  .quote {
+    background: var(--inset);
+    border: 1px solid var(--line-soft);
+    border-left: 3px solid var(--accent);
+    border-radius: var(--r-md);
+    padding: 12px 14px;
+    font-size: 13.5px;
+    color: var(--ink-soft);
+    white-space: pre-wrap;
+  }
+
+  .quote-head {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--ink-mute);
+    margin-bottom: 7px;
+  }
+
+  .quote-head b { color: var(--ink); font-size: 13px; font-weight: 600; }
+
+  .subs { display: grid; grid-template-columns: repeat(auto-fit, minmax(158px, 1fr)); gap: 10px; }
+
+  .sub {
+    appearance: none;
+    font: inherit;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    background: var(--surface);
+    color: var(--ink);
+    cursor: pointer;
+    transition: border-color 0.12s ease;
+  }
+
+  .sub:hover { border-color: var(--accent); }
+
+  .sub[aria-pressed="true"] {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+
+  .sub-photo {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    display: grid;
+    place-items: center;
+    flex: none;
+  }
+
+  .sub-photo svg { width: 24px; height: 24px; }
+  .sub b { display: block; font-size: 12.5px; font-weight: 600; line-height: 1.25; }
+  .sub span { display: block; font-size: 11px; color: var(--ok); }
+
+  .items { display: flex; flex-direction: column; gap: 9px; }
+
+  .item {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 10px 11px;
+    border: 1px solid var(--line-soft);
+    border-radius: var(--r-md);
+    background: var(--inset);
+  }
+
+  .item.bad { border-color: color-mix(in srgb, var(--crit) 45%, transparent); background: var(--crit-soft); }
+
+  .item-photo {
+    width: 42px;
+    height: 42px;
+    border-radius: 9px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    display: grid;
+    place-items: center;
+    flex: none;
+  }
+
+  .item-photo svg { width: 29px; height: 29px; }
+  .item b { display: block; font-size: 13px; font-weight: 600; }
+
+  .item-var { font-size: 12px; color: var(--ink-mute); display: flex; align-items: center; gap: 6px; }
+
+  .sw { width: 10px; height: 10px; border-radius: 50%; border: 1px solid rgba(0, 0, 0, 0.2); flex: none; }
+
+  .item-qty { margin-left: auto; font-family: var(--f-mono); font-size: 13px; color: var(--ink-mute); }
+
+  .kv { display: flex; align-items: baseline; gap: 12px; font-size: 13px; }
+  .kv + .kv { margin-top: 8px; }
+  .kv dt { color: var(--ink-mute); flex: none; }
+  .kv dd { margin: 0 0 0 auto; text-align: right; }
+
+  /* suivi */
+
+  .leg { display: grid; grid-template-columns: 16px 1fr auto; gap: 11px; padding-bottom: 15px; position: relative; }
+  .leg:last-child { padding-bottom: 0; }
+
+  .leg::before {
+    content: "";
+    position: absolute;
+    left: 7px;
+    top: 15px;
+    bottom: 0;
+    width: 2px;
+    background: var(--line);
+    border-radius: 2px;
+  }
+
+  .leg:last-child::before { display: none; }
+
+  .bead {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid var(--line);
+    background: var(--surface);
+    margin: 4px 0 0 3px;
+    z-index: 1;
+  }
+
+  .leg.done .bead { background: var(--ink-mute); border-color: var(--ink-mute); }
+  .leg.done::before { background: var(--ink-mute); }
+
+  .leg.now .bead {
+    background: var(--accent);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 4px var(--accent-soft);
+  }
+
+  .leg .t { font-size: 13px; }
+  .leg.now .t { font-weight: 600; }
+  .leg.todo .t { color: var(--ink-mute); }
+  .leg .p { font-size: 11.5px; color: var(--ink-mute); }
+  .leg .d { font-family: var(--f-mono); font-size: 11.5px; color: var(--ink-mute); white-space: nowrap; }
+
+  .events { display: flex; flex-direction: column; }
+
+  .event {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 11px 0;
+    font-size: 13px;
+  }
+
+  .event + .event { border-top: 1px solid var(--line-soft); }
+  .event i { width: 7px; height: 7px; border-radius: 50%; background: var(--c); flex: none; }
+  .event b { font-weight: 600; }
+  .event span { color: var(--ink-soft); }
+  .event time { margin-left: auto; font-family: var(--f-mono); font-size: 11.5px; color: var(--ink-mute); white-space: nowrap; }
+
+  .foot { display: flex; gap: 9px; justify-content: flex-end; flex-wrap: wrap; padding: 14px 17px; border-top: 1px solid var(--line-soft); }
+
+  .note { font-size: 12.5px; color: var(--ink-mute); }
+</style>
+
+<div class="frame">
+  <div class="app" id="app">
+    <!-- ============================= barre latérale ============================= -->
+    <aside class="side">
+      <div class="logo">
+        <span class="logo-mark">cS</span>
+        <span>
+          <b>cSAV Copilot</b>
+          <span>Poste de travail SAV</span>
+        </span>
+      </div>
+
+      <div class="search">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="7.2" cy="7.2" r="4.6" /><path d="M10.6 10.6 13.5 13.5" stroke-linecap="round" />
+        </svg>
+        Rechercher…
+        <kbd>⌘K</kbd>
+      </div>
+
+      <nav id="nav"></nav>
+
+      <div class="me">
+        <span class="avatar">CM</span>
+        <span>
+          <b>Claire Mercier</b>
+          <span>claire@atelier-lumen.fr</span>
+        </span>
+      </div>
+    </aside>
+
+    <!-- ==================================== zone principale ==================== -->
+    <div class="main">
+      <header class="head">
+        <span class="crumb">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M2.5 5.5h11v8h-11z" /><path d="M2.5 5.5 4 2.5h8l1.5 3" /><path d="M8 2.5v3" />
+          </svg>
+          Traitement
+        </span>
+        <h1>File de traitement</h1>
+
+        <div class="head-acts">
+          <div class="palette-wrap">
+            <button class="btn" id="palette-btn" aria-expanded="false" aria-haspopup="dialog">
+              <span class="dot-row" id="palette-dots"></span>
+              Apparence
+            </button>
+            <div class="pop" id="pop" role="dialog" aria-label="Apparence" hidden>
+              <h4>Couleur d'accent</h4>
+              <div class="swatches" id="swatches"></div>
+              <div class="pop-sep"></div>
+              <h4>Thème</h4>
+              <div class="seg" id="theme-seg">
+                <button data-theme="light" aria-pressed="true">Clair</button>
+                <button data-theme="dark" aria-pressed="false">Sombre</button>
+              </div>
+            </div>
+          </div>
+          <button class="btn btn-main">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+              <path d="M8 3.5v9M3.5 8h9" />
+            </svg>
+            Nouvelle escalade
+          </button>
+        </div>
+      </header>
+
+      <div class="work">
+        <!-- file -->
+        <section class="card" aria-label="File de traitement">
+          <div class="queue-top">
+            <div class="search">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                <circle cx="7.2" cy="7.2" r="4.6" /><path d="M10.6 10.6 13.5 13.5" stroke-linecap="round" />
+              </svg>
+              Commande, client…
+            </div>
+            <div class="tally-line"><b>8 commandes</b> · 6 à traiter</div>
+          </div>
+          <ul class="rows" id="rows"></ul>
+        </section>
+
+        <!-- fiche -->
+        <section class="sheet" id="sheet" aria-label="Fiche commande"></section>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  /* ------------------------------------------------------------ palettes */
+
+  const PALETTES = [
+    { key: 'violet', name: 'Violet', hex: '#6c5ce7' },
+    { key: 'indigo', name: 'Indigo', hex: '#4f46e5' },
+    { key: 'bleu', name: 'Bleu', hex: '#2563eb' },
+    { key: 'cyan', name: 'Cyan', hex: '#0891b2' },
+    { key: 'emeraude', name: 'Émeraude', hex: '#059669' },
+    { key: 'ambre', name: 'Ambre', hex: '#d97706' },
+    { key: 'corail', name: 'Corail', hex: '#e11d48' },
+    { key: 'graphite', name: 'Graphite', hex: '#475569' },
+  ];
+
+  let accent = 'violet';
+
+  $('swatches').innerHTML = PALETTES.map(
+    (p) => `<button class="swatch" data-key="${p.key}" aria-pressed="${p.key === accent}">
+      <i style="background:${p.hex}"></i>${esc(p.name)}
+    </button>`,
+  ).join('');
+
+  $('palette-dots').innerHTML = PALETTES.slice(0, 4)
+    .map((p) => `<i style="background:${p.hex}"></i>`)
+    .join('');
+
+  function setAccent(key) {
+    accent = key;
+    document.documentElement.dataset.accent = key;
+    $('swatches').querySelectorAll('.swatch').forEach((b) =>
+      b.setAttribute('aria-pressed', String(b.dataset.key === key)),
+    );
+  }
+
+  $('swatches').querySelectorAll('.swatch').forEach((b) =>
+    b.addEventListener('click', () => setAccent(b.dataset.key)),
+  );
+
+  $('theme-seg').querySelectorAll('button').forEach((b) =>
+    b.addEventListener('click', () => {
+      document.documentElement.dataset.theme = b.dataset.theme;
+      $('theme-seg').querySelectorAll('button').forEach((o) =>
+        o.setAttribute('aria-pressed', String(o === b)),
+      );
+    }),
+  );
+
+  $('palette-btn').addEventListener('click', () => {
+    const open = $('pop').hidden;
+    $('pop').hidden = !open;
+    $('palette-btn').setAttribute('aria-expanded', String(open));
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.palette-wrap') && !$('pop').hidden) {
+      $('pop').hidden = true;
+      $('palette-btn').setAttribute('aria-expanded', 'false');
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !$('pop').hidden) {
+      $('pop').hidden = true;
+      $('palette-btn').setAttribute('aria-expanded', 'false');
+      $('palette-btn').focus();
+    }
+  });
+
+  /* ------------------------------------------------------------ menu */
+
+  const ICONS = {
+    grid: '<path d="M2.5 2.5h4.5v4.5H2.5zM9 2.5h4.5v4.5H9zM2.5 9h4.5v4.5H2.5zM9 9h4.5v4.5H9z"/>',
+    inbox: '<path d="M2 9.5h3l1 2h4l1-2h3"/><path d="M2.5 9.5 4 3h8l1.5 6.5v4h-11z"/>',
+    chart: '<path d="M2.5 13.5V7M6.5 13.5V3M10.5 13.5v-4M14 13.5V5.5"/>',
+    bag: '<path d="M3 5h10l-.8 8.5H3.8z"/><path d="M6 5V3.5a2 2 0 0 1 4 0V5"/>',
+    users: '<circle cx="6" cy="6" r="2.4"/><path d="M2 13.2c0-2.2 1.8-3.6 4-3.6s4 1.4 4 3.6"/><path d="M10.6 4.2a2.4 2.4 0 0 1 0 4.3M11.6 9.9c1.5.4 2.6 1.6 2.6 3.3"/>',
+    box: '<path d="M8 2 14 5v6l-6 3-6-3V5z"/><path d="m2 5 6 3 6-3M8 8v6"/>',
+    truck: '<path d="M1.5 4.5h8v6h-8z"/><path d="M9.5 7h3l2 2v1.5h-5z"/><circle cx="4.5" cy="12" r="1.4"/><circle cx="11.5" cy="12" r="1.4"/>',
+    euro: '<path d="M11.5 4.2a4.6 4.6 0 1 0 0 7.6"/><path d="M2.8 6.6h5.4M2.8 9.1h5.4"/>',
+    shield: '<path d="M8 2 13 4v4.2c0 3-2.1 5-5 5.8-2.9-.8-5-2.8-5-5.8V4z"/><path d="M8 6v2.6"/><circle cx="8" cy="10.8" r=".5" fill="currentColor" stroke="none"/>',
+    pin: '<circle cx="8" cy="7" r="2.2"/><path d="M8 1.8c2.6 0 4.6 2 4.6 4.6 0 3.2-4.6 7.8-4.6 7.8S3.4 9.6 3.4 6.4C3.4 3.8 5.4 1.8 8 1.8z"/>',
+    gear: '<circle cx="8" cy="8" r="2.2"/><path d="M8 1.8v1.8M8 12.4v1.8M14.2 8h-1.8M3.6 8H1.8M12.4 3.6l-1.3 1.3M4.9 11.1l-1.3 1.3M12.4 12.4l-1.3-1.3M4.9 4.9 3.6 3.6"/>',
+  };
+
+  const ico = (k) => `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"
+    stroke-linejoin="round" stroke-linecap="round">${ICONS[k]}</svg>`;
+
+  const NAV = [
+    ['Pilotage', [['grid', "Vue d'ensemble"], ['inbox', 'File de traitement', 6, true], ['chart', 'Statistiques']]],
+    ['Commerce', [['bag', 'Commandes'], ['users', 'Clients'], ['box', 'Catalogue']]],
+    ['Fournisseur', [['truck', 'Ruptures & escalades', 3], ['pin', 'Suivi 17TRACK']]],
+    ['Finance', [['euro', 'Remboursements'], ['shield', 'Litiges Shopify', 1]]],
+    ['Plateforme', [['gear', 'Réglages']]],
+  ];
+
+  $('nav').innerHTML = NAV.map(
+    ([title, items]) => `<div class="nav-group">
+      <p class="nav-title">${esc(title)}</p>
+      ${items
+        .map(
+          ([icon, label, tally, on]) => `<button class="nav-item ${on ? 'on' : ''}">
+            ${ico(icon)}${esc(label)}
+            ${tally ? `<span class="tally">${tally}</span>` : ''}
+          </button>`,
+        )
+        .join('')}
+    </div>`,
+  ).join('');
+
+  /* ------------------------------------------------------------ données */
+
+  const LAMP = (shade) => `<svg viewBox="0 0 32 32" aria-hidden="true">
+    <path d="M16 2.5 V7" stroke="#8b93a5" stroke-width="1.6" stroke-linecap="round"/>
+    <path d="M6 18 L11.5 7 H20.5 L26 18 Z" fill="${shade}" stroke="rgba(0,0,0,.24)"
+      stroke-width="1" stroke-linejoin="round"/>
+    <ellipse cx="16" cy="18" rx="10" ry="1.7" fill="rgba(0,0,0,.11)"/>
+    <path d="M11 22.5 Q16 27.5 21 22.5" fill="none" stroke="${shade}" stroke-width="1.5"
+      opacity=".5" stroke-linecap="round"/>
+  </svg>`;
+
+  const BULB = (c) => `<svg viewBox="0 0 32 32" aria-hidden="true">
+    <circle cx="16" cy="13" r="8" fill="${c}" stroke="rgba(0,0,0,.24)" stroke-width="1"/>
+    <rect x="12" y="21" width="8" height="6" rx="1.6" fill="#9aa3b2"/>
+  </svg>`;
+
+  const pic = (i) => (i.bulb ? BULB(i.hex) : LAMP(i.hex));
+
+  const SRC = { client: 'Client', fournisseur: 'Fournisseur', litige: 'Litige Shopify' };
+  const ST = { todo: 'À traiter', wait: 'En attente', done: 'Traité' };
+
+  const ORDERS = [
+    {
+      id: '10344', src: 'fournisseur', st: 'todo', days: 8,
+      what: 'Produit indisponible — Lampadaire Sillage', kind: 'stock',
+      who: 'Julien Meyer', mail: 'julien.meyer91@gmail.com', total: '156,00 €',
+      addr: '8 impasse Victor Hugo, 33000 Bordeaux', placed: '10 juil. 2026',
+      items: [{ n: 'Lampadaire Sillage', v: 'Chêne', hex: '#c19a6b', q: 1, bad: true }],
+      track: null,
+      from: 'Shenzhen Lumi', at: 'il y a 8 jours',
+      msg: "Order #10344 cannot ship. Oak version out of stock since 3 weeks, our factory closed this line. Refund or replace?",
+    },
+    {
+      id: '10428', src: 'fournisseur', st: 'todo', days: 6,
+      what: 'Couleur Laiton en rupture définitive', kind: 'color',
+      who: 'Léa Fontaine', mail: 'lea.fontaine@gmail.com', total: '128,40 €',
+      addr: '14 rue des Cordeliers, 69002 Lyon', placed: '13 juil. 2026',
+      items: [
+        { n: 'Lampe Perce-neige', v: 'Laiton', hex: '#b08d3f', q: 1, bad: true },
+        { n: 'Ampoule E27 ambrée', v: null, hex: '#e8c88a', q: 2, bulb: true },
+      ],
+      track: { no: 'LP00427819923CN', by: 'Cainiao · Colissimo', leg: 1, dates: ['26 juil.', '28 juil.'] },
+      from: 'Shenzhen Lumi', at: 'il y a 6 jours',
+      msg: "Order #10428 — the Brass finish is discontinued by our factory, no restock planned. We can ship Black Matte or Brushed Copper instead. Please confirm within 48h or we hold the parcel.",
+    },
+    {
+      id: '10391', src: 'fournisseur', st: 'todo', days: 4,
+      what: 'Adresse incomplète — numéro de rue manquant', kind: 'address',
+      who: 'Marc Delaunay', mail: 'm.delaunay@orange.fr', total: '74,00 €',
+      addr: 'Résidence Les Tilleuls, 69003 Lyon', placed: '22 juil. 2026',
+      items: [{ n: 'Applique Halo', v: 'Noir mat', hex: '#2b2b2b', q: 1 }],
+      track: { no: 'LP00391220041CN', by: 'Cainiao · Mondial Relay', leg: 0, dates: ['30 juil.'] },
+      from: 'Shenzhen Lumi', at: 'il y a 4 jours',
+      msg: "Order #10391 — address has no street number, courier refused pickup. Please send full address.",
+    },
+    {
+      id: '10410', src: 'fournisseur', st: 'wait', days: 3,
+      what: 'Email client invalide — rebond à la livraison', kind: 'email',
+      who: 'Sophie Nguyen', mail: 'sophie.nguyen@laposte.ne', total: '89,90 €',
+      addr: '27 avenue Jean Jaurès, 44000 Nantes', placed: '25 juil. 2026',
+      items: [{ n: 'Suspension Brume', v: 'Opaline', hex: '#e9e4dc', q: 1 }],
+      track: { no: 'LP00410771120CN', by: 'Cainiao · Colissimo', leg: 2, dates: ['22 juil.', '24 juil.', '27 juil.'] },
+      from: 'Shenzhen Lumi', at: 'il y a 3 jours',
+      msg: "Order #10410 — customer email bounced, cannot send tracking. Typo in domain?",
+    },
+    {
+      id: '10412', src: 'litige', st: 'todo', days: 2,
+      what: 'Réclamation — produit non reçu', kind: 'dispute',
+      who: 'Karim Benali', mail: 'k.benali@gmail.com', total: '212,00 €',
+      addr: '3 place du Marché, 59000 Lille', placed: '26 juin 2026',
+      deadline: 'Réponse à Shopify avant le 9 août',
+      items: [{ n: 'Suspension Brume', v: 'Laiton', hex: '#b08d3f', q: 2 }],
+      track: { no: 'LP00412009984CN', by: 'Cainiao · Colissimo', leg: 5,
+        dates: ['27 juin', '29 juin', '2 juil.', '4 juil.', '6 juil.', '8 juil.'] },
+      from: 'Shopify Payments', at: 'il y a 2 jours',
+      msg: "A chargeback was opened on order #10412 for 212,00 EUR. Reason: product not received. Submit your evidence before August 9 or the amount will be debited automatically.",
+    },
+    {
+      id: '10375', src: 'client', st: 'todo', days: 1,
+      what: 'Abat-jour fêlé — demande de remboursement', kind: 'refund',
+      who: 'Amélie Rousseau', mail: 'a.rousseau@free.fr', total: '96,00 €',
+      addr: '61 rue Sainte-Catherine, 33000 Bordeaux', placed: '20 juil. 2026',
+      items: [{ n: 'Lampe Rosée', v: 'Verre soufflé', hex: '#dcc9c2', q: 1 }],
+      track: { no: 'LP00375441203CN', by: 'Cainiao · Colissimo', leg: 5,
+        dates: ['21 juil.', '23 juil.', '26 juil.', '27 juil.', '29 juil.', '1 août'] },
+      from: 'Amélie Rousseau', at: 'hier',
+      msg: "Bonjour,\n\nJ'ai reçu ma lampe hier, l'abat-jour en verre est fêlé sur tout un côté. Le carton était intact. Je ne souhaite pas d'échange, je préfère être remboursée.",
+    },
+    {
+      id: '10402', src: 'client', st: 'todo', days: 0,
+      what: 'Où en est ma commande ?', kind: 'wismo',
+      who: 'Thomas Girard', mail: 'thomas.girard@gmail.com', total: '62,00 €',
+      addr: '9 rue du Bac, 75007 Paris', placed: '23 juil. 2026',
+      items: [{ n: 'Applique Halo', v: 'Laiton', hex: '#b08d3f', q: 1 }],
+      track: { no: 'LP00402118876CN', by: 'Cainiao · Colissimo', leg: 3,
+        dates: ['24 juil.', '26 juil.', '29 juil.', '31 juil.'] },
+      from: 'Thomas Girard', at: "il y a 3 h",
+      msg: "Bonjour, ma commande est partie il y a 11 jours et le suivi ne bouge plus depuis une semaine. C'est normal ?",
+    },
+    {
+      id: '10298', src: 'client', st: 'done', days: 2,
+      what: 'Retour — mauvaise finition commandée', kind: 'return',
+      who: 'Inès Lambert', mail: 'ines.lambert@free.fr', total: '42,50 €',
+      addr: '12 boulevard Gambetta, 06000 Nice', placed: '4 juil. 2026',
+      items: [{ n: 'Ampoule E27 ambrée', v: null, hex: '#e8c88a', q: 3, bulb: true }],
+      track: { no: 'LP00298330445CN', by: 'Cainiao · Colissimo', leg: 5,
+        dates: ['5 juil.', '7 juil.', '10 juil.', '11 juil.', '13 juil.', '15 juil.'] },
+      from: 'Inès Lambert', at: 'il y a 4 jours',
+      msg: "Je me suis trompée de finition, comment faire pour l'échanger ?",
+    },
+  ];
+
+  const LEGS = [
+    ['Pris en charge par le fournisseur', 'Shenzhen, CN'],
+    ['Transit à l’export', 'Aéroport de Shenzhen (SZX)'],
+    ['Transit à l’import', 'Aéroport de Paris-CDG'],
+    ['Dédouanement', 'Douane française'],
+    ['En cours de livraison', 'Transporteur local'],
+    ['Livré', 'Remis au client'],
+  ];
+
+  const SUBS = [
+    { n: 'Lampe Perce-neige', v: 'Noir mat', hex: '#2b2b2b', s: '42 en stock' },
+    { n: 'Lampe Perce-neige', v: 'Cuivre brossé', hex: '#a5673f', s: '18 en stock' },
+    { n: 'Lampe Congère', v: 'Laiton', hex: '#b08d3f', s: '7 en stock' },
+  ];
+
+  const EVENTS = [
+    ['Message du fournisseur reçu', 'Rupture signalée sur la référence Laiton', "Aujourd'hui, 08:14", 'var(--age-3)'],
+    ['Suivi mis à jour', 'Transit à l’export — Aéroport de Shenzhen', 'Hier, 14:02', 'var(--accent)'],
+    ['Commande rattachée', 'Rapprochée par l’adresse du client', '28 juil., 09:45', 'var(--age-0)'],
+  ];
+
+  const ageVar = (d) => (d < 1 ? 'var(--age-0)' : d <= 2 ? 'var(--age-1)' : d <= 4 ? 'var(--age-2)' : 'var(--age-3)');
+  const ageText = (d) => (d < 1 ? "aujourd'hui" : d === 1 ? '1 jour' : `${d} jours`);
+
+  let selected = '10428';
+  let action = null;
+
+  /* ------------------------------------------------------------- rendu */
+
+  function renderRows() {
+    $('rows').innerHTML = ORDERS.map(
+      (o) => `<li><button class="row" data-id="${o.id}" aria-current="${o.id === selected}"
+        style="--age: ${ageVar(o.days)}">
+        <span class="row-top">
+          <span class="row-num">#${o.id}</span>
+          <span class="tag tag-${o.st}">${ST[o.st]}</span>
+          <span class="age">${ageText(o.days)}</span>
+        </span>
+        <span class="row-what">${esc(o.what)}</span>
+        <span class="row-meta">
+          <span class="tag tag-${o.src}">${SRC[o.src]}</span>
+          <span class="row-who">${esc(o.who)}</span>
+          <span class="thumbs" style="margin-left:auto">
+            ${o.items.map((i) => `<span class="thumb">${pic(i)}</span>`).join('')}
+          </span>
+        </span>
+      </button></li>`,
+    ).join('');
+
+    $('rows').querySelectorAll('.row').forEach((b) =>
+      b.addEventListener('click', () => {
+        selected = b.dataset.id;
+        action = null;
+        renderRows();
+        renderSheet();
+      }),
+    );
+  }
+
+  function actionsFor(o) {
+    const list = [];
+    if (o.kind === 'stock' || o.kind === 'color') list.push(['sub', 'Substitution'], ['refund', 'Rembourser']);
+    if (o.kind === 'address') list.push(['address', "Corriger l'adresse"]);
+    if (o.kind === 'email') list.push(['email', "Corriger l'email"]);
+    if (o.kind === 'refund') list.push(['refund', 'Rembourser']);
+    if (o.kind === 'dispute') list.push(['evidence', 'Répondre à Shopify']);
+    list.push(['client', 'Écrire au client'], ['supplier', 'Écrire au fournisseur']);
+    return list;
+  }
+
+  function paneFor(o, key) {
+    if (key === 'sub')
+      return `<p class="field-label">Le client garde sa commande, on remplace la référence indisponible.</p>
+        <div class="subs">
+          ${SUBS.map(
+            (s, i) => `<button class="sub" aria-pressed="${i === 0}">
+              <span class="sub-photo">${LAMP(s.hex)}</span>
+              <span><b>${esc(s.n)}<br />${esc(s.v)}</b><span>${esc(s.s)}</span></span>
+            </button>`,
+          ).join('')}
+        </div>`;
+
+    if (key === 'refund')
+      return `<div class="inset">
+          <dl style="margin:0">
+            <div class="kv"><dt>Montant payé</dt><dd class="mono">${esc(o.total)}</dd></div>
+            <div class="kv"><dt>Remboursable</dt><dd class="mono">${esc(o.total)}</dd></div>
+          </dl>
+        </div>
+        <p class="note" style="margin:10px 0 0">Confirmation obligatoire, consignée au journal d'audit.</p>`;
+
+    if (key === 'address')
+      return `<p class="field-label">Corrigée ici, l'adresse part vers Shopify et vers le fournisseur en une fois.</p>
+        <input class="control" value="${esc(o.addr)}" />`;
+
+    if (key === 'email')
+      return `<p class="field-label">L'adresse actuelle rebondit. La corriger relance l'envoi du suivi.</p>
+        <input class="control" value="${esc(o.mail)}" />`;
+
+    if (key === 'evidence')
+      return `<p class="field-label">Le suivi 17TRACK et l'adresse sont joints automatiquement.</p>
+        <div class="inset">
+          <dl style="margin:0">
+            <div class="kv"><dt>Preuve de suivi</dt><dd class="mono">${esc(o.track ? o.track.no : '—')}</dd></div>
+            <div class="kv"><dt>Statut colis</dt><dd>${o.track ? LEGS[o.track.leg][0] : '—'}</dd></div>
+          </dl>
+        </div>`;
+
+    if (key === 'client')
+      return `<textarea class="control" rows="4" placeholder="Votre réponse au client…"></textarea>
+        <p class="note" style="margin:9px 0 0">Part depuis sav@atelier-lumen.fr, dans le fil d'origine.</p>`;
+
+    return `<textarea class="control" rows="4" placeholder="Votre message au fournisseur…"></textarea>
+      <p class="note" style="margin:9px 0 0">Shenzhen Lumi — réponse moyenne sous 14 h.</p>`;
+  }
+
+  function renderSheet() {
+    const o = ORDERS.find((x) => x.id === selected);
+    const acts = actionsFor(o);
+    const current = action ?? acts[0][0];
+
+    $('sheet').innerHTML = `
+      <div class="card">
+        <div class="sheet-head">
+          <div>
+            <div class="sheet-num">#${o.id}</div>
+            <div class="sheet-sub">${esc(o.who)} · ${esc(o.mail)}</div>
+          </div>
+          <div style="margin-left:auto;text-align:right">
+            <span class="tag tag-${o.st}">${ST[o.st]}</span>
+            <div class="sheet-sub" style="margin-top:6px">
+              Ouvert depuis <b style="color:${ageVar(o.days)}">${ageText(o.days)}</b>
+            </div>
+          </div>
+        </div>
+
+        <div class="sect">
+          <h3>Problème signalé</h3>
+          ${o.deadline ? `<p class="field-label" style="color:var(--crit);font-weight:600">${esc(o.deadline)}</p>` : ''}
+          <div class="quote-head"><b>${esc(o.from)}</b><span>${esc(o.at)}</span></div>
+          <div class="quote">${esc(o.msg)}</div>
+        </div>
+
+        <div class="sect">
+          <h3>Action</h3>
+          <div class="options" style="margin-bottom:14px">
+            ${acts
+              .map(
+                ([k, label]) => `<button class="opt${k === 'refund' ? ' danger' : ''}"
+                  data-act="${k}" aria-pressed="${k === current}">${esc(label)}</button>`,
+              )
+              .join('')}
+          </div>
+          <div id="pane">${paneFor(o, current)}</div>
+        </div>
+
+        <div class="foot">
+          <button class="btn">Marquer résolu</button>
+          <button class="btn btn-main">Valider et envoyer</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="sect">
+          <h3>Commande</h3>
+          <div class="items">
+            ${o.items
+              .map(
+                (i) => `<div class="item${i.bad ? ' bad' : ''}">
+                  <span class="item-photo">${pic(i)}</span>
+                  <span>
+                    <b>${esc(i.n)}</b>
+                    <span class="item-var">
+                      ${i.v ? `<span class="sw" style="background:${i.hex}"></span>${esc(i.v)}` : 'Sans variante'}
+                    </span>
+                  </span>
+                  <span class="item-qty">×${i.q}</span>
+                </div>`,
+              )
+              .join('')}
+          </div>
+          <div class="inset" style="margin-top:12px">
+            <dl style="margin:0">
+              <div class="kv"><dt>Passée le</dt><dd class="mono">${esc(o.placed)}</dd></div>
+              <div class="kv"><dt>Montant</dt><dd class="mono">${esc(o.total)}</dd></div>
+              <div class="kv"><dt>Livraison</dt><dd>${esc(o.addr)}</dd></div>
+            </dl>
+          </div>
+        </div>
+
+        <div class="sect">
+          <h3>Suivi 17TRACK</h3>
+          ${
+            o.track
+              ? `<div class="inset" style="margin-bottom:14px">
+                  <dl style="margin:0">
+                    <div class="kv"><dt>Transporteur</dt><dd>${esc(o.track.by)}</dd></div>
+                    <div class="kv"><dt>N° de suivi</dt><dd class="mono">${esc(o.track.no)}</dd></div>
+                  </dl>
+                </div>
+                ${LEGS.map(([t, p], i) => {
+                  const cls = i < o.track.leg ? 'done' : i === o.track.leg ? 'now' : 'todo';
+                  return `<div class="leg ${cls}">
+                    <span class="bead"></span>
+                    <span><span class="t">${t}</span><br /><span class="p">${p}</span></span>
+                    <span class="d">${o.track.dates[i] ?? ''}</span>
+                  </div>`;
+                }).join('')}`
+              : `<p class="note">Aucun numéro de suivi : le colis n'a jamais été expédié.</p>`
+          }
+        </div>
+
+        <div class="sect">
+          <h3>Historique</h3>
+          <div class="events">
+            ${EVENTS.map(
+              ([t, d, when, c]) => `<div class="event" style="--c:${c}">
+                <i></i><span><b>${esc(t)}</b> — ${esc(d)}</span><time>${esc(when)}</time>
+              </div>`,
+            ).join('')}
+          </div>
+        </div>
+      </div>`;
+
+    $('sheet').querySelectorAll('.opt').forEach((b) =>
+      b.addEventListener('click', () => {
+        action = b.dataset.act;
+        renderSheet();
+      }),
+    );
+
+    bindSubs();
+  }
+
+  function bindSubs() {
+    const subs = $('sheet').querySelectorAll('.sub');
+    subs.forEach((b) =>
+      b.addEventListener('click', () => {
+        subs.forEach((s) => s.setAttribute('aria-pressed', String(s === b)));
+      }),
+    );
+  }
+
+  setAccent('violet');
+  document.documentElement.dataset.theme = 'light';
+  renderRows();
+  renderSheet();
+</script>
