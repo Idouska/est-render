@@ -107,6 +107,11 @@ async function api(path, options = {}) {
   return payload;
 }
 
+/** Domaine de la dernière boutique ouverte sur cet appareil. */
+function installUrlFor(shopDomain) {
+  return `/auth/shopify?shop=${encodeURIComponent(shopDomain)}`;
+}
+
 async function showGate(message) {
   $('gate-text').textContent = message;
   $('gate').hidden = false;
@@ -114,14 +119,49 @@ async function showGate(message) {
 
   // En production, le raccourci de développement n'existe pas : on renvoie
   // vers l'installation Shopify plutôt que vers un lien mort.
+  let devMode = false;
   try {
     const config = await fetch('/api/config').then((r) => r.json());
-    $('gate-dev').hidden = !config.devMode;
-    $('gate-prod').hidden = config.devMode;
+    devMode = Boolean(config.devMode);
   } catch {
-    $('gate-prod').hidden = false;
+    devMode = false;
+  }
+
+  $('gate-dev').hidden = !devMode;
+  $('gate-prod').hidden = devMode;
+
+  // La session est un cookie propre à chaque navigateur : ouvrir le dashboard
+  // sur un téléphone tombe forcément ici la première fois. Demander de
+  // composer une URL à la main à ce moment-là est le pire moment pour le faire,
+  // donc on retient le domaine et on propose un bouton.
+  const known = localStorage.getItem('csav.shop');
+
+  if (!devMode && known) {
+    $('gate-login').href = installUrlFor(known);
+    $('gate-login').textContent = `Se reconnecter à ${known.replace('.myshopify.com', '')}`;
+    $('gate-login').hidden = false;
+    $('gate-form').hidden = true;
+  } else if (!devMode) {
+    $('gate-login').hidden = true;
+    $('gate-form').hidden = false;
+  } else {
+    $('gate-login').hidden = true;
+    $('gate-form').hidden = true;
   }
 }
+
+$('gate-form').addEventListener('submit', (event) => {
+  event.preventDefault();
+
+  const raw = $('gate-shop')
+    .value.trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .replace(/\/.*$/, '');
+  if (!raw) return;
+
+  location.href = installUrlFor(raw.endsWith('.myshopify.com') ? raw : `${raw}.myshopify.com`);
+});
 
 /* ------------------------------------------------------------- barre haute */
 
@@ -2482,6 +2522,11 @@ async function boot() {
 
   $('gate').hidden = true;
   $('app').hidden = false;
+
+  // Mémorisé pour l'écran de session expirée, sur cet appareil uniquement.
+  if (state.me.merchant.shopDomain) {
+    localStorage.setItem('csav.shop', state.me.merchant.shopDomain);
+  }
 
   renderMe();
   renderClocks();

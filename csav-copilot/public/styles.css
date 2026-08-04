@@ -1052,7 +1052,9 @@ body {
 
 .gate {
   max-width: 520px;
-  margin: 80px auto;
+  /* Sur téléphone, 80 px de marge haute poussent le bouton hors du premier
+     coup d'œil alors que c'est la seule chose à faire sur cet écran. */
+  margin: clamp(24px, 8vh, 80px) 16px;
   padding: 28px;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -1063,6 +1065,32 @@ body {
 .gate h1 { margin: 0 0 10px; font-size: 19px; letter-spacing: -0.02em; }
 .gate p { color: var(--ink-soft); margin: 0 0 16px; }
 .gate code { font-family: var(--font-mono); font-size: 13px; background: var(--inset); padding: 2px 6px; border-radius: 4px; }
+
+@media (min-width: 552px) { .gate { margin: clamp(24px, 8vh, 80px) auto; } }
+
+.gate .btn { width: 100%; justify-content: center; }
+
+#gate-form { display: flex; flex-direction: column; gap: 8px; }
+
+#gate-form label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+#gate-form input {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--inset);
+  color: var(--ink);
+  font: inherit;
+  /* 16 px : en dessous, Safari iOS zoome à la mise au point et casse la mise
+     en page de l'écran. */
+  font-size: 16px;
+}
 
 /* ----------------------------------------------- console d'administration */
 

@@ -15,9 +15,23 @@
       <h1>Session expirée</h1>
       <p id="gate-text">Connectez-vous pour accéder au SAV.</p>
       <p id="gate-prod" hidden>
-        Installez l'application depuis votre administration Shopify, ou ouvrez
-        <code>/auth/shopify?shop=votre-boutique.myshopify.com</code>.
+        Reconnectez-vous à votre boutique Shopify — l'autorisation prend deux
+        secondes et vous ramène ici.
       </p>
+      <a class="btn btn-primary" id="gate-login" hidden>Se reconnecter</a>
+      <form id="gate-form" hidden>
+        <label for="gate-shop">Domaine de votre boutique</label>
+        <input
+          id="gate-shop"
+          type="text"
+          inputmode="url"
+          autocapitalize="off"
+          autocorrect="off"
+          spellcheck="false"
+          placeholder="ma-boutique.myshopify.com"
+        />
+        <button class="btn btn-primary" type="submit">Continuer</button>
+      </form>
       <a class="btn btn-primary" id="gate-dev" href="/dev/login" hidden>
         Ouvrir une session de développement
       </a>
