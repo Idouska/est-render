@@ -25,6 +25,30 @@ const listQuery = z.object({
 });
 
 /**
+ * Filtres propres à l'écran Commandes.
+ *
+ * Chaque écran a les siens : trier des commandes par état de paiement n'a
+ * aucun sens sur une liste de fournisseurs, et une barre unique partagée
+ * afficherait partout des options mortes.
+ */
+const orderQuery = listQuery.extend({
+  sort: z.enum(['recent', 'oldest', 'updated', 'amountDesc', 'amountAsc']).default('recent'),
+  payment: z.enum(['paid', 'pending', 'refunded', 'partially_refunded', 'voided']).optional(),
+  delivery: z.enum(['fulfilled', 'unfulfilled', 'partial', 'in_transit']).optional(),
+});
+
+/** Assemble la requête Shopify à partir de la recherche libre et des filtres. */
+function buildOrderQuery(input: z.infer<typeof orderQuery>): string {
+  return [
+    toOrderQuery(input.q),
+    input.payment ? `financial_status:${input.payment}` : '',
+    input.delivery ? `fulfillment_status:${input.delivery}` : '',
+  ]
+    .filter(Boolean)
+    .join(' AND ');
+}
+
+/**
  * Traduit une recherche libre en requête Shopify.
  *
  * Une chaîne qui ressemble à un email ou à un numéro de commande est envoyée
@@ -102,7 +126,7 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', requireSession);
 
   app.get('/api/orders', async (request, reply) => {
-    const parsed = listQuery.safeParse(request.query);
+    const parsed = orderQuery.safeParse(request.query);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Paramètres invalides', details: parsed.error.issues });
     }
@@ -110,9 +134,10 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
     try {
       const client = await getShopifyClient(request.session.merchantId);
       const page = await listOrders(client, {
-        query: toOrderQuery(parsed.data.q),
+        query: buildOrderQuery(parsed.data),
         limit: parsed.data.limit,
         cursor: parsed.data.cursor ?? null,
+        sort: parsed.data.sort,
       });
       return reply.send(page);
     } catch (error) {

@@ -29,7 +29,10 @@ const state = {
   refundFilter: '',
   settings: null,
   view: 'tickets',
-  orders: { items: [], cursor: null, hasNext: false, q: '', loading: false, loaded: false, timer: null },
+  orders: {
+    items: [], cursor: null, hasNext: false, q: '', loading: false, loaded: false, timer: null,
+    sort: 'recent', payment: '', delivery: '',
+  },
   customers: { items: [], cursor: null, hasNext: false, q: '', loading: false, loaded: false, timer: null },
 };
 
@@ -1742,6 +1745,19 @@ $('catalog-more').addEventListener('click', () => loadCatalog());
 // fichier reçu en mémoire puis re-téléchargé ne servirait à rien de plus.
 $('orders-export').href = '/api/orders/export.csv?limit=250';
 
+// Les filtres de commandes rejouent la requête depuis le début : garder le
+// curseur mélangerait deux tris dans la même liste.
+for (const [id, key] of [
+  ['orders-sort', 'sort'],
+  ['orders-payment', 'payment'],
+  ['orders-delivery', 'delivery'],
+]) {
+  $(id).addEventListener('change', (event) => {
+    state.orders[key] = event.target.value;
+    void loadOrders({ reset: true });
+  });
+}
+
 $('catalog-q').addEventListener('input', (event) => {
   state.catalog.q = event.target.value.trim();
   clearTimeout(state.catalog.timer);
@@ -2107,8 +2123,55 @@ $('nav-search').addEventListener('input', (event) => {
   renderNav();
 });
 
-// Entrée ouvre le premier résultat : chercher puis devoir viser à la souris
-// annulerait le gain du raccourci.
+/**
+ * Recherche globale.
+ *
+ * Le champ servait seulement à filtrer la navigation. Or ce qu'on cherche
+ * toute la journée, c'est une commande — « #1042 » —, et accessoirement un
+ * client. La destination se déduit de ce qui est tapé plutôt que d'un menu à
+ * choisir avant de taper.
+ */
+function routeSearch(raw) {
+  const term = raw.trim();
+  if (!term) return;
+
+  // Un numéro de commande, avec ou sans dièse : c'est le cas majoritaire, il
+  // passe en premier.
+  if (/^#?\d{2,}$/.test(term)) {
+    state.orders.q = term.startsWith('#') ? term : `#${term}`;
+    $('orders-q').value = state.orders.q;
+    setView('orders');
+    void loadOrders({ reset: true });
+    return;
+  }
+
+  // Une adresse email désigne un client : sa fiche dit plus que la liste des
+  // commandes du même nom.
+  if (term.includes('@')) {
+    state.customers.q = term;
+    $('customers-q').value = term;
+    setView('customers');
+    void loadCustomers({ reset: true });
+    return;
+  }
+
+  // Un écran porte ce nom : on y va, c'est l'ancien comportement du champ.
+  const view = VIEWS.find((candidate) =>
+    VIEW_META[candidate].label.toLowerCase().includes(term.toLowerCase()),
+  );
+  if (view) {
+    setView(view);
+    return;
+  }
+
+  // Sinon, du texte libre : la file de traitement le cherche dans les objets,
+  // les clients et les numéros de commande.
+  state.queue.q = term;
+  $('q-search').value = term;
+  setView('tickets');
+  void loadQueue();
+}
+
 $('nav-search').addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
     event.target.value = '';
@@ -2120,8 +2183,13 @@ $('nav-search').addEventListener('keydown', (event) => {
 
   if (event.key !== 'Enter') return;
 
-  const first = $('nav').querySelector('.nav-item');
-  if (first) setView(first.dataset.view);
+  routeSearch(event.target.value);
+
+  // La navigation était filtrée pendant la frappe : la laisser ainsi vide la
+  // barre latérale au moment précis où l'on arrive sur l'écran demandé.
+  state.navQuery = '';
+  renderNav();
+  event.target.blur();
 });
 
 document.addEventListener('keydown', (event) => {
@@ -2297,10 +2365,13 @@ async function loadOrders({ reset = false } = {}) {
 
   const params = new URLSearchParams();
   // 50 est le plafond accepté par l'API : moins d'allers-retours pour un
-  // catalogue de plusieurs centaines de références.
+  // carnet de plusieurs centaines de commandes.
   params.set('limit', '50');
   if (store.q) params.set('q', store.q);
   if (store.cursor) params.set('cursor', store.cursor);
+  if (store.sort && store.sort !== 'recent') params.set('sort', store.sort);
+  if (store.payment) params.set('payment', store.payment);
+  if (store.delivery) params.set('delivery', store.delivery);
 
   try {
     const page = await api(`/api/orders?${params}`);

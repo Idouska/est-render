@@ -59,7 +59,12 @@
               stroke-linecap="round" aria-hidden="true">
               <circle cx="7" cy="7" r="4.6" /><path d="m10.5 10.5 3 3" />
             </svg>
-            <input id="nav-search" type="search" placeholder="Aller à…" autocomplete="off" />
+            <input
+              id="nav-search"
+              type="search"
+              placeholder="#1042, client, écran…"
+              autocomplete="off"
+            />
             <kbd>/</kbd>
           </label>
 
@@ -255,15 +260,45 @@
       </main>
 
       <section class="browse" id="view-orders" hidden aria-label="Commandes">
-        <div class="browse-bar">
-          <input
-            type="search"
-            id="orders-q"
-            placeholder="Numéro de commande, email ou nom du client…"
-            aria-label="Rechercher une commande"
-          />
-          <span class="browse-count" id="orders-count"></span>
-          <a class="btn btn-small" id="orders-export" download>Exporter en Excel</a>
+        <div class="qbar">
+          <div class="qbar-row">
+            <input
+              type="search"
+              id="orders-q"
+              placeholder="#1042, email ou nom du client…"
+              aria-label="Rechercher une commande"
+            />
+            <a class="btn btn-small" id="orders-export" download>Exporter en Excel</a>
+          </div>
+
+          <div class="qbar-row qbar-selects">
+            <label>Trier <select id="orders-sort">
+              <option value="recent">Commande la plus récente</option>
+              <option value="oldest">La plus ancienne</option>
+              <option value="updated">Modifiée récemment</option>
+              <option value="amountDesc">Montant décroissant</option>
+              <option value="amountAsc">Montant croissant</option>
+            </select></label>
+
+            <label>Paiement <select id="orders-payment">
+              <option value="">Tous</option>
+              <option value="paid">Payé</option>
+              <option value="pending">En attente</option>
+              <option value="partially_refunded">Partiellement remboursé</option>
+              <option value="refunded">Remboursé</option>
+              <option value="voided">Annulé</option>
+            </select></label>
+
+            <label>Livraison <select id="orders-delivery">
+              <option value="">Toutes</option>
+              <option value="unfulfilled">Non expédiée</option>
+              <option value="partial">Partiellement expédiée</option>
+              <option value="in_transit">En transit</option>
+              <option value="fulfilled">Livrée</option>
+            </select></label>
+
+            <span class="qbar-count" id="orders-count"></span>
+          </div>
         </div>
         <div class="table-wrap">
           <table class="grid">

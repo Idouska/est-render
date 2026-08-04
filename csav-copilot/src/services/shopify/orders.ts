@@ -280,11 +280,34 @@ export interface OrderPage {
  * de commandes, ce qui demande un curseur — Shopify pagine par `endCursor`,
  * jamais par numéro de page.
  */
+/**
+ * Clés de tri exposées à l'écran Commandes.
+ *
+ * Restreintes à une liste close plutôt que passées telles quelles : `sortKey`
+ * est une énumération GraphQL, une valeur inconnue fait échouer toute la
+ * requête au lieu de retomber sur un tri par défaut.
+ */
+export const ORDER_SORT_KEYS = {
+  recent: { key: 'CREATED_AT', reverse: true },
+  oldest: { key: 'CREATED_AT', reverse: false },
+  updated: { key: 'UPDATED_AT', reverse: true },
+  amountDesc: { key: 'TOTAL_PRICE', reverse: true },
+  amountAsc: { key: 'TOTAL_PRICE', reverse: false },
+} as const;
+
+export type OrderSortKey = keyof typeof ORDER_SORT_KEYS;
+
 export async function listOrders(
   client: ShopifyClient,
-  options: { query?: string; limit?: number; cursor?: string | null } = {},
+  options: {
+    query?: string;
+    limit?: number;
+    cursor?: string | null;
+    sort?: OrderSortKey;
+  } = {},
 ): Promise<OrderPage> {
-  const { query = '', limit = 25, cursor = null } = options;
+  const { query = '', limit = 25, cursor = null, sort = 'recent' } = options;
+  const sortKey = ORDER_SORT_KEYS[sort] ?? ORDER_SORT_KEYS.recent;
 
   const data = await client.request<{
     orders: {
@@ -294,14 +317,14 @@ export async function listOrders(
   }>(
     /* GraphQL */ `
       ${ORDER_FIELDS}
-      query ListOrders($query: String, $limit: Int!, $cursor: String) {
-        orders(
-          first: $limit
-          after: $cursor
-          query: $query
-          sortKey: CREATED_AT
-          reverse: true
-        ) {
+      query ListOrders(
+        $query: String
+        $limit: Int!
+        $cursor: String
+        $sortKey: OrderSortKeys!
+        $reverse: Boolean!
+      ) {
+        orders(first: $limit, after: $cursor, query: $query, sortKey: $sortKey, reverse: $reverse) {
           pageInfo {
             hasNextPage
             endCursor
@@ -312,7 +335,7 @@ export async function listOrders(
         }
       }
     `,
-    { query: query || null, limit, cursor },
+    { query: query || null, limit, cursor, sortKey: sortKey.key, reverse: sortKey.reverse },
   );
 
   return {
