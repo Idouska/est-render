@@ -9,6 +9,7 @@ import { prisma } from './lib/prisma.ts';
 import { googleAuthRoutes } from './routes/auth.google.ts';
 import { shopifyAuthRoutes } from './routes/auth.shopify.ts';
 import { adminRoutes } from './routes/admin.ts';
+import { commerceRoutes } from './routes/commerce.ts';
 import { devRoutes } from './routes/dev.ts';
 import { refundRoutes } from './routes/refunds.ts';
 import { settingsRoutes } from './routes/settings.ts';
@@ -82,6 +83,7 @@ export async function buildServer() {
   await app.register(ticketRoutes);
   await app.register(refundRoutes);
   await app.register(settingsRoutes);
+  await app.register(commerceRoutes);
   await app.register(supplierRoutes);
   await app.register(supplierPortalRoutes);
   await app.register(adminRoutes);

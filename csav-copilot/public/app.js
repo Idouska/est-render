@@ -16,6 +16,9 @@ const state = {
   refund: null,
   supplier: null,
   settings: null,
+  view: 'tickets',
+  orders: { items: [], cursor: null, hasNext: false, q: '', loading: false, loaded: false, timer: null },
+  customers: { items: [], cursor: null, hasNext: false, q: '', loading: false, loaded: false, timer: null },
 };
 
 /* ------------------------------------------------------------------ outils */
@@ -527,6 +530,252 @@ $('sup-save').addEventListener('click', async () => {
   } catch (error) {
     toast(error.message, true);
   }
+});
+
+/* ------------------------------------------------------------ navigation */
+
+/* Trois sections dans une seule page : la file de tickets, le carnet de
+   commandes et le fichier client. Les deux dernières interrogent Shopify en
+   direct, donc on ne les charge qu'à la première ouverture. */
+
+const VIEWS = ['tickets', 'orders', 'customers'];
+
+function setView(view) {
+  state.view = view;
+
+  for (const name of VIEWS) $(`view-${name}`).hidden = name !== view;
+
+  $('tabs')
+    .querySelectorAll('.tab')
+    .forEach((tab) => tab.setAttribute('aria-pressed', String(tab.dataset.view === view)));
+
+  // Les indicateurs ne concernent que la file : les masquer ailleurs évite de
+  // laisser croire qu'ils décrivent l'écran affiché.
+  $('kpis').hidden = view !== 'tickets';
+
+  if (view === 'orders' && !state.orders.loaded) loadOrders({ reset: true });
+  if (view === 'customers' && !state.customers.loaded) loadCustomers({ reset: true });
+}
+
+$('tabs').addEventListener('click', (event) => {
+  const tab = event.target.closest('.tab');
+  if (tab) setView(tab.dataset.view);
+});
+
+/* --------------------------------------------------------- commandes ---- */
+
+const FINANCIAL_LABELS = {
+  PAID: 'Payée',
+  PARTIALLY_PAID: 'Partiellement payée',
+  PENDING: 'En attente',
+  REFUNDED: 'Remboursée',
+  PARTIALLY_REFUNDED: 'Partiellement remboursée',
+  VOIDED: 'Annulée',
+  AUTHORIZED: 'Autorisée',
+  EXPIRED: 'Expirée',
+};
+
+const FULFILLMENT_LABELS = {
+  FULFILLED: 'Expédiée',
+  UNFULFILLED: 'Non expédiée',
+  PARTIALLY_FULFILLED: 'Partiellement expédiée',
+  IN_PROGRESS: 'En préparation',
+  IN_TRANSIT: 'En transit',
+  OUT_FOR_DELIVERY: 'En livraison',
+  DELIVERED: 'Livrée',
+  ON_HOLD: 'En attente',
+  SCHEDULED: 'Programmée',
+  RESTOCKED: 'Remise en stock',
+};
+
+/** Couleur de pastille : ce qui demande une action ressort, le reste s'efface. */
+function statusTag(value, labels, alert) {
+  if (!value) return '<span class="tag tag-status st-NEW">—</span>';
+  const label = labels[value] ?? value;
+  const cls = alert.includes(value) ? 'st-NEEDS_REVIEW' : 'st-CLOSED';
+  return `<span class="tag tag-status ${cls}">${esc(label)}</span>`;
+}
+
+async function loadOrders({ reset = false } = {}) {
+  const store = state.orders;
+  if (store.loading) return;
+
+  store.loading = true;
+  const body = $('orders-rows');
+
+  if (reset) {
+    store.items = [];
+    store.cursor = null;
+    body.innerHTML = '<tr><td colspan="6" class="empty">Chargement…</td></tr>';
+  }
+
+  const params = new URLSearchParams();
+  if (store.q) params.set('q', store.q);
+  if (store.cursor) params.set('cursor', store.cursor);
+
+  try {
+    const page = await api(`/api/orders?${params}`);
+    store.items = store.items.concat(page.orders);
+    store.cursor = page.cursor;
+    store.hasNext = page.hasNextPage;
+    store.loaded = true;
+    renderOrders();
+  } catch (error) {
+    body.innerHTML = `<tr><td colspan="6" class="empty">${esc(error.message)}</td></tr>`;
+    $('orders-count').textContent = '';
+    $('orders-more').hidden = true;
+  } finally {
+    store.loading = false;
+  }
+}
+
+function renderOrders() {
+  const store = state.orders;
+
+  $('orders-rows').innerHTML =
+    store.items
+      .map(
+        (order) => `<tr class="grid-row" data-order="${esc(order.id)}">
+          <td class="mono"><b>${esc(order.name)}</b></td>
+          <td>${esc(order.customer?.displayName ?? order.customer?.email ?? 'Client inconnu')}</td>
+          <td>${fullDate(order.createdAt)}</td>
+          <td>${statusTag(order.displayFinancialStatus, FINANCIAL_LABELS, ['PENDING', 'PARTIALLY_PAID', 'EXPIRED'])}</td>
+          <td>${statusTag(order.displayFulfillmentStatus, FULFILLMENT_LABELS, ['UNFULFILLED', 'ON_HOLD'])}</td>
+          <td class="num mono">${euro(order.totalPrice, order.currency)}</td>
+        </tr>`,
+      )
+      .join('') || '<tr><td colspan="6" class="empty">Aucune commande.</td></tr>';
+
+  $('orders-count').textContent = store.items.length
+    ? `${store.items.length} commande${store.items.length > 1 ? 's' : ''}${store.hasNext ? ' affichées' : ''}`
+    : '';
+  $('orders-more').hidden = !store.hasNext;
+
+  // Cliquer une ligne ouvre le détail dans le panneau latéral de la file :
+  // c'est là que vivent déjà l'adresse, le suivi et le remboursement.
+  $('orders-rows')
+    .querySelectorAll('.grid-row')
+    .forEach((row) => row.addEventListener('click', () => openOrderSheet(row.dataset.order)));
+}
+
+async function openOrderSheet(id) {
+  try {
+    const { order } = await api(`/api/orders/${encodeURIComponent(id)}`);
+    // On réutilise les panneaux de la fiche ticket : ce sont les mêmes
+    // informations, et le remboursement y est déjà câblé.
+    renderCustomer(order);
+    renderOrder(null, order, null);
+    renderShipping(order);
+    setView('tickets');
+    $('d-subject').textContent = `Commande ${order.name}`;
+    $('d-meta').innerHTML = `${esc(order.customer?.displayName ?? '')} · <code>${esc(
+      order.customer?.email ?? '—',
+    )}</code>`;
+    $('d-messages').innerHTML =
+      '<p class="empty">Consultation depuis le carnet de commandes — aucun échange rattaché.</p>';
+    $('draft-zone').hidden = true;
+    $('no-draft').hidden = false;
+    $('no-draft-text').textContent =
+      'Ouvrez un ticket pour rédiger une réponse. Le remboursement reste accessible depuis un ticket.';
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+$('orders-more').addEventListener('click', () => loadOrders());
+
+$('orders-q').addEventListener('input', (event) => {
+  state.orders.q = event.target.value.trim();
+  clearTimeout(state.orders.timer);
+  // Chaque frappe déclencherait un appel Shopify : on attend une pause.
+  state.orders.timer = setTimeout(() => loadOrders({ reset: true }), 350);
+});
+
+/* ------------------------------------------------------------- clients -- */
+
+async function loadCustomers({ reset = false } = {}) {
+  const store = state.customers;
+  if (store.loading) return;
+
+  store.loading = true;
+  const body = $('customers-rows');
+
+  if (reset) {
+    store.items = [];
+    store.cursor = null;
+    body.innerHTML = '<tr><td colspan="7" class="empty">Chargement…</td></tr>';
+  }
+
+  const params = new URLSearchParams();
+  if (store.q) params.set('q', store.q);
+  if (store.cursor) params.set('cursor', store.cursor);
+
+  try {
+    const page = await api(`/api/customers?${params}`);
+    store.items = store.items.concat(page.customers);
+    store.cursor = page.cursor;
+    store.hasNext = page.hasNextPage;
+    store.loaded = true;
+    renderCustomers();
+  } catch (error) {
+    body.innerHTML = `<tr><td colspan="7" class="empty">${esc(error.message)}</td></tr>`;
+    $('customers-count').textContent = '';
+    $('customers-more').hidden = true;
+  } finally {
+    store.loading = false;
+  }
+}
+
+function renderCustomers() {
+  const store = state.customers;
+
+  $('customers-rows').innerHTML =
+    store.items
+      .map(
+        (customer) => `<tr class="grid-row" data-email="${esc(customer.email ?? '')}">
+          <td><b>${esc(customer.displayName ?? '—')}</b></td>
+          <td class="mono">${esc(customer.email ?? '—')}</td>
+          <td>${esc([customer.city, customer.country].filter(Boolean).join(', ') || '—')}</td>
+          <td>${fullDate(customer.createdAt)}</td>
+          <td class="num mono">${customer.numberOfOrders}</td>
+          <td class="num mono">${euro(customer.amountSpent, customer.currency)}</td>
+          <td>${
+            customer.lastOrder
+              ? `<span class="mono">${esc(customer.lastOrder.name)}</span> · ${relativeTime(
+                  customer.lastOrder.createdAt,
+                )}`
+              : '—'
+          }</td>
+        </tr>`,
+      )
+      .join('') || '<tr><td colspan="7" class="empty">Aucun client.</td></tr>';
+
+  $('customers-count').textContent = store.items.length
+    ? `${store.items.length} client${store.items.length > 1 ? 's' : ''}`
+    : '';
+  $('customers-more').hidden = !store.hasNext;
+
+  // Cliquer un client bascule sur ses commandes : c'est la question suivante
+  // qu'on se pose toujours.
+  $('customers-rows')
+    .querySelectorAll('.grid-row')
+    .forEach((row) =>
+      row.addEventListener('click', () => {
+        if (!row.dataset.email) return;
+        state.orders.q = row.dataset.email;
+        $('orders-q').value = row.dataset.email;
+        setView('orders');
+        loadOrders({ reset: true });
+      }),
+    );
+}
+
+$('customers-more').addEventListener('click', () => loadCustomers());
+
+$('customers-q').addEventListener('input', (event) => {
+  state.customers.q = event.target.value.trim();
+  clearTimeout(state.customers.timer);
+  state.customers.timer = setTimeout(() => loadCustomers({ reset: true }), 350);
 });
 
 /* --------------------------------------------------------------- réglages */

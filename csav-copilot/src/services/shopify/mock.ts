@@ -295,6 +295,67 @@ export function createMockShopifyClient(shopDomain: string): ShopifyClient {
         return { orders: { nodes: found.map(toGraphQL) } } as T;
       }
 
+      // Listes du carnet de commandes et du fichier client. La pagination
+      // n'est pas simulée : le jeu fictif tient sur une page.
+      if (query.includes('query ListOrders')) {
+        const found = runSearch(String(variables?.query ?? '')).slice(
+          0,
+          Number(variables?.limit ?? 25),
+        );
+        return {
+          orders: {
+            pageInfo: { hasNextPage: false, endCursor: null },
+            nodes: found.map(toGraphQL),
+          },
+        } as T;
+      }
+
+      if (query.includes('query ListCustomers')) {
+        const term = String(variables?.query ?? '')
+          .replace(/^email:/, '')
+          .replace(/"/g, '')
+          .toLowerCase();
+
+        // Un client par adresse distincte, avec sa commande la plus récente.
+        const byEmail = new Map<string, typeof ORDERS>();
+        for (const order of ORDERS) {
+          const list = byEmail.get(order.customerEmail) ?? [];
+          list.push(order);
+          byEmail.set(order.customerEmail, list);
+        }
+
+        const nodes = [...byEmail.entries()]
+          .map(([email, orders]) => ({
+            email,
+            latest: [...orders].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]!,
+          }))
+          .filter(
+            ({ email, latest }) =>
+              !term ||
+              email.toLowerCase().includes(term) ||
+              latest.customerName.toLowerCase().includes(term),
+          )
+          .map(({ email, latest }) => {
+            return {
+              id: `gid://shopify/Customer/${email}`,
+              displayName: latest.customerName,
+              defaultEmailAddress: { emailAddress: email },
+              defaultPhoneNumber: { phoneNumber: latest.address?.phone ?? null },
+              numberOfOrders: latest.customerOrders,
+              amountSpent: { amount: latest.customerSpent, currencyCode: latest.currency },
+              createdAt: latest.customerSince,
+              defaultAddress: latest.address
+                ? { city: latest.address.city, countryCodeV2: latest.address.country }
+                : null,
+              lastOrder: { name: latest.name, createdAt: latest.createdAt },
+            };
+          });
+
+        return {
+          customers: { pageInfo: { hasNextPage: false, endCursor: null }, nodes },
+        } as T;
+      }
+
       if (query.includes('query GetOrder')) {
         const found = ORDERS.find((o) => o.id === variables?.id);
         return { order: found ? toGraphQL(found) : null } as T;

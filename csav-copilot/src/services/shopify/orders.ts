@@ -242,3 +242,60 @@ export async function getOrderById(
 export function quoteSearchValue(value: string): string {
   return `"${value.replace(/["\\]/g, '\\$&')}"`;
 }
+
+export interface OrderPage {
+  orders: OrderSummary[];
+  /** Curseur du dernier élément, à repasser tel quel pour la page suivante. */
+  cursor: string | null;
+  hasNextPage: boolean;
+}
+
+/**
+ * Liste paginée des commandes, de la plus récente à la plus ancienne.
+ *
+ * Distincte de `searchOrders` : celle-ci sert le rattachement d'un mail à une
+ * commande et renvoie un lot court sans pagination. Ici on parcourt le carnet
+ * de commandes, ce qui demande un curseur — Shopify pagine par `endCursor`,
+ * jamais par numéro de page.
+ */
+export async function listOrders(
+  client: ShopifyClient,
+  options: { query?: string; limit?: number; cursor?: string | null } = {},
+): Promise<OrderPage> {
+  const { query = '', limit = 25, cursor = null } = options;
+
+  const data = await client.request<{
+    orders: {
+      pageInfo: { hasNextPage: boolean; endCursor: string | null };
+      nodes: RawOrder[];
+    };
+  }>(
+    /* GraphQL */ `
+      ${ORDER_FIELDS}
+      query ListOrders($query: String, $limit: Int!, $cursor: String) {
+        orders(
+          first: $limit
+          after: $cursor
+          query: $query
+          sortKey: CREATED_AT
+          reverse: true
+        ) {
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+          nodes {
+            ...OrderFields
+          }
+        }
+      }
+    `,
+    { query: query || null, limit, cursor },
+  );
+
+  return {
+    orders: data.orders.nodes.map(toSummary),
+    cursor: data.orders.pageInfo.endCursor,
+    hasNextPage: data.orders.pageInfo.hasNextPage,
+  };
+}

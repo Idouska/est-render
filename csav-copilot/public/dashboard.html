@@ -33,6 +33,12 @@
         <button class="btn btn-small" id="settings-open">Réglages</button>
       </header>
 
+      <nav class="tabs" id="tabs" aria-label="Sections">
+        <button class="tab" data-view="tickets" aria-pressed="true">File de traitement</button>
+        <button class="tab" data-view="orders" aria-pressed="false">Commandes</button>
+        <button class="tab" data-view="customers" aria-pressed="false">Clients</button>
+      </nav>
+
       <div class="notice" id="mock-notice" hidden>
         <span class="notice-mark">Simulation</span>
         <div>
@@ -44,7 +50,7 @@
         </div>
       </div>
 
-      <section class="kpis" aria-label="Indicateurs des 30 derniers jours">
+      <section class="kpis" id="kpis" aria-label="Indicateurs des 30 derniers jours">
         <div class="kpi">
           <span class="kpi-label">Traités · 30 jours</span>
           <span class="kpi-value" id="kpi-done">—</span>
@@ -67,7 +73,7 @@
         </div>
       </section>
 
-      <main class="workspace">
+      <main class="workspace" id="view-tickets">
         <section class="panel" aria-label="File de tickets">
           <div class="filters" id="filters">
             <button class="chip" data-filter="" aria-pressed="true">Tous</button>
@@ -161,6 +167,67 @@
           </div>
         </aside>
       </main>
+
+      <section class="browse" id="view-orders" hidden aria-label="Commandes">
+        <div class="browse-bar">
+          <input
+            type="search"
+            id="orders-q"
+            placeholder="Numéro de commande, email ou nom du client…"
+            aria-label="Rechercher une commande"
+          />
+          <span class="browse-count" id="orders-count"></span>
+        </div>
+        <div class="table-wrap">
+          <table class="grid">
+            <thead>
+              <tr>
+                <th>Commande</th>
+                <th>Client</th>
+                <th>Date</th>
+                <th>Paiement</th>
+                <th>Livraison</th>
+                <th class="num">Montant</th>
+              </tr>
+            </thead>
+            <tbody id="orders-rows"></tbody>
+          </table>
+        </div>
+        <div class="browse-foot">
+          <button class="btn" id="orders-more" hidden>Charger la suite</button>
+        </div>
+      </section>
+
+      <section class="browse" id="view-customers" hidden aria-label="Clients">
+        <div class="browse-bar">
+          <input
+            type="search"
+            id="customers-q"
+            placeholder="Nom ou email…"
+            aria-label="Rechercher un client"
+          />
+          <span class="browse-count" id="customers-count"></span>
+        </div>
+        <div class="table-wrap">
+          <table class="grid">
+            <thead>
+              <tr>
+                <th>Client</th>
+                <th>Email</th>
+                <th>Lieu</th>
+                <th>Client depuis</th>
+                <th class="num">Commandes</th>
+                <th class="num">Total dépensé</th>
+                <th>Dernière commande</th>
+              </tr>
+            </thead>
+            <tbody id="customers-rows"></tbody>
+          </table>
+        </div>
+        <div class="browse-foot">
+          <button class="btn" id="customers-more" hidden>Charger la suite</button>
+        </div>
+      </section>
     </div>
 
     <div
