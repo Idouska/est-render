@@ -24,22 +24,36 @@
     </div>
 
     <div class="shell" id="app" hidden>
-      <header class="topbar">
-        <div class="brand">
-          <strong id="merchant-name">cSAV Copilot</strong>
-          <span id="merchant-shop"></span>
-        </div>
-        <div class="conn" id="conn"></div>
-        <button class="btn btn-small" id="settings-open">Réglages</button>
-      </header>
+      <div class="app">
+        <aside class="side">
+          <div class="brand">
+            <span class="brand-mark" id="brand-mark">SA</span>
+            <div>
+              <strong id="merchant-name">cSAV Copilot</strong>
+              <span id="merchant-shop"></span>
+            </div>
+          </div>
 
-      <nav class="tabs" id="tabs" aria-label="Sections">
-        <button class="tab" data-view="tickets" aria-pressed="true">File de traitement</button>
-        <button class="tab" data-view="orders" aria-pressed="false">Commandes</button>
-        <button class="tab" data-view="customers" aria-pressed="false">Clients</button>
-        <button class="tab" data-view="suppliers" aria-pressed="false">Fournisseurs</button>
-        <button class="tab" data-view="team" aria-pressed="false">Équipe</button>
-      </nav>
+          <nav id="nav" aria-label="Sections"></nav>
+
+          <div class="me">
+            <span class="avatar" id="me-avatar">?</span>
+            <div style="min-width: 0">
+              <b id="me-name">—</b>
+              <span id="me-role"></span>
+            </div>
+            <button class="btn btn-small" id="logout" style="margin-left: auto">Sortir</button>
+          </div>
+        </aside>
+
+        <div class="main">
+          <header class="head">
+            <div class="crumb" id="crumb"></div>
+            <div class="head-acts">
+              <div class="conn" id="conn"></div>
+            </div>
+            <h1 id="view-title">File de traitement</h1>
+          </header>
 
       <div class="notice" id="mock-notice" hidden>
         <span class="notice-mark">Simulation</span>
@@ -266,6 +280,223 @@
           </table>
         </div>
       </section>
+
+      <section class="browse" id="view-overview" hidden aria-label="Vue d'ensemble">
+        <div class="kpis" id="ov-kpis"></div>
+        <div class="set-grid">
+          <div class="panel">
+            <div class="panel-head"><span class="panel-title">À traiter en priorité</span></div>
+            <ul class="queue-list" id="ov-queue"></ul>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><span class="panel-title">Dernières actions</span></div>
+            <ul class="journal" id="ov-audit"></ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="browse" id="view-stats" hidden aria-label="Statistiques">
+        <div class="kpis" id="stats-kpis"></div>
+        <div class="panel">
+          <div class="panel-head"><span class="panel-title">Volume par jour</span></div>
+          <div class="card-body" id="stats-daily"></div>
+        </div>
+        <div class="table-wrap">
+          <table class="grid">
+            <thead>
+              <tr>
+                <th>Membre</th>
+                <th>Rôle</th>
+                <th class="num">Réponses envoyées</th>
+                <th class="num">Remboursements</th>
+                <th class="num">Escalades</th>
+              </tr>
+            </thead>
+            <tbody id="stats-team"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="browse" id="view-catalog" hidden aria-label="Catalogue">
+        <div class="browse-bar">
+          <div class="seg" id="catalog-seg" style="max-width: 260px">
+            <button data-kind="products" aria-pressed="true">Produits</button>
+            <button data-kind="collections" aria-pressed="false">Collections</button>
+          </div>
+          <input type="search" id="catalog-q" placeholder="Titre, référence, fournisseur…" />
+          <span class="browse-count" id="catalog-count"></span>
+        </div>
+        <div class="table-wrap">
+          <table class="grid">
+            <thead id="catalog-head"></thead>
+            <tbody id="catalog-rows"></tbody>
+          </table>
+        </div>
+        <div class="browse-foot">
+          <button class="btn" id="catalog-more" hidden>Charger la suite</button>
+        </div>
+      </section>
+
+      <section class="browse" id="view-tracking" hidden aria-label="Suivi colis">
+        <div class="browse-bar">
+          <span class="browse-count" id="tracking-count"></span>
+          <button class="btn btn-small" id="tracking-refresh" style="margin-left: auto">
+            Rafraîchir
+          </button>
+        </div>
+        <div class="table-wrap">
+          <table class="grid">
+            <thead>
+              <tr>
+                <th>Commande</th>
+                <th>Client</th>
+                <th>Transporteur</th>
+                <th>N° de suivi</th>
+                <th>Destination</th>
+                <th>Livraison estimée</th>
+              </tr>
+            </thead>
+            <tbody id="tracking-rows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="browse" id="view-refunds" hidden aria-label="Remboursements">
+        <div class="browse-bar">
+          <span class="browse-count" id="refunds-count"></span>
+        </div>
+        <div class="table-wrap">
+          <table class="grid">
+            <thead>
+              <tr>
+                <th>Commande</th>
+                <th>Date</th>
+                <th>Motif</th>
+                <th>Type</th>
+                <th>État</th>
+                <th class="num">Montant</th>
+              </tr>
+            </thead>
+            <tbody id="refunds-rows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="browse" id="view-disputes" hidden aria-label="Litiges Shopify">
+        <div class="browse-bar">
+          <span class="browse-count" id="disputes-count"></span>
+        </div>
+        <div class="table-wrap">
+          <table class="grid">
+            <thead>
+              <tr>
+                <th>Commande</th>
+                <th>Motif</th>
+                <th>Type</th>
+                <th>État</th>
+                <th>Preuves attendues</th>
+                <th class="num">Montant</th>
+              </tr>
+            </thead>
+            <tbody id="disputes-rows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="browse" id="view-settings" hidden aria-label="Réglages">
+        <div class="set-grid">
+          <div class="panel">
+            <div class="panel-head"><span class="panel-title">Connexions</span></div>
+            <div class="card-body set-group">
+              <p class="set-help">
+                Aucune clé d'API à saisir : l'accès passe par une autorisation que vous
+                donnez, et que vous pouvez retirer à tout moment.
+              </p>
+              <div class="set-conn" id="set-shopify"></div>
+              <div class="set-conn" id="set-gmail"></div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head"><span class="panel-title">Réponses automatiques</span></div>
+            <div class="card-body set-group">
+              <label class="confirm">
+                <input type="checkbox" id="set-autosend" />
+                <span>
+                  <b>Envoyer sans relecture</b> les réponses dont la confiance dépasse le
+                  seuil ci-dessous. Désactivé, tout reste en brouillon.
+                </span>
+              </label>
+              <div class="field">
+                <label for="set-threshold">Seuil de confiance</label>
+                <input type="range" id="set-threshold" min="0.5" max="1" step="0.01" />
+                <small>
+                  À <b id="set-threshold-echo">—</b>. Plus le seuil est haut, moins de
+                  réponses partent seules.
+                </small>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head"><span class="panel-title">Conservation des données</span></div>
+            <div class="card-body set-group">
+              <div class="field">
+                <label for="set-retention">Durée de conservation des mails ingérés</label>
+                <select id="set-retention">
+                  <option value="30">30 jours</option>
+                  <option value="90">90 jours</option>
+                  <option value="180">6 mois</option>
+                  <option value="365">1 an</option>
+                  <option value="730">2 ans</option>
+                  <option value="1095">3 ans</option>
+                </select>
+                <small>
+                  Passé ce délai, les messages et leurs pièces sont purgés
+                  automatiquement. Base légale RGPD — voir la politique de
+                  confidentialité.
+                </small>
+              </div>
+              <div class="actions">
+                <button class="btn btn-primary" id="set-save">Enregistrer</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="browse" id="view-palettes" hidden aria-label="Palettes">
+        <div class="set-grid">
+          <div class="panel">
+            <div class="panel-head"><span class="panel-title">Couleur d'accent</span></div>
+            <div class="card-body set-group">
+              <p class="set-help">
+                Le choix est propre à vous et reste sur cet appareil — vos collègues
+                gardent le leur. L'accent ne code aucune information : l'état d'un
+                ticket ou d'un paiement garde ses couleurs quoi que vous choisissiez.
+              </p>
+              <div class="swatches" id="palette-swatches"></div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head"><span class="panel-title">Thème</span></div>
+            <div class="card-body set-group">
+              <div class="seg" id="theme-seg" style="max-width: 260px">
+                <button data-theme="light" aria-pressed="true">Clair</button>
+                <button data-theme="dark" aria-pressed="false">Sombre</button>
+                <button data-theme="auto" aria-pressed="false">Système</button>
+              </div>
+              <p class="set-help">
+                « Système » suit le réglage de votre ordinateur, y compris s'il bascule
+                automatiquement le soir.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+        </div>
+      </div>
     </div>
 
     <div
@@ -377,75 +608,6 @@
           <button class="btn btn-danger" id="sup-f-delete" hidden>Supprimer</button>
           <button class="btn" id="sup-f-cancel">Annuler</button>
           <button class="btn btn-primary" id="sup-f-save">Enregistrer</button>
-        </div>
-      </div>
-    </div>
-
-    <div
-      class="backdrop"
-      id="settings-modal"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="settings-title"
-    >
-      <div class="modal modal-wide">
-        <div class="modal-head">
-          <h2 id="settings-title">Réglages</h2>
-          <p>Connexions de votre boutique, autonomie de l'IA et conservation des données.</p>
-        </div>
-        <div class="modal-body">
-          <section class="set-group">
-            <h3>Connexions</h3>
-            <p class="set-help">
-              Aucune clé d'API à saisir : l'accès passe par une autorisation que vous
-              donnez, et que vous pouvez retirer à tout moment.
-            </p>
-            <div class="set-conn" id="set-shopify"></div>
-            <div class="set-conn" id="set-gmail"></div>
-          </section>
-
-          <section class="set-group">
-            <h3>Réponses automatiques</h3>
-            <label class="confirm">
-              <input type="checkbox" id="set-autosend" />
-              <span>
-                <b>Envoyer sans relecture</b> les réponses dont la confiance dépasse le
-                seuil ci-dessous. Désactivé, tout reste en brouillon.
-              </span>
-            </label>
-            <div class="field">
-              <label for="set-threshold">Seuil de confiance</label>
-              <input type="range" id="set-threshold" min="0.5" max="1" step="0.01" />
-              <small>
-                À <b id="set-threshold-echo">—</b>. Plus le seuil est haut, moins de
-                réponses partent seules.
-              </small>
-            </div>
-          </section>
-
-          <section class="set-group">
-            <h3>Conservation des données</h3>
-            <div class="field">
-              <label for="set-retention">Durée de conservation des mails ingérés</label>
-              <select id="set-retention">
-                <option value="30">30 jours</option>
-                <option value="90">90 jours</option>
-                <option value="180">6 mois</option>
-                <option value="365">1 an</option>
-                <option value="730">2 ans</option>
-                <option value="1095">3 ans</option>
-              </select>
-              <small>
-                Passé ce délai, les messages et leurs pièces sont purgés
-                automatiquement. Base légale RGPD — voir la politique de
-                confidentialité.
-              </small>
-            </div>
-          </section>
-        </div>
-        <div class="modal-foot">
-          <button class="btn" id="set-cancel">Fermer</button>
-          <button class="btn btn-primary" id="set-save">Enregistrer</button>
         </div>
       </div>
     </div>

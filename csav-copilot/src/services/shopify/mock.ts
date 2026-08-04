@@ -356,6 +356,74 @@ export function createMockShopifyClient(shopDomain: string): ShopifyClient {
         } as T;
       }
 
+      // Catalogue fictif : les articles cités dans les commandes ci-dessus,
+      // pour que le mode démonstration reste cohérent d'un écran à l'autre.
+      if (query.includes('query ListProducts')) {
+        const titles = [...new Set(ORDERS.flatMap((o) => o.items.map((i) => i.title)))];
+        const term = String(variables?.query ?? '').toLowerCase();
+
+        const nodes = titles
+          .filter((title) => !term || title.toLowerCase().includes(term))
+          .map((title, index) => ({
+            id: `gid://shopify/Product/${index + 1}`,
+            title,
+            handle: title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+            status: index % 5 === 4 ? 'DRAFT' : 'ACTIVE',
+            vendor: 'Atelier Lumen',
+            productType: 'Luminaire',
+            totalInventory: index % 4 === 3 ? 0 : 12 + index * 3,
+            updatedAt: new Date(Date.UTC(2026, 1, 20 - index)).toISOString(),
+            featuredMedia: null,
+            variantsCount: { count: 1 + (index % 3) },
+            priceRangeV2: {
+              minVariantPrice: { amount: String(29 + index * 7), currencyCode: 'EUR' },
+              maxVariantPrice: { amount: String(29 + index * 11) },
+            },
+          }));
+
+        return {
+          products: { pageInfo: { hasNextPage: false, endCursor: null }, nodes },
+        } as T;
+      }
+
+      if (query.includes('query ListCollections')) {
+        const nodes = ['Luminaires', 'Nouveautés', 'Fin de série'].map((title, index) => ({
+          id: `gid://shopify/Collection/${index + 1}`,
+          title,
+          handle: title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+          updatedAt: new Date(Date.UTC(2026, 1, 18 - index)).toISOString(),
+          productsCount: { count: 4 - index },
+          image: null,
+        }));
+
+        return {
+          collections: { pageInfo: { hasNextPage: false, endCursor: null }, nodes },
+        } as T;
+      }
+
+      // Un litige ouvert, pour que l'écran Finance montre le cas qui compte :
+      // celui dont l'échéance approche.
+      if (query.includes('query ListDisputes')) {
+        return {
+          shopifyPaymentsAccount: {
+            disputes: {
+              nodes: [
+                {
+                  id: 'gid://shopify/ShopifyPaymentsDispute/1',
+                  amount: { amount: '128.40', currencyCode: 'EUR' },
+                  reasonDetails: { reason: 'PRODUCT_NOT_RECEIVED' },
+                  status: 'NEEDS_RESPONSE',
+                  type: 'CHARGEBACK',
+                  evidenceDueBy: new Date(Date.now() + 4 * 86400000).toISOString(),
+                  initiatedAt: new Date(Date.now() - 3 * 86400000).toISOString(),
+                  order: { name: '#10428' },
+                },
+              ],
+            },
+          },
+        } as T;
+      }
+
       if (query.includes('query GetOrder')) {
         const found = ORDERS.find((o) => o.id === variables?.id);
         return { order: found ? toGraphQL(found) : null } as T;

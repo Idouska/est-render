@@ -14,6 +14,7 @@ import { devRoutes } from './routes/dev.ts';
 import { refundRoutes } from './routes/refunds.ts';
 import { settingsRoutes } from './routes/settings.ts';
 import { supplierPortalRoutes } from './routes/supplierPortal.ts';
+import { statsRoutes } from './routes/stats.ts';
 import { supplierRoutes } from './routes/suppliers.ts';
 import { teamRoutes } from './routes/team.ts';
 import { ticketRoutes } from './routes/tickets.ts';
@@ -89,6 +90,7 @@ export async function buildServer() {
   await app.register(refundRoutes);
   await app.register(settingsRoutes);
   await app.register(commerceRoutes);
+  await app.register(statsRoutes);
   await app.register(supplierRoutes);
   await app.register(teamRoutes);
   await app.register(supplierPortalRoutes);

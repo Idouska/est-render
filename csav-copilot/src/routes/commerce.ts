@@ -1,7 +1,8 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { requireSession } from '../plugins/auth.ts';
 import { getShopifyClient, ShopifyError } from '../services/shopify/client.ts';
+import { listCollections, listDisputes, listProducts } from '../services/shopify/catalog.ts';
 import { listCustomers } from '../services/shopify/customers.ts';
 import { getOrderById, listOrders, quoteSearchValue } from '../services/shopify/orders.ts';
 
@@ -63,6 +64,23 @@ function describeShopifyError(error: unknown): { status: number; message: string
   }
 
   return { status: 502, message: error instanceof Error ? error.message : String(error) };
+}
+
+/** Encapsule un appel Shopify avec la traduction d'erreur commune. */
+async function serveShopify<T>(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  label: string,
+  run: (client: Awaited<ReturnType<typeof getShopifyClient>>) => Promise<T>,
+) {
+  try {
+    const client = await getShopifyClient(request.session.merchantId);
+    return await reply.send(await run(client));
+  } catch (error) {
+    const { status, message } = describeShopifyError(error);
+    request.log.error({ err: error }, label);
+    return reply.code(status).send({ error: message });
+  }
 }
 
 export async function commerceRoutes(app: FastifyInstance): Promise<void> {
@@ -129,4 +147,78 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(status).send({ error: message });
     }
   });
+
+  app.get('/api/products', async (request, reply) => {
+    const parsed = listQuery.safeParse(request.query);
+    if (!parsed.success) return reply.code(400).send({ error: 'Paramètres invalides' });
+
+    return serveShopify(request, reply, 'Listing des produits en échec', (client) =>
+      listProducts(client, {
+        query: parsed.data.q?.trim() ?? '',
+        limit: parsed.data.limit,
+        cursor: parsed.data.cursor ?? null,
+      }),
+    );
+  });
+
+  app.get('/api/collections', async (request, reply) => {
+    const parsed = listQuery.safeParse(request.query);
+    if (!parsed.success) return reply.code(400).send({ error: 'Paramètres invalides' });
+
+    return serveShopify(request, reply, 'Listing des collections en échec', (client) =>
+      listCollections(client, {
+        query: parsed.data.q?.trim() ?? '',
+        limit: parsed.data.limit,
+        cursor: parsed.data.cursor ?? null,
+      }),
+    );
+  });
+
+  /**
+   * Colis en cours d'acheminement.
+   *
+   * Construit à partir des commandes plutôt que d'un service de suivi : ce sont
+   * les données que Shopify détient déjà, et le SAV a besoin du couple
+   * commande + client, pas d'un numéro isolé.
+   */
+  app.get('/api/tracking', async (request, reply) => {
+    const parsed = listQuery.safeParse(request.query);
+    if (!parsed.success) return reply.code(400).send({ error: 'Paramètres invalides' });
+
+    return serveShopify(request, reply, 'Listing du suivi en échec', async (client) => {
+      const page = await listOrders(client, {
+        // Une commande livrée n'appelle plus d'action ; une non expédiée n'a pas
+        // encore de numéro de suivi à afficher.
+        query: 'fulfillment_status:shipped OR fulfillment_status:partial',
+        limit: parsed.data.limit,
+        cursor: parsed.data.cursor ?? null,
+      });
+
+      const shipments = page.orders.flatMap((order) =>
+        order.fulfillments
+          .filter((fulfillment) => fulfillment.trackingNumber)
+          .map((fulfillment) => ({
+            orderId: order.id,
+            orderName: order.name,
+            customer: order.customer?.displayName ?? order.customer?.email ?? null,
+            status: fulfillment.status,
+            carrier: fulfillment.trackingCompany,
+            trackingNumber: fulfillment.trackingNumber,
+            trackingUrl: fulfillment.trackingUrl,
+            estimatedDeliveryAt: fulfillment.estimatedDeliveryAt,
+            updatedAt: fulfillment.updatedAt,
+            city: order.shippingAddress?.city ?? null,
+            country: order.shippingAddress?.country ?? null,
+          })),
+      );
+
+      return { shipments, cursor: page.cursor, hasNextPage: page.hasNextPage };
+    });
+  });
+
+  app.get('/api/disputes', async (request, reply) =>
+    serveShopify(request, reply, 'Listing des litiges en échec', async (client) => ({
+      disputes: await listDisputes(client),
+    })),
+  );
 }

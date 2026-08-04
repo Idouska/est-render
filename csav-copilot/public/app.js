@@ -17,6 +17,8 @@ const state = {
   suppliers: [],
   editingSupplier: null,
   team: { users: [], me: null },
+  pendingCount: 0,
+  catalog: { items: [], cursor: null, hasNext: false, q: '', kind: 'products', loading: false, loaded: false, timer: null },
   editingUser: null,
   settings: null,
   view: 'tickets',
@@ -121,16 +123,29 @@ async function showGate(message) {
 
 function renderMe() {
   const me = state.me;
+  const shop = me.merchant.shopDomain ?? '';
+
   $('merchant-name').textContent = me.merchant.name ?? 'cSAV Copilot';
-  $('merchant-shop').textContent = me.merchant.shopDomain;
+  $('merchant-shop').textContent = shop.replace('.myshopify.com', '');
+  $('brand-mark').textContent = (me.merchant.name ?? shop).slice(0, 2).toUpperCase();
+
+  const who = me.user?.name ?? me.user?.email ?? '—';
+  $('me-name').textContent = who;
+  $('me-role').textContent = ROLE_LABELS[me.user?.role] ?? '';
+  $('me-avatar').textContent = who
+    .split(/[\s.@]+/)
+    .slice(0, 2)
+    .map((part) => part[0] ?? '')
+    .join('')
+    .toUpperCase();
 
   const pills = [];
 
   pills.push(
     me.shopify.connected || me.shopify.simulated
-      ? `<span class="conn-pill"><span class="dot${me.shopify.simulated ? ' warn' : ''}"></span> Shopify ${
-          me.shopify.simulated ? 'simulé' : 'connecté'
-        }</span>`
+      ? `<span class="conn-pill"><span class="dot${
+          me.shopify.simulated ? ' warn' : ''
+        }"></span> Shopify ${me.shopify.simulated ? 'simulé' : 'connecté'}</span>`
       : '<span class="conn-pill"><span class="dot off"></span> Shopify non connecté</span>',
   );
 
@@ -143,9 +158,7 @@ function renderMe() {
       )}${me.gmail.watchActive ? '' : ' — écoute inactive'}</span>`,
     );
   } else {
-    pills.push(
-      '<span class="conn-pill"><span class="dot off"></span> Gmail non connecté</span>',
-    );
+    pills.push('<span class="conn-pill"><span class="dot off"></span> Gmail non connecté</span>');
   }
 
   pills.push(
@@ -153,14 +166,6 @@ function renderMe() {
       me.merchant.autoSendEnabled ? '' : ' warn'
     }"></span> Envoi auto ${me.merchant.autoSendEnabled ? 'activé' : 'désactivé'}</span>`,
   );
-
-  if (me.user) {
-    pills.push(
-      `<span class="conn-pill">${esc(me.user.name ?? me.user.email)} · ${esc(
-        ROLE_LABELS[me.user.role] ?? me.user.role,
-      )}</span>`,
-    );
-  }
 
   $('conn').innerHTML = pills.join('');
   $('mock-notice').hidden = !me.shopify.simulated;
@@ -174,6 +179,8 @@ async function loadMetrics() {
 
   $('kpi-done').textContent = String((counts.CLOSED ?? 0) + (counts.AUTO_SENT ?? 0));
   $('kpi-pending').textContent = String(metrics.pending ?? 0);
+  state.pendingCount = metrics.pending ?? 0;
+  renderNav();
   $('kpi-pending-note').textContent = `${counts.NEEDS_REVIEW ?? 0} à valider · ${
     counts.DRAFT_READY ?? 0
   } prêts`;
@@ -862,36 +869,573 @@ $('team-f-resend').addEventListener('click', async () => {
   }
 });
 
+/* ---------------------------------------------------------- vue d'ensemble */
+
+/* Résumé de ce qui appelle une action maintenant. Réutilise les données déjà
+   chargées au démarrage plutôt que de rappeler l'API : cet écran doit
+   s'afficher instantanément, c'est le premier ouvert de la journée. */
+async function loadOverview() {
+  const metrics = await api('/api/metrics');
+  const counts = metrics.tickets ?? {};
+
+  const cards = [
+    ['En attente de vous', metrics.pending ?? 0, `${counts.NEEDS_REVIEW ?? 0} à valider`],
+    ['Brouillons prêts', counts.DRAFT_READY ?? 0, 'relecture puis envoi'],
+    ['Chez le fournisseur', counts.AWAITING_SUPPLIER ?? 0, 'en attente de réponse'],
+    ['Traités · 30 jours', (counts.CLOSED ?? 0) + (counts.AUTO_SENT ?? 0), 'réponses envoyées'],
+  ];
+
+  $('ov-kpis').innerHTML = cards
+    .map(
+      ([label, value, note]) => `<div class="kpi">
+        <span class="kpi-label">${esc(label)}</span>
+        <span class="kpi-value">${value}</span>
+        <span class="kpi-note">${esc(note)}</span>
+      </div>`,
+    )
+    .join('');
+
+  const urgent = state.tickets
+    .filter((ticket) => ticket.status !== 'CLOSED' && ticket.status !== 'AUTO_SENT')
+    .slice(0, 8);
+
+  $('ov-queue').innerHTML =
+    urgent
+      .map(
+        (ticket) => `<li><button class="queue-item" data-id="${esc(ticket.id)}">
+          <span class="queue-top">
+            <span class="queue-who">${esc(ticket.customerName ?? ticket.customerEmail)}</span>
+            <span class="queue-time">${relativeTime(ticket.lastMessageAt)}</span>
+          </span>
+          <div class="queue-subject">${esc(ticket.subject ?? '(sans objet)')}</div>
+          <span class="queue-tags">
+            <span class="tag tag-status st-${ticket.status}">${esc(
+              STATUS_LABELS[ticket.status] ?? ticket.status,
+            )}</span>
+            <span class="tag tag-order">${esc(ticket.orderName ?? 'commande ?')}</span>
+          </span>
+        </button></li>`,
+      )
+      .join('') || '<li class="empty" style="padding:16px 14px">Rien en attente.</li>';
+
+  $('ov-queue')
+    .querySelectorAll('.queue-item')
+    .forEach((button) =>
+      button.addEventListener('click', async () => {
+        setView('tickets');
+        await selectTicket(button.dataset.id);
+      }),
+    );
+
+  $('ov-audit').innerHTML = $('c-audit').innerHTML;
+}
+
+/* --------------------------------------------------------- statistiques -- */
+
+function duration(minutes) {
+  if (minutes === null || minutes === undefined) return '—';
+  if (minutes < 60) return `${Math.round(minutes)} min`;
+  const hours = minutes / 60;
+  if (hours < 48) return `${hours.toFixed(1)} h`;
+  return `${Math.round(hours / 24)} j`;
+}
+
+async function loadStats() {
+  const stats = await api('/api/stats?days=30');
+
+  $('stats-kpis').innerHTML = [
+    ['Tickets reçus', stats.tickets.total, '30 derniers jours'],
+    ['Première réponse', duration(stats.firstReply.medianMinutes), `médiane sur ${stats.firstReply.measured}`],
+    ['Brouillons envoyés', `${Math.round(stats.drafts.sendRate * 100)} %`, `${stats.drafts.sent} sur ${stats.drafts.total}`],
+    [
+      'Confiance moyenne',
+      stats.drafts.averageConfidence === null
+        ? '—'
+        : `${Math.round(stats.drafts.averageConfidence * 100)} %`,
+      'sur les brouillons rédigés',
+    ],
+  ]
+    .map(
+      ([label, value, note]) => `<div class="kpi">
+        <span class="kpi-label">${esc(label)}</span>
+        <span class="kpi-value">${esc(String(value))}</span>
+        <span class="kpi-note">${esc(note)}</span>
+      </div>`,
+    )
+    .join('');
+
+  /* Histogramme en CSS pur : une bibliothèque de graphiques pour douze barres
+     ajouterait un build et une dépendance à surveiller. */
+  const peak = Math.max(1, ...stats.tickets.daily.map((day) => day.received));
+
+  $('stats-daily').innerHTML = `<div class="spark">${stats.tickets.daily
+    .map(
+      (day) => `<span class="spark-col" title="${esc(day.day)} — ${day.received} reçus, ${
+        day.handled
+      } traités">
+        <i style="height:${Math.round((day.received / peak) * 100)}%"></i>
+        <u style="height:${Math.round((day.handled / peak) * 100)}%"></u>
+      </span>`,
+    )
+    .join('')}</div>
+    <p class="set-help" style="margin-top:10px">
+      Barre pleine : tickets reçus. Barre foncée : tickets traités. Quand la
+      seconde reste durablement sous la première, la file grossit.
+    </p>`;
+
+  $('stats-team').innerHTML =
+    stats.team
+      .map(
+        (member) => `<tr class="${member.active ? '' : 'muted'}">
+          <td><b>${esc(member.name)}</b></td>
+          <td>${esc(ROLE_LABELS[member.role] ?? member.role)}</td>
+          <td class="num mono">${member.replies}</td>
+          <td class="num mono">${member.refunds}</td>
+          <td class="num mono">${member.escalations}</td>
+        </tr>`,
+      )
+      .join('') || '<tr><td colspan="5" class="empty">Aucune activité sur la période.</td></tr>';
+}
+
+/* -------------------------------------------------------------- catalogue */
+
+const CATALOG_HEADS = {
+  products:
+    '<tr><th></th><th>Produit</th><th>Statut</th><th>Fournisseur</th><th class="num">Stock</th><th class="num">Variantes</th><th class="num">Prix</th></tr>',
+  collections: '<tr><th></th><th>Collection</th><th class="num">Produits</th><th>Modifiée</th></tr>',
+};
+
+async function loadCatalog({ reset = false } = {}) {
+  const store = state.catalog;
+  if (store.loading) return;
+
+  store.loading = true;
+  $('catalog-head').innerHTML = CATALOG_HEADS[store.kind];
+
+  if (reset) {
+    store.items = [];
+    store.cursor = null;
+    $('catalog-rows').innerHTML = '<tr><td colspan="7" class="empty">Chargement…</td></tr>';
+  }
+
+  const params = new URLSearchParams();
+  if (store.q) params.set('q', store.q);
+  if (store.cursor) params.set('cursor', store.cursor);
+
+  try {
+    const path = store.kind === 'products' ? 'products' : 'collections';
+    const page = await api(`/api/${path}?${params}`);
+    store.items = store.items.concat(page[path]);
+    store.cursor = page.cursor;
+    store.hasNext = page.hasNextPage;
+    store.loaded = true;
+    renderCatalog();
+  } catch (error) {
+    $('catalog-rows').innerHTML = `<tr><td colspan="7" class="empty">${esc(error.message)}</td></tr>`;
+    $('catalog-more').hidden = true;
+  } finally {
+    store.loading = false;
+  }
+}
+
+const PRODUCT_STATUS = { ACTIVE: 'En ligne', DRAFT: 'Brouillon', ARCHIVED: 'Archivé' };
+
+function renderCatalog() {
+  const store = state.catalog;
+
+  const thumb = (url) =>
+    url
+      ? `<img class="thumb" src="${esc(url)}" alt="" loading="lazy" />`
+      : '<span class="thumb"></span>';
+
+  const rows =
+    store.kind === 'products'
+      ? store.items.map(
+          (product) => `<tr>
+            <td>${thumb(product.image)}</td>
+            <td><b>${esc(product.title)}</b></td>
+            <td><span class="tag tag-status ${
+              product.status === 'ACTIVE' ? 'st-CLOSED' : 'st-NEW'
+            }">${esc(PRODUCT_STATUS[product.status] ?? product.status)}</span></td>
+            <td>${esc(product.vendor ?? '—')}</td>
+            <td class="num mono ${
+              (product.totalInventory ?? 0) <= 0 ? 'set-alert' : ''
+            }">${product.totalInventory ?? '—'}</td>
+            <td class="num mono">${product.variantCount}</td>
+            <td class="num mono">${
+              product.priceMin === null
+                ? '—'
+                : product.priceMin === product.priceMax
+                  ? euro(product.priceMin, product.currency ?? 'EUR')
+                  : `${euro(product.priceMin, product.currency ?? 'EUR')} – ${euro(
+                      product.priceMax,
+                      product.currency ?? 'EUR',
+                    )}`
+            }</td>
+          </tr>`,
+        )
+      : store.items.map(
+          (collection) => `<tr>
+            <td>${thumb(collection.image)}</td>
+            <td><b>${esc(collection.title)}</b><br /><span class="sub mono">${esc(
+              collection.handle,
+            )}</span></td>
+            <td class="num mono">${collection.productsCount}</td>
+            <td>${fullDate(collection.updatedAt)}</td>
+          </tr>`,
+        );
+
+  $('catalog-rows').innerHTML =
+    rows.join('') || '<tr><td colspan="7" class="empty">Rien à afficher.</td></tr>';
+
+  $('catalog-count').textContent = store.items.length
+    ? `${store.items.length} ${store.kind === 'products' ? 'produits' : 'collections'}`
+    : '';
+  $('catalog-more').hidden = !store.hasNext;
+}
+
+$('catalog-seg')
+  .querySelectorAll('button')
+  .forEach((button) =>
+    button.addEventListener('click', () => {
+      state.catalog.kind = button.dataset.kind;
+      $('catalog-seg')
+        .querySelectorAll('button')
+        .forEach((other) =>
+          other.setAttribute('aria-pressed', String(other.dataset.kind === button.dataset.kind)),
+        );
+      loadCatalog({ reset: true });
+    }),
+  );
+
+$('catalog-more').addEventListener('click', () => loadCatalog());
+
+$('catalog-q').addEventListener('input', (event) => {
+  state.catalog.q = event.target.value.trim();
+  clearTimeout(state.catalog.timer);
+  state.catalog.timer = setTimeout(() => loadCatalog({ reset: true }), 350);
+});
+
+/* ------------------------------------------------------------ suivi colis */
+
+async function loadTracking() {
+  const body = $('tracking-rows');
+  body.innerHTML = '<tr><td colspan="6" class="empty">Chargement…</td></tr>';
+
+  try {
+    const { shipments } = await api('/api/tracking?limit=50');
+
+    body.innerHTML =
+      shipments
+        .map(
+          (shipment) => `<tr>
+            <td class="mono"><b>${esc(shipment.orderName)}</b></td>
+            <td>${esc(shipment.customer ?? '—')}</td>
+            <td>${esc(shipment.carrier ?? '—')}</td>
+            <td class="mono">${
+              shipment.trackingUrl
+                ? `<a href="${esc(shipment.trackingUrl)}" target="_blank" rel="noopener">${esc(
+                    shipment.trackingNumber,
+                  )}</a>`
+                : esc(shipment.trackingNumber ?? '—')
+            }</td>
+            <td>${esc([shipment.city, shipment.country].filter(Boolean).join(', ') || '—')}</td>
+            <td>${shipment.estimatedDeliveryAt ? fullDate(shipment.estimatedDeliveryAt) : '—'}</td>
+          </tr>`,
+        )
+        .join('') ||
+      '<tr><td colspan="6" class="empty">Aucun colis en cours d’acheminement.</td></tr>';
+
+    $('tracking-count').textContent = shipments.length
+      ? `${shipments.length} colis en transit`
+      : '';
+  } catch (error) {
+    body.innerHTML = `<tr><td colspan="6" class="empty">${esc(error.message)}</td></tr>`;
+  }
+}
+
+$('tracking-refresh').addEventListener('click', () => loadTracking());
+
+/* --------------------------------------------------------- remboursements */
+
+const REFUND_STATUS = {
+  PENDING: 'En attente',
+  COMPLETED: 'Effectué',
+  FAILED: 'Échec',
+  CANCELLED: 'Annulé',
+};
+
+const REFUND_KIND = { FULL: 'Total', PARTIAL: 'Partiel', SHIPPING: 'Frais de port' };
+
+async function loadRefunds() {
+  const body = $('refunds-rows');
+  body.innerHTML = '<tr><td colspan="6" class="empty">Chargement…</td></tr>';
+
+  try {
+    const { refunds } = await api('/api/refunds');
+
+    body.innerHTML =
+      refunds
+        .map(
+          (refund) => `<tr>
+            <td class="mono"><b>${esc(refund.orderName ?? '—')}</b></td>
+            <td>${fullDate(refund.createdAt)}</td>
+            <td>${esc(refund.reason ?? '—')}</td>
+            <td>${esc(REFUND_KIND[refund.kind] ?? refund.kind)}</td>
+            <td><span class="tag tag-status ${
+              refund.status === 'COMPLETED'
+                ? 'st-CLOSED'
+                : refund.status === 'FAILED'
+                  ? 'st-FAILED'
+                  : 'st-NEEDS_REVIEW'
+            }">${esc(REFUND_STATUS[refund.status] ?? refund.status)}</span></td>
+            <td class="num mono">${euro(refund.amount, refund.currency ?? 'EUR')}</td>
+          </tr>`,
+        )
+        .join('') || '<tr><td colspan="6" class="empty">Aucun remboursement.</td></tr>';
+
+    $('refunds-count').textContent = refunds.length
+      ? `${refunds.length} remboursement${refunds.length > 1 ? 's' : ''}`
+      : '';
+  } catch (error) {
+    body.innerHTML = `<tr><td colspan="6" class="empty">${esc(error.message)}</td></tr>`;
+  }
+}
+
+/* ----------------------------------------------------------------- litiges */
+
+const DISPUTE_STATUS = {
+  NEEDS_RESPONSE: 'Réponse attendue',
+  UNDER_REVIEW: 'En cours d’examen',
+  CHARGE_REFUNDED: 'Remboursé',
+  ACCEPTED: 'Accepté',
+  WON: 'Gagné',
+  LOST: 'Perdu',
+};
+
+async function loadDisputes() {
+  const body = $('disputes-rows');
+  body.innerHTML = '<tr><td colspan="6" class="empty">Chargement…</td></tr>';
+
+  try {
+    const { disputes } = await api('/api/disputes');
+
+    body.innerHTML =
+      disputes
+        .map((dispute) => {
+          // L'échéance est la seule information qui commande une action datée :
+          // passée la date, la banque tranche sans nous.
+          const late =
+            dispute.evidenceDueBy && new Date(dispute.evidenceDueBy).getTime() < Date.now();
+
+          return `<tr>
+            <td class="mono"><b>${esc(dispute.orderName ?? '—')}</b></td>
+            <td>${esc(dispute.reason ?? '—')}</td>
+            <td>${esc(dispute.type ?? '—')}</td>
+            <td><span class="tag tag-status ${
+              dispute.status === 'NEEDS_RESPONSE' ? 'st-FAILED' : 'st-NEW'
+            }">${esc(DISPUTE_STATUS[dispute.status] ?? dispute.status)}</span></td>
+            <td class="${late ? 'set-alert' : ''}">${
+              dispute.evidenceDueBy ? fullDate(dispute.evidenceDueBy) : '—'
+            }</td>
+            <td class="num mono">${euro(dispute.amount, dispute.currency)}</td>
+          </tr>`;
+        })
+        .join('') ||
+      '<tr><td colspan="6" class="empty">Aucun litige. Si votre boutique n’utilise pas Shopify Payments, cet écran restera vide.</td></tr>';
+
+    $('disputes-count').textContent = disputes.length
+      ? `${disputes.length} litige${disputes.length > 1 ? 's' : ''}`
+      : '';
+  } catch (error) {
+    body.innerHTML = `<tr><td colspan="6" class="empty">${esc(error.message)}</td></tr>`;
+  }
+}
+
 /* ------------------------------------------------------------ navigation */
 
-/* Trois sections dans une seule page : la file de tickets, le carnet de
-   commandes et le fichier client. Les deux dernières interrogent Shopify en
-   direct, donc on ne les charge qu'à la première ouverture. */
+/* Icônes en ligne : une police d'icônes ou un CDN ne passerait pas la
+   politique de sécurité, et douze glyphes ne justifient pas un build. */
+const ICONS = {
+  grid: '<path d="M2.5 2.5h4.5v4.5H2.5zM9 2.5h4.5v4.5H9zM2.5 9h4.5v4.5H2.5zM9 9h4.5v4.5H9z"/>',
+  inbox: '<path d="M2 9.5h3l1 2h4l1-2h3"/><path d="M2.5 9.5 4 3h8l1.5 6.5v4h-11z"/>',
+  chart: '<path d="M2.5 13.5V7M6.5 13.5V3M10.5 13.5v-4M14 13.5V5.5"/>',
+  bag: '<path d="M3 5h10l-.8 8.5H3.8z"/><path d="M6 5V3.5a2 2 0 0 1 4 0V5"/>',
+  users:
+    '<circle cx="6" cy="6" r="2.4"/><path d="M2 13.2c0-2.2 1.8-3.6 4-3.6s4 1.4 4 3.6"/><path d="M10.6 4.2a2.4 2.4 0 0 1 0 4.3M11.6 9.9c1.5.4 2.6 1.6 2.6 3.3"/>',
+  box: '<path d="M8 2 14 5v6l-6 3-6-3V5z"/><path d="m2 5 6 3 6-3M8 8v6"/>',
+  truck:
+    '<path d="M1.5 4.5h8v6h-8z"/><path d="M9.5 7h3l2 2v1.5h-5z"/><circle cx="4.5" cy="12" r="1.4"/><circle cx="11.5" cy="12" r="1.4"/>',
+  pin: '<path d="M8 14s5-4.5 5-8A5 5 0 0 0 3 6c0 3.5 5 8 5 8z"/><circle cx="8" cy="6" r="1.8"/>',
+  euro: '<path d="M12 4.2A4.5 4.5 0 0 0 5 8a4.5 4.5 0 0 0 7 3.8M3 7h5M3 9.4h5"/>',
+  shield: '<path d="M8 2l5 2v4.2c0 3-2.2 4.8-5 5.6-2.8-.8-5-2.6-5-5.6V4z"/>',
+  swatch: '<circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="5.6" r="1"/><circle cx="10.2" cy="9" r="1"/><circle cx="5.8" cy="9" r="1"/>',
+  gear: '<circle cx="8" cy="8" r="2.2"/><path d="M8 1.8v1.6M8 12.6v1.6M14.2 8h-1.6M3.4 8H1.8M12.4 3.6l-1.1 1.1M4.7 11.3l-1.1 1.1M12.4 12.4l-1.1-1.1M4.7 4.7 3.6 3.6"/>',
+};
 
-const VIEWS = ['tickets', 'orders', 'customers', 'suppliers', 'team'];
+function ico(name) {
+  return `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"
+    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] ?? ''}</svg>`;
+}
+
+/* Une entrée par écran : icône, libellé, groupe, et le compteur affiché en
+   pastille quand il y a quelque chose à traiter. */
+const VIEW_META = {
+  overview: { icon: 'grid', label: "Vue d'ensemble", group: 'Pilotage', title: "Vue d'ensemble" },
+  tickets: { icon: 'inbox', label: 'File de traitement', group: 'Pilotage', title: 'File de traitement' },
+  stats: { icon: 'chart', label: "Statistiques", group: 'Pilotage', title: "Statistiques d'équipe" },
+  orders: { icon: 'bag', label: 'Commandes', group: 'Commerce', title: 'Commandes' },
+  customers: { icon: 'users', label: 'Clients', group: 'Commerce', title: 'Clients' },
+  catalog: { icon: 'box', label: 'Catalogue', group: 'Commerce', title: 'Catalogue' },
+  suppliers: { icon: 'truck', label: 'Fournisseurs', group: 'Fournisseur', title: 'Contacts fournisseurs' },
+  tracking: { icon: 'pin', label: 'Suivi colis', group: 'Fournisseur', title: 'Suivi des colis' },
+  refunds: { icon: 'euro', label: 'Remboursements', group: 'Finance', title: 'Remboursements' },
+  disputes: { icon: 'shield', label: 'Litiges Shopify', group: 'Finance', title: 'Litiges Shopify' },
+  team: { icon: 'users', label: 'Équipe & rôles', group: 'Plateforme', title: 'Équipe & rôles' },
+  palettes: { icon: 'swatch', label: 'Palettes', group: 'Plateforme', title: 'Apparence' },
+  settings: { icon: 'gear', label: 'Réglages', group: 'Plateforme', title: 'Réglages' },
+};
+
+const NAV_GROUPS = ['Pilotage', 'Commerce', 'Fournisseur', 'Finance', 'Plateforme'];
+
+const VIEWS = Object.keys(VIEW_META);
+
+function renderNav() {
+  $('nav').innerHTML = NAV_GROUPS.map((group) => {
+    const items = VIEWS.filter((view) => VIEW_META[view].group === group);
+    return `<div class="nav-group">
+      <p class="nav-title">${esc(group)}</p>
+      ${items
+        .map((view) => {
+          const meta = VIEW_META[view];
+          const tally = view === 'tickets' ? (state.pendingCount ?? 0) : 0;
+          return `<button class="nav-item" data-view="${view}" aria-current="${
+            view === state.view
+          }">${ico(meta.icon)}${esc(meta.label)}${
+            tally ? `<span class="tally">${tally}</span>` : ''
+          }</button>`;
+        })
+        .join('')}
+    </div>`;
+  }).join('');
+
+  $('nav')
+    .querySelectorAll('.nav-item')
+    .forEach((item) => item.addEventListener('click', () => setView(item.dataset.view)));
+}
+
+/* Chaque vue charge à sa première ouverture. Interroger Shopify pour un écran
+   que personne ne regarde coûte une latence pour rien. */
+const VIEW_LOADERS = {
+  overview: () => loadOverview(),
+  orders: () => !state.orders.loaded && loadOrders({ reset: true }),
+  customers: () => !state.customers.loaded && loadCustomers({ reset: true }),
+  catalog: () => !state.catalog.loaded && loadCatalog({ reset: true }),
+  suppliers: () => renderSuppliers(),
+  tracking: () => loadTracking(),
+  refunds: () => loadRefunds(),
+  disputes: () => loadDisputes(),
+  team: () => loadTeam(),
+  stats: () => loadStats(),
+  palettes: () => renderPalettes(),
+  settings: () => openSettings(),
+};
 
 function setView(view) {
   state.view = view;
+  const meta = VIEW_META[view];
 
-  for (const name of VIEWS) $(`view-${name}`).hidden = name !== view;
+  for (const name of VIEWS) {
+    const el = $(`view-${name}`);
+    if (el) el.hidden = name !== view;
+  }
 
-  $('tabs')
-    .querySelectorAll('.tab')
-    .forEach((tab) => tab.setAttribute('aria-pressed', String(tab.dataset.view === view)));
+  $('view-title').textContent = meta.title;
+  $('crumb').innerHTML = `${ico(meta.icon)} ${esc(meta.group)}`;
 
-  // Les indicateurs ne concernent que la file : les masquer ailleurs évite de
-  // laisser croire qu'ils décrivent l'écran affiché.
+  // Les indicateurs décrivent la file : les laisser ailleurs ferait croire
+  // qu'ils décrivent l'écran affiché.
   $('kpis').hidden = view !== 'tickets';
 
-  if (view === 'orders' && !state.orders.loaded) loadOrders({ reset: true });
-  if (view === 'customers' && !state.customers.loaded) loadCustomers({ reset: true });
-  if (view === 'suppliers') renderSuppliers();
-  if (view === 'team') loadTeam();
+  renderNav();
+
+  try {
+    VIEW_LOADERS[view]?.();
+  } catch (error) {
+    toast(error.message, true);
+  }
 }
 
-$('tabs').addEventListener('click', (event) => {
-  const tab = event.target.closest('.tab');
-  if (tab) setView(tab.dataset.view);
+/* ------------------------------------------------------------- apparence */
+
+const PALETTES = [
+  ['violet', 'Violet', '#6c5ce7'],
+  ['indigo', 'Indigo', '#4f46e5'],
+  ['bleu', 'Bleu', '#2563eb'],
+  ['cyan', 'Cyan', '#0891b2'],
+  ['emeraude', 'Émeraude', '#059669'],
+  ['ambre', 'Ambre', '#d97706'],
+  ['corail', 'Corail', '#e11d48'],
+  ['graphite', 'Graphite', '#475569'],
+];
+
+/* Préférence d'affichage, propre à la personne et à son écran : elle vit dans
+   le navigateur, pas en base. La stocker côté serveur imposerait le même thème
+   au portable et au poste fixe. */
+function applyAppearance() {
+  const accent = localStorage.getItem('csav.accent') ?? 'violet';
+  const theme = localStorage.getItem('csav.theme') ?? 'auto';
+
+  document.documentElement.dataset.accent = accent;
+
+  const dark =
+    theme === 'dark' ||
+    (theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+
+  if (dark) document.documentElement.dataset.theme = 'dark';
+  else delete document.documentElement.dataset.theme;
+}
+
+function renderPalettes() {
+  const accent = localStorage.getItem('csav.accent') ?? 'violet';
+  const theme = localStorage.getItem('csav.theme') ?? 'auto';
+
+  $('palette-swatches').innerHTML = PALETTES.map(
+    ([key, label, hex]) => `<button class="swatch" data-accent="${key}" aria-pressed="${
+      key === accent
+    }"><i style="background:${hex}"></i>${esc(label)}</button>`,
+  ).join('');
+
+  $('palette-swatches')
+    .querySelectorAll('.swatch')
+    .forEach((button) =>
+      button.addEventListener('click', () => {
+        localStorage.setItem('csav.accent', button.dataset.accent);
+        applyAppearance();
+        renderPalettes();
+      }),
+    );
+
+  $('theme-seg')
+    .querySelectorAll('button')
+    .forEach((button) => {
+      button.setAttribute('aria-pressed', String(button.dataset.theme === theme));
+      button.onclick = () => {
+        localStorage.setItem('csav.theme', button.dataset.theme);
+        applyAppearance();
+        renderPalettes();
+      };
+    });
+}
+
+// Le thème « Système » doit suivre la bascule jour/nuit de l'OS sans rechargement.
+window
+  .matchMedia('(prefers-color-scheme: dark)')
+  .addEventListener('change', () => applyAppearance());
+
+$('logout').addEventListener('click', async () => {
+  await api('/api/auth/logout', { method: 'POST' }).catch(() => undefined);
+  window.location.href = '/login';
 });
 
 /* --------------------------------------------------------- commandes ---- */
@@ -1208,22 +1752,7 @@ function renderSettings() {
 async function openSettings() {
   state.settings = await api('/api/settings');
   renderSettings();
-  $('settings-modal').classList.add('open');
 }
-
-$('settings-open').addEventListener('click', async () => {
-  try {
-    await openSettings();
-  } catch (error) {
-    toast(error.message, true);
-  }
-});
-
-$('set-cancel').addEventListener('click', () => $('settings-modal').classList.remove('open'));
-
-$('settings-modal').addEventListener('click', (event) => {
-  if (event.target === $('settings-modal')) $('settings-modal').classList.remove('open');
-});
 
 $('set-threshold').addEventListener('input', (event) => {
   $('set-threshold-echo').textContent = `${Math.round(Number(event.target.value) * 100)} %`;
@@ -1248,7 +1777,6 @@ $('set-save').addEventListener('click', async () => {
     await Promise.all([loadMetrics(), loadAudit()]);
 
     toast('Réglages enregistrés.');
-    $('settings-modal').classList.remove('open');
   } catch (error) {
     toast(error.message, true);
   }
@@ -1587,12 +2115,12 @@ $('r-go').addEventListener('click', async () => {
 /* ------------------------------------------------------------- démarrage */
 
 async function boot() {
+  applyAppearance();
+
   try {
     state.me = await api('/api/me');
   } catch (error) {
-    if (error.status !== 401) {
-      showGate(error.message);
-    }
+    if (error.status !== 401) showGate(error.message);
     return;
   }
 
@@ -1600,11 +2128,11 @@ async function boot() {
   $('app').hidden = false;
 
   renderMe();
+  setView('tickets');
+
   await Promise.all([loadMetrics(), loadQueue(), loadAudit(), loadSupplier()]);
 
-  if (state.tickets.length > 0) {
-    await selectTicket(state.tickets[0].id);
-  }
+  if (state.tickets.length > 0) await selectTicket(state.tickets[0].id);
 }
 
 boot();
