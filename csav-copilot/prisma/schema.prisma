@@ -343,7 +343,6 @@ model Supplier {
   contactEmail String
   contactName  String?
   phone        String?
-  role         SupplierRole @default(SUPPLIER)
   // Un fournisseur désactivé ne reçoit plus d'escalade mais garde son
   // historique : supprimer la ligne effacerait des échanges déjà consignés.
   active       Boolean      @default(true)
@@ -366,12 +365,6 @@ model Supplier {
   @@index([merchantId, active])
 }
 
-enum SupplierRole {
-  SUPPLIER // production, réassort
-  CARRIER // transporteur
-  WORKSHOP // atelier, réparation
-  WAREHOUSE // entrepôt, préparation de commande
-}
 
 model SupplierEscalation {
   id         String @id @default(cuid())

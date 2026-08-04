@@ -23,22 +23,6 @@ export class SupplierNotConfiguredError extends Error {
  */
 type EscalationReason = 'OUT_OF_STOCK' | 'INCORRECT_ADDRESS' | 'MISSING_ITEM' | 'OTHER';
 
-/**
- * Métier attendu selon le motif d'escalade.
- *
- * Un colis perdu se règle avec le transporteur, une rupture avec le
- * fournisseur, un article manquant avec l'entrepôt qui a préparé le colis.
- * Ce routage n'est qu'un défaut : l'agent peut toujours désigner quelqu'un
- * d'autre, parce que l'organisation réelle d'un marchand ne rentre jamais
- * complètement dans une table.
- */
-const DEFAULT_ROLE_BY_REASON: Record<EscalationReason, 'SUPPLIER' | 'CARRIER' | 'WORKSHOP' | 'WAREHOUSE'> = {
-  OUT_OF_STOCK: 'SUPPLIER',
-  INCORRECT_ADDRESS: 'CARRIER',
-  MISSING_ITEM: 'WAREHOUSE',
-  OTHER: 'SUPPLIER',
-};
-
 export async function createEscalation(params: {
   merchantId: string;
   ticketId: string;
@@ -62,10 +46,9 @@ export async function createEscalation(params: {
 
   const supplier = params.supplierId
     ? suppliers.find((candidate) => candidate.id === params.supplierId)
-    : // À défaut d'un destinataire explicite : le bon métier, sinon le premier
-      // contact actif — mieux vaut une escalade mal adressée qu'un agent
-      // bloqué devant un ticket urgent.
-      suppliers.find((candidate) => candidate.role === DEFAULT_ROLE_BY_REASON[params.reason]) ??
+    : // À défaut d'un destinataire explicite : le premier contact actif. Mieux
+      // vaut une escalade adressée au mauvais contact qu'un agent bloqué devant
+      // un ticket urgent.
       suppliers[0];
 
   if (!supplier) {

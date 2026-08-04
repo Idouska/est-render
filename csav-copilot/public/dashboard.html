@@ -364,7 +364,6 @@
             <thead>
               <tr>
                 <th>Nom</th>
-                <th>Rôle</th>
                 <th>Contact</th>
                 <th>Téléphone</th>
                 <th class="num">Escalades en cours</th>
@@ -776,15 +775,6 @@
             <input type="text" id="sup-f-name" placeholder="Atelier Nord" />
           </div>
           <div class="field">
-            <label for="sup-f-role">Rôle</label>
-            <select id="sup-f-role">
-              <option value="SUPPLIER">Fournisseur — production, réassort</option>
-              <option value="CARRIER">Transporteur — livraison, colis perdu</option>
-              <option value="WORKSHOP">Atelier — réparation, SAV technique</option>
-              <option value="WAREHOUSE">Entrepôt — préparation de commande</option>
-            </select>
-          </div>
-          <div class="field">
             <label for="sup-f-email">Email de contact</label>
             <input type="email" id="sup-f-email" placeholder="contact@fournisseur.example" />
           </div>
@@ -805,6 +795,13 @@
             <span>Contact actif — il peut recevoir des escalades.</span>
           </label>
         </div>
+        <p class="set-help" style="padding: 0 18px 14px">
+          Avec son lien de travail, ce contact peut : consulter les commandes de
+          la veille, saisir un numéro de suivi et photographier l'étiquette de
+          chaque colis, et signaler un problème — rupture sur un produit, une
+          taille ou un coloris, adresse ou téléphone incomplet. Il ne voit ni
+          vos tickets clients, ni vos montants, ni vos autres contacts.
+        </p>
         <div class="modal-foot modal-foot-wrap">
           <button class="btn" id="sup-f-link" hidden>Lien de travail…</button>
           <button class="btn btn-danger" id="sup-f-delete" hidden>Supprimer</button>

@@ -12,7 +12,6 @@ const supplierBody = z.object({
   contactEmail: z.string().email(),
   contactName: z.string().max(200).nullish(),
   phone: z.string().max(40).nullish(),
-  role: z.enum(['SUPPLIER', 'CARRIER', 'WORKSHOP', 'WAREHOUSE']).default('SUPPLIER'),
   notes: z.string().max(2000).nullish(),
   active: z.boolean().default(true),
 });
@@ -46,7 +45,6 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
         contactEmail: supplier.contactEmail,
         contactName: supplier.contactName,
         phone: supplier.phone,
-        role: supplier.role,
         active: supplier.active,
         notes: supplier.notes,
         createdAt: supplier.createdAt,
@@ -75,7 +73,7 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
         action: 'supplier.created',
         targetType: 'Supplier',
         targetId: supplier.id,
-        metadata: { name: supplier.name, role: supplier.role },
+        metadata: { name: supplier.name },
         ipAddress: request.ip,
       });
 

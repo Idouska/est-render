@@ -1147,13 +1147,6 @@ async function loadSupplier() {
   renderSupplierSummary();
 }
 
-const SUPPLIER_ROLE_LABELS = {
-  SUPPLIER: 'Fournisseur',
-  CARRIER: 'Transporteur',
-  WORKSHOP: 'Atelier',
-  WAREHOUSE: 'Entrepôt',
-};
-
 /** Contacts joignables : un contact désactivé ne doit pas être proposé. */
 function activeSuppliers() {
   return state.suppliers.filter((supplier) => supplier.active);
@@ -1172,7 +1165,6 @@ function renderSupplierSummary() {
   summary.innerHTML = active
     .map(
       (supplier) => `<div class="row">
-        <dt>${esc(SUPPLIER_ROLE_LABELS[supplier.role] ?? supplier.role)}</dt>
         <dd>${esc(supplier.name)}${
           supplier.openEscalations
             ? ` <span class="tag tag-status st-NEEDS_REVIEW">${supplier.openEscalations} en cours</span>`
@@ -1197,7 +1189,6 @@ function renderSuppliers() {
           <td><b>${esc(supplier.name)}</b>${
             supplier.contactName ? `<br><span class="sub">${esc(supplier.contactName)}</span>` : ''
           }</td>
-          <td>${esc(SUPPLIER_ROLE_LABELS[supplier.role] ?? supplier.role)}</td>
           <td class="mono">${esc(supplier.contactEmail)}</td>
           <td class="mono">${esc(supplier.phone ?? '—')}</td>
           <td class="num mono">${supplier.openEscalations}</td>
@@ -1229,7 +1220,6 @@ function openSupplierForm(id) {
 
   $('supmodal-title').textContent = supplier ? supplier.name : 'Nouveau contact';
   $('sup-f-name').value = supplier?.name ?? '';
-  $('sup-f-role').value = supplier?.role ?? 'SUPPLIER';
   $('sup-f-email').value = supplier?.contactEmail ?? '';
   $('sup-f-contact').value = supplier?.contactName ?? '';
   $('sup-f-phone').value = supplier?.phone ?? '';
@@ -1266,7 +1256,6 @@ $('supplier-modal').addEventListener('click', (event) => {
 $('sup-f-save').addEventListener('click', async () => {
   const payload = {
     name: $('sup-f-name').value.trim(),
-    role: $('sup-f-role').value,
     contactEmail: $('sup-f-email').value.trim(),
     contactName: $('sup-f-contact').value.trim() || null,
     phone: $('sup-f-phone').value.trim() || null,
@@ -2718,13 +2707,10 @@ async function loadEscalations(ticketId) {
         <div class="field">
           <label for="esc-supplier">Destinataire</label>
           <select id="esc-supplier">
-            <option value="">Choisir d'après le motif</option>
+            <option value="">Premier contact actif</option>
             ${contacts
               .map(
-                (supplier) =>
-                  `<option value="${esc(supplier.id)}">${esc(supplier.name)} — ${esc(
-                    SUPPLIER_ROLE_LABELS[supplier.role] ?? supplier.role,
-                  )}</option>`,
+                (supplier) => `<option value="${esc(supplier.id)}">${esc(supplier.name)}</option>`,
               )
               .join('')}
           </select>
