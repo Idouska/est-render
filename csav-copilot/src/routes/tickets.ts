@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { env } from '../config/env.ts';
 import { recordAudit } from '../lib/audit.ts';
 import { prisma } from '../lib/prisma.ts';
-import { requireSession } from '../plugins/auth.ts';
+import { requirePermission, requireSession } from '../plugins/auth.ts';
 import { sendDraft, updateDraftBody } from '../services/gmail/drafts.ts';
 import { getShopifyClient, ShopifyError } from '../services/shopify/client.ts';
 import { getOrderById, quoteSearchValue, searchOrders } from '../services/shopify/orders.ts';
@@ -43,7 +43,9 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
         autoSendEnabled: merchant.autoSendEnabled,
         autoSendThreshold: merchant.autoSendThreshold,
       },
-      user: merchant.users[0] ?? null,
+      user: merchant.users[0]
+        ? { ...merchant.users[0], id: userId, role: request.session.role }
+        : { id: userId, email: request.session.email, name: null, role: request.session.role },
       shopify: {
         connected: Boolean(merchant.shopify && !merchant.shopify.uninstalledAt),
         simulated: env.SHOPIFY_MOCK,
@@ -195,6 +197,7 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
   /** Rattachement manuel : l'agent tranche là où l'automatisme s'est abstenu. */
   app.post<{ Params: { id: string }; Body: { orderId?: string } }>(
     '/api/tickets/:id/order',
+    { preHandler: requirePermission('reply') },
     async (request, reply) => {
       const { merchantId, userId } = request.session;
       const orderId = z.string().min(1).safeParse(request.body?.orderId);
@@ -261,6 +264,7 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
   // Édition du brouillon par l'agent avant envoi.
   app.patch<{ Params: { id: string }; Body: { body?: string } }>(
     '/api/drafts/:id',
+    { preHandler: requirePermission('reply') },
     async (request, reply) => {
       const { merchantId, userId } = request.session;
       const body = z.string().min(1).safeParse(request.body?.body);
@@ -308,7 +312,10 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
   );
 
   // Envoi — toujours déclenché par un humain en phase 1.
-  app.post<{ Params: { id: string } }>('/api/drafts/:id/send', async (request, reply) => {
+  app.post<{ Params: { id: string } }>(
+    '/api/drafts/:id/send',
+    { preHandler: requirePermission('reply') },
+    async (request, reply) => {
     const { merchantId, userId } = request.session;
 
     const draft = await prisma.draft.findFirst({

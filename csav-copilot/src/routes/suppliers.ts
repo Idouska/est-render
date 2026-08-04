@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { recordAudit } from '../lib/audit.ts';
 import { prisma } from '../lib/prisma.ts';
-import { requireSession } from '../plugins/auth.ts';
+import { requirePermission, requireSession } from '../plugins/auth.ts';
 import { createEscalation, resolveEscalation, sendEscalation } from '../services/suppliers/escalate.ts';
 
 const supplierBody = z.object({
@@ -53,7 +53,7 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  app.post('/api/suppliers', async (request, reply) => {
+  app.post('/api/suppliers', { preHandler: requirePermission('configure') }, async (request, reply) => {
     const parsed = supplierBody.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Requête invalide', details: parsed.error.issues });
@@ -94,7 +94,10 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  app.patch<{ Params: { id: string } }>('/api/suppliers/:id', async (request, reply) => {
+  app.patch<{ Params: { id: string } }>(
+    '/api/suppliers/:id',
+    { preHandler: requirePermission('configure') },
+    async (request, reply) => {
     const parsed = supplierBody.partial().safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Requête invalide', details: parsed.error.issues });
@@ -134,7 +137,10 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
    * messages déjà envoyés et consignés. On désactive à la place — le
    * fournisseur ne reçoit plus rien mais l'historique reste lisible.
    */
-  app.delete<{ Params: { id: string } }>('/api/suppliers/:id', async (request, reply) => {
+  app.delete<{ Params: { id: string } }>(
+    '/api/suppliers/:id',
+    { preHandler: requirePermission('configure') },
+    async (request, reply) => {
     const { merchantId, userId } = request.session;
 
     const supplier = await prisma.supplier.findFirst({
@@ -186,7 +192,10 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ escalations });
   });
 
-  app.post<{ Params: { id: string } }>('/api/tickets/:id/escalations', async (request, reply) => {
+  app.post<{ Params: { id: string } }>(
+    '/api/tickets/:id/escalations',
+    { preHandler: requirePermission('escalate') },
+    async (request, reply) => {
     const parsed = escalationBody.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Requête invalide', details: parsed.error.issues });
@@ -243,7 +252,10 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
-  app.post<{ Params: { id: string } }>('/api/escalations/:id/send', async (request, reply) => {
+  app.post<{ Params: { id: string } }>(
+    '/api/escalations/:id/send',
+    { preHandler: requirePermission('escalate') },
+    async (request, reply) => {
     const { merchantId, userId } = request.session;
 
     const escalation = await prisma.supplierEscalation.findFirst({
@@ -259,7 +271,10 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ ok: true });
   });
 
-  app.post<{ Params: { id: string } }>('/api/escalations/:id/resolve', async (request, reply) => {
+  app.post<{ Params: { id: string } }>(
+    '/api/escalations/:id/resolve',
+    { preHandler: requirePermission('escalate') },
+    async (request, reply) => {
     const { merchantId, userId } = request.session;
 
     const escalation = await prisma.supplierEscalation.findFirst({

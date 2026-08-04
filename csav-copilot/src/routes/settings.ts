@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { env } from '../config/env.ts';
 import { recordAudit } from '../lib/audit.ts';
 import { prisma } from '../lib/prisma.ts';
-import { requireSession } from '../plugins/auth.ts';
+import { requirePermission, requireSession } from '../plugins/auth.ts';
 
 /**
  * Réglages du marchand.
@@ -80,7 +80,7 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  app.patch('/api/settings', async (request, reply) => {
+  app.patch('/api/settings', { preHandler: requirePermission('configure') }, async (request, reply) => {
     const parsed = patchBody.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Requête invalide', details: parsed.error.issues });

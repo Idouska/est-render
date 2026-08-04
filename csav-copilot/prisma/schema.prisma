@@ -57,17 +57,28 @@ model User {
   email      String
   name       String?
   role       UserRole @default(AGENT)
+  // Désactiver coupe l'accès immédiatement sans effacer qui a fait quoi :
+  // le journal d'audit référence `userId`, une suppression le rendrait muet.
+  active     Boolean  @default(true)
   createdAt  DateTime @default(now())
+
+  invitedAt   DateTime?
+  lastLoginAt DateTime?
 
   merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
 
   @@unique([merchantId, email])
-  @@index([merchantId])
+  @@index([merchantId, active])
 }
 
+/// Quatre niveaux, définis par ce qu'ils peuvent casser plutôt que par
+/// l'organigramme : envoyer un mail à un client, rendre de l'argent, changer
+/// la configuration. Voir `src/plugins/auth.ts` pour la table des droits.
 enum UserRole {
-  OWNER
-  AGENT
+  OWNER // tout, y compris l'équipe et les réglages
+  SUPERVISOR // rembourse et règle, ne gère pas l'équipe
+  AGENT // répond aux clients, escalade, ne rembourse pas
+  VIEWER // lecture seule
 }
 
 // ---------------------------------------------------------------------------

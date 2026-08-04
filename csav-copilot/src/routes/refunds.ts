@@ -5,7 +5,7 @@ import { recordAudit } from '../lib/audit.ts';
 import { hmacSha256Hex, safeEqual } from '../lib/crypto.ts';
 import { logger } from '../lib/logger.ts';
 import { prisma } from '../lib/prisma.ts';
-import { requireSession } from '../plugins/auth.ts';
+import { requirePermission, requireSession } from '../plugins/auth.ts';
 import { getShopifyClient } from '../services/shopify/client.ts';
 import { createRefund, getRefundableTransactions } from '../services/shopify/refunds.ts';
 
@@ -57,7 +57,7 @@ export async function refundRoutes(app: FastifyInstance): Promise<void> {
    * Étape 2 — exécution. Action financière irréversible : on trace avant
    * l'appel Shopify (pour ne rien perdre en cas de crash), puis on complète.
    */
-  app.post('/api/refunds', async (request, reply) => {
+  app.post('/api/refunds', { preHandler: requirePermission('refund') }, async (request, reply) => {
     const parsed = refundBody.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Requête invalide', details: parsed.error.issues });

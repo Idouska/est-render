@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Connexion — cSAV Copilot</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%230b5e6b'/%3E%3Cpath d='M3 5.5h10v6H3z' fill='none' stroke='%23fff' stroke-width='1.2'/%3E%3Cpath d='M3 5.8l5 3.4 5-3.4' fill='none' stroke='%23fff' stroke-width='1.2'/%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="gate">
+      <h1>Connexion</h1>
+      <p>
+        Entrez votre adresse professionnelle. Vous recevrez un lien de connexion —
+        pas de mot de passe à retenir.
+      </p>
+
+      <div class="field">
+        <label for="email">Adresse email</label>
+        <input type="email" id="email" autocomplete="email" placeholder="vous@boutique.fr" />
+      </div>
+
+      <div class="actions" style="margin-top: 14px">
+        <button class="btn btn-primary" id="go">Recevoir le lien</button>
+      </div>
+
+      <p class="empty" id="result" hidden style="margin-top: 16px"></p>
+
+      <p class="empty" style="margin-top: 22px">
+        Vous êtes le propriétaire de la boutique et vous n'avez pas encore installé
+        l'application&nbsp;? Passez par votre administration Shopify.
+      </p>
+    </div>
+
+    <script type="module">
+      const $ = (id) => document.getElementById(id);
+
+      async function request() {
+        const email = $('email').value.trim();
+        if (!email) return;
+
+        const button = $('go');
+        button.disabled = true;
+        button.textContent = 'Envoi…';
+
+        try {
+          const response = await fetch('/api/auth/request-link', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email }),
+          });
+          const payload = await response.json().catch(() => null);
+
+          // Toujours le même message, compte existant ou non : l'inverse
+          // transformerait cette page en annuaire des employés du marchand.
+          $('result').textContent =
+            payload?.message ?? 'Si un compte existe pour cette adresse, un lien vient d’être envoyé.';
+          $('result').hidden = false;
+        } catch {
+          $('result').textContent = 'Envoi impossible pour le moment. Réessayez dans un instant.';
+          $('result').hidden = false;
+        } finally {
+          button.disabled = false;
+          button.textContent = 'Recevoir le lien';
+        }
+      }
+
+      $('go').addEventListener('click', request);
+      $('email').addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') request();
+      });
+    </script>
+  </body>
+</html>

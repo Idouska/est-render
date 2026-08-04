@@ -38,6 +38,7 @@
         <button class="tab" data-view="orders" aria-pressed="false">Commandes</button>
         <button class="tab" data-view="customers" aria-pressed="false">Clients</button>
         <button class="tab" data-view="suppliers" aria-pressed="false">Fournisseurs</button>
+        <button class="tab" data-view="team" aria-pressed="false">Équipe</button>
       </nav>
 
       <div class="notice" id="mock-notice" hidden>
@@ -241,6 +242,85 @@
           </table>
         </div>
       </section>
+
+      <section class="browse" id="view-team" hidden aria-label="Équipe">
+        <div class="browse-bar">
+          <span class="browse-count" id="team-count"></span>
+          <button class="btn btn-primary" id="team-new" style="margin-left:auto" hidden>
+            Inviter quelqu'un
+          </button>
+        </div>
+        <div class="table-wrap">
+          <table class="grid">
+            <thead>
+              <tr>
+                <th>Personne</th>
+                <th>Rôle</th>
+                <th>Droits</th>
+                <th>Dernière connexion</th>
+                <th>État</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="team-rows"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <div
+      class="backdrop"
+      id="team-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="teammodal-title"
+    >
+      <div class="modal">
+        <div class="modal-head">
+          <h2 id="teammodal-title">Inviter quelqu'un</h2>
+          <p>
+            La personne reçoit un lien de connexion par email. Aucun mot de passe à
+            créer ni à partager.
+          </p>
+        </div>
+        <div class="modal-body">
+          <div class="field">
+            <label for="team-f-email">Adresse email</label>
+            <input type="email" id="team-f-email" placeholder="prenom@boutique.fr" />
+          </div>
+          <div class="field">
+            <label for="team-f-name">Nom (facultatif)</label>
+            <input type="text" id="team-f-name" placeholder="Claire Mercier" />
+          </div>
+          <div class="field">
+            <label for="team-f-role">Rôle</label>
+            <select id="team-f-role">
+              <option value="AGENT">Agent — répond aux clients, escalade</option>
+              <option value="SUPERVISOR">Superviseur — rembourse et règle</option>
+              <option value="OWNER">Propriétaire — tout, y compris l'équipe</option>
+              <option value="VIEWER">Lecture seule — consulte sans agir</option>
+            </select>
+            <small id="team-f-perms"></small>
+          </div>
+          <label class="confirm" id="team-f-active-row" hidden>
+            <input type="checkbox" id="team-f-active" checked />
+            <span>Compte actif — la personne peut se connecter.</span>
+          </label>
+          <div class="warnbox" id="team-f-link" hidden>
+            <b>!</b>
+            <div>
+              L'email n'a pas pu être envoyé — la boîte Gmail n'est pas connectée.
+              Transmettez ce lien vous-même :
+              <br /><code id="team-f-link-url" style="word-break: break-all"></code>
+            </div>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn" id="team-f-resend" hidden>Renvoyer l'invitation</button>
+          <button class="btn" id="team-f-cancel">Annuler</button>
+          <button class="btn btn-primary" id="team-f-save">Enregistrer</button>
+        </div>
+      </div>
     </div>
 
     <div

@@ -15,6 +15,7 @@ import { refundRoutes } from './routes/refunds.ts';
 import { settingsRoutes } from './routes/settings.ts';
 import { supplierPortalRoutes } from './routes/supplierPortal.ts';
 import { supplierRoutes } from './routes/suppliers.ts';
+import { teamRoutes } from './routes/team.ts';
 import { ticketRoutes } from './routes/tickets.ts';
 import { gmailWebhookRoutes } from './routes/webhooks.gmail.ts';
 
@@ -74,6 +75,10 @@ export async function buildServer() {
   // par l'écran de consentement OAuth Google et par la fiche Shopify Partners.
   // Contenu à faire valider avant tout usage réel — voir le bandeau sur ces
   // pages et docs/08-mise-en-ligne.md.
+  // Page de demande de lien : la seule entrée pour un membre d'équipe qui
+  // n'est pas passé par l'installation Shopify.
+  app.get('/login', async (request, reply) => reply.type('text/html').sendFile('login.html'));
+
   app.get('/privacy', async (request, reply) => reply.type('text/html').sendFile('privacy.html'));
   app.get('/terms', async (request, reply) => reply.type('text/html').sendFile('terms.html'));
 
@@ -85,6 +90,7 @@ export async function buildServer() {
   await app.register(settingsRoutes);
   await app.register(commerceRoutes);
   await app.register(supplierRoutes);
+  await app.register(teamRoutes);
   await app.register(supplierPortalRoutes);
   await app.register(adminRoutes);
 

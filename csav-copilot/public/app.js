@@ -16,6 +16,8 @@ const state = {
   refund: null,
   suppliers: [],
   editingSupplier: null,
+  team: { users: [], me: null },
+  editingUser: null,
   settings: null,
   view: 'tickets',
   orders: { items: [], cursor: null, hasNext: false, q: '', loading: false, loaded: false, timer: null },
@@ -153,7 +155,11 @@ function renderMe() {
   );
 
   if (me.user) {
-    pills.push(`<span class="conn-pill">${esc(me.user.name ?? me.user.email)}</span>`);
+    pills.push(
+      `<span class="conn-pill">${esc(me.user.name ?? me.user.email)} · ${esc(
+        ROLE_LABELS[me.user.role] ?? me.user.role,
+      )}</span>`,
+    );
   }
 
   $('conn').innerHTML = pills.join('');
@@ -277,6 +283,22 @@ function renderDetail() {
   renderShipping(order);
 }
 
+/** Droits de l'utilisateur connecté, tels que renvoyés par /api/me. */
+function myRole() {
+  return state.me?.user?.role ?? 'VIEWER';
+}
+
+function canI(permission) {
+  const table = {
+    reply: ['OWNER', 'SUPERVISOR', 'AGENT'],
+    escalate: ['OWNER', 'SUPERVISOR', 'AGENT'],
+    refund: ['OWNER', 'SUPERVISOR'],
+    configure: ['OWNER', 'SUPERVISOR'],
+    manageTeam: ['OWNER'],
+  };
+  return (table[permission] ?? []).includes(myRole());
+}
+
 function renderDraft(draft, ticket) {
   const zone = $('draft-zone');
   const none = $('no-draft');
@@ -304,11 +326,23 @@ function renderDraft(draft, ticket) {
   $('d-conf-num').textContent = draft.confidence.toFixed(2).replace('.', ',');
 
   const sent = draft.status === 'SENT';
-  $('btn-send').disabled = sent;
+  // Un rôle sans le droit voit le bouton désactivé plutôt que masqué : cacher
+  // laisserait croire à une régression du produit, et le titre explique.
+  const mayReply = canI('reply');
+
+  $('btn-send').disabled = sent || !mayReply;
   $('btn-send').textContent = sent ? 'Réponse envoyée' : 'Envoyer la réponse';
-  $('btn-save').disabled = sent;
-  $('btn-refund').disabled = !ticket.shopifyOrderId;
-  $('btn-refund').title = ticket.shopifyOrderId
+  $('btn-save').disabled = sent || !mayReply;
+  if (!mayReply) {
+    $('btn-send').title = 'Votre rôle est en lecture seule.';
+    $('btn-save').title = 'Votre rôle est en lecture seule.';
+  }
+
+  $('btn-refund').disabled = !ticket.shopifyOrderId || !canI('refund');
+  if (!canI('refund')) {
+    $('btn-refund').title = 'Seuls le propriétaire et les superviseurs peuvent rembourser.';
+  }
+  if (canI('refund')) $('btn-refund').title = ticket.shopifyOrderId
     ? ''
     : 'Rattachez d’abord une commande à ce ticket.';
 }
@@ -649,13 +683,192 @@ $('sup-f-delete').addEventListener('click', async () => {
   }
 });
 
+/* --------------------------------------------------------------- équipe -- */
+
+const ROLE_LABELS = {
+  OWNER: 'Propriétaire',
+  SUPERVISOR: 'Superviseur',
+  AGENT: 'Agent',
+  VIEWER: 'Lecture seule',
+};
+
+/* Ce que chaque rôle peut faire, en une ligne. Affiché dans le tableau : un
+   nom de rôle seul ne dit rien à qui n'a pas lu la documentation. */
+const ROLE_ABILITIES = {
+  OWNER: 'Tout, y compris l’équipe et les réglages',
+  SUPERVISOR: 'Répond, rembourse, règle la boutique',
+  AGENT: 'Répond aux clients et escalade',
+  VIEWER: 'Consulte sans rien envoyer',
+};
+
+function isOwner() {
+  return state.team.me?.role === 'OWNER';
+}
+
+async function loadTeam() {
+  const data = await api('/api/team');
+  state.team = data;
+  renderTeam();
+}
+
+function renderTeam() {
+  const { users } = state.team;
+  const owner = isOwner();
+
+  $('team-new').hidden = !owner;
+
+  $('team-rows').innerHTML = users
+    .map((user) => {
+      const self = user.id === state.team.me?.id;
+      return `<tr class="grid-row${user.active ? '' : ' muted'}" data-user="${esc(user.id)}">
+        <td>
+          <b>${esc(user.name ?? user.email)}</b>${self ? ' <span class="sub">(vous)</span>' : ''}
+          <br /><span class="sub mono">${esc(user.email)}</span>
+        </td>
+        <td>${esc(ROLE_LABELS[user.role] ?? user.role)}</td>
+        <td class="sub">${esc(ROLE_ABILITIES[user.role] ?? '')}</td>
+        <td>${
+          user.lastLoginAt
+            ? relativeTime(user.lastLoginAt)
+            : user.invitedAt
+              ? `<span class="sub">invité ${relativeTime(user.invitedAt)}</span>`
+              : '<span class="sub">jamais</span>'
+        }</td>
+        <td>${
+          user.active
+            ? '<span class="tag tag-status st-CLOSED">Actif</span>'
+            : '<span class="tag tag-status st-NEW">Désactivé</span>'
+        }</td>
+        <td>${owner ? '<button class="btn btn-small">Modifier</button>' : ''}</td>
+      </tr>`;
+    })
+    .join('');
+
+  const active = users.filter((user) => user.active).length;
+  $('team-count').textContent = `${users.length} personne${users.length > 1 ? 's' : ''} · ${active} active${
+    active > 1 ? 's' : ''
+  }`;
+
+  if (owner) {
+    $('team-rows')
+      .querySelectorAll('.grid-row')
+      .forEach((row) => row.addEventListener('click', () => openTeamForm(row.dataset.user)));
+  }
+}
+
+function describeRole() {
+  $('team-f-perms').textContent = ROLE_ABILITIES[$('team-f-role').value] ?? '';
+}
+
+/** `id` absent : invitation. Sinon édition du rôle et de l'état. */
+function openTeamForm(id) {
+  const user = id ? state.team.users.find((candidate) => candidate.id === id) : null;
+  state.editingUser = user?.id ?? null;
+  const self = user?.id === state.team.me?.id;
+
+  $('teammodal-title').textContent = user ? (user.name ?? user.email) : "Inviter quelqu'un";
+  $('team-f-email').value = user?.email ?? '';
+  $('team-f-email').disabled = Boolean(user); // l'adresse identifie le compte
+  $('team-f-name').value = user?.name ?? '';
+  $('team-f-role').value = user?.role ?? 'AGENT';
+  $('team-f-active').checked = user ? user.active : true;
+
+  $('team-f-active-row').hidden = !user;
+  $('team-f-resend').hidden = !user;
+  $('team-f-link').hidden = true;
+
+  // Se rétrograder ou se désactiver soi-même fermerait la porte de l'intérieur.
+  $('team-f-role').disabled = self;
+  $('team-f-active').disabled = self;
+
+  describeRole();
+  $('team-modal').classList.add('open');
+}
+
+$('team-f-role').addEventListener('change', describeRole);
+$('team-new').addEventListener('click', () => openTeamForm(null));
+$('team-f-cancel').addEventListener('click', () => $('team-modal').classList.remove('open'));
+$('team-modal').addEventListener('click', (event) => {
+  if (event.target === $('team-modal')) $('team-modal').classList.remove('open');
+});
+
+/** Affiche le lien quand l'email n'a pas pu partir, au lieu de mentir. */
+function showInviteLink(payload) {
+  if (payload?.inviteUrl) {
+    $('team-f-link-url').textContent = payload.inviteUrl;
+    $('team-f-link').hidden = false;
+    return false;
+  }
+  return true;
+}
+
+$('team-f-save').addEventListener('click', async () => {
+  const id = state.editingUser;
+
+  try {
+    if (id) {
+      const payload = { name: $('team-f-name').value.trim() || null };
+      // Champs verrouillés sur soi-même : ne pas les envoyer évite un 409
+      // inutile côté serveur.
+      if (!$('team-f-role').disabled) {
+        payload.role = $('team-f-role').value;
+        payload.active = $('team-f-active').checked;
+      }
+
+      await api(`/api/team/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+      $('team-modal').classList.remove('open');
+      toast('Membre mis à jour.');
+    } else {
+      const email = $('team-f-email').value.trim();
+      if (!email) {
+        toast('Une adresse email est requise.', true);
+        return;
+      }
+
+      const result = await api('/api/team', {
+        method: 'POST',
+        body: JSON.stringify({
+          email,
+          name: $('team-f-name').value.trim() || undefined,
+          role: $('team-f-role').value,
+        }),
+      });
+
+      if (showInviteLink(result)) {
+        $('team-modal').classList.remove('open');
+        toast('Invitation envoyée.');
+      }
+    }
+
+    await Promise.all([loadTeam(), loadAudit()]);
+  } catch (error) {
+    toast(error.message, true);
+  }
+});
+
+$('team-f-resend').addEventListener('click', async () => {
+  const id = state.editingUser;
+  if (!id) return;
+
+  try {
+    const result = await api(`/api/team/${id}/invite`, { method: 'POST' });
+    if (showInviteLink(result)) {
+      toast('Invitation renvoyée.');
+      $('team-modal').classList.remove('open');
+    }
+    await loadTeam();
+  } catch (error) {
+    toast(error.message, true);
+  }
+});
+
 /* ------------------------------------------------------------ navigation */
 
 /* Trois sections dans une seule page : la file de tickets, le carnet de
    commandes et le fichier client. Les deux dernières interrogent Shopify en
    direct, donc on ne les charge qu'à la première ouverture. */
 
-const VIEWS = ['tickets', 'orders', 'customers', 'suppliers'];
+const VIEWS = ['tickets', 'orders', 'customers', 'suppliers', 'team'];
 
 function setView(view) {
   state.view = view;
@@ -673,6 +886,7 @@ function setView(view) {
   if (view === 'orders' && !state.orders.loaded) loadOrders({ reset: true });
   if (view === 'customers' && !state.customers.loaded) loadCustomers({ reset: true });
   if (view === 'suppliers') renderSuppliers();
+  if (view === 'team') loadTeam();
 }
 
 $('tabs').addEventListener('click', (event) => {
@@ -1192,6 +1406,10 @@ const AUDIT_LABELS = {
   'refund.completed': 'Remboursement effectué',
   'refund.failed': 'Remboursement en échec',
   'merchant.settings_updated': 'Réglages modifiés',
+  'user.invited': 'Membre invité',
+  'user.joined': 'Membre a rejoint l’équipe',
+  'user.logged_in': 'Connexion',
+  'user.updated': 'Membre modifié',
   'supplier.configured': 'Fournisseur configuré',
   'supplier.created': 'Contact fournisseur ajouté',
   'supplier.updated': 'Contact fournisseur modifié',
