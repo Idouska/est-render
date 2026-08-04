@@ -30,6 +30,17 @@ model Merchant {
   // Base légale RGPD : durée de conservation des mails ingérés, en jours.
   retentionDays Int @default(365)
 
+  // Identité affichée dans l'application. Distincte de `name`, qui vient de
+  // Shopify : un marchand veut souvent afficher son enseigne plutôt que la
+  // raison sociale, et son logo plutôt que deux initiales.
+  brandName String?
+  logoUrl   String?
+
+  /// Gabarit de lien de suivi, `{tracking}` remplacé par le numéro. Vide, on
+  /// utilise le lien fourni par Shopify — qui manque chez certains
+  /// transporteurs, d'où la possibilité de le forcer.
+  trackingUrlTemplate String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

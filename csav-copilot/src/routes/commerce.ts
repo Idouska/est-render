@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { prisma } from '../lib/prisma.ts';
 import { requireSession } from '../plugins/auth.ts';
 import { getShopifyClient, ShopifyError } from '../services/shopify/client.ts';
 import { listCollections, listDisputes, listProducts } from '../services/shopify/catalog.ts';
@@ -185,6 +186,16 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
     const parsed = listQuery.safeParse(request.query);
     if (!parsed.success) return reply.code(400).send({ error: 'Paramètres invalides' });
 
+    // Gabarit de lien choisi par le marchand : certains transporteurs ne
+    // renvoient pas d'URL à Shopify, et un numéro sans lien oblige l'agent à
+    // aller le coller à la main sur le site du transporteur.
+    const merchant = await prisma.merchant.findUnique({
+      where: { id: request.session.merchantId },
+      select: { trackingUrlTemplate: true },
+    });
+
+    const template = merchant?.trackingUrlTemplate?.trim() || null;
+
     return serveShopify(request, reply, 'Listing du suivi en échec', async (client) => {
       const page = await listOrders(client, {
         // Une commande livrée n'appelle plus d'action ; une non expédiée n'a pas
@@ -204,7 +215,10 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
             status: fulfillment.status,
             carrier: fulfillment.trackingCompany,
             trackingNumber: fulfillment.trackingNumber,
-            trackingUrl: fulfillment.trackingUrl,
+            trackingUrl:
+              template && fulfillment.trackingNumber
+                ? template.replace('{tracking}', encodeURIComponent(fulfillment.trackingNumber))
+                : fulfillment.trackingUrl,
             estimatedDeliveryAt: fulfillment.estimatedDeliveryAt,
             updatedAt: fulfillment.updatedAt,
             city: order.shippingAddress?.city ?? null,

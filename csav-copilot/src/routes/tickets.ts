@@ -5,6 +5,7 @@ import { recordAudit } from '../lib/audit.ts';
 import { prisma } from '../lib/prisma.ts';
 import { requirePermission, requireSession } from '../plugins/auth.ts';
 import { sendDraft, updateDraftBody } from '../services/gmail/drafts.ts';
+import { sendPlainEmail } from '../services/gmail/send.ts';
 import { getShopifyClient, ShopifyError } from '../services/shopify/client.ts';
 import { getOrderById, quoteSearchValue, searchOrders } from '../services/shopify/orders.ts';
 
@@ -40,6 +41,8 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
         id: merchant.id,
         shopDomain: merchant.shopDomain,
         name: merchant.name,
+        brandName: merchant.brandName,
+        logoUrl: merchant.logoUrl,
         autoSendEnabled: merchant.autoSendEnabled,
         autoSendThreshold: merchant.autoSendThreshold,
       },
@@ -352,4 +355,52 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
 
     return reply.send({ ok: true });
   });
+
+  /**
+   * Message sortant à l'initiative de l'agent, hors ticket.
+   *
+   * Distinct d'une réponse : il n'y a pas de fil à poursuivre, pas de brouillon
+   * à relire. La règle « rien ne part sans validation humaine » est respectée
+   * par construction — c'est un humain qui écrit et qui clique.
+   */
+  app.post(
+    '/api/emails',
+    { preHandler: requirePermission('reply') },
+    async (request, reply) => {
+      const parsed = z
+        .object({
+          to: z.string().email(),
+          subject: z.string().min(1).max(200),
+          body: z.string().min(1).max(20000),
+        })
+        .safeParse(request.body);
+
+      if (!parsed.success) {
+        return reply.code(400).send({ error: 'Requête invalide', details: parsed.error.issues });
+      }
+
+      const { merchantId, userId } = request.session;
+
+      try {
+        await sendPlainEmail({ merchantId, ...parsed.data });
+      } catch (error) {
+        request.log.error({ err: error }, 'Envoi de message libre en échec');
+        return reply.code(502).send({
+          error:
+            'Envoi impossible : vérifiez que la boîte Gmail est connectée dans les réglages.',
+        });
+      }
+
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId: userId,
+        action: 'email.sent',
+        metadata: { to: parsed.data.to, subject: parsed.data.subject },
+        ipAddress: request.ip,
+      });
+
+      return reply.send({ ok: true });
+    },
+  );
 }

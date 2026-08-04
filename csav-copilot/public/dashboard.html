@@ -28,6 +28,7 @@
         <aside class="side">
           <div class="brand">
             <span class="brand-mark" id="brand-mark">SA</span>
+            <img class="brand-logo" id="brand-logo" alt="" hidden />
             <div>
               <strong id="merchant-name">cSAV Copilot</strong>
               <span id="merchant-shop"></span>
@@ -50,6 +51,7 @@
           <header class="head">
             <div class="crumb" id="crumb"></div>
             <div class="head-acts">
+              <div class="clocks" id="clocks"></div>
               <div class="conn" id="conn"></div>
             </div>
             <h1 id="view-title">File de traitement</h1>
@@ -222,6 +224,7 @@
                 <th class="num">Commandes</th>
                 <th class="num">Total dépensé</th>
                 <th>Dernière commande</th>
+                <th></th>
               </tr>
             </thead>
             <tbody id="customers-rows"></tbody>
@@ -362,8 +365,15 @@
       </section>
 
       <section class="browse" id="view-refunds" hidden aria-label="Remboursements">
+        <div class="kpis" id="refunds-kpis"></div>
         <div class="browse-bar">
-          <span class="browse-count" id="refunds-count"></span>
+          <div class="filters" id="refunds-filters" style="padding: 0; border: 0">
+            <button class="chip" data-refund="" aria-pressed="true">Tous</button>
+            <button class="chip" data-refund="PENDING" aria-pressed="false">En cours</button>
+            <button class="chip" data-refund="COMPLETED" aria-pressed="false">Effectués</button>
+            <button class="chip" data-refund="FAILED" aria-pressed="false">En échec</button>
+          </div>
+          <span class="browse-count" id="refunds-count" style="margin-left: auto"></span>
         </div>
         <div class="table-wrap">
           <table class="grid">
@@ -414,6 +424,44 @@
               </p>
               <div class="set-conn" id="set-shopify"></div>
               <div class="set-conn" id="set-gmail"></div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head"><span class="panel-title">Identité</span></div>
+            <div class="card-body set-group">
+              <div class="field">
+                <label for="set-brand">Nom affiché</label>
+                <input type="text" id="set-brand" placeholder="Votre enseigne" />
+                <small>Remplace le nom Shopify dans l'application et sur les invitations.</small>
+              </div>
+              <div class="field">
+                <label for="set-logo">Adresse du logo</label>
+                <input type="text" id="set-logo" placeholder="https://…/logo.png" />
+                <small>
+                  Une URL d'image, carrée de préférence. Votre thème Shopify en héberge
+                  déjà une.
+                </small>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head"><span class="panel-title">Suivi des colis</span></div>
+            <div class="card-body set-group">
+              <div class="field">
+                <label for="set-tracking">Gabarit de lien de suivi</label>
+                <input
+                  type="text"
+                  id="set-tracking"
+                  placeholder="https://t.17track.net/fr#nums={tracking}"
+                />
+                <small>
+                  <code>{tracking}</code> est remplacé par le numéro. Laissez vide pour
+                  utiliser le lien fourni par le transporteur via Shopify — qui manque
+                  chez certains.
+                </small>
+              </div>
             </div>
           </div>
 
@@ -495,6 +543,42 @@
           </div>
         </div>
       </section>
+        </div>
+      </div>
+    </div>
+
+    <div
+      class="backdrop"
+      id="mail-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="mail-title"
+    >
+      <div class="modal modal-wide">
+        <div class="modal-head">
+          <h2 id="mail-title">Écrire au client</h2>
+          <p>
+            Le message part depuis votre boîte SAV connectée. Il n'ouvre pas de ticket :
+            la réponse du client, elle, en créera un.
+          </p>
+        </div>
+        <div class="modal-body">
+          <div class="field">
+            <label for="mail-to">Destinataire</label>
+            <input type="email" id="mail-to" />
+          </div>
+          <div class="field">
+            <label for="mail-subject">Objet</label>
+            <input type="text" id="mail-subject" placeholder="À propos de votre commande" />
+          </div>
+          <div class="field">
+            <label for="mail-body">Message</label>
+            <textarea id="mail-body" style="min-height: 200px"></textarea>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn" id="mail-cancel">Annuler</button>
+          <button class="btn btn-primary" id="mail-send">Envoyer</button>
         </div>
       </div>
     </div>

@@ -20,6 +20,12 @@ import { requirePermission, requireSession } from '../plugins/auth.ts';
 const patchBody = z
   .object({
     name: z.string().min(1).max(200).nullable().optional(),
+    brandName: z.string().max(120).nullish(),
+    // Une URL d'image, pas un envoi de fichier : le marchand héberge déjà son
+    // logo sur son thème Shopify ou son site, et stocker des binaires
+    // demanderait un espace de fichiers à sauvegarder et à purger.
+    logoUrl: z.string().url().max(500).nullish(),
+    trackingUrlTemplate: z.string().max(300).nullish(),
     autoSendEnabled: z.boolean().optional(),
     // Un seuil sous 0,5 reviendrait à envoyer des réponses que le modèle
     // lui-même juge douteuses. Le plancher est volontairement haut.
@@ -51,6 +57,9 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({
       merchant: {
         name: merchant.name,
+        brandName: merchant.brandName,
+        logoUrl: merchant.logoUrl,
+        trackingUrlTemplate: merchant.trackingUrlTemplate,
         shopDomain: merchant.shopDomain,
         status: merchant.status,
         autoSendEnabled: merchant.autoSendEnabled,
@@ -124,6 +133,9 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({
       merchant: {
         name: merchant.name,
+        brandName: merchant.brandName,
+        logoUrl: merchant.logoUrl,
+        trackingUrlTemplate: merchant.trackingUrlTemplate,
         shopDomain: merchant.shopDomain,
         status: merchant.status,
         autoSendEnabled: merchant.autoSendEnabled,

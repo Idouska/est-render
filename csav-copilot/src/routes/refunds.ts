@@ -174,12 +174,31 @@ export async function refundRoutes(app: FastifyInstance): Promise<void> {
 
   app.get('/api/refunds', async (request, reply) => {
     const { merchantId } = request.session;
-    const refunds = await prisma.refund.findMany({
-      where: { merchantId },
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-    });
-    return reply.send({ refunds });
+
+    const [refunds, byStatus] = await Promise.all([
+      prisma.refund.findMany({
+        where: { merchantId },
+        orderBy: { createdAt: 'desc' },
+        take: 200,
+      }),
+      prisma.refund.groupBy({
+        by: ['status'],
+        where: { merchantId },
+        _count: { _all: true },
+        _sum: { amount: true },
+      }),
+    ]);
+
+    // Un remboursement en attente est de l'argent promis mais pas encore parti :
+    // c'est le chiffre qui manque quand on rapproche la caisse.
+    const totals = Object.fromEntries(
+      byStatus.map((row) => [
+        row.status,
+        { count: row._count._all, amount: Number(row._sum.amount ?? 0) },
+      ]),
+    );
+
+    return reply.send({ refunds, totals });
   });
 }
 

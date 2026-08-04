@@ -20,6 +20,8 @@ const state = {
   pendingCount: 0,
   catalog: { items: [], cursor: null, hasNext: false, q: '', kind: 'products', loading: false, loaded: false, timer: null },
   editingUser: null,
+  refundRows: [],
+  refundFilter: '',
   settings: null,
   view: 'tickets',
   orders: { items: [], cursor: null, hasNext: false, q: '', loading: false, loaded: false, timer: null },
@@ -125,9 +127,27 @@ function renderMe() {
   const me = state.me;
   const shop = me.merchant.shopDomain ?? '';
 
-  $('merchant-name').textContent = me.merchant.name ?? 'cSAV Copilot';
+  const brand = me.merchant.brandName || me.merchant.name || 'cSAV Copilot';
+
+  $('merchant-name').textContent = brand;
   $('merchant-shop').textContent = shop.replace('.myshopify.com', '');
-  $('brand-mark').textContent = (me.merchant.name ?? shop).slice(0, 2).toUpperCase();
+  $('brand-mark').textContent = brand.slice(0, 2).toUpperCase();
+
+  // Le logo remplace les initiales quand il est renseigné, et retombe dessus
+  // si l'image ne charge pas — une URL cassée ne doit pas laisser un trou.
+  const logo = $('brand-logo');
+  if (me.merchant.logoUrl) {
+    logo.src = me.merchant.logoUrl;
+    logo.hidden = false;
+    $('brand-mark').hidden = true;
+    logo.onerror = () => {
+      logo.hidden = true;
+      $('brand-mark').hidden = false;
+    };
+  } else {
+    logo.hidden = true;
+    $('brand-mark').hidden = false;
+  }
 
   const who = me.user?.name ?? me.user?.email ?? '—';
   $('me-name').textContent = who;
@@ -1172,8 +1192,46 @@ async function loadRefunds() {
   body.innerHTML = '<tr><td colspan="6" class="empty">Chargement…</td></tr>';
 
   try {
-    const { refunds } = await api('/api/refunds');
+    const { refunds, totals } = await api('/api/refunds');
+    state.refundRows = refunds;
 
+    const pending = totals.PENDING ?? { count: 0, amount: 0 };
+    const done = totals.COMPLETED ?? { count: 0, amount: 0 };
+    const failed = totals.FAILED ?? { count: 0, amount: 0 };
+
+    $('refunds-kpis').innerHTML = [
+      ['En cours', euro(pending.amount), `${pending.count} demande${pending.count > 1 ? 's' : ''}`],
+      ['Effectués', euro(done.amount), `${done.count} remboursement${done.count > 1 ? 's' : ''}`],
+      ['En échec', String(failed.count), failed.count ? 'à reprendre à la main' : 'rien à reprendre'],
+      [
+        'Total rendu',
+        euro(done.amount + pending.amount),
+        'effectués et engagés',
+      ],
+    ]
+      .map(
+        ([label, value, note]) => `<div class="kpi">
+          <span class="kpi-label">${esc(label)}</span>
+          <span class="kpi-value">${esc(String(value))}</span>
+          <span class="kpi-note">${esc(note)}</span>
+        </div>`,
+      )
+      .join('');
+
+    renderRefundRows();
+  } catch (error) {
+    body.innerHTML = `<tr><td colspan="6" class="empty">${esc(error.message)}</td></tr>`;
+  }
+}
+
+function renderRefundRows() {
+  const body = $('refunds-rows');
+  const filter = state.refundFilter;
+  const refunds = filter
+    ? state.refundRows.filter((refund) => refund.status === filter)
+    : state.refundRows;
+
+  {
     body.innerHTML =
       refunds
         .map(
@@ -1197,10 +1255,63 @@ async function loadRefunds() {
     $('refunds-count').textContent = refunds.length
       ? `${refunds.length} remboursement${refunds.length > 1 ? 's' : ''}`
       : '';
-  } catch (error) {
-    body.innerHTML = `<tr><td colspan="6" class="empty">${esc(error.message)}</td></tr>`;
   }
 }
+
+$('refunds-filters').addEventListener('click', (event) => {
+  const chip = event.target.closest('.chip');
+  if (!chip) return;
+
+  state.refundFilter = chip.dataset.refund;
+  $('refunds-filters')
+    .querySelectorAll('.chip')
+    .forEach((other) =>
+      other.setAttribute('aria-pressed', String(other.dataset.refund === state.refundFilter)),
+    );
+  renderRefundRows();
+});
+
+/* ------------------------------------------------------ message sortant -- */
+
+function openMail(to, subject = '') {
+  $('mail-to').value = to ?? '';
+  $('mail-subject').value = subject;
+  $('mail-body').value = '';
+  $('mail-modal').classList.add('open');
+  $('mail-subject').focus();
+}
+
+$('mail-cancel').addEventListener('click', () => $('mail-modal').classList.remove('open'));
+$('mail-modal').addEventListener('click', (event) => {
+  if (event.target === $('mail-modal')) $('mail-modal').classList.remove('open');
+});
+
+$('mail-send').addEventListener('click', async () => {
+  const payload = {
+    to: $('mail-to').value.trim(),
+    subject: $('mail-subject').value.trim(),
+    body: $('mail-body').value.trim(),
+  };
+
+  if (!payload.to || !payload.subject || !payload.body) {
+    toast('Destinataire, objet et message sont requis.', true);
+    return;
+  }
+
+  const button = $('mail-send');
+  button.disabled = true;
+
+  try {
+    await api('/api/emails', { method: 'POST', body: JSON.stringify(payload) });
+    $('mail-modal').classList.remove('open');
+    toast('Message envoyé.');
+    await loadAudit();
+  } catch (error) {
+    toast(error.message, true);
+  } finally {
+    button.disabled = false;
+  }
+});
 
 /* ----------------------------------------------------------------- litiges */
 
@@ -1251,6 +1362,45 @@ async function loadDisputes() {
     body.innerHTML = `<tr><td colspan="6" class="empty">${esc(error.message)}</td></tr>`;
   }
 }
+
+/* ------------------------------------------------------------- horloges - */
+
+/* L'équipe travaille avec des fournisseurs en Asie et des clients en Europe :
+   l'heure locale décide si un appel a une chance d'aboutir maintenant. */
+const CLOCKS = [
+  ['Agadir', 'Africa/Casablanca', 'ma'],
+  ['Paris', 'Europe/Paris', 'fr'],
+  ['Chine', 'Asia/Shanghai', 'cn'],
+  ['Malaisie', 'Asia/Kuala_Lumpur', 'my'],
+  ['New York', 'America/New_York', 'us'],
+];
+
+function renderClocks() {
+  const now = new Date();
+
+  $('clocks').innerHTML = CLOCKS.map(([city, zone, code]) => {
+    const time = now.toLocaleTimeString('fr-FR', {
+      timeZone: zone,
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    // Heures ouvrées locales : appeler un fournisseur à 3 h du matin chez lui
+    // ne sert à rien, et c'est l'erreur que ces horloges évitent.
+    const hour = Number(
+      now.toLocaleString('en-GB', { timeZone: zone, hour: '2-digit', hour12: false }),
+    );
+    const open = hour >= 9 && hour < 18;
+
+    return `<div class="clock clock-${code}">
+      <b>${esc(city)}</b>
+      <span>${time}</span>
+      <i>${open ? 'ouvert' : 'hors horaires'}</i>
+    </div>`;
+  }).join('');
+}
+
+setInterval(renderClocks, 30000);
 
 /* ------------------------------------------------------------ navigation */
 
@@ -1622,6 +1772,11 @@ function renderCustomers() {
                 )}`
               : '—'
           }</td>
+          <td>${
+            customer.email
+              ? `<button class="btn btn-small" data-mail="${esc(customer.email)}">Écrire</button>`
+              : ''
+          }</td>
         </tr>`,
       )
       .join('') || '<tr><td colspan="7" class="empty">Aucun client.</td></tr>';
@@ -1633,6 +1788,16 @@ function renderCustomers() {
 
   // Cliquer un client bascule sur ses commandes : c'est la question suivante
   // qu'on se pose toujours.
+  // Le bouton « Écrire » ne doit pas déclencher la bascule vers les commandes.
+  $('customers-rows')
+    .querySelectorAll('[data-mail]')
+    .forEach((button) =>
+      button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        openMail(button.dataset.mail);
+      }),
+    );
+
   $('customers-rows')
     .querySelectorAll('.grid-row')
     .forEach((row) =>
@@ -1729,6 +1894,9 @@ function renderSettings() {
       : '<a class="btn btn-small btn-primary" href="/auth/google">Connecter</a>',
   });
 
+  $('set-brand').value = merchant.brandName ?? '';
+  $('set-logo').value = merchant.logoUrl ?? '';
+  $('set-tracking').value = merchant.trackingUrlTemplate ?? '';
   $('set-autosend').checked = merchant.autoSendEnabled;
   $('set-threshold').value = merchant.autoSendThreshold;
   $('set-threshold-echo').textContent = `${Math.round(merchant.autoSendThreshold * 100)} %`;
@@ -1763,6 +1931,9 @@ $('set-save').addEventListener('click', async () => {
     const { merchant } = await api('/api/settings', {
       method: 'PATCH',
       body: JSON.stringify({
+        brandName: $('set-brand').value.trim() || null,
+        logoUrl: $('set-logo').value.trim() || null,
+        trackingUrlTemplate: $('set-tracking').value.trim() || null,
         autoSendEnabled: $('set-autosend').checked,
         autoSendThreshold: Number($('set-threshold').value),
         retentionDays: Number($('set-retention').value),
@@ -1771,8 +1942,7 @@ $('set-save').addEventListener('click', async () => {
 
     // La barre haute et l'indicateur « envoi automatique » affichent ces
     // valeurs : les rafraîchir évite un écran qui se contredit.
-    state.me.merchant.autoSendEnabled = merchant.autoSendEnabled;
-    state.me.merchant.autoSendThreshold = merchant.autoSendThreshold;
+    Object.assign(state.me.merchant, merchant);
     renderMe();
     await Promise.all([loadMetrics(), loadAudit()]);
 
@@ -1938,6 +2108,7 @@ const AUDIT_LABELS = {
   'user.joined': 'Membre a rejoint l’équipe',
   'user.logged_in': 'Connexion',
   'user.updated': 'Membre modifié',
+  'email.sent': 'Message envoyé',
   'supplier.configured': 'Fournisseur configuré',
   'supplier.created': 'Contact fournisseur ajouté',
   'supplier.updated': 'Contact fournisseur modifié',
@@ -2128,6 +2299,7 @@ async function boot() {
   $('app').hidden = false;
 
   renderMe();
+  renderClocks();
   setView('tickets');
 
   await Promise.all([loadMetrics(), loadQueue(), loadAudit(), loadSupplier()]);
