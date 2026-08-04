@@ -380,12 +380,16 @@ body {
   display: flex;
   align-items: center;
   gap: 7px;
+  /* Sans taille explicite, l'icône du fil d'Ariane s'étire à la hauteur
+     disponible et occupe un quart de l'écran. */
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--ink-mute);
 }
+
+.crumb svg { width: 14px; height: 14px; flex: none; }
 
 .head h1 {
   margin: 0;
@@ -595,12 +599,111 @@ body {
   }
 }
 
+/* ------------------------------------------------ barre de filtres file --- */
+
+/* Trois rangées, du plus utilisé au moins utilisé : recherche et raccourcis,
+   puis les statuts, puis les réglages fins. Tout empilé sur une seule ligne,
+   rien ne se distinguait. */
+.qbar {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow);
+  padding: 11px 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.qbar-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+.qbar input[type="search"] {
+  flex: 1;
+  min-width: 220px;
+  padding: 8px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--inset);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+
+.qbar-quick { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+/* Raccourcis : cumulables, donc ils s'allument sans s'exclure — contrairement
+   aux statuts juste en dessous, qui eux sont un choix unique. */
+.qchip {
+  appearance: none;
+  font: inherit;
+  font-size: 12.5px;
+  padding: 6px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink-soft);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.qchip:hover { border-color: var(--ink-mute); }
+
+.qchip[aria-pressed="true"] {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+.qlink {
+  appearance: none;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--accent-ink);
+  cursor: pointer;
+  padding: 6px 4px;
+}
+
+.qbar-selects { gap: 14px; }
+
+.qbar-selects label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+.qbar-selects select {
+  font: inherit;
+  font-size: 12.5px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink);
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+
+.qbar-count { margin-left: auto; font-size: 12.5px; color: var(--ink-mute); }
+
 .filters {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
-  padding: 12px 13px;
-  border-bottom: 1px solid var(--line-soft);
+}
+
+.chip .count {
+  margin-left: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  opacity: 0.75;
 }
 
 .chip {
@@ -664,11 +767,89 @@ body {
 .queue-subject { font-size: 13.5px; font-weight: 600; line-height: 1.35; letter-spacing: -0.01em; }
 .queue-tags { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 
+/* Ancienneté : la seule information de la file qui se lit sans la lire. Le
+   seuil est la promesse de réponse — au-delà de 3 jours, le client a déjà
+   relancé, au-delà de 7 il est parti. */
+.age {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.age::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+.age-fresh { background: var(--ok-soft); color: var(--ok); }
+.age-warm { background: var(--warn-soft); color: var(--warn); }
+.age-late { background: var(--crit-soft); color: var(--crit); }
+
+/* Pastille d'agent : deux initiales suffisent à voir d'un coup si la file est
+   répartie ou si tout retombe sur la même personne. */
+.who-dot {
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 9.5px;
+  font-weight: 700;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  flex: none;
+}
+
+.who-dot.none { background: var(--inset); color: var(--ink-mute); font-weight: 600; }
+
+.queue-foot { display: flex; align-items: center; gap: 6px; }
+
+/* Assignation dans l'en-tête du ticket : à portée immédiate, parce que prendre
+   un ticket est le premier geste de son traitement. */
+.d-assign {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+.d-assign select {
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+
+.d-assign select:disabled { opacity: 0.6; }
+.queue-foot .tag-order { margin-left: 0; }
+
 /* -------------------------------------------------------------- fiche --- */
 
 .thread-head { padding: 15px 17px; border-bottom: 1px solid var(--line-soft); }
 .thread-subject { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.02em; }
-.thread-meta { font-size: 12.5px; color: var(--ink-mute); margin-top: 5px; }
+.thread-meta {
+  font-size: 12.5px;
+  color: var(--ink-mute);
+  margin-top: 5px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
 .thread-meta code { font-family: var(--font-mono); }
 
 .messages {

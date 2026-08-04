@@ -95,6 +95,7 @@ model User {
   lastLoginAt DateTime?
 
   merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  tickets  Ticket[]
 
   @@unique([merchantId, email])
   @@index([merchantId, active])
@@ -168,11 +169,16 @@ model Ticket {
   orderMatchMethod OrderMatchMethod?
   orderMatchScore  Float?
 
+  /// Agent responsable. Nul = personne ne l'a pris, ce qui est l'état à
+  /// surveiller : un ticket sans propriétaire attend indéfiniment.
+  assignedToId String?
+
   lastMessageAt DateTime
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   merchant    Merchant             @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  assignedTo  User?                @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
   messages    Message[]
   drafts      Draft[]
   refunds     Refund[]
@@ -181,6 +187,7 @@ model Ticket {
   @@unique([merchantId, gmailThreadId])
   @@index([merchantId, status])
   @@index([merchantId, lastMessageAt])
+  @@index([merchantId, assignedToId])
 }
 
 enum Intent {

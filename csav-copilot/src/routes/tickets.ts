@@ -9,13 +9,81 @@ import { sendPlainEmail } from '../services/gmail/send.ts';
 import { getShopifyClient, ShopifyError } from '../services/shopify/client.ts';
 import { getOrderById, quoteSearchValue, searchOrders } from '../services/shopify/orders.ts';
 
+const TICKET_STATUSES = [
+  'NEW',
+  'PROCESSING',
+  'DRAFT_READY',
+  'NEEDS_REVIEW',
+  'AWAITING_SUPPLIER',
+  'AUTO_SENT',
+  'CLOSED',
+  'FAILED',
+] as const;
+
 const listQuery = z.object({
-  status: z
-    .enum(['NEW', 'PROCESSING', 'DRAFT_READY', 'NEEDS_REVIEW', 'AUTO_SENT', 'CLOSED', 'FAILED'])
+  status: z.enum(TICKET_STATUSES).optional(),
+  /** Recherche libre sur l'objet, le client et le numéro de commande. */
+  q: z.string().max(200).optional(),
+  intent: z
+    .enum(['WISMO', 'RETURN', 'DISPUTE', 'REFUND', 'PRODUCT_QUESTION', 'POSITIVE', 'OTHER'])
     .optional(),
+  /** Identifiant d'agent, ou `none` pour les tickets que personne n'a pris. */
+  assignee: z.string().max(60).optional(),
+  /** Ancienneté minimale en jours — le filtre « urgents ». */
+  minAgeDays: z.coerce.number().int().min(0).max(365).optional(),
+  /** Tickets sans commande rattachée : l'agent doit la retrouver à la main. */
+  unlinked: z.coerce.boolean().optional(),
+  sort: z.enum(['oldest', 'newest', 'confidence']).default('newest'),
   cursor: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(25),
 });
+
+/**
+ * Traduit les filtres de la file en clause Prisma.
+ *
+ * Isolée parce que la liste et les compteurs doivent appliquer exactement les
+ * mêmes règles : un compteur qui ne correspond pas à ce que la liste affiche
+ * est pire que pas de compteur du tout.
+ */
+function buildTicketWhere(
+  merchantId: string,
+  filters: z.infer<typeof listQuery>,
+  options: { withStatus: boolean },
+) {
+  const term = filters.q?.trim();
+
+  return {
+    merchantId,
+    ...(options.withStatus && filters.status ? { status: filters.status } : {}),
+    ...(filters.intent ? { intent: filters.intent } : {}),
+    ...(filters.assignee === 'none'
+      ? { assignedToId: null }
+      : filters.assignee
+        ? { assignedToId: filters.assignee }
+        : {}),
+    ...(filters.minAgeDays !== undefined
+      ? {
+          // L'ancienneté se compte depuis la dernière prise de parole, pas
+          // depuis l'ouverture : un ticket relancé hier n'est pas en retard de
+          // dix jours.
+          lastMessageAt: {
+            lte: new Date(Date.now() - filters.minAgeDays * 24 * 60 * 60 * 1000),
+          },
+        }
+      : {}),
+    ...(filters.unlinked ? { shopifyOrderId: null } : {}),
+    ...(term
+      ? {
+          OR: [
+            { subject: { contains: term, mode: 'insensitive' as const } },
+            { customerEmail: { contains: term, mode: 'insensitive' as const } },
+            { customerName: { contains: term, mode: 'insensitive' as const } },
+            { orderName: { contains: term, mode: 'insensitive' as const } },
+          ],
+        }
+      : {}),
+  };
+}
 
 export async function ticketRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', requireSession);
@@ -73,34 +141,114 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const { merchantId } = request.session;
-    const { status, cursor, limit } = query.data;
+    const { cursor, limit, sort } = query.data;
 
-    const tickets = await prisma.ticket.findMany({
-      where: { merchantId, ...(status ? { status } : {}) },
-      orderBy: { lastMessageAt: 'desc' },
-      take: limit + 1,
-      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-      select: {
-        id: true,
-        subject: true,
-        customerEmail: true,
-        customerName: true,
-        intent: true,
-        intentConfidence: true,
-        status: true,
-        orderName: true,
-        lastMessageAt: true,
-      },
-    });
+    const orderBy =
+      sort === 'oldest'
+        ? ({ lastMessageAt: 'asc' } as const)
+        : sort === 'confidence'
+          ? ({ intentConfidence: 'asc' } as const)
+          : ({ lastMessageAt: 'desc' } as const);
+
+    const [tickets, byStatus] = await Promise.all([
+      prisma.ticket.findMany({
+        where: buildTicketWhere(merchantId, query.data, { withStatus: true }),
+        orderBy,
+        take: limit + 1,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+        select: {
+          id: true,
+          subject: true,
+          customerEmail: true,
+          customerName: true,
+          intent: true,
+          intentConfidence: true,
+          status: true,
+          orderName: true,
+          shopifyOrderId: true,
+          lastMessageAt: true,
+          createdAt: true,
+          assignedToId: true,
+          assignedTo: { select: { id: true, name: true, email: true } },
+        },
+      }),
+      // Compteurs calculés sur les mêmes filtres, statut exclu : sinon chaque
+      // onglet afficherait son propre nombre et jamais celui des autres.
+      prisma.ticket.groupBy({
+        by: ['status'],
+        where: buildTicketWhere(merchantId, query.data, { withStatus: false }),
+        _count: true,
+      }),
+    ]);
 
     const hasMore = tickets.length > limit;
     if (hasMore) tickets.pop();
 
+    const counts = Object.fromEntries(byStatus.map((row) => [row.status, row._count]));
+
     return reply.send({
       tickets,
+      counts: { ...counts, ALL: byStatus.reduce((sum, row) => sum + row._count, 0) },
       nextCursor: hasMore ? tickets[tickets.length - 1]?.id : null,
     });
   });
+
+  /**
+   * Assignation d'un ticket.
+   *
+   * `reply` et non `configure` : prendre un ticket fait partie du travail
+   * quotidien d'un agent, lui demander un superviseur pour ça bloquerait la
+   * file entière dès que personne n'est disponible.
+   */
+  app.patch<{ Params: { id: string } }>(
+    '/api/tickets/:id/assign',
+    { preHandler: requirePermission('reply') },
+    async (request, reply) => {
+      const parsed = z
+        .object({ userId: z.string().min(1).nullable() })
+        .safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Agent invalide' });
+
+      const { merchantId, userId: actorId } = request.session;
+
+      const ticket = await prisma.ticket.findFirst({
+        where: { id: request.params.id, merchantId },
+        select: { id: true },
+      });
+      if (!ticket) return reply.code(404).send({ error: 'Ticket introuvable' });
+
+      // L'agent visé doit appartenir à cette boutique et être actif : sans ce
+      // contrôle, un identifiant d'un autre marchand passerait.
+      if (parsed.data.userId) {
+        const target = await prisma.user.findFirst({
+          where: { id: parsed.data.userId, merchantId, active: true },
+          select: { id: true },
+        });
+        if (!target) {
+          return reply.code(400).send({ error: 'Cet agent n’existe pas sur cette boutique.' });
+        }
+      }
+
+      const updated = await prisma.ticket.update({
+        where: { id: ticket.id },
+        data: { assignedToId: parsed.data.userId },
+        select: { assignedTo: { select: { id: true, name: true, email: true } } },
+      });
+
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId,
+        action: parsed.data.userId ? 'ticket.assigned' : 'ticket.unassigned',
+        targetType: 'Ticket',
+        targetId: ticket.id,
+        metadata: { userId: parsed.data.userId },
+        ipAddress: request.ip,
+      });
+
+      return reply.send({ assignedTo: updated.assignedTo });
+    },
+  );
 
   app.get('/api/metrics', async (request, reply) => {
     const { merchantId } = request.session;

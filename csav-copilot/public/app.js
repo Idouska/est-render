@@ -20,6 +20,9 @@ const state = {
   pendingCount: 0,
   shops: [],
   navQuery: '',
+  queue: { q: '', intent: '', assignee: '', sort: 'newest', urgent: false, unassigned: false, unlinked: false, timer: null },
+  queueCounts: {},
+  agents: [],
   catalog: { items: [], cursor: null, hasNext: false, q: '', kind: 'products', loading: false, loaded: false, timer: null },
   editingUser: null,
   refundRows: [],
@@ -338,36 +341,100 @@ async function loadMetrics() {
 
 /* -------------------------------------------------------- file de tickets */
 
-async function loadQueue() {
-  const query = state.filter ? `?status=${encodeURIComponent(state.filter)}` : '';
-  const data = await api(`/api/tickets${query}`);
-  state.tickets = data.tickets;
+/** Ancienneté en jours depuis la dernière prise de parole. */
+function ageInDays(iso) {
+  return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+}
 
+function ageChip(iso) {
+  const days = ageInDays(iso);
+  // Trois paliers seulement : au-delà, la couleur ne se lit plus comme une
+  // échelle mais comme une décoration.
+  const level = days >= 7 ? 'late' : days >= 3 ? 'warm' : 'fresh';
+  const label = days === 0 ? "aujourd'hui" : days === 1 ? '1 jour' : `${days} jours`;
+  return `<span class="age age-${level}">${label}</span>`;
+}
+
+function initials(value) {
+  return String(value ?? '')
+    .split(/[\s.@_-]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0] ?? '')
+    .join('')
+    .toUpperCase();
+}
+
+/** Paramètres d'appel dérivés de l'état des filtres. */
+function queueParams() {
+  const params = new URLSearchParams();
+  const f = state.queue;
+
+  if (state.filter) params.set('status', state.filter);
+  if (f.q.trim()) params.set('q', f.q.trim());
+  if (f.intent) params.set('intent', f.intent);
+  if (f.assignee) params.set('assignee', f.assignee);
+  if (f.sort !== 'newest') params.set('sort', f.sort);
+  if (f.urgent) params.set('minAgeDays', '3');
+  if (f.unassigned) params.set('assignee', 'none');
+  if (f.unlinked) params.set('unlinked', 'true');
+
+  return params;
+}
+
+function queueIsFiltered() {
+  const f = state.queue;
+  return Boolean(
+    state.filter || f.q.trim() || f.intent || f.assignee || f.urgent || f.unassigned || f.unlinked,
+  );
+}
+
+async function loadQueue() {
   const list = $('queue');
+  const data = await api(`/api/tickets?${queueParams()}`);
+
+  state.tickets = data.tickets;
+  state.queueCounts = data.counts ?? {};
+  renderQueueBar();
 
   if (state.tickets.length === 0) {
-    list.innerHTML = '<li class="empty" style="padding:16px 14px">Aucun ticket ici.</li>';
+    // Un écran vide doit dire pourquoi il est vide : « aucun ticket » et
+    // « aucun ticket qui corresponde aux filtres » appellent des gestes
+    // opposés.
+    list.innerHTML = queueIsFiltered()
+      ? `<li class="empty" style="padding:16px 14px">
+           Aucun ticket ne correspond à ces filtres.
+           <button class="qlink" data-reset="1">Tout afficher</button>
+         </li>`
+      : '<li class="empty" style="padding:16px 14px">Rien en attente. La file est vide.</li>';
+
+    list.querySelector('[data-reset]')?.addEventListener('click', resetQueueFilters);
     return;
   }
 
   list.innerHTML = state.tickets
     .map((ticket) => {
       const label = STATUS_LABELS[ticket.status] ?? ticket.status;
+      const who = ticket.assignedTo;
+
       return `<li>
         <button class="queue-item" data-id="${ticket.id}" aria-current="${
           ticket.id === state.currentId
         }">
           <span class="queue-top">
             <span class="queue-who">${esc(ticket.customerName ?? ticket.customerEmail)}</span>
-            <span class="queue-time">${relativeTime(ticket.lastMessageAt)}</span>
+            ${ageChip(ticket.lastMessageAt)}
           </span>
           <div class="queue-subject">${esc(ticket.subject ?? '(sans objet)')}</div>
           <span class="queue-tags">
-            ${ticket.intent ? `<span class="tag tag-intent">${ticket.intent}</span>` : ''}
+            ${ticket.intent ? `<span class="tag tag-intent">${INTENT_LABELS[ticket.intent] ?? ticket.intent}</span>` : ''}
             <span class="tag tag-status st-${ticket.status}">${label}</span>
             <span class="tag tag-order">${
               ticket.orderName ? esc(ticket.orderName) : 'commande ?'
             }</span>
+            <span class="who-dot${who ? '' : ' none'}" title="${
+              who ? esc(who.name ?? who.email) : 'non assigné'
+            }" style="margin-left:auto">${who ? initials(who.name ?? who.email) : '—'}</span>
           </span>
         </button>
       </li>`;
@@ -378,6 +445,128 @@ async function loadQueue() {
     button.addEventListener('click', () => selectTicket(button.dataset.id));
   });
 }
+
+/* ------------------------------------------------- barre de filtres file */
+
+const INTENT_LABELS = {
+  WISMO: 'Où est ma commande',
+  RETURN: 'Retour',
+  DISPUTE: 'Litige',
+  REFUND: 'Remboursement',
+  PRODUCT_QUESTION: 'Question produit',
+  POSITIVE: 'Message positif',
+  OTHER: 'Autre',
+};
+
+function renderQueueBar() {
+  const counts = state.queueCounts ?? {};
+
+  $('filters')
+    .querySelectorAll('.chip')
+    .forEach((chip) => {
+      const status = chip.dataset.filter;
+      const count = status ? (counts[status] ?? 0) : (counts.ALL ?? 0);
+      chip.setAttribute('aria-pressed', String(status === state.filter));
+
+      const base = chip.dataset.label ?? chip.textContent.trim();
+      chip.dataset.label = base;
+      chip.innerHTML = `${esc(base)}<span class="count">${count}</span>`;
+    });
+
+  for (const [key, id] of [
+    ['urgent', 'urgent'],
+    ['unassigned', 'unassigned'],
+    ['unlinked', 'unlinked'],
+  ]) {
+    $('queue-bar')
+      .querySelector(`[data-quick="${id}"]`)
+      .setAttribute('aria-pressed', String(Boolean(state.queue[key])));
+  }
+
+  $('q-reset').hidden = !queueIsFiltered();
+  $('q-count').textContent = `${state.tickets.length} affiché${
+    state.tickets.length > 1 ? 's' : ''
+  }`;
+}
+
+/** Liste des agents pour le filtre et l'assignation. */
+async function loadAgents() {
+  try {
+    const data = await api('/api/team');
+    state.agents = (data.users ?? []).filter((user) => user.active);
+  } catch {
+    // Un agent sans droit sur l'équipe ne doit pas perdre sa file pour autant.
+    state.agents = [];
+  }
+
+  const options = state.agents
+    .map((user) => `<option value="${esc(user.id)}">${esc(user.name ?? user.email)}</option>`)
+    .join('');
+
+  $('q-assignee').innerHTML =
+    `<option value="">Tous</option><option value="none">Non assignés</option>${options}`;
+
+  $('q-intent').innerHTML =
+    '<option value="">Tous</option>' +
+    Object.entries(INTENT_LABELS)
+      .map(([key, label]) => `<option value="${key}">${esc(label)}</option>`)
+      .join('');
+}
+
+function resetQueueFilters() {
+  state.filter = '';
+  state.queue = { q: '', intent: '', assignee: '', sort: 'newest', urgent: false, unassigned: false, unlinked: false };
+
+  $('q-search').value = '';
+  $('q-sort').value = 'newest';
+  $('q-assignee').value = '';
+  $('q-intent').value = '';
+
+  void loadQueue();
+}
+
+$('q-search').addEventListener('input', (event) => {
+  state.queue.q = event.target.value;
+  // Un appel par frappe saturerait l'API sur une file de plusieurs milliers de
+  // tickets ; 250 ms est le délai en dessous duquel la frappe paraît continue.
+  clearTimeout(state.queue.timer);
+  state.queue.timer = setTimeout(() => void loadQueue(), 250);
+});
+
+$('q-sort').addEventListener('change', (event) => {
+  state.queue.sort = event.target.value;
+  void loadQueue();
+});
+
+$('q-assignee').addEventListener('change', (event) => {
+  state.queue.assignee = event.target.value;
+  state.queue.unassigned = event.target.value === 'none';
+  void loadQueue();
+});
+
+$('q-intent').addEventListener('change', (event) => {
+  state.queue.intent = event.target.value;
+  void loadQueue();
+});
+
+$('q-reset').addEventListener('click', resetQueueFilters);
+
+$('queue-bar').addEventListener('click', (event) => {
+  const quick = event.target.closest('[data-quick]');
+  if (!quick) return;
+
+  const key = quick.dataset.quick;
+  state.queue[key] = !state.queue[key];
+
+  // Le raccourci et le sélecteur « Assigné » désignent la même chose : les
+  // laisser diverger afficherait deux vérités contradictoires à l'écran.
+  if (key === 'unassigned') {
+    state.queue.assignee = state.queue.unassigned ? 'none' : '';
+    $('q-assignee').value = state.queue.assignee;
+  }
+
+  void loadQueue();
+});
 
 const STATUS_LABELS = {
   NEW: 'Nouveau',
@@ -404,15 +593,52 @@ function renderDetail() {
   const { ticket, order, orderError } = state.detail;
 
   $('d-subject').textContent = ticket.subject ?? '(sans objet)';
+
+  const canAssign = canI('reply');
+  const assignOptions = state.agents
+    .map(
+      (user) =>
+        `<option value="${esc(user.id)}"${
+          user.id === ticket.assignedToId ? ' selected' : ''
+        }>${esc(user.name ?? user.email)}</option>`,
+    )
+    .join('');
+
   $('d-meta').innerHTML =
     `${esc(ticket.customerName ?? '')} · <code>${esc(ticket.customerEmail)}</code>` +
     (ticket.intent
-      ? ` · intention <b>${ticket.intent}</b>${
+      ? ` · intention <b>${INTENT_LABELS[ticket.intent] ?? ticket.intent}</b>${
           ticket.intentConfidence != null
             ? ` (${ticket.intentConfidence.toFixed(2).replace('.', ',')})`
             : ''
         }`
-      : '');
+      : '') +
+    ` · ouvert depuis <b>${ageInDays(ticket.createdAt)} j</b>` +
+    `<span class="d-assign">Assigné à
+       <select id="d-assignee"${canAssign ? '' : ' disabled'}>
+         <option value="">Personne</option>${assignOptions}
+       </select>
+     </span>`;
+
+  $('d-assignee')?.addEventListener('change', async (event) => {
+    const userId = event.target.value || null;
+
+    try {
+      await api(`/api/tickets/${ticket.id}/assign`, {
+        method: 'PATCH',
+        body: JSON.stringify({ userId }),
+      });
+
+      ticket.assignedToId = userId;
+      toast(userId ? 'Ticket assigné.' : 'Ticket remis au pot commun.');
+      await loadQueue();
+    } catch (error) {
+      // On remet la valeur d'avant : laisser le sélecteur sur un choix qui n'a
+      // pas pris ferait croire que l'assignation a eu lieu.
+      event.target.value = ticket.assignedToId ?? '';
+      toast(error.message, true);
+    }
+  });
 
   $('d-messages').innerHTML = ticket.messages
     .map(
@@ -2351,10 +2577,6 @@ $('filters').addEventListener('click', async (event) => {
   if (!chip) return;
 
   state.filter = chip.dataset.filter;
-  $('filters')
-    .querySelectorAll('.chip')
-    .forEach((other) => other.setAttribute('aria-pressed', String(other === chip)));
-
   await loadQueue();
 });
 
@@ -2532,7 +2754,14 @@ async function boot() {
   renderClocks();
   setView('tickets');
 
-  await Promise.all([loadMetrics(), loadQueue(), loadAudit(), loadSupplier(), loadShops()]);
+  await Promise.all([
+    loadAgents(),
+    loadMetrics(),
+    loadQueue(),
+    loadAudit(),
+    loadSupplier(),
+    loadShops(),
+  ]);
 
   if (state.tickets.length > 0) await selectTicket(state.tickets[0].id);
 }

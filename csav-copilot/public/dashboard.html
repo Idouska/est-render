@@ -120,15 +120,47 @@
         </div>
       </section>
 
-      <main class="workspace" id="view-tickets">
-        <section class="panel" aria-label="File de tickets">
+      <section class="qbar" id="queue-bar" aria-label="Filtres de la file">
+        <div class="qbar-row">
+          <input
+            id="q-search"
+            type="search"
+            placeholder="N° de commande, client, objet…"
+            autocomplete="off"
+          />
+          <div class="qbar-quick">
+            <button class="qchip" data-quick="urgent" aria-pressed="false">Urgents 3 j+</button>
+            <button class="qchip" data-quick="unassigned" aria-pressed="false">Non assignés</button>
+            <button class="qchip" data-quick="unlinked" aria-pressed="false">Sans commande</button>
+            <button class="qlink" id="q-reset" hidden>Réinitialiser</button>
+          </div>
+        </div>
+
+        <div class="qbar-row">
           <div class="filters" id="filters">
             <button class="chip" data-filter="" aria-pressed="true">Tous</button>
             <button class="chip" data-filter="DRAFT_READY" aria-pressed="false">Brouillon prêt</button>
             <button class="chip" data-filter="NEEDS_REVIEW" aria-pressed="false">À valider</button>
             <button class="chip" data-filter="NEW" aria-pressed="false">Nouveaux</button>
+            <button class="chip" data-filter="AWAITING_SUPPLIER" aria-pressed="false">Fournisseur</button>
             <button class="chip" data-filter="CLOSED" aria-pressed="false">Clos</button>
           </div>
+        </div>
+
+        <div class="qbar-row qbar-selects">
+          <label>Trier <select id="q-sort">
+            <option value="newest">Plus récent d'abord</option>
+            <option value="oldest">Plus ancien d'abord</option>
+            <option value="confidence">Confiance la plus basse</option>
+          </select></label>
+          <label>Assigné <select id="q-assignee"><option value="">Tous</option></select></label>
+          <label>Motif <select id="q-intent"><option value="">Tous</option></select></label>
+          <span class="qbar-count" id="q-count"></span>
+        </div>
+      </section>
+
+      <main class="workspace" id="view-tickets">
+        <section class="panel" aria-label="File de tickets">
           <ul class="queue-list" id="queue">
             <li class="empty" style="padding: 16px 14px">Chargement…</li>
           </ul>
