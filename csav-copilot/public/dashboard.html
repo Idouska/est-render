@@ -39,6 +39,15 @@
             <div class="shop-menu" id="shop-menu" hidden></div>
           </div>
 
+          <label class="side-search" for="nav-search">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"
+              stroke-linecap="round" aria-hidden="true">
+              <circle cx="7" cy="7" r="4.6" /><path d="m10.5 10.5 3 3" />
+            </svg>
+            <input id="nav-search" type="search" placeholder="Aller à…" autocomplete="off" />
+            <kbd>/</kbd>
+          </label>
+
           <nav id="nav" aria-label="Sections"></nav>
 
           <div class="me">
@@ -53,12 +62,14 @@
 
         <div class="main">
           <header class="head">
-            <div class="crumb" id="crumb"></div>
+            <div class="head-main">
+              <div class="crumb" id="crumb"></div>
+              <h1 id="view-title">File de traitement</h1>
+            </div>
             <div class="head-acts">
               <div class="clocks" id="clocks"></div>
               <div class="conn" id="conn"></div>
             </div>
-            <h1 id="view-title">File de traitement</h1>
           </header>
 
       <div class="notice" id="mock-notice" hidden>

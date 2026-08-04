@@ -179,7 +179,7 @@ body {
   font: inherit;
 }
 
-.brand:hover { background: var(--surface-2); border-color: var(--line); }
+.brand:hover { background: var(--inset); border-color: var(--line); }
 .brand > div { min-width: 0; flex: 1; }
 .brand-caret { color: var(--ink-mute); font-size: 11px; flex: none; }
 
@@ -194,7 +194,7 @@ body {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 12px;
-  box-shadow: var(--shadow-lg, 0 18px 40px rgb(0 0 0 / 18%));
+  box-shadow: var(--shadow-pop);
   padding: 5px;
   display: grid;
   gap: 2px;
@@ -217,14 +217,53 @@ body {
   text-align: left;
 }
 
-.shop-item:hover { background: var(--surface-2); }
-.shop-item[aria-current='true'] { background: var(--accent-soft, var(--surface-2)); font-weight: 600; }
+.shop-item:hover { background: var(--inset); }
+.shop-item[aria-current='true'] { background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; }
 .shop-item b { display: block; font-size: 13px; font-weight: inherit; }
 .shop-item small { display: block; font-size: 11px; color: var(--ink-mute); font-family: var(--font-mono); }
 .shop-item .shop-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
-.shop-item[aria-current='false'] .shop-dot { background: var(--line-strong, var(--line)); }
-.shop-menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 2px; }
-.shop-add { color: var(--accent-strong); font-weight: 600; }
+.shop-item[aria-current='false'] .shop-dot { background: var(--ink-mute); opacity: 0.4; }
+.shop-menu hr { border: 0; border-top: 1px solid var(--line-soft); margin: 4px 2px; }
+.shop-add { color: var(--accent-ink); font-weight: 600; font-size: 13px; }
+
+/* Recherche : point d'entrée unique vers n'importe quel écran. Le raccourci
+   affiché évite d'avoir à le deviner. */
+.side-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--inset);
+  color: var(--ink-mute);
+  font-size: 13px;
+  cursor: text;
+}
+
+.side-search svg { width: 15px; height: 15px; flex: none; }
+
+.side-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  outline: none;
+}
+
+.side-search kbd {
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink-mute);
+  flex: none;
+}
 
 .brand-mark {
   width: 38px;
@@ -323,20 +362,46 @@ body {
 
 .main { display: flex; flex-direction: column; gap: 13px; min-width: 0; }
 
-.head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 4px 2px 0; }
+/* Le titre tient sa colonne à gauche, l'état du système la sienne à droite.
+   Mélangés sur une même ligne, les indicateurs entraient en concurrence avec
+   le titre de l'écran et on ne savait plus où regarder en arrivant. */
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+  padding: 4px 2px 0;
+}
 
-.crumb { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--ink-mute); }
+.head-main { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+
+.crumb {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
 
 .head h1 {
-  width: 100%;
   margin: 0;
-  font-size: 25px;
+  font-size: 26px;
   font-weight: 600;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.03em;
   text-wrap: balance;
 }
 
-.head-acts { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.head-acts {
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 7px;
+}
 
 /* ============================================================= boutons === */
 
@@ -483,19 +548,24 @@ body {
 .st-CLOSED,
 .st-AUTO_SENT { background: var(--ok-soft); color: var(--ok); }
 
-.conn { display: flex; gap: 7px; flex-wrap: wrap; }
+/* État des connexions : information de fond, pas d'action. Sans cadre ni
+   fond, elle cesse de rivaliser visuellement avec les boutons de l'écran. */
+.conn { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
 
 .conn-pill {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
-  padding: 4px 10px;
+  font-size: 11.5px;
+  padding: 3px 9px;
   border-radius: 999px;
-  border: 1px solid var(--line);
-  background: var(--surface);
-  color: var(--ink-soft);
+  border: 1px solid transparent;
+  background: none;
+  color: var(--ink-mute);
+  white-space: nowrap;
 }
+
+.conn-pill:hover { border-color: var(--line); background: var(--surface); }
 
 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex: none; }
 .dot.warn { background: var(--warn); }
@@ -792,6 +862,12 @@ body {
 }
 
 .grid td { padding: 11px 14px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
+
+/* Sur des tableaux larges, l'œil perd sa ligne entre la première et la
+   dernière colonne. */
+.grid tbody tr { transition: background 0.1s ease; }
+.grid tbody tr:hover { background: var(--inset); }
+.grid tbody tr:last-child td { border-bottom: 0; }
 .grid tr:last-child td { border-bottom: 0; }
 .grid .num { text-align: right; }
 .grid .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
@@ -1077,68 +1153,83 @@ body {
 
 /* ---------------------------------------------------------- horloges --- */
 
-/* Cinq fuseaux, chacun aux couleurs de son drapeau : l'équipe SAV travaille
-   avec des fournisseurs en Asie et des clients en Europe, et l'heure locale
-   décide si un appel a une chance d'aboutir maintenant. */
-.clocks { display: flex; gap: 6px; flex-wrap: wrap; }
+/* Cinq fuseaux, groupés dans une seule barre au lieu de cinq cartes. Le
+   drapeau se réduit à un filet vertical : il sert à retrouver une ville d'un
+   coup d'œil, pas à décorer — cinq aplats de couleur nationale côte à côte
+   écrasaient tout le reste de l'en-tête.
 
-.clock {
-  position: relative;
-  overflow: hidden;
+   L'heure hors plage de travail passe en gris : ce qu'on veut savoir en
+   regardant, c'est s'il est possible d'appeler maintenant. */
+.clocks {
   display: flex;
-  flex-direction: column;
-  padding: 5px 11px 7px;
+  align-items: stretch;
+  gap: 0;
+  padding: 3px;
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: var(--r-md);
-  border: 1px solid var(--ck-line);
-  background: var(--ck-bg);
-  min-width: 76px;
+  box-shadow: var(--shadow);
 }
 
-.clock::after {
+.clock {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 11px;
+  border-radius: var(--r-sm);
+}
+
+.clock + .clock { box-shadow: inset 1px 0 0 var(--line-soft); }
+.clock:hover { background: var(--inset); }
+
+/* Le filet reprend les bandes du drapeau, en vertical. */
+.clock::before {
   content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 3px;
-  background: var(--ck-ribbon);
+  width: 3px;
+  align-self: stretch;
+  min-height: 26px;
+  border-radius: 3px;
+  background: var(--ck-flag);
+  flex: none;
 }
 
 .clock b {
+  display: block;
   font-size: 9px;
   font-weight: 700;
-  letter-spacing: 0.09em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--ck-mute);
+  color: var(--ink-mute);
+  line-height: 1.5;
 }
 
 .clock span {
+  display: block;
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   line-height: 1.15;
-  color: var(--ck-ink);
+  letter-spacing: -0.02em;
+  color: var(--ink);
 }
 
-.clock i { font-size: 9.5px; font-style: normal; color: var(--ck-mute); }
+/* Fermé : l'heure recule au second plan, la ville reste lisible. */
+.clock.shut span { color: var(--ink-mute); font-weight: 500; }
+.clock.shut::before { opacity: 0.4; }
 
-.clock-ma { --ck-bg: #fdf3ec; --ck-line: #ecc9b8; --ck-ink: #7c2d12; --ck-mute: #b0633f;
-  --ck-ribbon: linear-gradient(90deg, #c1272d 55%, #006233 55%); }
-.clock-fr { --ck-bg: #f2f6fe; --ck-line: #c3d2f0; --ck-ink: #1e3a8a; --ck-mute: #5b74b8;
-  --ck-ribbon: linear-gradient(90deg, #002395 33%, #ffffff 33% 66%, #ed2939 66%); }
-.clock-cn { --ck-bg: #fdf0ee; --ck-line: #eec2b6; --ck-ink: #9f1d17; --ck-mute: #c05a44;
-  --ck-ribbon: linear-gradient(90deg, #de2910 55%, #ffde00 55%); }
-.clock-my { --ck-bg: #eef4fd; --ck-line: #c2d3ee; --ck-ink: #10338b; --ck-mute: #5a76b5;
-  --ck-ribbon: linear-gradient(90deg, #cc0001 40%, #010066 40% 70%, #ffcc00 70%); }
-.clock-us { --ck-bg: #f3f5fc; --ck-line: #c8d0ea; --ck-ink: #0a3161; --ck-mute: #5d719e;
-  --ck-ribbon: linear-gradient(90deg, #b31942 45%, #ffffff 45% 72%, #0a3161 72%); }
+.clock-ma { --ck-flag: linear-gradient(180deg, #c1272d 50%, #006233 50%); }
+.clock-fr { --ck-flag: linear-gradient(180deg, #002395 33%, #f5f5f7 33% 66%, #ed2939 66%); }
+.clock-cn { --ck-flag: linear-gradient(180deg, #de2910 50%, #ffde00 50%); }
+.clock-my { --ck-flag: linear-gradient(180deg, #cc0001 40%, #010066 40% 70%, #ffcc00 70%); }
+.clock-us { --ck-flag: linear-gradient(180deg, #b31942 45%, #f5f5f7 45% 72%, #0a3161 72%); }
 
-[data-theme="dark"] .clock-ma { --ck-bg: #2e211a; --ck-line: #55352a; --ck-ink: #f3c9a8; --ck-mute: #c08a68; }
-[data-theme="dark"] .clock-fr { --ck-bg: #1c2233; --ck-line: #35446b; --ck-ink: #b9c9f2; --ck-mute: #7a8fc4; }
-[data-theme="dark"] .clock-cn { --ck-bg: #301b18; --ck-line: #5c3128; --ck-ink: #f4b8a6; --ck-mute: #c27a62; }
-[data-theme="dark"] .clock-my { --ck-bg: #1a2033; --ck-line: #32406b; --ck-ink: #b6c6ee; --ck-mute: #7688bd; }
-[data-theme="dark"] .clock-us { --ck-bg: #1a2030; --ck-line: #333f60; --ck-ink: #bccbee; --ck-mute: #7688b3; }
+@media (max-width: 1400px) {
+  /* Sur un écran étroit, l'en-tête doit rendre la place au titre : on garde
+     les heures, on abandonne les libellés de ville. */
+  .clock b { display: none; }
+  .clock { padding: 5px 8px; }
+}
 
 .brand-logo {
   width: 38px;

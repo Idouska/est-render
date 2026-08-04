@@ -19,6 +19,7 @@ const state = {
   team: { users: [], me: null },
   pendingCount: 0,
   shops: [],
+  navQuery: '',
   catalog: { items: [], cursor: null, hasNext: false, q: '', kind: 'products', loading: false, loaded: false, timer: null },
   editingUser: null,
   refundRows: [],
@@ -1482,10 +1483,13 @@ function renderClocks() {
     );
     const open = hour >= 9 && hour < 18;
 
-    return `<div class="clock clock-${code}">
-      <b>${esc(city)}</b>
-      <span>${time}</span>
-      <i>${open ? 'ouvert' : 'hors horaires'}</i>
+    return `<div class="clock clock-${code}${open ? '' : ' shut'}" title="${esc(city)} — ${
+      open ? 'heures ouvrées' : 'hors horaires (9 h – 18 h locales)'
+    }">
+      <div>
+        <b>${esc(city)}</b>
+        <span>${time}</span>
+      </div>
     </div>`;
   }).join('');
 }
@@ -1541,8 +1545,17 @@ const NAV_GROUPS = ['Pilotage', 'Commerce', 'Fournisseur', 'Finance', 'Plateform
 const VIEWS = Object.keys(VIEW_META);
 
 function renderNav() {
+  // Recherche : on ne masque pas les groupes vides en les laissant en place,
+  // ils laisseraient des titres orphelins au-dessus de rien.
+  const needle = (state.navQuery ?? '').trim().toLowerCase();
+  const matches = (view) =>
+    !needle ||
+    `${VIEW_META[view].label} ${VIEW_META[view].group}`.toLowerCase().includes(needle);
+
   $('nav').innerHTML = NAV_GROUPS.map((group) => {
-    const items = VIEWS.filter((view) => VIEW_META[view].group === group);
+    const items = VIEWS.filter((view) => VIEW_META[view].group === group && matches(view));
+    if (items.length === 0) return '';
+
     return `<div class="nav-group">
       <p class="nav-title">${esc(group)}</p>
       ${items
@@ -1559,10 +1572,44 @@ function renderNav() {
     </div>`;
   }).join('');
 
+  if (!$('nav').innerHTML.trim()) {
+    $('nav').innerHTML = '<p class="empty" style="padding: 4px 8px">Aucun écran ne correspond.</p>';
+  }
+
   $('nav')
     .querySelectorAll('.nav-item')
     .forEach((item) => item.addEventListener('click', () => setView(item.dataset.view)));
 }
+
+$('nav-search').addEventListener('input', (event) => {
+  state.navQuery = event.target.value;
+  renderNav();
+});
+
+// Entrée ouvre le premier résultat : chercher puis devoir viser à la souris
+// annulerait le gain du raccourci.
+$('nav-search').addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    event.target.value = '';
+    state.navQuery = '';
+    renderNav();
+    event.target.blur();
+    return;
+  }
+
+  if (event.key !== 'Enter') return;
+
+  const first = $('nav').querySelector('.nav-item');
+  if (first) setView(first.dataset.view);
+});
+
+document.addEventListener('keydown', (event) => {
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName ?? '');
+  if (event.key === '/' && !typing) {
+    event.preventDefault();
+    $('nav-search').focus();
+  }
+});
 
 /* Chaque vue charge à sa première ouverture. Interroger Shopify pour un écran
    que personne ne regarde coûte une latence pour rien. */
