@@ -68,6 +68,7 @@ model Merchant {
   auditLogs           AuditLog[]
   suppliers           Supplier[]
   supplierEscalations SupplierEscalation[]
+  parcels             Parcel[]
 
   @@index([organizationId])
 }
@@ -387,9 +388,57 @@ model SupplierEscalation {
   ticket   Ticket            @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   supplier Supplier          @relation(fields: [supplierId], references: [id], onDelete: Cascade)
   messages SupplierMessage[]
+  parcels  Parcel[]
 
   @@index([merchantId, status])
   @@index([ticketId])
+}
+
+/// Un colis d'une commande, avec son numéro de suivi et sa photo.
+///
+/// Une commande de trois articles part souvent en trois colis, chacun avec son
+/// numéro : le rang (`index` sur `total`) est ce qui permet au client comme à
+/// l'agent de savoir lequel manque à l'appel.
+///
+/// La photo est stockée en base plutôt que sur un stockage objet : le service
+/// n'en a pas, et une preuve d'expédition qui vit ailleurs que la donnée
+/// qu'elle justifie finit par s'en séparer. Elle est compressée côté navigateur
+/// avant l'envoi — quelques centaines de kilooctets, pas les huit mégaoctets
+/// bruts d'un appareil photo de téléphone.
+model Parcel {
+  id           String  @id @default(cuid())
+  merchantId   String
+  escalationId String?
+
+  /// Rattachement commande : le nom lisible sert au SAV, le GID aux appels
+  /// Shopify. Les deux sont conservés parce que le fournisseur ne connaît que
+  /// le premier.
+  shopifyOrderId String?
+  orderName      String?
+
+  trackingNumber String
+  carrier        String?
+
+  index Int
+  total Int
+
+  photoMime    String?
+  photoData    Bytes?
+  photoTakenAt DateTime?
+
+  /// Qui a saisi : identifiant d'utilisateur, ou nul si c'est le fournisseur
+  /// depuis son lien — il n'a pas de compte.
+  createdById String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  merchant   Merchant            @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  escalation SupplierEscalation? @relation(fields: [escalationId], references: [id], onDelete: SetNull)
+
+  @@unique([merchantId, trackingNumber])
+  @@index([merchantId, shopifyOrderId])
+  @@index([escalationId])
 }
 
 enum EscalationReason {

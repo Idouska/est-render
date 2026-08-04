@@ -446,6 +446,65 @@ async function loadQueue() {
   });
 }
 
+/* ------------------------------------------------------------------ colis */
+
+/**
+ * Colis saisis par le fournisseur, avec la photo de chaque étiquette.
+ *
+ * Une commande de trois articles part souvent en trois colis : afficher le
+ * rang (« 2/3 ») dit d'un coup d'œil lequel manque quand un client signale un
+ * envoi incomplet — c'est la question que Shopify seul ne répond pas.
+ */
+async function renderParcels(ticket) {
+  const panel = $('parcels-panel');
+
+  if (!ticket?.shopifyOrderId) {
+    panel.hidden = true;
+    return;
+  }
+
+  let parcels = [];
+  try {
+    const data = await api(`/api/parcels?orderId=${encodeURIComponent(ticket.shopifyOrderId)}`);
+    parcels = data.parcels ?? [];
+  } catch {
+    panel.hidden = true;
+    return;
+  }
+
+  if (parcels.length === 0) {
+    panel.hidden = true;
+    return;
+  }
+
+  panel.hidden = false;
+
+  $('c-parcels').innerHTML = parcels
+    .map(
+      (parcel) => `<div class="pcl">
+        <div class="pcl-head">
+          <b>Colis ${parcel.index}/${parcel.total}</b>
+          ${
+            parcel.hasPhoto
+              ? ''
+              : '<span class="pcl-nophoto">sans photo</span>'
+          }
+        </div>
+        <code>${esc(parcel.trackingNumber)}</code>
+        ${parcel.carrier ? `<small>${esc(parcel.carrier)}</small>` : ''}
+        ${
+          parcel.hasPhoto
+            ? `<a href="/api/parcels/${esc(parcel.id)}/photo" target="_blank" rel="noopener">
+                 <img src="/api/parcels/${esc(parcel.id)}/photo" loading="lazy"
+                   alt="Étiquette du colis ${parcel.index}" />
+               </a>`
+            : ''
+        }
+      </div>`,
+    )
+    .join('');
+}
+
 /* -------------------------------------------------- actions contextuelles */
 
 /*
@@ -994,6 +1053,8 @@ async function attachOrder(ticketId, orderId) {
 function renderShipping(order) {
   const container = $('c-ship');
   const fulfillment = order?.fulfillments?.[0];
+
+  void renderParcels(state.detail?.ticket);
 
   if (!fulfillment) {
     container.innerHTML = order
