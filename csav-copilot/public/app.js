@@ -2161,9 +2161,11 @@ function setView(view) {
   $('view-title').textContent = meta.title;
   $('crumb').innerHTML = `${ico(meta.icon)} ${esc(meta.group)}`;
 
-  // Les indicateurs décrivent la file : les laisser ailleurs ferait croire
-  // qu'ils décrivent l'écran affiché.
+  // Les indicateurs et les filtres décrivent la file : les laisser ailleurs
+  // ferait croire qu'ils décrivent l'écran affiché — la barre de filtres est
+  // apparue au-dessus des Réglages, où elle ne veut rien dire.
   $('kpis').hidden = view !== 'tickets';
+  $('queue-bar').hidden = view !== 'tickets';
 
   renderNav();
 

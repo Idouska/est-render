@@ -38,6 +38,21 @@ const patchBody = z
     message: 'Aucun champ à mettre à jour',
   });
 
+/**
+ * Une autorisation accordée en couvre-t-elle une autre ?
+ *
+ * Shopify n'énumère pas `read_orders` quand `write_orders` est accordé — la
+ * lecture est incluse. Sans cette règle, l'écran réclame en permanence une
+ * autorisation déjà obtenue, et le marchand réinstalle son application pour
+ * rien.
+ */
+function covers(granted: string[], required: string): boolean {
+  if (granted.includes(required)) return true;
+
+  const readable = required.startsWith('read_') ? `write_${required.slice(5)}` : null;
+  return readable !== null && granted.includes(readable);
+}
+
 export async function settingsRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', requireSession);
 
@@ -79,7 +94,7 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
             // l'application n'a pas été réinstallée. Sans cet écart affiché, la
             // panne se manifeste seulement par un « accès refusé » sur un écran.
             requiredScopes: env.SHOPIFY_SCOPES,
-            missingScopes: env.SHOPIFY_SCOPES.filter((scope) => !granted.includes(scope)),
+            missingScopes: env.SHOPIFY_SCOPES.filter((scope) => !covers(granted, scope)),
             installedAt: merchant.shopify?.installedAt ?? null,
           };
         })(),
