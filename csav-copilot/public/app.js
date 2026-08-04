@@ -409,7 +409,20 @@ async function loadQueue() {
            Aucun ticket ne correspond à ces filtres.
            <button class="qlink" data-reset="1">Tout afficher</button>
          </li>`
-      : '<li class="empty" style="padding:16px 14px">Rien en attente. La file est vide.</li>';
+      : `<li class="empty" style="padding:16px 14px">
+           Rien en attente.
+           ${
+             state.me?.gmail?.connected
+               ? `Les messages reçus sur <code>${esc(
+                   state.me.gmail.emailAddress,
+                 )}</code> arrivent ici automatiquement${
+                   state.me.gmail.watchActive
+                     ? '.'
+                     : ' — mais <b class="set-alert">l’écoute est expirée</b>, reconnectez la boîte dans les Réglages.'
+                 }`
+               : 'Aucune boîte mail connectée : rien ne peut entrer. Connectez Gmail dans les Réglages.'
+           }
+         </li>`;
 
     list.querySelector('[data-reset]')?.addEventListener('click', resetQueueFilters);
     return;
@@ -421,16 +434,21 @@ async function loadQueue() {
       const who = ticket.assignedTo;
 
       return `<li>
-        <button class="queue-item" data-id="${ticket.id}" aria-current="${
-          ticket.id === state.currentId
-        }">
+        <button class="queue-item li-${ticket.intent ?? 'OTHER'}" data-id="${ticket.id}"
+          aria-current="${ticket.id === state.currentId}">
           <span class="queue-top">
             <span class="queue-who">${esc(ticket.customerName ?? ticket.customerEmail)}</span>
             ${ageChip(ticket.lastMessageAt)}
           </span>
           <div class="queue-subject">${esc(ticket.subject ?? '(sans objet)')}</div>
           <span class="queue-tags">
-            ${ticket.intent ? `<span class="tag tag-intent">${INTENT_LABELS[ticket.intent] ?? ticket.intent}</span>` : ''}
+            ${
+              ticket.intent
+                ? `<span class="tag in-${ticket.intent}">${
+                    INTENT_LABELS[ticket.intent] ?? ticket.intent
+                  }</span>`
+                : ''
+            }
             <span class="tag tag-status st-${ticket.status}">${label}</span>
             <span class="tag tag-order">${
               ticket.orderName ? esc(ticket.orderName) : 'commande ?'

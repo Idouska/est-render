@@ -535,7 +535,39 @@ body {
 
 .tag { font-size: 10.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; display: inline-block; }
 
+/* Motif du message : une couleur par nature de demande, indépendante de la
+   palette choisie. Toutes les étiquettes à la couleur d'accent obligeaient à
+   les lire une par une pour trier la file du regard.
+
+   Ces teintes ne se substituent pas aux couleurs d'état (vert = fait, rouge =
+   critique) : elles disent de quoi on parle, pas où ça en est. */
 .tag-intent { background: var(--accent-soft); color: var(--accent-ink); }
+
+.in-WISMO { background: #e7f0fe; color: #1c4fb0; }
+.in-RETURN { background: #fdf0dd; color: #9a5b06; }
+.in-DISPUTE { background: #fdeaea; color: #b3272c; }
+.in-REFUND { background: #f0ebfd; color: #5a3fc0; }
+.in-PRODUCT_QUESTION { background: #e2f5f8; color: #0d6d80; }
+.in-POSITIVE { background: #e3f6ef; color: #04724f; }
+.in-OTHER { background: var(--inset); color: var(--ink-mute); }
+
+[data-theme="dark"] .in-WISMO { background: #16233c; color: #a9c6f5; }
+[data-theme="dark"] .in-RETURN { background: #2d2313; color: #f0c98a; }
+[data-theme="dark"] .in-DISPUTE { background: #331d1e; color: #f2a6a8; }
+[data-theme="dark"] .in-REFUND { background: #241d3d; color: #c3b2f5; }
+[data-theme="dark"] .in-PRODUCT_QUESTION { background: #122b31; color: #96d6e3; }
+[data-theme="dark"] .in-POSITIVE { background: #102c23; color: #85d9b8; }
+
+/* Filet vertical repris du motif : il donne à la file une trame lisible de
+   loin, avant même d'avoir lu une ligne. */
+.queue-item { border-left: 3px solid transparent; }
+.queue-item.li-WISMO { border-left-color: #2f6fe4; }
+.queue-item.li-RETURN { border-left-color: #d97706; }
+.queue-item.li-DISPUTE { border-left-color: #e5484d; }
+.queue-item.li-REFUND { border-left-color: #6c5ce7; }
+.queue-item.li-PRODUCT_QUESTION { border-left-color: #0891b2; }
+.queue-item.li-POSITIVE { border-left-color: #059669; }
+.queue-item.li-OTHER { border-left-color: var(--line); }
 .tag-order { background: var(--inset); color: var(--ink-mute); font-family: var(--font-mono); }
 
 /* Couleurs sémantiques : indépendantes de l'accent, pour que le sens d'un
