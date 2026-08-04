@@ -232,10 +232,76 @@ Quand le service web est vert, Render affiche son adresse, du type
 
 ---
 
+## Étape 4 bis — Nom de domaine
+
+Dès le déploiement, Render vous donne une adresse gratuite du type
+`https://csav-api.onrender.com`. Elle fonctionne, elle est en HTTPS, et elle
+suffit pour tester. Mais un marchand à qui vous demandez d'autoriser l'accès à
+sa boîte mail voit cette URL sur l'écran de consentement Google : `onrender.com`
+inspire moins confiance que votre propre domaine.
+
+**Faites ce choix maintenant, avant l'étape 5.** Changer de domaine plus tard
+oblige à refaire le rebouclage en quatre endroits — `APP_URL`, Shopify, l'URI de
+redirection Google et l'audience Pub/Sub — et à repasser par la validation
+Google si elle est déjà lancée. Un quart d'heure maintenant, une demi-journée
+plus tard.
+
+### Acheter le domaine
+
+| Registrar | Prix indicatif | Note |
+|---|---|---|
+| **OVH** | 7–12 €/an | Français, facturation française |
+| **Gandi** | 15–20 €/an | Français, interface soignée |
+| **Cloudflare Registrar** | prix coûtant, ~9 €/an | Le moins cher, mais pas de `.fr` |
+| **Namecheap** | 8–12 €/an | Correct, américain |
+
+Pour un SaaS vendu à des marchands français, un `.fr` chez un registrar français
+est cohérent avec le discours « vos données restent en Europe » tenu au reste du
+dossier.
+
+### Choisir l'adresse : un sous-domaine, pas la racine
+
+Réservez `app.` ou `sav.` à l'application, et gardez la racine libre pour un
+futur site vitrine :
+
+```
+sav.votredomaine.fr     →  l'application
+votredomaine.fr         →  plus tard, la page de présentation
+```
+
+Un sous-domaine se branche avec un simple CNAME, alors que la racine d'un
+domaine demande un enregistrement A ou ALIAS que tous les registrars ne gèrent
+pas correctement.
+
+### Le brancher sur Render
+
+1. Render → service `csav-api` → **Settings → Custom Domains → Add Custom
+   Domain**. Saisissez `sav.votredomaine.fr`.
+2. Render affiche l'enregistrement DNS à créer. Chez votre registrar, zone DNS :
+
+   | Type | Nom | Valeur |
+   |---|---|---|
+   | CNAME | `sav` | `csav-api.onrender.com` |
+
+   Pour la racine plutôt qu'un sous-domaine, Render demande un `A` vers son IP
+   (indiquée dans l'interface) ou un `ALIAS`/`ANAME` si votre registrar le
+   propose.
+3. Attendez la propagation — quelques minutes en général, jusqu'à quelques
+   heures. Render vérifie, puis émet un certificat TLS Let's Encrypt
+   automatiquement. Rien à installer, rien à renouveler.
+
+Une fois le domaine vert dans Render, c'est **lui** que vous utilisez partout à
+l'étape suivante, et non l'adresse `onrender.com`.
+
+---
+
 ## Étape 5 — Reboucler les URL
 
 Maintenant que l'adresse existe, il faut la déclarer partout. Remplacez
-`https://votre-app.onrender.com` par la vôtre.
+`https://votre-app.onrender.com` par la vôtre — celle de votre domaine
+personnalisé si vous en avez branché un à l'étape précédente, sinon l'adresse
+`onrender.com`. Les quatre déclarations qui suivent doivent porter **la même**
+adresse, à la lettre près.
 
 **Sur Render**, service `csav-api` → Environment :
 
