@@ -143,6 +143,27 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         continue;
       }
 
+      // Un identifiant part dans un en-tête HTTP, qui n'accepte que de l'ASCII
+      // imprimable. Le refuser ici donne un message actionnable ; laisser
+      // passer produit au premier appel un « Cannot convert argument to a
+      // ByteString » incompréhensible, très loin de la cause.
+      //
+      // Le cas courant n'est pas un caractère exotique mais une valeur masquée
+      // recopiée depuis un écran — les puces « • » d'un champ mot de passe.
+      const offending = [...value].findIndex((char) => {
+        const code = char.codePointAt(0) ?? 0;
+        return code < 0x20 || code > 0x7e;
+      });
+
+      if (offending !== -1) {
+        const char = [...value][offending] ?? '';
+        return reply.code(400).send({
+          error:
+            `${key} contient un caractère invalide en position ${offending + 1} (« ${char} »). ` +
+            'Les identifiants sont en ASCII : c’est en général le signe qu’une valeur masquée a été copiée à la place de la vraie.',
+        });
+      }
+
       if (key === 'AI_PROVIDER' && value !== 'anthropic' && value !== 'deepseek') {
         return reply.code(400).send({ error: 'AI_PROVIDER doit valoir anthropic ou deepseek.' });
       }
