@@ -54,6 +54,23 @@ journal d'audit et les garde-fous du remboursement.
 
 `npm run db:reset` remet la démonstration à zéro.
 
+### La console d'administration en local
+
+Elle règle les identifiants de la plateforme (clés Shopify, Google, IA) sans
+redéploiement. Elle n'existe que si `ADMIN_PASSWORD` est renseignée — laissez la
+ligne vide dans `.env` et `/admin` répond 404 en expliquant pourquoi. Pour
+l'activer :
+
+```bash
+node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"
+```
+
+Collez le résultat sur la ligne `ADMIN_PASSWORD=` de `.env`, redémarrez, puis
+ouvrez **http://localhost:3000/admin**. Le bouton « Tester la connexion » du
+groupe « Intelligence artificielle » fait un vrai appel au modèle : c'est le
+moyen le plus court de vérifier qu'une clé fonctionne. Voir
+[docs/11-console-admin.md](docs/11-console-admin.md).
+
 ### Ce qu'il faut regarder
 
 | Ticket | Ce qu'il démontre |
