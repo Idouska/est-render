@@ -37,6 +37,7 @@
         <button class="tab" data-view="tickets" aria-pressed="true">File de traitement</button>
         <button class="tab" data-view="orders" aria-pressed="false">Commandes</button>
         <button class="tab" data-view="customers" aria-pressed="false">Clients</button>
+        <button class="tab" data-view="suppliers" aria-pressed="false">Fournisseurs</button>
       </nav>
 
       <div class="notice" id="mock-notice" hidden>
@@ -141,20 +142,7 @@
           <div class="panel">
             <div class="panel-head">
               <span class="panel-title">Fournisseur</span>
-              <button class="btn btn-small" id="supplier-edit-toggle">Configurer</button>
-            </div>
-            <div class="card-body" id="supplier-config" hidden>
-              <div class="field">
-                <label for="sup-name">Nom du fournisseur</label>
-                <input type="text" id="sup-name" placeholder="Atelier Nord" />
-              </div>
-              <div class="field">
-                <label for="sup-email">Email de contact</label>
-                <input type="email" id="sup-email" placeholder="contact@fournisseur.example" />
-              </div>
-              <div class="actions">
-                <button class="btn btn-primary" id="sup-save">Enregistrer</button>
-              </div>
+              <button class="btn btn-small" id="supplier-edit-toggle">Gérer</button>
             </div>
             <div class="card-body" id="supplier-summary">
               <p class="empty">Aucun fournisseur configuré.</p>
@@ -228,6 +216,89 @@
           <button class="btn" id="customers-more" hidden>Charger la suite</button>
         </div>
       </section>
+
+      <section class="browse" id="view-suppliers" hidden aria-label="Fournisseurs">
+        <div class="browse-bar">
+          <span class="browse-count" id="suppliers-count"></span>
+          <button class="btn btn-primary" id="sup-new" style="margin-left:auto">
+            Ajouter un contact
+          </button>
+        </div>
+        <div class="table-wrap">
+          <table class="grid">
+            <thead>
+              <tr>
+                <th>Nom</th>
+                <th>Rôle</th>
+                <th>Contact</th>
+                <th>Téléphone</th>
+                <th class="num">Escalades en cours</th>
+                <th>État</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="suppliers-rows"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <div
+      class="backdrop"
+      id="supplier-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="supmodal-title"
+    >
+      <div class="modal">
+        <div class="modal-head">
+          <h2 id="supmodal-title">Nouveau contact</h2>
+          <p>
+            Le rôle décide vers qui part une escalade : une rupture au fournisseur,
+            un colis perdu au transporteur, un article manquant à l'entrepôt.
+          </p>
+        </div>
+        <div class="modal-body">
+          <div class="field">
+            <label for="sup-f-name">Nom de l'entreprise</label>
+            <input type="text" id="sup-f-name" placeholder="Atelier Nord" />
+          </div>
+          <div class="field">
+            <label for="sup-f-role">Rôle</label>
+            <select id="sup-f-role">
+              <option value="SUPPLIER">Fournisseur — production, réassort</option>
+              <option value="CARRIER">Transporteur — livraison, colis perdu</option>
+              <option value="WORKSHOP">Atelier — réparation, SAV technique</option>
+              <option value="WAREHOUSE">Entrepôt — préparation de commande</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="sup-f-email">Email de contact</label>
+            <input type="email" id="sup-f-email" placeholder="contact@fournisseur.example" />
+          </div>
+          <div class="field">
+            <label for="sup-f-contact">Interlocuteur (facultatif)</label>
+            <input type="text" id="sup-f-contact" placeholder="Nom de la personne" />
+          </div>
+          <div class="field">
+            <label for="sup-f-phone">Téléphone (facultatif)</label>
+            <input type="text" id="sup-f-phone" placeholder="+33 …" />
+          </div>
+          <div class="field">
+            <label for="sup-f-notes">Notes internes (facultatif)</label>
+            <textarea id="sup-f-notes" placeholder="Délais habituels, conditions de retour…"></textarea>
+          </div>
+          <label class="confirm">
+            <input type="checkbox" id="sup-f-active" checked />
+            <span>Contact actif — il peut recevoir des escalades.</span>
+          </label>
+        </div>
+        <div class="modal-foot">
+          <button class="btn btn-danger" id="sup-f-delete" hidden>Supprimer</button>
+          <button class="btn" id="sup-f-cancel">Annuler</button>
+          <button class="btn btn-primary" id="sup-f-save">Enregistrer</button>
+        </div>
+      </div>
     </div>
 
     <div

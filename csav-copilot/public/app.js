@@ -14,7 +14,8 @@ const state = {
   currentId: null,
   detail: null,
   refund: null,
-  supplier: null,
+  suppliers: [],
+  editingSupplier: null,
   settings: null,
   view: 'tickets',
   orders: { items: [], cursor: null, hasNext: false, q: '', loading: false, loaded: false, timer: null },
@@ -491,43 +492,159 @@ const ESCALATION_STATUS_LABELS = {
 };
 
 async function loadSupplier() {
-  const { supplier } = await api('/api/suppliers');
-  state.supplier = supplier;
+  const { suppliers } = await api('/api/suppliers');
+  state.suppliers = suppliers;
   renderSupplierSummary();
+}
+
+const SUPPLIER_ROLE_LABELS = {
+  SUPPLIER: 'Fournisseur',
+  CARRIER: 'Transporteur',
+  WORKSHOP: 'Atelier',
+  WAREHOUSE: 'Entrepôt',
+};
+
+/** Contacts joignables : un contact désactivé ne doit pas être proposé. */
+function activeSuppliers() {
+  return state.suppliers.filter((supplier) => supplier.active);
 }
 
 function renderSupplierSummary() {
   const summary = $('supplier-summary');
-  if (state.supplier) {
-    summary.innerHTML = `<p>Contact : <b>${esc(state.supplier.name)}</b> · <code>${esc(
-      state.supplier.contactEmail,
-    )}</code></p>`;
-    $('sup-name').value = state.supplier.name;
-    $('sup-email').value = state.supplier.contactEmail;
-  } else {
+  const active = activeSuppliers();
+
+  if (active.length === 0) {
     summary.innerHTML =
-      '<p class="empty">Aucun fournisseur configuré — les escalades sont indisponibles.</p>';
+      "<p class=\"empty\">Aucun contact actif — les escalades sont indisponibles. Ajoutez-en depuis l'onglet Fournisseurs.</p>";
+    return;
   }
+
+  summary.innerHTML = active
+    .map(
+      (supplier) => `<div class="row">
+        <dt>${esc(SUPPLIER_ROLE_LABELS[supplier.role] ?? supplier.role)}</dt>
+        <dd>${esc(supplier.name)}${
+          supplier.openEscalations
+            ? ` <span class="tag tag-status st-NEEDS_REVIEW">${supplier.openEscalations} en cours</span>`
+            : ''
+        }</dd>
+      </div>`,
+    )
+    .join('');
 }
 
-$('supplier-edit-toggle').addEventListener('click', () => {
-  $('supplier-config').hidden = !$('supplier-config').hidden;
+$('supplier-edit-toggle').addEventListener('click', () => setView('suppliers'));
+
+/* --------------------------------------------------------- fournisseurs -- */
+
+function renderSuppliers() {
+  const rows = state.suppliers;
+
+  $('suppliers-rows').innerHTML =
+    rows
+      .map(
+        (supplier) => `<tr class="grid-row${supplier.active ? '' : ' muted'}" data-supplier="${esc(supplier.id)}">
+          <td><b>${esc(supplier.name)}</b>${
+            supplier.contactName ? `<br><span class="sub">${esc(supplier.contactName)}</span>` : ''
+          }</td>
+          <td>${esc(SUPPLIER_ROLE_LABELS[supplier.role] ?? supplier.role)}</td>
+          <td class="mono">${esc(supplier.contactEmail)}</td>
+          <td class="mono">${esc(supplier.phone ?? '—')}</td>
+          <td class="num mono">${supplier.openEscalations}</td>
+          <td>${
+            supplier.active
+              ? '<span class="tag tag-status st-CLOSED">Actif</span>'
+              : '<span class="tag tag-status st-NEW">Désactivé</span>'
+          }</td>
+          <td><button class="btn btn-small">Modifier</button></td>
+        </tr>`,
+      )
+      .join('') ||
+    '<tr><td colspan="7" class="empty">Aucun contact. Ajoutez le fournisseur, le transporteur ou l’atelier que vous sollicitez le plus.</td></tr>';
+
+  const active = activeSuppliers().length;
+  $('suppliers-count').textContent = rows.length
+    ? `${rows.length} contact${rows.length > 1 ? 's' : ''} · ${active} actif${active > 1 ? 's' : ''}`
+    : '';
+
+  $('suppliers-rows')
+    .querySelectorAll('.grid-row')
+    .forEach((row) => row.addEventListener('click', () => openSupplierForm(row.dataset.supplier)));
+}
+
+/** `id` absent : création. Sinon édition, avec la suppression proposée. */
+function openSupplierForm(id) {
+  const supplier = id ? state.suppliers.find((candidate) => candidate.id === id) : null;
+  state.editingSupplier = supplier?.id ?? null;
+
+  $('supmodal-title').textContent = supplier ? supplier.name : 'Nouveau contact';
+  $('sup-f-name').value = supplier?.name ?? '';
+  $('sup-f-role').value = supplier?.role ?? 'SUPPLIER';
+  $('sup-f-email').value = supplier?.contactEmail ?? '';
+  $('sup-f-contact').value = supplier?.contactName ?? '';
+  $('sup-f-phone').value = supplier?.phone ?? '';
+  $('sup-f-notes').value = supplier?.notes ?? '';
+  $('sup-f-active').checked = supplier ? supplier.active : true;
+
+  // La suppression n'a de sens que sur un contact sans historique ; le serveur
+  // tranche, on se contente de ne pas la proposer à la création.
+  $('sup-f-delete').hidden = !supplier;
+
+  $('supplier-modal').classList.add('open');
+}
+
+$('sup-new').addEventListener('click', () => openSupplierForm(null));
+$('sup-f-cancel').addEventListener('click', () => $('supplier-modal').classList.remove('open'));
+$('supplier-modal').addEventListener('click', (event) => {
+  if (event.target === $('supplier-modal')) $('supplier-modal').classList.remove('open');
 });
 
-$('sup-save').addEventListener('click', async () => {
-  const name = $('sup-name').value.trim();
-  const contactEmail = $('sup-email').value.trim();
-  if (!name || !contactEmail) return;
+$('sup-f-save').addEventListener('click', async () => {
+  const payload = {
+    name: $('sup-f-name').value.trim(),
+    role: $('sup-f-role').value,
+    contactEmail: $('sup-f-email').value.trim(),
+    contactName: $('sup-f-contact').value.trim() || null,
+    phone: $('sup-f-phone').value.trim() || null,
+    notes: $('sup-f-notes').value.trim() || null,
+    active: $('sup-f-active').checked,
+  };
+
+  if (!payload.name || !payload.contactEmail) {
+    toast("Le nom et l'email sont requis.", true);
+    return;
+  }
 
   try {
-    await api('/api/suppliers', {
-      method: 'PUT',
-      body: JSON.stringify({ name, contactEmail }),
+    const id = state.editingSupplier;
+    await api(id ? `/api/suppliers/${id}` : '/api/suppliers', {
+      method: id ? 'PATCH' : 'POST',
+      body: JSON.stringify(payload),
     });
-    toast('Fournisseur enregistré.');
-    $('supplier-config').hidden = true;
+
+    $('supplier-modal').classList.remove('open');
+    toast(id ? 'Contact mis à jour.' : 'Contact ajouté.');
     await Promise.all([loadSupplier(), loadAudit()]);
+    renderSuppliers();
   } catch (error) {
+    toast(error.message, true);
+  }
+});
+
+$('sup-f-delete').addEventListener('click', async () => {
+  const id = state.editingSupplier;
+  if (!id) return;
+  if (!confirm('Supprimer ce contact définitivement ?')) return;
+
+  try {
+    await api(`/api/suppliers/${id}`, { method: 'DELETE' });
+    $('supplier-modal').classList.remove('open');
+    toast('Contact supprimé.');
+    await Promise.all([loadSupplier(), loadAudit()]);
+    renderSuppliers();
+  } catch (error) {
+    // Le refus le plus fréquent — un contact avec de l'historique — arrive ici
+    // avec sa propre explication.
     toast(error.message, true);
   }
 });
@@ -538,7 +655,7 @@ $('sup-save').addEventListener('click', async () => {
    commandes et le fichier client. Les deux dernières interrogent Shopify en
    direct, donc on ne les charge qu'à la première ouverture. */
 
-const VIEWS = ['tickets', 'orders', 'customers'];
+const VIEWS = ['tickets', 'orders', 'customers', 'suppliers'];
 
 function setView(view) {
   state.view = view;
@@ -555,6 +672,7 @@ function setView(view) {
 
   if (view === 'orders' && !state.orders.loaded) loadOrders({ reset: true });
   if (view === 'customers' && !state.customers.loaded) loadCustomers({ reset: true });
+  if (view === 'suppliers') renderSuppliers();
 }
 
 $('tabs').addEventListener('click', (event) => {
@@ -927,9 +1045,25 @@ async function loadEscalations(ticketId) {
   const data = await api(`/api/tickets/${ticketId}/escalations`);
   const escalations = data.escalations ?? [];
 
-  const newForm = state.supplier
+  const contacts = activeSuppliers();
+
+  const newForm = contacts.length
     ? `<div class="escalation" id="new-escalation">
         <div class="field">
+          <label for="esc-supplier">Destinataire</label>
+          <select id="esc-supplier">
+            <option value="">Choisir d'après le motif</option>
+            ${contacts
+              .map(
+                (supplier) =>
+                  `<option value="${esc(supplier.id)}">${esc(supplier.name)} — ${esc(
+                    SUPPLIER_ROLE_LABELS[supplier.role] ?? supplier.role,
+                  )}</option>`,
+              )
+              .join('')}
+          </select>
+        </div>
+        <div class="field" style="margin-top:8px">
           <label for="esc-reason">Motif</label>
           <select id="esc-reason">
             <option value="OUT_OF_STOCK">Rupture de stock</option>
@@ -1006,6 +1140,7 @@ async function createEscalation(ticketId) {
       body: JSON.stringify({
         reason: $('esc-reason').value,
         note: $('esc-note').value.trim() || undefined,
+        supplierId: $('esc-supplier').value || undefined,
       }),
     });
     toast('Brouillon fournisseur rédigé.');
@@ -1058,6 +1193,9 @@ const AUDIT_LABELS = {
   'refund.failed': 'Remboursement en échec',
   'merchant.settings_updated': 'Réglages modifiés',
   'supplier.configured': 'Fournisseur configuré',
+  'supplier.created': 'Contact fournisseur ajouté',
+  'supplier.updated': 'Contact fournisseur modifié',
+  'supplier.deleted': 'Contact fournisseur supprimé',
   'supplier.escalation_created': 'Escalade fournisseur rédigée',
   'supplier.notified': 'Fournisseur notifié',
   'supplier.replied': 'Réponse du fournisseur',

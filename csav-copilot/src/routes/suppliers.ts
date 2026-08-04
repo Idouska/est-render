@@ -8,11 +8,18 @@ import { createEscalation, resolveEscalation, sendEscalation } from '../services
 const supplierBody = z.object({
   name: z.string().min(1).max(200),
   contactEmail: z.string().email(),
+  contactName: z.string().max(200).nullish(),
+  phone: z.string().max(40).nullish(),
+  role: z.enum(['SUPPLIER', 'CARRIER', 'WORKSHOP', 'WAREHOUSE']).default('SUPPLIER'),
+  notes: z.string().max(2000).nullish(),
+  active: z.boolean().default(true),
 });
 
 const escalationBody = z.object({
   reason: z.enum(['OUT_OF_STOCK', 'INCORRECT_ADDRESS', 'MISSING_ITEM', 'OTHER']),
   note: z.string().max(2000).optional(),
+  // Destinataire choisi par l'agent. Absent, le service route d'après le motif.
+  supplierId: z.string().min(1).optional(),
 });
 
 /** Routes côté marchand : configurer le fournisseur, escalader un ticket. */
@@ -20,16 +27,33 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', requireSession);
 
   app.get('/api/suppliers', async (request, reply) => {
-    const supplier = await prisma.supplier.findUnique({
+    const suppliers = await prisma.supplier.findMany({
       where: { merchantId: request.session.merchantId },
+      orderBy: [{ active: 'desc' }, { name: 'asc' }],
+      include: {
+        // Le nombre d'escalades en cours dit lequel de vos contacts vous fait
+        // attendre — c'est la seule métrique qui déclenche une action.
+        _count: { select: { escalations: { where: { status: { in: ['OPEN', 'ANSWERED'] } } } } },
+      },
     });
-    return reply.send({ supplier });
+
+    return reply.send({
+      suppliers: suppliers.map((supplier) => ({
+        id: supplier.id,
+        name: supplier.name,
+        contactEmail: supplier.contactEmail,
+        contactName: supplier.contactName,
+        phone: supplier.phone,
+        role: supplier.role,
+        active: supplier.active,
+        notes: supplier.notes,
+        createdAt: supplier.createdAt,
+        openEscalations: supplier._count.escalations,
+      })),
+    });
   });
 
-  // Un seul fournisseur par marchand en phase 1 : upsert, pas de création
-  // multiple. Passer à plusieurs fournisseurs demanderait de savoir associer
-  // un article Shopify à son fournisseur (champ "vendor"), non exploité ici.
-  app.put('/api/suppliers', async (request, reply) => {
+  app.post('/api/suppliers', async (request, reply) => {
     const parsed = supplierBody.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Requête invalide', details: parsed.error.issues });
@@ -37,24 +61,108 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
 
     const { merchantId, userId } = request.session;
 
-    const supplier = await prisma.supplier.upsert({
-      where: { merchantId },
-      create: { merchantId, ...parsed.data },
-      update: parsed.data,
+    try {
+      const supplier = await prisma.supplier.create({
+        data: { merchantId, ...parsed.data },
+      });
+
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId: userId,
+        action: 'supplier.created',
+        targetType: 'Supplier',
+        targetId: supplier.id,
+        metadata: { name: supplier.name, role: supplier.role },
+        ipAddress: request.ip,
+      });
+
+      return reply.send({ supplier });
+    } catch (error) {
+      // Collision sur (merchantId, contactEmail) : deux fiches pour la même
+      // adresse rendraient les réponses du fournisseur inattribuables.
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        (error as { code?: string }).code === 'P2002'
+      ) {
+        return reply.code(409).send({
+          error: 'Un contact utilise déjà cette adresse email.',
+        });
+      }
+      throw error;
+    }
+  });
+
+  app.patch<{ Params: { id: string } }>('/api/suppliers/:id', async (request, reply) => {
+    const parsed = supplierBody.partial().safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Requête invalide', details: parsed.error.issues });
+    }
+
+    const { merchantId, userId } = request.session;
+
+    const existing = await prisma.supplier.findFirst({
+      where: { id: request.params.id, merchantId },
+      select: { id: true },
+    });
+    if (!existing) return reply.code(404).send({ error: 'Contact introuvable' });
+
+    const supplier = await prisma.supplier.update({
+      where: { id: existing.id },
+      data: parsed.data,
     });
 
     await recordAudit({
       merchantId,
       actorType: 'USER',
       actorId: userId,
-      action: 'supplier.configured',
+      action: 'supplier.updated',
+      targetType: 'Supplier',
+      targetId: supplier.id,
+      metadata: parsed.data,
+      ipAddress: request.ip,
+    });
+
+    return reply.send({ supplier });
+  });
+
+  /**
+   * Suppression définitive, refusée dès qu'un échange existe.
+   *
+   * Supprimer un contact effacerait ses escalades en cascade, donc des
+   * messages déjà envoyés et consignés. On désactive à la place — le
+   * fournisseur ne reçoit plus rien mais l'historique reste lisible.
+   */
+  app.delete<{ Params: { id: string } }>('/api/suppliers/:id', async (request, reply) => {
+    const { merchantId, userId } = request.session;
+
+    const supplier = await prisma.supplier.findFirst({
+      where: { id: request.params.id, merchantId },
+      include: { _count: { select: { escalations: true } } },
+    });
+    if (!supplier) return reply.code(404).send({ error: 'Contact introuvable' });
+
+    if (supplier._count.escalations > 0) {
+      return reply.code(409).send({
+        error: `Ce contact a ${supplier._count.escalations} escalade(s) dans l'historique. Désactivez-le plutôt que de le supprimer.`,
+      });
+    }
+
+    await prisma.supplier.delete({ where: { id: supplier.id } });
+
+    await recordAudit({
+      merchantId,
+      actorType: 'USER',
+      actorId: userId,
+      action: 'supplier.deleted',
       targetType: 'Supplier',
       targetId: supplier.id,
       metadata: { name: supplier.name },
       ipAddress: request.ip,
     });
 
-    return reply.send({ supplier });
+    return reply.send({ ok: true });
   });
 
   app.get<{ Params: { id: string } }>('/api/tickets/:id/escalations', async (request, reply) => {
@@ -92,6 +200,7 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
         ticketId: request.params.id,
         reason: parsed.data.reason,
         note: parsed.data.note,
+        supplierId: parsed.data.supplierId ?? null,
         userId,
       });
       return reply.send({ escalation });

@@ -21,21 +21,52 @@ export class SupplierNotConfiguredError extends Error {
  * brouillon client — même logique de confiance humaine, juste un
  * destinataire différent.
  */
+type EscalationReason = 'OUT_OF_STOCK' | 'INCORRECT_ADDRESS' | 'MISSING_ITEM' | 'OTHER';
+
+/**
+ * Métier attendu selon le motif d'escalade.
+ *
+ * Un colis perdu se règle avec le transporteur, une rupture avec le
+ * fournisseur, un article manquant avec l'entrepôt qui a préparé le colis.
+ * Ce routage n'est qu'un défaut : l'agent peut toujours désigner quelqu'un
+ * d'autre, parce que l'organisation réelle d'un marchand ne rentre jamais
+ * complètement dans une table.
+ */
+const DEFAULT_ROLE_BY_REASON: Record<EscalationReason, 'SUPPLIER' | 'CARRIER' | 'WORKSHOP' | 'WAREHOUSE'> = {
+  OUT_OF_STOCK: 'SUPPLIER',
+  INCORRECT_ADDRESS: 'CARRIER',
+  MISSING_ITEM: 'WAREHOUSE',
+  OTHER: 'SUPPLIER',
+};
+
 export async function createEscalation(params: {
   merchantId: string;
   ticketId: string;
-  reason: 'OUT_OF_STOCK' | 'INCORRECT_ADDRESS' | 'MISSING_ITEM' | 'OTHER';
+  reason: EscalationReason;
   note?: string | null;
   userId: string;
+  /** Destinataire choisi par l'agent. Absent, on route d'après le motif. */
+  supplierId?: string | null;
 }) {
-  const [merchant, ticket, supplier] = await Promise.all([
+  const [merchant, ticket, suppliers] = await Promise.all([
     prisma.merchant.findUniqueOrThrow({ where: { id: params.merchantId } }),
     prisma.ticket.findFirstOrThrow({
       where: { id: params.ticketId, merchantId: params.merchantId },
       include: { messages: { orderBy: { receivedAt: 'desc' }, take: 1 } },
     }),
-    prisma.supplier.findUnique({ where: { merchantId: params.merchantId } }),
+    prisma.supplier.findMany({
+      where: { merchantId: params.merchantId, active: true },
+      orderBy: { createdAt: 'asc' },
+    }),
   ]);
+
+  const supplier = params.supplierId
+    ? suppliers.find((candidate) => candidate.id === params.supplierId)
+    : // À défaut d'un destinataire explicite : le bon métier, sinon le premier
+      // contact actif — mieux vaut une escalade mal adressée qu'un agent
+      // bloqué devant un ticket urgent.
+      suppliers.find((candidate) => candidate.role === DEFAULT_ROLE_BY_REASON[params.reason]) ??
+      suppliers[0];
 
   if (!supplier) {
     throw new SupplierNotConfiguredError(params.merchantId);

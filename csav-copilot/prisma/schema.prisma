@@ -39,7 +39,7 @@ model Merchant {
   tickets             Ticket[]
   refunds             Refund[]
   auditLogs           AuditLog[]
-  supplier            Supplier?
+  suppliers           Supplier[]
   supplierEscalations SupplierEscalation[]
 }
 
@@ -285,17 +285,39 @@ enum RefundStatus {
 // par mail — ce qui évite de dupliquer le pipeline Gmail pour un second canal.
 // ---------------------------------------------------------------------------
 
+// Un marchand a rarement un seul interlocuteur : l'atelier qui répare, le
+// transporteur qui perd, l'entrepôt qui se trompe de colis. Le rôle sert à
+// router l'escalade vers le bon métier plutôt qu'à décrire l'entreprise.
 model Supplier {
-  id           String @id @default(cuid())
-  merchantId   String @unique
+  id           String       @id @default(cuid())
+  merchantId   String
   name         String
   contactEmail String
+  contactName  String?
+  phone        String?
+  role         SupplierRole @default(SUPPLIER)
+  // Un fournisseur désactivé ne reçoit plus d'escalade mais garde son
+  // historique : supprimer la ligne effacerait des échanges déjà consignés.
+  active       Boolean      @default(true)
+  notes        String?      @db.Text
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   merchant    Merchant             @relation(fields: [merchantId], references: [id], onDelete: Cascade)
   escalations SupplierEscalation[]
+
+  // Deux fiches pour la même adresse chez un même marchand n'ont pas de sens :
+  // les réponses arrivant par mail seraient impossibles à attribuer.
+  @@unique([merchantId, contactEmail])
+  @@index([merchantId, active])
+}
+
+enum SupplierRole {
+  SUPPLIER // production, réassort
+  CARRIER // transporteur
+  WORKSHOP // atelier, réparation
+  WAREHOUSE // entrepôt, préparation de commande
 }
 
 model SupplierEscalation {
