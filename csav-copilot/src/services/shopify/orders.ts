@@ -4,6 +4,10 @@ export interface OrderLineItem {
   title: string;
   quantity: number;
   variantTitle: string | null;
+  /// Vignette du produit : l'atelier reconnaît un article à sa photo bien plus
+  /// vite qu'à sa référence, et c'est ce qui rend l'export exploitable.
+  image: string | null;
+  sku: string | null;
 }
 
 export interface Fulfillment {
@@ -91,6 +95,10 @@ const ORDER_FIELDS = /* GraphQL */ `
         title
         quantity
         variantTitle
+        sku
+        image {
+          url
+        }
       }
     }
     fulfillments(first: 10) {
@@ -131,7 +139,15 @@ interface RawOrder {
     createdAt: string | null;
     amountSpent: { amount: string } | null;
   } | null;
-  lineItems: { nodes: Array<{ title: string; quantity: number; variantTitle: string | null }> };
+  lineItems: {
+    nodes: Array<{
+      title: string;
+      quantity: number;
+      variantTitle: string | null;
+      sku: string | null;
+      image: { url: string } | null;
+    }>;
+  };
   fulfillments: Array<{
     status: string;
     updatedAt: string;
@@ -172,7 +188,13 @@ function toSummary(order: RawOrder): OrderSummary {
           createdAt: order.customer.createdAt,
         }
       : null,
-    lineItems: order.lineItems.nodes,
+    lineItems: order.lineItems.nodes.map((item) => ({
+      title: item.title,
+      quantity: item.quantity,
+      variantTitle: item.variantTitle,
+      sku: item.sku,
+      image: item.image?.url ?? null,
+    })),
     fulfillments: order.fulfillments.map((f) => ({
       status: f.status,
       updatedAt: f.updatedAt,

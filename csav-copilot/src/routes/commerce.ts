@@ -1,6 +1,8 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { env } from '../config/env.ts';
 import { prisma } from '../lib/prisma.ts';
+import { ordersToCsv } from '../services/export/ordersCsv.ts';
 import { requireSession } from '../plugins/auth.ts';
 import { getShopifyClient, ShopifyError, ShopifyScopeError } from '../services/shopify/client.ts';
 import { listCollections, listDisputes, listProducts } from '../services/shopify/catalog.ts';
@@ -241,6 +243,86 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
       return { shipments, cursor: page.cursor, hasNextPage: page.hasNextPage };
     });
   });
+
+  /**
+   * Export du carnet de commandes pour Excel.
+   *
+   * Même fichier que celui du fournisseur, servi ici à l'agent : une seule
+   * définition de colonnes, donc les deux ne divergent jamais.
+   */
+  app.get<{ Querystring: { since?: string; until?: string; limit?: string } }>(
+    '/api/orders/export.csv',
+    async (request, reply) => {
+      const parsed = z
+        .object({
+          since: z.string().date().optional(),
+          until: z.string().date().optional(),
+          limit: z.coerce.number().int().min(1).max(250).default(100),
+        })
+        .safeParse(request.query);
+
+      if (!parsed.success) return reply.code(400).send({ error: 'Période invalide' });
+
+      try {
+        const client = await getShopifyClient(request.session.merchantId);
+
+        // Sans période : les dernières 24 heures, le geste du matin.
+        const query =
+          !parsed.data.since && !parsed.data.until
+            ? `created_at:>=${new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()}`
+            : [
+                parsed.data.since ? `created_at:>=${parsed.data.since}` : '',
+                parsed.data.until ? `created_at:<=${parsed.data.until}T23:59:59Z` : '',
+              ]
+                .filter(Boolean)
+                .join(' AND ');
+
+        const page = await listOrders(client, { query, limit: parsed.data.limit, cursor: null });
+
+        const parcels = await prisma.parcel.findMany({
+          where: {
+            merchantId: request.session.merchantId,
+            shopifyOrderId: { in: page.orders.map((order) => order.id) },
+          },
+          orderBy: { index: 'asc' },
+          select: {
+            id: true,
+            shopifyOrderId: true,
+            trackingNumber: true,
+            index: true,
+            total: true,
+            photoMime: true,
+          },
+        });
+
+        const csv = ordersToCsv(
+          page.orders.map((order) => ({
+            order,
+            parcels: parcels
+              .filter((parcel) => parcel.shopifyOrderId === order.id)
+              .map((parcel) => ({
+                index: parcel.index,
+                total: parcel.total,
+                trackingNumber: parcel.trackingNumber,
+                photoUrl: parcel.photoMime ? `/api/parcels/${parcel.id}/photo` : null,
+              })),
+          })),
+          env.APP_URL,
+        );
+
+        const stamp = new Date().toISOString().slice(0, 10);
+
+        return reply
+          .type('text/csv; charset=utf-8')
+          .header('Content-Disposition', `attachment; filename="commandes-${stamp}.csv"`)
+          .send(csv);
+      } catch (error) {
+        const { status, message } = describeShopifyError(error);
+        request.log.error({ err: error }, 'Export des commandes en échec');
+        return reply.code(status).send({ error: message });
+      }
+    },
+  );
 
   app.get('/api/disputes', async (request, reply) =>
     serveShopify(request, reply, 'Listing des litiges en échec', async (client) => ({

@@ -349,6 +349,11 @@ model Supplier {
   active       Boolean      @default(true)
   notes        String?      @db.Text
 
+  /// Version du lien de travail permanent. L'incrémenter invalide d'un coup
+  /// tous les liens déjà transmis à ce fournisseur — la seule façon de révoquer
+  /// un jeton signé sans table de sessions.
+  portalTokenVersion Int @default(1)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

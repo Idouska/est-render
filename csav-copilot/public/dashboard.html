@@ -263,6 +263,7 @@
             aria-label="Rechercher une commande"
           />
           <span class="browse-count" id="orders-count"></span>
+          <a class="btn btn-small" id="orders-export" download>Exporter en Excel</a>
         </div>
         <div class="table-wrap">
           <table class="grid">
@@ -769,7 +770,8 @@
             <span>Contact actif — il peut recevoir des escalades.</span>
           </label>
         </div>
-        <div class="modal-foot">
+        <div class="modal-foot modal-foot-wrap">
+          <button class="btn" id="sup-f-link" hidden>Lien de travail…</button>
           <button class="btn btn-danger" id="sup-f-delete" hidden>Supprimer</button>
           <button class="btn" id="sup-f-cancel">Annuler</button>
           <button class="btn btn-primary" id="sup-f-save">Enregistrer</button>

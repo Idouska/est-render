@@ -1629,3 +1629,8 @@ body {
   border: 1px solid var(--line);
   display: block;
 }
+
+/* Pied de modale à plusieurs actions : sans retour à la ligne, « Lien de
+   travail » et « Supprimer » débordent sur un écran étroit. */
+.modal-foot-wrap { flex-wrap: wrap; }
+.modal-foot-wrap .btn-danger { margin-right: auto; }

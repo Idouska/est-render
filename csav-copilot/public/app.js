@@ -446,6 +446,40 @@ async function loadQueue() {
   });
 }
 
+/* ------------------------------------------------- lien de travail atelier */
+
+/**
+ * Émet — ou révoque — le lien permanent d'un fournisseur.
+ *
+ * Le lien vaut accès : on l'affiche une fois, à copier, et on rappelle que le
+ * révoquer coupe tous ceux déjà transmis. Rien n'est stocké en clair côté
+ * marchand, le jeton se recalcule à la demande.
+ */
+async function openSupplierLink(supplierId, revoke = false) {
+  if (revoke && !confirm(
+    'Révoquer le lien coupe l’accès de ce fournisseur immédiatement, y compris '
+      + 'celui qu’il a déjà enregistré. Un nouveau lien sera généré. Continuer ?',
+  )) {
+    return;
+  }
+
+  try {
+    const { url } = await api(`/api/suppliers/${supplierId}/portal-link`, {
+      method: 'POST',
+      body: JSON.stringify({ revoke }),
+    });
+
+    await navigator.clipboard?.writeText(url).catch(() => {});
+    toast(revoke ? 'Ancien lien révoqué, nouveau lien copié.' : 'Lien copié dans le presse-papier.');
+
+    // Affiché en clair malgré la copie : un presse-papier peut échouer en
+    // silence, et le marchand doit pouvoir le sélectionner à la main.
+    prompt('Lien de travail du fournisseur — à lui transmettre :', url);
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
 /* ------------------------------------------------------------------ colis */
 
 /**
@@ -1203,8 +1237,22 @@ function openSupplierForm(id) {
   // tranche, on se contente de ne pas la proposer à la création.
   $('sup-f-delete').hidden = !supplier;
 
+  // Le lien n'existe que pour un fournisseur déjà enregistré : il porte son
+  // identifiant.
+  $('sup-f-link').hidden = !supplier;
+  $('sup-f-link').dataset.supplier = supplier?.id ?? '';
+
   $('supplier-modal').classList.add('open');
 }
+
+$('sup-f-link').addEventListener('click', async (event) => {
+  const id = event.currentTarget.dataset.supplier;
+  if (!id) return;
+
+  // Maj + clic révoque : geste volontairement peu accessible, l'opération est
+  // irréversible pour les liens déjà transmis.
+  await openSupplierLink(id, event.shiftKey);
+});
 
 $('sup-new').addEventListener('click', () => openSupplierForm(null));
 $('sup-f-cancel').addEventListener('click', () => $('supplier-modal').classList.remove('open'));
@@ -1689,6 +1737,10 @@ $('catalog-seg')
   );
 
 $('catalog-more').addEventListener('click', () => loadCatalog());
+
+// Lien direct plutôt qu'un appel : le navigateur gère le téléchargement, et un
+// fichier reçu en mémoire puis re-téléchargé ne servirait à rien de plus.
+$('orders-export').href = '/api/orders/export.csv?limit=250';
 
 $('catalog-q').addEventListener('input', (event) => {
   state.catalog.q = event.target.value.trim();

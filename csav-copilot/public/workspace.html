@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Atelier — commandes à préparer</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%230b5e6b'/%3E%3Cpath d='M3 5.5h10v6H3z' fill='none' stroke='%23fff' stroke-width='1.2'/%3E%3Cpath d='M3 5.8l5 3.4 5-3.4' fill='none' stroke='%23fff' stroke-width='1.2'/%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="/static/styles.css" />
+    <link rel="stylesheet" href="/static/workspace.css" />
+  </head>
+  <body>
+    <div id="gate" class="gate" hidden>
+      <h1>Lien invalide</h1>
+      <p id="gate-error"></p>
+      <p>Demandez au marchand de vous renvoyer votre lien d'accès.</p>
+    </div>
+
+    <div class="ws" id="app" hidden>
+      <header class="ws-head">
+        <div>
+          <div class="crumb">Atelier</div>
+          <h1 id="ws-title">Commandes à préparer</h1>
+          <p class="hint" id="ws-supplier"></p>
+        </div>
+        <div class="ws-acts">
+          <label class="ws-range">
+            Du <input type="date" id="ws-since" />
+          </label>
+          <label class="ws-range">
+            au <input type="date" id="ws-until" />
+          </label>
+          <button class="btn" id="ws-reload">Actualiser</button>
+          <a class="btn btn-primary" id="ws-csv" download>Télécharger en Excel</a>
+        </div>
+      </header>
+
+      <p class="hint" id="ws-count"></p>
+      <div id="ws-orders"></div>
+    </div>
+
+    <div class="modal-wrap" id="issue-modal">
+      <div class="modal">
+        <div class="modal-head">
+          <h2>Signaler un problème</h2>
+          <p id="issue-order"></p>
+        </div>
+        <div class="modal-body">
+          <label class="field">
+            Nature du problème
+            <select id="issue-kind">
+              <option value="PHONE">Numéro de téléphone incomplet ou invalide</option>
+              <option value="ADDRESS">Adresse incomplète ou incorrecte</option>
+              <option value="STOCK">Article indisponible</option>
+              <option value="DAMAGE">Article abîmé</option>
+              <option value="OTHER">Autre problème</option>
+            </select>
+          </label>
+          <label class="field">
+            Détail
+            <textarea id="issue-note" rows="4"
+              placeholder="Ex. : le numéro fait 8 chiffres, il en manque un."></textarea>
+          </label>
+        </div>
+        <div class="modal-foot">
+          <button class="btn" id="issue-cancel">Annuler</button>
+          <button class="btn btn-primary" id="issue-send">Envoyer au marchand</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="toast" id="toast" role="status"></div>
+    <script type="module" src="/static/workspace.js"></script>
+  </body>
+</html>

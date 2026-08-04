@@ -1,6 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { env } from '../config/env.ts';
 import { recordAudit } from '../lib/audit.ts';
+import { signSupplierWorkspaceToken } from '../lib/supplierToken.ts';
 import { prisma } from '../lib/prisma.ts';
 import { requirePermission, requireSession } from '../plugins/auth.ts';
 import { createEscalation, resolveEscalation, sendEscalation } from '../services/suppliers/escalate.ts';
@@ -170,6 +172,54 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
 
     return reply.send({ ok: true });
   });
+
+  /**
+   * Lien de travail permanent d'un fournisseur.
+   *
+   * Émis à la demande plutôt que stocké : le jeton se recalcule à partir du
+   * numéro de version, donc rien de secret ne dort en base. « Révoquer »
+   * incrémente ce numéro et invalide d'un coup tous les liens transmis.
+   */
+  app.post<{ Params: { id: string }; Body: { revoke?: boolean } }>(
+    '/api/suppliers/:id/portal-link',
+    { preHandler: requirePermission('configure') },
+    async (request, reply) => {
+      const { merchantId, userId } = request.session;
+
+      const supplier = await prisma.supplier.findFirst({
+        where: { id: request.params.id, merchantId },
+        select: { id: true, name: true, portalTokenVersion: true },
+      });
+      if (!supplier) return reply.code(404).send({ error: 'Fournisseur introuvable' });
+
+      const version = request.body?.revoke
+        ? (
+            await prisma.supplier.update({
+              where: { id: supplier.id },
+              data: { portalTokenVersion: { increment: 1 } },
+              select: { portalTokenVersion: true },
+            })
+          ).portalTokenVersion
+        : supplier.portalTokenVersion;
+
+      const token = signSupplierWorkspaceToken({ merchantId, supplierId: supplier.id, version });
+
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId: userId,
+        action: request.body?.revoke ? 'supplier.link_revoked' : 'supplier.link_issued',
+        targetType: 'Supplier',
+        targetId: supplier.id,
+        ipAddress: request.ip,
+      });
+
+      return reply.send({
+        url: `${env.APP_URL}/fournisseur/${supplier.id}?token=${encodeURIComponent(token)}`,
+        revoked: Boolean(request.body?.revoke),
+      });
+    },
+  );
 
   app.get<{ Params: { id: string } }>('/api/tickets/:id/escalations', async (request, reply) => {
     const { merchantId } = request.session;

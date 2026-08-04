@@ -1,0 +1,154 @@
+/* Espace de travail du fournisseur.
+   Conçu pour un téléphone tenu d'une main dans un entrepôt : cibles larges,
+   texte à 16 px minimum, aucune colonne à faire défiler latéralement. */
+
+.ws { max-width: 1100px; margin: 0 auto; padding: 14px 12px 60px; }
+
+.ws-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.ws-head h1 { margin: 2px 0 4px; font-size: 23px; letter-spacing: -0.025em; }
+.ws-acts { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.ws-range { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink-mute); }
+
+.ws-range input {
+  font: inherit;
+  font-size: 16px;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.ord {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow);
+  padding: 13px 14px;
+  margin-bottom: 11px;
+  display: grid;
+  gap: 10px;
+}
+
+.ord-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ord-head b { font-size: 16px; font-family: var(--font-mono); }
+.ord-head .when { font-size: 12px; color: var(--ink-mute); margin-left: auto; }
+
+.ord-who { font-size: 13.5px; }
+.ord-who small { display: block; color: var(--ink-mute); font-size: 12.5px; }
+
+/* Le téléphone est mis en avant : c'est le champ que le transporteur utilise,
+   et celui qui bloque le plus souvent une livraison. */
+.ord-phone { font-family: var(--font-mono); font-weight: 600; }
+.ord-phone.missing { color: var(--crit); }
+
+.ord-items { display: flex; gap: 9px; flex-wrap: wrap; }
+
+.ord-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 9px 6px 6px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-md);
+  background: var(--inset);
+  font-size: 12.5px;
+}
+
+.ord-item img { width: 38px; height: 38px; border-radius: var(--r-sm); object-fit: cover; flex: none; }
+.ord-item b { display: block; font-weight: 600; }
+.ord-item small { color: var(--ink-mute); }
+
+.ord-foot { display: flex; gap: 8px; flex-wrap: wrap; }
+.ord-foot .btn { flex: 1; justify-content: center; min-width: 140px; }
+
+.field { display: grid; gap: 5px; font-size: 12.5px; color: var(--ink-mute); }
+
+.field select,
+.field textarea,
+.field input {
+  font: inherit;
+  font-size: 16px;
+  color: var(--ink);
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--inset);
+  width: 100%;
+}
+
+.modal-wrap {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: rgb(10 10 20 / 45%);
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+}
+
+.modal-wrap.open { display: flex; }
+
+@media (max-width: 700px) {
+  .ws-acts { width: 100%; }
+  .ws-acts .btn { flex: 1; justify-content: center; }
+  .modal-wrap { padding: 0; align-items: stretch; }
+}
+
+/* Cartes colis — mêmes règles que le portail d'escalade, reprises ici parce
+   que la feuille principale ne les porte pas. */
+.pk-list { display: grid; gap: 10px; }
+
+.pk {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 11px 12px;
+  display: grid;
+  gap: 8px;
+  background: var(--inset);
+}
+
+.pk-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+.pk-done { margin-left: auto; color: var(--ok); text-transform: none; letter-spacing: 0; font-size: 12px; }
+
+.pk input[type="text"] {
+  font: inherit;
+  font-size: 16px;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  width: 100%;
+}
+
+.pk-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pk-shot { flex: 1; min-width: 150px; justify-content: center; }
+.pk input[type="file"] { display: none; }
+
+.pk-thumb {
+  width: 100%;
+  max-height: 190px;
+  object-fit: cover;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+}
