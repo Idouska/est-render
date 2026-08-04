@@ -1121,6 +1121,9 @@ async function loadCatalog({ reset = false } = {}) {
   }
 
   const params = new URLSearchParams();
+  // 50 est le plafond accepté par l'API : moins d'allers-retours pour un
+  // catalogue de plusieurs centaines de références.
+  params.set('limit', '50');
   if (store.q) params.set('q', store.q);
   if (store.cursor) params.set('cursor', store.cursor);
 
@@ -1190,8 +1193,13 @@ function renderCatalog() {
   $('catalog-rows').innerHTML =
     rows.join('') || '<tr><td colspan="7" class="empty">Rien à afficher.</td></tr>';
 
+  // « 25 produits » laissait croire que le catalogue en comptait 25, alors que
+  // c'est le nombre de lignes déjà chargées. Shopify ne donne pas de total sans
+  // parcourir toutes les pages, donc on nomme ce qu'on sait.
   $('catalog-count').textContent = store.items.length
-    ? `${store.items.length} ${store.kind === 'products' ? 'produits' : 'collections'}`
+    ? `${store.items.length} ${store.kind === 'products' ? 'produits' : 'collections'} affichés${
+        store.hasNext ? ' · d’autres à charger' : ''
+      }`
     : '';
   $('catalog-more').hidden = !store.hasNext;
 }
@@ -1718,6 +1726,9 @@ async function loadOrders({ reset = false } = {}) {
   }
 
   const params = new URLSearchParams();
+  // 50 est le plafond accepté par l'API : moins d'allers-retours pour un
+  // catalogue de plusieurs centaines de références.
+  params.set('limit', '50');
   if (store.q) params.set('q', store.q);
   if (store.cursor) params.set('cursor', store.cursor);
 
@@ -1815,6 +1826,9 @@ async function loadCustomers({ reset = false } = {}) {
   }
 
   const params = new URLSearchParams();
+  // 50 est le plafond accepté par l'API : moins d'allers-retours pour un
+  // catalogue de plusieurs centaines de références.
+  params.set('limit', '50');
   if (store.q) params.set('q', store.q);
   if (store.cursor) params.set('cursor', store.cursor);
 
