@@ -5,10 +5,37 @@ import { recordAudit } from '../lib/audit.ts';
 import { encryptSecret, hmacSha256Hex, safeEqual } from '../lib/crypto.ts';
 import { logger } from '../lib/logger.ts';
 import { prisma } from '../lib/prisma.ts';
-import { SESSION_COOKIE, signSession } from '../lib/session.ts';
+import { SESSION_COOKIE, signSession, verifySession } from '../lib/session.ts';
 import { requireCredential } from '../services/platform/credentials.ts';
 
 const STATE_COOKIE = 'csav_shopify_state';
+const LINK_COOKIE = 'csav_shopify_link';
+
+/**
+ * Contexte de rattachement d'une nouvelle boutique, posé avant la redirection
+ * vers Shopify et relu au retour.
+ *
+ * Il traverse un aller-retour hors de notre domaine, donc il est signé : sans
+ * ça, n'importe qui pourrait forger un cookie désignant l'organisation d'un
+ * autre et y greffer sa propre boutique.
+ */
+function signLink(payload: { organizationId: string; email: string }): string {
+  const encoded = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+  return `${encoded}.${hmacSha256Hex(env.ENCRYPTION_KEY, encoded)}`;
+}
+
+function readLink(token: string | undefined): { organizationId: string; email: string } | null {
+  if (!token) return null;
+  const [encoded, signature] = token.split('.');
+  if (!encoded || !signature) return null;
+  if (!safeEqual(signature, hmacSha256Hex(env.ENCRYPTION_KEY, encoded))) return null;
+
+  try {
+    return JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'));
+  } catch {
+    return null;
+  }
+}
 
 /** Seuls les domaines *.myshopify.com sont acceptés (anti-redirect arbitraire). */
 function isValidShopDomain(shop: string): boolean {
@@ -54,6 +81,30 @@ export async function shopifyAuthRoutes(app: FastifyInstance): Promise<void> {
       path: '/',
       maxAge: 600,
     });
+
+    // Installation lancée depuis le dashboard : la nouvelle boutique rejoint le
+    // groupe de celle où l'utilisateur est déjà connecté, avec son compte.
+    const session = verifySession(request.cookies[SESSION_COOKIE]);
+    if (session) {
+      const user = await prisma.user.findFirst({
+        where: { id: session.userId, merchantId: session.merchantId, active: true },
+        select: { email: true, role: true, merchant: { select: { organizationId: true } } },
+      });
+
+      if (user?.role === 'OWNER' && user.merchant.organizationId) {
+        reply.setCookie(
+          LINK_COOKIE,
+          signLink({ organizationId: user.merchant.organizationId, email: user.email }),
+          {
+            httpOnly: true,
+            secure: env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            path: '/',
+            maxAge: 600,
+          },
+        );
+      }
+    }
 
     const clientId = await requireCredential(
       'SHOPIFY_API_KEY',
@@ -113,10 +164,26 @@ export async function shopifyAuthRoutes(app: FastifyInstance): Promise<void> {
         scope: string;
       };
 
+      const link = readLink(request.cookies[LINK_COOKIE]);
+      reply.clearCookie(LINK_COOKIE, { path: '/' });
+
+      const existing = await prisma.merchant.findUnique({
+        where: { shopDomain: shop },
+        select: { id: true, organizationId: true },
+      });
+
+      // Une boutique déjà rattachée garde son groupe : la réinstaller ne doit
+      // pas la faire changer de propriétaire.
+      const organizationId =
+        existing?.organizationId ??
+        (link?.organizationId
+          ? link.organizationId
+          : (await prisma.organization.create({ data: { name: shop } })).id);
+
       const merchant = await prisma.merchant.upsert({
         where: { shopDomain: shop },
-        create: { shopDomain: shop, status: 'ACTIVE' },
-        update: { status: 'ACTIVE' },
+        create: { shopDomain: shop, status: 'ACTIVE', organizationId },
+        update: { status: 'ACTIVE', organizationId },
       });
 
       await prisma.shopifyConnection.upsert({
@@ -133,11 +200,15 @@ export async function shopifyAuthRoutes(app: FastifyInstance): Promise<void> {
         },
       });
 
-      // Un utilisateur propriétaire par défaut : le multi-agent viendra plus tard.
+      // Le propriétaire de la nouvelle boutique est celui qui a lancé
+      // l'installation depuis le dashboard ; à défaut — première installation,
+      // ou lancement depuis l'App Store — un compte technique lié au domaine.
+      const ownerEmail = link?.email ?? `owner@${shop}`;
+
       const user = await prisma.user.upsert({
-        where: { merchantId_email: { merchantId: merchant.id, email: `owner@${shop}` } },
-        create: { merchantId: merchant.id, email: `owner@${shop}`, role: 'OWNER' },
-        update: {},
+        where: { merchantId_email: { merchantId: merchant.id, email: ownerEmail } },
+        create: { merchantId: merchant.id, email: ownerEmail, role: 'OWNER' },
+        update: { active: true },
       });
 
       await recordAudit({

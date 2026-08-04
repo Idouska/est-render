@@ -26,13 +26,17 @@
     <div class="shell" id="app" hidden>
       <div class="app">
         <aside class="side">
-          <div class="brand">
-            <span class="brand-mark" id="brand-mark">SA</span>
-            <img class="brand-logo" id="brand-logo" alt="" hidden />
-            <div>
-              <strong id="merchant-name">cSAV Copilot</strong>
-              <span id="merchant-shop"></span>
-            </div>
+          <div class="brand-wrap">
+            <button class="brand" id="shop-switch" type="button" aria-expanded="false">
+              <span class="brand-mark" id="brand-mark">SA</span>
+              <img class="brand-logo" id="brand-logo" alt="" hidden />
+              <div>
+                <strong id="merchant-name">cSAV Copilot</strong>
+                <span id="merchant-shop"></span>
+              </div>
+              <span class="brand-caret" aria-hidden="true">▾</span>
+            </button>
+            <div class="shop-menu" id="shop-menu" hidden></div>
           </div>
 
           <nav id="nav" aria-label="Sections"></nav>

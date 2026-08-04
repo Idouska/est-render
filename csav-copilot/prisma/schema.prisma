@@ -16,11 +16,26 @@ datasource db {
 // Tenant
 // ---------------------------------------------------------------------------
 
+/// Regroupe les boutiques d'un même exploitant.
+///
+/// Le `merchantId` reste la frontière d'isolation : aucune requête métier ne
+/// traverse l'organisation. Elle sert uniquement à savoir vers quelles autres
+/// boutiques un utilisateur a le droit de basculer, et à quel groupe rattacher
+/// une nouvelle installation Shopify.
+model Organization {
+  id        String   @id @default(cuid())
+  name      String?
+  createdAt DateTime @default(now())
+
+  merchants Merchant[]
+}
+
 model Merchant {
-  id         String         @id @default(cuid())
-  shopDomain String         @unique // ex. ma-boutique.myshopify.com
-  name       String?
-  status     MerchantStatus @default(ACTIVE)
+  id             String  @id @default(cuid())
+  organizationId String?
+  shopDomain     String  @unique // ex. ma-boutique.myshopify.com
+  name           String?
+  status         MerchantStatus @default(ACTIVE)
 
   // Seuil de confiance à partir duquel une réponse peut partir sans validation.
   // autoSendEnabled reste false en phase 1 : on ne produit que des brouillons.
@@ -44,6 +59,7 @@ model Merchant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  organization        Organization?      @relation(fields: [organizationId], references: [id])
   shopify             ShopifyConnection?
   gmail               GmailConnection?
   users               User[]
@@ -52,6 +68,8 @@ model Merchant {
   auditLogs           AuditLog[]
   suppliers           Supplier[]
   supplierEscalations SupplierEscalation[]
+
+  @@index([organizationId])
 }
 
 enum MerchantStatus {

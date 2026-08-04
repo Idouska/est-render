@@ -18,6 +18,7 @@ const state = {
   editingSupplier: null,
   team: { users: [], me: null },
   pendingCount: 0,
+  shops: [],
   catalog: { items: [], cursor: null, hasNext: false, q: '', kind: 'products', loading: false, loaded: false, timer: null },
   editingUser: null,
   refundRows: [],
@@ -189,6 +190,87 @@ function renderMe() {
 
   $('conn').innerHTML = pills.join('');
   $('mock-notice').hidden = !me.shopify.simulated;
+}
+
+/* ------------------------------------------------------- sélecteur boutique */
+
+async function loadShops() {
+  try {
+    const data = await api('/api/shops');
+    state.shops = data.shops ?? [];
+  } catch {
+    // Le sélecteur est un confort : s'il échoue, le dashboard reste utilisable
+    // sur la boutique en cours.
+    state.shops = [];
+  }
+  renderShopMenu();
+}
+
+function renderShopMenu() {
+  const canAdd = canI('configure');
+  const rows = state.shops.map(
+    (shop) => `
+      <button class="shop-item" type="button" data-shop="${esc(shop.id)}" aria-current="${
+        shop.current ? 'true' : 'false'
+      }">
+        <span class="shop-dot"></span>
+        <span style="min-width:0">
+          <b>${esc(shop.label)}</b>
+          <small>${esc(shop.shopDomain.replace('.myshopify.com', ''))} · ${
+            ROLE_LABELS[shop.role] ?? shop.role
+          }</small>
+        </span>
+      </button>`,
+  );
+
+  if (canAdd) {
+    rows.push('<hr />');
+    rows.push(
+      '<button class="shop-item shop-add" type="button" data-shop-add="1">＋ Ajouter une boutique</button>',
+    );
+  }
+
+  $('shop-menu').innerHTML = rows.join('');
+
+  // Une seule boutique et aucun droit d'en ajouter : le menu n'aurait qu'une
+  // ligne, qui ne fait rien. On masque le chevron.
+  $('shop-switch').querySelector('.brand-caret').hidden = state.shops.length < 2 && !canAdd;
+}
+
+function toggleShopMenu(open) {
+  const menu = $('shop-menu');
+  const next = open ?? menu.hidden;
+  menu.hidden = !next;
+  $('shop-switch').setAttribute('aria-expanded', String(next));
+}
+
+async function switchShop(merchantId) {
+  try {
+    await api('/api/shops/switch', { method: 'POST', body: JSON.stringify({ merchantId }) });
+    // Rechargement complet plutôt qu'un rafraîchissement d'écran : tout ce qui
+    // est en mémoire (tickets, catalogue, stats) appartient à l'ancienne
+    // boutique, et en garder une miette afficherait des données croisées.
+    location.reload();
+  } catch (error) {
+    toast(error.message ?? 'Changement de boutique impossible', true);
+  }
+}
+
+async function addShop() {
+  const input = prompt(
+    'Domaine Shopify de la boutique à ajouter\n(ex. ma-boutique.myshopify.com)',
+  );
+  if (!input) return;
+
+  try {
+    const { installUrl } = await api('/api/shops/connect', {
+      method: 'POST',
+      body: JSON.stringify({ shopDomain: input }),
+    });
+    location.href = installUrl;
+  } catch (error) {
+    toast(error.message ?? 'Ajout impossible', true);
+  }
 }
 
 /* ------------------------------------------------------------ indicateurs */
@@ -2283,6 +2365,32 @@ $('r-go').addEventListener('click', async () => {
   }
 });
 
+/* --------------------------------------------------- événements boutiques */
+
+$('shop-switch').addEventListener('click', (event) => {
+  event.stopPropagation();
+  toggleShopMenu();
+});
+
+$('shop-menu').addEventListener('click', (event) => {
+  const add = event.target.closest('[data-shop-add]');
+  if (add) {
+    toggleShopMenu(false);
+    void addShop();
+    return;
+  }
+
+  const row = event.target.closest('[data-shop]');
+  if (!row) return;
+
+  toggleShopMenu(false);
+  if (row.getAttribute('aria-current') !== 'true') void switchShop(row.dataset.shop);
+});
+
+// Un menu ouvert qui reste ouvert quand on clique ailleurs recouvre la
+// navigation et donne l'impression d'une interface bloquée.
+document.addEventListener('click', () => toggleShopMenu(false));
+
 /* ------------------------------------------------------------- démarrage */
 
 async function boot() {
@@ -2302,7 +2410,7 @@ async function boot() {
   renderClocks();
   setView('tickets');
 
-  await Promise.all([loadMetrics(), loadQueue(), loadAudit(), loadSupplier()]);
+  await Promise.all([loadMetrics(), loadQueue(), loadAudit(), loadSupplier(), loadShops()]);
 
   if (state.tickets.length > 0) await selectTicket(state.tickets[0].id);
 }

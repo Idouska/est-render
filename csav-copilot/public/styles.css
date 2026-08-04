@@ -162,7 +162,69 @@ body {
 
 @media (max-width: 1080px) { .side { position: static; max-height: none; } }
 
-.brand { display: flex; align-items: center; gap: 11px; padding: 2px 4px; }
+.brand-wrap { position: relative; }
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 6px;
+  width: 100%;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+
+.brand:hover { background: var(--surface-2); border-color: var(--line); }
+.brand > div { min-width: 0; flex: 1; }
+.brand-caret { color: var(--ink-mute); font-size: 11px; flex: none; }
+
+/* Le sélecteur de boutique se superpose à la navigation plutôt que de la
+   pousser vers le bas : la liste peut être longue. */
+.shop-menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg, 0 18px 40px rgb(0 0 0 / 18%));
+  padding: 5px;
+  display: grid;
+  gap: 2px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.shop-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 9px;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+
+.shop-item:hover { background: var(--surface-2); }
+.shop-item[aria-current='true'] { background: var(--accent-soft, var(--surface-2)); font-weight: 600; }
+.shop-item b { display: block; font-size: 13px; font-weight: inherit; }
+.shop-item small { display: block; font-size: 11px; color: var(--ink-mute); font-family: var(--font-mono); }
+.shop-item .shop-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
+.shop-item[aria-current='false'] .shop-dot { background: var(--line-strong, var(--line)); }
+.shop-menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 2px; }
+.shop-add { color: var(--accent-strong); font-weight: 600; }
 
 .brand-mark {
   width: 38px;
