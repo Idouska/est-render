@@ -7,6 +7,7 @@ import { requirePermission, requireSession } from '../plugins/auth.ts';
 import { sendDraft, updateDraftBody } from '../services/gmail/drafts.ts';
 import { sendPlainEmail } from '../services/gmail/send.ts';
 import { getShopifyClient, ShopifyError } from '../services/shopify/client.ts';
+import { listVariants } from '../services/shopify/catalog.ts';
 import { getOrderById, quoteSearchValue, searchOrders } from '../services/shopify/orders.ts';
 
 const TICKET_STATUSES = [
@@ -249,6 +250,58 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
       return reply.send({ assignedTo: updated.assignedTo });
     },
   );
+
+  /**
+   * Remplacements possibles pour la commande rattachée au ticket.
+   *
+   * Croisement ticket → commande → catalogue : c'est la question que l'agent
+   * se pose devant une rupture, et la seule réponse utile est « quoi d'autre,
+   * en stock, tout de suite ».
+   */
+  app.get<{ Params: { id: string } }>('/api/tickets/:id/substitutions', async (request, reply) => {
+    const { merchantId } = request.session;
+
+    const ticket = await prisma.ticket.findFirst({
+      where: { id: request.params.id, merchantId },
+      select: { shopifyOrderId: true },
+    });
+
+    if (!ticket) return reply.code(404).send({ error: 'Ticket introuvable' });
+    if (!ticket.shopifyOrderId) {
+      return reply.send({
+        options: [],
+        reason: 'Aucune commande rattachée : impossible de savoir quoi remplacer.',
+      });
+    }
+
+    try {
+      const shopify = await getShopifyClient(merchantId);
+      const order = await getOrderById(shopify, ticket.shopifyOrderId);
+
+      const titles = [...new Set(order?.lineItems.map((line) => line.title) ?? [])];
+      if (titles.length === 0) {
+        return reply.send({ options: [], reason: 'Cette commande ne contient aucun article.' });
+      }
+
+      // Un seul appel plutôt qu'un par article : les titres partagent le plus
+      // souvent la même gamme, et Shopify limite le débit des requêtes.
+      const query = titles.map((title) => `title:*${title.split(/\s+/)[0]}*`).join(' OR ');
+      const options = await listVariants(shopify, { query });
+
+      return reply.send({
+        options: options.filter((option) => option.availableForSale),
+        orderedTitles: titles,
+      });
+    } catch (error) {
+      request.log.warn({ err: error }, 'Recherche de substitution en échec');
+      return reply.code(502).send({
+        error:
+          error instanceof ShopifyError
+            ? 'Catalogue indisponible : la boutique Shopify n’a pas répondu.'
+            : 'Catalogue indisponible.',
+      });
+    }
+  });
 
   app.get('/api/metrics', async (request, reply) => {
     const { merchantId } = request.session;

@@ -141,8 +141,6 @@ body {
   min-height: 100vh;
 }
 
-@media (max-width: 1080px) { .app { grid-template-columns: 1fr; } }
-
 /* ----------------------------------------------------------- sidebar --- */
 
 .side {
@@ -160,7 +158,6 @@ body {
   overflow-y: auto;
 }
 
-@media (max-width: 1080px) { .side { position: static; max-height: none; } }
 
 .brand-wrap { position: relative; }
 
@@ -835,6 +832,79 @@ body {
 }
 
 .d-assign select:disabled { opacity: 0.6; }
+
+/* ------------------------------------------------ actions contextuelles --- */
+
+.actbar {
+  padding: 12px 15px;
+  border-top: 1px solid var(--line-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.actbar-row { display: grid; grid-auto-flow: column; gap: 7px; grid-auto-columns: 1fr; }
+
+@media (max-width: 700px) { .actbar-row { grid-auto-flow: row; } }
+
+.actbtn {
+  appearance: none;
+  font: inherit;
+  font-size: 13px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  text-align: center;
+}
+
+.actbtn:hover:not(:disabled) { border-color: var(--ink-mute); }
+.actbtn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.actbtn.on {
+  background: linear-gradient(150deg, var(--accent), var(--accent-strong));
+  border-color: transparent;
+  color: var(--on-accent);
+  font-weight: 600;
+  box-shadow: 0 4px 14px -6px var(--accent);
+}
+
+.actbar-note { margin: 0; font-size: 12.5px; color: var(--ink-mute); }
+
+/* Propositions de remplacement : la vignette et le stock priment, ce sont les
+   deux choses que l'agent regarde avant de s'engager auprès du client. */
+.subs { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; }
+
+.sub {
+  appearance: none;
+  font: inherit;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: inherit;
+  cursor: pointer;
+}
+
+.sub:hover { border-color: var(--accent); background: var(--accent-soft); }
+.sub img, .sub-blank {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-sm);
+  object-fit: cover;
+  background: var(--inset);
+  flex: none;
+}
+
+.sub b { display: block; font-size: 13px; font-weight: 600; }
+.sub small { display: block; font-size: 11.5px; color: var(--ink-mute); }
+.sub-stock { font-family: var(--font-mono); color: var(--ok) !important; }
 .queue-foot .tag-order { margin-left: 0; }
 
 /* -------------------------------------------------------------- fiche --- */
@@ -1447,4 +1517,97 @@ body {
   object-fit: cover;
   flex: none;
   border: 1px solid var(--line);
+}
+
+/* ------------------------------------------------------------ responsive ---
+
+   Sous 1080 px la barre latérale devient un tiroir : empilée au-dessus du
+   contenu, elle occupait un écran entier avant d'arriver au premier ticket.
+   Le tiroir garde la navigation à un geste sans la faire payer en hauteur. */
+
+.scrim { display: none; }
+.navtoggle { display: none; }
+
+@media (max-width: 1080px) {
+  .app { grid-template-columns: 1fr; padding: 8px; gap: 10px; }
+
+  .side {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(280px, 84vw);
+    z-index: 60;
+    border-radius: 0;
+    border-left: 0;
+    border-top: 0;
+    border-bottom: 0;
+    max-height: none;
+    transform: translateX(-101%);
+    transition: transform 0.2s ease;
+  }
+
+  .app.nav-open .side { transform: none; box-shadow: var(--shadow-pop); }
+
+  .scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 55;
+    background: rgb(10 10 20 / 45%);
+  }
+
+  .navtoggle {
+    display: inline-grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    flex: none;
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    background: var(--surface);
+    color: var(--ink);
+    cursor: pointer;
+  }
+
+  .navtoggle svg { width: 18px; height: 18px; }
+
+  .head { align-items: center; gap: 10px; }
+  /* Sans cette largeur, le titre se retrouve poussé à droite par le bouton de
+     navigation et la ligne se lit à l'envers. */
+  .head-main { flex: 1 1 auto; align-items: flex-start; }
+  .head h1 { font-size: 21px; }
+  .head-acts { width: 100%; align-items: stretch; }
+
+  /* Les horloges défilent latéralement plutôt que de repousser le titre : sur
+     un téléphone, cinq fuseaux ne tiennent pas et n'ont pas à disparaître. */
+  .clocks { overflow-x: auto; scrollbar-width: none; }
+  .clocks::-webkit-scrollbar { display: none; }
+  .conn { justify-content: flex-start; }
+}
+
+@media (max-width: 700px) {
+  .app { padding: 6px; }
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .kpi { padding: 11px 12px; }
+  .kpi-value { font-size: 21px; }
+  .qbar { padding: 9px 10px; }
+  .qbar-selects { gap: 8px; }
+  .qbar-selects label { flex: 1 1 46%; }
+  .qbar-selects select { flex: 1; min-width: 0; }
+  .qbar-count { margin-left: 0; width: 100%; }
+  .queue-list { max-height: none; }
+  .card-body, .panel-head { padding-left: 12px; padding-right: 12px; }
+  .head h1 { font-size: 19px; }
+
+  /* Une modale plein écran : centrée, elle laissait le clavier virtuel
+     recouvrir le champ en cours de saisie. */
+  /* Modale plein écran : centrée, elle laissait le clavier virtuel recouvrir
+     le champ en cours de saisie. */
+  .modal { width: 100%; max-width: none; max-height: 100dvh; border-radius: 0; border: 0; }
+  .modal-wide { width: 100%; }
+  .modal-foot { position: sticky; bottom: 0; }
+
+  /* 16 px : en dessous, Safari iOS zoome à la mise au point. */
+  .modal input, .modal textarea, .modal select, .qbar input[type="search"] { font-size: 16px; }
 }

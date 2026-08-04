@@ -446,6 +446,146 @@ async function loadQueue() {
   });
 }
 
+/* -------------------------------------------------- actions contextuelles */
+
+/*
+ * Ce que l'agent peut faire dépend de ce que le client demande.
+ *
+ * Une barre d'actions unique et générique oblige à relire le ticket pour
+ * choisir ; ici l'action la plus probable est déjà en tête, et les autres
+ * restent accessibles. L'ordre compte plus que la liste.
+ */
+const ACTIONS_BY_INTENT = {
+  WISMO: ['tracking', 'client', 'supplier'],
+  RETURN: ['client', 'supplier', 'refund'],
+  DISPUTE: ['refund', 'client', 'supplier'],
+  REFUND: ['refund', 'client'],
+  PRODUCT_QUESTION: ['substitute', 'client', 'supplier'],
+  POSITIVE: ['client'],
+  OTHER: ['client', 'supplier', 'refund'],
+};
+
+const ACTION_META = {
+  substitute: { label: 'Proposer un remplacement', note: 'Le client garde sa commande, on remplace la référence indisponible.' },
+  refund: { label: 'Rembourser…', note: 'Irréversible : l’argent repart chez le client immédiatement.' },
+  client: { label: 'Écrire au client', note: 'Message direct, hors brouillon proposé.' },
+  supplier: { label: 'Écrire au fournisseur', note: 'Ouvre une escalade suivie, avec relance automatique.' },
+  tracking: { label: 'Voir le suivi', note: 'Position du colis d’après le transporteur.' },
+};
+
+function renderActionBar() {
+  const { ticket } = state.detail;
+  const keys = ACTIONS_BY_INTENT[ticket.intent] ?? ACTIONS_BY_INTENT.OTHER;
+
+  $('actbar').hidden = false;
+  $('subs').hidden = true;
+
+  $('actbar-row').innerHTML = keys
+    .map((key, index) => {
+      // Une action impossible reste visible mais désactivée, avec sa raison en
+      // infobulle : la faire disparaître laisserait croire qu'elle n'existe pas.
+      const blocked = actionBlockedReason(key, ticket);
+      return `<button class="actbtn${index === 0 && !blocked ? ' on' : ''}" data-act="${key}"${
+        blocked ? ` disabled title="${esc(blocked)}"` : ''
+      }>${esc(ACTION_META[key].label)}</button>`;
+    })
+    .join('');
+
+  const first = keys.find((key) => !actionBlockedReason(key, ticket));
+  $('actbar-note').textContent = first ? ACTION_META[first].note : '';
+}
+
+function actionBlockedReason(key, ticket) {
+  if (key === 'refund') {
+    if (!canI('refund')) return 'Seuls le propriétaire et les superviseurs peuvent rembourser.';
+    if (!ticket.shopifyOrderId) return 'Aucune commande rattachée à ce ticket.';
+  }
+  if ((key === 'substitute' || key === 'tracking') && !ticket.shopifyOrderId) {
+    return 'Aucune commande rattachée à ce ticket.';
+  }
+  if (key === 'supplier' && !canI('escalate')) return 'Votre rôle ne permet pas d’escalader.';
+  if (key === 'client' && !canI('reply')) return 'Vous êtes en lecture seule.';
+  return null;
+}
+
+$('actbar-row').addEventListener('click', async (event) => {
+  const button = event.target.closest('.actbtn');
+  if (!button || button.disabled) return;
+
+  const key = button.dataset.act;
+  const { ticket } = state.detail;
+
+  $('actbar-row')
+    .querySelectorAll('.actbtn')
+    .forEach((other) => other.classList.toggle('on', other === button));
+  $('actbar-note').textContent = ACTION_META[key].note;
+  $('subs').hidden = true;
+
+  if (key === 'refund') return $('btn-refund').click();
+  if (key === 'client') return openMail(ticket.customerEmail, `Re: ${ticket.subject ?? ''}`);
+  if (key === 'supplier') return setView('suppliers');
+  if (key === 'tracking') return setView('tracking');
+  if (key === 'substitute') return loadSubstitutions(ticket.id);
+});
+
+async function loadSubstitutions(ticketId) {
+  const box = $('subs');
+  box.hidden = false;
+  box.innerHTML = '<p class="empty">Recherche des références en stock…</p>';
+
+  let data;
+  try {
+    data = await api(`/api/tickets/${ticketId}/substitutions`);
+  } catch (error) {
+    box.innerHTML = `<p class="empty">${esc(error.message)}</p>`;
+    return;
+  }
+
+  if (!data.options?.length) {
+    box.innerHTML = `<p class="empty">${esc(
+      data.reason ?? 'Aucune référence équivalente en stock pour le moment.',
+    )}</p>`;
+    return;
+  }
+
+  box.innerHTML = data.options
+    .slice(0, 6)
+    .map(
+      (option) => `
+      <button class="sub" data-sub="${esc(option.id)}"
+        data-label="${esc(
+          `${option.productTitle}${option.variantTitle ? ` — ${option.variantTitle}` : ''}`,
+        )}">
+        ${
+          option.image
+            ? `<img src="${esc(option.image)}" alt="" loading="lazy" />`
+            : '<span class="sub-blank"></span>'
+        }
+        <span style="min-width:0">
+          <b>${esc(option.productTitle)}</b>
+          <small>${esc(option.variantTitle ?? '—')}</small>
+          <small class="sub-stock">${
+            option.inventoryQuantity ?? 0
+          } en stock</small>
+        </span>
+      </button>`,
+    )
+    .join('');
+
+  box.querySelectorAll('.sub').forEach((button) => {
+    button.addEventListener('click', () => {
+      // On insère une phrase dans le brouillon plutôt que d'envoyer : le
+      // remplacement d'un article se propose, il ne s'impose pas.
+      const body = $('d-body');
+      const sentence = `Nous pouvons vous proposer en remplacement : ${button.dataset.label}, disponible immédiatement. Confirmez-vous ce choix ?`;
+
+      body.value = body.value.trim() ? `${body.value.trim()}\n\n${sentence}` : sentence;
+      body.focus();
+      toast('Proposition ajoutée au brouillon — à relire avant envoi.');
+    });
+  });
+}
+
 /* ------------------------------------------------- barre de filtres file */
 
 const INTENT_LABELS = {
@@ -639,6 +779,8 @@ function renderDetail() {
       toast(error.message, true);
     }
   });
+
+  renderActionBar();
 
   $('d-messages').innerHTML = ticket.messages
     .map(
@@ -2106,6 +2248,7 @@ async function openOrderSheet(id) {
     $('d-messages').innerHTML =
       '<p class="empty">Consultation depuis le carnet de commandes — aucun échange rattaché.</p>';
     $('draft-zone').hidden = true;
+    $('actbar').hidden = true;
     $('no-draft').hidden = false;
     $('no-draft-text').textContent =
       'Ouvrez un ticket pour rédiger une réponse. Le remboursement reste accessible depuis un ticket.';
@@ -2702,6 +2845,30 @@ $('r-go').addEventListener('click', async () => {
     $('r-go').disabled = false;
     toast(error.message, true);
   }
+});
+
+/* ------------------------------------------------------ tiroir de navigation */
+
+function toggleNav(open) {
+  const grid = $('app-grid');
+  const next = open ?? !grid.classList.contains('nav-open');
+
+  grid.classList.toggle('nav-open', next);
+  $('scrim').hidden = !next;
+  $('navtoggle').setAttribute('aria-expanded', String(next));
+}
+
+$('navtoggle').addEventListener('click', () => toggleNav());
+$('scrim').addEventListener('click', () => toggleNav(false));
+
+// Naviguer ferme le tiroir : le laisser ouvert masquerait l'écran qu'on vient
+// justement de demander.
+$('nav').addEventListener('click', (event) => {
+  if (event.target.closest('.nav-item')) toggleNav(false);
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') toggleNav(false);
 });
 
 /* --------------------------------------------------- événements boutiques */

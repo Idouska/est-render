@@ -291,3 +291,101 @@ export async function listDisputes(
     initiatedAt: dispute.initiatedAt,
   }));
 }
+
+/* ------------------------------------------------------------- variantes --- */
+
+/**
+ * Variante disponible à l'échange.
+ *
+ * Le stock est le champ décisif : proposer un remplacement en rupture à un
+ * client qui attend déjà depuis huit jours transforme un incident en litige.
+ */
+export interface VariantOption {
+  id: string;
+  productId: string;
+  productTitle: string;
+  variantTitle: string | null;
+  sku: string | null;
+  image: string | null;
+  price: string | null;
+  currency: string | null;
+  inventoryQuantity: number | null;
+  availableForSale: boolean;
+}
+
+interface RawVariant {
+  id: string;
+  title: string | null;
+  sku: string | null;
+  price: string | null;
+  inventoryQuantity: number | null;
+  availableForSale: boolean;
+  image: { url: string } | null;
+  product: {
+    id: string;
+    title: string;
+    featuredMedia: { preview: { image: { url: string } | null } | null } | null;
+  };
+}
+
+/**
+ * Variantes candidates pour un remplacement, les mieux pourvues d'abord.
+ *
+ * La recherche porte sur le titre du produit commandé : c'est le seul lien
+ * exploitable, une ligne de commande Shopify ne conserve pas l'identifiant de
+ * la variante d'origine dans ce que nous lisons.
+ */
+export async function listVariants(
+  client: ShopifyClient,
+  options: { query: string; limit?: number },
+): Promise<VariantOption[]> {
+  const { query, limit = 20 } = options;
+  if (!query.trim()) return [];
+
+  const data = await client.request<{ productVariants: { nodes: RawVariant[] } }>(
+    /* GraphQL */ `
+      query ListVariants($query: String, $limit: Int!) {
+        productVariants(first: $limit, query: $query) {
+          nodes {
+            id
+            title
+            sku
+            price
+            inventoryQuantity
+            availableForSale
+            image {
+              url
+            }
+            product {
+              id
+              title
+              featuredMedia {
+                preview {
+                  image {
+                    url
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    `,
+    { query, limit },
+  );
+
+  return data.productVariants.nodes
+    .map((variant) => ({
+      id: variant.id,
+      productId: variant.product.id,
+      productTitle: variant.product.title,
+      variantTitle: variant.title,
+      sku: variant.sku,
+      image: variant.image?.url ?? variant.product.featuredMedia?.preview?.image?.url ?? null,
+      price: variant.price,
+      currency: null,
+      inventoryQuantity: variant.inventoryQuantity,
+      availableForSale: variant.availableForSale,
+    }))
+    .sort((a, b) => (b.inventoryQuantity ?? 0) - (a.inventoryQuantity ?? 0));
+}
