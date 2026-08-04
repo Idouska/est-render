@@ -67,12 +67,22 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
         retentionDays: merchant.retentionDays,
       },
       connections: {
-        shopify: {
-          connected: Boolean(merchant.shopify && !merchant.shopify.uninstalledAt),
-          simulated: env.SHOPIFY_MOCK,
-          scopes: merchant.shopify?.scopes?.split(',').filter(Boolean) ?? [],
-          installedAt: merchant.shopify?.installedAt ?? null,
-        },
+        shopify: (() => {
+          const granted = merchant.shopify?.scopes?.split(',').map((s) => s.trim()).filter(Boolean) ?? [];
+
+          return {
+            connected: Boolean(merchant.shopify && !merchant.shopify.uninstalledAt),
+            simulated: env.SHOPIFY_MOCK,
+            scopes: granted,
+            // Le jeton conserve les autorisations obtenues le jour de
+            // l'installation : élargir la liste demandée ne change rien tant que
+            // l'application n'a pas été réinstallée. Sans cet écart affiché, la
+            // panne se manifeste seulement par un « accès refusé » sur un écran.
+            requiredScopes: env.SHOPIFY_SCOPES,
+            missingScopes: env.SHOPIFY_SCOPES.filter((scope) => !granted.includes(scope)),
+            installedAt: merchant.shopify?.installedAt ?? null,
+          };
+        })(),
         gmail: {
           connected: Boolean(merchant.gmail),
           simulated: env.GMAIL_MOCK,

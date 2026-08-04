@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.ts';
 import { requireSession } from '../plugins/auth.ts';
-import { getShopifyClient, ShopifyError } from '../services/shopify/client.ts';
+import { getShopifyClient, ShopifyError, ShopifyScopeError } from '../services/shopify/client.ts';
 import { listCollections, listDisputes, listProducts } from '../services/shopify/catalog.ts';
 import { listCustomers } from '../services/shopify/customers.ts';
 import { getOrderById, listOrders, quoteSearchValue } from '../services/shopify/orders.ts';
@@ -48,6 +48,18 @@ function toCustomerQuery(raw: string | undefined): string {
 
 /** Message lisible pour une boutique déconnectée ou une erreur Shopify. */
 function describeShopifyError(error: unknown): { status: number; message: string } {
+  if (error instanceof ShopifyScopeError) {
+    const needed = error.requiredAccess ? `« ${error.requiredAccess} »` : 'une autorisation absente';
+    return {
+      status: 409,
+      message:
+        `L’installation Shopify actuelle n’accorde pas ${needed}. Élargir la liste des ` +
+        `autorisations ne suffit pas : le jeton d’accès garde celles obtenues le jour de ` +
+        `l’installation. Réinstallez l’application depuis les Réglages pour les reprendre. ` +
+        `Autorisations actuellement accordées : ${error.grantedScopes.join(', ') || 'aucune'}.`,
+    };
+  }
+
   if (error instanceof ShopifyError) {
     if (!error.status) {
       return {

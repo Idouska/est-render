@@ -17,6 +17,26 @@ export class ShopifyError extends Error {
   }
 }
 
+/**
+ * Autorisation manquante sur le token installé.
+ *
+ * Shopify répond 200 avec `ACCESS_DENIED` dans `errors[].extensions` — un
+ * succès HTTP qui masque un problème d'installation. Sans type dédié, le
+ * message remonte tel quel (« Access denied for products field ») et n'indique
+ * pas la seule action utile : réinstaller l'application.
+ */
+export class ShopifyScopeError extends ShopifyError {
+  readonly requiredAccess: string | null;
+  readonly grantedScopes: string[];
+
+  constructor(message: string, requiredAccess: string | null, grantedScopes: string[]) {
+    super(message, 200);
+    this.name = 'ShopifyScopeError';
+    this.requiredAccess = requiredAccess;
+    this.grantedScopes = grantedScopes;
+  }
+}
+
 export interface ShopifyClient {
   shopDomain: string;
   request<T>(query: string, variables?: Record<string, unknown>): Promise<T>;
@@ -46,6 +66,10 @@ export async function getShopifyClient(merchantId: string): Promise<ShopifyClien
   }
 
   const accessToken = decryptSecret(connection.accessTokenEnc);
+  // Portées réellement accordées lors de l'installation : les citer dans
+  // l'erreur évite de chercher côté code une autorisation qui manque côté
+  // token — le cas où `SHOPIFY_SCOPES` a été élargi sans réinstaller.
+  const grantedScopes = connection.scopes.split(',').map((scope) => scope.trim()).filter(Boolean);
   const shopDomain = connection.merchant.shopDomain;
   const endpoint = `https://${shopDomain}/admin/api/${env.SHOPIFY_API_VERSION}/graphql.json`;
 
@@ -71,8 +95,24 @@ export async function getShopifyClient(merchantId: string): Promise<ShopifyClien
 
       const payload = (await response.json()) as {
         data?: T;
-        errors?: Array<{ message: string }>;
+        errors?: Array<{
+          message: string;
+          extensions?: { code?: string; requiredAccess?: string };
+        }>;
       };
+
+      const denied = payload.errors?.find(
+        (error) =>
+          error.extensions?.code === 'ACCESS_DENIED' || /access denied/i.test(error.message),
+      );
+
+      if (denied) {
+        throw new ShopifyScopeError(
+          denied.message,
+          denied.extensions?.requiredAccess ?? null,
+          grantedScopes,
+        );
+      }
 
       if (payload.errors?.length) {
         throw new ShopifyError(

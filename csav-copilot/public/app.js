@@ -1929,6 +1929,11 @@ function renderConnection(el, { label, connected, simulated, detail, actions }) 
 function renderSettings() {
   const { merchant, connections } = state.settings;
 
+  // Écart entre les autorisations demandées et celles réellement accordées :
+  // c'est ce qui provoque un « accès refusé » sur le catalogue alors que la
+  // boutique est bien connectée.
+  const missingScopes = connections.shopify.missingScopes ?? [];
+
   renderConnection($('set-shopify'), {
     label: 'Shopify',
     connected: connections.shopify.connected,
@@ -1936,14 +1941,25 @@ function renderSettings() {
     detail: connections.shopify.connected
       ? `Boutique <code>${esc(merchant.shopDomain)}</code> · autorisations : ${
           connections.shopify.scopes.map(esc).join(', ') || '—'
+        }${
+          missingScopes.length
+            ? ` · <b class="set-alert">manquantes : ${missingScopes
+                .map(esc)
+                .join(', ')}</b> — réautorisez pour les obtenir.`
+            : ''
         }`
       : "L'accès Shopify vient de l'installation de l'application depuis votre administration.",
     // Se déconnecter de Shopify, c'est désinstaller l'app côté Shopify : le
     // faire depuis ici laisserait les deux côtés en désaccord.
     actions: connections.shopify.connected
-      ? `<a class="btn btn-small" href="https://${esc(
+      ? `<a class="btn btn-small${
+          missingScopes.length ? ' btn-primary' : ''
+        }" href="/auth/shopify?shop=${encodeURIComponent(
           merchant.shopDomain,
-        )}/admin/settings/apps" target="_blank" rel="noopener">Gérer sur Shopify</a>`
+        )}">Réautoriser</a>
+         <a class="btn btn-small" href="https://${esc(
+           merchant.shopDomain,
+         )}/admin/settings/apps" target="_blank" rel="noopener">Gérer sur Shopify</a>`
       : `<a class="btn btn-small btn-primary" href="/auth/shopify?shop=${encodeURIComponent(
           merchant.shopDomain,
         )}">Connecter</a>`,
