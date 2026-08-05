@@ -1781,9 +1781,14 @@ function renderTeam() {
               : '<span class="sub">jamais</span>'
         }</td>
         <td>${
-          user.active
-            ? '<span class="tag tag-status st-CLOSED">Actif</span>'
-            : '<span class="tag tag-status st-NEW">Désactivé</span>'
+          // « Actif » se lit comme « utilise l'outil » alors qu'il ne veut dire
+          // que « pas désactivé ». Une invitation jamais honorée doit se voir :
+          // c'est le symptôme d'un mail qui n'est pas arrivé.
+          !user.active
+            ? '<span class="tag tag-status st-NEW">Désactivé</span>'
+            : user.lastLoginAt
+              ? '<span class="tag tag-status st-CLOSED">Actif</span>'
+              : '<span class="tag tag-status st-NEEDS_REVIEW">Invité</span>'
         }</td>
         <td>${owner ? '<button class="btn btn-small">Modifier</button>' : ''}</td>
       </tr>`;
@@ -1814,7 +1819,11 @@ function openTeamForm(id) {
 
   $('teammodal-title').textContent = user ? (user.name ?? user.email) : "Inviter quelqu'un";
   $('team-f-email').value = user?.email ?? '';
-  $('team-f-email').disabled = Boolean(user); // l'adresse identifie le compte
+  // Le champ d'invitation ne sert qu'à la création ; sur un compte existant,
+  // c'est le champ modifiable en dessous qui porte l'adresse.
+  $('team-f-email').closest('.field').hidden = Boolean(user);
+  $('team-f-email-row').hidden = !user;
+  $('team-f-email-edit').value = user?.email ?? '';
   $('team-f-name').value = user?.name ?? '';
   $('team-f-role').value = user?.role ?? 'AGENT';
   $('team-f-active').checked = user ? user.active : true;
@@ -1853,7 +1862,10 @@ $('team-f-save').addEventListener('click', async () => {
 
   try {
     if (id) {
-      const payload = { name: $('team-f-name').value.trim() || null };
+      const payload = {
+        name: $('team-f-name').value.trim() || null,
+        email: $('team-f-email-edit').value.trim(),
+      };
       // Champs verrouillés sur soi-même : ne pas les envoyer évite un 409
       // inutile côté serveur.
       if (!$('team-f-role').disabled) {
@@ -3123,9 +3135,11 @@ $('customers-q').addEventListener('input', (event) => {
  * d'où les liens plutôt que des `fetch`. Seule la déconnexion Gmail est un
  * POST, parce qu'elle détruit des données.
  */
-function renderConnection(el, { label, connected, simulated, detail, actions }) {
+function renderConnection(el, { label, connected, simulated, detail, actions, status: given }) {
   const dot = simulated ? 'warn' : connected ? '' : 'off';
-  const status = simulated ? 'simulé' : connected ? 'connecté' : 'non connecté';
+  // L'état est fourni par l'appelant quand l'accord grammatical l'exige :
+  // « Boîtes mail connecté » se lisait mal, et le pluriel dépend du nombre.
+  const status = given ?? (simulated ? 'simulé' : connected ? 'connecté' : 'non connecté');
 
   // En mode simulé, aucune autorisation réelle n'est en jeu : proposer de
   // connecter ou de déconnecter promettrait un effet qui n'aura pas lieu.
@@ -3216,7 +3230,12 @@ function renderSettings() {
     : 'Aucune boîte connectée — rien n’est ingéré.';
 
   renderConnection($('set-gmail'), {
-    label: 'Boîtes mail',
+    label: boxes.length > 1 ? 'Boîtes mail' : 'Boîte mail',
+    status: gmail.simulated
+      ? 'simulée'
+      : boxes.length === 0
+        ? 'aucune'
+        : `${boxes.length} connectée${boxes.length > 1 ? 's' : ''}`,
     connected: gmail.connected,
     simulated: gmail.simulated,
     detail: gmailDetail,
@@ -3276,6 +3295,27 @@ async function openSettings() {
   renderSettings();
 }
 
+/* Repère de modification : sans lui, on ne sait pas si l'on a déjà enregistré,
+   et l'on quitte l'écran en perdant sa saisie. */
+const SETTINGS_FIELDS = [
+  'set-brand',
+  'set-logo',
+  'set-tracking',
+  'set-autosend',
+  'set-threshold',
+  'set-retention',
+];
+
+function markSettingsDirty() {
+  $('set-dirty').textContent = 'Modifications non enregistrées.';
+  $('set-dirty').classList.add('dirty');
+}
+
+for (const id of SETTINGS_FIELDS) {
+  $(id).addEventListener('input', markSettingsDirty);
+  $(id).addEventListener('change', markSettingsDirty);
+}
+
 $('set-threshold').addEventListener('input', (event) => {
   $('set-threshold-echo').textContent = `${Math.round(Number(event.target.value) * 100)} %`;
 });
@@ -3300,6 +3340,8 @@ $('set-save').addEventListener('click', async () => {
     renderMe();
     await Promise.all([loadMetrics(), loadAudit()]);
 
+    $('set-dirty').textContent = 'Réglages enregistrés.';
+    $('set-dirty').classList.remove('dirty');
     toast('Réglages enregistrés.');
   } catch (error) {
     toast(error.message, true);

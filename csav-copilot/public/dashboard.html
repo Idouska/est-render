@@ -623,11 +623,13 @@
                   confidentialité.
                 </small>
               </div>
-              <div class="actions">
-                <button class="btn btn-primary" id="set-save">Enregistrer</button>
-              </div>
             </div>
           </div>
+        </div>
+
+        <div class="set-bar">
+          <span class="hint" id="set-dirty">Aucune modification en attente.</span>
+          <button class="btn btn-primary" id="set-save">Enregistrer les réglages</button>
         </div>
       </section>
 
@@ -721,6 +723,11 @@
             <label for="team-f-email">Adresse email</label>
             <input type="email" id="team-f-email" placeholder="prenom@boutique.fr" />
           </div>
+          <div class="field" id="team-f-email-row" hidden>
+            <label for="team-f-email-edit">Adresse email</label>
+            <input type="email" id="team-f-email-edit" />
+            <small>Le lien de connexion part à cette adresse.</small>
+          </div>
           <div class="field">
             <label for="team-f-name">Nom (facultatif)</label>
             <input type="text" id="team-f-name" placeholder="Claire Mercier" />
@@ -728,9 +735,9 @@
           <div class="field">
             <label for="team-f-role">Rôle</label>
             <select id="team-f-role">
-              <option value="AGENT">Agent — répond aux clients, escalade</option>
-              <option value="SUPERVISOR">Superviseur — rembourse et règle</option>
               <option value="OWNER">Propriétaire — tout, y compris l'équipe</option>
+              <option value="SUPERVISOR">Superviseur — rembourse et règle</option>
+              <option value="AGENT">Agent — répond aux clients, escalade</option>
               <option value="VIEWER">Lecture seule — consulte sans agir</option>
             </select>
             <small id="team-f-perms"></small>

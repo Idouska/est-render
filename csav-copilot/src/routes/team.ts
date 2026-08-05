@@ -24,6 +24,13 @@ const inviteBody = z.object({
 });
 
 const updateBody = z.object({
+  /**
+   * L'installation Shopify crée un compte propriétaire sur une adresse
+   * fabriquée (`owner@boutique.myshopify.com`), qui n'existe pas. Sans
+   * possibilité de la corriger, le propriétaire ne peut jamais recevoir de
+   * lien de connexion et dépend du seul cookie de son navigateur.
+   */
+  email: z.string().email().max(200).optional(),
   name: z.string().min(1).max(120).nullish(),
   role: z.enum(['OWNER', 'SUPERVISOR', 'AGENT', 'VIEWER']).optional(),
   active: z.boolean().optional(),
@@ -293,9 +300,21 @@ export async function teamRoutes(app: FastifyInstance): Promise<void> {
           }
         }
 
+        const email = parsed.data.email?.trim().toLowerCase();
+
+        if (email && email !== target.email) {
+          const taken = await prisma.user.findFirst({
+            where: { merchantId, email, id: { not: target.id } },
+            select: { id: true },
+          });
+          if (taken) {
+            return reply.code(409).send({ error: 'Cette adresse est déjà utilisée dans l’équipe.' });
+          }
+        }
+
         const user = await prisma.user.update({
           where: { id: target.id },
-          data: parsed.data,
+          data: { ...parsed.data, ...(email ? { email } : {}) },
         });
 
         await recordAudit({
