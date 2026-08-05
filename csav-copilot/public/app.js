@@ -2777,14 +2777,25 @@ function renderClocks() {
     const hour = Number(
       now.toLocaleString('en-GB', { timeZone: zone, hour: '2-digit', hour12: false }),
     );
+    const minute = now.getMinutes();
     const open = hour >= 9 && hour < 18;
+
+    // Vrai cadran : les aiguilles portent l'heure locale. Un chiffre se lit,
+    // une aiguille se reconnaît — à cinq fuseaux côte à côte, la silhouette
+    // des cadrans dit « matin là-bas, soir ici » avant toute lecture.
+    const hourAngle = ((hour % 12) + minute / 60) * 30;
+    const minuteAngle = minute * 6;
 
     return `<div class="clock clock-${code}${open ? '' : ' shut'}" title="${esc(city)} — ${
       open ? 'heures ouvrées' : 'hors horaires (9 h – 18 h locales)'
     }">
+      <span class="dial" aria-hidden="true">
+        <i class="dial-h" style="transform: rotate(${hourAngle}deg)"></i>
+        <i class="dial-m" style="transform: rotate(${minuteAngle}deg)"></i>
+      </span>
       <div>
         <b>${esc(city)}</b>
-        <span>${time}</span>
+        <span class="clock-time">${time}</span>
       </div>
     </div>`;
   }).join('');
@@ -2987,7 +2998,15 @@ function setView(view) {
     if (el) el.hidden = name !== view;
   }
 
-  $('view-title').textContent = meta.title;
+  // L'animation d'entrée ne joue qu'une fois par élément : pour qu'elle
+  // accompagne chaque changement d'écran, on la relance en la retirant le
+  // temps d'un cadre. Sans le `void offsetWidth`, le navigateur fusionne les
+  // deux écritures et rien ne bouge.
+  const title = $('view-title');
+  title.style.animation = 'none';
+  void title.offsetWidth;
+  title.style.animation = '';
+  title.textContent = meta.title;
   $('crumb').innerHTML = `${ico(meta.icon)} ${esc(meta.group)}`;
 
   // Les indicateurs et les filtres décrivent la file : les laisser ailleurs

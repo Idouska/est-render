@@ -1568,7 +1568,7 @@ body {
   line-height: 1.5;
 }
 
-.clock span {
+.clock .clock-time {
   display: block;
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
@@ -1580,7 +1580,7 @@ body {
 }
 
 /* Fermé : l'heure recule au second plan, la ville reste lisible. */
-.clock.shut span { color: var(--ink-mute); font-weight: 500; }
+.clock.shut .clock-time { color: var(--ink-mute); font-weight: 500; }
 .clock.shut::before { opacity: 0.4; }
 
 .clock-ma { --ck-flag: linear-gradient(180deg, #c1272d 50%, #006233 50%); }
@@ -2988,4 +2988,163 @@ textarea:focus-visible {
   border-radius: 4px;
   border: 1px solid var(--line);
   background: var(--surface);
+}
+
+/* ==========================================================================
+   EN-TÊTE
+   ==========================================================================
+
+   Le haut de l'écran est ce qu'on voit cent fois par jour : c'est lui qui
+   décide si l'outil a l'air d'une maquette ou d'un produit. Deux reproches
+   fondés : le titre était un texte posé sans matière, et les fuseaux une
+   rangée de chiffres gris — l'information juste, la vie en moins. */
+
+/* --------------------------------------------------------------- titre --- */
+
+/* Le titre entre au lieu d'apparaître. Huit pixels et un fondu : en dessous,
+   on ne voit rien ; au-delà, on attend l'interface au lieu de travailler. */
+@keyframes head-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+.head h1 {
+  font-size: 27px;
+  font-weight: 650;
+  letter-spacing: -0.032em;
+  animation: head-in 0.32s var(--ease) both;
+}
+
+.crumb { animation: head-in 0.32s var(--ease) 0.04s both; }
+
+/* Filet dégradé sous le titre : la signature discrète de la marque, qui suit
+   la palette choisie. C'est le seul ornement de l'en-tête — un seul suffit. */
+.head h1::after {
+  content: '';
+  display: block;
+  margin-top: 7px;
+  width: 44px;
+  height: 3px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 15%, transparent));
+}
+
+/* ------------------------------------------------------------- cadrans --- */
+
+/* Chaque fuseau porte un vrai cadran, aiguilles à l'heure locale. Un chiffre
+   se lit ; une silhouette d'aiguilles se reconnaît — cinq cadrans côte à côte
+   disent « matin là-bas, soir ici » avant toute lecture. */
+.clocks {
+  padding: 4px;
+  border-radius: 999px;
+  background-image: var(--grad-raised);
+  box-shadow: var(--e2), var(--edge);
+}
+
+.clock {
+  border-radius: 999px;
+  padding: 4px 12px 4px 5px;
+  transition: background 0.16s var(--ease);
+}
+
+.clock + .clock { box-shadow: none; }
+
+/* Le filet-drapeau d'avant disparaît : le cadran occupe sa place. Le drapeau
+   revient en anneau autour du cadran — la nationalité cercle l'heure. */
+.clock::before { display: none; }
+
+.dial {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 32%, var(--surface), color-mix(in srgb, var(--ink) 7%, var(--surface)));
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--ink) 10%, transparent),
+    inset 0 1px 2px rgb(16 18 40 / 12%),
+    0 1px 2px rgb(16 18 40 / 10%);
+}
+
+/* L'anneau national : les bandes du drapeau, en cône autour du verre. */
+.dial::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  padding: 2px;
+  background: var(--ck-flag);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0.85;
+}
+
+/* Le pivot central. */
+.dial::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 3px;
+  height: 3px;
+  margin: -1.5px 0 0 -1.5px;
+  border-radius: 50%;
+  background: var(--ink);
+}
+
+/* Les aiguilles tournent depuis le centre. La transition fait glisser la
+   minute d'un cran toutes les 30 s au lieu de sauter — le cadran est vivant
+   sans qu'on puisse dire pourquoi. */
+.dial-h,
+.dial-m {
+  position: absolute;
+  left: 50%;
+  bottom: 50%;
+  transform-origin: 50% 100%;
+  border-radius: 2px;
+  background: var(--ink);
+  transition: transform 0.6s var(--ease);
+}
+
+.dial-h { width: 2px; height: 8px; margin-left: -1px; }
+.dial-m { width: 1.5px; height: 11px; margin-left: -0.75px; opacity: 0.75; }
+
+/* Fermé : le cadran s'éteint — verre assombri, anneau atténué. On voit de
+   loin où il fait nuit. */
+.clock.shut .dial {
+  background: radial-gradient(circle at 50% 32%,
+    color-mix(in srgb, var(--ink) 12%, var(--surface)),
+    color-mix(in srgb, var(--ink) 22%, var(--surface)));
+}
+
+.clock.shut .dial::before { opacity: 0.3; }
+.clock.shut .dial-h, .clock.shut .dial-m { background: var(--ink-mute); }
+
+/* Ouvert : un point de vie respire à côté de la ville. Il ne clignote pas —
+   il respire, et c'est ce qui le rend haut de gamme plutôt que criard. */
+@keyframes breathe {
+  0%, 100% { opacity: 0.9; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.8); }
+}
+
+.clock:not(.shut) b::after {
+  content: '';
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-left: 5px;
+  border-radius: 50%;
+  background: var(--ok);
+  animation: breathe 2.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .clock:not(.shut) b::after { animation: none; }
+  .head h1, .crumb { animation: none; }
+}
+
+@media (max-width: 1400px) {
+  .clock { padding: 4px 8px 4px 5px; }
 }
