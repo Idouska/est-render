@@ -20,6 +20,8 @@ const state = {
   pendingCount: 0,
   shops: [],
   navQuery: '',
+  refreshing: false,
+  lastRefresh: null,
   queue: { q: '', intent: '', assignee: '', sort: 'newest', urgent: false, unassigned: false, unlinked: false, timer: null },
   queueCounts: {},
   agents: [],
@@ -3037,6 +3039,91 @@ $('r-go').addEventListener('click', async () => {
   }
 });
 
+/* ------------------------------------------------------- rafraîchissement */
+
+/**
+ * Recharge l'écran courant.
+ *
+ * Les tickets arrivent par notification Gmail, sans que la page en soit
+ * informée : sans rechargement, un agent qui laisse l'onglet ouvert toute la
+ * matinée regarde une file figée à son arrivée.
+ */
+async function refreshCurrent({ silent = false } = {}) {
+  if (state.refreshing) return;
+  state.refreshing = true;
+
+  const button = $('refresh');
+  if (!silent) button.classList.add('busy');
+
+  // Les chargeurs d'écran sautent le travail quand les données sont déjà là :
+  // c'est ce qu'on veut en navigant, l'inverse de ce qu'on veut en actualisant.
+  const store = { orders: 'orders', customers: 'customers', catalog: 'catalog' }[state.view];
+  if (store) state[store].loaded = false;
+
+  try {
+    const jobs = [state.view === 'tickets' ? loadQueue() : VIEW_LOADERS[state.view]?.()];
+
+    // Les indicateurs et le compteur de la navigation décrivent la file : ils
+    // doivent suivre, quel que soit l'écran regardé.
+    if (state.view === 'tickets') jobs.push(loadMetrics(), loadAudit());
+
+    await Promise.all(jobs.filter(Boolean));
+    state.lastRefresh = Date.now();
+  } catch (error) {
+    if (!silent) toast(error.message ?? 'Actualisation impossible', true);
+  } finally {
+    state.refreshing = false;
+    button.classList.remove('busy');
+    renderRefreshLabel();
+  }
+}
+
+function renderRefreshLabel() {
+  if (!state.lastRefresh) return;
+
+  const seconds = Math.round((Date.now() - state.lastRefresh) / 1000);
+  const label =
+    seconds < 60
+      ? 'à l’instant'
+      : `il y a ${Math.floor(seconds / 60)} min`;
+
+  $('refresh-label').textContent = label;
+  $('refresh').title = 'Actualiser (R)';
+}
+
+setInterval(renderRefreshLabel, 15000);
+
+$('refresh').addEventListener('click', () => void refreshCurrent());
+
+$('auto-refresh').addEventListener('change', (event) => {
+  localStorage.setItem('csav.autoRefresh', event.target.checked ? '1' : '0');
+  toast(event.target.checked ? 'Actualisation automatique activée.' : 'Actualisation automatique coupée.');
+});
+
+// Toutes les 60 secondes, et seulement si l'onglet est visible : recharger en
+// arrière-plan consommerait l'API Shopify pour un écran que personne ne
+// regarde.
+setInterval(() => {
+  if (!$('auto-refresh').checked || document.hidden || !state.me) return;
+  void refreshCurrent({ silent: true });
+}, 60000);
+
+// Au retour sur l'onglet après une absence : ce qui est affiché a toutes les
+// chances d'être périmé.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden || !state.me || !$('auto-refresh').checked) return;
+  if (Date.now() - (state.lastRefresh ?? 0) < 30000) return;
+  void refreshCurrent({ silent: true });
+});
+
+document.addEventListener('keydown', (event) => {
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName ?? '');
+  if (!typing && (event.key === 'r' || event.key === 'R')) {
+    event.preventDefault();
+    void refreshCurrent();
+  }
+});
+
 /* ------------------------------------------------------ tiroir de navigation */
 
 function toggleNav(open) {
@@ -3106,6 +3193,10 @@ async function boot() {
   if (state.me.merchant.shopDomain) {
     localStorage.setItem('csav.shop', state.me.merchant.shopDomain);
   }
+
+  $('auto-refresh').checked = localStorage.getItem('csav.autoRefresh') !== '0';
+  state.lastRefresh = Date.now();
+  renderRefreshLabel();
 
   renderMe();
   renderClocks();

@@ -1666,3 +1666,30 @@ body {
    travail » et « Supprimer » débordent sur un écran étroit. */
 .modal-foot-wrap { flex-wrap: wrap; }
 .modal-foot-wrap .btn-danger { margin-right: auto; }
+
+/* ------------------------------------------------------- rafraîchissement --- */
+
+.head-tools { display: flex; align-items: center; gap: 7px; }
+.head-tools .btn { padding: 5px 10px; }
+.head-tools svg { width: 14px; height: 14px; }
+
+/* Rotation pendant le chargement : sans elle, un clic sur un écran déjà à
+   jour ne produit aucun retour visible et donne l'impression d'un bouton
+   mort. */
+.head-tools .btn.busy svg { animation: spin 0.8s linear infinite; }
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.auto-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--ink-mute);
+  cursor: pointer;
+  user-select: none;
+}
+
+.auto-toggle input { accent-color: var(--accent); }

@@ -94,6 +94,20 @@
               <h1 id="view-title">File de traitement</h1>
             </div>
             <div class="head-acts">
+              <div class="head-tools">
+                <button class="btn btn-small" id="refresh" type="button" title="Actualiser (R)">
+                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"
+                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M13.5 8a5.5 5.5 0 1 1-1.7-4" />
+                    <path d="M13.5 2.5V6H10" />
+                  </svg>
+                  <span id="refresh-label">Actualiser</span>
+                </button>
+                <label class="auto-toggle" title="Recharge l’écran toutes les 60 secondes">
+                  <input type="checkbox" id="auto-refresh" checked />
+                  <span>auto</span>
+                </label>
+              </div>
               <div class="clocks" id="clocks"></div>
               <div class="conn" id="conn"></div>
             </div>
