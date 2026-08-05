@@ -5,6 +5,7 @@ import { recordAudit } from "../lib/audit.ts";
 import { decryptSecret } from "../lib/crypto.ts";
 import { prisma } from "../lib/prisma.ts";
 import { PREVIEW_COOKIE, requirePermission, requireSession } from "../plugins/auth.ts";
+import { getAiProvider } from "../services/ai/factory.ts";
 import { backfillMailbox, backfillProgress } from "../services/gmail/backfill.ts";
 import { createOAuthClient, getGmailClient } from "../services/gmail/client.ts";
 import { loadLabelNames, loadLabelStyles } from "../services/gmail/labels.ts";
@@ -583,6 +584,63 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
 
     return reply.send({ labels: styles });
   });
+
+  /**
+   * Essai réel du fournisseur d'IA.
+   *
+   * Un ticket en échec dit désormais pourquoi, mais encore faut-il en ouvrir
+   * un — et sur une file de cinq mille lignes, la cause se répète cinq mille
+   * fois. Ici on interroge le modèle avec la question la plus simple possible :
+   * s'il répond, la panne est ailleurs ; s'il refuse, il dit exactement quoi,
+   * en un clic et sans consulter les journaux du serveur.
+   */
+  app.post(
+    "/api/ai/test",
+    { preHandler: requirePermission("configure") },
+    async (request, reply) => {
+      const started = Date.now();
+
+      try {
+        const provider = await getAiProvider();
+
+        const result = await provider.completeJson<{ ok: boolean }>({
+          system: "Réponds uniquement en JSON.",
+          user: 'Réponds exactement {"ok": true}.',
+          effort: "low",
+          maxTokens: 64,
+          schema: {
+            type: "object",
+            properties: { ok: { type: "boolean" } },
+            required: ["ok"],
+            additionalProperties: false,
+          },
+          validate: (value: unknown) => {
+            if (typeof value !== "object" || value === null) {
+              throw new TypeError("objet attendu");
+            }
+            return value as { ok: boolean };
+          },
+        });
+
+        return reply.send({
+          ok: !result.refused,
+          provider: provider.name,
+          ms: Date.now() - started,
+          refused: result.refused,
+        });
+      } catch (error) {
+        // Le message du fournisseur tel quel : « invalid x-api-key »,
+        // « insufficient balance », « model not found » disent chacun un geste
+        // différent, et les fondre dans un « échec » commun les rendrait tous
+        // inutiles.
+        return reply.code(502).send({
+          ok: false,
+          ms: Date.now() - started,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    },
+  );
 
   /** Avancement d'un rattrapage en cours. */
   app.get<{ Params: { id: string } }>(

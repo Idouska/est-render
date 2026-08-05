@@ -6095,3 +6095,59 @@ $('refunds-range')?.addEventListener('click', (event) => {
   refundDays = Number(button.dataset.days);
   void loadRefunds();
 });
+
+/* Essai du fournisseur d'IA. Le seul moyen, sans accès aux journaux, de savoir
+   si le modèle répond — et sinon, ce qu'il reproche exactement. */
+$('ai-test')?.addEventListener('click', async () => {
+  const button = $('ai-test');
+  const node = $('ai-test-state');
+
+  button.disabled = true;
+  node.textContent = 'Interrogation du modèle…';
+
+  try {
+    const result = await api('/api/ai/test', { method: 'POST', body: '{}' });
+    node.innerHTML = result.ok
+      ? `<b style="color:var(--ok)">Le modèle répond.</b> ${esc(result.provider)} · ${
+          result.ms
+        } ms. Les tickets en échec peuvent être relancés.`
+      : `<b class="set-alert">Le modèle a refusé de répondre.</b> Vérifiez le contenu du prompt.`;
+
+    if (result.ok) {
+      // La relance est proposée là où l'on vient de constater que la cause est
+      // levée : la chercher ailleurs, c'est ne pas la faire.
+      const retry = document.createElement('button');
+      retry.className = 'btn btn-small btn-primary';
+      retry.style.marginTop = '9px';
+      retry.textContent = 'Relancer les tickets en échec';
+      retry.addEventListener('click', async () => {
+        retry.disabled = true;
+        retry.textContent = 'Relance…';
+        try {
+          const out = await api('/api/tickets/retry-failed', { method: 'POST', body: '{}' });
+          toast(
+            `${out.queued} ticket${out.queued > 1 ? 's' : ''} remis en traitement${
+              out.remaining ? ' — relancez pour la suite.' : '.'
+            }`,
+          );
+        } catch (error) {
+          toast(error.message, true);
+        } finally {
+          retry.disabled = false;
+          retry.textContent = 'Relancer les tickets en échec';
+        }
+      });
+      node.append(document.createElement('br'), retry);
+    }
+  } catch (error) {
+    // Le message du fournisseur est reproduit tel quel : « invalid x-api-key »,
+    // « insufficient balance » et « model not found » appellent trois gestes
+    // différents, et un « échec » commun les rendrait tous inutiles.
+    node.innerHTML =
+      `<b class="set-alert">L’IA ne répond pas.</b><br>` +
+      `<span class="mono" style="font-size:12px">${esc(error.message)}</span><br>` +
+      `<span>Réglez la clé dans la console d’administration (<code>/admin</code>).</span>`;
+  } finally {
+    button.disabled = false;
+  }
+});

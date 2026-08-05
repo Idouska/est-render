@@ -4,6 +4,7 @@ import { env } from '../config/env.ts';
 import { recordAudit } from '../lib/audit.ts';
 import { prisma } from '../lib/prisma.ts';
 import { PREVIEW_COOKIE, requirePermission, requireSession } from '../plugins/auth.ts';
+import { enqueueTicket } from '../queue/index.ts';
 import { accessibleMerchantIds, listShopsFor } from './shops.ts';
 import { sendDraft, updateDraftBody } from '../services/gmail/drafts.ts';
 import { sendPlainEmail } from '../services/gmail/send.ts';
@@ -299,6 +300,42 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
    * ne soit possible, et l'agent réapprend chaque matin qu'il n'y a rien à en
    * faire. Il revient de lui-même à la date dite.
    */
+  /**
+   * Relance les tickets que l'IA n'a pas su traiter.
+   *
+   * Une panne d'IA ne touche jamais un ticket : elle les touche tous, et les
+   * reprendre un par un n'a aucun sens. Une fois la cause levée — clé
+   * corrigée, quota rechargé —, ce bouton remet la file entière en traitement.
+   */
+  app.post(
+    '/api/tickets/retry-failed',
+    { preHandler: requirePermission('reply') },
+    async (request, reply) => {
+      const { merchantId } = request.session;
+
+      const failed = await prisma.ticket.findMany({
+        where: { merchantId, status: 'FAILED', isHistorical: false },
+        select: { id: true },
+        // Mille par appel : au-delà, la mise en file dépasse le temps d'une
+        // requête. Relancer deux fois reprend là où l'on s'est arrêté, puisque
+        // les tickets repris changent d'état.
+        take: 1000,
+      });
+
+      let queued = 0;
+      for (const ticket of failed) {
+        try {
+          await enqueueTicket({ merchantId, ticketId: ticket.id });
+          queued += 1;
+        } catch (error) {
+          request.log.error({ err: error, ticketId: ticket.id }, 'Relance impossible');
+        }
+      }
+
+      return reply.send({ queued, remaining: failed.length === 1000 });
+    },
+  );
+
   app.patch<{ Params: { id: string } }>(
     '/api/tickets/:id/snooze',
     { preHandler: requirePermission('reply') },
