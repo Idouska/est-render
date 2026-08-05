@@ -219,6 +219,11 @@ model Ticket {
   /// rien à faire en haut de la pile pendant trois jours.
   snoozedUntil DateTime?
 
+  /// Libellés Gmail portés par le fil, tels que le marchand les a créés.
+  /// Les siens uniquement : les catégories automatiques de Google décrivent
+  /// son classement à lui, pas l'organisation du SAV.
+  labels String[]
+
   /// Échange importé de l'historique Gmail, pas traité par l'outil. Il sert de
   /// matière à l'IA et n'apparaît nulle part ailleurs : le compter dans les
   /// statistiques ferait croire à des mois de travail qui n'ont pas eu lieu.

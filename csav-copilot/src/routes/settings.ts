@@ -5,6 +5,7 @@ import { recordAudit } from "../lib/audit.ts";
 import { decryptSecret } from "../lib/crypto.ts";
 import { prisma } from "../lib/prisma.ts";
 import { PREVIEW_COOKIE, requirePermission, requireSession } from "../plugins/auth.ts";
+import { backfillMailbox, backfillProgress } from "../services/gmail/backfill.ts";
 import { createOAuthClient, getGmailClient } from "../services/gmail/client.ts";
 import { importMailboxHistory } from "../services/gmail/importHistory.ts";
 import { stopWatch } from "../services/gmail/watch.ts";
@@ -495,16 +496,37 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
       if (!mailbox) return reply.code(404).send({ error: "Boîte introuvable" });
 
       const parsed = z
-        .object({ days: z.number().int().min(1).max(30).optional() })
+        .object({ days: z.number().int().min(1).max(180).optional() })
         .safeParse(request.body ?? {});
       if (!parsed.success) return reply.code(400).send({ error: "Requête invalide" });
+
+      const days = parsed.data.days ?? 7;
+
+      // Au-delà d'une semaine, le travail dépasse le temps d'une requête HTTP :
+      // il part en arrière-plan et rend compte par `progress`. En deçà, la
+      // réponse immédiate vaut mieux qu'un avancement à interroger.
+      if (days > 7) {
+        if (backfillProgress.get(mailbox.id)?.done === false) {
+          return reply
+            .code(409)
+            .send({ error: "Un rattrapage est déjà en cours sur cette boîte." });
+        }
+
+        void backfillMailbox({ merchantId, mailboxId: mailbox.id, days }).catch(
+          (error: unknown) => {
+            request.log.error({ err: error }, "Rattrapage en échec");
+          },
+        );
+
+        return reply.code(202).send({ started: true, days });
+      }
 
       try {
         // Relève manuelle = rattrapage. Suivre le curseur ici répondrait
         // « rien de nouveau » sur une boîte pleine de courrier antérieur au
         // branchement, ce qui est vrai et parfaitement inutile.
         const result = await ingestMerchantInbox(merchantId, mailbox.id, {
-          backfillDays: parsed.data.days ?? 7,
+          backfillDays: days,
         });
         return reply.send(result);
       } catch (error) {
@@ -513,6 +535,21 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
           error: error instanceof Error ? error.message : "Relève impossible",
         });
       }
+    },
+  );
+
+  /** Avancement d'un rattrapage en cours. */
+  app.get<{ Params: { id: string } }>(
+    "/api/mailboxes/:id/backfill",
+    { preHandler: requirePermission("configure") },
+    async (request, reply) => {
+      const mailbox = await prisma.gmailConnection.findFirst({
+        where: { id: request.params.id, merchantId: request.session.merchantId },
+        select: { id: true },
+      });
+      if (!mailbox) return reply.code(404).send({ error: "Boîte introuvable" });
+
+      return reply.send(backfillProgress.get(mailbox.id) ?? null);
     },
   );
 

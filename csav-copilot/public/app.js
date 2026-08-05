@@ -24,7 +24,7 @@ const state = {
   refreshing: false,
   lastRefresh: null,
   queue: {
-    q: '', intent: '', assignee: '', mailbox: '', sort: 'newest',
+    q: '', intent: '', assignee: '', mailbox: '', label: '', sort: 'newest',
     urgent: false, unassigned: false, unlinked: false, historical: false, timer: null,
   },
   queueCounts: {},
@@ -415,6 +415,7 @@ function queueParams() {
   if (f.intent) params.set('intent', f.intent);
   if (f.assignee) params.set('assignee', f.assignee);
   if (f.mailbox) params.set('mailbox', f.mailbox);
+  if (f.label) params.set('label', f.label);
   if (state.allShops) params.set('scope', 'all');
   if (f.sort !== 'newest') params.set('sort', f.sort);
   if (f.urgent) params.set('minAgeDays', '3');
@@ -428,8 +429,8 @@ function queueParams() {
 function queueIsFiltered() {
   const f = state.queue;
   return Boolean(
-    state.filter || f.q.trim() || f.intent || f.assignee || f.mailbox || f.urgent ||
-      f.unassigned || f.unlinked || f.historical,
+    state.filter || f.q.trim() || f.intent || f.assignee || f.mailbox || f.label ||
+      f.urgent || f.unassigned || f.unlinked || f.historical,
   );
 }
 
@@ -1174,6 +1175,20 @@ async function loadAgents() {
   // Une seule boîte : le filtre n'aurait qu'une option utile.
   $('q-mailbox').closest('label').hidden = mailboxes.length < 2;
 
+  // Les libellés viennent de ce que la file contient, pas d'un appel à Gmail :
+  // proposer un filtre sur une étiquette qu'aucun ticket ne porte ne mène qu'à
+  // une liste vide.
+  const labels = [...new Set(state.tickets.flatMap((ticket) => ticket.labels ?? []))].sort(
+    (a, b) => a.localeCompare(b, 'fr'),
+  );
+
+  const labelSelect = $('q-label');
+  labelSelect.innerHTML =
+    '<option value="">Tous</option>' +
+    labels.map((name) => `<option value="${esc(name)}">${esc(name)}</option>`).join('');
+  labelSelect.value = state.queue.label;
+  labelSelect.closest('label').hidden = labels.length === 0;
+
   $('q-intent').innerHTML =
     '<option value="">Tous</option>' +
     Object.entries(INTENT_LABELS)
@@ -1184,12 +1199,13 @@ async function loadAgents() {
 function resetQueueFilters() {
   state.filter = '';
   state.queue = {
-    q: '', intent: '', assignee: '', mailbox: '', sort: 'newest',
+    q: '', intent: '', assignee: '', mailbox: '', label: '', sort: 'newest',
     urgent: false, unassigned: false, unlinked: false, historical: false,
   };
 
   $('q-search').value = '';
   $('q-mailbox').value = '';
+  $('q-label').value = '';
   $('q-sort').value = 'newest';
   $('q-assignee').value = '';
   $('q-intent').value = '';
@@ -1213,6 +1229,11 @@ $('q-sort').addEventListener('change', (event) => {
 $('q-assignee').addEventListener('change', (event) => {
   state.queue.assignee = event.target.value;
   state.queue.unassigned = event.target.value === 'none';
+  void loadQueue();
+});
+
+$('q-label').addEventListener('change', (event) => {
+  state.queue.label = event.target.value;
   void loadQueue();
 });
 
@@ -3632,9 +3653,18 @@ function renderSettings() {
                       mailbox.id,
                     )}">Par défaut</button>`
               }
-              <button class="btn btn-small" data-mbx-poll="${esc(
-                mailbox.id,
-              )}">Relever maintenant</button>
+              <span class="poll-wrap">
+                <select class="poll-days" data-mbx-days="${esc(mailbox.id)}"
+                  title="Profondeur du rattrapage">
+                  <option value="7">7 jours</option>
+                  <option value="30">1 mois</option>
+                  <option value="90">3 mois</option>
+                  <option value="180">6 mois</option>
+                </select>
+                <button class="btn btn-small" data-mbx-poll="${esc(
+                  mailbox.id,
+                )}">Relever</button>
+              </span>
               <button class="btn btn-small" data-mbx-diag="${esc(
                 mailbox.id,
               )}">Diagnostic</button>
@@ -3687,11 +3717,23 @@ function renderSettings() {
         const previous = button.textContent;
         button.textContent = 'Relève…';
 
+        const id = button.dataset.mbxPoll;
+        const days = Number(
+          button.closest('.mbx')?.querySelector('[data-mbx-days]')?.value ?? 7,
+        );
+
         try {
-          const result = await api(`/api/mailboxes/${button.dataset.mbxPoll}/poll`, {
+          const result = await api(`/api/mailboxes/${id}/poll`, {
             method: 'POST',
-            body: '{}',
+            body: JSON.stringify({ days }),
           });
+
+          // Au-delà d'une semaine, le serveur rend la main tout de suite et
+          // travaille derrière : on suit l'avancement au lieu d'attendre.
+          if (result.started) {
+            watchBackfill(id, node, button, previous);
+            return;
+          }
 
           const message =
             result.ingested > 0
@@ -4305,6 +4347,49 @@ function renderDiagnosis(report) {
   }
 
   return lines.join('<br>');
+}
+
+/**
+ * Suit un rattrapage parti en arrière-plan.
+ *
+ * Le compte monte pendant que le travail avance : sans ce retour, trois mois
+ * de courrier ressembleraient à un bouton sans effet pendant plusieurs
+ * minutes — exactement le défaut qu'on vient de corriger ailleurs.
+ */
+function watchBackfill(mailboxId, node, button, previousLabel) {
+  let elapsed = 0;
+
+  const tick = async () => {
+    let progress;
+    try {
+      progress = await api(`/api/mailboxes/${mailboxId}/backfill`);
+    } catch {
+      progress = null;
+    }
+
+    if (progress) {
+      node.textContent = progress.done
+        ? `Rattrapage terminé — ${progress.ingested} message${
+            progress.ingested > 1 ? 's' : ''
+          } sur ${progress.scanned} examinés, ${progress.tickets} ticket${
+            progress.tickets > 1 ? 's' : ''
+          } en file.`
+        : `Rattrapage… ${progress.scanned} messages examinés, ${progress.ingested} relevés.`;
+    }
+
+    elapsed += 3;
+
+    if (progress?.done || elapsed > 900) {
+      button.disabled = false;
+      button.textContent = previousLabel;
+      if (progress?.ingested > 0) await loadQueue();
+      return;
+    }
+
+    setTimeout(tick, 3000);
+  };
+
+  setTimeout(tick, 1500);
 }
 
 async function refreshLearning() {

@@ -1,6 +1,8 @@
 import { logger } from '../../lib/logger.ts';
 import { prisma } from '../../lib/prisma.ts';
 import { enqueueTicket } from '../../queue/index.ts';
+import { getGmailClient } from '../gmail/client.ts';
+import { loadLabelNames, resolveLabels } from '../gmail/labels.ts';
 import { fetchNewMessages, fetchRecentMessages } from '../gmail/sync.ts';
 
 /**
@@ -34,6 +36,18 @@ export async function ingestMerchantInbox(
   const ticketIds = new Set<string>();
   let ingested = 0;
 
+  // Table des libellés chargée une fois, si du courrier est arrivé : elle ne
+  // change presque jamais, l'appeler par message serait du gaspillage.
+  let labelNames = new Map<string, string>();
+  if (messages.length > 0) {
+    try {
+      const { gmail, mailboxId: id } = await getGmailClient(merchantId, mailboxId);
+      labelNames = await loadLabelNames(gmail, id);
+    } catch {
+      // Sans libellés, l'ingestion continue : ils décorent, ils ne décident pas.
+    }
+  }
+
   for (const message of messages) {
     if (!message.fromEmail) continue;
 
@@ -51,11 +65,13 @@ export async function ingestMerchantInbox(
         // Mémorisée à la création : la réponse repartira de la boîte qui a
         // reçu le message, pas d'une autre.
         mailboxId: mailboxId ?? null,
+        labels: resolveLabels(message.labelIds, labelNames),
         lastMessageAt: message.receivedAt,
       },
       update: {
         // Un nouveau message sur un fil déjà traité rouvre le ticket.
         status: 'NEW',
+        labels: resolveLabels(message.labelIds, labelNames),
         lastMessageAt: message.receivedAt,
       },
     });

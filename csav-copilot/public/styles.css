@@ -3394,3 +3394,40 @@ textarea:focus-visible {
   line-height: 1.55;
   color: var(--ink-soft);
 }
+
+/* Libellé Gmail repris tel quel. Volontairement neutre : ces étiquettes sont
+   celles du marchand, leur donner une couleur d'intention laisserait croire
+   que l'outil les interprète. */
+.tag-label {
+  background: var(--inset);
+  color: var(--ink-soft);
+  font-weight: 500;
+}
+
+.tag-label::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 5px;
+  border-radius: 2px;
+  background: var(--ink-mute);
+  vertical-align: 1px;
+}
+
+/* Profondeur du rattrapage, collée à son bouton : séparés, on choisit une
+   durée puis on cherche quoi en faire. */
+.poll-wrap { display: inline-flex; align-items: stretch; gap: 0; }
+
+.poll-days {
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-right: 0;
+  border-radius: var(--r-md) 0 0 var(--r-md);
+  background: var(--inset);
+  color: var(--ink);
+}
+
+.poll-wrap .btn { border-radius: 0 var(--r-md) var(--r-md) 0; }

@@ -41,6 +41,8 @@ const listQuery = z.object({
   snoozed: z.coerce.boolean().optional(),
   /** Consulter les échanges importés de l'historique, invisibles autrement. */
   historical: z.coerce.boolean().optional(),
+  /** Libellé Gmail, tel que le marchand l'a créé dans sa boîte. */
+  label: z.string().max(120).optional(),
   /** `all` élargit la file à toutes les boutiques du groupe. */
   scope: z.enum(['shop', 'all']).default('shop'),
   sort: z.enum(['oldest', 'newest', 'confidence']).default('newest'),
@@ -104,6 +106,7 @@ function buildTicketWhere(
           ],
         }),
     ...(filters.mailbox ? { mailboxId: filters.mailbox } : {}),
+    ...(filters.label ? { labels: { has: filters.label } } : {}),
     ...(term
       ? {
           OR: [
@@ -230,6 +233,7 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
           shopifyOrderId: true,
           lastMessageAt: true,
           createdAt: true,
+          labels: true,
           assignedToId: true,
           assignedTo: { select: { id: true, name: true, email: true } },
           mailbox: { select: { id: true, emailAddress: true, label: true } },
