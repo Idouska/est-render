@@ -1610,6 +1610,10 @@ async function selectTicket(id) {
 function renderDetail() {
   const { ticket, order, orderError } = state.detail;
 
+  // Le détail de commande appartient à la consultation hors ticket : le
+  // laisser affiché sous un vrai fil ferait lire deux dossiers à la fois.
+  $('ordv').hidden = true;
+
   $('d-subject').textContent = ticket.subject ?? '(sans objet)';
 
   const canAssign = canI('reply');
@@ -3698,6 +3702,117 @@ function renderOrders() {
     .forEach((row) => row.addEventListener('click', () => openOrderSheet(row.dataset.order)));
 }
 
+const FIN_LABELS = {
+  PAID: 'Payée',
+  PENDING: 'Paiement en attente',
+  REFUNDED: 'Remboursée',
+  PARTIALLY_REFUNDED: 'Partiellement remboursée',
+  VOIDED: 'Annulée',
+  AUTHORIZED: 'Autorisée',
+};
+
+const FUL_LABELS = {
+  FULFILLED: 'Expédiée',
+  UNFULFILLED: 'À expédier',
+  PARTIALLY_FULFILLED: 'Partiellement expédiée',
+  IN_TRANSIT: 'En transit',
+  DELIVERED: 'Livrée',
+  RESTOCKED: 'Remise en stock',
+};
+
+/**
+ * Une commande, dans le panneau central.
+ *
+ * Elle vivait dans le rail latéral, en trois lignes de texte sous un fil de
+ * discussion vide : un agent qui cherche ce qui a été acheté devait faire
+ * défiler la page entière pour lire à la loupe ce que Shopify affiche en grand.
+ * Ici elle occupe la place qui lui revient — articles avec leurs vignettes,
+ * montants, statuts, adresse, colis.
+ */
+function renderOrderDetail(order) {
+  const view = $('ordv');
+  view.hidden = false;
+
+  const fin = order.displayFinancialStatus;
+  const ful = order.displayFulfillmentStatus;
+
+  const items = (order.lineItems ?? [])
+    .map(
+      (item) => `<div class="ordv-item">
+        ${
+          item.image?.url
+            ? `<img src="${esc(item.image.url)}" alt="" loading="lazy" />`
+            : '<span class="ordv-noimg"></span>'
+        }
+        <div>
+          <b>${esc(item.title)}</b>
+          <span>${[item.variantTitle, item.sku ? `réf. ${item.sku}` : null]
+            .filter(Boolean)
+            .map(esc)
+            .join(' · ')}</span>
+        </div>
+        <span class="ordv-qty mono">× ${item.quantity}</span>
+      </div>`,
+    )
+    .join('');
+
+  const parcels = (order.fulfillments ?? [])
+    .flatMap((fulfillment) => fulfillment.trackingInfo ?? [])
+    .filter((info) => info.number)
+    .map(
+      (info) => `<div class="ordv-row">
+        <span>${esc(info.company ?? 'Transporteur')}</span>
+        <button class="linklike mono" data-track="${esc(info.number)}"${
+          info.url ? ` data-track-url="${esc(info.url)}"` : ''
+        }>${esc(info.number)}</button>
+      </div>`,
+    )
+    .join('');
+
+  const address = order.shippingAddress;
+
+  view.innerHTML = `
+    <div class="ordv-head">
+      <div class="ordv-badges">
+        <span class="tag ${fin === 'PAID' ? 'st-CLOSED' : 'st-NEEDS_REVIEW'}">${esc(
+          FIN_LABELS[fin] ?? fin ?? '—',
+        )}</span>
+        <span class="tag ${
+          ful === 'FULFILLED' || ful === 'DELIVERED' ? 'st-CLOSED' : 'st-NEW'
+        }">${esc(FUL_LABELS[ful] ?? ful ?? '—')}</span>
+        <span class="ordv-when">${fullDate(order.createdAt)}</span>
+      </div>
+      <b class="ordv-total mono">${esc(euro(order.totalPrice, order.currency))}</b>
+    </div>
+
+    <div class="ordv-items">${items || '<p class="empty">Aucun article.</p>'}</div>
+
+    <div class="ordv-cols">
+      <section>
+        <span class="rail-title">Livraison</span>
+        ${
+          address
+            ? `<p class="ordv-addr">${[
+                address.name,
+                address.address1,
+                address.address2,
+                `${address.zip ?? ''} ${address.city ?? ''}`.trim(),
+                address.country,
+              ]
+                .filter(Boolean)
+                .map(esc)
+                .join('<br>')}</p>
+               ${address.phone ? `<p class="ordv-addr mono">${esc(address.phone)}</p>` : ''}`
+            : '<p class="empty">Aucune adresse.</p>'
+        }
+      </section>
+      <section>
+        <span class="rail-title">Colis</span>
+        ${parcels || '<p class="empty">Aucun numéro de suivi.</p>'}
+      </section>
+    </div>`;
+}
+
 async function openOrderSheet(id) {
   try {
     const { order } = await api(`/api/orders/${encodeURIComponent(id)}`);
@@ -3711,14 +3826,13 @@ async function openOrderSheet(id) {
     $('d-meta').innerHTML = `${esc(order.customer?.displayName ?? '')} · <code>${esc(
       order.customer?.email ?? '—',
     )}</code>`;
-    $('d-messages').innerHTML =
-      '<p class="empty">Consultation depuis le carnet de commandes — aucun échange rattaché.</p>';
+
+    renderOrderDetail(order);
     renderBrief(null);
+    $('d-fold').hidden = true;
     $('draft-zone').hidden = true;
     $('actbar').hidden = true;
-    $('no-draft').hidden = false;
-    $('no-draft-text').textContent =
-      'Ouvrez un ticket pour rédiger une réponse. Le remboursement reste accessible depuis un ticket.';
+    $('no-draft').hidden = true;
   } catch (error) {
     toast(error.message, true);
   }

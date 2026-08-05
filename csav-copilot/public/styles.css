@@ -3921,3 +3921,85 @@ textarea:focus-visible {
 }
 
 .actbtn { white-space: nowrap; }
+
+/* ==========================================================================
+   DÉTAIL DE COMMANDE
+   ========================================================================== */
+
+.ordv { padding: 0 15px 15px; display: grid; gap: 14px; }
+
+.ordv-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.ordv-badges { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ordv-when { font-size: 12px; color: var(--ink-mute); }
+
+.ordv-total {
+  margin-left: auto;
+  font-size: 21px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+/* Les articles avec leur vignette : reconnaître une paire de chaussures à son
+   image prend le quart du temps qu'il faut pour lire « Aero Glide 2 · Sable ». */
+.ordv-items { display: grid; gap: 2px; }
+
+.ordv-item {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 10px;
+  border-radius: var(--r-md);
+}
+
+.ordv-item:hover { background: var(--inset); }
+
+.ordv-item img,
+.ordv-noimg {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-sm);
+  object-fit: cover;
+  background: var(--inset);
+  border: 1px solid var(--line-soft);
+}
+
+.ordv-item b { display: block; font-size: 13.5px; font-weight: 600; }
+.ordv-item span { display: block; font-size: 12px; color: var(--ink-mute); }
+.ordv-qty { font-size: 13px; color: var(--ink-soft); }
+
+/* Adresse et colis côte à côte tant que la place le permet : ce sont les deux
+   questions qui suivent « qu'a-t-il acheté ». */
+.ordv-cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.ordv-addr { margin: 0 0 6px; font-size: 13px; line-height: 1.5; color: var(--ink-soft); }
+
+.ordv-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+  padding: 4px 0;
+}
+
+@media (max-width: 700px) {
+  .ordv { padding: 0 12px 12px; }
+  .ordv-total { font-size: 18px; }
+  .ordv-item { grid-template-columns: 38px minmax(0, 1fr) auto; gap: 9px; }
+  .ordv-item img, .ordv-noimg { width: 38px; height: 38px; }
+}
