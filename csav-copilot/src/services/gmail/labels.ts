@@ -72,16 +72,31 @@ export function resolveLabels(labelIds: string[], names: Map<string, string>): s
  */
 export async function syncTicketLabels(params: {
   gmail: gmail_v1.Gmail;
-  merchantId: string;
   mailboxId: string;
   days: number;
-  /** Injecté pour éviter une dépendance circulaire avec Prisma dans ce module. */
-  applyLabels: (messageIds: string[], label: string) => Promise<number>;
+  /**
+   * Résout des identifiants de messages Gmail en identifiants de tickets.
+   * Injecté pour garder ce module libre de toute dépendance à Prisma.
+   */
+  ticketsFor: (messageIds: string[]) => Promise<string[]>;
+  /** Écrit la liste complète des libellés d'un ticket, en une fois. */
+  applyLabels: (byTicket: Map<string, string[]>) => Promise<void>;
 }): Promise<number> {
-  const { gmail, mailboxId, days, applyLabels } = params;
+  const { gmail, mailboxId, days, ticketsFor, applyLabels } = params;
 
   const names = await loadLabelNames(gmail, mailboxId);
-  let updated = 0;
+
+  /*
+   * On rassemble d'abord, on écrit ensuite.
+   *
+   * Un ticket porte souvent plusieurs étiquettes, et Gmail ne sait répondre
+   * que libellé par libellé. Écrire au fil de l'eau imposerait d'ajouter à une
+   * liste existante — une opération que l'ORM ne sait pas faire et qui obligeait
+   * à du SQL brut, silencieusement cassé le jour où le type de paramètre ne
+   * convient pas. Rassemblé en mémoire, chaque ticket s'écrit une fois, avec sa
+   * liste complète.
+   */
+  const byTicket = new Map<string, string[]>();
 
   for (const name of names.values()) {
     const ids: string[] = [];
@@ -90,8 +105,8 @@ export async function syncTicketLabels(params: {
     do {
       const { data } = await gmail.users.messages.list({
         userId: 'me',
-        // Le nom entre guillemets : un libellé contenant une espace — « À
-        // rembourser » — serait sinon lu comme deux critères.
+        // Le nom entre guillemets : un libellé contenant une espace — « Avant
+        // vente » — serait sinon lu comme deux critères de recherche.
         q: `label:"${name}" newer_than:${days}d`,
         maxResults: 500,
         pageToken,
@@ -106,8 +121,21 @@ export async function syncTicketLabels(params: {
       // masse dont le SAV n'a rien à tirer.
     } while (pageToken && ids.length < 2000);
 
-    if (ids.length > 0) updated += await applyLabels(ids, name);
+    if (ids.length === 0) continue;
+
+    // Par paquets de cinq cents : une clause `IN` de deux mille éléments
+    // dépasse ce que Postgres accepte confortablement.
+    for (let index = 0; index < ids.length; index += 500) {
+      const ticketIds = await ticketsFor(ids.slice(index, index + 500));
+
+      for (const ticketId of ticketIds) {
+        const existing = byTicket.get(ticketId);
+        if (existing) existing.push(name);
+        else byTicket.set(ticketId, [name]);
+      }
+    }
   }
 
-  return updated;
+  await applyLabels(byTicket);
+  return byTicket.size;
 }

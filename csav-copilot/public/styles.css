@@ -3482,7 +3482,7 @@ textarea:focus-visible {
 .folded .brand-caret,
 .folded .me > div,
 .folded .me .btn,
-.folded .nav-item span:not(.tally) { display: none; }
+.folded .nav-label { display: none; }
 
 .folded .side { padding: 12px 8px; }
 .folded .side-fold { top: 10px; right: 8px; }
@@ -3654,3 +3654,13 @@ textarea:focus-visible {
   .head h1 { font-size: 19px; }
   .head-acts { width: 100%; justify-content: flex-start; }
 }
+
+/* Le rail replié ne doit rien laisser déborder. L'intitulé était un texte nu
+   dans le bouton, donc impossible à masquer : il continuait de s'afficher sur
+   soixante-deux pixels et se chevauchait ligne après ligne. Il porte
+   désormais sa propre balise, et le débordement est coupé en dernier recours. */
+.folded .side,
+.folded .nav-item,
+.folded .brand { overflow: hidden; }
+
+.folded .nav-item { white-space: nowrap; }

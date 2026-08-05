@@ -28,6 +28,8 @@ export interface BackfillProgress {
   relabelled: number;
   /** Le plafond a été atteint : il reste du courrier au-delà. */
   capped: boolean;
+  /** Motif d'échec de la pose des libellés, s'il y en a eu un. */
+  labelError?: string;
   done: boolean;
 }
 
@@ -195,32 +197,31 @@ export async function backfillMailbox(params: {
 
       progress.relabelled = await syncTicketLabels({
         gmail,
-        merchantId,
         mailboxId: connection.id,
         days,
-        applyLabels: async (messageIds, label) => {
+        ticketsFor: async (messageIds) => {
           const rows = await prisma.message.findMany({
             where: { merchantId, gmailMessageId: { in: messageIds } },
             select: { ticketId: true },
           });
-
-          const ticketIds = [...new Set(rows.map((row) => row.ticketId))];
-          if (ticketIds.length === 0) return 0;
-
-          // Ajout et non remplacement : un ticket porte souvent plusieurs
-          // étiquettes, et chaque libellé est traité par une requête distincte.
-          // La remise à zéro a eu lieu une fois, juste avant la boucle.
-          await prisma.$executeRaw`
-            UPDATE "Ticket"
-            SET "labels" = array_append("labels", ${label})
-            WHERE "id" = ANY(${ticketIds}::text[])
-              AND NOT (${label} = ANY("labels"))
-          `;
-
-          return ticketIds.length;
+          return [...new Set(rows.map((row) => row.ticketId))];
+        },
+        applyLabels: async (byTicket) => {
+          for (const [ticketId, labels] of byTicket) {
+            await prisma.ticket.update({
+              where: { id: ticketId },
+              data: { labels: [...new Set(labels)].sort((a, b) => a.localeCompare(b, 'fr')) },
+            });
+          }
         },
       });
+
     } catch (error) {
+      // Consignée dans l'avancement et pas seulement dans les journaux : une
+      // pose d'étiquettes qui échoue en silence se manifeste par des libellés
+      // absents, et l'on cherche alors le défaut du mauvais côté.
+      progress.labelError =
+        error instanceof Error ? error.message.slice(0, 200) : 'échec inconnu';
       logger.warn({ merchantId, err: error }, 'Synchronisation des libellés en échec');
     }
 

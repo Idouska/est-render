@@ -3160,7 +3160,7 @@ function renderNav() {
           const tally = view === 'tickets' ? (state.pendingCount ?? 0) : 0;
           return `<button class="nav-item" data-view="${view}" aria-current="${
             view === state.view
-          }">${ico(meta.icon)}${esc(meta.label)}${
+          }">${ico(meta.icon)}<span class="nav-label">${esc(meta.label)}</span>${
             tally ? `<span class="tally">${tally}</span>` : ''
           }</button>`;
         })
@@ -4481,6 +4481,12 @@ function backfillSummary(progress) {
   } else {
     parts.push(
       'Aucun libellé trouvé : ces messages ne portent pas d’étiquette dans Gmail.',
+    );
+  }
+
+  if (progress.labelError) {
+    parts.push(
+      `<b class="set-alert">Libellés non posés :</b> ${esc(progress.labelError)}`,
     );
   }
 
