@@ -4119,3 +4119,82 @@ textarea:focus-visible {
   .head-tools { flex-wrap: wrap; }
   .head-acts { flex-wrap: wrap; }
 }
+
+/* ==========================================================================
+   ÉTATS : QUATRE FAMILLES, PAS DEUX
+   ==========================================================================
+
+   Un colis livré, un colis en route, un colis bloqué en douane et un colis
+   perdu portaient deux couleurs pour quatre situations. L'agent devait lire
+   chaque ligne pour faire le tri que la couleur aurait dû faire pour lui.
+
+   Vert : c'est fini, rien à faire. Bleu : en cours, rien à faire non plus,
+   mais ce n'est pas terminé. Ambre : en attente d'un tiers. Rouge : quelqu'un
+   doit s'en occuper. Gris : sans objet. */
+
+.tone-ok { background: var(--ok-soft); color: var(--ok); }
+.tone-go { background: color-mix(in srgb, #2f6fe4 12%, transparent); color: #1c4fb0; }
+.tone-wait { background: var(--warn-soft); color: var(--warn); }
+.tone-bad { background: var(--crit-soft); color: var(--crit); }
+.tone-mute { background: var(--inset); color: var(--ink-mute); }
+
+[data-theme='dark'] .tone-go {
+  background: color-mix(in srgb, #2f6fe4 22%, transparent);
+  color: #a9c6f5;
+}
+
+/* Une ligne dont l'état appelle une action se signale par son bord, pas
+   seulement par sa pastille : sur vingt lignes, on repère un liseré avant de
+   lire une étiquette. */
+.grid tr:has(.tone-bad) td:first-child { box-shadow: inset 3px 0 0 var(--crit); }
+.grid tr:has(.tone-wait) td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
+
+@media (max-width: 760px) {
+  /* En fiche, le liseré passe sur tout le bord gauche de la carte. */
+  .grid tr:has(.tone-bad) td:first-child,
+  .grid tr:has(.tone-wait) td:first-child { box-shadow: none; }
+  .grid tr:has(.tone-bad) { border-left: 3px solid var(--crit); }
+  .grid tr:has(.tone-wait) { border-left: 3px solid var(--warn); }
+}
+
+/* ---------------------------------------------------------- litiges --- */
+
+/* Le compte à rebours prend la tête de la carte. Un litige non contesté est
+   débité d'office à l'échéance : c'est le seul chiffre qui décide de l'ordre
+   de travail, et il était noyé dans une phrase. */
+.dsp-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+.dsp-count {
+  display: grid;
+  place-items: center;
+  min-width: 66px;
+  padding: 7px 10px;
+  border-radius: var(--r-md);
+  text-align: center;
+  flex: none;
+}
+
+.dsp-count b {
+  display: block;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.dsp-count span {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+.dsp-id { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; min-width: 0; }
+.dsp-amount { margin-left: auto; font-size: 17px; font-weight: 650; }
+
+@media (max-width: 700px) {
+  .dsp-amount { margin-left: 0; width: 100%; }
+}

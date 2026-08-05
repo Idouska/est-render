@@ -2878,9 +2878,9 @@ async function loadTracking() {
             }</td>
             <td>${
               shipment.liveStatus
-                ? `<span class="tag ${
-                    shipment.liveStatus === 'Delivered' ? 'st-CLOSED' : 'st-NEEDS_REVIEW'
-                  }">${esc(TRACK_LABELS[shipment.liveStatus] ?? shipment.liveStatus)}</span>${
+                ? `<span class="tag ${trackTone(shipment.liveStatus)}">${esc(
+                    TRACK_LABELS[shipment.liveStatus] ?? shipment.liveStatus,
+                  )}</span>${
                     shipment.lastEvent
                       ? `<br><span class="sub">${esc(shipment.lastEvent.status)}${
                           shipment.lastEvent.location ? ` · ${esc(shipment.lastEvent.location)}` : ''
@@ -2918,6 +2918,37 @@ async function loadTracking() {
 $('tracking-refresh').addEventListener('click', () => loadTracking());
 
 /* --------------------------------------------------------- remboursements */
+
+/*
+ * Couleur d'un état de colis.
+ *
+ * Quatre familles, pas deux. « En transit » et « Incident de livraison »
+ * portaient le même orange : l'un demande de patienter, l'autre d'agir tout de
+ * suite, et l'agent devait lire chaque ligne pour faire le tri que la couleur
+ * aurait dû faire pour lui.
+ */
+const TRACK_TONE = {
+  Delivered: 'ok',
+  OutForDelivery: 'go',
+  AvailableForPickup: 'go',
+  InTransit: 'go',
+  InfoReceived: 'wait',
+  NotFound: 'wait',
+  Expired: 'wait',
+  DeliveryFailure: 'bad',
+  Exception: 'bad',
+};
+
+function trackTone(status) {
+  return `tone-${TRACK_TONE[status] ?? 'wait'}`;
+}
+
+const REFUND_TONE = {
+  COMPLETED: 'ok',
+  PENDING: 'wait',
+  FAILED: 'bad',
+  CANCELLED: 'mute',
+};
 
 const REFUND_STATUS = {
   PENDING: 'En attente',
@@ -2981,12 +3012,8 @@ function renderRefundRows() {
             <td>${fullDate(refund.createdAt)}</td>
             <td>${esc(refund.reason ?? '—')}</td>
             <td>${esc(REFUND_KIND[refund.kind] ?? refund.kind)}</td>
-            <td><span class="tag tag-status ${
-              refund.status === 'COMPLETED'
-                ? 'st-CLOSED'
-                : refund.status === 'FAILED'
-                  ? 'st-FAILED'
-                  : 'st-NEEDS_REVIEW'
+            <td><span class="tag tone-${
+              REFUND_TONE[refund.status] ?? 'wait'
             }">${esc(REFUND_STATUS[refund.status] ?? refund.status)}</span></td>
             <td class="num mono">${euro(refund.amount, refund.currency ?? 'EUR')}</td>
           </tr>`,
@@ -3106,12 +3133,31 @@ async function loadDisputes() {
       const evidence = dispute.evidence ?? [];
       const delivered = evidence.filter((item) => item.status === 'Delivered');
 
+      // Le compte à rebours est la seule information qui décide de l'ordre de
+      // travail : un litige non contesté est débité d'office. Il passe donc en
+      // tête de carte, au corps d'un chiffre qu'on lit de loin.
+      const countdown =
+        dispute.daysLeft === null
+          ? { value: '—', unit: 'sans échéance', tone: 'mute' }
+          : dispute.daysLeft < 0
+            ? { value: 'Perdu', unit: 'échéance dépassée', tone: 'bad' }
+            : {
+                value: String(dispute.daysLeft),
+                unit: dispute.daysLeft > 1 ? 'jours restants' : 'jour restant',
+                tone: dispute.daysLeft <= 3 ? 'bad' : dispute.daysLeft <= 7 ? 'wait' : 'go',
+              };
+
       return `<article class="dsp${urgent ? ' urgent' : ''}">
         <div class="dsp-head">
-          <b class="mono">${esc(dispute.orderName ?? 'commande inconnue')}</b>
-          <span class="tag tag-status ${
-            dispute.status === 'NEEDS_RESPONSE' ? 'st-FAILED' : 'st-NEW'
-          }">${esc(DISPUTE_STATUS[dispute.status] ?? dispute.status)}</span>
+          <span class="dsp-count tone-${countdown.tone}">
+            <b>${esc(countdown.value)}</b><span>${esc(countdown.unit)}</span>
+          </span>
+          <div class="dsp-id">
+            <b class="mono">${esc(dispute.orderName ?? 'commande inconnue')}</b>
+            <span class="tag tone-${
+              dispute.status === 'NEEDS_RESPONSE' ? 'bad' : 'go'
+            }">${esc(DISPUTE_STATUS[dispute.status] ?? dispute.status)}</span>
+          </div>
           <span class="mono dsp-amount">${esc(euro(dispute.amount, dispute.currency))}</span>
         </div>
 
@@ -3135,7 +3181,7 @@ async function loadDisputes() {
                       <span class="mono">${esc(item.trackingNumber)}</span>
                       ${item.carrier ? `<span class="tag tag-order">${esc(item.carrier)}</span>` : ''}
                       <span class="tag ${
-                        item.status === 'Delivered' ? 'st-CLOSED' : 'st-NEEDS_REVIEW'
+                        trackTone(item.status)
                       }">${esc(TRACK_LABELS[item.status] ?? item.status ?? 'suivi indisponible')}</span>
                       ${
                         item.hasPhoto
