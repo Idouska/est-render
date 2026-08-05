@@ -519,6 +519,162 @@ async function openSupplierLink(supplierId, revoke = false) {
   }
 }
 
+/* ----------------------------------------------------------- fiche client */
+
+/**
+ * Tout ce que la boutique sait d'un client, en un panneau.
+ *
+ * L'email est la clé : c'est le seul identifiant partagé entre Shopify et nos
+ * tickets. Le panneau s'ouvre par-dessus l'écran courant plutôt que de le
+ * remplacer — l'agent consulte sans perdre le ticket qu'il traite.
+ */
+async function openCustomerSheet(email, displayName) {
+  if (!email) return;
+
+  $('sheet-name').textContent = displayName || email;
+  $('sheet-email').textContent = email;
+  $('sheet-body').innerHTML = '<p class="empty">Chargement…</p>';
+  $('sheet-wrap').hidden = false;
+
+  let data;
+  try {
+    data = await api(`/api/customer-sheet?email=${encodeURIComponent(email)}`);
+  } catch (error) {
+    $('sheet-body').innerHTML = `<p class="empty">${esc(error.message)}</p>`;
+    return;
+  }
+
+  const { totals, customer, orders, tickets, refunds, parcels, shopifyError } = data;
+  if (customer?.displayName) $('sheet-name').textContent = customer.displayName;
+
+  const money = (value) => euro(value, totals.currency ?? 'EUR');
+
+  const sections = [];
+
+  sections.push(`<div class="sheet-stats">
+    <div class="sheet-stat"><b>${totals.orders}</b><span>Commandes</span></div>
+    <div class="sheet-stat"><b>${esc(money(totals.spent))}</b><span>Dépensé</span></div>
+    <div class="sheet-stat"><b>${totals.openTickets}/${totals.tickets}</b><span>Tickets ouverts</span></div>
+    <div class="sheet-stat"><b>${esc(money(totals.refunded))}</b><span>Remboursé</span></div>
+  </div>`);
+
+  if (shopifyError) {
+    sections.push(`<div class="notice"><span class="notice-mark">Shopify</span><div>${esc(
+      shopifyError,
+    )}</div></div>`);
+  }
+
+  sections.push(group(
+    'Commandes',
+    orders.map(
+      (order) => `<div class="sheet-row">
+        <b class="mono">${esc(order.name)}</b>
+        <span class="tag tag-order">${esc(order.displayFulfillmentStatus ?? '—')}</span>
+        <span class="tag tag-order">${esc(order.displayFinancialStatus ?? '—')}</span>
+        <span class="mono">${esc(euro(order.totalPrice, order.currency))}</span>
+        <span class="when">${relativeTime(order.createdAt)}</span>
+        <p>${esc(
+          (order.lineItems ?? [])
+            .map((item) => `${item.quantity} × ${item.title}`)
+            .join(' · ') || 'aucun article',
+        )}</p>
+      </div>`,
+    ),
+    'Aucune commande à cette adresse.',
+  ));
+
+  sections.push(group(
+    'Colis',
+    parcels.map(
+      (parcel) => `<div class="sheet-row">
+        <b>${parcel.index}/${parcel.total}</b>
+        <span class="mono">${esc(parcel.trackingNumber)}</span>
+        ${parcel.carrier ? `<span class="tag tag-order">${esc(parcel.carrier)}</span>` : ''}
+        ${
+          parcel.hasPhoto
+            ? `<a class="btn btn-small" href="/api/parcels/${esc(
+                parcel.id,
+              )}/photo" target="_blank" rel="noopener">Photo</a>`
+            : '<span class="when">sans photo</span>'
+        }
+        <span class="when">${esc(parcel.orderName ?? '')}</span>
+      </div>`,
+    ),
+    'Aucun colis saisi pour ce client.',
+  ));
+
+  sections.push(group(
+    'Tickets',
+    tickets.map(
+      (ticket) => `<div class="sheet-row clickable" data-ticket="${esc(ticket.id)}">
+        <b>${esc(ticket.subject ?? '(sans objet)')}</b>
+        <span class="tag st-${ticket.status}">${esc(
+          STATUS_LABELS[ticket.status] ?? ticket.status,
+        )}</span>
+        ${
+          ticket.intent
+            ? `<span class="tag in-${ticket.intent}">${esc(
+                INTENT_LABELS[ticket.intent] ?? ticket.intent,
+              )}</span>`
+            : ''
+        }
+        <span class="when">${relativeTime(ticket.lastMessageAt)}</span>
+      </div>`,
+    ),
+    'Aucun échange avec ce client.',
+  ));
+
+  sections.push(group(
+    'Remboursements',
+    refunds.map(
+      (refund) => `<div class="sheet-row">
+        <b class="mono">${esc(euro(refund.amount, refund.currency))}</b>
+        <span class="tag st-${refund.status === 'COMPLETED' ? 'CLOSED' : 'NEEDS_REVIEW'}">${esc(
+          refund.status,
+        )}</span>
+        <span class="when">${relativeTime(refund.createdAt)}</span>
+        <p>${esc(refund.reason)}</p>
+      </div>`,
+    ),
+    'Aucun remboursement.',
+  ));
+
+  $('sheet-body').innerHTML = sections.join('');
+
+  // Un ticket de la fiche ramène à la file, sur ce ticket : c'est le geste
+  // attendu quand on découvre un échange passé qui explique la demande.
+  $('sheet-body')
+    .querySelectorAll('[data-ticket]')
+    .forEach((row) =>
+      row.addEventListener('click', async () => {
+        closeCustomerSheet();
+        setView('tickets');
+        await selectTicket(row.dataset.ticket);
+      }),
+    );
+}
+
+function group(title, rows, empty) {
+  return `<section class="sheet-group">
+    <h3>${esc(title)}</h3>
+    ${rows.length ? rows.join('') : `<div class="sheet-row"><p>${esc(empty)}</p></div>`}
+  </section>`;
+}
+
+function closeCustomerSheet() {
+  $('sheet-wrap').hidden = true;
+}
+
+$('sheet-close').addEventListener('click', closeCustomerSheet);
+
+$('sheet-wrap').addEventListener('click', (event) => {
+  if (event.target === $('sheet-wrap')) closeCustomerSheet();
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !$('sheet-wrap').hidden) closeCustomerSheet();
+});
+
 /* ------------------------------------------------------------------ colis */
 
 /**
@@ -899,7 +1055,9 @@ function renderDetail() {
     .join('');
 
   $('d-meta').innerHTML =
-    `${esc(ticket.customerName ?? '')} · <code>${esc(ticket.customerEmail)}</code>` +
+    `<button class="linkish" id="d-who">${esc(
+      ticket.customerName ?? ticket.customerEmail,
+    )}</button> · <code>${esc(ticket.customerEmail)}</code>` +
     (ticket.intent
       ? ` · intention <b>${INTENT_LABELS[ticket.intent] ?? ticket.intent}</b>${
           ticket.intentConfidence != null
@@ -913,6 +1071,10 @@ function renderDetail() {
          <option value="">Personne</option>${assignOptions}
        </select>
      </span>`;
+
+  $('d-who')?.addEventListener('click', () =>
+    void openCustomerSheet(ticket.customerEmail, ticket.customerName ?? ''),
+  );
 
   $('d-assignee')?.addEventListener('change', async (event) => {
     const userId = event.target.value || null;
@@ -1028,9 +1190,17 @@ function row(label, value, mono = false) {
 function renderCustomer(order) {
   const customer = order?.customer;
 
+  // Sans commande rattachée, l'email du ticket suffit à ouvrir la fiche : elle
+  // contient justement de quoi retrouver la commande manquante.
+  const ticketEmail = state.detail?.ticket?.customerEmail ?? null;
+
   if (!customer) {
-    $('c-customer').innerHTML =
-      '<p class="empty">Fiche client indisponible sans commande rattachée.</p>';
+    $('c-customer').innerHTML = ticketEmail
+      ? `<p class="empty">Aucune commande rattachée.</p>
+         <button class="btn btn-small" id="c-sheet">Ouvrir la fiche client</button>`
+      : '<p class="empty">Fiche client indisponible sans commande rattachée.</p>';
+
+    $('c-sheet')?.addEventListener('click', () => void openCustomerSheet(ticketEmail));
     return;
   }
 
@@ -1042,7 +1212,12 @@ function renderCustomer(order) {
     (customer.amountSpent
       ? row('Total dépensé', euro(customer.amountSpent, order.currency), true)
       : '') +
-    '</dl>';
+    '</dl>' +
+    '<button class="btn btn-small" id="c-sheet" style="margin-top:8px">Fiche complète</button>';
+
+  $('c-sheet')?.addEventListener('click', () =>
+    void openCustomerSheet(customer.email ?? ticketEmail, customer.displayName ?? ''),
+  );
 }
 
 function renderOrder(ticket, order, orderError) {
@@ -2571,9 +2746,10 @@ function renderCustomers() {
     : '';
   $('customers-more').hidden = !store.hasNext;
 
-  // Cliquer un client bascule sur ses commandes : c'est la question suivante
-  // qu'on se pose toujours.
-  // Le bouton « Écrire » ne doit pas déclencher la bascule vers les commandes.
+  // Cliquer un client ouvre sa fiche croisée : commandes, colis, tickets et
+  // remboursements d'un coup. Auparavant on basculait sur ses commandes, ce
+  // qui ne répondait qu'à un quart de la question.
+  // Le bouton « Écrire » ne doit pas déclencher l'ouverture de la fiche.
   $('customers-rows')
     .querySelectorAll('[data-mail]')
     .forEach((button) =>
@@ -2587,11 +2763,8 @@ function renderCustomers() {
     .querySelectorAll('.grid-row')
     .forEach((row) =>
       row.addEventListener('click', () => {
-        if (!row.dataset.email) return;
-        state.orders.q = row.dataset.email;
-        $('orders-q').value = row.dataset.email;
-        setView('orders');
-        loadOrders({ reset: true });
+        const cell = row.querySelector('td b');
+        void openCustomerSheet(row.dataset.email, cell?.textContent ?? '');
       }),
     );
 }

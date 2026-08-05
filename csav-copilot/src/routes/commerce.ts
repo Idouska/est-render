@@ -188,6 +188,132 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
+  /**
+   * Fiche client complète.
+   *
+   * Le seul écran qui croise les quatre sources : commandes Shopify, tickets
+   * SAV, remboursements et colis. Sans lui, répondre à « ma commande n'est
+   * jamais arrivée » demande d'ouvrir cinq écrans et de noter les résultats
+   * sur un papier — c'est ce que l'administration Shopify ne fait pas et qui
+   * justifie cet outil.
+   *
+   * La clé est l'email : c'est le seul identifiant présent des deux côtés, un
+   * ticket n'ayant pas d'identifiant client Shopify.
+   */
+  app.get<{ Querystring: { email?: string } }>('/api/customer-sheet', async (request, reply) => {
+    const parsed = z.object({ email: z.string().email().max(200) }).safeParse(request.query);
+    if (!parsed.success) return reply.code(400).send({ error: 'Adresse email requise' });
+
+    const { merchantId } = request.session;
+    const email = parsed.data.email.toLowerCase();
+
+    // Les données internes d'abord : elles répondent même si Shopify est
+    // injoignable, et c'est déjà la moitié de la fiche.
+    const [tickets, refunds] = await Promise.all([
+      prisma.ticket.findMany({
+        where: { merchantId, customerEmail: email },
+        orderBy: { lastMessageAt: 'desc' },
+        take: 25,
+        select: {
+          id: true,
+          subject: true,
+          status: true,
+          intent: true,
+          orderName: true,
+          lastMessageAt: true,
+          createdAt: true,
+          assignedTo: { select: { name: true, email: true } },
+        },
+      }),
+      prisma.refund.findMany({
+        where: { merchantId, ticket: { customerEmail: email } },
+        orderBy: { createdAt: 'desc' },
+        take: 25,
+        select: {
+          id: true,
+          amount: true,
+          currency: true,
+          reason: true,
+          kind: true,
+          status: true,
+          shopifyOrderId: true,
+          createdAt: true,
+        },
+      }),
+    ]);
+
+    let customer = null;
+    let orders: Awaited<ReturnType<typeof listOrders>>['orders'] = [];
+    let shopifyError: string | null = null;
+
+    try {
+      const client = await getShopifyClient(merchantId);
+      const page = await listOrders(client, {
+        query: `email:${quoteSearchValue(email)}`,
+        limit: 25,
+        sort: 'recent',
+      });
+
+      orders = page.orders;
+      // L'identité vient de la commande la plus récente : chercher le client
+      // séparément coûterait un appel de plus pour la même information.
+      customer = page.orders[0]?.customer ?? null;
+    } catch (error) {
+      shopifyError = describeShopifyError(error).message;
+      request.log.warn({ err: error }, 'Fiche client : lecture Shopify en échec');
+    }
+
+    const parcels = orders.length
+      ? await prisma.parcel.findMany({
+          where: { merchantId, shopifyOrderId: { in: orders.map((order) => order.id) } },
+          orderBy: [{ orderName: 'asc' }, { index: 'asc' }],
+          select: {
+            id: true,
+            shopifyOrderId: true,
+            orderName: true,
+            trackingNumber: true,
+            carrier: true,
+            index: true,
+            total: true,
+            photoMime: true,
+            photoTakenAt: true,
+            updatedAt: true,
+          },
+        })
+      : [];
+
+    const spent = orders.reduce((sum, order) => sum + Number(order.totalPrice ?? 0), 0);
+
+    return reply.send({
+      email,
+      customer,
+      shopifyError,
+      orders,
+      tickets,
+      refunds: refunds.map((refund) => ({ ...refund, amount: refund.amount.toString() })),
+      parcels: parcels.map((parcel) => ({
+        ...parcel,
+        hasPhoto: Boolean(parcel.photoMime),
+        photoMime: undefined,
+      })),
+      // Repères calculés ici plutôt qu'à l'écran : ce sont des chiffres, pas
+      // de la mise en forme, et l'agent les cite au client.
+      totals: {
+        orders: orders.length,
+        spent: spent.toFixed(2),
+        currency: orders[0]?.currency ?? null,
+        tickets: tickets.length,
+        openTickets: tickets.filter(
+          (ticket) => ticket.status !== 'CLOSED' && ticket.status !== 'AUTO_SENT',
+        ).length,
+        refunded: refunds
+          .filter((refund) => refund.status === 'COMPLETED')
+          .reduce((sum, refund) => sum + Number(refund.amount), 0)
+          .toFixed(2),
+      },
+    });
+  });
+
   app.get('/api/products', async (request, reply) => {
     const parsed = listQuery.safeParse(request.query);
     if (!parsed.success) return reply.code(400).send({ error: 'Paramètres invalides' });

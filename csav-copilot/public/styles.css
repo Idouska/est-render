@@ -1717,3 +1717,98 @@ body {
   background: var(--surface);
   color: var(--ink);
 }
+
+/* ---------------------------------------------------------- fiche client --- */
+
+/* Panneau latéral plutôt qu'un écran : l'agent consulte la fiche sans perdre
+   le ticket qu'il est en train de traiter, ni sa place dans la file. */
+.sheet-wrap {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgb(10 10 20 / 42%);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.sheet {
+  width: min(560px, 100%);
+  background: var(--ground);
+  border-left: 1px solid var(--line);
+  box-shadow: var(--shadow-pop);
+  display: flex;
+  flex-direction: column;
+  animation: slide-in 0.18s ease;
+}
+
+@keyframes slide-in {
+  from { transform: translateX(24px); opacity: 0; }
+}
+
+.sheet-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 15px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.sheet-head h2 { margin: 0; font-size: 17px; letter-spacing: -0.02em; }
+.sheet-head p { margin: 2px 0 0; font-size: 12.5px; color: var(--ink-mute); font-family: var(--font-mono); }
+.sheet-head .btn { margin-left: auto; }
+
+.sheet-body { padding: 13px; overflow-y: auto; display: flex; flex-direction: column; gap: 11px; }
+
+.sheet-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+
+.sheet-stat {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 9px 10px;
+}
+
+.sheet-stat b { display: block; font-size: 17px; font-weight: 600; letter-spacing: -0.02em; }
+.sheet-stat span { display: block; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-mute); }
+
+.sheet-group { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); }
+.sheet-group > h3 {
+  margin: 0;
+  padding: 10px 13px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.sheet-row { padding: 9px 13px; display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.sheet-row + .sheet-row { border-top: 1px solid var(--line-soft); }
+.sheet-row b { font-size: 13px; }
+.sheet-row .mono { font-size: 12px; }
+.sheet-row .when { margin-left: auto; font-size: 11.5px; color: var(--ink-mute); }
+.sheet-row.clickable { cursor: pointer; }
+.sheet-row.clickable:hover { background: var(--inset); }
+.sheet-row p { margin: 0; width: 100%; font-size: 12.5px; color: var(--ink-mute); }
+
+@media (max-width: 700px) {
+  .sheet { width: 100%; border-left: 0; }
+  .sheet-stats { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* Nom cliquable dans un texte courant : souligné au survol seulement, sinon
+   la ligne se transforme en liste de liens. */
+.linkish {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.linkish:hover { text-decoration: underline; color: var(--accent-ink); }
