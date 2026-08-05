@@ -3700,7 +3700,8 @@ function renderSettings() {
                 }, ${result.ticketIds.length} ticket${
                   result.ticketIds.length > 1 ? 's' : ''
                 } dans la file.`
-              : 'Rien de nouveau : tout le courrier relevable est déjà dans la file.';
+              : 'Rien à relever : les 7 derniers jours sont déjà dans la file. ' +
+                'Le courrier plus ancien s’importe avec « Apprendre de l’historique ».';
 
           if (node) node.textContent = message;
           toast(message);

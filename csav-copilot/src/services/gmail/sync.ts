@@ -20,6 +20,67 @@ import { parseMessage, type ParsedMessage } from './messages.ts';
  */
 const MAX_PER_RUN = 60;
 
+/**
+ * Rattrape le courrier déjà présent dans la boîte.
+ *
+ * L'ingestion normale est incrémentale : elle ne connaît que ce qui arrive
+ * après la pose du curseur, au moment du branchement. Tout ce qui attendait
+ * déjà dans la boîte lui est invisible — d'où une file vide alors que le
+ * diagnostic annonce du courrier manquant, chacun disant vrai de son point de
+ * vue.
+ *
+ * Cette fonction ignore le curseur et relit la fenêtre demandée. Elle ne
+ * l'avance pas non plus : le suivi incrémental doit continuer sa route sans
+ * savoir qu'on est passé par là.
+ */
+export async function fetchRecentMessages(
+  merchantId: string,
+  mailboxId: string | null | undefined,
+  days: number,
+): Promise<ParsedMessage[]> {
+  const connection = mailboxId
+    ? await prisma.gmailConnection.findFirst({ where: { id: mailboxId, merchantId } })
+    : await prisma.gmailConnection.findFirst({
+        where: { merchantId },
+        orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+      });
+  if (!connection) return [];
+
+  const { gmail } = await getGmailClient(merchantId, connection.id);
+
+  const { data } = await gmail.users.messages.list({
+    userId: 'me',
+    // `-from:me` écarte ce que la boutique s'est envoyé : ce n'est pas du
+    // courrier client, et le ramasser créerait des tickets sans demandeur.
+    q: `in:inbox newer_than:${days}d -from:me`,
+    maxResults: MAX_PER_RUN,
+  });
+
+  const parsed: ParsedMessage[] = [];
+
+  for (const entry of data.messages ?? []) {
+    const id = entry.id;
+    if (!id) continue;
+
+    const known = await prisma.message.findUnique({
+      where: { merchantId_gmailMessageId: { merchantId, gmailMessageId: id } },
+      select: { id: true },
+    });
+    if (known) continue;
+
+    const { data: raw } = await gmail.users.messages.get({ userId: 'me', id, format: 'full' });
+    const message = parseMessage(raw);
+
+    if (!message) continue;
+    if (message.fromEmail === connection.emailAddress.toLowerCase()) continue;
+    if (message.labelIds.includes('DRAFT') || message.labelIds.includes('SENT')) continue;
+
+    parsed.push(message);
+  }
+
+  return parsed;
+}
+
 export async function fetchNewMessages(
   merchantId: string,
   mailboxId?: string | null,

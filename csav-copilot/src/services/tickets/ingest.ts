@@ -1,7 +1,7 @@
 import { logger } from '../../lib/logger.ts';
 import { prisma } from '../../lib/prisma.ts';
 import { enqueueTicket } from '../../queue/index.ts';
-import { fetchNewMessages } from '../gmail/sync.ts';
+import { fetchNewMessages, fetchRecentMessages } from '../gmail/sync.ts';
 
 /**
  * Ingère les nouveaux mails d'un marchand : upsert du ticket (un ticket = un
@@ -13,11 +13,24 @@ import { fetchNewMessages } from '../gmail/sync.ts';
 export async function ingestMerchantInbox(
   merchantId: string,
   mailboxId?: string | null,
+  options: {
+    /**
+     * Relire la boîte sur cette profondeur au lieu de suivre le curseur.
+     *
+     * Réservé à la relève manuelle : c'est le seul cas où l'on veut rattraper
+     * ce qui attendait avant le branchement. L'ingestion automatique reste
+     * incrémentale, sous peine de relire la même fenêtre à chaque
+     * notification.
+     */
+    backfillDays?: number;
+  } = {},
 ): Promise<{
   ingested: number;
   ticketIds: string[];
 }> {
-  const messages = await fetchNewMessages(merchantId, mailboxId);
+  const messages = options.backfillDays
+    ? await fetchRecentMessages(merchantId, mailboxId, options.backfillDays)
+    : await fetchNewMessages(merchantId, mailboxId);
   const ticketIds = new Set<string>();
   let ingested = 0;
 

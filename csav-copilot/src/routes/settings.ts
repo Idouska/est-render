@@ -494,8 +494,18 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
       });
       if (!mailbox) return reply.code(404).send({ error: "Boîte introuvable" });
 
+      const parsed = z
+        .object({ days: z.number().int().min(1).max(30).optional() })
+        .safeParse(request.body ?? {});
+      if (!parsed.success) return reply.code(400).send({ error: "Requête invalide" });
+
       try {
-        const result = await ingestMerchantInbox(merchantId, mailbox.id);
+        // Relève manuelle = rattrapage. Suivre le curseur ici répondrait
+        // « rien de nouveau » sur une boîte pleine de courrier antérieur au
+        // branchement, ce qui est vrai et parfaitement inutile.
+        const result = await ingestMerchantInbox(merchantId, mailbox.id, {
+          backfillDays: parsed.data.days ?? 7,
+        });
         return reply.send(result);
       } catch (error) {
         request.log.error({ err: error }, "Relève manuelle en échec");
