@@ -653,6 +653,42 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
+  /**
+   * Motifs d'échec les plus fréquents, regroupés.
+   *
+   * Une panne de traitement se répète à l'identique sur des milliers de
+   * tickets : ouvrir une fiche pour lire un message qui est le même partout
+   * fait perdre du temps à celui qui cherche. Regroupés, trois lignes suffisent
+   * à nommer la cause.
+   */
+  app.get(
+    "/api/tickets/failures",
+    { preHandler: requirePermission("configure") },
+    async (request, reply) => {
+      const { merchantId } = request.session;
+
+      const rows = await prisma.ticket.groupBy({
+        by: ["failureReason"],
+        where: { merchantId, status: "FAILED", isHistorical: false },
+        _count: { _all: true },
+        orderBy: { _count: { failureReason: "desc" } },
+        take: 5,
+      });
+
+      const total = rows.reduce((sum, row) => sum + row._count._all, 0);
+
+      return reply.send({
+        total,
+        reasons: rows.map((row) => ({
+          // Nul quand l'échec date d'avant l'enregistrement des motifs : le
+          // dire vaut mieux que d'afficher une ligne vide.
+          reason: row.failureReason ?? "motif non enregistré (échec antérieur)",
+          count: row._count._all,
+        })),
+      });
+    },
+  );
+
   /** Avancement d'un rattrapage en cours. */
   app.get<{ Params: { id: string } }>(
     "/api/mailboxes/:id/backfill",

@@ -6119,6 +6119,29 @@ $('ai-test')?.addEventListener('click', async () => {
       `<b>Résumé :</b> ${(result.summary ?? []).map((line) => esc(line)).join(' · ') || '—'}<br>` +
       `<b>Brouillon :</b> <i>${esc(result.preview ?? '')}…</i>`;
 
+    // Les échecs déjà en base, regroupés par motif : si l'IA rédige mais que
+    // les tickets échouent, la cause est ailleurs et c'est ici qu'elle se lit.
+    try {
+      const failures = await api('/api/tickets/failures');
+      if (failures.total > 0) {
+        node.innerHTML +=
+          `<br><br><b class="set-alert">${failures.total} ticket${
+            failures.total > 1 ? 's' : ''
+          } en échec.</b> Motifs :<br>` +
+          failures.reasons
+            .map(
+              (row) =>
+                `<span class="mono" style="font-size:12px">${row.count} × ${esc(
+                  row.reason,
+                )}</span>`,
+            )
+            .join('<br>');
+      }
+    } catch {
+      // Le diagnostic principal a déjà répondu : ne pas le gâcher pour un
+      // complément.
+    }
+
     {
       // La relance est proposée là où l'on vient de constater que la cause est
       // levée : la chercher ailleurs, c'est ne pas la faire.
