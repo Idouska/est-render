@@ -128,6 +128,24 @@ function buildTicketWhere(
   };
 }
 
+/**
+ * Libellés Gmail distincts portés par les tickets d'un marchand.
+ *
+ * `unnest` en SQL plutôt qu'un chargement de toutes les lignes : sur quatre
+ * mille tickets, rapatrier chaque tableau d'étiquettes pour les aplatir en
+ * mémoire coûterait plus cher que la liste elle-même.
+ */
+async function listMerchantLabels(merchantIds: string[]): Promise<string[]> {
+  const rows = await prisma.$queryRaw<Array<{ label: string }>>`
+    SELECT DISTINCT unnest("labels") AS label
+    FROM "Ticket"
+    WHERE "merchantId" = ANY(${merchantIds}::text[])
+    ORDER BY 1
+  `;
+
+  return rows.map((row) => row.label);
+}
+
 export async function ticketRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', requireSession);
 
@@ -258,6 +276,10 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({
       tickets,
       counts: { ...counts, ALL: byStatus.reduce((sum, row) => sum + row._count, 0) },
+      // Tous les libellés du marchand, pas seulement ceux de la page affichée.
+      // Les déduire des cinquante tickets à l'écran donnait une liste qui
+      // changeait à chaque tri et n'offrait jamais le filtre qu'on cherchait.
+      labels: await listMerchantLabels(merchantIds),
       nextCursor: hasMore ? tickets[tickets.length - 1]?.id : null,
     });
   });

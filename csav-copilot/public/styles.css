@@ -3664,3 +3664,147 @@ textarea:focus-visible {
 .folded .brand { overflow: hidden; }
 
 .folded .nav-item { white-space: nowrap; }
+
+/* ==========================================================================
+   CARTE UTILISATEUR
+   ==========================================================================
+
+   L'adresse d'un compte Shopify tient en trente-cinq caractères
+   (owner@rjd8fe-w0.myshopify.com) : elle passait à la ligne, poussait le
+   bouton hors de la carte, et « Sortir » venait se poser par-dessus le texte.
+   Deux lignes, chacune bornée, et le bouton sur la sienne. */
+
+.me {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 6px 4px;
+}
+
+.me > div { min-width: 0; }
+
+/* Coupée plutôt que repliée : le début d'une adresse suffit à reconnaître son
+   compte, et l'infobulle donne le reste. */
+.me b {
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.me span { font-size: 11px; }
+
+/* Le bouton perd son libellé au profit d'une icône : « Sortir » écrit en toutes
+   lettres réclamait le tiers d'une barre de 224 px pour une action qu'on fait
+   une fois par jour. */
+.me .btn {
+  margin: 0;
+  padding: 5px 7px;
+  font-size: 0;
+  line-height: 0;
+}
+
+.me .btn::before {
+  content: '⏻';
+  font-size: 13px;
+  line-height: 1;
+}
+
+/* ==========================================================================
+   BARRE DE FILTRES
+   ==========================================================================
+
+   Trois rangées d'objets tous différents — un champ pâle, des puces
+   rectangulaires, des pastilles arrondies, des menus déroulants nus, des
+   intitulés en capitales espacées. Chacun défendable seul, l'ensemble
+   dépareillé : rien n'indiquait quels contrôles allaient ensemble, ni lequel
+   comptait.
+
+   Un vocabulaire unique désormais. Même hauteur, même rayon, même arête pour
+   tout ce qui se clique ; les intitulés passent en minuscules parce qu'ils
+   accompagnent un menu et n'ont pas à crier. */
+
+.qbar { padding: 10px 12px; gap: 8px; }
+
+/* Le champ de recherche prend la parole : c'est le point d'entrée de l'écran,
+   pas un contrôle parmi cinq. */
+.qbar input[type='search'] {
+  padding: 9px 12px 9px 34px;
+  font-size: 13.5px;
+  background:
+    var(--inset)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23838aa0' stroke-width='1.5' stroke-linecap='round'%3E%3Ccircle cx='7' cy='7' r='4.6'/%3E%3Cpath d='m10.5 10.5 3 3'/%3E%3C/svg%3E")
+    no-repeat 11px 50% / 15px 15px;
+}
+
+/* Statuts et raccourcis partagent la même pilule : ils font le même geste —
+   restreindre la liste — et se distinguaient par la forme sans raison. */
+.qchip,
+.filters .chip {
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12.5px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  box-shadow: var(--e1), var(--edge);
+  transition: border-color 0.14s var(--ease), color 0.14s var(--ease);
+}
+
+/* Le relief ne s'applique qu'au repos. Posé sans réserve, il repeignait par
+   dessus le fond coloré de la puce active et la rendait blanche — la même
+   méprise que sur le bouton d'envoi il y a quelques jours. */
+.qchip:not([aria-pressed='true']),
+.filters .chip:not([aria-pressed='true']) {
+  background-image: var(--grad-raised);
+}
+
+.qchip[aria-pressed='true'],
+.filters .chip[aria-pressed='true'] { box-shadow: none; }
+
+/* Les menus rejoignent la même famille : hauteur, rayon, relief. */
+.qbar-selects select {
+  height: 28px;
+  padding: 0 26px 0 10px;
+  font-size: 12.5px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background-image: var(--grad-raised);
+  box-shadow: var(--e1), var(--edge);
+  color: var(--ink);
+  appearance: none;
+  background-repeat: no-repeat;
+  background-position: right 9px center;
+  background-size: 9px;
+}
+
+/* Le chevron est dessiné plutôt qu'hérité : celui du système impose sa propre
+   couleur et sa propre taille, et jure avec le reste. */
+.qbar-selects select {
+  background-image: var(--grad-raised),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6' fill='none' stroke='%23838aa0' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M1 1l4 4 4-4'/%3E%3C/svg%3E");
+  background-position: center, right 9px center;
+  background-size: auto, 9px;
+}
+
+/* Les intitulés accompagnent leur menu : minuscules, discrets, sans espacement
+   de lettres. Ils annonçaient chaque filtre comme un titre de section. */
+.qbar-selects label {
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-mute);
+  gap: 7px;
+}
+
+.qbar-selects { gap: 12px; row-gap: 8px; }
+
+/* Le compteur ferme la ligne, aligné à droite et sans emphase : il informe,
+   il ne se clique pas. */
+#q-count { margin-left: auto; font-size: 11.5px; color: var(--ink-mute); }
+
+@media (max-width: 700px) {
+  .qbar input[type='search'] { min-width: 100%; }
+}

@@ -245,6 +245,8 @@ function renderMe() {
 
   const who = me.user?.name ?? me.user?.email ?? '—';
   $('me-name').textContent = who;
+  // L'adresse est coupée à l'affichage : l'infobulle rend la version entière.
+  $('me-name').title = who;
   $('me-role').textContent = ROLE_LABELS[me.user?.role] ?? '';
   $('me-avatar').textContent = who
     .split(/[\s.@]+/)
@@ -478,6 +480,7 @@ async function loadQueue({ append = false } = {}) {
   state.queueCursor = data.nextCursor ?? null;
   state.tickets = append ? [...state.tickets, ...data.tickets] : data.tickets;
   state.queueCounts = data.counts ?? {};
+  state.queueLabels = data.labels ?? state.queueLabels ?? [];
   renderQueueBar();
 
   if (state.tickets.length === 0) {
@@ -1239,12 +1242,10 @@ async function loadAgents() {
   // Une seule boîte : le filtre n'aurait qu'une option utile.
   $('q-mailbox').closest('label').hidden = mailboxes.length < 2;
 
-  // Les libellés viennent de ce que la file contient, pas d'un appel à Gmail :
-  // proposer un filtre sur une étiquette qu'aucun ticket ne porte ne mène qu'à
-  // une liste vide.
-  const labels = [...new Set(state.tickets.flatMap((ticket) => ticket.labels ?? []))].sort(
-    (a, b) => a.localeCompare(b, 'fr'),
-  );
+  // La liste vient du serveur, qui la calcule sur l'ensemble des tickets. La
+  // déduire des cinquante lignes affichées donnait un menu qui changeait à
+  // chaque tri et n'offrait jamais le filtre qu'on cherchait.
+  const labels = state.queueLabels ?? [];
 
   const labelSelect = $('q-label');
   labelSelect.innerHTML =
