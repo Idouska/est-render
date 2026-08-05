@@ -208,6 +208,16 @@
           </div>
         </div>
 
+        <!-- Origine du ticket : trois populations qui ne se traitent pas de la
+             même façon. Un onglet plutôt qu'un filtre de plus, parce qu'on
+             choisit son terrain avant de le filtrer. -->
+        <div class="qbar-row qbar-origins">
+          <button class="otab" data-origin="" aria-pressed="true">Tout</button>
+          <button class="otab" data-origin="client">Client</button>
+          <button class="otab" data-origin="supplier">Fournisseur</button>
+          <button class="otab" data-origin="dispute">Litige</button>
+        </div>
+
         <div class="qbar-row">
           <div class="filters" id="filters">
             <button class="chip" data-filter="" aria-pressed="true">Tous</button>
@@ -280,6 +290,20 @@
             <span class="panel-title">Action</span>
             <div class="actbar-row" id="actbar-row"></div>
             <p class="actbar-note" id="actbar-note"></p>
+
+            <!-- Rédaction sur place. Écrire au client depuis une fenêtre
+                 modale masque le ticket au moment précis où l'on a besoin de
+                 le relire pour répondre. -->
+            <div class="compose" id="compose" hidden>
+              <textarea id="compose-body" rows="5"></textarea>
+              <div class="compose-foot">
+                <button class="btn btn-small" id="compose-relay" hidden></button>
+                <span class="hint" id="compose-hint"></span>
+                <button class="btn" id="compose-cancel">Annuler</button>
+                <button class="btn btn-primary" id="compose-send">Valider et envoyer</button>
+              </div>
+            </div>
+
             <div class="subs" id="subs" hidden></div>
           </div>
 

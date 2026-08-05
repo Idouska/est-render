@@ -25,7 +25,8 @@ const state = {
   lastRefresh: null,
   queue: {
     q: '', intent: '', assignee: '', mailbox: '', label: '', sort: 'newest',
-    urgent: false, unassigned: false, unlinked: false, historical: false, timer: null,
+    urgent: false, unassigned: false, unlinked: false, historical: false,
+    origin: '', timer: null,
   },
   queueCounts: {},
   agents: [],
@@ -520,6 +521,15 @@ async function loadQueue({ append = false } = {}) {
   state.tickets = append ? [...state.tickets, ...data.tickets] : data.tickets;
   state.queueCounts = data.counts ?? {};
   state.queueLabels = data.labels ?? state.queueLabels ?? [];
+
+  // Compteurs de la navigation, dérivés des mêmes chiffres que la file : deux
+  // sources donneraient deux vérités, et c'est celle qu'on ne regarde pas qui
+  // finirait par mentir.
+  state.navCounts = {
+    suppliers: state.queueCounts?.AWAITING_SUPPLIER ?? 0,
+    disputes: state.disputeCount ?? 0,
+  };
+  renderNav();
   renderQueueBar();
 
   if (state.tickets.length === 0) {
@@ -1112,6 +1122,112 @@ function renderActionBar() {
   $('actbar-note').textContent = first ? ACTION_META[first].note : '';
 }
 
+/**
+ * Ouvre la rédaction sous les actions, sans quitter le ticket.
+ *
+ * Une fenêtre modale masque exactement ce qu'on doit relire pour répondre. Ici
+ * le message se compose au-dessous du fil, qui reste visible.
+ */
+function openCompose(target, ticket) {
+  const zone = $('compose');
+  zone.hidden = false;
+  zone.dataset.target = target;
+
+  const body = $('compose-body');
+  body.placeholder =
+    target === 'client' ? 'Votre message au client…' : 'Votre message au fournisseur…';
+  body.value = '';
+  body.focus();
+
+  const relay = $('compose-relay');
+  const hint = $('compose-hint');
+
+  if (target === 'supplier') {
+    // L'heure locale de l'atelier décide du canal : un mail à 5 h du matin
+    // attend le réveil, un message instantané aussi — mais on ne le découvre
+    // qu'après avoir attendu. Le dire ici évite la relance inutile.
+    const local = supplierLocalTime();
+    relay.hidden = false;
+    relay.textContent = 'Relancer sur WhatsApp';
+    hint.textContent = local
+      ? `Il est ${local.time} en Chine — ${
+          local.open ? 'heures ouvrées' : 'hors horaires, réponse probable demain matin'
+        }.`
+      : '';
+  } else {
+    relay.hidden = true;
+    hint.textContent = `Part vers ${ticket.customerEmail}.`;
+  }
+}
+
+/** Heure de l'atelier, et si l'on peut espérer une réponse tout de suite. */
+function supplierLocalTime() {
+  const now = new Date();
+  const time = now.toLocaleTimeString('fr-FR', {
+    timeZone: 'Asia/Shanghai',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  const hour = Number(
+    now.toLocaleString('en-GB', { timeZone: 'Asia/Shanghai', hour: '2-digit', hour12: false }),
+  );
+  return { time, open: hour >= 9 && hour < 18 };
+}
+
+$('compose-cancel')?.addEventListener('click', () => {
+  $('compose').hidden = true;
+});
+
+$('compose-relay')?.addEventListener('click', () => {
+  const text = $('compose-body').value.trim();
+  // WhatsApp Web plutôt qu'un envoi silencieux : le numéro du fournisseur
+  // appartient à sa fiche, et l'agent doit voir partir son message.
+  window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
+});
+
+$('compose-send')?.addEventListener('click', async () => {
+  const zone = $('compose');
+  const text = $('compose-body').value.trim();
+  const ticket = state.detail?.ticket;
+
+  if (!text || !ticket) return;
+
+  $('compose-send').disabled = true;
+  try {
+    if (zone.dataset.target === 'client') {
+      await api('/api/emails', {
+        method: 'POST',
+        body: JSON.stringify({
+          to: ticket.customerEmail,
+          subject: `Re: ${ticket.subject ?? 'votre commande'}`,
+          body: text,
+        }),
+      });
+      toast('Message envoyé au client.');
+    } else {
+      await api(`/api/tickets/${ticket.id}/escalations`, {
+        method: 'POST',
+        // Le motif suit l'intention détectée : une rupture escalade autrement
+        // qu'une adresse incomplète, et le service route d'après lui.
+        body: JSON.stringify({
+          reason:
+            ticket.intent === 'RETURN' || ticket.intent === 'REFUND'
+              ? 'MISSING_ITEM'
+              : 'OTHER',
+          note: text,
+        }),
+      });
+      toast('Escalade envoyée au fournisseur.');
+    }
+    zone.hidden = true;
+    await selectTicket(ticket.id);
+  } catch (error) {
+    toast(error.message, true);
+  } finally {
+    $('compose-send').disabled = false;
+  }
+});
+
 function actionBlockedReason(key, ticket) {
   if (key === 'refund') {
     if (!canI('refund')) return 'Seuls le propriétaire et les superviseurs peuvent rembourser.';
@@ -1139,8 +1255,8 @@ $('actbar-row').addEventListener('click', async (event) => {
   $('subs').hidden = true;
 
   if (key === 'refund') return $('btn-refund').click();
-  if (key === 'client') return openMail(ticket.customerEmail, `Re: ${ticket.subject ?? ''}`);
-  if (key === 'supplier') return setView('suppliers');
+  if (key === 'client') return openCompose('client', ticket);
+  if (key === 'supplier') return openCompose('supplier', ticket);
   if (key === 'tracking') return setView('tracking');
   if (key === 'substitute') return loadSubstitutions(ticket.id);
 });
@@ -1360,7 +1476,39 @@ $('q-intent').addEventListener('change', (event) => {
 
 $('q-reset').addEventListener('click', resetQueueFilters);
 
+/*
+ * Origine du ticket.
+ *
+ * Trois populations qui ne se traitent pas pareil : ce qu'écrit un client, ce
+ * qui remonte d'un atelier, et ce qu'une banque conteste. Traduites en filtres
+ * existants plutôt qu'en colonne de base : l'origine se déduit du motif et du
+ * statut, la stocker une seconde fois créerait une vérité de plus à tenir.
+ */
+const ORIGIN_FILTERS = {
+  client: { intent: '', status: '' },
+  supplier: { intent: '', status: 'AWAITING_SUPPLIER' },
+  dispute: { intent: 'DISPUTE', status: '' },
+};
+
 $('queue-bar').addEventListener('click', (event) => {
+  const tab = event.target.closest('[data-origin]');
+  if (tab) {
+    const origin = tab.dataset.origin;
+    state.queue.origin = origin;
+
+    const rule = ORIGIN_FILTERS[origin] ?? { intent: '', status: '' };
+    state.queue.intent = rule.intent;
+    state.filter = rule.status;
+    $('q-intent').value = rule.intent;
+
+    $('queue-bar')
+      .querySelectorAll('[data-origin]')
+      .forEach((other) => other.setAttribute('aria-pressed', String(other === tab)));
+
+    void loadQueue();
+    return;
+  }
+
   const quick = event.target.closest('[data-quick]');
   if (!quick) return;
 
@@ -3204,7 +3352,13 @@ function renderNav() {
       ${items
         .map((view) => {
           const meta = VIEW_META[view];
-          const tally = view === 'tickets' ? (state.pendingCount ?? 0) : 0;
+          // Chaque écran qui accumule du retard porte son compte. Un chiffre
+          // dans la navigation évite d'ouvrir un écran pour découvrir qu'il
+          // n'y avait rien — et surtout d'en ignorer un qui déborde.
+          const tally =
+            view === 'tickets'
+              ? (state.pendingCount ?? 0)
+              : (state.navCounts?.[view] ?? 0);
           return `<button class="nav-item" data-view="${view}" aria-current="${
             view === state.view
           }">${ico(meta.icon)}<span class="nav-label">${esc(meta.label)}</span>${
