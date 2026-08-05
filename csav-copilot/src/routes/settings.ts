@@ -7,6 +7,7 @@ import { prisma } from "../lib/prisma.ts";
 import { PREVIEW_COOKIE, requirePermission, requireSession } from "../plugins/auth.ts";
 import { backfillMailbox, backfillProgress } from "../services/gmail/backfill.ts";
 import { createOAuthClient, getGmailClient } from "../services/gmail/client.ts";
+import { loadLabelNames } from "../services/gmail/labels.ts";
 import { importMailboxHistory } from "../services/gmail/importHistory.ts";
 import { stopWatch } from "../services/gmail/watch.ts";
 import { ingestMerchantInbox } from "../services/tickets/ingest.ts";
@@ -466,6 +467,13 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
         });
         report.alreadyIngested = known;
         report.missing = ids.length - known;
+
+        // Les libellés que Gmail expose réellement, tels quels. C'est la seule
+        // façon de trancher entre « l'outil ne sait pas les lire » et « la
+        // boîte n'en a pas » : sans cette liste, on cherche un défaut qui
+        // n'existe peut-être pas.
+        const labelNames = await loadLabelNames(gmail, mailbox.id);
+        report.labels = [...labelNames.values()].sort((a, b) => a.localeCompare(b, "fr"));
       } catch (error) {
         report.tokenValid = false;
         report.error =

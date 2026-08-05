@@ -3576,3 +3576,81 @@ textarea:focus-visible {
   #kpis .kpi { flex: 1 1 45%; }
   #kpis .kpi + .kpi { box-shadow: none; }
 }
+
+/* ==========================================================================
+   EN-TÊTE COMPACT
+   ==========================================================================
+
+   Le titre occupait sa ligne, le fil d'Ariane la sienne, les horloges et les
+   pastilles d'état deux autres. Quatre rangées avant la première ligne de
+   travail, sur l'écran où l'on passe la journée : c'est un ticket et demi de
+   perdu à chaque coup d'œil.
+
+   Tout revient sur une seule ligne. Rien n'est supprimé — le fil d'Ariane
+   disparaît parce que la navigation dit déjà où l'on est, et c'était la seule
+   information redondante du lot. */
+
+.head {
+  align-items: center;
+  gap: 14px;
+  padding: 0;
+  flex-wrap: nowrap;
+}
+
+.head-main { flex-direction: row; align-items: center; gap: 12px; min-width: 0; }
+
+/* Le fil d'Ariane répétait la section déjà surlignée dans la navigation. */
+.crumb { display: none; }
+
+.head h1 {
+  font-size: 21px;
+  letter-spacing: -0.026em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Le filet dégradé passe sous le titre en soulignement court plutôt qu'en
+   barre séparée : la signature reste, la hauteur part. */
+.head h1::after {
+  display: inline-block;
+  margin: 0 0 4px 10px;
+  width: 26px;
+  height: 2px;
+  vertical-align: middle;
+}
+
+.head-acts {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+/* Les pastilles d'état passent en icônes : trois points de couleur disent
+   l'essentiel — connecté ou non — et le détail reste dans l'infobulle. */
+.conn { flex-wrap: nowrap; gap: 2px; }
+.conn-pill { padding: 3px 6px; font-size: 0; gap: 0; }
+.conn-pill .dot { width: 8px; height: 8px; }
+
+/* Les horloges perdent le nom des villes : à cette taille, le cadran et son
+   anneau national suffisent à reconnaître un fuseau. */
+.head .clock b { display: none; }
+.head .clock { padding: 4px 7px; }
+.head .clock .clock-time { font-size: 12.5px; }
+.head .wface { min-width: 0; padding: 4px 8px 5px; }
+.head .wface b { display: none; }
+.head .wface-time { font-size: 13px; }
+
+/* Sous 1200 px, les horloges cèdent la place : l'heure de Kuala Lumpur passe
+   après le titre de l'écran qu'on est en train de lire. */
+@media (max-width: 1200px) {
+  .head .clocks { display: none; }
+}
+
+@media (max-width: 700px) {
+  .head { flex-wrap: wrap; }
+  .head h1 { font-size: 19px; }
+  .head-acts { width: 100%; justify-content: flex-start; }
+}

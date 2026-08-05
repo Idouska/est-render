@@ -4415,6 +4415,21 @@ function renderDiagnosis(report) {
     lines.push('Tout le courrier récent est bien dans la file.');
   }
 
+  // Les libellés dits par leur nom : « je ne vois pas mes libellés » se règle
+  // en regardant si Gmail en expose, plutôt qu'en cherchant un défaut qui
+  // n'existe peut-être pas.
+  if (Array.isArray(report.labels)) {
+    lines.push(
+      report.labels.length > 0
+        ? `Libellés Gmail vus : ${report.labels
+            .map((name) => `<span class="tag tag-label">${esc(name)}</span>`)
+            .join(' ')}`
+        : '<b class="set-alert">Aucun libellé personnel dans cette boîte.</b> ' +
+          'Les catégories de Google (Promotions, Réseaux sociaux…) ne comptent pas : ' +
+          'seules vos propres étiquettes sont reprises.',
+    );
+  }
+
   if (!report.watchActive) {
     lines.push(
       '<b class="set-alert">Écoute inactive.</b> Le courrier n’arrivera pas tout ' +
