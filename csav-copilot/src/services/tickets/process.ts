@@ -47,7 +47,9 @@ export async function processTicket(merchantId: string, ticketId: string): Promi
 
   await prisma.ticket.update({
     where: { id: ticket.id },
-    data: { status: 'PROCESSING' },
+    // Une reprise réussie doit effacer l'échec précédent, sinon le motif
+    // survit à sa cause et décrit un problème déjà résolu.
+    data: { status: 'PROCESSING', failureReason: null },
   });
 
   try {
@@ -230,7 +232,12 @@ export async function processTicket(merchantId: string, ticketId: string): Promi
     logger.error({ merchantId, ticketId, err: error }, 'Échec du traitement du ticket');
     await prisma.ticket.update({
       where: { id: ticket.id },
-      data: { status: 'FAILED' },
+      data: {
+        status: 'FAILED',
+        // Tronquée : le message d'erreur suffit à orienter, la pile
+        // d'appels appartient aux journaux.
+        failureReason: (error instanceof Error ? error.message : String(error)).slice(0, 300),
+      },
     });
     throw error;
   }

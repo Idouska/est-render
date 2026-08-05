@@ -70,9 +70,29 @@ export async function backfillMailbox(params: {
 
         const known = await prisma.message.findUnique({
           where: { merchantId_gmailMessageId: { merchantId, gmailMessageId: entry.id } },
-          select: { id: true },
+          select: { id: true, ticketId: true },
         });
-        if (known) continue;
+
+        // Message déjà connu : on ne le réingère pas, mais on rafraîchit les
+        // libellés de son ticket. Sans ça, une boîte étiquetée après coup — ou
+        // ingérée avant que l'outil ne sache lire les libellés — n'en
+        // afficherait jamais, et relancer le rattrapage ne changerait rien.
+        if (known) {
+          const { data: head } = await gmail.users.messages.get({
+            userId: 'me',
+            id: entry.id,
+            format: 'minimal',
+          });
+
+          const names = resolveLabels(head.labelIds ?? [], labelNames);
+          if (names.length > 0) {
+            await prisma.ticket.update({
+              where: { id: known.ticketId },
+              data: { labels: names },
+            });
+          }
+          continue;
+        }
 
         const { data: raw } = await gmail.users.messages.get({
           userId: 'me',

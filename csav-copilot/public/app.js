@@ -179,6 +179,32 @@ $('gate-form').addEventListener('submit', (event) => {
 
 /* ------------------------------------------------------------- barre haute */
 
+/**
+ * Navigation repliée en rail d'icônes.
+ *
+ * Deux cent quarante-huit pixels de barre permanente, c'est une colonne de
+ * tickets en moins sur un portable. Repliée, la navigation garde ses icônes et
+ * rend la largeur au travail ; le choix est mémorisé, parce qu'on ne le refait
+ * pas dix fois par jour.
+ */
+function applySideFold() {
+  const folded = localStorage.getItem('csav.side') === 'folded';
+  document.getElementById('app-grid')?.classList.toggle('folded', folded);
+  const button = document.getElementById('side-fold');
+  if (button) {
+    button.setAttribute('aria-pressed', String(folded));
+    button.title = folded ? 'Déplier la navigation' : 'Replier la navigation';
+  }
+}
+
+document.getElementById('side-fold')?.addEventListener('click', () => {
+  const folded = localStorage.getItem('csav.side') === 'folded';
+  localStorage.setItem('csav.side', folded ? 'open' : 'folded');
+  applySideFold();
+});
+
+applySideFold();
+
 function renderMe() {
   const me = state.me;
   const shop = me.merchant.shopDomain ?? '';
@@ -434,11 +460,23 @@ function queueIsFiltered() {
   );
 }
 
-async function loadQueue() {
-  const list = $('queue');
-  const data = await api(`/api/tickets?${queueParams()}`);
+let queueObserver = null;
+let queueLoadingMore = false;
 
-  state.tickets = data.tickets;
+async function loadQueue({ append = false } = {}) {
+  const list = $('queue');
+
+  const params = queueParams();
+  if (append && state.queueCursor) params.set('cursor', state.queueCursor);
+  // Cinquante par page plutôt que vingt-cinq : le défilement infini enchaîne
+  // les pages, autant qu'elles soient assez grosses pour qu'il ne se déclenche
+  // pas à chaque tour de molette.
+  params.set('limit', '50');
+
+  const data = await api(`/api/tickets?${params}`);
+
+  state.queueCursor = data.nextCursor ?? null;
+  state.tickets = append ? [...state.tickets, ...data.tickets] : data.tickets;
   state.queueCounts = data.counts ?? {};
   renderQueueBar();
 
@@ -522,6 +560,28 @@ async function loadQueue() {
       </li>`;
     })
     .join('');
+
+  // Sentinelle de fin de liste : quand elle entre dans le champ, la page
+  // suivante se charge. Un bouton « charger la suite » sur une file de travail
+  // se re-clique cinquante fois ; le défilement, lui, ne se remarque pas.
+  if (state.queueCursor) {
+    const sentinel = document.createElement('li');
+    sentinel.className = 'queue-more';
+    sentinel.textContent = 'Chargement…';
+    list.append(sentinel);
+
+    queueObserver?.disconnect();
+    queueObserver = new IntersectionObserver((entries) => {
+      if (!entries[0]?.isIntersecting || queueLoadingMore) return;
+      queueLoadingMore = true;
+      void loadQueue({ append: true }).finally(() => {
+        queueLoadingMore = false;
+      });
+    });
+    queueObserver.observe(sentinel);
+  } else {
+    queueObserver?.disconnect();
+  }
 
   list.querySelectorAll('.queue-item').forEach((button) => {
     button.addEventListener('click', () => selectTicket(button.dataset.id));
@@ -1140,9 +1200,13 @@ function renderQueueBar() {
   }
 
   $('q-reset').hidden = !queueIsFiltered();
-  $('q-count').textContent = `${state.tickets.length} affiché${
-    state.tickets.length > 1 ? 's' : ''
-  }`;
+  // « 25 affichés » sur 556 laissait croire que le reste était perdu. Le
+  // total rend le rapport lisible, et le défilement fait le reste.
+  const total = state.queueCounts?.ALL ?? null;
+  $('q-count').textContent =
+    total !== null && total > state.tickets.length
+      ? `${state.tickets.length} sur ${total}`
+      : `${state.tickets.length} affiché${state.tickets.length > 1 ? 's' : ''}`;
 }
 
 /** Liste des agents pour le filtre et l'assignation. */
@@ -1539,6 +1603,18 @@ function renderDraft(draft, ticket) {
   const none = $('no-draft');
 
   renderBrief(draft);
+
+  // Un ticket en échec doit dire pourquoi, à l'endroit où l'on constate
+  // l'absence de brouillon. Sans ça, « Échec » envoie lire les journaux du
+  // serveur — c'est-à-dire que personne ne saura jamais.
+  if (ticket.status === 'FAILED' && ticket.failureReason) {
+    zone.hidden = true;
+    none.hidden = false;
+    $('no-draft-text').innerHTML =
+      `<b class="set-alert">Le traitement a échoué.</b><br>` +
+      `<span class="mono" style="font-size:12px">${esc(ticket.failureReason)}</span>`;
+    return;
+  }
 
   if (!draft) {
     zone.hidden = true;

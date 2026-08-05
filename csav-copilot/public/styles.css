@@ -3431,3 +3431,148 @@ textarea:focus-visible {
 }
 
 .poll-wrap .btn { border-radius: 0 var(--r-md) var(--r-md) 0; }
+
+/* Sentinelle de fin de liste : discrète, elle ne doit pas se lire comme une
+   ligne de plus. */
+.queue-more {
+  padding: 14px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--ink-mute);
+}
+
+/* ==========================================================================
+   BARRE LATÉRALE REPLIABLE
+   ========================================================================== */
+
+/* 248 px de navigation permanente, c'est une colonne de tickets en moins sur
+   un portable. Repliée, elle garde ses icônes — la position reste lisible —
+   et rend la largeur au travail. */
+.app { grid-template-columns: 224px 1fr; transition: grid-template-columns 0.22s var(--ease); }
+.app.folded { grid-template-columns: 62px 1fr; }
+
+.side { padding: 12px 10px; position: relative; }
+
+.side-fold {
+  position: absolute;
+  top: 12px;
+  right: 10px;
+  z-index: 2;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--ink-mute);
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.12s ease, border-color 0.12s ease;
+}
+
+.side-fold svg { width: 13px; height: 13px; }
+.side-fold:hover { color: var(--ink); border-color: var(--ink-mute); }
+.folded .side-fold svg { transform: rotate(180deg); }
+
+/* Repliée : tout ce qui est texte disparaît, les icônes se centrent. */
+.folded .side-search,
+.folded .nav-title,
+.folded .brand > div,
+.folded .brand-caret,
+.folded .me > div,
+.folded .me .btn,
+.folded .nav-item span:not(.tally) { display: none; }
+
+.folded .side { padding: 12px 8px; }
+.folded .side-fold { top: 10px; right: 8px; }
+.folded .brand-wrap { margin-top: 26px; }
+.folded .brand { justify-content: center; padding: 4px; }
+.folded .me { justify-content: center; }
+
+.folded .nav-item {
+  justify-content: center;
+  padding: 9px 0;
+}
+
+.folded .nav-item[aria-current='true']::before { left: -8px; }
+
+/* Le compteur d'urgence survit au repli : c'est la seule information de la
+   navigation qu'on ne peut pas se permettre de perdre. */
+.folded .nav-item .tally {
+  position: absolute;
+  top: 3px;
+  right: 6px;
+  margin: 0;
+  padding: 0 4px;
+  font-size: 9.5px;
+}
+
+@media (max-width: 1080px) {
+  /* En tiroir mobile, le repli n'a pas de sens : la barre est déjà masquée. */
+  .side-fold { display: none; }
+}
+
+/* ==========================================================================
+   INDICATEURS DE LA FILE
+   ==========================================================================
+
+   Quatre cartes de cent trente pixels de haut pour quatre nombres, sur l'écran
+   où l'on travaille : c'est un quart de la hauteur utile consacré à des
+   chiffres qu'on consulte deux fois par jour. Sur la file, ils redeviennent
+   une bande. L'écran Statistiques garde les grandes cartes — c'est sa raison
+   d'être. */
+
+#kpis {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  padding: 0;
+  border-radius: var(--r-lg);
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  background-image: var(--grad-surface);
+  box-shadow: var(--e1), var(--edge);
+  overflow: hidden;
+}
+
+#kpis .kpi {
+  flex: 1 1 160px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 11px 15px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+#kpis .kpi + .kpi { box-shadow: inset 1px 0 0 var(--line-soft); }
+
+#kpis .kpi-label {
+  order: 2;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  font-weight: 500;
+  color: var(--ink-mute);
+  min-height: 0;
+}
+
+#kpis .kpi-value {
+  order: 1;
+  font-size: 19px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  margin: 0;
+  flex: none;
+}
+
+/* La note disparaît : à cette densité, elle explique un chiffre qu'on ne
+   regarde plus assez longtemps pour avoir besoin d'explication. */
+#kpis .kpi-note { display: none; }
+
+@media (max-width: 700px) {
+  #kpis .kpi { flex: 1 1 45%; }
+  #kpis .kpi + .kpi { box-shadow: none; }
+}

@@ -219,6 +219,13 @@ model Ticket {
   /// rien à faire en haut de la pile pendant trois jours.
   snoozedUntil DateTime?
 
+  /// Pourquoi le traitement a échoué, quand il a échoué.
+  ///
+  /// Sans ce champ, un ticket en « Échec » ne dit rien : ni clé d'IA absente,
+  /// ni quota dépassé, ni message illisible. On regarde les journaux du
+  /// serveur — c'est-à-dire que personne ne regarde.
+  failureReason String?
+
   /// Libellés Gmail portés par le fil, tels que le marchand les a créés.
   /// Les siens uniquement : les catégories automatiques de Google décrivent
   /// son classement à lui, pas l'organisation du SAV.

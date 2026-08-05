@@ -234,6 +234,7 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
           lastMessageAt: true,
           createdAt: true,
           labels: true,
+          failureReason: true,
           assignedToId: true,
           assignedTo: { select: { id: true, name: true, email: true } },
           mailbox: { select: { id: true, emailAddress: true, label: true } },
