@@ -453,6 +453,27 @@ export function createMockShopifyClient(shopDomain: string): ShopifyClient {
         } as T;
       }
 
+      if (query.includes('query ShopPolicies')) {
+        return {
+          shop: {
+            name: 'Boutique fictive',
+            contactEmail: 'contact@exemple.test',
+            shipsToCountries: ['FR', 'BE', 'CH'],
+            shippingPolicy: {
+              title: 'Livraison',
+              body: '<p>Expédition sous 2 à 5 jours ouvrés vers la France.</p>',
+            },
+            refundPolicy: {
+              title: 'Retours et remboursements',
+              body: '<p>Retour accepté 30 jours après réception, article non porté.</p>',
+            },
+            privacyPolicy: null,
+            termsOfService: null,
+            subscriptionPolicy: null,
+          },
+        } as T;
+      }
+
       if (query.includes('mutation CreateRefund')) {
         const input = variables?.input as { orderId: string };
         const id = `gid://shopify/Refund/${Date.now()}`;

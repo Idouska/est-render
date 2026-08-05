@@ -5,6 +5,8 @@ import { recordAudit } from "../lib/audit.ts";
 import { prisma } from "../lib/prisma.ts";
 import { requirePermission, requireSession } from "../plugins/auth.ts";
 import { importMailboxHistory } from "../services/gmail/importHistory.ts";
+import { ShopifyScopeError } from "../services/shopify/client.ts";
+import { fetchShopPolicies, policiesToPlaybook } from "../services/shopify/policies.ts";
 import { decodePhoto, photoSchema } from "./parcels.ts";
 
 /**
@@ -318,6 +320,41 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
         .finally(() => importsRunning.delete(mailbox.id));
 
       return reply.code(202).send({ started: true });
+    },
+  );
+
+  /**
+   * Politiques publiques de la boutique, mises en forme de playbook.
+   *
+   * En lecture seule : on propose un texte, c'est le marchand qui l'enregistre
+   * après relecture. Écrire directement dans le playbook écraserait sans
+   * prévenir des consignes que Shopify ne connaît pas.
+   */
+  app.get(
+    "/api/settings/policies",
+    { preHandler: requirePermission("configure") },
+    async (request, reply) => {
+      const { merchantId } = request.session;
+
+      try {
+        const policies = await fetchShopPolicies(merchantId);
+        return reply.send({
+          playbook: policiesToPlaybook(policies),
+          sections: policies.sections.length,
+          shopName: policies.shopName,
+        });
+      } catch (error) {
+        if (error instanceof ShopifyScopeError) {
+          return reply.code(409).send({
+            error:
+              "Shopify refuse l'accès aux politiques. Réautorisez l'application depuis les réglages.",
+          });
+        }
+        request.log.error({ err: error, merchantId }, "Lecture des politiques échouée");
+        return reply
+          .code(502)
+          .send({ error: "Shopify n'a pas répondu. Réessayez dans un instant." });
+      }
     },
   );
 

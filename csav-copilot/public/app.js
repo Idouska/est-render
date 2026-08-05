@@ -3424,6 +3424,49 @@ for (const id of SETTINGS_FIELDS) {
   $(id).addEventListener('change', markSettingsDirty);
 }
 
+/**
+ * Reprend les politiques publiques de la boutique dans le playbook.
+ *
+ * Les règles existent déjà, écrites et publiées : les retaper à la main
+ * garantit qu'elles divergeront au premier changement de politique de retour.
+ * On propose, on n'écrase pas : le playbook peut contenir des consignes que
+ * Shopify ne connaît pas.
+ */
+$('set-policies').addEventListener('click', async () => {
+  const button = $('set-policies');
+  const current = $('set-playbook').value.trim();
+
+  if (
+    current &&
+    !confirm(
+      'Remplacer le contenu actuel par vos politiques Shopify ?\n\n' +
+        'Ce que vous avez écrit à la main sera perdu.',
+    )
+  ) {
+    return;
+  }
+
+  button.disabled = true;
+  try {
+    const { playbook, sections } = await api('/api/settings/policies');
+
+    if (!playbook) {
+      toast('Aucune politique publiée sur la boutique.', true);
+      return;
+    }
+
+    $('set-playbook').value = playbook;
+    markSettingsDirty();
+    toast(
+      `${sections} politique${sections > 1 ? 's' : ''} reprise${sections > 1 ? 's' : ''} — relisez, puis enregistrez.`,
+    );
+  } catch (error) {
+    toast(error.message, true);
+  } finally {
+    button.disabled = false;
+  }
+});
+
 $('set-threshold').addEventListener('input', (event) => {
   $('set-threshold-echo').textContent = `${Math.round(Number(event.target.value) * 100)} %`;
 });

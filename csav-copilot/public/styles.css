@@ -1727,6 +1727,18 @@ body {
   color: var(--ink);
 }
 
+/* Action rattachée à un champ : le bouton précède son explication, sinon on lit
+   la justification d'un geste qu'on n'a pas encore vu. */
+.field-acts {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+}
+
 /* Volume du corpus d'apprentissage. Vide tant que rien n'a été importé : une
    ligne « 0 échange » suggérerait un échec là où il n'y a qu'une absence. */
 .mbx-learn:not(:empty) {
