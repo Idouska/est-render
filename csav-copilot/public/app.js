@@ -1366,9 +1366,40 @@ function canI(permission) {
   return (table[permission] ?? []).includes(myRole());
 }
 
+/**
+ * Résumé du message client, au-dessus du fil.
+ *
+ * Il vient de la même génération que le brouillon : demander deux fois au
+ * modèle doublerait le coût et laisserait le résumé décrire un message que la
+ * réponse n'a pas traité.
+ */
+function renderBrief(draft) {
+  const brief = $('d-brief');
+  const points = draft?.summary ?? [];
+  const ask = draft?.ask ?? '';
+
+  // Rien à montrer : on masque au lieu d'afficher un cadre vide, qui ferait
+  // croire à une panne plutôt qu'à une absence.
+  if (points.length === 0 && !ask) {
+    brief.hidden = true;
+    $('d-fold').open = true;
+    return;
+  }
+
+  brief.hidden = false;
+  // Le fil se replie dès qu'un résumé le remplace : c'est tout l'intérêt.
+  $('d-fold').open = false;
+
+  $('d-ask').textContent = ask;
+  $('d-ask').hidden = !ask;
+  $('d-summary').innerHTML = points.map((line) => `<li>${esc(line)}</li>`).join('');
+}
+
 function renderDraft(draft, ticket) {
   const zone = $('draft-zone');
   const none = $('no-draft');
+
+  renderBrief(draft);
 
   if (!draft) {
     zone.hidden = true;
@@ -3069,6 +3100,7 @@ async function openOrderSheet(id) {
     )}</code>`;
     $('d-messages').innerHTML =
       '<p class="empty">Consultation depuis le carnet de commandes — aucun échange rattaché.</p>';
+    renderBrief(null);
     $('draft-zone').hidden = true;
     $('actbar').hidden = true;
     $('no-draft').hidden = false;

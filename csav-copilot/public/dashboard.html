@@ -209,7 +209,23 @@
             </div>
           </div>
 
-          <div class="messages" id="d-messages"></div>
+          <!-- Le résumé passe avant le fil : un agent qui traite cent tickets
+               par jour décide sur ces quatre lignes et n'ouvre le fil que si
+               quelque chose cloche. L'ordre inverse — lire puis résumer — est
+               celui qui coûte la journée. -->
+          <section class="brief" id="d-brief" hidden>
+            <div class="brief-head">
+              <span class="panel-title">Résumé</span>
+              <span class="brief-src">par l'IA</span>
+            </div>
+            <p class="brief-ask" id="d-ask"></p>
+            <ul class="brief-points" id="d-summary"></ul>
+          </section>
+
+          <details class="thread-fold" id="d-fold">
+            <summary><span class="thread-fold-label">Fil complet</span></summary>
+            <div class="messages" id="d-messages"></div>
+          </details>
 
           <div class="actbar" id="actbar" hidden>
             <span class="panel-title">Action</span>
@@ -248,42 +264,42 @@
           </div>
         </section>
 
+        <!-- Un seul panneau, sectionné. Six cartes flottantes dont quatre
+             affichaient « — » : c'est six fois le même cadre, six ombres et
+             six titres pour un contenu qui tient dans une colonne. Le dossier
+             d'un client est une chose, pas six. -->
         <aside class="context">
-          <div class="panel">
-            <div class="panel-head"><span class="panel-title">Client</span></div>
-            <div class="card-body" id="c-customer">
-              <p class="empty">—</p>
+          <div class="panel rail">
+            <div class="rail-sec">
+              <span class="rail-title">Client</span>
+              <div id="c-customer"><p class="empty">—</p></div>
             </div>
-          </div>
-          <div class="panel">
-            <div class="panel-head"><span class="panel-title">Commande</span></div>
-            <div class="card-body" id="c-order">
-              <p class="empty">—</p>
+            <div class="rail-sec">
+              <span class="rail-title">Commande</span>
+              <div id="c-order"><p class="empty">—</p></div>
             </div>
-          </div>
-          <div class="panel">
-            <div class="panel-head"><span class="panel-title">Livraison</span></div>
-            <div class="card-body" id="c-ship">
-              <p class="empty">—</p>
+            <div class="rail-sec">
+              <span class="rail-title">Livraison</span>
+              <div id="c-ship"><p class="empty">—</p></div>
             </div>
-          </div>
-          <div class="panel" id="parcels-panel" hidden>
-            <div class="panel-head"><span class="panel-title">Colis</span></div>
-            <div class="card-body" id="c-parcels"></div>
-          </div>
-          <div class="panel">
-            <div class="panel-head">
-              <span class="panel-title">Fournisseur</span>
-              <button class="btn btn-small" id="supplier-edit-toggle">Gérer</button>
+            <div class="rail-sec" id="parcels-panel" hidden>
+              <span class="rail-title">Colis</span>
+              <div id="c-parcels"></div>
             </div>
-            <div class="card-body" id="supplier-summary">
-              <p class="empty">Aucun fournisseur configuré.</p>
+            <div class="rail-sec">
+              <span class="rail-title">
+                Fournisseur
+                <button class="btn btn-small" id="supplier-edit-toggle">Gérer</button>
+              </span>
+              <div id="supplier-summary">
+                <p class="empty">Aucun fournisseur configuré.</p>
+              </div>
+              <div id="escalations"></div>
             </div>
-            <div class="card-body" id="escalations"></div>
-          </div>
-          <div class="panel">
-            <div class="panel-head"><span class="panel-title">Journal d'audit</span></div>
-            <ul class="journal" id="c-audit"></ul>
+            <details class="rail-sec rail-fold">
+              <summary><span class="rail-title">Journal d'audit</span></summary>
+              <ul class="journal" id="c-audit"></ul>
+            </details>
           </div>
         </aside>
       </main>

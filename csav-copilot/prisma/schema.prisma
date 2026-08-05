@@ -338,6 +338,13 @@ model Draft {
   model      String
   confidence Float
   reasoning  String?     @db.Text
+
+  /// Résumé du message du client, en deux à quatre points. L'agent doit
+  /// pouvoir décider sans lire le fil : c'est ce qui fait la différence entre
+  /// traiter cent tickets par jour et vingt.
+  summary    String[]
+  /// Ce que le client demande concrètement, en une ligne.
+  ask        String?
   status     DraftStatus @default(PENDING_REVIEW)
   createdBy  DraftAuthor @default(AI)
 

@@ -185,6 +185,8 @@ export async function processTicket(merchantId: string, ticketId: string): Promi
         model: await describeActiveModel(),
         confidence: generated.confidence,
         reasoning: generated.reasoning,
+        summary: generated.summary,
+        ask: generated.ask || null,
         status: 'PENDING_REVIEW',
         createdBy: 'AI',
       },

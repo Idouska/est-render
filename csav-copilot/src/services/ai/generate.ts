@@ -3,6 +3,16 @@ import type { OrderSummary } from '../shopify/orders.ts';
 import { getAiProvider } from './factory.ts';
 
 export interface DraftGeneration {
+  /**
+   * Le message du client ramené à deux ou quatre points.
+   *
+   * C'est ce qui change le métier d'agent : décider sans lire le fil. Sur cent
+   * tickets par jour, la lecture intégrale est le poste de temps principal, et
+   * la plupart des fils ne disent qu'une chose.
+   */
+  summary: string[];
+  /** La demande concrète, en une ligne. */
+  ask: string;
   body: string;
   confidence: number;
   /** Pourquoi ce niveau de confiance — affiché à l'agent dans le dashboard. */
@@ -91,11 +101,32 @@ Contraintes absolues :
   maison : inspire-t'en. Ne recopie jamais leurs faits — montants, numéros,
   dates appartiennent à d'autres dossiers.
 
+Avant de rédiger, résume le message du client :
+- « summary » : deux à quatre points, une phrase courte chacun, à l'indicatif.
+  Les faits que l'agent doit connaître pour trancher — ce qui s'est passé, ce
+  qui a déjà été tenté, ce qui bloque, le ton s'il est menaçant ou détendu.
+  N'y mets pas ce que tu vas répondre, ni de formule de politesse.
+- « ask » : ce que le client veut obtenir, en une ligne, à l'infinitif quand
+  c'est possible (« Être remboursé du montant total », « Savoir où est le
+  colis »). S'il ne demande rien de précis, dis-le.
+
+Le résumé sert un agent qui n'ouvrira pas le fil : s'il y manque un fait
+décisif, il répondra à côté.
+
 Réponds en JSON, sans texte autour.`;
 
 const SCHEMA = {
   type: 'object',
   properties: {
+    summary: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'Deux à quatre points résumant le message du client.',
+    },
+    ask: {
+      type: 'string',
+      description: 'Ce que le client demande, en une ligne.',
+    },
     body: {
       type: 'string',
       description: 'Le corps du mail, texte brut, prêt à envoyer.',
@@ -111,7 +142,7 @@ const SCHEMA = {
     },
     needsHuman: { type: 'boolean' },
   },
-  required: ['body', 'confidence', 'reasoning', 'needsHuman'],
+  required: ['summary', 'ask', 'body', 'confidence', 'reasoning', 'needsHuman'],
   additionalProperties: false,
 } as const;
 
@@ -223,6 +254,13 @@ function validate(value: unknown): DraftGeneration {
 
   const v = value as Record<string, unknown>;
 
+  // Le résumé est toléré absent : un modèle qui l'oublie doit quand même
+  // livrer sa réponse, l'écran sait afficher un résumé vide. L'inverse — un
+  // brouillon rejeté pour un résumé manquant — coûterait un ticket non traité.
+  const summary = Array.isArray(v.summary)
+    ? v.summary.filter((line): line is string => typeof line === 'string' && line.trim() !== '')
+    : [];
+
   if (typeof v.body !== 'string' || v.body.trim() === '') {
     throw new TypeError('Réponse de génération : body doit être une chaîne non vide');
   }
@@ -237,6 +275,8 @@ function validate(value: unknown): DraftGeneration {
   }
 
   return {
+    summary: summary.slice(0, 4).map((line) => line.trim()),
+    ask: typeof v.ask === 'string' ? v.ask.trim() : '',
     body: v.body,
     confidence: v.confidence,
     reasoning: v.reasoning,

@@ -49,27 +49,62 @@
 /* ============================================================= thèmes ==== */
 
 :root {
-  --ground: #f4f4f7;
+  /* Le fond est franchement plus sombre que les cartes. À 3 % d'écart, une
+     carte blanche sur fond presque blanc ne se pose sur rien : c'est la
+     première cause de l'impression de platitude, avant même les ombres. */
+  --ground: #eceef4;
   --surface: #ffffff;
-  --sunk: #fafafc;
-  --inset: #f5f5f8;
-  --ink: #14141b;
-  --ink-soft: #4a4a5c;
-  --ink-mute: #83839a;
-  --line: #e9e9f0;
-  --line-soft: #f1f1f6;
+  --sunk: #f7f8fb;
+  --inset: #f2f4f8;
+  --ink: #101018;
+  --ink-soft: #474a5c;
+  --ink-mute: #7d8296;
+  --line: #e4e7ef;
+  --line-soft: #eef0f5;
 
-  --ok: #059669; --ok-soft: #e3f6ef;
+  --ok: #05966a; --ok-soft: #e2f6ef;
   --warn: #d97706; --warn-soft: #fdf1de;
   --crit: #e5484d; --crit-soft: #fdeaea;
 
-  --r-lg: 15px;
+  --r-xl: 20px;
+  --r-lg: 16px;
   --r-md: 11px;
   --r-sm: 9px;
   --r: 11px;
 
-  --shadow: 0 1px 2px rgba(20, 20, 40, 0.04), 0 12px 28px -20px rgba(20, 20, 40, 0.3);
-  --shadow-pop: 0 8px 32px -8px rgba(20, 20, 40, 0.22), 0 2px 8px rgba(20, 20, 40, 0.06);
+  /* Une surface n'est jamais un aplat : un dégradé d'un point de luminosité
+     suffit à la faire lire comme un plan physique. Invisible isolément,
+     décisif à l'échelle de l'écran. */
+  --grad-surface: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
+  --grad-raised: linear-gradient(180deg, #ffffff 0%, #f7f9fc 100%);
+
+  /* Liseré clair sur l'arête haute : c'est lui qui donne l'épaisseur. Une
+     ombre sans lumière ne fait pas du relief, elle fait une tache. */
+  --edge: inset 0 1px 0 rgb(255 255 255 / 90%);
+
+  /* Échelle d'élévation. Chaque niveau superpose une ombre de contact serrée
+     (l'objet touche le fond) et une ombre ambiante large (il occupe l'espace).
+     Une seule ombre ne peut pas dire les deux. */
+  --e1: 0 1px 2px rgb(16 18 40 / 5%), 0 1px 3px -1px rgb(16 18 40 / 4%);
+  --e2: 0 1px 2px rgb(16 18 40 / 6%), 0 6px 16px -8px rgb(16 18 40 / 14%);
+  --e3: 0 2px 4px rgb(16 18 40 / 6%), 0 14px 32px -12px rgb(16 18 40 / 20%);
+  --e4: 0 4px 8px rgb(16 18 40 / 7%), 0 28px 60px -20px rgb(16 18 40 / 28%);
+
+  --shadow: var(--e2);
+  --shadow-pop: var(--e4);
+
+  /* Échelle typographique. L'ancienne tenait entre 13 et 14,5 px : sans écart
+     de corps, aucune hiérarchie ne peut s'installer, et tout se vaut. */
+  --t-display: 30px;
+  --t-title: 20px;
+  --t-lead: 16px;
+  --t-body: 14px;
+  --t-meta: 12.5px;
+  --t-micro: 11px;
+
+  /* Courbe unique, légèrement dépassante : le mouvement se remarque sans
+     s'exhiber. */
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
 
   --font-ui: "Segoe UI Variable Display", "SF Pro Display", system-ui, -apple-system,
     "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
@@ -79,22 +114,34 @@
 }
 
 [data-theme="dark"] {
-  --ground: #14161c;
-  --surface: #1b1e26;
-  --sunk: #20242d;
-  --inset: #232733;
-  --ink: #eef0f5;
-  --ink-soft: #b3b8c6;
-  --ink-mute: #848b9d;
-  --line: #2b303b;
-  --line-soft: #242832;
+  --ground: #0e1014;
+  --surface: #191c23;
+  --sunk: #15181e;
+  --inset: #21252e;
+  --ink: #f0f2f7;
+  --ink-soft: #b0b6c4;
+  --ink-mute: #7f8698;
+  --line: #292e39;
+  --line-soft: #22262f;
 
-  --ok-soft: #102c23; --warn-soft: #2d2313; --crit-soft: #331d1e;
-  --accent-soft: color-mix(in srgb, var(--accent) 20%, #1b1e26);
+  --ok-soft: #0d2b21; --warn-soft: #2d2313; --crit-soft: #331d1e;
+  --accent-soft: color-mix(in srgb, var(--accent) 20%, #191c23);
   --accent-ink: color-mix(in srgb, var(--accent) 62%, #ffffff);
 
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 30px -20px rgba(0, 0, 0, 0.8);
-  --shadow-pop: 0 10px 34px -8px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.35);
+  --grad-surface: linear-gradient(180deg, #1c1f27 0%, #171a21 100%);
+  --grad-raised: linear-gradient(180deg, #20242d 0%, #1a1d25 100%);
+
+  /* Dans le sombre, l'arête haute s'éclaire à peine : au-delà, le liseré
+     devient un trait blanc et trahit l'artifice. */
+  --edge: inset 0 1px 0 rgb(255 255 255 / 7%);
+
+  --e1: 0 1px 2px rgb(0 0 0 / 40%);
+  --e2: 0 1px 2px rgb(0 0 0 / 45%), 0 6px 16px -8px rgb(0 0 0 / 60%);
+  --e3: 0 2px 4px rgb(0 0 0 / 45%), 0 14px 32px -12px rgb(0 0 0 / 70%);
+  --e4: 0 4px 8px rgb(0 0 0 / 50%), 0 28px 60px -20px rgb(0 0 0 / 85%);
+
+  --shadow: var(--e2);
+  --shadow-pop: var(--e4);
 
   color-scheme: dark;
 }
@@ -2071,3 +2118,469 @@ body {
 }
 
 .canned-bar #canned-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* ==========================================================================
+   RELIEF
+   ==========================================================================
+
+   Cette couche vient en dernier et corrige un défaut structurel : l'interface
+   était plate. Non par manque d'ombres, mais parce que trois choses
+   manquaient ensemble, et qu'aucune ne suffit seule.
+
+   1. Le fond et les cartes se ressemblaient trop. Une carte blanche sur un
+      fond presque blanc ne se pose sur rien.
+   2. Les surfaces étaient des aplats. Un plan physique a un dégradé et une
+      arête éclairée ; sans eux, une bordure de 1 px est tout ce qui existe.
+   3. Le texte tenait entre 13 et 14,5 px. Une hiérarchie ne naît pas des
+      couleurs, elle naît des écarts de corps et de graisse.
+
+   Rien ici n'ajoute de décor. Chaque règle sert à faire lire l'écran plus
+   vite : ce qui compte doit se voir avant qu'on ait décidé de le chercher. */
+
+/* --------------------------------------------------------- atmosphère --- */
+
+/* Le fond n'est pas un gris uniforme mais une lumière qui vient du haut,
+   très légèrement teintée de l'accent. L'œil ne l'identifie pas ; il perçoit
+   une profondeur, et l'écran cesse d'être un tableur. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(115% 42% at 50% -14%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 70%),
+    radial-gradient(70% 32% at 100% 0%, color-mix(in srgb, var(--accent) 4%, transparent), transparent 65%);
+}
+
+[data-theme="dark"] body::before {
+  background:
+    radial-gradient(120% 68% at 50% -18%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 64%),
+    radial-gradient(90% 50% at 100% 0%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 55%);
+}
+
+.app, .shell, .gate { position: relative; z-index: 1; }
+.app { background: none; }
+
+/* ------------------------------------------------------------ surfaces --- */
+
+.panel,
+.card,
+.kpi,
+.side {
+  background-image: var(--grad-surface);
+  box-shadow: var(--e2), var(--edge);
+  border-color: color-mix(in srgb, var(--line) 80%, transparent);
+}
+
+.panel, .card, .kpi { border-radius: var(--r-lg); }
+.side { border-radius: var(--r-xl); }
+
+/* Les surfaces flottantes se détachent franchement : un menu qui plane à la
+   même hauteur que la carte du dessous laisse hésiter sur ce qui est actif. */
+.shop-menu,
+.sheet,
+.modal,
+.toast {
+  box-shadow: var(--e4), var(--edge);
+  background-image: var(--grad-raised);
+}
+
+/* ------------------------------------------------------- typographie --- */
+
+/* L'écart de corps fait la hiérarchie. Le chiffre d'un indicateur doit
+   s'imposer d'un coup d'œil depuis l'autre bout du bureau ; son intitulé n'a
+   qu'à être disponible. */
+.kpi-value {
+  font-size: var(--t-display);
+  font-weight: 640;
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+  margin-top: 6px;
+}
+
+.kpi-label {
+  font-size: 10.5px;
+  letter-spacing: 0.09em;
+  color: var(--ink-mute);
+}
+
+.kpi { padding: 17px 18px 16px; }
+
+/* L'objet d'un ticket est ce qu'on lit en premier dans la file : il gagne le
+   corps que portait tout le reste. */
+.queue-subject {
+  font-size: 14.5px;
+  font-weight: 620;
+  letter-spacing: -0.014em;
+}
+
+.queue-who { font-size: 12.5px; color: var(--ink-soft); font-weight: 600; }
+.queue-time { font-size: 11px; letter-spacing: 0.01em; }
+
+/* Les chiffres s'alignent en colonne partout où il y en a : sans chasse fixe,
+   une liste de montants ondule et se compare mal. */
+.mono, code, .kpi-value, .queue-time, .tally { font-variant-numeric: tabular-nums; }
+
+/* ------------------------------------------------------------ boutons --- */
+
+/* Un bouton est une pièce qu'on enfonce. Il lui faut une arête haute claire au
+   repos, un décollement au survol, un écrasement au clic. Sans ces trois
+   états, cliquer ne procure aucune sensation et l'interface paraît morte. */
+/* `:not(.btn-primary)` est indispensable : cette règle vient après la
+   déclaration du bouton principal, et un `background-image` nu y écraserait
+   son dégradé coloré — le bouton d'envoi devenait blanc sur blanc. */
+.btn:not(.btn-primary):not(.btn-danger) {
+  background-image: var(--grad-raised);
+}
+
+.btn {
+  box-shadow: var(--e1), var(--edge);
+  font-weight: 550;
+  transition:
+    transform 0.14s var(--ease),
+    box-shadow 0.14s var(--ease),
+    border-color 0.14s var(--ease),
+    filter 0.14s var(--ease);
+}
+
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--e2), var(--edge);
+  border-color: color-mix(in srgb, var(--ink-mute) 45%, transparent);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: var(--e1);
+  filter: brightness(0.98);
+}
+
+/* L'ombre d'un bouton coloré prend sa couleur. Une ombre grise sous un bouton
+   violet est le détail qui trahit une interface non dessinée. */
+.btn-primary {
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--accent) 40%, transparent),
+    0 8px 20px -8px color-mix(in srgb, var(--accent) 65%, transparent),
+    inset 0 1px 0 rgb(255 255 255 / 22%);
+}
+
+.btn-primary:hover:not(:disabled) {
+  box-shadow:
+    0 2px 4px color-mix(in srgb, var(--accent) 42%, transparent),
+    0 14px 30px -10px color-mix(in srgb, var(--accent) 75%, transparent),
+    inset 0 1px 0 rgb(255 255 255 / 28%);
+}
+
+.btn-primary:active:not(:disabled) {
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--accent) 40%, transparent),
+    inset 0 1px 0 rgb(255 255 255 / 15%);
+}
+
+/* ------------------------------------------------------- navigation --- */
+
+/* L'entrée active portait un simple fond teinté. Elle gagne un repère vertical
+   accroché au bord : la position courante se retrouve en périphérie, sans
+   avoir à lire les intitulés. */
+.nav-item { position: relative; transition: background 0.14s var(--ease), color 0.14s var(--ease); }
+
+.nav-item[aria-current="true"] {
+  background-image: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--accent) 16%, transparent),
+    color-mix(in srgb, var(--accent) 7%, transparent)
+  );
+}
+
+.nav-item[aria-current="true"]::before {
+  content: '';
+  position: absolute;
+  left: -12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 18px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
+}
+
+.nav-item .tally { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--crit) 22%, transparent); }
+
+/* La pastille de marque prend un reflet : c'est le seul objet vraiment
+   coloré de la barre, autant qu'il ait de la matière. */
+.brand-mark {
+  box-shadow:
+    0 2px 6px -1px color-mix(in srgb, var(--accent) 55%, transparent),
+    0 8px 18px -8px color-mix(in srgb, var(--accent) 60%, transparent),
+    inset 0 1px 0 rgb(255 255 255 / 30%);
+  background-image: linear-gradient(150deg,
+    color-mix(in srgb, var(--accent) 88%, #ffffff) 0%,
+    var(--accent) 45%,
+    var(--accent-strong) 100%);
+}
+
+/* --------------------------------------------------------- file --- */
+
+/* La ligne survolée avance d'un cheveu vers le lecteur. Le liseré d'intention
+   s'épaissit sur la ligne ouverte : on sait de quoi parle le ticket qu'on
+   traite sans revenir à l'étiquette. */
+.queue-item {
+  transition: background 0.14s var(--ease), box-shadow 0.14s var(--ease);
+}
+
+.queue-item:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink-mute) 16%, transparent); }
+
+.queue-item[aria-current="true"] {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent),
+    0 2px 10px -6px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+.queue-item[aria-current="true"] .queue-subject { color: var(--accent-ink); }
+
+/* --------------------------------------------------------- horloges --- */
+
+/* La bande d'horloges est un objet secondaire : elle doit s'enfoncer dans le
+   fond au lieu de flotter comme une carte de données. */
+.clocks {
+  background-image: linear-gradient(180deg,
+    color-mix(in srgb, var(--ink) 3%, transparent),
+    transparent);
+  box-shadow: inset 0 1px 2px rgb(16 18 40 / 5%);
+}
+
+[data-theme="dark"] .clocks { box-shadow: inset 0 1px 2px rgb(0 0 0 / 35%); }
+
+.clock b { letter-spacing: -0.02em; }
+
+/* ------------------------------------------------------- étiquettes --- */
+
+/* Un contour intérieur de la même teinte que le fond : l'étiquette cesse
+   d'être une tache posée, elle devient un objet cerné. */
+.tag {
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 5%);
+  letter-spacing: 0.005em;
+}
+
+[data-theme="dark"] .tag { box-shadow: inset 0 0 0 1px rgb(255 255 255 / 8%); }
+
+/* ------------------------------------------------------------ champs --- */
+
+/* Un champ est un creux, l'inverse exact d'un bouton : ombre portée vers
+   l'intérieur, pas d'arête claire en haut. */
+input[type="text"],
+input[type="email"],
+input[type="search"],
+input[type="password"],
+input[type="number"],
+select,
+textarea {
+  box-shadow: inset 0 1px 2px rgb(16 18 40 / 4%);
+  transition: box-shadow 0.14s var(--ease), border-color 0.14s var(--ease);
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow:
+    inset 0 1px 2px rgb(16 18 40 / 4%),
+    0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+[data-theme="dark"] input[type="text"],
+[data-theme="dark"] input[type="email"],
+[data-theme="dark"] input[type="search"],
+[data-theme="dark"] select,
+[data-theme="dark"] textarea {
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 30%);
+}
+
+/* ----------------------------------------------------------- retenue --- */
+
+/* Sur un écran tactile, le survol n'existe pas et le décollement reste collé
+   après le doigt. Et l'atmosphère de fond coûte deux dégradés à repeindre à
+   chaque défilement, pour un gain nul sur un écran de téléphone. */
+@media (hover: none) {
+  .btn:hover:not(:disabled) { transform: none; }
+}
+
+@media (max-width: 700px) {
+  body::before { display: none; }
+}
+
+@media (max-width: 700px) {
+  /* Sur deux colonnes étroites, un intitulé qui passe à la ligne décale son
+     chiffre : les quatre nombres ne s'alignent plus et la rangée se lit une
+     carte après l'autre au lieu d'un seul coup d'œil. On réserve la hauteur de
+     deux lignes pour que la ligne de base des chiffres soit commune. */
+  .kpi-label { min-height: 2.3em; }
+  .kpi-value { font-size: 27px; }
+}
+
+/* ==========================================================================
+   RÉSUMÉ ET RAIL
+   ========================================================================== */
+
+/* ----------------------------------------------------------- le résumé --- */
+
+/* Premier bloc du ticket, avant le fil. Il porte l'accent parce qu'il est le
+   seul endroit de l'écran où l'agent doit poser les yeux d'abord. */
+.brief {
+  margin: 0 15px 14px;
+  padding: 13px 15px 14px;
+  border-radius: var(--r-lg);
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--accent) 9%, var(--surface)),
+      color-mix(in srgb, var(--accent) 4%, var(--surface)));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.brief-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.brief-head .panel-title { color: var(--accent-ink); }
+
+/* La provenance est dite une fois, discrètement. Un agent doit savoir qu'il
+   lit une synthèse de machine, pas les mots du client. */
+.brief-src {
+  margin-left: auto;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+/* La demande en une ligne, au corps d'un titre : c'est l'information qui
+   décide de l'action, tout le reste est contexte. */
+.brief-ask {
+  margin: 0 0 9px;
+  font-size: var(--t-lead);
+  font-weight: 620;
+  line-height: 1.3;
+  letter-spacing: -0.018em;
+  color: var(--ink);
+}
+
+.brief-points { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+
+.brief-points li {
+  position: relative;
+  padding-left: 15px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+.brief-points li::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 8px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+/* Le fil complet devient un repli. Il reste consultable en un clic, mais il
+   cesse d'occuper la hauteur d'écran que mérite désormais la réponse. */
+.thread-fold { margin: 0 15px 4px; }
+
+.thread-fold > summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 2px;
+  color: var(--ink-mute);
+  font-size: 12.5px;
+}
+
+.thread-fold > summary::-webkit-details-marker { display: none; }
+
+.thread-fold > summary::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-right: 1.6px solid currentColor;
+  border-bottom: 1.6px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 0.16s var(--ease);
+}
+
+.thread-fold[open] > summary::before { transform: rotate(45deg); }
+.thread-fold > summary:hover { color: var(--ink); }
+.thread-fold .messages { padding-left: 0; padding-right: 0; }
+
+/* -------------------------------------------------------------- rail --- */
+
+/* Un seul cadre, des sections séparées par un trait. Répéter le cadre autour
+   de chaque rubrique multipliait les ombres et les titres sans rien ajouter :
+   le dossier d'un client est une chose, pas six. */
+.rail { padding: 2px 0; }
+
+.rail-sec { padding: 13px 15px; }
+.rail-sec + .rail-sec { border-top: 1px solid var(--line-soft); }
+
+.rail-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  margin-bottom: 7px;
+}
+
+.rail-title .btn { margin-left: auto; }
+.rail-sec .empty { font-size: 13px; }
+
+/* Le journal d'audit se replie : il sert une fois par semaine, en cas de
+   doute sur qui a fait quoi. Déplié en permanence, il poussait la commande et
+   la livraison hors de l'écran. */
+.rail-fold > summary { cursor: pointer; list-style: none; }
+.rail-fold > summary::-webkit-details-marker { display: none; }
+.rail-fold > summary .rail-title { margin-bottom: 0; }
+.rail-fold > summary .rail-title::after {
+  content: '';
+  margin-left: auto;
+  width: 6px;
+  height: 6px;
+  border-right: 1.6px solid currentColor;
+  border-bottom: 1.6px solid currentColor;
+  transform: rotate(-45deg);
+}
+.rail-fold[open] > summary .rail-title::after { transform: rotate(45deg); }
+.rail-fold[open] .journal { margin-top: 10px; }
+
+@media (max-width: 700px) {
+  .brief, .thread-fold { margin-left: 12px; margin-right: 12px; }
+  .brief-ask { font-size: 15px; }
+}
+
+/* -------------------------------------------------- zone de brouillon --- */
+
+/* La réponse est ce que l'agent vient écrire : elle mérite la hauteur que le
+   fil occupait avant d'être replié. À six lignes visibles, on relisait sa
+   propre phrase dans une meurtrière. */
+.draft textarea {
+  min-height: 200px;
+  line-height: 1.55;
+  font-size: 14px;
+}
+
+/* Une seule rangée d'actions, l'envoi à gauche et le reste à sa suite. Les
+   boutons repassaient à la ligne et « Rembourser » se retrouvait seul en bas,
+   là où on lit une action principale. */
+.draft .actions { align-items: center; }
+.draft .actions .hint { margin-left: auto; text-align: right; }
+
+/* Le motif de confiance sur une ligne, aligné à gauche comme le reste :
+   centré, il flottait sans rapport avec les boutons dessous. */
+.reasoning { align-items: baseline; }
+.reasoning span:last-child { text-align: left; }
