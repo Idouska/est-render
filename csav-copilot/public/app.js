@@ -1390,6 +1390,7 @@ function renderDetail() {
           <span>${shortTime(message.receivedAt)}</span>
         </div>
         <div class="msg-body">${esc(message.bodyText)}</div>
+        ${renderAttachments(message.attachments)}
       </div>`,
     )
     .join('');
@@ -1424,6 +1425,45 @@ function canI(permission) {
  * modèle doublerait le coût et laisserait le résumé décrire un message que la
  * réponse n'a pas traité.
  */
+/**
+ * Pièces jointes d'un message client.
+ *
+ * Les images s'affichent, le reste se télécharge. Un client qui signale une
+ * semelle décollée joint une photo : la lui redemander parce que l'outil ne
+ * sait pas la montrer est la faute la plus visible qu'un SAV puisse commettre.
+ */
+function renderAttachments(files) {
+  if (!files || files.length === 0) return '';
+
+  const items = files
+    .map((file) => {
+      const url = `/api/attachments/${encodeURIComponent(file.id)}`;
+      const isImage = (file.mimeType ?? '').startsWith('image/');
+
+      if (isImage) {
+        return `<a class="att att-img" href="${url}" target="_blank" rel="noopener"
+                   title="${esc(file.filename)}">
+          <img src="${url}" alt="${esc(file.filename)}" loading="lazy" />
+        </a>`;
+      }
+
+      return `<a class="att att-file" href="${url}" target="_blank" rel="noopener">
+        <span class="att-name">${esc(file.filename)}</span>
+        <span class="att-size">${formatBytes(file.size)}</span>
+      </a>`;
+    })
+    .join('');
+
+  return `<div class="atts">${items}</div>`;
+}
+
+function formatBytes(size) {
+  if (!size) return '';
+  if (size < 1024) return `${size} o`;
+  if (size < 1024 * 1024) return `${Math.round(size / 1024)} Ko`;
+  return `${(size / (1024 * 1024)).toFixed(1).replace('.', ',')} Mo`;
+}
+
 function renderBrief(draft) {
   const brief = $('d-brief');
   // Le repli n'a de sens qu'avec un fil dedans : affiché d'emblée, il proposait
@@ -4616,8 +4656,8 @@ document.addEventListener('keydown', (event) => {
   // c'est le geste qui doit toujours répondre.
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
     event.preventDefault();
-    $('nav-search').focus();
-    $('nav-search').select();
+    if ($('pal').hidden) openPalette();
+    else closePalette();
     return;
   }
 
@@ -4667,4 +4707,286 @@ document.addEventListener('keydown', (event) => {
     default:
       break;
   }
+});
+
+/* ==========================================================================
+   AGIR, PUIS POUVOIR REVENIR
+   ==========================================================================
+
+   Une boîte « êtes-vous sûr ? » demande de réfléchir au pire moment : avant
+   d'avoir vu le résultat. Elle interrompt tout le monde à chaque fois pour
+   éviter l'erreur d'une fois sur cent, et on finit par la valider sans la lire
+   — ce qui la rend inutile en plus d'être pénible.
+
+   L'inverse coûte moins et protège mieux : agir tout de suite, montrer le
+   résultat, laisser six secondes pour revenir en arrière. */
+
+/** Message avec bouton d'annulation, à la place du bandeau ordinaire. */
+function toastUndo(message, undo) {
+  const el = $('toast');
+  el.textContent = '';
+  el.classList.remove('error');
+
+  const text = document.createElement('span');
+  text.textContent = message;
+
+  const button = document.createElement('button');
+  button.className = 'toast-undo';
+  button.textContent = 'Annuler';
+  button.addEventListener('click', async () => {
+    button.disabled = true;
+    try {
+      await undo();
+      toast('Annulé.');
+    } catch (error) {
+      toast(error.message, true);
+    }
+  });
+
+  el.append(text, button);
+  el.classList.add('show');
+
+  clearTimeout(el._timer);
+  // Six secondes plutôt que quatre : le temps de lire, de comprendre que ce
+  // n'était pas le bon ticket, et d'atteindre le bouton.
+  el._timer = setTimeout(() => {
+    el.classList.remove('show');
+    el.textContent = '';
+  }, 6000);
+}
+
+const SNOOZE_CHOICES = [
+  { hours: 4, label: 'Cet après-midi' },
+  { hours: 24, label: 'Demain' },
+  { hours: 72, label: 'Dans 3 jours' },
+  { hours: 168, label: 'La semaine prochaine' },
+];
+
+async function snoozeTicket(hours, label) {
+  const id = state.currentId;
+  if (!id) return;
+
+  try {
+    const result = await api(`/api/tickets/${id}/snooze`, {
+      method: 'PATCH',
+      body: JSON.stringify({ hours }),
+    });
+
+    // La file se recharge tout de suite : le ticket disparaît, ce qui est la
+    // preuve visible que l'action a porté.
+    await loadQueue();
+
+    toastUndo(`En veille — ${label.toLowerCase()}.`, async () => {
+      await api(`/api/tickets/${id}/snooze`, {
+        method: 'PATCH',
+        // On restitue l'état d'avant, pas « aucune veille » : un ticket déjà
+        // endormi qu'on rendort par erreur doit retrouver sa date initiale.
+        body: JSON.stringify({
+          hours: result.previous
+            ? Math.max(
+                1,
+                Math.round((new Date(result.previous) - Date.now()) / 3_600_000),
+              )
+            : null,
+        }),
+      });
+      await loadQueue();
+    });
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+function renderSnoozeMenu() {
+  const menu = $('snooze-menu');
+  if (!menu) return;
+
+  menu.innerHTML = SNOOZE_CHOICES.map(
+    (choice) =>
+      `<button type="button" data-h="${choice.hours}">${choice.label}</button>`,
+  ).join('');
+
+  menu.querySelectorAll('button').forEach((button) =>
+    button.addEventListener('click', () => {
+      menu.hidden = true;
+      const choice = SNOOZE_CHOICES.find((c) => String(c.hours) === button.dataset.h);
+      snoozeTicket(choice.hours, choice.label);
+    }),
+  );
+}
+
+$('btn-snooze')?.addEventListener('click', () => {
+  const menu = $('snooze-menu');
+  menu.hidden = !menu.hidden;
+  if (!menu.hidden) renderSnoozeMenu();
+});
+
+document.addEventListener('click', (event) => {
+  const menu = $('snooze-menu');
+  if (!menu || menu.hidden) return;
+  if (!event.target.closest('.snooze-wrap')) menu.hidden = true;
+});
+
+/* ==========================================================================
+   PALETTE DE COMMANDES
+   ==========================================================================
+
+   ⌘K ne se contentait plus de placer le curseur dans la recherche : elle
+   exécute. Un outil dense finit toujours par cacher ses fonctions derrière
+   trois niveaux de menu ; la palette rend chacune atteignable en trois
+   lettres, sans avoir à se rappeler où elle se range.
+
+   Les commandes indisponibles ne sont pas listées : proposer « Rembourser »
+   à qui n'en a pas le droit ne renseigne personne. */
+
+function buildCommands() {
+  const list = [];
+
+  for (const [view, meta] of Object.entries(VIEW_META)) {
+    list.push({
+      label: `Aller à ${meta.title}`,
+      hint: 'Navigation',
+      run: () => setView(view),
+    });
+  }
+
+  const hasTicket = Boolean(state.currentId && state.detail?.ticket);
+
+  if (hasTicket && canI('reply')) {
+    for (const choice of SNOOZE_CHOICES) {
+      list.push({
+        label: `Mettre en veille — ${choice.label.toLowerCase()}`,
+        hint: 'Ticket courant',
+        run: () => snoozeTicket(choice.hours, choice.label),
+      });
+    }
+    list.push({
+      label: 'Écrire la réponse',
+      hint: 'Ticket courant',
+      run: () => $('d-body').focus(),
+    });
+  }
+
+  if (hasTicket && canI('refund') && state.detail.ticket.shopifyOrderId) {
+    list.push({
+      label: 'Rembourser cette commande',
+      hint: 'Ticket courant',
+      run: () => $('btn-refund').click(),
+    });
+  }
+
+  list.push(
+    { label: 'Actualiser', hint: 'Écran', run: () => refreshCurrent() },
+    {
+      label: 'Basculer clair / sombre',
+      hint: 'Apparence',
+      run: () => {
+        // On lit le thème appliqué plutôt que la préférence enregistrée :
+        // en mode « Système », c'est ce qu'on voit qu'on veut inverser.
+        const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+        $('theme-seg')
+          ?.querySelector(`[data-theme="${dark ? 'light' : 'dark'}"]`)
+          ?.click();
+      },
+    },
+    {
+      label: 'Afficher les raccourcis',
+      hint: 'Aide',
+      run: () => { $('keys').hidden = false; },
+    },
+  );
+
+  return list;
+}
+
+let paletteItems = [];
+let paletteIndex = 0;
+
+function openPalette() {
+  paletteItems = buildCommands();
+  paletteIndex = 0;
+
+  $('pal').hidden = false;
+  $('pal-input').value = '';
+  $('pal-input').focus();
+  renderPalette('');
+}
+
+function closePalette() {
+  $('pal').hidden = true;
+}
+
+/**
+ * Filtre par sous-séquence plutôt que par sous-chaîne : « alcom » trouve
+ * « Aller à Commandes ». C'est ce qui permet de taper trois lettres au lieu du
+ * libellé exact, et c'est tout l'intérêt d'une palette.
+ */
+function fuzzyMatch(needle, haystack) {
+  if (!needle) return true;
+  const text = haystack.toLowerCase();
+  let index = 0;
+  for (const char of needle.toLowerCase()) {
+    index = text.indexOf(char, index);
+    if (index === -1) return false;
+    index += 1;
+  }
+  return true;
+}
+
+function renderPalette(query) {
+  const matches = paletteItems.filter((item) => fuzzyMatch(query, item.label));
+  paletteIndex = Math.min(paletteIndex, Math.max(0, matches.length - 1));
+
+  $('pal-list').innerHTML = matches.length
+    ? matches
+        .map(
+          (item, index) => `<li>
+            <button class="pal-item" data-i="${index}" aria-selected="${index === paletteIndex}">
+              <span>${esc(item.label)}</span>
+              <small>${esc(item.hint)}</small>
+            </button>
+          </li>`,
+        )
+        .join('')
+    : '<li class="empty" style="padding:14px">Aucune commande.</li>';
+
+  $('pal-list')
+    .querySelectorAll('.pal-item')
+    .forEach((button) =>
+      button.addEventListener('click', () => {
+        closePalette();
+        matches[Number(button.dataset.i)]?.run();
+      }),
+    );
+
+  $('pal-list')._matches = matches;
+}
+
+$('pal-input')?.addEventListener('input', (event) => {
+  paletteIndex = 0;
+  renderPalette(event.target.value.trim());
+});
+
+$('pal-input')?.addEventListener('keydown', (event) => {
+  const matches = $('pal-list')._matches ?? [];
+
+  if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    paletteIndex = Math.min(matches.length - 1, paletteIndex + 1);
+    renderPalette(event.target.value.trim());
+  } else if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    paletteIndex = Math.max(0, paletteIndex - 1);
+    renderPalette(event.target.value.trim());
+  } else if (event.key === 'Enter') {
+    event.preventDefault();
+    closePalette();
+    matches[paletteIndex]?.run();
+  } else if (event.key === 'Escape') {
+    closePalette();
+  }
+});
+
+$('pal')?.addEventListener('click', (event) => {
+  if (event.target === $('pal')) closePalette();
 });

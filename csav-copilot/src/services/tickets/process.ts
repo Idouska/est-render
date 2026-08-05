@@ -23,7 +23,11 @@ export async function processTicket(merchantId: string, ticketId: string): Promi
     where: { id: ticketId, merchantId },
     include: {
       merchant: true,
-      messages: { orderBy: { receivedAt: 'asc' }, take: 20 },
+      messages: {
+        orderBy: { receivedAt: 'asc' },
+        take: 20,
+        include: { attachments: { select: { filename: true, mimeType: true } } },
+      },
     },
   });
 
@@ -137,6 +141,12 @@ export async function processTicket(merchantId: string, ticketId: string): Promi
 
     const context: GenerationContext = {
       playbook: ticket.merchant.playbook,
+      // Les fichiers du dernier message reçu : ce sont ceux dont le client
+      // parle, pas ceux d'un échange d'il y a trois semaines.
+      attachments: (lastInbound.attachments ?? []).map((file) => ({
+        filename: file.filename,
+        mimeType: file.mimeType,
+      })),
       examples,
       language,
       history: {

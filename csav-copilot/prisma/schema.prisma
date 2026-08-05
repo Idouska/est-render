@@ -316,11 +316,37 @@ model Message {
   receivedAt DateTime
   createdAt  DateTime @default(now())
 
-  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  ticket      Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  attachments Attachment[]
 
   // Idempotence de l'ingestion : Pub/Sub garantit at-least-once.
   @@unique([merchantId, gmailMessageId])
   @@index([ticketId, receivedAt])
+}
+
+/// Pièce jointe reçue d'un client.
+///
+/// Seules les métadonnées sont stockées : le fichier reste chez Gmail et se
+/// récupère à l'affichage. Une photo de défaut pèse quelques mégaoctets, et les
+/// conserver en base ferait grossir la sauvegarde sans rien apporter — Gmail
+/// les garde déjà, et le seul cas où elles disparaissent est celui du message
+/// supprimé, où l'on ne veut plus les montrer.
+model Attachment {
+  id                String @id @default(cuid())
+  merchantId        String
+  messageId         String
+  gmailAttachmentId String
+
+  filename String
+  mimeType String
+  size     Int
+
+  createdAt DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+  @@index([merchantId])
 }
 
 enum MessageDirection {

@@ -60,6 +60,17 @@ export async function ingestMerchantInbox(
           bodyText: message.bodyText,
           snippet: message.snippet,
           receivedAt: message.receivedAt,
+          // Un client qui signale une semelle décollée joint une photo. Sans
+          // elle, l'agent répond à l'aveugle et redemande ce qui est déjà là.
+          attachments: {
+            create: message.attachments.map((file) => ({
+              merchantId,
+              gmailAttachmentId: file.gmailAttachmentId,
+              filename: file.filename,
+              mimeType: file.mimeType,
+              size: file.size,
+            })),
+          },
         },
       });
       ingested += 1;

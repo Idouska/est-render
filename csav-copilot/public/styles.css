@@ -2815,3 +2815,177 @@ textarea:focus-visible {
 @media (prefers-reduced-motion: no-preference) {
   .queue-item[aria-current='true'] { transition: box-shadow 0.18s var(--ease); }
 }
+
+/* ------------------------------------------------------ pièces jointes --- */
+
+.atts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+
+/* La photo se montre, elle ne s'annonce pas. Une ligne « photo.jpg (2,4 Mo) »
+   oblige à ouvrir un onglet pour savoir de quoi parle le client. */
+.att-img {
+  display: block;
+  width: 104px;
+  height: 104px;
+  border-radius: var(--r-md);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  box-shadow: var(--e1);
+  transition: transform 0.14s var(--ease), box-shadow 0.14s var(--ease);
+}
+
+.att-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.att-img:hover { transform: translateY(-2px); box-shadow: var(--e3); }
+
+.att-file {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 11px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  background: var(--inset);
+  text-decoration: none;
+  color: var(--ink);
+  font-size: 12.5px;
+}
+
+.att-file:hover { border-color: var(--accent); }
+.att-name { font-weight: 600; }
+.att-size { color: var(--ink-mute); font-size: 11.5px; }
+
+/* ------------------------------------------------------------- veille --- */
+
+.snooze-wrap { position: relative; display: inline-flex; }
+
+.snooze-menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 40;
+  min-width: 190px;
+  padding: 5px;
+  display: grid;
+  gap: 2px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  background-image: var(--grad-raised);
+  box-shadow: var(--e4), var(--edge);
+}
+
+.snooze-menu button {
+  appearance: none;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: inherit;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+
+.snooze-menu button:hover { background: var(--accent-soft); color: var(--accent-ink); }
+
+/* Le bouton d'annulation vit dans le bandeau : le chercher ailleurs, c'est
+   le trouver après les six secondes. */
+.toast-undo {
+  appearance: none;
+  margin-left: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.toast-undo:hover { background: rgb(255 255 255 / 15%); }
+.toast-undo:disabled { opacity: 0.5; cursor: default; }
+
+/* ------------------------------------------------ palette de commandes --- */
+
+.pal {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  background: rgb(8 10 20 / 45%);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 12vh 20px 20px;
+}
+
+.pal[hidden] { display: none; }
+
+.pal-box {
+  width: min(560px, 100%);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--line);
+  background-image: var(--grad-raised);
+  box-shadow: var(--e4), var(--edge);
+  overflow: hidden;
+}
+
+.pal-box input {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  background: none;
+  padding: 15px 17px;
+  font: inherit;
+  font-size: 15px;
+  color: var(--ink);
+  outline: none;
+  box-shadow: none;
+}
+
+.pal-list { margin: 0; padding: 5px; list-style: none; max-height: 46vh; overflow-y: auto; }
+
+.pal-item {
+  appearance: none;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--ink);
+  text-align: left;
+  padding: 9px 11px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+
+.pal-item small { margin-left: auto; font-size: 11px; color: var(--ink-mute); }
+.pal-item:hover { background: var(--inset); }
+
+.pal-item[aria-selected='true'] {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+.pal-foot {
+  padding: 9px 14px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 11.5px;
+  color: var(--ink-mute);
+  background: var(--sunk);
+}
+
+.pal-foot kbd {
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  padding: 1px 5px;
+  margin: 0 1px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}

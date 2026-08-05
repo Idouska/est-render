@@ -137,6 +137,17 @@
         </ul>
       </div>
 
+      <!-- Palette de commandes (⌘K). Placée hors des écrans : elle doit
+           répondre d'où qu'on l'appelle. -->
+      <div class="pal" id="pal" hidden role="dialog" aria-modal="true" aria-label="Commandes">
+        <div class="pal-box">
+          <input id="pal-input" type="text" placeholder="Une commande, un écran…"
+            autocomplete="off" spellcheck="false" />
+          <ul class="pal-list" id="pal-list"></ul>
+          <div class="pal-foot"><kbd>↑</kbd><kbd>↓</kbd> parcourir · <kbd>↵</kbd> exécuter · <kbd>esc</kbd> fermer</div>
+        </div>
+      </div>
+
       <div class="notice" id="mock-notice" hidden>
         <span class="notice-mark">Simulation</span>
         <div>
@@ -279,6 +290,10 @@
             <div class="actions">
               <button class="btn btn-primary" id="btn-send">Envoyer la réponse</button>
               <button class="btn" id="btn-save">Enregistrer les modifications</button>
+              <span class="snooze-wrap">
+                <button class="btn" id="btn-snooze" type="button">Mettre en veille…</button>
+                <div class="snooze-menu" id="snooze-menu" hidden></div>
+              </span>
               <button class="btn btn-danger" id="btn-refund">Rembourser…</button>
               <span class="hint">Rien ne part sans ce clic.</span>
             </div>

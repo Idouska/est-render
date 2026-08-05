@@ -1,5 +1,20 @@
 import type { gmail_v1 } from 'googleapis';
 
+/**
+ * Pièce jointe d'un message.
+ *
+ * On retient l'identifiant Gmail, pas le contenu : une photo de défaut pèse
+ * trois mégaoctets, et cent tickets par jour rempliraient la base en un mois.
+ * Gmail conserve déjà le fichier, et le seul cas où il disparaît — le message
+ * supprimé — est celui où l'on ne veut plus l'afficher de toute façon.
+ */
+export interface ParsedAttachment {
+  gmailAttachmentId: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+}
+
 export interface ParsedMessage {
   gmailMessageId: string;
   gmailThreadId: string;
@@ -11,6 +26,7 @@ export interface ParsedMessage {
   snippet: string | null;
   receivedAt: Date;
   labelIds: string[];
+  attachments: ParsedAttachment[];
 }
 
 function header(message: gmail_v1.Schema$Message, name: string): string | null {
@@ -103,6 +119,41 @@ export function stripQuotedText(body: string): string {
   return cut.join('\n').trim() || body.trim();
 }
 
+/**
+ * Pièces jointes réelles d'un message.
+ *
+ * Écarte les images intégrées au corps HTML — signatures, logos, pixels de
+ * suivi : elles portent un `Content-ID` et ne sont pas des documents envoyés.
+ * Sans ce filtre, chaque mail d'un client Gmail arrive avec quatre « pièces
+ * jointes » qui sont son logo d'entreprise.
+ */
+export function extractAttachments(
+  payload: gmail_v1.Schema$MessagePart | undefined,
+): ParsedAttachment[] {
+  if (!payload) return [];
+
+  const found: ParsedAttachment[] = [];
+
+  const walk = (part: gmail_v1.Schema$MessagePart): void => {
+    const id = part.body?.attachmentId;
+    const inline = part.headers?.some((h) => h.name?.toLowerCase() === 'content-id');
+
+    if (id && part.filename && !inline) {
+      found.push({
+        gmailAttachmentId: id,
+        filename: part.filename,
+        mimeType: part.mimeType ?? 'application/octet-stream',
+        size: part.body?.size ?? 0,
+      });
+    }
+
+    for (const child of part.parts ?? []) walk(child);
+  };
+
+  walk(payload);
+  return found;
+}
+
 export function parseMessage(message: gmail_v1.Schema$Message): ParsedMessage | null {
   if (!message.id || !message.threadId) return null;
 
@@ -121,5 +172,6 @@ export function parseMessage(message: gmail_v1.Schema$Message): ParsedMessage | 
     snippet: message.snippet ?? null,
     receivedAt: new Date(internalDate),
     labelIds: message.labelIds ?? [],
+    attachments: extractAttachments(message.payload ?? undefined),
   };
 }

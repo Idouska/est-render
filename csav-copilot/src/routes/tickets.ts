@@ -37,6 +37,8 @@ const listQuery = z.object({
   unlinked: z.coerce.boolean().optional(),
   /** Boîte mail d'origine — utile quand `contact@` et `sav@` cohabitent. */
   mailbox: z.string().max(60).optional(),
+  /** Voir au contraire ce qui dort — pour vérifier qu'on n'a rien enterré. */
+  snoozed: z.coerce.boolean().optional(),
   /** `all` élargit la file à toutes les boutiques du groupe. */
   scope: z.enum(['shop', 'all']).default('shop'),
   sort: z.enum(['oldest', 'newest', 'confidence']).default('newest'),
@@ -83,6 +85,20 @@ function buildTicketWhere(
         }
       : {}),
     ...(filters.unlinked ? { shopifyOrderId: null } : {}),
+    // Un ticket en veille sort de la file jusqu'à son réveil. C'est tout
+    // l'intérêt : sans ça, le mettre en veille ne ferait que poser une
+    // étiquette de plus sur une ligne toujours présente.
+    //
+    // Passé par `AND` et non par `OR` : la recherche libre occupe déjà la clé
+    // `OR`, et deux `OR` dans le même objet s'écrasent silencieusement — le
+    // filtre disparaîtrait sans la moindre erreur.
+    ...(filters.snoozed
+      ? { snoozedUntil: { gt: new Date() } }
+      : {
+          AND: [
+            { OR: [{ snoozedUntil: null }, { snoozedUntil: { lte: new Date() } }] },
+          ],
+        }),
     ...(filters.mailbox ? { mailboxId: filters.mailbox } : {}),
     ...(term
       ? {
@@ -244,6 +260,65 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
    * quotidien d'un agent, lui demander un superviseur pour ça bloquerait la
    * file entière dès que personne n'est disponible.
    */
+  /**
+   * Mise en veille d'un ticket.
+   *
+   * Un ticket qui attend une réponse du fournisseur n'a rien à faire en haut de
+   * la pile pendant trois jours : il occupe l'attention sans qu'aucune action
+   * ne soit possible, et l'agent réapprend chaque matin qu'il n'y a rien à en
+   * faire. Il revient de lui-même à la date dite.
+   */
+  app.patch<{ Params: { id: string } }>(
+    '/api/tickets/:id/snooze',
+    { preHandler: requirePermission('reply') },
+    async (request, reply) => {
+      const parsed = z
+        .object({
+          /** Nombre d'heures, ou `null` pour réveiller tout de suite. */
+          hours: z.number().int().min(1).max(24 * 30).nullable(),
+        })
+        .safeParse(request.body);
+
+      if (!parsed.success) return reply.code(400).send({ error: 'Durée invalide' });
+
+      const { merchantId, userId } = request.session;
+
+      const ticket = await prisma.ticket.findFirst({
+        where: { id: request.params.id, merchantId },
+        select: { id: true, snoozedUntil: true },
+      });
+      if (!ticket) return reply.code(404).send({ error: 'Ticket introuvable' });
+
+      const until =
+        parsed.data.hours === null
+          ? null
+          : new Date(Date.now() + parsed.data.hours * 60 * 60 * 1000);
+
+      await prisma.ticket.update({
+        where: { id: ticket.id },
+        data: { snoozedUntil: until },
+      });
+
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId: userId,
+        action: until ? 'ticket.snoozed' : 'ticket.woken',
+        targetType: 'Ticket',
+        targetId: ticket.id,
+        metadata: { until: until?.toISOString() ?? null },
+        ipAddress: request.ip,
+      });
+
+      // L'état précédent revient dans la réponse : c'est lui qui permet à
+      // l'interface de proposer une annulation sans rien deviner.
+      return reply.send({
+        snoozedUntil: until,
+        previous: ticket.snoozedUntil,
+      });
+    },
+  );
+
   app.patch<{ Params: { id: string } }>(
     '/api/tickets/:id/assign',
     { preHandler: requirePermission('reply') },
@@ -468,7 +543,16 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
     const ticket = await prisma.ticket.findFirst({
       where: { id: request.params.id, merchantId: { in: readable } },
       include: {
-        messages: { orderBy: { receivedAt: 'asc' } },
+        messages: {
+          orderBy: { receivedAt: 'asc' },
+          include: {
+            // Le contenu reste chez Gmail : on ne sert ici que de quoi
+            // afficher une vignette et bâtir son lien.
+            attachments: {
+              select: { id: true, filename: true, mimeType: true, size: true },
+            },
+          },
+        },
         drafts: { orderBy: { createdAt: 'desc' }, take: 5 },
       },
     });

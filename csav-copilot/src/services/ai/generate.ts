@@ -28,6 +28,15 @@ export interface GenerationContext {
   subject: string | null;
   /** Fil du mail, du plus ancien au plus récent. */
   thread: Array<{ role: 'customer' | 'merchant'; text: string; at: Date }>;
+
+  /**
+   * Fichiers joints par le client.
+   *
+   * Le modèle ne les voit pas — il n'a pas d'yeux ici. Mais savoir qu'ils
+   * existent lui évite la faute la plus agaçante du SAV : redemander les photos
+   * que le client vient d'envoyer.
+   */
+  attachments?: Array<{ filename: string; mimeType: string }>;
   order: OrderSummary | null;
   /** Renseigné quand plusieurs commandes correspondent au client. */
   ambiguousOrders?: OrderSummary[];
@@ -97,6 +106,10 @@ Contraintes absolues :
   n'extrapole pas une règle voisine.
 - L'historique du client sert à ajuster le ton, pas à être récité : ne lui
   annonce pas son nombre de commandes.
+- Quand des fichiers sont joints, tu ne peux pas les regarder. Ne décris jamais
+  leur contenu et n'en déduis rien. Mais ne les redemande pas non plus :
+  accuse réception (« j'ai bien vos photos ») et dis qu'un collègue les
+  examine si la décision en dépend.
 - Les réponses passées de l'équipe montrent le ton et les tournures de la
   maison : inspire-t'en. Ne recopie jamais leurs faits — montants, numéros,
   dates appartiennent à d'autres dossiers.
@@ -187,6 +200,14 @@ function buildContextBlock(context: GenerationContext): string {
   const parts = [`Boutique : ${context.merchantName}`, `Intention détectée : ${context.intent}`];
 
   if (context.language) parts.push(`Langue détectée : ${context.language}`);
+
+  if (context.attachments && context.attachments.length > 0) {
+    const names = context.attachments.map((file) => file.filename).join(', ');
+    parts.push(
+      `\n--- Fichiers joints par le client (${context.attachments.length}) ---\n${names}\n` +
+        'Tu ne peux pas les ouvrir. Accuse-en réception sans décrire ce qu’ils montrent.',
+    );
+  }
 
   // Les règles passent avant la commande : elles conditionnent ce qu'on a le
   // droit de promettre, la commande ne fait que décrire l'existant.

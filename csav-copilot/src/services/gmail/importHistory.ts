@@ -179,6 +179,15 @@ export async function importMailboxHistory(params: {
             bodyText: message.bodyText,
             snippet: message.snippet,
             receivedAt: message.receivedAt,
+            attachments: {
+              create: message.attachments.map((file) => ({
+                merchantId,
+                gmailAttachmentId: file.gmailAttachmentId,
+                filename: file.filename,
+                mimeType: file.mimeType,
+                size: file.size,
+              })),
+            },
           },
         });
         result.messagesImported += 1;
