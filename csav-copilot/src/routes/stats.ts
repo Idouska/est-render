@@ -2,6 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.ts';
 import { requireSession } from '../plugins/auth.ts';
+import { getShopifyClient, ShopifyError } from '../services/shopify/client.ts';
+import { fetchCommerceStats } from '../services/shopify/commerceStats.ts';
 
 /**
  * Statistiques d'équipe.
@@ -20,6 +22,51 @@ const query = z.object({
 
 export async function statsRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', requireSession);
+
+  /**
+   * Chiffres de la boutique — CA par jour, panier moyen, remboursements.
+   *
+   * Route séparée de `/api/stats` : elle interroge Shopify et peut donc être
+   * lente ou tomber seule. L'écran affiche l'équipe même quand la boutique ne
+   * répond pas — perdre un graphe est gênant, perdre l'écran entier ne l'est
+   * pas au même prix.
+   */
+  app.get('/api/stats/commerce', async (request, reply) => {
+    const parsed = query.safeParse(request.query);
+    if (!parsed.success) return reply.code(400).send({ error: 'Paramètres invalides' });
+
+    const { merchantId } = request.session;
+
+    try {
+      const client = await getShopifyClient(merchantId);
+      const stats = await fetchCommerceStats(client, parsed.data.days);
+
+      // Les remboursements passés par l'outil, en regard de ceux de Shopify :
+      // l'écart dit ce qui se rembourse hors SAV.
+      const viaTool = await prisma.refund.aggregate({
+        where: {
+          merchantId,
+          status: 'COMPLETED',
+          createdAt: { gte: new Date(Date.now() - parsed.data.days * 86_400_000) },
+        },
+        _sum: { amount: true },
+        _count: { _all: true },
+      });
+
+      return reply.send({
+        ...stats,
+        refundsViaTool: {
+          count: viaTool._count._all,
+          amount: Number(viaTool._sum.amount ?? 0),
+        },
+      });
+    } catch (error) {
+      if (error instanceof ShopifyError) {
+        return reply.code(502).send({ error: 'Shopify n’a pas répondu.' });
+      }
+      throw error;
+    }
+  });
 
   app.get('/api/stats', async (request, reply) => {
     const parsed = query.safeParse(request.query);

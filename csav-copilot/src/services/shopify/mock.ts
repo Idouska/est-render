@@ -453,6 +453,32 @@ export function createMockShopifyClient(shopDomain: string): ShopifyClient {
         } as T;
       }
 
+      if (query.includes('query CommerceStats')) {
+        // Soixante jours de ventes plausibles, déterministes : un graphe de
+        // démonstration qui change à chaque appel ferait douter du vrai.
+        const nodes = [];
+        for (let back = 0; back < 60; back += 1) {
+          const date = new Date(Date.now() - back * 86_400_000);
+          const seed = (back * 7919) % 23;
+          const count = 2 + (seed % 5);
+          for (let i = 0; i < count; i += 1) {
+            const amount = (79 + ((seed * 13 + i * 31) % 90)).toFixed(2);
+            nodes.push({
+              createdAt: date.toISOString(),
+              cancelledAt: null,
+              displayFinancialStatus: 'PAID',
+              displayFulfillmentStatus: back < 3 && i === 0 ? 'UNFULFILLED' : 'FULFILLED',
+              totalPriceSet: { shopMoney: { amount, currencyCode: 'EUR' } },
+              totalRefundedSet:
+                (seed + i) % 11 === 0 ? { shopMoney: { amount: '39.00' } } : null,
+            });
+          }
+        }
+        return {
+          orders: { pageInfo: { hasNextPage: false, endCursor: null }, nodes },
+        } as T;
+      }
+
       if (query.includes('query ShopPolicies')) {
         return {
           shop: {

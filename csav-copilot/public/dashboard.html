@@ -504,9 +504,40 @@
       </section>
 
       <section class="browse" id="view-stats" hidden aria-label="Statistiques">
+        <!-- La période gouverne tout l'écran : un seul sélecteur, en tête,
+             plutôt qu'un réglage par graphe qui finirait incohérent. -->
+        <div class="stats-bar">
+          <div class="seg" id="stats-range">
+            <button data-days="7">7 jours</button>
+            <button data-days="30" aria-pressed="true">30 jours</button>
+            <button data-days="90">90 jours</button>
+          </div>
+        </div>
+
+        <div class="kpis" id="commerce-kpis"></div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <span class="panel-title">Chiffre d'affaires par jour</span>
+            <span class="hint" id="ca-note"></span>
+          </div>
+          <div class="card-body" id="chart-revenue"><p class="empty">Chargement…</p></div>
+        </div>
+
+        <div class="stats-duo">
+          <div class="panel">
+            <div class="panel-head"><span class="panel-title">Commandes par jour</span></div>
+            <div class="card-body" id="chart-orders"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><span class="panel-title">Motifs des demandes</span></div>
+            <div class="card-body" id="chart-intents"></div>
+          </div>
+        </div>
+
         <div class="kpis" id="stats-kpis"></div>
         <div class="panel">
-          <div class="panel-head"><span class="panel-title">Volume par jour</span></div>
+          <div class="panel-head"><span class="panel-title">Tickets par jour</span></div>
           <div class="card-body" id="stats-daily"></div>
         </div>
         <div class="table-wrap">

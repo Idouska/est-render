@@ -2187,11 +2187,144 @@ function duration(minutes) {
   return `${Math.round(hours / 24)} j`;
 }
 
+/* La période choisie vaut pour tout l'écran de statistiques. */
+let statsDays = 30;
+
+function money(value, currency) {
+  return new Intl.NumberFormat('fr-FR', {
+    style: 'currency',
+    currency: currency || 'EUR',
+    maximumFractionDigits: value >= 1000 ? 0 : 2,
+  }).format(value);
+}
+
+/**
+ * Histogramme SVG, sans bibliothèque.
+ *
+ * Chaque barre porte son infobulle native (`<title>`) : jour, valeur exacte.
+ * Une bibliothèque de graphiques apporterait le zoom et les légendes animées ;
+ * pour trente barres et une lecture de tendance, elle n'apporterait que du
+ * poids et une dépendance à surveiller.
+ */
+function svgBars(days, pick, format, options = {}) {
+  const peak = Math.max(1, ...days.map(pick));
+  const width = 100 / days.length;
+
+  const bars = days
+    .map((day, index) => {
+      const value = pick(day);
+      const height = Math.max(value > 0 ? 2 : 0, (value / peak) * 92);
+      const label = new Date(day.day + 'T00:00:00').toLocaleDateString('fr-FR', {
+        day: 'numeric',
+        month: 'short',
+      });
+      return `<g>
+        <title>${esc(label)} — ${esc(format(value))}</title>
+        <rect x="${(index * width + width * 0.15).toFixed(2)}" y="${(100 - height).toFixed(2)}"
+          width="${(width * 0.7).toFixed(2)}" height="${height.toFixed(2)}" rx="1"
+          class="bar${options.soft ? ' bar-soft' : ''}" />
+      </g>`;
+    })
+    .join('');
+
+  // Repères horizontaux au quart : assez pour situer, pas assez pour rayer.
+  const grid = [25, 50, 75]
+    .map((y) => `<line x1="0" x2="100" y1="${y}" y2="${y}" class="chart-grid" />`)
+    .join('');
+
+  return `<svg class="chart" viewBox="0 0 100 100" preserveAspectRatio="none"
+    role="img">${grid}${bars}</svg>
+    <div class="chart-scale"><span>${esc(format(peak))}</span><span>0</span></div>`;
+}
+
+/** Répartition en barres horizontales : à sept catégories, plus lisible qu'un
+    camembert — les angles proches se comparent mal, les longueurs bien. */
+function intentBars(byIntent) {
+  const rows = Object.entries(byIntent).sort((a, b) => b[1] - a[1]);
+  if (rows.length === 0) return '<p class="empty">Aucune demande sur la période.</p>';
+
+  const total = rows.reduce((sum, [, count]) => sum + count, 0);
+
+  return rows
+    .map(
+      ([intent, count]) => `<div class="ibar">
+        <span class="ibar-label">${esc(INTENT_LABELS[intent] ?? intent)}</span>
+        <span class="ibar-track">
+          <i class="ibar-fill in-${esc(intent)}" style="width:${((count / total) * 100).toFixed(1)}%"></i>
+        </span>
+        <span class="ibar-count mono">${count}</span>
+      </div>`,
+    )
+    .join('');
+}
+
 async function loadStats() {
-  const stats = await api('/api/stats?days=30');
+  // Les deux sources partent ensemble et échouent séparément : Shopify en
+  // panne ne doit pas priver l'écran des chiffres d'équipe, ni l'inverse.
+  const [stats, commerce] = await Promise.all([
+    api(`/api/stats?days=${statsDays}`),
+    api(`/api/stats/commerce?days=${statsDays}`).catch(() => null),
+  ]);
+
+  $('stats-range')
+    .querySelectorAll('button')
+    .forEach((button) => {
+      button.setAttribute('aria-pressed', String(Number(button.dataset.days) === statsDays));
+    });
+
+  /* ------------------------------------------------ chiffres boutique --- */
+
+  if (commerce) {
+    const t = commerce.totals;
+    $('commerce-kpis').innerHTML = [
+      ['Chiffre d’affaires', money(t.revenue, commerce.currency), `${t.orders} commandes`],
+      ['Panier moyen', money(t.averageOrder, commerce.currency), 'par commande'],
+      [
+        'Remboursé',
+        money(t.refunded, commerce.currency),
+        `${(t.refundRate * 100).toFixed(1).replace('.', ',')} % du CA`,
+      ],
+      ['À expédier', t.unfulfilled, t.cancelled ? `${t.cancelled} annulées` : 'commandes en attente'],
+    ]
+      .map(
+        ([label, value, note]) => `<div class="kpi">
+          <span class="kpi-label">${esc(String(label))}</span>
+          <span class="kpi-value">${esc(String(value))}</span>
+          <span class="kpi-note">${esc(String(note))}</span>
+        </div>`,
+      )
+      .join('');
+
+    $('chart-revenue').innerHTML = svgBars(
+      commerce.days,
+      (day) => day.revenue,
+      (value) => money(value, commerce.currency),
+    );
+    $('ca-note').textContent =
+      commerce.refundsViaTool.count > 0
+        ? `${commerce.refundsViaTool.count} remboursement${commerce.refundsViaTool.count > 1 ? 's' : ''} via l’outil`
+        : '';
+
+    $('chart-orders').innerHTML = svgBars(
+      commerce.days,
+      (day) => day.orders,
+      (value) => `${Math.round(value)} commande${value > 1 ? 's' : ''}`,
+      { soft: true },
+    );
+  } else {
+    $('commerce-kpis').innerHTML = '';
+    $('chart-revenue').innerHTML =
+      '<p class="empty">Shopify n’a pas répondu — les chiffres boutique reviendront avec lui.</p>';
+    $('chart-orders').innerHTML = '<p class="empty">—</p>';
+    $('ca-note').textContent = '';
+  }
+
+  $('chart-intents').innerHTML = intentBars(stats.tickets.byIntent);
+
+  /* --------------------------------------------------------- équipe --- */
 
   $('stats-kpis').innerHTML = [
-    ['Tickets reçus', stats.tickets.total, '30 derniers jours'],
+    ['Tickets reçus', stats.tickets.total, `${statsDays} derniers jours`],
     ['Première réponse', duration(stats.firstReply.medianMinutes), `médiane sur ${stats.firstReply.measured}`],
     ['Brouillons envoyés', `${Math.round(stats.drafts.sendRate * 100)} %`, `${stats.drafts.sent} sur ${stats.drafts.total}`],
     [
@@ -2243,6 +2376,13 @@ async function loadStats() {
       )
       .join('') || '<tr><td colspan="5" class="empty">Aucune activité sur la période.</td></tr>';
 }
+
+$('stats-range').addEventListener('click', (event) => {
+  const button = event.target.closest('[data-days]');
+  if (!button) return;
+  statsDays = Number(button.dataset.days);
+  loadStats();
+});
 
 /* -------------------------------------------------------------- catalogue */
 

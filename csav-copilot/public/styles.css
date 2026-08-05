@@ -3262,3 +3262,92 @@ textarea:focus-visible {
   .clock { padding: 4px 8px 4px 5px; }
   .wface { min-width: 0; padding: 4px 9px 5px; }
 }
+
+/* ==========================================================================
+   STATISTIQUES
+   ========================================================================== */
+
+.stats-bar { display: flex; align-items: center; gap: 10px; }
+.stats-bar .seg { display: inline-grid; grid-auto-flow: column; }
+
+/* Deux graphes côte à côte quand la place le permet. */
+.stats-duo {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 13px;
+}
+
+/* Le graphe et son échelle. Le SVG s'étire, les repères restent lisibles. */
+.chart {
+  display: block;
+  width: 100%;
+  height: 190px;
+}
+
+.chart-grid {
+  stroke: var(--line-soft);
+  stroke-width: 0.3;
+  vector-effect: non-scaling-stroke;
+}
+
+.chart .bar {
+  fill: var(--accent);
+  opacity: 0.85;
+  transition: opacity 0.12s ease;
+}
+
+.chart .bar-soft { fill: color-mix(in srgb, var(--accent) 45%, var(--ink-mute)); }
+.chart g:hover .bar { opacity: 1; }
+
+.chart-scale {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--ink-mute);
+}
+
+/* Motifs en barres horizontales : les longueurs se comparent d'un regard,
+   les angles d'un camembert non. */
+.ibar {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr) 40px;
+  align-items: center;
+  gap: 10px;
+}
+
+.ibar + .ibar { margin-top: 9px; }
+.ibar-label { font-size: 12.5px; color: var(--ink-soft); }
+
+.ibar-track {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--inset);
+  overflow: hidden;
+}
+
+.ibar-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  min-width: 3px;
+  background: var(--accent);
+}
+
+.ibar-count { text-align: right; font-size: 12px; }
+
+@media (max-width: 700px) {
+  .ibar { grid-template-columns: 92px minmax(0, 1fr) 34px; }
+  .chart { height: 150px; }
+}
+
+/* Les pastilles de motif sont pastel ; une jauge pastel sur fond gris ne se
+   voit pas. Les jauges reprennent les couleurs franches des liserés de file. */
+.ibar-fill.in-WISMO { background: #2f6fe4; }
+.ibar-fill.in-RETURN { background: #d97706; }
+.ibar-fill.in-DISPUTE { background: #e5484d; }
+.ibar-fill.in-REFUND { background: #6c5ce7; }
+.ibar-fill.in-PRODUCT_QUESTION { background: #0891b2; }
+.ibar-fill.in-POSITIVE { background: #059669; }
+.ibar-fill.in-OTHER { background: var(--ink-mute); }
