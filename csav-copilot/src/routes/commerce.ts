@@ -3,6 +3,11 @@ import { z } from 'zod';
 import { env } from '../config/env.ts';
 import { prisma } from '../lib/prisma.ts';
 import { ordersToCsv } from '../services/export/ordersCsv.ts';
+import {
+  getTracking,
+  registerTracking,
+  TRACK_STATUS_LABELS,
+} from '../services/tracking/track17.ts';
 import { requireSession } from '../plugins/auth.ts';
 import { getShopifyClient, ShopifyError, ShopifyScopeError } from '../services/shopify/client.ts';
 import { listCollections, listDisputes, listProducts } from '../services/shopify/catalog.ts';
@@ -370,6 +375,15 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
         cursor: parsed.data.cursor ?? null,
       });
 
+      // Les numéros connus de 17TRACK viennent aussi des colis saisis par le
+      // fournisseur, que Shopify ignore.
+      const numbers = page.orders
+        .flatMap((order) => order.fulfillments.map((f) => f.trackingNumber))
+        .filter(Boolean) as string[];
+
+      await registerTracking(numbers);
+      const tracking = await getTracking(numbers);
+
       const shipments = page.orders.flatMap((order) =>
         order.fulfillments
           .filter((fulfillment) => fulfillment.trackingNumber)
@@ -386,12 +400,25 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
                 : fulfillment.trackingUrl,
             estimatedDeliveryAt: fulfillment.estimatedDeliveryAt,
             updatedAt: fulfillment.updatedAt,
+            // État réel du transporteur quand 17TRACK est configuré : celui de
+            // Shopify reste figé à l'expédition pendant tout l'acheminement.
+            liveStatus: fulfillment.trackingNumber
+              ? (tracking.get(fulfillment.trackingNumber)?.status ?? null)
+              : null,
+            lastEvent: fulfillment.trackingNumber
+              ? (tracking.get(fulfillment.trackingNumber)?.events?.[0] ?? null)
+              : null,
             city: order.shippingAddress?.city ?? null,
             country: order.shippingAddress?.country ?? null,
           })),
       );
 
-      return { shipments, cursor: page.cursor, hasNextPage: page.hasNextPage };
+      return {
+        shipments,
+        labels: TRACK_STATUS_LABELS,
+        cursor: page.cursor,
+        hasNextPage: page.hasNextPage,
+      };
     });
   });
 
@@ -475,9 +502,94 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
+  /**
+   * Litiges Shopify, avec de quoi y répondre.
+   *
+   * Un litige non contesté est débité automatiquement à l'échéance. Ce que la
+   * banque attend, c'est une preuve de livraison : numéro de suivi, statut du
+   * colis et adresse. Ces trois éléments existent déjà dans l'application —
+   * les rassembler ici évite de les recopier à la main sous la pression du
+   * délai.
+   */
   app.get('/api/disputes', async (request, reply) =>
-    serveShopify(request, reply, 'Listing des litiges en échec', async (client) => ({
-      disputes: await listDisputes(client),
-    })),
+    serveShopify(request, reply, 'Listing des litiges en échec', async (client) => {
+      const disputes = await listDisputes(client);
+
+      // Rapprochement par numéro de commande : c'est la seule clé commune
+      // entre un litige Shopify Payments et nos colis.
+      const orderNames = disputes.map((dispute) => dispute.orderName).filter(Boolean) as string[];
+
+      const parcels = orderNames.length
+        ? await prisma.parcel.findMany({
+            where: { merchantId: request.session.merchantId, orderName: { in: orderNames } },
+            orderBy: { index: 'asc' },
+            select: {
+              id: true,
+              orderName: true,
+              trackingNumber: true,
+              carrier: true,
+              index: true,
+              total: true,
+              photoMime: true,
+            },
+          })
+        : [];
+
+      const tracking = await getTracking(parcels.map((parcel) => parcel.trackingNumber));
+
+      return {
+        disputes: disputes.map((dispute) => {
+          const own = parcels.filter((parcel) => parcel.orderName === dispute.orderName);
+
+          return {
+            ...dispute,
+            // Jours restants : l'information qui décide de l'ordre de travail
+            // de la journée. Négatif = échéance dépassée.
+            daysLeft: dispute.evidenceDueBy
+              ? Math.ceil(
+                  (new Date(dispute.evidenceDueBy).getTime() - Date.now()) / (24 * 60 * 60 * 1000),
+                )
+              : null,
+            evidence: own.map((parcel) => {
+              const track = tracking.get(parcel.trackingNumber);
+              return {
+                parcelId: parcel.id,
+                index: parcel.index,
+                total: parcel.total,
+                trackingNumber: parcel.trackingNumber,
+                carrier: track?.carrier ?? parcel.carrier,
+                status: track?.status ?? null,
+                deliveredAt: track?.deliveredAt ?? null,
+                hasPhoto: Boolean(parcel.photoMime),
+              };
+            }),
+          };
+        }),
+      };
+    }),
   );
+
+  /**
+   * Suivi détaillé d'un colis.
+   *
+   * Séparé de la liste : la chronologie complète ne sert qu'à l'écran ouvert,
+   * et 17TRACK facture à l'appel.
+   */
+  app.get<{ Params: { number: string } }>('/api/tracking/:number', async (request, reply) => {
+    const number = request.params.number.trim();
+
+    // Le numéro doit appartenir à un colis du marchand : sans ce contrôle,
+    // l'application deviendrait un service de suivi ouvert à tous.
+    const parcel = await prisma.parcel.findFirst({
+      where: { merchantId: request.session.merchantId, trackingNumber: number },
+      select: { id: true, orderName: true, carrier: true, index: true, total: true },
+    });
+
+    if (!parcel) return reply.code(404).send({ error: 'Colis inconnu' });
+
+    await registerTracking([number]);
+    const track = (await getTracking([number])).get(number) ?? null;
+
+    return reply.send({ parcel, track, labels: TRACK_STATUS_LABELS });
+  });
 }

@@ -550,6 +550,75 @@ async function openSupplierLink(supplierId, revoke = false) {
   }
 }
 
+/* ------------------------------------------------- chronologie d'un colis */
+
+/**
+ * Historique réel du colis, transporteur par transporteur.
+ *
+ * Shopify fige le statut à l'expédition : pour un envoi depuis la Chine, il
+ * reste « expédié » trois semaines. C'est 17TRACK qui sait où en est le colis,
+ * et c'est cette réponse-là qu'attend le client.
+ */
+async function openTracking(number) {
+  $('sheet-name').textContent = 'Suivi du colis';
+  $('sheet-email').textContent = number;
+  $('sheet-body').innerHTML = '<p class="empty">Interrogation du transporteur…</p>';
+  $('sheet-wrap').hidden = false;
+
+  let data;
+  try {
+    data = await api(`/api/tracking/${encodeURIComponent(number)}`);
+  } catch (error) {
+    $('sheet-body').innerHTML = `<p class="empty">${esc(error.message)}</p>`;
+    return;
+  }
+
+  const { parcel, track } = data;
+
+  if (!track) {
+    $('sheet-body').innerHTML = `<section class="sheet-group">
+      <h3>Suivi indisponible</h3>
+      <div class="sheet-row"><p>
+        Aucune donnée transporteur pour ce numéro. Soit la clé 17TRACK n'est pas
+        configurée dans la console d'administration, soit le transporteur n'a pas
+        encore pris le colis en charge.
+      </p></div>
+    </section>`;
+    return;
+  }
+
+  $('sheet-body').innerHTML = `
+    <section class="sheet-group">
+      <h3>${esc(parcel.orderName ?? 'Colis')} · ${parcel.index}/${parcel.total}</h3>
+      <div class="sheet-row">
+        <b>${esc(TRACK_LABELS[track.status] ?? track.status ?? '—')}</b>
+        ${track.carrier ? `<span class="tag tag-order">${esc(track.carrier)}</span>` : ''}
+        <span class="when">${
+          track.lastUpdatedAt ? relativeTime(track.lastUpdatedAt) : ''
+        }</span>
+      </div>
+    </section>
+
+    <section class="sheet-group">
+      <h3>Chronologie</h3>
+      <div class="sheet-row" style="display:block">
+        ${
+          track.events.length
+            ? `<div class="tl">${track.events
+                .map(
+                  (event) => `<div class="tl-step">
+                    <span class="when">${fullDate(event.at)}</span>
+                    <b>${esc(event.status)}</b>
+                    ${event.location ? `<span>${esc(event.location)}</span>` : ''}
+                  </div>`,
+                )
+                .join('')}</div>`
+            : '<p>Aucun événement pour le moment.</p>'
+        }
+      </div>
+    </section>`;
+}
+
 /* ----------------------------------------------- vue d'ensemble du groupe */
 
 /**
@@ -2143,12 +2212,34 @@ async function loadTracking() {
                   )}</a>`
                 : esc(shipment.trackingNumber ?? '—')
             }</td>
-            <td>${esc([shipment.city, shipment.country].filter(Boolean).join(', ') || '—')}</td>
-            <td>${shipment.estimatedDeliveryAt ? fullDate(shipment.estimatedDeliveryAt) : '—'}</td>
+            <td>${
+              shipment.liveStatus
+                ? `<span class="tag ${
+                    shipment.liveStatus === 'Delivered' ? 'st-CLOSED' : 'st-NEEDS_REVIEW'
+                  }">${esc(TRACK_LABELS[shipment.liveStatus] ?? shipment.liveStatus)}</span>${
+                    shipment.lastEvent
+                      ? `<br><span class="sub">${esc(shipment.lastEvent.status)}${
+                          shipment.lastEvent.location ? ` · ${esc(shipment.lastEvent.location)}` : ''
+                        }</span>`
+                      : ''
+                  }`
+                : esc([shipment.city, shipment.country].filter(Boolean).join(', ') || '—')
+            }</td>
+            <td>${
+              shipment.trackingNumber
+                ? `<button class="btn btn-small" data-track="${esc(
+                    shipment.trackingNumber,
+                  )}">Chronologie</button>`
+                : '—'
+            }</td>
           </tr>`,
         )
         .join('') ||
       '<tr><td colspan="6" class="empty">Aucun colis en cours d’acheminement.</td></tr>';
+
+    body.querySelectorAll('[data-track]').forEach((button) =>
+      button.addEventListener('click', () => void openTracking(button.dataset.track)),
+    );
 
     $('tracking-count').textContent = shipments.length
       ? `${shipments.length} colis en transit`
@@ -2310,42 +2401,154 @@ const DISPUTE_STATUS = {
 
 async function loadDisputes() {
   const body = $('disputes-rows');
-  body.innerHTML = '<tr><td colspan="6" class="empty">Chargement…</td></tr>';
+  body.innerHTML = '<p class="empty">Chargement…</p>';
 
+  let disputes;
   try {
-    const { disputes } = await api('/api/disputes');
-
-    body.innerHTML =
-      disputes
-        .map((dispute) => {
-          // L'échéance est la seule information qui commande une action datée :
-          // passée la date, la banque tranche sans nous.
-          const late =
-            dispute.evidenceDueBy && new Date(dispute.evidenceDueBy).getTime() < Date.now();
-
-          return `<tr>
-            <td class="mono"><b>${esc(dispute.orderName ?? '—')}</b></td>
-            <td>${esc(dispute.reason ?? '—')}</td>
-            <td>${esc(dispute.type ?? '—')}</td>
-            <td><span class="tag tag-status ${
-              dispute.status === 'NEEDS_RESPONSE' ? 'st-FAILED' : 'st-NEW'
-            }">${esc(DISPUTE_STATUS[dispute.status] ?? dispute.status)}</span></td>
-            <td class="${late ? 'set-alert' : ''}">${
-              dispute.evidenceDueBy ? fullDate(dispute.evidenceDueBy) : '—'
-            }</td>
-            <td class="num mono">${euro(dispute.amount, dispute.currency)}</td>
-          </tr>`;
-        })
-        .join('') ||
-      '<tr><td colspan="6" class="empty">Aucun litige. Si votre boutique n’utilise pas Shopify Payments, cet écran restera vide.</td></tr>';
-
-    $('disputes-count').textContent = disputes.length
-      ? `${disputes.length} litige${disputes.length > 1 ? 's' : ''}`
-      : '';
+    ({ disputes } = await api('/api/disputes'));
   } catch (error) {
-    body.innerHTML = `<tr><td colspan="6" class="empty">${esc(error.message)}</td></tr>`;
+    body.innerHTML = `<p class="empty">${esc(error.message)}</p>`;
+    $('disputes-count').textContent = '';
+    return;
   }
+
+  if (disputes.length === 0) {
+    body.innerHTML =
+      '<p class="empty">Aucun litige. Si votre boutique n’utilise pas Shopify Payments, cet écran restera vide.</p>';
+    $('disputes-count').textContent = '';
+    return;
+  }
+
+  // Les plus urgents d'abord : un litige non contesté est débité d'office à
+  // l'échéance, l'ordre de la liste est donc l'ordre de travail.
+  disputes.sort((a, b) => (a.daysLeft ?? 999) - (b.daysLeft ?? 999));
+
+  body.innerHTML = disputes
+    .map((dispute) => {
+      const urgent = dispute.daysLeft !== null && dispute.daysLeft <= 3;
+      const deadline =
+        dispute.daysLeft === null
+          ? 'Aucune échéance annoncée'
+          : dispute.daysLeft < 0
+            ? `Échéance dépassée depuis ${-dispute.daysLeft} j — la banque a tranché`
+            : `Réponse à Shopify avant le ${fullDate(dispute.evidenceDueBy)} · ${
+                dispute.daysLeft
+              } j restants`;
+
+      // Preuve de livraison : ce que la banque attend, assemblé à partir des
+      // colis déjà saisis plutôt que recopié à la main dans l'urgence.
+      const evidence = dispute.evidence ?? [];
+      const delivered = evidence.filter((item) => item.status === 'Delivered');
+
+      return `<article class="dsp${urgent ? ' urgent' : ''}">
+        <div class="dsp-head">
+          <b class="mono">${esc(dispute.orderName ?? 'commande inconnue')}</b>
+          <span class="tag tag-status ${
+            dispute.status === 'NEEDS_RESPONSE' ? 'st-FAILED' : 'st-NEW'
+          }">${esc(DISPUTE_STATUS[dispute.status] ?? dispute.status)}</span>
+          <span class="mono dsp-amount">${esc(euro(dispute.amount, dispute.currency))}</span>
+        </div>
+
+        <div class="dsp-deadline${
+          urgent || (dispute.daysLeft ?? 0) < 0 ? ' late' : ''
+        }">${esc(deadline)}</div>
+
+        <div class="dsp-reason">
+          <span class="panel-title">Motif</span>
+          ${esc(dispute.reason ?? '—')}${dispute.type ? ` · ${esc(dispute.type)}` : ''}
+        </div>
+
+        <section class="dsp-evidence">
+          <span class="panel-title">Preuve de livraison</span>
+          ${
+            evidence.length
+              ? evidence
+                  .map(
+                    (item) => `<div class="dsp-row">
+                      <b>${item.index}/${item.total}</b>
+                      <span class="mono">${esc(item.trackingNumber)}</span>
+                      ${item.carrier ? `<span class="tag tag-order">${esc(item.carrier)}</span>` : ''}
+                      <span class="tag ${
+                        item.status === 'Delivered' ? 'st-CLOSED' : 'st-NEEDS_REVIEW'
+                      }">${esc(TRACK_LABELS[item.status] ?? item.status ?? 'suivi indisponible')}</span>
+                      ${
+                        item.hasPhoto
+                          ? `<a class="btn btn-small" href="/api/parcels/${esc(
+                              item.parcelId,
+                            )}/photo" target="_blank" rel="noopener">Photo</a>`
+                          : ''
+                      }
+                    </div>`,
+                  )
+                  .join('')
+              : `<p class="empty">Aucun colis rattaché à cette commande. Sans numéro de suivi,
+                 il n'y a pas de preuve de livraison à produire — c'est le litige le plus
+                 difficile à gagner.</p>`
+          }
+        </section>
+
+        <div class="dsp-acts">
+          <button class="btn btn-primary" data-dsp-copy="${esc(dispute.id)}"${
+            evidence.length ? '' : ' disabled'
+          }>Copier la preuve</button>
+          <a class="btn" href="https://${esc(
+            state.me?.merchant?.shopDomain ?? '',
+          )}/admin/payments/disputes" target="_blank" rel="noopener">Répondre sur Shopify</a>
+          ${
+            delivered.length === evidence.length && evidence.length
+              ? '<span class="hint">Tous les colis sont marqués livrés — dossier favorable.</span>'
+              : ''
+          }
+        </div>
+      </article>`;
+    })
+    .join('');
+
+  $('disputes-count').textContent = `${disputes.length} litige${
+    disputes.length > 1 ? 's' : ''
+  }`;
+
+  // Le dossier se colle dans le formulaire Shopify : l'API de soumission de
+  // preuves n'est pas ouverte aux applications, seule l'administration le
+  // permet. Autant préparer le texte exact plutôt que de laisser recopier.
+  body.querySelectorAll('[data-dsp-copy]').forEach((button) =>
+    button.addEventListener('click', async () => {
+      const dispute = disputes.find((candidate) => candidate.id === button.dataset.dspCopy);
+
+      const text = [
+        `Commande ${dispute.orderName ?? ''} — ${euro(dispute.amount, dispute.currency)}`,
+        '',
+        'Preuve de livraison :',
+        ...dispute.evidence.map(
+          (item) =>
+            `• Colis ${item.index}/${item.total} — ${item.trackingNumber}` +
+            `${item.carrier ? ` (${item.carrier})` : ''} — ${
+              TRACK_LABELS[item.status] ?? item.status ?? 'statut indisponible'
+            }${item.deliveredAt ? `, livré le ${fullDate(item.deliveredAt)}` : ''}`,
+        ),
+      ].join('\n');
+
+      try {
+        await navigator.clipboard.writeText(text);
+        toast('Preuve copiée — collez-la dans le formulaire Shopify.');
+      } catch {
+        prompt('Preuve à coller dans Shopify :', text);
+      }
+    }),
+  );
 }
+
+const TRACK_LABELS = {
+  NotFound: 'Introuvable chez le transporteur',
+  InfoReceived: 'Pris en charge',
+  InTransit: 'En transit',
+  Expired: 'Suivi expiré',
+  AvailableForPickup: 'À retirer',
+  OutForDelivery: 'En cours de livraison',
+  DeliveryFailure: 'Échec de livraison',
+  Delivered: 'Livré',
+  Exception: 'Incident',
+};
 
 /* ------------------------------------------------------------- horloges - */
 

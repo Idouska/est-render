@@ -1867,3 +1867,76 @@ body {
 /* Pastille de boutique sur une ligne de file : lue avant le nom du client,
    elle n'apparaît qu'en mode « toutes les boutiques ». */
 .shop-pip { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+
+/* --------------------------------------------------------------- litiges --- */
+
+.dsp {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow);
+  padding: 14px 16px;
+  margin-bottom: 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Le filet rouge se voit avant d'avoir lu la date : c'est de l'argent qui
+   part tout seul à l'échéance. */
+.dsp.urgent { border-left-color: var(--crit); }
+
+.dsp-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.dsp-head b { font-size: 15px; }
+.dsp-amount { margin-left: auto; font-size: 15px; font-weight: 600; }
+
+.dsp-deadline { font-size: 13px; color: var(--ink-soft); }
+.dsp-deadline.late { color: var(--crit); font-weight: 600; }
+
+.dsp-reason { font-size: 13px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+
+.dsp-evidence {
+  background: var(--inset);
+  border-radius: var(--r-md);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.dsp-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; }
+.dsp-acts { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* --------------------------------------------------- chronologie de suivi --- */
+
+.tl { display: flex; flex-direction: column; }
+
+.tl-step {
+  position: relative;
+  padding: 0 0 14px 20px;
+  border-left: 2px solid var(--line);
+}
+
+.tl-step:last-child { border-left-color: transparent; padding-bottom: 0; }
+
+.tl-step::before {
+  content: "";
+  position: absolute;
+  left: -6px;
+  top: 3px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--line-strong, var(--ink-mute));
+  opacity: 0.5;
+}
+
+/* L'étape la plus récente est en tête et porte la couleur d'accent : c'est
+   celle qu'on cite au client. */
+.tl-step:first-child::before { background: var(--accent); opacity: 1; }
+.tl-step:first-child b { color: var(--ink); }
+
+.tl-step b { display: block; font-size: 13px; font-weight: 500; color: var(--ink-soft); }
+.tl-step span { font-size: 11.5px; color: var(--ink-mute); }
+.tl-step .when { float: right; font-family: var(--font-mono); }

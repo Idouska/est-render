@@ -487,8 +487,8 @@
                 <th>Client</th>
                 <th>Transporteur</th>
                 <th>N° de suivi</th>
-                <th>Destination</th>
-                <th>Livraison estimée</th>
+                <th>Où en est le colis</th>
+                <th></th>
               </tr>
             </thead>
             <tbody id="tracking-rows"></tbody>
@@ -528,21 +528,7 @@
         <div class="browse-bar">
           <span class="browse-count" id="disputes-count"></span>
         </div>
-        <div class="table-wrap">
-          <table class="grid">
-            <thead>
-              <tr>
-                <th>Commande</th>
-                <th>Motif</th>
-                <th>Type</th>
-                <th>État</th>
-                <th>Preuves attendues</th>
-                <th class="num">Montant</th>
-              </tr>
-            </thead>
-            <tbody id="disputes-rows"></tbody>
-          </table>
-        </div>
+        <div id="disputes-rows"></div>
       </section>
 
       <section class="browse" id="view-settings" hidden aria-label="Réglages">
