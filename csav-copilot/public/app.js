@@ -3285,10 +3285,14 @@ function renderSettings() {
                       mailbox.id,
                     )}">Par défaut</button>`
               }
+              <button class="btn btn-small" data-mbx-learn="${esc(
+                mailbox.id,
+              )}">Apprendre de l’historique</button>
               <button class="btn btn-small btn-danger" data-mbx-off="${esc(
                 mailbox.id,
               )}">Débrancher</button>
             </div>
+            <div class="mbx-learn" data-mbx-learn-state="${esc(mailbox.id)}"></div>
           </div>`,
         )
         .join('')
@@ -3310,6 +3314,40 @@ function renderSettings() {
       gmail.connected ? '' : ' btn-primary'
     }" href="/auth/google">${gmail.connected ? '＋ Ajouter une boîte' : 'Connecter Gmail'}</a>`,
   });
+
+  // Apprentissage : jamais déclenché tout seul, jamais sur toutes les boîtes.
+  // C'est le marchand qui désigne celle dont les réponses font référence — une
+  // adresse branchée pour des essais n'a rien à apprendre à l'IA.
+  $('set-gmail')
+    .querySelectorAll('[data-mbx-learn]')
+    .forEach((button) =>
+      button.addEventListener('click', async () => {
+        const id = button.dataset.mbxLearn;
+        const address = button.closest('.mbx')?.querySelector('code')?.textContent ?? '';
+
+        if (
+          !confirm(
+            `Analyser les 6 derniers mois de ${address} ?\n\n` +
+              'Les échanges déjà traités serviront de modèle de ton à l’IA. ' +
+              'Ils restent invisibles dans la file et dans les statistiques.',
+          )
+        ) {
+          return;
+        }
+
+        button.disabled = true;
+        try {
+          await api(`/api/mailboxes/${id}/learn`, { method: 'POST', body: '{}' });
+          toast('Apprentissage lancé — ça tourne en arrière-plan.');
+          pollLearning();
+        } catch (error) {
+          button.disabled = false;
+          toast(error.message, true);
+        }
+      }),
+    );
+
+  void refreshLearning();
 
   $('set-gmail')
     .querySelectorAll('[data-mbx-default]')
@@ -3743,6 +3781,52 @@ $('r-go').addEventListener('click', async () => {
     toast(error.message, true);
   }
 });
+
+/**
+ * État de l'apprentissage, affiché sous chaque boîte.
+ *
+ * L'import tourne côté serveur bien après la réponse HTTP : sans ce retour, le
+ * marchand cliquerait, ne verrait rien, et recliquerait.
+ */
+async function refreshLearning() {
+  let data;
+  try {
+    data = await api('/api/learning');
+  } catch {
+    return false;
+  }
+
+  const running = new Set(data.running ?? []);
+
+  document.querySelectorAll('[data-mbx-learn-state]').forEach((node) => {
+    const id = node.dataset.mbxLearnState;
+    const button = document.querySelector(`[data-mbx-learn="${CSS.escape(id)}"]`);
+    if (button) button.disabled = running.has(id);
+
+    node.textContent = running.has(id)
+      ? 'Analyse en cours…'
+      : data.imported > 0
+        ? `${data.imported} échange${data.imported > 1 ? 's' : ''} appris`
+        : '';
+  });
+
+  return running.size > 0;
+}
+
+/** Relance la lecture d'état tant qu'un import tourne, puis s'arrête. */
+function pollLearning() {
+  let elapsed = 0;
+
+  const tick = async () => {
+    const stillRunning = await refreshLearning();
+    elapsed += 5;
+    // Cinq minutes : au-delà, l'import a fini ou a échoué, et le journal
+    // serveur le dira mieux qu'une horloge qui tourne dans le vide.
+    if (stillRunning && elapsed < 300) setTimeout(tick, 5000);
+  };
+
+  setTimeout(tick, 5000);
+}
 
 async function patchMailbox(id, body) {
   try {

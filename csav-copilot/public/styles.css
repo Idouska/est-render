@@ -1727,6 +1727,14 @@ body {
   color: var(--ink);
 }
 
+/* Volume du corpus d'apprentissage. Vide tant que rien n'a été importé : une
+   ligne « 0 échange » suggérerait un échec là où il n'y a qu'une absence. */
+.mbx-learn:not(:empty) {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
 /* ---------------------------------------------------------- fiche client --- */
 
 /* Panneau latéral plutôt qu'un écran : l'agent consulte la fiche sans perdre

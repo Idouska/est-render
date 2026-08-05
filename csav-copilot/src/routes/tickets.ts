@@ -62,6 +62,9 @@ function buildTicketWhere(
     // Une liste, jamais un identifiant venu du client : `merchantIds` est
     // toujours calculé serveur depuis la session.
     merchantId: merchantIds.length === 1 ? merchantIds[0] : { in: merchantIds },
+    // Les échanges importés servent de matière à l'IA, pas de travail à faire :
+    // les afficher noierait la file sous des mois d'archives closes.
+    isHistorical: false,
     ...(options.withStatus && filters.status ? { status: filters.status } : {}),
     ...(filters.intent ? { intent: filters.intent } : {}),
     ...(filters.assignee === 'none'
@@ -358,7 +361,7 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
     const [open, late, disputes, closed] = await Promise.all([
       prisma.ticket.groupBy({
         by: ['merchantId'],
-        where: { merchantId: { in: ids }, status: { in: [...OPEN] } },
+        where: { merchantId: { in: ids }, isHistorical: false, status: { in: [...OPEN] } },
         _count: true,
       }),
       // « En retard » se compte sur les tickets encore ouverts : un ticket clos
@@ -367,6 +370,7 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
         by: ['merchantId'],
         where: {
           merchantId: { in: ids },
+          isHistorical: false,
           status: { in: [...OPEN] },
           lastMessageAt: { lte: lateBefore },
         },
@@ -374,13 +378,14 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
       }),
       prisma.ticket.groupBy({
         by: ['merchantId'],
-        where: { merchantId: { in: ids }, intent: 'DISPUTE', status: { in: [...OPEN] } },
+        where: { merchantId: { in: ids }, isHistorical: false, intent: 'DISPUTE', status: { in: [...OPEN] } },
         _count: true,
       }),
       prisma.ticket.groupBy({
         by: ['merchantId'],
         where: {
           merchantId: { in: ids },
+          isHistorical: false,
           status: { in: ['CLOSED', 'AUTO_SENT'] },
           lastMessageAt: { gte: since },
         },
@@ -428,7 +433,7 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
     const [byStatus, sentDrafts, totalDrafts] = await Promise.all([
       prisma.ticket.groupBy({
         by: ['status'],
-        where: { merchantId, lastMessageAt: { gte: since } },
+        where: { merchantId, isHistorical: false, lastMessageAt: { gte: since } },
         _count: true,
       }),
       prisma.draft.count({ where: { merchantId, status: 'SENT', createdAt: { gte: since } } }),

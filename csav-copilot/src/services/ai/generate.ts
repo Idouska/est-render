@@ -46,6 +46,14 @@ export interface GenerationContext {
   } | null;
 
   /**
+   * Réponses réellement envoyées par l'équipe sur des cas semblables.
+   *
+   * Le ton d'une maison se transmet par l'exemple, pas par une consigne de
+   * style : ces échanges apprennent au modèle comment *cette* boutique répond.
+   */
+  examples?: Array<{ question: string; answer: string }>;
+
+  /**
    * Langue du message reçu, en code ISO. La réponse est rédigée dedans :
    * répondre en français à un client de Portland est une faute.
    */
@@ -79,6 +87,9 @@ Contraintes absolues :
   n'extrapole pas une règle voisine.
 - L'historique du client sert à ajuster le ton, pas à être récité : ne lui
   annonce pas son nombre de commandes.
+- Les réponses passées de l'équipe montrent le ton et les tournures de la
+  maison : inspire-t'en. Ne recopie jamais leurs faits — montants, numéros,
+  dates appartiennent à d'autres dossiers.
 
 Réponds en JSON, sans texte autour.`;
 
@@ -180,6 +191,19 @@ function buildContextBlock(context: GenerationContext): string {
     parts.push(
       `\n--- Aucune commande rattachée ---\n` +
         `Demande au client son numéro de commande ou l'adresse email utilisée lors de l'achat.`,
+    );
+  }
+
+  if (context.examples?.length) {
+    parts.push(
+      `\n--- Réponses déjà envoyées par l'équipe sur des cas semblables ---\n` +
+        context.examples
+          .map(
+            (example, index) =>
+              `Exemple ${index + 1}\nClient : ${example.question}\nÉquipe : ${example.answer}`,
+          )
+          .join('\n\n') +
+        `\nReprends le ton et les tournures, jamais les faits.`,
     );
   }
 

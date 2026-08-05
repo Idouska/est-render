@@ -31,12 +31,12 @@ export async function statsRoutes(app: FastifyInstance): Promise<void> {
     const [byStatus, byIntent, drafts, tickets, users, audits] = await Promise.all([
       prisma.ticket.groupBy({
         by: ['status'],
-        where: { merchantId, createdAt: { gte: since } },
+        where: { merchantId, isHistorical: false, createdAt: { gte: since } },
         _count: { _all: true },
       }),
       prisma.ticket.groupBy({
         by: ['intent'],
-        where: { merchantId, createdAt: { gte: since }, intent: { not: null } },
+        where: { merchantId, isHistorical: false, createdAt: { gte: since }, intent: { not: null } },
         _count: { _all: true },
       }),
       prisma.draft.findMany({
@@ -54,7 +54,7 @@ export async function statsRoutes(app: FastifyInstance): Promise<void> {
         },
       }),
       prisma.ticket.findMany({
-        where: { merchantId, createdAt: { gte: since } },
+        where: { merchantId, isHistorical: false, createdAt: { gte: since } },
         select: { createdAt: true, status: true },
       }),
       prisma.user.findMany({

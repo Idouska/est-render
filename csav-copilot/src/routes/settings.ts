@@ -4,7 +4,16 @@ import { env } from "../config/env.ts";
 import { recordAudit } from "../lib/audit.ts";
 import { prisma } from "../lib/prisma.ts";
 import { requirePermission, requireSession } from "../plugins/auth.ts";
+import { importMailboxHistory } from "../services/gmail/importHistory.ts";
 import { decodePhoto, photoSchema } from "./parcels.ts";
+
+/**
+ * Boîtes dont l'import tourne, pour ne pas le lancer deux fois et pour que
+ * l'interface montre l'attente. En mémoire du processus : l'information ne
+ * survit pas à un redémarrage, et c'est acceptable — un import interrompu se
+ * relance, il est idempotent.
+ */
+const importsRunning = new Set<string>();
 
 /**
  * Réglages du marchand.
@@ -243,6 +252,94 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
       return reply.send({ ok: true });
     },
   );
+
+  /**
+   * Apprentissage sur l'historique d'une boîte.
+   *
+   * Déclenché à la main, boîte par boîte, jamais en tâche de fond : une
+   * adresse connectée pour des essais ne doit pas être aspirée parce qu'elle
+   * était branchée. Le marchand choisit celle dont les réponses font
+   * référence.
+   *
+   * Réponse immédiate, travail en arrière-plan : parcourir plusieurs centaines
+   * de fils dépasse largement le temps d'une requête HTTP. L'avancement se lit
+   * sur `GET /api/learning`.
+   */
+  app.post<{ Params: { id: string } }>(
+    "/api/mailboxes/:id/learn",
+    { preHandler: requirePermission("configure") },
+    async (request, reply) => {
+      const parsed = z
+        .object({ months: z.number().int().min(1).max(24).optional() })
+        .safeParse(request.body ?? {});
+      if (!parsed.success)
+        return reply.code(400).send({ error: "Requête invalide" });
+
+      const { merchantId, userId } = request.session;
+
+      const mailbox = await prisma.gmailConnection.findFirst({
+        where: { id: request.params.id, merchantId },
+        select: { id: true, emailAddress: true },
+      });
+      if (!mailbox) return reply.code(404).send({ error: "Boîte introuvable" });
+
+      if (importsRunning.has(mailbox.id)) {
+        return reply
+          .code(409)
+          .send({ error: "Un apprentissage est déjà en cours sur cette boîte." });
+      }
+
+      await recordAudit({
+        merchantId,
+        actorType: "USER",
+        actorId: userId,
+        action: "mailbox.learn",
+        targetType: "GmailConnection",
+        targetId: mailbox.id,
+        metadata: {
+          emailAddress: mailbox.emailAddress,
+          months: parsed.data.months ?? 6,
+        },
+        ipAddress: request.ip,
+      });
+
+      importsRunning.add(mailbox.id);
+      void importMailboxHistory({
+        merchantId,
+        mailboxId: mailbox.id,
+        ...(parsed.data.months ? { months: parsed.data.months } : {}),
+      })
+        .catch((error: unknown) => {
+          request.log.error(
+            { err: error, mailboxId: mailbox.id },
+            "Import historique échoué",
+          );
+        })
+        .finally(() => importsRunning.delete(mailbox.id));
+
+      return reply.code(202).send({ started: true });
+    },
+  );
+
+  /** Ce que l'IA a appris : volume du corpus et imports en cours. */
+  app.get("/api/learning", async (request, reply) => {
+    const { merchantId } = request.session;
+
+    const [imported, mailboxes] = await Promise.all([
+      prisma.ticket.count({ where: { merchantId, isHistorical: true } }),
+      prisma.gmailConnection.findMany({
+        where: { merchantId },
+        select: { id: true },
+      }),
+    ]);
+
+    return reply.send({
+      imported,
+      running: mailboxes
+        .map((mailbox) => mailbox.id)
+        .filter((id) => importsRunning.has(id)),
+    });
+  });
 
   app.delete<{ Params: { id: string } }>(
     "/api/mailboxes/:id",

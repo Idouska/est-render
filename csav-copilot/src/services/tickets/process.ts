@@ -4,6 +4,7 @@ import { prisma } from '../../lib/prisma.ts';
 import { classifyEmail } from '../ai/classify.ts';
 import { describeActiveModel } from '../ai/factory.ts';
 import { generateReply, type GenerationContext } from '../ai/generate.ts';
+import { findSimilarExchanges } from '../ai/examples.ts';
 import { detectLanguage } from '../ai/language.ts';
 import { createReplyDraft } from '../gmail/drafts.ts';
 import { matchOrder } from '../matching/orderMatcher.ts';
@@ -113,6 +114,15 @@ export async function processTicket(merchantId: string, ticketId: string): Promi
 
     const language = detectLanguage(lastInbound.bodyText, lastInbound.subject);
 
+    // Ce que l'équipe a déjà répondu dans des cas semblables : le ton d'une
+    // maison se transmet par l'exemple, pas par une consigne de style.
+    const examples = await findSimilarExchanges({
+      merchantId,
+      intent: classification.intent,
+      bodyText: lastInbound.bodyText,
+      excludeTicketId: ticket.id,
+    });
+
     await prisma.ticket.update({
       where: { id: ticket.id },
       data: {
@@ -127,6 +137,7 @@ export async function processTicket(merchantId: string, ticketId: string): Promi
 
     const context: GenerationContext = {
       playbook: ticket.merchant.playbook,
+      examples,
       language,
       history: {
         orders: order ? (order.customer?.numberOfOrders ?? 1) : 0,

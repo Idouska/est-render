@@ -219,6 +219,11 @@ model Ticket {
   /// rien à faire en haut de la pile pendant trois jours.
   snoozedUntil DateTime?
 
+  /// Échange importé de l'historique Gmail, pas traité par l'outil. Il sert de
+  /// matière à l'IA et n'apparaît nulle part ailleurs : le compter dans les
+  /// statistiques ferait croire à des mois de travail qui n'ont pas eu lieu.
+  isHistorical Boolean @default(false)
+
   lastMessageAt DateTime
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -237,6 +242,7 @@ model Ticket {
   @@index([merchantId, assignedToId])
   @@index([merchantId, mailboxId])
   @@index([merchantId, dueAt])
+  @@index([merchantId, isHistorical])
 }
 
 /// Réponse type.
