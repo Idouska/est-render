@@ -1230,6 +1230,16 @@ const STATUS_LABELS = {
 async function selectTicket(id) {
   state.currentId = id;
   const detail = await api(`/api/tickets/${id}`);
+
+  // Un ticket supprimé entre l'affichage de la file et le clic renverrait une
+  // réponse sans ticket : mieux vaut un message que l'écran blanc laissé par
+  // une exception au milieu du rendu.
+  if (!detail?.ticket) {
+    toast('Ce ticket n’existe plus.', true);
+    await loadQueue();
+    return;
+  }
+
   state.detail = detail;
   renderDetail();
   await Promise.all([loadQueue(), loadEscalations(id)]);

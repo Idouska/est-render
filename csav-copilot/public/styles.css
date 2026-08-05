@@ -1634,6 +1634,15 @@ body {
 
   /* Une modale plein écran : centrée, elle laissait le clavier virtuel
      recouvrir le champ en cours de saisie. */
+  /* La barre d'enregistrement passe en colonne : sur une seule ligne, le
+     libellé se coupait en deux et le bouton débordait de la carte. */
+  .set-bar { flex-direction: column; align-items: stretch; gap: 8px; }
+  .set-bar .btn { margin-left: 0; width: 100%; justify-content: center; }
+
+  /* Le message flottant se posait par-dessus cette barre collante, masquant
+     précisément le bouton qu'il commente. */
+  .toast { bottom: 96px; }
+
   /* Modale plein écran : centrée, elle laissait le clavier virtuel recouvrir
      le champ en cours de saisie. */
   .modal { width: 100%; max-width: none; max-height: 100dvh; border-radius: 0; border: 0; }
@@ -2010,3 +2019,24 @@ body {
 /* L'adresse d'image reste possible mais repliée : le téléversement est le
    chemin normal, l'URL le cas particulier de qui héberge déjà son logo. */
 .brand-url summary { font-size: 12.5px; color: var(--ink-mute); cursor: pointer; }
+
+@media (max-width: 700px) {
+  /* Nom d'usage sur sa propre ligne : coincé entre deux boutons, le champ
+     devenait trop étroit pour lire ce qu'on y tape. */
+  .mbx-acts input { flex: 1 1 100%; }
+  .mbx-acts .btn { flex: 1; justify-content: center; }
+
+  /* Les actions d'un litige s'empilent plutôt que de se serrer. */
+  .dsp-acts .btn { flex: 1; justify-content: center; min-width: 140px; }
+
+  .brand-edit-acts .btn { flex: 1; justify-content: center; }
+
+  /* La vignette du logo rétrécit : à 64 px elle mangeait la largeur du champ
+     de nom juste à côté. */
+  .brand-preview { width: 52px; height: 52px; font-size: 17px; }
+
+  /* Les repères de la fiche client passent sur deux colonnes, déjà réglé, mais
+     les lignes doivent pouvoir revenir à la ligne. */
+  .sheet-row { align-items: flex-start; }
+  .sheet-row .when { margin-left: 0; width: 100%; }
+}
