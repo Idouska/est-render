@@ -3677,6 +3677,12 @@ function renderSettings() {
     .querySelectorAll('[data-mbx-poll]')
     .forEach((button) =>
       button.addEventListener('click', async () => {
+        // L'état s'écrit dans la carte, pas seulement sur le bouton : un
+        // libellé qui change sur une puce de douze pixels passe inaperçu, et
+        // l'attente ressemble alors à un clic sans effet.
+        const node = button.closest('.mbx')?.querySelector('[data-mbx-diag-state]');
+        if (node) node.textContent = 'Relève en cours — cela peut prendre une minute…';
+
         button.disabled = true;
         const previous = button.textContent;
         button.textContent = 'Relève…';
@@ -3687,16 +3693,21 @@ function renderSettings() {
             body: '{}',
           });
 
-          toast(
+          const message =
             result.ingested > 0
               ? `${result.ingested} message${result.ingested > 1 ? 's' : ''} relevé${
                   result.ingested > 1 ? 's' : ''
-                } — voyez la file.`
-              : 'Rien de nouveau : tout le courrier récent est déjà dans la file.',
-          );
+                }, ${result.ticketIds.length} ticket${
+                  result.ticketIds.length > 1 ? 's' : ''
+                } dans la file.`
+              : 'Rien de nouveau : tout le courrier relevable est déjà dans la file.';
+
+          if (node) node.textContent = message;
+          toast(message);
 
           if (result.ingested > 0) await loadQueue();
         } catch (error) {
+          if (node) node.innerHTML = `<b class="set-alert">${esc(error.message)}</b>`;
           toast(error.message, true);
         } finally {
           button.disabled = false;

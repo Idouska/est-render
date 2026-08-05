@@ -9,6 +9,17 @@ import { parseMessage, type ParsedMessage } from './messages.ts';
  * Si Gmail répond 404 (historyId trop ancien, > 1 semaine), on retombe sur un
  * `messages.list` borné dans le temps — le fallback polling du brief.
  */
+/**
+ * Messages traités par passage.
+ *
+ * Sans plafond, une boîte restée longtemps sans relève rend des centaines
+ * d'identifiants, chacun coûtant un appel Gmail : la requête dépasse le délai
+ * du serveur et échoue au bout de plusieurs minutes, sans rien avoir ingéré.
+ * Bornée, elle rend la main et le passage suivant reprend où celui-ci s'est
+ * arrêté — le curseur n'avance que si tout a été traité.
+ */
+const MAX_PER_RUN = 60;
+
 export async function fetchNewMessages(
   merchantId: string,
   mailboxId?: string | null,
@@ -61,9 +72,14 @@ export async function fetchNewMessages(
     messageIds = await listRecentMessageIds(gmail);
   }
 
+  // Les identifiants arrivent du plus ancien au plus récent : tronquer par la
+  // fin traite d'abord ce qui attend depuis le plus longtemps.
+  const truncated = messageIds.length > MAX_PER_RUN;
+  const batch = messageIds.slice(0, MAX_PER_RUN);
+
   const parsed: ParsedMessage[] = [];
 
-  for (const id of messageIds) {
+  for (const id of batch) {
     // On ne ré-appelle pas Gmail pour un message déjà ingéré : Pub/Sub est
     // at-least-once et rejoue régulièrement les mêmes notifications.
     const known = await prisma.message.findUnique({
@@ -83,14 +99,24 @@ export async function fetchNewMessages(
     parsed.push(message);
   }
 
-  const profileHistoryId =
-    newHistoryId ?? (await gmail.users.getProfile({ userId: 'me' })).data.historyId ?? null;
+  // Curseur avancé seulement si le lot était complet. L'avancer après une
+  // troncature sauterait définitivement le reliquat : ces messages ne
+  // reviendraient dans aucun historique, et disparaîtraient sans trace.
+  if (!truncated) {
+    const profileHistoryId =
+      newHistoryId ?? (await gmail.users.getProfile({ userId: 'me' })).data.historyId ?? null;
 
-  if (profileHistoryId) {
-    await prisma.gmailConnection.update({
-      where: { id: connection.id },
-      data: { lastHistoryId: profileHistoryId },
-    });
+    if (profileHistoryId) {
+      await prisma.gmailConnection.update({
+        where: { id: connection.id },
+        data: { lastHistoryId: profileHistoryId },
+      });
+    }
+  } else {
+    logger.info(
+      { merchantId, remaining: messageIds.length - batch.length },
+      'Relève tronquée, curseur inchangé',
+    );
   }
 
   return parsed;
