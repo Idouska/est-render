@@ -523,6 +523,12 @@ async function loadQueue() {
 
   list.querySelectorAll('.queue-item').forEach((button) => {
     button.addEventListener('click', () => selectTicket(button.dataset.id));
+    button.addEventListener('mouseenter', () => prefetchTicket(button.dataset.id));
+    // Le survol n'existe pas au doigt : sur mobile, le contact précède le clic
+    // d'assez peu pour que ça compte quand même.
+    button.addEventListener('touchstart', () => prefetchTicket(button.dataset.id), {
+      passive: true,
+    });
   });
 }
 
@@ -1240,9 +1246,48 @@ const STATUS_LABELS = {
 
 /* ------------------------------------------------------- détail du ticket */
 
+/**
+ * Fiches déjà chargées, mises de côté au survol.
+ *
+ * Entre le moment où le curseur se pose sur une ligne et celui où le doigt
+ * clique, il s'écoule à peu près le temps d'un aller-retour serveur. Le
+ * dépenser à l'avance rend l'ouverture instantanée sans rien changer au reste :
+ * c'est le gain de vitesse ressentie le moins cher qui existe.
+ */
+const prefetched = new Map();
+
+function prefetchTicket(id) {
+  if (!id || prefetched.has(id)) return;
+
+  // On mémorise la promesse, pas le résultat : deux survols rapprochés ne
+  // doivent déclencher qu'une requête.
+  prefetched.set(
+    id,
+    api(`/api/tickets/${id}`).catch(() => {
+      // Un échec de préchargement ne se signale pas : l'utilisateur n'a rien
+      // demandé. Le clic refera la requête et affichera l'erreur si elle
+      // persiste.
+      prefetched.delete(id);
+      return null;
+    }),
+  );
+
+  // Le cache ne vit que le temps du survol suivant : un ticket rouvert dix
+  // minutes plus tard doit être relu, son statut a pu changer.
+  setTimeout(() => prefetched.delete(id), 30_000);
+}
+
 async function selectTicket(id) {
   state.currentId = id;
-  const detail = await api(`/api/tickets/${id}`);
+
+  // Retour visuel immédiat, avant toute requête : la ligne cliquée s'allume
+  // tout de suite. Attendre le serveur pour déplacer une surbrillance donne
+  // l'impression d'un clic perdu.
+  document.querySelectorAll('.queue-item').forEach((item) => {
+    item.setAttribute('aria-current', String(item.dataset.id === id));
+  });
+
+  const detail = (await prefetched.get(id)) ?? (await api(`/api/tickets/${id}`));
 
   // Un ticket supprimé entre l'affichage de la file et le clic renverrait une
   // réponse sans ticket : mieux vaut un message que l'écran blanc laissé par
@@ -1381,6 +1426,9 @@ function canI(permission) {
  */
 function renderBrief(draft) {
   const brief = $('d-brief');
+  // Le repli n'a de sens qu'avec un fil dedans : affiché d'emblée, il proposait
+  // de déplier le néant.
+  $('d-fold').hidden = !state.detail?.ticket;
   const points = draft?.summary ?? [];
   const ask = draft?.ask ?? '';
 
@@ -4527,4 +4575,96 @@ function trimPreviewChoices() {
 $('as-supplier')?.addEventListener('click', () => {
   setView('suppliers');
   toast('Ouvrez « Espace de travail » sur un contact pour voir son écran.');
+});
+
+/* ==========================================================================
+   CLAVIER
+   ==========================================================================
+
+   Ce qui distingue un outil qu'on subit d'un outil qu'on pilote. Un agent qui
+   traite cent tickets fait cent allers-retours souris entre la liste et la
+   réponse ; au clavier il ne quitte jamais la position de frappe.
+
+   Le jeu de touches est celui que les outils de messagerie ont imposé — J/K
+   pour parcourir, Entrée pour ouvrir, ⌘Entrée pour envoyer. Les réinventer
+   n'aurait servi qu'à les faire apprendre. */
+
+function typingSomewhere() {
+  const tag = document.activeElement?.tagName ?? '';
+  return /^(INPUT|TEXTAREA|SELECT)$/.test(tag) || document.activeElement?.isContentEditable;
+}
+
+/** Déplace la sélection dans la file, en la gardant à l'écran. */
+function moveQueue(step) {
+  const items = [...document.querySelectorAll('#queue .queue-item')];
+  if (items.length === 0) return;
+
+  const current = items.findIndex((item) => item.dataset.id === state.currentId);
+  // Aucun ticket ouvert : la première frappe prend le premier de la liste
+  // plutôt que le second, qui serait le voisin d'un point de départ imaginaire.
+  const next = current === -1 ? 0 : Math.min(items.length - 1, Math.max(0, current + step));
+
+  const target = items[next];
+  if (!target) return;
+
+  target.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  selectTicket(target.dataset.id);
+}
+
+document.addEventListener('keydown', (event) => {
+  // ⌘K ouvre la recherche depuis n'importe où, y compris depuis un champ :
+  // c'est le geste qui doit toujours répondre.
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+    event.preventDefault();
+    $('nav-search').focus();
+    $('nav-search').select();
+    return;
+  }
+
+  // ⌘Entrée envoie la réponse depuis la zone de rédaction. Sans lui, écrire se
+  // termine toujours par un aller-retour à la souris.
+  if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+    if (document.activeElement === $('d-body') && !$('btn-send').disabled) {
+      event.preventDefault();
+      $('btn-send').click();
+    }
+    return;
+  }
+
+  if (typingSomewhere() || event.altKey || event.metaKey || event.ctrlKey) return;
+  if (state.view !== 'tickets') return;
+
+  switch (event.key) {
+    case 'j':
+    case 'ArrowDown':
+      event.preventDefault();
+      moveQueue(1);
+      break;
+    case 'k':
+    case 'ArrowUp':
+      event.preventDefault();
+      moveQueue(-1);
+      break;
+    case 'r':
+      // Répondre : le curseur va dans le brouillon, prêt à corriger.
+      if (!$('draft-zone').hidden) {
+        event.preventDefault();
+        $('d-body').focus();
+      }
+      break;
+    case 'e':
+      // Déplier ou replier le fil, quand le résumé ne suffit pas.
+      event.preventDefault();
+      $('d-fold').open = !$('d-fold').open;
+      break;
+    case '?':
+      event.preventDefault();
+      $('keys').hidden = !$('keys').hidden;
+      break;
+    case 'Escape':
+      $('keys').hidden = true;
+      break;
+    default:
+      break;
+  }
 });

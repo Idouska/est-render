@@ -122,6 +122,21 @@
         <button class="btn btn-small" id="asbar-exit">Revenir à ma vue</button>
       </div>
 
+      <!-- Aide-mémoire des raccourcis, appelée par « ? ». Un outil au clavier
+           dont les touches ne sont écrites nulle part n'est au clavier pour
+           personne. -->
+      <div class="keys" id="keys" hidden>
+        <b>Raccourcis</b>
+        <ul>
+          <li><kbd>J</kbd> <kbd>K</kbd> parcourir la file</li>
+          <li><kbd>R</kbd> écrire la réponse</li>
+          <li><kbd>E</kbd> déplier le fil</li>
+          <li><kbd>⌘</kbd><kbd>↵</kbd> envoyer</li>
+          <li><kbd>⌘</kbd><kbd>K</kbd> rechercher</li>
+          <li><kbd>?</kbd> cette aide</li>
+        </ul>
+      </div>
+
       <div class="notice" id="mock-notice" hidden>
         <span class="notice-mark">Simulation</span>
         <div>
@@ -199,7 +214,10 @@
       <main class="workspace" id="view-tickets">
         <section class="panel" aria-label="File de tickets">
           <ul class="queue-list" id="queue">
-            <li class="empty" style="padding: 16px 14px">Chargement…</li>
+            <li class="skel-row"><span class="skel"></span><span class="skel"></span><span class="skel"></span></li>
+            <li class="skel-row"><span class="skel"></span><span class="skel"></span><span class="skel"></span></li>
+            <li class="skel-row"><span class="skel"></span><span class="skel"></span><span class="skel"></span></li>
+            <li class="skel-row"><span class="skel"></span><span class="skel"></span><span class="skel"></span></li>
           </ul>
         </section>
 
@@ -231,7 +249,7 @@
             <ul class="brief-points" id="d-summary"></ul>
           </section>
 
-          <details class="thread-fold" id="d-fold">
+          <details class="thread-fold" id="d-fold" hidden>
             <summary><span class="thread-fold-label">Fil complet</span></summary>
             <div class="messages" id="d-messages"></div>
           </details>
