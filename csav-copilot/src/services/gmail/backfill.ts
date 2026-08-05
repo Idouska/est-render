@@ -2,7 +2,7 @@ import { logger } from '../../lib/logger.ts';
 import { prisma } from '../../lib/prisma.ts';
 import { enqueueTicket } from '../../queue/index.ts';
 import { getGmailClient } from './client.ts';
-import { loadLabelNames, resolveLabels } from './labels.ts';
+import { loadLabelNames, resolveLabels, syncTicketLabels } from './labels.ts';
 import { parseMessage } from './messages.ts';
 
 /**
@@ -84,27 +84,10 @@ export async function backfillMailbox(params: {
           select: { id: true, ticketId: true },
         });
 
-        // Message déjà connu : on ne le réingère pas, mais on rafraîchit les
-        // libellés de son ticket. Sans ça, une boîte étiquetée après coup — ou
-        // ingérée avant que l'outil ne sache lire les libellés — n'en
-        // afficherait jamais, et relancer le rattrapage ne changerait rien.
-        if (known) {
-          const { data: head } = await gmail.users.messages.get({
-            userId: 'me',
-            id: entry.id,
-            format: 'minimal',
-          });
-
-          const names = resolveLabels(head.labelIds ?? [], labelNames);
-          if (names.length > 0) {
-            await prisma.ticket.update({
-              where: { id: known.ticketId },
-              data: { labels: names },
-            });
-            progress.relabelled += 1;
-          }
-          continue;
-        }
+        // Message déjà connu : on passe sans rien demander à Gmail. Les
+        // libellés se rattrapent en fin de course, par libellé et non par
+        // message — un appel par étiquette au lieu d'un par courrier.
+        if (known) continue;
 
         const { data: raw } = await gmail.users.messages.get({
           userId: 'me',
@@ -176,6 +159,53 @@ export async function backfillMailbox(params: {
 
       pageToken = data.nextPageToken ?? undefined;
     } while (pageToken && progress.scanned < maxMessages);
+
+    // Les libellés en dernier : c'est un confort, et il ne doit pas retarder
+    // l'entrée du courrier dans la file.
+    try {
+      // Table rase sur la fenêtre traitée, avant de reposer les étiquettes.
+      // Sans ça, un libellé retiré dans Gmail survivrait indéfiniment dans
+      // l'outil : on ne saurait plus si l'étiquette décrit le présent ou un
+      // classement abandonné il y a six mois.
+      await prisma.ticket.updateMany({
+        where: {
+          merchantId,
+          mailboxId: connection.id,
+          lastMessageAt: { gte: new Date(Date.now() - days * 86_400_000) },
+        },
+        data: { labels: [] },
+      });
+
+      progress.relabelled = await syncTicketLabels({
+        gmail,
+        merchantId,
+        mailboxId: connection.id,
+        days,
+        applyLabels: async (messageIds, label) => {
+          const rows = await prisma.message.findMany({
+            where: { merchantId, gmailMessageId: { in: messageIds } },
+            select: { ticketId: true },
+          });
+
+          const ticketIds = [...new Set(rows.map((row) => row.ticketId))];
+          if (ticketIds.length === 0) return 0;
+
+          // Ajout et non remplacement : un ticket porte souvent plusieurs
+          // étiquettes, et chaque libellé est traité par une requête distincte.
+          // La remise à zéro a eu lieu une fois, juste avant la boucle.
+          await prisma.$executeRaw`
+            UPDATE "Ticket"
+            SET "labels" = array_append("labels", ${label})
+            WHERE "id" = ANY(${ticketIds}::text[])
+              AND NOT (${label} = ANY("labels"))
+          `;
+
+          return ticketIds.length;
+        },
+      });
+    } catch (error) {
+      logger.warn({ merchantId, err: error }, 'Synchronisation des libellés en échec');
+    }
 
     // Mise en file après coup : un échec ici ne doit pas faire perdre le
     // courrier déjà enregistré.

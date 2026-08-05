@@ -59,3 +59,55 @@ export function resolveLabels(labelIds: string[], names: Map<string, string>): s
     .filter((name): name is string => Boolean(name))
     .sort((a, b) => a.localeCompare(b, 'fr'));
 }
+
+/**
+ * Réétiquette les tickets d'une boîte, en interrogeant Gmail par libellé.
+ *
+ * L'approche naïve — relire les libellés de chaque message — coûte un appel
+ * par message : quinze cents messages, quinze cents allers-retours, plusieurs
+ * minutes et autant de quota pour une information qui tient en quelques
+ * requêtes. Ici on demande à Gmail « quels messages portent ce libellé »,
+ * une fois par libellé : cinq étiquettes font cinq requêtes, quel que soit le
+ * volume de la boîte.
+ */
+export async function syncTicketLabels(params: {
+  gmail: gmail_v1.Gmail;
+  merchantId: string;
+  mailboxId: string;
+  days: number;
+  /** Injecté pour éviter une dépendance circulaire avec Prisma dans ce module. */
+  applyLabels: (messageIds: string[], label: string) => Promise<number>;
+}): Promise<number> {
+  const { gmail, mailboxId, days, applyLabels } = params;
+
+  const names = await loadLabelNames(gmail, mailboxId);
+  let updated = 0;
+
+  for (const name of names.values()) {
+    const ids: string[] = [];
+    let pageToken: string | undefined;
+
+    do {
+      const { data } = await gmail.users.messages.list({
+        userId: 'me',
+        // Le nom entre guillemets : un libellé contenant une espace — « À
+        // rembourser » — serait sinon lu comme deux critères.
+        q: `label:"${name}" newer_than:${days}d`,
+        maxResults: 500,
+        pageToken,
+      });
+
+      for (const entry of data.messages ?? []) {
+        if (entry.id) ids.push(entry.id);
+      }
+
+      pageToken = data.nextPageToken ?? undefined;
+      // Deux mille par libellé : au-delà, l'étiquette décrit un classement de
+      // masse dont le SAV n'a rien à tirer.
+    } while (pageToken && ids.length < 2000);
+
+    if (ids.length > 0) updated += await applyLabels(ids, name);
+  }
+
+  return updated;
+}
