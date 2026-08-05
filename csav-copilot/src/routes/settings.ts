@@ -1,10 +1,10 @@
-import type { FastifyInstance } from 'fastify';
-import { z } from 'zod';
-import { env } from '../config/env.ts';
-import { recordAudit } from '../lib/audit.ts';
-import { prisma } from '../lib/prisma.ts';
-import { requirePermission, requireSession } from '../plugins/auth.ts';
-import { decodePhoto, photoSchema } from './parcels.ts';
+import type { FastifyInstance } from "fastify";
+import { z } from "zod";
+import { env } from "../config/env.ts";
+import { recordAudit } from "../lib/audit.ts";
+import { prisma } from "../lib/prisma.ts";
+import { requirePermission, requireSession } from "../plugins/auth.ts";
+import { decodePhoto, photoSchema } from "./parcels.ts";
 
 /**
  * Réglages du marchand.
@@ -42,7 +42,7 @@ const patchBody = z
     retentionDays: z.number().int().min(30).max(1095).optional(),
   })
   .refine((value) => Object.keys(value).length > 0, {
-    message: 'Aucun champ à mettre à jour',
+    message: "Aucun champ à mettre à jour",
   });
 
 /**
@@ -56,12 +56,14 @@ const patchBody = z
 function covers(granted: string[], required: string): boolean {
   if (granted.includes(required)) return true;
 
-  const readable = required.startsWith('read_') ? `write_${required.slice(5)}` : null;
+  const readable = required.startsWith("read_")
+    ? `write_${required.slice(5)}`
+    : null;
   return readable !== null && granted.includes(readable);
 }
 
 export async function settingsRoutes(app: FastifyInstance): Promise<void> {
-  app.addHook('preHandler', requireSession);
+  app.addHook("preHandler", requireSession);
 
   /**
    * Logo de la boutique.
@@ -69,31 +71,33 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
    * Servi par l'application plutôt que depuis une URL publique : le logo suit
    * la boutique, et un lien externe finit toujours par casser.
    */
-  app.get('/api/branding/logo', async (request, reply) => {
+  app.get("/api/branding/logo", async (request, reply) => {
     const merchant = await prisma.merchant.findUnique({
       where: { id: request.session.merchantId },
       select: { logoData: true, logoMime: true },
     });
 
     if (!merchant?.logoData || !merchant.logoMime) {
-      return reply.code(404).send({ error: 'Aucun logo' });
+      return reply.code(404).send({ error: "Aucun logo" });
     }
 
     return reply
       .type(merchant.logoMime)
-      .header('Cache-Control', 'private, max-age=300')
+      .header("Cache-Control", "private, max-age=300")
       .send(Buffer.from(merchant.logoData));
   });
 
-  app.get('/api/settings', async (request, reply) => {
+  app.get("/api/settings", async (request, reply) => {
     const { merchantId } = request.session;
 
     const merchant = await prisma.merchant.findUnique({
       where: { id: merchantId },
       include: {
-        shopify: { select: { installedAt: true, uninstalledAt: true, scopes: true } },
+        shopify: {
+          select: { installedAt: true, uninstalledAt: true, scopes: true },
+        },
         mailboxes: {
-          orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+          orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
           select: {
             id: true,
             emailAddress: true,
@@ -106,7 +110,8 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
       },
     });
 
-    if (!merchant) return reply.code(404).send({ error: 'Marchand introuvable' });
+    if (!merchant)
+      return reply.code(404).send({ error: "Marchand introuvable" });
 
     return reply.send({
       merchant: {
@@ -124,10 +129,16 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
       },
       connections: {
         shopify: (() => {
-          const granted = merchant.shopify?.scopes?.split(',').map((s) => s.trim()).filter(Boolean) ?? [];
+          const granted =
+            merchant.shopify?.scopes
+              ?.split(",")
+              .map((s) => s.trim())
+              .filter(Boolean) ?? [];
 
           return {
-            connected: Boolean(merchant.shopify && !merchant.shopify.uninstalledAt),
+            connected: Boolean(
+              merchant.shopify && !merchant.shopify.uninstalledAt,
+            ),
             simulated: env.SHOPIFY_MOCK,
             scopes: granted,
             // Le jeton conserve les autorisations obtenues le jour de
@@ -135,7 +146,9 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
             // l'application n'a pas été réinstallée. Sans cet écart affiché, la
             // panne se manifeste seulement par un « accès refusé » sur un écran.
             requiredScopes: env.SHOPIFY_SCOPES,
-            missingScopes: env.SHOPIFY_SCOPES.filter((scope) => !covers(granted, scope)),
+            missingScopes: env.SHOPIFY_SCOPES.filter(
+              (scope) => !covers(granted, scope),
+            ),
             installedAt: merchant.shopify?.installedAt ?? null,
           };
         })(),
@@ -152,7 +165,9 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
             isDefault: mailbox.isDefault,
             connectedAt: mailbox.createdAt,
             watchExpiration: mailbox.watchExpiration,
-            watchActive: Boolean(mailbox.watchExpiration && mailbox.watchExpiration > new Date()),
+            watchActive: Boolean(
+              mailbox.watchExpiration && mailbox.watchExpiration > new Date(),
+            ),
           })),
         },
       },
@@ -167,8 +182,8 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
    * qu'on retire une adresse serait une catastrophe silencieuse.
    */
   app.patch<{ Params: { id: string } }>(
-    '/api/mailboxes/:id',
-    { preHandler: requirePermission('configure') },
+    "/api/mailboxes/:id",
+    { preHandler: requirePermission("configure") },
     async (request, reply) => {
       const parsed = z
         .object({
@@ -177,7 +192,8 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
         })
         .safeParse(request.body);
 
-      if (!parsed.success) return reply.code(400).send({ error: 'Requête invalide' });
+      if (!parsed.success)
+        return reply.code(400).send({ error: "Requête invalide" });
 
       const { merchantId, userId } = request.session;
 
@@ -185,14 +201,20 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
         where: { id: request.params.id, merchantId },
         select: { id: true, emailAddress: true },
       });
-      if (!mailbox) return reply.code(404).send({ error: 'Boîte introuvable' });
+      if (!mailbox) return reply.code(404).send({ error: "Boîte introuvable" });
 
       // Une seule boîte par défaut : la désignation se fait en deux temps dans
       // une transaction, sinon un échec laisserait la boutique sans aucune.
       if (parsed.data.isDefault) {
         await prisma.$transaction([
-          prisma.gmailConnection.updateMany({ where: { merchantId }, data: { isDefault: false } }),
-          prisma.gmailConnection.update({ where: { id: mailbox.id }, data: { isDefault: true } }),
+          prisma.gmailConnection.updateMany({
+            where: { merchantId },
+            data: { isDefault: false },
+          }),
+          prisma.gmailConnection.update({
+            where: { id: mailbox.id },
+            data: { isDefault: true },
+          }),
         ]);
       }
 
@@ -205,10 +227,10 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
 
       await recordAudit({
         merchantId,
-        actorType: 'USER',
+        actorType: "USER",
         actorId: userId,
-        action: 'mailbox.updated',
-        targetType: 'GmailConnection',
+        action: "mailbox.updated",
+        targetType: "GmailConnection",
         targetId: mailbox.id,
         metadata: { emailAddress: mailbox.emailAddress, ...parsed.data },
         ipAddress: request.ip,
@@ -219,8 +241,8 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
   );
 
   app.delete<{ Params: { id: string } }>(
-    '/api/mailboxes/:id',
-    { preHandler: requirePermission('configure') },
+    "/api/mailboxes/:id",
+    { preHandler: requirePermission("configure") },
     async (request, reply) => {
       const { merchantId, userId } = request.session;
 
@@ -228,11 +250,11 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
         where: { id: request.params.id, merchantId },
         select: { id: true, emailAddress: true, isDefault: true },
       });
-      if (!mailbox) return reply.code(404).send({ error: 'Boîte introuvable' });
+      if (!mailbox) return reply.code(404).send({ error: "Boîte introuvable" });
 
       const remaining = await prisma.gmailConnection.findFirst({
         where: { merchantId, id: { not: mailbox.id } },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { createdAt: "asc" },
         select: { id: true },
       });
 
@@ -241,17 +263,29 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
       await prisma.$transaction([
         prisma.gmailConnection.delete({ where: { id: mailbox.id } }),
         ...(mailbox.isDefault && remaining
-          ? [prisma.gmailConnection.update({ where: { id: remaining.id }, data: { isDefault: true } })]
+          ? [
+              prisma.gmailConnection.update({
+                where: { id: remaining.id },
+                data: { isDefault: true },
+              }),
+            ]
           : []),
-        ...(remaining ? [] : [prisma.merchant.update({ where: { id: merchantId }, data: { autoSendEnabled: false } })]),
+        ...(remaining
+          ? []
+          : [
+              prisma.merchant.update({
+                where: { id: merchantId },
+                data: { autoSendEnabled: false },
+              }),
+            ]),
       ]);
 
       await recordAudit({
         merchantId,
-        actorType: 'USER',
+        actorType: "USER",
         actorId: userId,
-        action: 'mailbox.disconnected',
-        targetType: 'GmailConnection',
+        action: "mailbox.disconnected",
+        targetType: "GmailConnection",
         targetId: mailbox.id,
         metadata: { emailAddress: mailbox.emailAddress },
         ipAddress: request.ip,
@@ -261,73 +295,80 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
-  app.patch('/api/settings', { preHandler: requirePermission('configure') }, async (request, reply) => {
-    const parsed = patchBody.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'Requête invalide', details: parsed.error.issues });
-    }
-
-    const { merchantId, userId } = request.session;
-
-    // L'envoi automatique fait partir des mails sans relecture : on refuse de
-    // l'activer tant que Gmail n'est pas connecté, sinon le réglage promet un
-    // comportement que rien ne peut exécuter.
-    if (parsed.data.autoSendEnabled === true) {
-      const gmail = await prisma.gmailConnection.findFirst({
-        where: { merchantId },
-        select: { id: true },
-      });
-      if (!gmail && !env.GMAIL_MOCK) {
-        return reply.code(409).send({
-          error: 'Connectez une boîte Gmail avant d’activer l’envoi automatique.',
-        });
+  app.patch(
+    "/api/settings",
+    { preHandler: requirePermission("configure") },
+    async (request, reply) => {
+      const parsed = patchBody.safeParse(request.body);
+      if (!parsed.success) {
+        return reply
+          .code(400)
+          .send({ error: "Requête invalide", details: parsed.error.issues });
       }
-    }
 
-    const { logo, ...fields } = parsed.data;
+      const { merchantId, userId } = request.session;
 
-    const logoFields =
-      logo === undefined
-        ? {}
-        : logo === null
-          ? { logoData: null, logoMime: null }
-          : (() => {
-              const decoded = decodePhoto(logo);
-              return { logoData: decoded.data, logoMime: decoded.mime };
-            })();
+      // L'envoi automatique fait partir des mails sans relecture : on refuse de
+      // l'activer tant que Gmail n'est pas connecté, sinon le réglage promet un
+      // comportement que rien ne peut exécuter.
+      if (parsed.data.autoSendEnabled === true) {
+        const gmail = await prisma.gmailConnection.findFirst({
+          where: { merchantId },
+          select: { id: true },
+        });
+        if (!gmail && !env.GMAIL_MOCK) {
+          return reply.code(409).send({
+            error:
+              "Connectez une boîte Gmail avant d’activer l’envoi automatique.",
+          });
+        }
+      }
 
-    const merchant = await prisma.merchant.update({
-      where: { id: merchantId },
-      data: { ...fields, ...logoFields },
-    });
+      const { logo, ...fields } = parsed.data;
 
-    await recordAudit({
-      merchantId,
-      actorType: 'USER',
-      actorId: userId,
-      action: 'merchant.settings_updated',
-      targetType: 'Merchant',
-      targetId: merchantId,
-      // On consigne les champs touchés, pas seulement le fait qu'il y a eu une
-      // modification : activer l'envoi automatique doit être traçable.
-      metadata: parsed.data,
-      ipAddress: request.ip,
-    });
+      const logoFields =
+        logo === undefined
+          ? {}
+          : logo === null
+            ? { logoData: null, logoMime: null }
+            : (() => {
+                const decoded = decodePhoto(logo);
+                return { logoData: decoded.data, logoMime: decoded.mime };
+              })();
 
-    return reply.send({
-      merchant: {
-        name: merchant.name,
-        brandName: merchant.brandName,
-        logoUrl: merchant.logoUrl,
-        hasLogo: Boolean(merchant.logoMime),
-        logoUpdatedAt: merchant.updatedAt,
-        trackingUrlTemplate: merchant.trackingUrlTemplate,
-        shopDomain: merchant.shopDomain,
-        status: merchant.status,
-        autoSendEnabled: merchant.autoSendEnabled,
-        autoSendThreshold: merchant.autoSendThreshold,
-        retentionDays: merchant.retentionDays,
-      },
-    });
-  });
+      const merchant = await prisma.merchant.update({
+        where: { id: merchantId },
+        data: { ...fields, ...logoFields },
+      });
+
+      await recordAudit({
+        merchantId,
+        actorType: "USER",
+        actorId: userId,
+        action: "merchant.settings_updated",
+        targetType: "Merchant",
+        targetId: merchantId,
+        // On consigne les champs touchés, pas seulement le fait qu'il y a eu une
+        // modification : activer l'envoi automatique doit être traçable.
+        metadata: parsed.data,
+        ipAddress: request.ip,
+      });
+
+      return reply.send({
+        merchant: {
+          name: merchant.name,
+          brandName: merchant.brandName,
+          logoUrl: merchant.logoUrl,
+          hasLogo: Boolean(merchant.logoMime),
+          logoUpdatedAt: merchant.updatedAt,
+          trackingUrlTemplate: merchant.trackingUrlTemplate,
+          shopDomain: merchant.shopDomain,
+          status: merchant.status,
+          autoSendEnabled: merchant.autoSendEnabled,
+          autoSendThreshold: merchant.autoSendThreshold,
+          retentionDays: merchant.retentionDays,
+        },
+      });
+    },
+  );
 }
