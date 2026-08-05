@@ -3632,6 +3632,12 @@ function renderSettings() {
                       mailbox.id,
                     )}">Par défaut</button>`
               }
+              <button class="btn btn-small" data-mbx-poll="${esc(
+                mailbox.id,
+              )}">Relever maintenant</button>
+              <button class="btn btn-small" data-mbx-diag="${esc(
+                mailbox.id,
+              )}">Diagnostic</button>
               <button class="btn btn-small" data-mbx-learn="${esc(
                 mailbox.id,
               )}">Apprendre de l’historique</button>
@@ -3640,6 +3646,7 @@ function renderSettings() {
               )}">Débrancher</button>
             </div>
             <div class="mbx-learn" data-mbx-learn-state="${esc(mailbox.id)}"></div>
+            <div class="mbx-diag" data-mbx-diag-state="${esc(mailbox.id)}"></div>
           </div>`,
         )
         .join('')
@@ -3661,6 +3668,64 @@ function renderSettings() {
       gmail.connected ? '' : ' btn-primary'
     }" href="/auth/google">${gmail.connected ? '＋ Ajouter une boîte' : 'Connecter Gmail'}</a>`,
   });
+
+  // Relève manuelle : court-circuite Pub/Sub, Redis et le worker. Si elle
+  // ramène du courrier que l'arrivée automatique n'avait pas vu, la panne est
+  // dans cette chaîne-là, et le message le dit plutôt que de la laisser
+  // chercher.
+  $('set-gmail')
+    .querySelectorAll('[data-mbx-poll]')
+    .forEach((button) =>
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        const previous = button.textContent;
+        button.textContent = 'Relève…';
+
+        try {
+          const result = await api(`/api/mailboxes/${button.dataset.mbxPoll}/poll`, {
+            method: 'POST',
+            body: '{}',
+          });
+
+          toast(
+            result.ingested > 0
+              ? `${result.ingested} message${result.ingested > 1 ? 's' : ''} relevé${
+                  result.ingested > 1 ? 's' : ''
+                } — voyez la file.`
+              : 'Rien de nouveau : tout le courrier récent est déjà dans la file.',
+          );
+
+          if (result.ingested > 0) await loadQueue();
+        } catch (error) {
+          toast(error.message, true);
+        } finally {
+          button.disabled = false;
+          button.textContent = previous;
+        }
+      }),
+    );
+
+  // Diagnostic : ce que Gmail contient, ce que la base en a. L'écart nomme
+  // l'étage en panne.
+  $('set-gmail')
+    .querySelectorAll('[data-mbx-diag]')
+    .forEach((button) =>
+      button.addEventListener('click', async () => {
+        // Ligne propre au diagnostic : partager celle de l'apprentissage
+        // ferait effacer le rapport au prochain rafraîchissement du compteur.
+        const node = button
+          .closest('.mbx')
+          ?.querySelector('[data-mbx-diag-state]');
+        if (node) node.textContent = 'Diagnostic en cours…';
+
+        try {
+          const report = await api(`/api/mailboxes/${button.dataset.mbxDiag}/diagnose`);
+          if (node) node.innerHTML = renderDiagnosis(report);
+        } catch (error) {
+          if (node) node.textContent = error.message;
+        }
+      }),
+    );
 
   // Apprentissage : jamais déclenché tout seul, jamais sur toutes les boîtes.
   // C'est le marchand qui désigne celle dont les réponses font référence — une
@@ -4178,6 +4243,49 @@ $('r-go').addEventListener('click', async () => {
  * L'import tourne côté serveur bien après la réponse HTTP : sans ce retour, le
  * marchand cliquerait, ne verrait rien, et recliquerait.
  */
+/**
+ * Traduit le bilan en phrases, pas en champs bruts.
+ *
+ * Un rapport technique déposé à l'écran laisse au lecteur le travail de
+ * conclure. Ce qu'on veut savoir tient en une ligne : est-ce que du courrier
+ * manque, et si oui à quel étage.
+ */
+function renderDiagnosis(report) {
+  const lines = [];
+
+  if (report.tokenValid === false) {
+    lines.push(
+      `<b class="set-alert">Autorisation perdue.</b> Gmail refuse l’accès à cette boîte — ` +
+        `débranchez-la et reconnectez-la. (${esc(report.error ?? '')})`,
+    );
+    return lines.join('<br>');
+  }
+
+  lines.push(
+    `Boîte lisible · ${report.totalMessages ?? '—'} messages au total, ` +
+      `${report.inboxLast7Days} reçus dans les 7 derniers jours.`,
+  );
+
+  if (report.missing > 0) {
+    lines.push(
+      `<b class="set-alert">${report.missing} message${report.missing > 1 ? 's' : ''} ` +
+        `absent${report.missing > 1 ? 's' : ''} de la file.</b> ` +
+        'Cliquez « Relever maintenant » pour les faire entrer.',
+    );
+  } else {
+    lines.push('Tout le courrier récent est bien dans la file.');
+  }
+
+  if (!report.watchActive) {
+    lines.push(
+      '<b class="set-alert">Écoute inactive.</b> Le courrier n’arrivera pas tout ' +
+        'seul : reconnectez cette boîte.',
+    );
+  }
+
+  return lines.join('<br>');
+}
+
 async function refreshLearning() {
   let data;
   try {

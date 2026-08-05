@@ -4,7 +4,9 @@ import { env } from "../config/env.ts";
 import { recordAudit } from "../lib/audit.ts";
 import { prisma } from "../lib/prisma.ts";
 import { PREVIEW_COOKIE, requirePermission, requireSession } from "../plugins/auth.ts";
+import { getGmailClient } from "../services/gmail/client.ts";
 import { importMailboxHistory } from "../services/gmail/importHistory.ts";
+import { ingestMerchantInbox } from "../services/tickets/ingest.ts";
 import { ShopifyScopeError } from "../services/shopify/client.ts";
 import { fetchShopPolicies, policiesToPlaybook } from "../services/shopify/policies.ts";
 import { decodePhoto, photoSchema } from "./parcels.ts";
@@ -396,6 +398,104 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
 
     return reply.send({ role: parsed.data.role });
   });
+
+  /**
+   * Bilan de santé d'une boîte.
+   *
+   * L'ingestion échoue en silence par construction : Pub/Sub pousse, une file
+   * encaisse, un worker traite. Si l'un des trois manque, rien ne se produit et
+   * rien ne le dit — l'écran affiche « écoute active » pendant que le courrier
+   * s'accumule ailleurs. Ce relevé interroge Gmail en direct et compare à ce
+   * que la base contient, ce qui désigne l'étage en panne au lieu de laisser
+   * chercher.
+   */
+  app.get<{ Params: { id: string } }>(
+    "/api/mailboxes/:id/diagnose",
+    { preHandler: requirePermission("configure") },
+    async (request, reply) => {
+      const { merchantId } = request.session;
+
+      const mailbox = await prisma.gmailConnection.findFirst({
+        where: { id: request.params.id, merchantId },
+      });
+      if (!mailbox) return reply.code(404).send({ error: "Boîte introuvable" });
+
+      const report: Record<string, unknown> = {
+        emailAddress: mailbox.emailAddress,
+        watchActive: Boolean(
+          mailbox.watchExpiration && mailbox.watchExpiration > new Date(),
+        ),
+        watchExpiration: mailbox.watchExpiration,
+        // Sans curseur, l'ingestion incrémentale n'a pas de point de départ et
+        // retombe sur un balayage des deux derniers jours.
+        hasCursor: Boolean(mailbox.lastHistoryId),
+      };
+
+      try {
+        const { gmail } = await getGmailClient(merchantId, mailbox.id);
+
+        // Le profil prouve que le jeton vit encore. C'est le premier point à
+        // écarter : une autorisation révoquée ressemble à une file vide.
+        const { data: profile } = await gmail.users.getProfile({ userId: "me" });
+        report.tokenValid = true;
+        report.totalMessages = profile.messagesTotal ?? null;
+
+        const { data: list } = await gmail.users.messages.list({
+          userId: "me",
+          q: "in:inbox newer_than:7d",
+          maxResults: 25,
+        });
+
+        const ids = (list.messages ?? []).map((m) => m.id!).filter(Boolean);
+        report.inboxLast7Days = ids.length;
+
+        // Combien de ces messages sont déjà en base : l'écart entre les deux
+        // est exactement ce qui manque à la file.
+        const known = await prisma.message.count({
+          where: { merchantId, gmailMessageId: { in: ids } },
+        });
+        report.alreadyIngested = known;
+        report.missing = ids.length - known;
+      } catch (error) {
+        report.tokenValid = false;
+        report.error =
+          error instanceof Error ? error.message : "Gmail n’a pas répondu";
+      }
+
+      return reply.send(report);
+    },
+  );
+
+  /**
+   * Relève la boîte tout de suite, sans passer par la file de travaux.
+   *
+   * Volontairement synchrone : c'est le seul appel qui court-circuite Redis et
+   * le worker. S'il ramène du courrier alors que l'arrivée automatique reste
+   * muette, la panne est dans la chaîne Pub/Sub — pas dans l'accès Gmail.
+   */
+  app.post<{ Params: { id: string } }>(
+    "/api/mailboxes/:id/poll",
+    { preHandler: requirePermission("configure") },
+    async (request, reply) => {
+      const { merchantId } = request.session;
+
+      const mailbox = await prisma.gmailConnection.findFirst({
+        where: { id: request.params.id, merchantId },
+        select: { id: true },
+      });
+      if (!mailbox) return reply.code(404).send({ error: "Boîte introuvable" });
+
+      try {
+        const result = await ingestMerchantInbox(merchantId, mailbox.id);
+        return reply.send(result);
+      } catch (error) {
+        request.log.error({ err: error }, "Relève manuelle en échec");
+        return reply.code(502).send({
+          error: error instanceof Error ? error.message : "Relève impossible",
+        });
+      }
+    },
+  );
 
   /**
    * Ce que l'IA a appris : volume du corpus et imports en cours.
