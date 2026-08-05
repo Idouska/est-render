@@ -461,6 +461,8 @@ export function createMockShopifyClient(shopDomain: string): ShopifyClient {
               {
                 id: 'gid://shopify/Order/10391',
                 name: '#10391',
+                totalPriceSet: { shopMoney: { amount: '74.00' } },
+                customer: { displayName: 'Marc Delaunay', email: 'm.delaunay@orange.fr' },
                 refunds: [
                   {
                     id: 'gid://shopify/Refund/9001',

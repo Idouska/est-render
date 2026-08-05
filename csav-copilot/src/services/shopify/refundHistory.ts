@@ -21,6 +21,8 @@ interface RawRefund {
 interface RawOrder {
   id: string;
   name: string;
+  totalPriceSet: { shopMoney: { amount: string } };
+  customer: { displayName: string | null; email: string | null } | null;
   refunds: RawRefund[];
 }
 
@@ -32,6 +34,9 @@ export interface ShopRefund {
   amount: string;
   currency: string;
   reason: string;
+  /** Qui a été remboursé : la première question qu'on se pose devant la ligne. */
+  customerName: string | null;
+  customerEmail: string | null;
   /** Toujours effectué : Shopify n'expose que les remboursements aboutis. */
   status: 'COMPLETED';
   kind: 'PARTIAL' | 'FULL';
@@ -49,6 +54,15 @@ const QUERY = /* GraphQL */ `
       nodes {
         id
         name
+        totalPriceSet {
+          shopMoney {
+            amount
+          }
+        }
+        customer {
+          displayName
+          email
+        }
         refunds(first: 10) {
           id
           createdAt
@@ -88,17 +102,30 @@ export async function fetchShopRefunds(
     } = await client.request(QUERY, { query, cursor });
 
     for (const order of data.orders.nodes) {
+      const orderTotal = Number(order.totalPriceSet?.shopMoney.amount ?? 0);
+
       for (const refund of order.refunds ?? []) {
+        const amount = refund.totalRefundedSet.shopMoney.amount;
+
         found.push({
           id: refund.id,
           shopifyOrderId: order.id,
           orderName: order.name,
           createdAt: refund.createdAt,
-          amount: refund.totalRefundedSet.shopMoney.amount,
+          amount,
           currency: refund.totalRefundedSet.shopMoney.currencyCode,
-          reason: refund.note?.trim() || 'Remboursement Shopify',
+          // Une note vide n'est pas un motif : afficher « Remboursement
+          // Shopify » sur trois cents lignes remplit une colonne sans rien
+          // apprendre. Mieux vaut avouer l'absence.
+          reason: refund.note?.trim() || '—',
+          customerName: order.customer?.displayName ?? null,
+          customerEmail: order.customer?.email ?? null,
           status: 'COMPLETED',
-          kind: 'PARTIAL',
+          // Total ou partiel se déduit du montant, il ne se devine pas. Annoncer
+          // « Partiel » sur un remboursement intégral est un mensonge, et c'est
+          // exactement ce que faisait la valeur codée en dur.
+          kind:
+            orderTotal > 0 && Number(amount) >= orderTotal - 0.01 ? 'FULL' : 'PARTIAL',
           external: true,
         });
       }

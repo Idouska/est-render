@@ -2911,7 +2911,7 @@ async function loadTracking() {
       ? `${shipments.length} colis en transit`
       : '';
   } catch (error) {
-    body.innerHTML = `<tr><td colspan="6" class="empty">${esc(error.message)}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="7" class="empty">${esc(error.message)}</td></tr>`;
   }
 }
 
@@ -2961,7 +2961,7 @@ const REFUND_KIND = { FULL: 'Total', PARTIAL: 'Partiel', SHIPPING: 'Frais de por
 
 async function loadRefunds() {
   const body = $('refunds-rows');
-  body.innerHTML = '<tr><td colspan="6" class="empty">Chargement…</td></tr>';
+  body.innerHTML = '<tr><td colspan="7" class="empty">Chargement…</td></tr>';
 
   try {
     const { refunds, totals } = await api('/api/refunds');
@@ -2992,7 +2992,7 @@ async function loadRefunds() {
 
     renderRefundRows();
   } catch (error) {
-    body.innerHTML = `<tr><td colspan="6" class="empty">${esc(error.message)}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="7" class="empty">${esc(error.message)}</td></tr>`;
   }
 }
 
@@ -3007,13 +3007,14 @@ function renderRefundRows() {
     body.innerHTML =
       refunds
         .map(
-          (refund) => `<tr>
+          (refund) => `<tr class="grid-row" data-order="${esc(refund.shopifyOrderId ?? '')}">
             <td class="mono"><b>${esc(refund.orderName ?? '—')}</b>${
               // L'origine se dit une fois, discrètement : un remboursement
               // passé dans Shopify ne porte ni auteur ni ticket, et l'agent
               // doit savoir pourquoi la ligne est plus pauvre.
               refund.external ? '<span class="src">Shopify</span>' : ''
             }</td>
+            <td>${esc(refund.customerName ?? refund.customerEmail ?? '—')}</td>
             <td>${fullDate(refund.createdAt)}</td>
             <td>${esc(refund.reason ?? '—')}</td>
             <td>${esc(REFUND_KIND[refund.kind] ?? refund.kind)}</td>
@@ -3023,7 +3024,15 @@ function renderRefundRows() {
             <td class="num mono">${euro(refund.amount, refund.currency ?? 'EUR')}</td>
           </tr>`,
         )
-        .join('') || '<tr><td colspan="6" class="empty">Aucun remboursement.</td></tr>';
+        .join('') || '<tr><td colspan="7" class="empty">Aucun remboursement.</td></tr>';
+
+    // La ligne mène à la commande : c'est la question qui suit toujours un
+    // montant remboursé — sur quoi, et pourquoi.
+    body.querySelectorAll('[data-order]').forEach((row) =>
+      row.addEventListener('click', () => {
+        if (row.dataset.order) void openOrderSheet(row.dataset.order);
+      }),
+    );
 
     $('refunds-count').textContent = refunds.length
       ? `${refunds.length} remboursement${refunds.length > 1 ? 's' : ''}`
@@ -3716,7 +3725,7 @@ async function loadOrders({ reset = false } = {}) {
     store.loaded = true;
     renderOrders();
   } catch (error) {
-    body.innerHTML = `<tr><td colspan="6" class="empty">${esc(error.message)}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="7" class="empty">${esc(error.message)}</td></tr>`;
     $('orders-count').textContent = '';
     $('orders-more').hidden = true;
   } finally {
