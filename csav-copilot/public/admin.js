@@ -98,12 +98,16 @@ const GROUPS = [
   },
   {
     id: 'tracking',
-    title: 'Suivi de colis (17TRACK)',
+    title: 'Suivi de colis',
     help:
-      "Sans cette clé, l'application ne connaît du colis que ce que Shopify en sait — " +
-      "un statut figé au moment de l'expédition. 17TRACK donne la position réelle, " +
-      'étape par étape, ce qui sert à répondre au client et à contester un litige.',
-    fields: [{ key: 'TRACK17_API_KEY', label: 'Clé API 17TRACK' }],
+      "Sans clé, l'application ne connaît du colis que ce que Shopify en sait — " +
+      "un statut figé au moment de l'expédition. Un fournisseur de suivi donne la " +
+      'position réelle, étape par étape. Une seule clé suffit : ParcelsApp est ' +
+      'utilisé en priorité, 17TRACK sinon.',
+    fields: [
+      { key: 'PARCELSAPP_API_KEY', label: 'Clé API ParcelsApp' },
+      { key: 'TRACK17_API_KEY', label: 'Clé API 17TRACK' },
+    ],
   },
 ];
 

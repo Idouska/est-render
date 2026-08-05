@@ -36,6 +36,7 @@ export const CREDENTIAL_KEYS = [
   'GOOGLE_PUBSUB_TOPIC',
   'GOOGLE_PUBSUB_SERVICE_ACCOUNT',
   'TRACK17_API_KEY',
+  'PARCELSAPP_API_KEY',
 ] as const;
 
 export type CredentialKey = (typeof CREDENTIAL_KEYS)[number];
@@ -51,6 +52,7 @@ export const SECRET_KEYS: ReadonlySet<CredentialKey> = new Set<CredentialKey>([
   'SHOPIFY_API_SECRET',
   'GOOGLE_CLIENT_SECRET',
   'TRACK17_API_KEY',
+  'PARCELSAPP_API_KEY',
 ]);
 
 /** Valeurs de repli quand ni la base ni l'environnement ne fournissent rien. */
