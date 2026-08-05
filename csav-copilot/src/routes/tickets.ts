@@ -39,6 +39,8 @@ const listQuery = z.object({
   mailbox: z.string().max(60).optional(),
   /** Voir au contraire ce qui dort — pour vérifier qu'on n'a rien enterré. */
   snoozed: z.coerce.boolean().optional(),
+  /** Consulter les échanges importés de l'historique, invisibles autrement. */
+  historical: z.coerce.boolean().optional(),
   /** `all` élargit la file à toutes les boutiques du groupe. */
   scope: z.enum(['shop', 'all']).default('shop'),
   sort: z.enum(['oldest', 'newest', 'confidence']).default('newest'),
@@ -65,8 +67,10 @@ function buildTicketWhere(
     // toujours calculé serveur depuis la session.
     merchantId: merchantIds.length === 1 ? merchantIds[0] : { in: merchantIds },
     // Les échanges importés servent de matière à l'IA, pas de travail à faire :
-    // les afficher noierait la file sous des mois d'archives closes.
-    isHistorical: false,
+    // les afficher noierait la file sous des mois d'archives closes. Un filtre
+    // explicite les montre — importer trois cents échanges et ne rien pouvoir
+    // consulter donne l'impression que rien n'a eu lieu.
+    isHistorical: filters.historical === true,
     ...(options.withStatus && filters.status ? { status: filters.status } : {}),
     ...(filters.intent ? { intent: filters.intent } : {}),
     ...(filters.assignee === 'none'

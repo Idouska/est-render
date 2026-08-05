@@ -25,7 +25,7 @@ const state = {
   lastRefresh: null,
   queue: {
     q: '', intent: '', assignee: '', mailbox: '', sort: 'newest',
-    urgent: false, unassigned: false, unlinked: false, timer: null,
+    urgent: false, unassigned: false, unlinked: false, historical: false, timer: null,
   },
   queueCounts: {},
   agents: [],
@@ -420,6 +420,7 @@ function queueParams() {
   if (f.urgent) params.set('minAgeDays', '3');
   if (f.unassigned) params.set('assignee', 'none');
   if (f.unlinked) params.set('unlinked', 'true');
+  if (f.historical) params.set('historical', 'true');
 
   return params;
 }
@@ -428,7 +429,7 @@ function queueIsFiltered() {
   const f = state.queue;
   return Boolean(
     state.filter || f.q.trim() || f.intent || f.assignee || f.mailbox || f.urgent ||
-      f.unassigned || f.unlinked,
+      f.unassigned || f.unlinked || f.historical,
   );
 }
 
@@ -1130,6 +1131,7 @@ function renderQueueBar() {
     ['urgent', 'urgent'],
     ['unassigned', 'unassigned'],
     ['unlinked', 'unlinked'],
+    ['historical', 'historical'],
   ]) {
     $('queue-bar')
       .querySelector(`[data-quick="${id}"]`)
@@ -1183,7 +1185,7 @@ function resetQueueFilters() {
   state.filter = '';
   state.queue = {
     q: '', intent: '', assignee: '', mailbox: '', sort: 'newest',
-    urgent: false, unassigned: false, unlinked: false,
+    urgent: false, unassigned: false, unlinked: false, historical: false,
   };
 
   $('q-search').value = '';
@@ -1238,6 +1240,18 @@ $('queue-bar').addEventListener('click', (event) => {
   if (key === 'unassigned') {
     state.queue.assignee = state.queue.unassigned ? 'none' : '';
     $('q-assignee').value = state.queue.assignee;
+  }
+
+  // « Historique appris » n'est pas un filtre de plus, c'est un autre corpus :
+  // les échanges importés et le travail en cours ne cohabitent jamais dans la
+  // même liste. Les mêler donnerait des compteurs impossibles à interpréter.
+  if (key === 'historical' && state.queue.historical) {
+    state.filter = '';
+    state.queue.urgent = false;
+    state.queue.unassigned = false;
+    state.queue.unlinked = false;
+    state.queue.assignee = '';
+    $('q-assignee').value = '';
   }
 
   void loadQueue();
@@ -4179,10 +4193,14 @@ async function refreshLearning() {
     const button = document.querySelector(`[data-mbx-learn="${CSS.escape(id)}"]`);
     if (button) button.disabled = running.has(id);
 
+    // Le compte de *cette* boîte, pas le total : afficher le même nombre sous
+    // chacune ferait croire que toutes ont été analysées.
+    const learned = data.byMailbox?.[id] ?? 0;
+
     node.textContent = running.has(id)
       ? 'Analyse en cours…'
-      : data.imported > 0
-        ? `${data.imported} échange${data.imported > 1 ? 's' : ''} appris`
+      : learned > 0
+        ? `${learned} échange${learned > 1 ? 's' : ''} appris`
         : '';
   });
 

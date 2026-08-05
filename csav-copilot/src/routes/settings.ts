@@ -397,20 +397,40 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ role: parsed.data.role });
   });
 
-  /** Ce que l'IA a appris : volume du corpus et imports en cours. */
+  /**
+   * Ce que l'IA a appris : volume du corpus et imports en cours.
+   *
+   * Compté par boîte, pas globalement. Un total unique répété sous chaque
+   * carte laissait croire que toutes avaient appris autant — deux boîtes
+   * affichaient « 304 échanges appris » alors qu'une seule avait été
+   * analysée. Un chiffre faux à cet endroit fait douter de tout le reste.
+   */
   app.get("/api/learning", async (request, reply) => {
     const { merchantId } = request.session;
 
-    const [imported, mailboxes] = await Promise.all([
-      prisma.ticket.count({ where: { merchantId, isHistorical: true } }),
+    const [rows, mailboxes] = await Promise.all([
+      prisma.ticket.groupBy({
+        by: ["mailboxId"],
+        where: { merchantId, isHistorical: true },
+        _count: { _all: true },
+      }),
       prisma.gmailConnection.findMany({
         where: { merchantId },
         select: { id: true },
       }),
     ]);
 
+    const byMailbox: Record<string, number> = {};
+    let imported = 0;
+
+    for (const row of rows) {
+      imported += row._count._all;
+      if (row.mailboxId) byMailbox[row.mailboxId] = row._count._all;
+    }
+
     return reply.send({
       imported,
+      byMailbox,
       running: mailboxes
         .map((mailbox) => mailbox.id)
         .filter((id) => importsRunning.has(id)),

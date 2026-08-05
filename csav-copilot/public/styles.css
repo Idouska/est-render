@@ -3373,3 +3373,12 @@ textarea:focus-visible {
 .sheet-ext { margin: 4px 0 0; font-size: 12.5px; }
 .sheet-ext a { color: var(--ink-mute); }
 .sheet-ext a:hover { color: var(--ink); }
+
+/* « Historique appris » ouvre un autre corpus, pas un sous-ensemble du
+   travail en cours : la puce le dit par sa couleur plutôt que par une note
+   qu'on ne lira pas. */
+.qchip[data-quick='historical'][aria-pressed='true'] {
+  background: var(--warn-soft);
+  color: var(--warn);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warn) 40%, transparent);
+}
