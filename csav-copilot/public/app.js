@@ -194,8 +194,10 @@ function renderMe() {
   // Le logo remplace les initiales quand il est renseigné, et retombe dessus
   // si l'image ne charge pas — une URL cassée ne doit pas laisser un trou.
   const logo = $('brand-logo');
-  if (me.merchant.logoUrl) {
-    logo.src = me.merchant.logoUrl;
+  const logoSrc = brandLogoSrc(me.merchant);
+
+  if (logoSrc) {
+    logo.src = logoSrc;
     logo.hidden = false;
     $('brand-mark').hidden = true;
     logo.onerror = () => {
@@ -3281,6 +3283,7 @@ function renderSettings() {
     );
 
   $('set-brand').value = merchant.brandName ?? '';
+  renderLogoPreview(merchant);
   $('set-logo').value = merchant.logoUrl ?? '';
   $('set-tracking').value = merchant.trackingUrlTemplate ?? '';
   $('set-autosend').checked = merchant.autoSendEnabled;
@@ -3681,6 +3684,127 @@ async function patchMailbox(id, body) {
     toast(error.message, true);
   }
 }
+
+/* ------------------------------------------------------ identité de marque */
+
+/** Ce qui doit s'afficher dans la pastille : image téléversée, URL, initiales. */
+function brandLogoSrc(merchant) {
+  if (merchant?.hasLogo) {
+    // Horodatage en suffixe : sans lui, le navigateur ressert l'ancienne image
+    // après un remplacement, et on croit que l'envoi a échoué.
+    return `/api/branding/logo?v=${encodeURIComponent(merchant.logoUpdatedAt ?? Date.now())}`;
+  }
+  return merchant?.logoUrl || null;
+}
+
+function renderLogoPreview(merchant, pending = null) {
+  const src = pending ?? brandLogoSrc(merchant);
+  const img = $('set-logo-img');
+
+  $('set-logo-initials').textContent = (merchant?.brandName || merchant?.name || 'SA')
+    .slice(0, 2)
+    .toUpperCase();
+
+  if (src) {
+    img.src = src;
+    img.hidden = false;
+    // Une URL cassée ne doit pas laisser un carré vide : on retombe sur les
+    // initiales, comme dans la barre latérale.
+    img.onerror = () => {
+      img.hidden = true;
+    };
+  } else {
+    img.hidden = true;
+  }
+
+  $('set-logo-clear').hidden = !(merchant?.hasLogo || pending);
+}
+
+/** Réduit le logo avant l'envoi : 256 px suffisent partout où il s'affiche. */
+async function shrinkLogo(file) {
+  const bitmap = await createImageBitmap(file);
+  const side = Math.min(256, Math.max(bitmap.width, bitmap.height));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = side;
+  canvas.height = side;
+
+  const context = canvas.getContext('2d');
+  // Recadrage centré : un logo rectangulaire déformé est pire qu'un logo rogné.
+  const crop = Math.min(bitmap.width, bitmap.height);
+  context.drawImage(
+    bitmap,
+    (bitmap.width - crop) / 2,
+    (bitmap.height - crop) / 2,
+    crop,
+    crop,
+    0,
+    0,
+    side,
+    side,
+  );
+  bitmap.close?.();
+
+  return canvas.toDataURL('image/png');
+}
+
+let pendingLogo;
+
+$('set-logo-file').addEventListener('change', async (event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  try {
+    pendingLogo = await shrinkLogo(file);
+    renderLogoPreview(state.settings?.merchant, pendingLogo);
+    $('set-brand-note').textContent = 'Image prête — cliquez sur Appliquer.';
+  } catch {
+    toast('Image illisible — essayez un PNG ou un JPEG.', true);
+  }
+});
+
+$('set-logo-clear').addEventListener('click', () => {
+  pendingLogo = null;
+  renderLogoPreview({ ...state.settings?.merchant, hasLogo: false, logoUrl: null });
+  $('set-brand-note').textContent = 'Logo retiré — cliquez sur Appliquer.';
+});
+
+/**
+ * Enregistre l'identité seule.
+ *
+ * Séparé du bouton général : changer un logo est un geste isolé, avec un
+ * résultat qu'on veut voir tout de suite en haut de la barre latérale.
+ */
+$('set-brand-apply').addEventListener('click', async () => {
+  $('set-brand-apply').disabled = true;
+
+  try {
+    const body = {
+      brandName: $('set-brand').value.trim() || null,
+      logoUrl: $('set-logo').value.trim() || null,
+    };
+
+    if (pendingLogo !== undefined) body.logo = pendingLogo;
+
+    const { merchant } = await api('/api/settings', {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    });
+
+    pendingLogo = undefined;
+    state.me.merchant = { ...state.me.merchant, ...merchant };
+    renderMe();
+    renderLogoPreview(merchant);
+
+    $('set-brand-note').textContent = 'Identité mise à jour.';
+    toast('Identité mise à jour.');
+    await openSettings();
+  } catch (error) {
+    toast(error.message, true);
+  } finally {
+    $('set-brand-apply').disabled = false;
+  }
+});
 
 /* ------------------------------------------------------- rafraîchissement */
 

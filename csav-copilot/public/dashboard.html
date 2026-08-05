@@ -548,18 +548,45 @@
           <div class="panel">
             <div class="panel-head"><span class="panel-title">Identité</span></div>
             <div class="card-body set-group">
-              <div class="field">
-                <label for="set-brand">Nom affiché</label>
-                <input type="text" id="set-brand" placeholder="Votre enseigne" />
-                <small>Remplace le nom Shopify dans l'application et sur les invitations.</small>
+              <div class="brand-edit">
+                <span class="brand-preview" id="set-logo-preview">
+                  <img id="set-logo-img" alt="" hidden />
+                  <b id="set-logo-initials">SA</b>
+                </span>
+
+                <div class="brand-edit-fields">
+                  <label for="set-brand">Nom affiché</label>
+                  <input type="text" id="set-brand" placeholder="Votre enseigne" />
+
+                  <div class="brand-edit-acts">
+                    <label class="btn btn-small">
+                      Choisir une image
+                      <input type="file" id="set-logo-file" accept="image/*" hidden />
+                    </label>
+                    <button class="btn btn-small btn-danger" id="set-logo-clear" hidden>
+                      Retirer
+                    </button>
+                  </div>
+                </div>
               </div>
-              <div class="field">
-                <label for="set-logo">Adresse du logo</label>
-                <input type="text" id="set-logo" placeholder="https://…/logo.png" />
-                <small>
-                  Une URL d'image, carrée de préférence. Votre thème Shopify en héberge
-                  déjà une.
-                </small>
+
+              <small>
+                L'image est redimensionnée à 256 px et hébergée par l'application.
+                Carrée de préférence — c'est ce qui s'affiche en haut de la barre latérale.
+              </small>
+
+              <details class="brand-url">
+                <summary>Utiliser plutôt une adresse d'image</summary>
+                <div class="field" style="margin-top: 8px">
+                  <label for="set-logo">Adresse du logo</label>
+                  <input type="text" id="set-logo" placeholder="https://…/logo.png" />
+                  <small>Servira si aucune image n'est téléversée ci-dessus.</small>
+                </div>
+              </details>
+
+              <div class="actions">
+                <button class="btn btn-primary" id="set-brand-apply">Appliquer</button>
+                <span class="hint" id="set-brand-note"></span>
               </div>
             </div>
           </div>

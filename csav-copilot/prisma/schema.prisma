@@ -49,7 +49,13 @@ model Merchant {
   // Shopify : un marchand veut souvent afficher son enseigne plutôt que la
   // raison sociale, et son logo plutôt que deux initiales.
   brandName String?
+  /// Logo hébergé ailleurs — thème Shopify, site vitrine.
   logoUrl   String?
+  /// Logo téléversé depuis l'application, redimensionné par le navigateur
+  /// avant l'envoi. Stocké en base plutôt que sur un stockage objet : le
+  /// service n'en a pas, et une image de 30 Ko ne justifie pas d'en ajouter un.
+  logoData  Bytes?
+  logoMime  String?
 
   /// Gabarit de lien de suivi, `{tracking}` remplacé par le numéro. Vide, on
   /// utilise le lien fourni par Shopify — qui manque chez certains

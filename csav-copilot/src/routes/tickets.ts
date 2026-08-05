@@ -123,6 +123,7 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
         name: merchant.name,
         brandName: merchant.brandName,
         logoUrl: merchant.logoUrl,
+        hasLogo: Boolean(merchant.logoMime),
         autoSendEnabled: merchant.autoSendEnabled,
         autoSendThreshold: merchant.autoSendThreshold,
       },

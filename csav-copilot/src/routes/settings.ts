@@ -4,6 +4,7 @@ import { env } from '../config/env.ts';
 import { recordAudit } from '../lib/audit.ts';
 import { prisma } from '../lib/prisma.ts';
 import { requirePermission, requireSession } from '../plugins/auth.ts';
+import { decodePhoto, photoSchema } from './parcels.ts';
 
 /**
  * Réglages du marchand.
@@ -25,6 +26,12 @@ const patchBody = z
     // logo sur son thème Shopify ou son site, et stocker des binaires
     // demanderait un espace de fichiers à sauvegarder et à purger.
     logoUrl: z.string().url().max(500).nullish(),
+    /**
+     * Logo téléversé, en data URL. `null` efface l'image et fait retomber sur
+     * `logoUrl`, puis sur les initiales — un logo qu'on ne peut pas retirer
+     * oblige à en mettre un autre pour s'en débarrasser.
+     */
+    logo: photoSchema.nullish(),
     trackingUrlTemplate: z.string().max(300).nullish(),
     autoSendEnabled: z.boolean().optional(),
     // Un seuil sous 0,5 reviendrait à envoyer des réponses que le modèle
@@ -56,6 +63,28 @@ function covers(granted: string[], required: string): boolean {
 export async function settingsRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', requireSession);
 
+  /**
+   * Logo de la boutique.
+   *
+   * Servi par l'application plutôt que depuis une URL publique : le logo suit
+   * la boutique, et un lien externe finit toujours par casser.
+   */
+  app.get('/api/branding/logo', async (request, reply) => {
+    const merchant = await prisma.merchant.findUnique({
+      where: { id: request.session.merchantId },
+      select: { logoData: true, logoMime: true },
+    });
+
+    if (!merchant?.logoData || !merchant.logoMime) {
+      return reply.code(404).send({ error: 'Aucun logo' });
+    }
+
+    return reply
+      .type(merchant.logoMime)
+      .header('Cache-Control', 'private, max-age=300')
+      .send(Buffer.from(merchant.logoData));
+  });
+
   app.get('/api/settings', async (request, reply) => {
     const { merchantId } = request.session;
 
@@ -84,6 +113,8 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
         name: merchant.name,
         brandName: merchant.brandName,
         logoUrl: merchant.logoUrl,
+        hasLogo: Boolean(merchant.logoMime),
+        logoUpdatedAt: merchant.updatedAt,
         trackingUrlTemplate: merchant.trackingUrlTemplate,
         shopDomain: merchant.shopDomain,
         status: merchant.status,
@@ -253,9 +284,21 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
       }
     }
 
+    const { logo, ...fields } = parsed.data;
+
+    const logoFields =
+      logo === undefined
+        ? {}
+        : logo === null
+          ? { logoData: null, logoMime: null }
+          : (() => {
+              const decoded = decodePhoto(logo);
+              return { logoData: decoded.data, logoMime: decoded.mime };
+            })();
+
     const merchant = await prisma.merchant.update({
       where: { id: merchantId },
-      data: parsed.data,
+      data: { ...fields, ...logoFields },
     });
 
     await recordAudit({
@@ -276,6 +319,8 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
         name: merchant.name,
         brandName: merchant.brandName,
         logoUrl: merchant.logoUrl,
+        hasLogo: Boolean(merchant.logoMime),
+        logoUpdatedAt: merchant.updatedAt,
         trackingUrlTemplate: merchant.trackingUrlTemplate,
         shopDomain: merchant.shopDomain,
         status: merchant.status,
