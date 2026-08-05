@@ -2762,8 +2762,16 @@ const CLOCKS = [
   ['New York', 'America/New_York', 'us'],
 ];
 
+/** Aiguilles ou chiffres — un goût, pas une vérité : mémorisé par navigateur. */
+function clockStyle() {
+  return localStorage.getItem('csav.clocks') === 'digital' ? 'digital' : 'analog';
+}
+
 function renderClocks() {
   const now = new Date();
+  const digital = clockStyle() === 'digital';
+
+  $('clocks').classList.toggle('clocks-digital', digital);
 
   $('clocks').innerHTML = CLOCKS.map(([city, zone, code]) => {
     const time = now.toLocaleTimeString('fr-FR', {
@@ -2779,19 +2787,32 @@ function renderClocks() {
     );
     const minute = now.getMinutes();
     const open = hour >= 9 && hour < 18;
+    const title = `${city} — ${open ? 'heures ouvrées' : 'hors horaires (9 h – 18 h locales)'}`;
 
-    // Vrai cadran : les aiguilles portent l'heure locale. Un chiffre se lit,
-    // une aiguille se reconnaît — à cinq fuseaux côte à côte, la silhouette
-    // des cadrans dit « matin là-bas, soir ici » avant toute lecture.
+    // Numérique : l'écran d'une montre connectée — fond noir, chiffres
+    // lumineux. La couleur dit l'état : vert joignable, ambre nuit.
+    if (digital) {
+      return `<div class="wface${open ? '' : ' shut'}" title="${esc(title)}">
+        <b>${esc(city)}</b>
+        <span class="wface-time">${time}</span>
+      </div>`;
+    }
+
+    // Aiguilles : un cadran de manufacture. L'angle des secondes cale
+    // l'animation continue — l'aiguille tourne vraiment, elle n'attend pas le
+    // prochain rendu.
     const hourAngle = ((hour % 12) + minute / 60) * 30;
-    const minuteAngle = minute * 6;
+    const minuteAngle = minute * 6 + now.getSeconds() / 10;
+    const secondsOffset = -(now.getSeconds() + now.getMilliseconds() / 1000);
 
-    return `<div class="clock clock-${code}${open ? '' : ' shut'}" title="${esc(city)} — ${
-      open ? 'heures ouvrées' : 'hors horaires (9 h – 18 h locales)'
-    }">
+    return `<div class="clock clock-${code}${open ? '' : ' shut'}" title="${esc(title)}">
       <span class="dial" aria-hidden="true">
+        <i class="dial-ring"></i>
+        <i class="dial-face"></i>
         <i class="dial-h" style="transform: rotate(${hourAngle}deg)"></i>
         <i class="dial-m" style="transform: rotate(${minuteAngle}deg)"></i>
+        <i class="dial-s" style="animation-delay: ${secondsOffset}s"></i>
+        <i class="dial-cap"></i>
       </span>
       <div>
         <b>${esc(city)}</b>
@@ -3081,6 +3102,17 @@ function renderPalettes() {
       button.onclick = () => {
         localStorage.setItem('csav.theme', button.dataset.theme);
         applyAppearance();
+        renderPalettes();
+      };
+    });
+
+  $('clock-seg')
+    .querySelectorAll('button')
+    .forEach((button) => {
+      button.setAttribute('aria-pressed', String(button.dataset.clockstyle === clockStyle()));
+      button.onclick = () => {
+        localStorage.setItem('csav.clocks', button.dataset.clockstyle);
+        renderClocks();
         renderPalettes();
       };
     });
