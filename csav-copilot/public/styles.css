@@ -1305,7 +1305,14 @@ body {
 
 /* =============================================================== réglages */
 
-.set-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 13px; align-items: start; }
+/* Une colonne, pas trois.
+   `auto-fit` rangeait six cartes de hauteurs très inégales : « Suivi des
+   colis » s'arrêtait au tiers de la page et laissait un vide de 600 px pendant
+   que « Règles de la boutique », le champ le plus important de l'écran, était
+   comprimé dans un tiers de largeur. Une grille automatique ne sait pas qu'un
+   réglage compte plus qu'un autre — elle range par ordre d'apparition et
+   produit exactement ce désordre. */
+.set-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; max-width: 1000px; }
 
 .set-group { display: flex; flex-direction: column; gap: 12px; }
 
@@ -2584,3 +2591,149 @@ textarea:focus-visible {
    centré, il flottait sans rapport avec les boutons dessous. */
 .reasoning { align-items: baseline; }
 .reasoning span:last-child { text-align: left; }
+
+/* ==========================================================================
+   RÉGLAGES
+   ========================================================================== */
+
+/* Chaque réglage occupe la largeur : l'intitulé et son explication à gauche,
+   les commandes à droite. C'est la disposition des pages de configuration qui
+   tiennent la route — on lit ce dont il s'agit avant de toucher au réglage,
+   et rien ne se retrouve à l'étroit parce qu'un voisin était plus grand. */
+#view-settings .panel {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  align-items: start;
+}
+
+#view-settings .panel-head {
+  display: block;
+  border-bottom: 0;
+  border-right: 1px solid var(--line-soft);
+  padding: 17px 18px;
+  align-self: stretch;
+}
+
+/* Le titre reprend un corps lisible. En capitales de 11 px, six rubriques de
+   nature très différente avaient rigoureusement le même poids visuel. */
+#view-settings .panel-title {
+  font-size: 14.5px;
+  font-weight: 620;
+  letter-spacing: -0.012em;
+  text-transform: none;
+  color: var(--ink);
+}
+
+#view-settings .card-body { padding: 17px 18px; }
+
+/* Les explications quittent le corps du réglage pour rejoindre son intitulé :
+   le côté droit ne contient plus que ce sur quoi on agit. */
+#view-settings .set-help {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-mute);
+}
+
+/* Plus de carte dans la carte. Un encadré gris à l'intérieur d'un panneau
+   encadré, c'est deux bordures et deux fonds pour une seule information. */
+.set-conn {
+  border: 0;
+  background: none;
+  padding: 0;
+}
+
+.set-conn + .set-conn {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-soft);
+}
+
+/* Les champs prennent la largeur disponible : les valeurs longues — gabarit
+   de suivi, adresse de boîte — étaient coupées en plein milieu. */
+#view-settings input[type="text"],
+#view-settings input[type="url"],
+#view-settings select,
+#view-settings textarea { width: 100%; }
+
+#view-settings .field label {
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
+}
+
+/* La barre d'enregistrement flotte au-dessus du contenu : sans cette réserve,
+   elle masquait la fin du dernier réglage. */
+#view-settings { padding-bottom: 76px; }
+
+@media (max-width: 900px) {
+  #view-settings .panel { grid-template-columns: minmax(0, 1fr); }
+  #view-settings .panel-head {
+    border-right: 0;
+    border-bottom: 1px solid var(--line-soft);
+    padding-bottom: 13px;
+  }
+}
+
+/* ------------------------------------------------- vue simulée (rôle) --- */
+
+/* Bandeau pleine largeur, ambré, en tête de page. Une simulation de rôle qu'on
+   oublie se manifeste comme une perte de droits : on cherche la panne pendant
+   une heure avant de comprendre. Il doit donc être impossible à rater, et sa
+   sortie toujours à portée. */
+.asbar {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  border-radius: var(--r-md);
+  background: var(--warn-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warn) 32%, transparent);
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.asbar-mark {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--warn);
+  flex: none;
+}
+
+.asbar .btn { margin-left: auto; }
+
+@media (max-width: 700px) {
+  .asbar .btn { margin-left: 0; width: 100%; justify-content: center; }
+}
+
+/* Le sélecteur de rôle garde sa largeur naturelle. En grille pleine largeur,
+   quatre boutons s'étalaient sur 550 px avec 80 px de vide entre chaque mot :
+   on ne lisait plus un choix, on lisait une barre de navigation. */
+#view-settings .seg {
+  display: inline-grid;
+  grid-auto-columns: max-content;
+  justify-self: start;
+}
+
+/* Les intitulés de l'identité rejoignent la casse des autres réglages. Trois
+   styles de label sur la même page — capitales espacées ici, phrase là — donne
+   l'impression de deux écrans cousus ensemble. */
+#view-settings .brand-edit-fields label,
+#view-settings .set-group > label {
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
+}
+
+/* Un logo se change seul et se voit tout de suite ; le reste des réglages part
+   d'un seul enregistrement. Deux boutons qui disent tous deux « enregistrer »
+   sans dire quoi obligeaient à cliquer pour comprendre. */
+#set-brand-apply::after { content: ' le logo et le nom'; font-weight: 400; }

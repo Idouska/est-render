@@ -3,7 +3,7 @@ import { z } from "zod";
 import { env } from "../config/env.ts";
 import { recordAudit } from "../lib/audit.ts";
 import { prisma } from "../lib/prisma.ts";
-import { requirePermission, requireSession } from "../plugins/auth.ts";
+import { PREVIEW_COOKIE, requirePermission, requireSession } from "../plugins/auth.ts";
 import { importMailboxHistory } from "../services/gmail/importHistory.ts";
 import { ShopifyScopeError } from "../services/shopify/client.ts";
 import { fetchShopPolicies, policiesToPlaybook } from "../services/shopify/policies.ts";
@@ -357,6 +357,45 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
       }
     },
   );
+
+  /**
+   * Simulation de rôle.
+   *
+   * Un propriétaire doit pouvoir constater ce que voit un agent avant de lui
+   * confier la boutique. La restriction est appliquée par le serveur, pas
+   * seulement masquée à l'écran : une simulation graphique laisserait passer
+   * les requêtes qu'elle prétend interdire, et donnerait une fausse assurance.
+   *
+   * Aucune vérification de droits ici : `effectiveRole` ne retient jamais
+   * qu'un rôle plus étroit que le rôle réel, donc demander à voir en
+   * propriétaire quand on est agent ne produit rien.
+   */
+  app.post("/api/preview-role", async (request, reply) => {
+    const parsed = z
+      .object({
+        role: z.enum(["OWNER", "SUPERVISOR", "AGENT", "VIEWER"]).nullable(),
+      })
+      .safeParse(request.body);
+
+    if (!parsed.success) return reply.code(400).send({ error: "Rôle inconnu" });
+
+    if (parsed.data.role === null) {
+      reply.clearCookie(PREVIEW_COOKIE, { path: "/" });
+      return reply.send({ role: null });
+    }
+
+    reply.setCookie(PREVIEW_COOKIE, parsed.data.role, {
+      httpOnly: true,
+      secure: env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      // Deux heures : une simulation oubliée qui survit à la nuit ferait
+      // croire à une perte de droits le lendemain matin.
+      maxAge: 7200,
+    });
+
+    return reply.send({ role: parsed.data.role });
+  });
 
   /** Ce que l'IA a appris : volume du corpus et imports en cours. */
   app.get("/api/learning", async (request, reply) => {

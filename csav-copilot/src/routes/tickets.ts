@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { env } from '../config/env.ts';
 import { recordAudit } from '../lib/audit.ts';
 import { prisma } from '../lib/prisma.ts';
-import { requirePermission, requireSession } from '../plugins/auth.ts';
+import { PREVIEW_COOKIE, requirePermission, requireSession } from '../plugins/auth.ts';
 import { accessibleMerchantIds, listShopsFor } from './shops.ts';
 import { sendDraft, updateDraftBody } from '../services/gmail/drafts.ts';
 import { sendPlainEmail } from '../services/gmail/send.ts';
@@ -141,6 +141,11 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
       user: merchant.users[0]
         ? { ...merchant.users[0], id: userId, role: request.session.role }
         : { id: userId, email: request.session.email, name: null, role: request.session.role },
+      // Le rôle réel accompagne le rôle appliqué : sans lui, l'interface ne
+      // saurait pas qu'elle est en simulation et n'offrirait aucun moyen d'en
+      // sortir.
+      realRole: request.session.realRole,
+      previewing: request.session.role !== request.session.realRole,
       shopify: {
         connected: Boolean(merchant.shopify && !merchant.shopify.uninstalledAt),
         simulated: env.SHOPIFY_MOCK,

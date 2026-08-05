@@ -5,7 +5,13 @@ import { SESSION_COOKIE, verifySession, type SessionPayload } from '../lib/sessi
 
 declare module 'fastify' {
   interface FastifyRequest {
-    session: SessionPayload & { role: UserRole; email: string };
+    session: SessionPayload & {
+      /** Rôle appliqué à cette requête — celui simulé, s'il est plus étroit. */
+      role: UserRole;
+      /** Rôle réel du compte, indépendant de toute simulation. */
+      realRole: UserRole;
+      email: string;
+    };
   }
 }
 
@@ -42,6 +48,42 @@ export function can(role: UserRole, permission: Permission): boolean {
   return (PERMISSIONS[permission] as readonly UserRole[]).includes(role);
 }
 
+/** Nom du cookie portant le rôle simulé. */
+export const PREVIEW_COOKIE = 'csav_preview_role';
+
+/**
+ * Classement des rôles, du plus large au plus étroit.
+ *
+ * Sert uniquement à interdire qu'une simulation élargisse les droits. La table
+ * PERMISSIONS reste la référence pour savoir qui peut quoi : ce rang ne dit pas
+ * les droits, il dit seulement lequel est contenu dans l'autre.
+ */
+const RANK: Record<UserRole, number> = {
+  OWNER: 3,
+  SUPERVISOR: 2,
+  AGENT: 1,
+  VIEWER: 0,
+};
+
+/**
+ * Rôle effectif d'une requête.
+ *
+ * Un propriétaire doit pouvoir constater ce que voit un agent : décrire les
+ * droits dans une page d'aide ne remplace jamais l'écran lui-même, et une
+ * simulation seulement graphique mentirait — le serveur continuerait
+ * d'autoriser ce que l'écran prétend interdire.
+ *
+ * D'où la règle unique : la simulation ne peut que **restreindre**. Un cookie
+ * falsifié en `OWNER` par un agent ne lui donne rien, puisque le rang retenu
+ * est toujours le plus étroit des deux. C'est ce qui permet de ne pas signer ce
+ * cookie sans créer de faille.
+ */
+export function effectiveRole(real: UserRole, previewed: string | undefined): UserRole {
+  if (!previewed || !(previewed in RANK)) return real;
+  const candidate = previewed as UserRole;
+  return RANK[candidate] < RANK[real] ? candidate : real;
+}
+
 /**
  * Garde-fou d'isolation multi-tenant : toute route du dashboard passe par ici,
  * et le `merchantId` de toute requête vient d'ici — jamais du corps ou de l'URL.
@@ -71,7 +113,9 @@ export async function requireSession(
     return;
   }
 
-  request.session = { ...session, role: user.role, email: user.email };
+  const role = effectiveRole(user.role, request.cookies[PREVIEW_COOKIE]);
+
+  request.session = { ...session, role, email: user.email, realRole: user.role };
 }
 
 const DENIALS: Record<Permission, string> = {

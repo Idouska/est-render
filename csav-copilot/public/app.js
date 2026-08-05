@@ -183,6 +183,12 @@ function renderMe() {
   const me = state.me;
   const shop = me.merchant.shopDomain ?? '';
 
+  // Déclaré plus bas dans le fichier : les fonctions sont hissées, l'appel est
+  // donc sûr, et la bannière doit paraître au premier rendu — pas au premier
+  // passage par les Réglages.
+  renderPreviewBar();
+  trimPreviewChoices();
+
   const brand = state.allShops
     ? 'Toutes les boutiques'
     : me.merchant.brandName || me.merchant.name || 'cSAV Copilot';
@@ -4428,3 +4434,86 @@ async function boot() {
 }
 
 boot();
+
+/* ==========================================================================
+   VOIR EN TANT QUE
+   ==========================================================================
+
+   Un propriétaire doit pouvoir constater ce que voit un agent. Décrire les
+   droits dans un tableau ne remplace jamais l'écran : on découvre autrement
+   qu'un bouton reste visible mais désactivé, ou qu'une colonne entière
+   disparaît.
+
+   La simulation ne descend jamais qu'en dessous du rôle réel — le serveur s'en
+   assure, l'interface ne fait que proposer. */
+
+const AS_LABELS = {
+  OWNER: 'Propriétaire',
+  SUPERVISOR: 'Superviseur',
+  AGENT: 'Agent',
+  VIEWER: 'Observateur',
+};
+
+async function setPreviewRole(role) {
+  try {
+    await api('/api/preview-role', {
+      method: 'POST',
+      body: JSON.stringify({ role: role || null }),
+    });
+    // Rechargement complet : les droits changent côté serveur, et rejouer
+    // seulement l'écran courant laisserait les autres vues dans l'état
+    // d'avant, avec des boutons que le serveur refuse désormais.
+    location.reload();
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+function renderPreviewBar() {
+  const bar = $('asbar');
+  if (!bar) return;
+
+  const previewing = Boolean(state.me?.previewing);
+  bar.hidden = !previewing;
+
+  if (previewing) {
+    const shown = AS_LABELS[state.me.user.role] ?? state.me.user.role;
+    const real = AS_LABELS[state.me.realRole] ?? state.me.realRole;
+    $('asbar-text').textContent =
+      `Vous utilisez l'outil comme un ${shown.toLowerCase()}. Votre rôle réel est ${real.toLowerCase()}.`;
+  }
+
+  document.querySelectorAll('#as-role [data-as]').forEach((button) => {
+    const active = (button.dataset.as || '') === (previewing ? state.me.user.role : '');
+    button.setAttribute('aria-pressed', String(active));
+  });
+
+  const note = $('as-note');
+  if (note) {
+    note.textContent = previewing
+      ? 'La simulation s’arrête d’elle-même au bout de deux heures.'
+      : `Vous êtes ${(AS_LABELS[state.me?.realRole] ?? '—').toLowerCase()}.`;
+  }
+}
+
+document.querySelectorAll('#as-role [data-as]').forEach((button) =>
+  button.addEventListener('click', () => setPreviewRole(button.dataset.as)),
+);
+
+$('asbar-exit')?.addEventListener('click', () => setPreviewRole(''));
+
+// Un rôle plus large que le sien n'est pas proposé : le serveur le refuserait
+// silencieusement, et un bouton sans effet est pire qu'un bouton absent.
+function trimPreviewChoices() {
+  const rank = { OWNER: 3, SUPERVISOR: 2, AGENT: 1, VIEWER: 0 };
+  const mine = rank[state.me?.realRole] ?? 0;
+  document.querySelectorAll('#as-role [data-as]').forEach((button) => {
+    const target = button.dataset.as;
+    button.hidden = Boolean(target) && (rank[target] ?? 0) >= mine;
+  });
+}
+
+$('as-supplier')?.addEventListener('click', () => {
+  setView('suppliers');
+  toast('Ouvrez « Espace de travail » sur un contact pour voir son écran.');
+});

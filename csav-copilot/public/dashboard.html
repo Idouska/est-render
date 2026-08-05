@@ -113,6 +113,15 @@
             </div>
           </header>
 
+      <!-- Bandeau de simulation de rôle. En haut, pleine largeur, coloré :
+           une simulation qu'on oublie fait croire à une perte de droits, et
+           on cherche la panne pendant une heure. -->
+      <div class="asbar" id="asbar" hidden>
+        <span class="asbar-mark">Vue simulée</span>
+        <span id="asbar-text"></span>
+        <button class="btn btn-small" id="asbar-exit">Revenir à ma vue</button>
+      </div>
+
       <div class="notice" id="mock-notice" hidden>
         <span class="notice-mark">Simulation</span>
         <div>
@@ -581,6 +590,36 @@
               </p>
               <div class="set-conn" id="set-shopify"></div>
               <div class="set-conn" id="set-gmail"></div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head">
+              <span class="panel-title">Voir en tant que</span>
+              <p class="set-help">
+                Ouvrez l'outil avec les droits d'un autre rôle pour constater ce qu'il
+                voit avant de lui confier la boutique. La restriction est appliquée par
+                le serveur, pas seulement masquée : ce que l'écran interdit est
+                réellement refusé.
+              </p>
+            </div>
+            <div class="card-body set-group">
+              <div class="seg" id="as-role">
+                <button type="button" data-as="" aria-pressed="true">Ma vue</button>
+                <button type="button" data-as="SUPERVISOR">Superviseur</button>
+                <button type="button" data-as="AGENT">Agent</button>
+                <button type="button" data-as="VIEWER">Observateur</button>
+              </div>
+              <p class="set-help" id="as-note"></p>
+              <div class="field">
+                <label>Espace fournisseur</label>
+                <p class="set-help">
+                  Le fournisseur n'a pas de compte ici : il travaille sur un lien
+                  permanent, sur son téléphone. Ouvrez celui d'un contact depuis
+                  l'écran Fournisseurs pour voir exactement son écran.
+                </p>
+                <button class="btn btn-small" id="as-supplier">Ouvrir un espace fournisseur</button>
+              </div>
             </div>
           </div>
 
