@@ -5,7 +5,7 @@ import { recordAudit } from "../lib/audit.ts";
 import { decryptSecret } from "../lib/crypto.ts";
 import { prisma } from "../lib/prisma.ts";
 import { PREVIEW_COOKIE, requirePermission, requireSession } from "../plugins/auth.ts";
-import { getAiProvider } from "../services/ai/factory.ts";
+import { generateReply } from "../services/ai/generate.ts";
 import { backfillMailbox, backfillProgress } from "../services/gmail/backfill.ts";
 import { createOAuthClient, getGmailClient } from "../services/gmail/client.ts";
 import { loadLabelNames, loadLabelStyles } from "../services/gmail/labels.ts";
@@ -600,39 +600,50 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const started = Date.now();
 
+      /*
+       * Un vrai brouillon, pas un aller-retour de politesse.
+       *
+       * La première version de cet essai demandait au modèle de répondre
+       * `{"ok": true}` et acceptait n'importe quel objet : elle prouvait que la
+       * clé était valide, rien de plus. Or ce qui casse en production, ce n'est
+       * pas la clé — c'est la conformité au schéma du brouillon, six champs
+       * dont un tableau, qu'un modèle sans sortie structurée native peut rater.
+       *
+       * On exerce donc le contrat réel, sur un ticket fictif. Ce qui passe ici
+       * passera en production ; ce qui échoue ici échouait déjà, en silence.
+       */
       try {
-        const provider = await getAiProvider();
-
-        const result = await provider.completeJson<{ ok: boolean }>({
-          system: "Réponds uniquement en JSON.",
-          user: 'Réponds exactement {"ok": true}.',
-          effort: "low",
-          maxTokens: 64,
-          schema: {
-            type: "object",
-            properties: { ok: { type: "boolean" } },
-            required: ["ok"],
-            additionalProperties: false,
-          },
-          validate: (value: unknown) => {
-            if (typeof value !== "object" || value === null) {
-              throw new TypeError("objet attendu");
-            }
-            return value as { ok: boolean };
-          },
+        const draft = await generateReply({
+          merchantName: "Boutique",
+          intent: "WISMO",
+          customerName: "Client",
+          subject: "Où est ma commande ?",
+          thread: [
+            {
+              role: "customer",
+              text: "Bonjour, j’ai commandé il y a dix jours et je n’ai aucune nouvelle. Pouvez-vous me dire où en est mon colis ?",
+              at: new Date(),
+            },
+          ],
+          order: null,
         });
 
         return reply.send({
-          ok: !result.refused,
-          provider: provider.name,
+          ok: true,
           ms: Date.now() - started,
-          refused: result.refused,
+          // Rendus à l'écran : lire le résumé et les premières lignes du
+          // brouillon en dit plus sur la qualité du modèle que n'importe quel
+          // « connexion réussie ».
+          summary: draft.summary,
+          ask: draft.ask,
+          preview: draft.body.slice(0, 220),
+          confidence: draft.confidence,
         });
       } catch (error) {
         // Le message du fournisseur tel quel : « invalid x-api-key »,
-        // « insufficient balance », « model not found » disent chacun un geste
-        // différent, et les fondre dans un « échec » commun les rendrait tous
-        // inutiles.
+        // « insufficient balance », « réponse non conforme au schéma » disent
+        // chacun un geste différent, et les fondre dans un « échec » commun les
+        // rendrait tous inutiles.
         return reply.code(502).send({
           ok: false,
           ms: Date.now() - started,

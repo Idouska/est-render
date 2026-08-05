@@ -6103,17 +6103,23 @@ $('ai-test')?.addEventListener('click', async () => {
   const node = $('ai-test-state');
 
   button.disabled = true;
-  node.textContent = 'Interrogation du modèle…';
+  node.textContent = 'Le modèle rédige un brouillon d’essai…';
 
   try {
     const result = await api('/api/ai/test', { method: 'POST', body: '{}' });
-    node.innerHTML = result.ok
-      ? `<b style="color:var(--ok)">Le modèle répond.</b> ${esc(result.provider)} · ${
-          result.ms
-        } ms. Les tickets en échec peuvent être relancés.`
-      : `<b class="set-alert">Le modèle a refusé de répondre.</b> Vérifiez le contenu du prompt.`;
 
-    if (result.ok) {
+    // Le résumé et le début du brouillon sont affichés : lire ce que le modèle
+    // produit vraiment en dit plus long qu'un « connexion réussie », et c'est
+    // exactement ce qui doit apparaître sur les tickets.
+    node.innerHTML =
+      `<b style="color:var(--ok)">Le modèle rédige.</b> ${result.ms} ms · confiance ${
+        Math.round((result.confidence ?? 0) * 100)
+      } %<br>` +
+      `<b>Demande :</b> ${esc(result.ask ?? '—')}<br>` +
+      `<b>Résumé :</b> ${(result.summary ?? []).map((line) => esc(line)).join(' · ') || '—'}<br>` +
+      `<b>Brouillon :</b> <i>${esc(result.preview ?? '')}…</i>`;
+
+    {
       // La relance est proposée là où l'on vient de constater que la cause est
       // levée : la chercher ailleurs, c'est ne pas la faire.
       const retry = document.createElement('button');
