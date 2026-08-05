@@ -2106,11 +2106,15 @@ function renderSuppliers() {
           }</td>
           <td class="mono">${esc(supplier.contactEmail)}</td>
           <td class="mono">${esc(supplier.phone ?? '—')}</td>
-          <td class="num mono">${supplier.openEscalations}</td>
+          <td class="num mono">${
+            supplier.openEscalations > 0
+              ? `<span class="tag tone-wait">${supplier.openEscalations}</span>`
+              : '<span class="sub">0</span>'
+          }</td>
           <td>${
             supplier.active
-              ? '<span class="tag tag-status st-CLOSED">Actif</span>'
-              : '<span class="tag tag-status st-NEW">Désactivé</span>'
+              ? '<span class="tag tone-ok">Actif</span>'
+              : '<span class="tag tone-mute">Désactivé</span>'
           }</td>
           <td><button class="btn btn-small">Modifier</button></td>
         </tr>`,
@@ -2258,6 +2262,54 @@ const ROLE_ABILITIES = {
   VIEWER: 'Consulte sans rien envoyer',
 };
 
+/*
+ * Table des droits, telle que le serveur l'applique.
+ *
+ * Elle existait dans le code et nulle part à l'écran : un propriétaire qui
+ * confie sa boutique devait deviner ce qu'un agent pourrait faire, ou
+ * l'apprendre en le regardant faire. Recopiée ici, elle doit rester fidèle à
+ * `src/plugins/auth.ts` — c'est le prix d'une explication lisible, et l'écart
+ * se verrait au premier essai grâce à « Voir en tant que ».
+ */
+/**
+ * Tableau des droits, servi par le serveur depuis la table qui les applique.
+ *
+ * Le recopier ici aurait été plus simple, et faux à terme : le jour où un
+ * droit change de rôle, l'écran continuerait d'annoncer l'ancien — et c'est
+ * l'écran qu'on croit, puisque c'est lui qu'on lit.
+ */
+async function renderRights() {
+  const body = $('rights-rows');
+  if (!body || body.dataset.loaded === '1') return;
+
+  let data;
+  try {
+    data = await api('/api/rights');
+  } catch {
+    return;
+  }
+
+  body.innerHTML = data.rights
+    .map(
+      (right) => `<tr>
+        <td>${esc(right.label)}</td>
+        ${right.allowed
+          .map(
+            (allowed) =>
+              `<td class="rights-cell">${
+                allowed
+                  ? '<span class="rights-yes" title="Autorisé">✓</span>'
+                  : '<span class="rights-no" title="Refusé">·</span>'
+              }</td>`,
+          )
+          .join('')}
+      </tr>`,
+    )
+    .join('');
+
+  body.dataset.loaded = '1';
+}
+
 function isOwner() {
   return state.team.me?.role === 'OWNER';
 }
@@ -2296,15 +2348,20 @@ function renderTeam() {
           // que « pas désactivé ». Une invitation jamais honorée doit se voir :
           // c'est le symptôme d'un mail qui n'est pas arrivé.
           !user.active
-            ? '<span class="tag tag-status st-NEW">Désactivé</span>'
+            ? '<span class="tag tone-mute">Désactivé</span>'
             : user.lastLoginAt
-              ? '<span class="tag tag-status st-CLOSED">Actif</span>'
-              : '<span class="tag tag-status st-NEEDS_REVIEW">Invité</span>'
+              ? '<span class="tag tone-ok">Actif</span>'
+              // Une invitation jamais honorée est en attente d'un tiers : c'est
+              // exactement le sens de l'ambre, et le symptôme d'un mail qui
+              // n'est pas arrivé.
+              : '<span class="tag tone-wait">Invité</span>'
         }</td>
         <td>${owner ? '<button class="btn btn-small">Modifier</button>' : ''}</td>
       </tr>`;
     })
     .join('');
+
+  void renderRights();
 
   const active = users.filter((user) => user.active).length;
   $('team-count').textContent = `${users.length} personne${users.length > 1 ? 's' : ''} · ${active} active${

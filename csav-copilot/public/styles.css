@@ -956,7 +956,11 @@ body {
    deux choses que l'agent regarde avant de s'engager auprès du client. */
 .subs { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; }
 
-.sub {
+/* Portées par `.subs` et pas seules : `.sub` désigne aussi, dans les tableaux,
+   le texte secondaire d'une cellule — l'email sous un nom, le résumé d'un rôle.
+   Non bornées, ces règles encadraient ces textes comme des champs de saisie, et
+   l'écran Équipe donnait l'impression d'un formulaire à remplir. */
+.subs .sub {
   appearance: none;
   font: inherit;
   text-align: left;
@@ -971,8 +975,8 @@ body {
   cursor: pointer;
 }
 
-.sub:hover { border-color: var(--accent); background: var(--accent-soft); }
-.sub img, .sub-blank {
+.subs .sub:hover { border-color: var(--accent); background: var(--accent-soft); }
+.subs .sub img, .sub-blank {
   width: 36px;
   height: 36px;
   border-radius: var(--r-sm);
@@ -981,8 +985,19 @@ body {
   flex: none;
 }
 
-.sub b { display: block; font-size: 13px; font-weight: 600; }
-.sub small { display: block; font-size: 11.5px; color: var(--ink-mute); }
+.subs .sub b { display: block; font-size: 13px; font-weight: 600; }
+.subs .sub small { display: block; font-size: 11.5px; color: var(--ink-mute); }
+
+/* Le texte secondaire d'une cellule : plus petit, plus pâle, rien de plus. */
+.grid .sub,
+.queue-item .sub {
+  display: inline;
+  font-size: 11.5px;
+  color: var(--ink-mute);
+  border: 0;
+  padding: 0;
+  background: none;
+}
 .sub-stock { font-family: var(--font-mono); color: var(--ok) !important; }
 .queue-foot .tag-order { margin-left: 0; }
 
@@ -4213,3 +4228,63 @@ textarea:focus-visible {
   background: var(--inset);
   color: var(--ink-mute);
 }
+
+/* ==========================================================================
+   DROITS PAR RÔLE
+   ==========================================================================
+
+   Le tableau existait dans le code et nulle part à l'écran : un propriétaire
+   qui confie sa boutique devait deviner ce qu'un agent pourrait faire. Replié,
+   parce qu'on le consulte au moment de choisir un rôle et jamais autrement. */
+
+.rights {
+  border-radius: var(--r-lg);
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  background-image: var(--grad-surface);
+  box-shadow: var(--e1), var(--edge);
+  overflow: hidden;
+}
+
+.rights > summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 13px 16px;
+}
+
+.rights > summary::-webkit-details-marker { display: none; }
+
+.rights-title { font-size: 14px; font-weight: 620; letter-spacing: -0.01em; }
+.rights-hint { font-size: 12.5px; color: var(--ink-mute); }
+
+.rights > summary::after {
+  content: '';
+  margin-left: auto;
+  width: 7px;
+  height: 7px;
+  border-right: 1.6px solid var(--ink-mute);
+  border-bottom: 1.6px solid var(--ink-mute);
+  transform: rotate(45deg);
+  transition: transform 0.16s var(--ease);
+  align-self: center;
+}
+
+.rights[open] > summary::after { transform: rotate(-135deg); }
+
+.rights .table-wrap {
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  border-radius: 0;
+  box-shadow: none;
+  background: none;
+  max-height: none;
+}
+
+.rights-cell { text-align: center; }
+
+/* Un droit accordé se lit d'un regard, un droit refusé ne doit pas attirer
+   l'œil : c'est la colonne des ✓ qui dessine le rôle. */
+.rights-yes { color: var(--ok); font-weight: 700; }
+.rights-no { color: var(--ink-mute); opacity: 0.4; }

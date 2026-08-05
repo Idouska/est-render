@@ -505,6 +505,31 @@
       </section>
 
       <section class="browse" id="view-team" hidden aria-label="Équipe">
+        <!-- Le tableau des droits, replié. Il se consulte au moment de choisir
+             un rôle et jamais autrement : déplié en permanence, il pousserait
+             l'équipe hors de l'écran pour redire chaque jour ce qu'on lit une
+             fois. -->
+        <details class="rights">
+          <summary>
+            <span class="rights-title">Qui a le droit de quoi</span>
+            <span class="rights-hint">Quatre rôles, définis par ce qu'ils peuvent casser</span>
+          </summary>
+          <div class="table-wrap">
+            <table class="grid">
+              <thead>
+                <tr>
+                  <th>Action</th>
+                  <th>Propriétaire</th>
+                  <th>Superviseur</th>
+                  <th>Agent</th>
+                  <th>Observateur</th>
+                </tr>
+              </thead>
+              <tbody id="rights-rows"></tbody>
+            </table>
+          </div>
+        </details>
+
         <div class="browse-bar">
           <span class="browse-count" id="team-count"></span>
           <button class="btn btn-primary" id="team-new" style="margin-left:auto" hidden>

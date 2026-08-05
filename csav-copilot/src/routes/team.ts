@@ -6,7 +6,9 @@ import { logger } from '../lib/logger.ts';
 import { signLoginToken, verifyLoginToken } from '../lib/loginToken.ts';
 import { prisma } from '../lib/prisma.ts';
 import { SESSION_COOKIE, signSession } from '../lib/session.ts';
-import { requirePermission, requireSession } from '../plugins/auth.ts';
+import { can, requirePermission, requireSession } from '../plugins/auth.ts';
+import type { Permission } from '../plugins/auth.ts';
+import type { UserRole } from '@prisma/client';
 import { sendPlainEmail } from '../services/gmail/send.ts';
 
 /**
@@ -91,6 +93,35 @@ async function deliverLink(params: {
 }
 
 export async function teamRoutes(app: FastifyInstance): Promise<void> {
+  /**
+   * Tableau des droits, servi depuis la table qui les applique.
+   *
+   * Il aurait été plus simple de le recopier dans l'interface. Une copie
+   * dérive : le jour où un droit change de rôle, l'écran continue d'annoncer
+   * l'ancien, et c'est l'écran qu'on croit puisque c'est lui qu'on lit. Servi
+   * d'ici, il ne peut pas mentir — il est construit à partir de `PERMISSIONS`.
+   */
+  app.get('/api/rights', async (_request, reply) => {
+    const LABELS: Record<Permission, string> = {
+      read: 'Lire les tickets et les commandes',
+      reply: 'Répondre à un client',
+      escalate: 'Escalader vers un fournisseur',
+      refund: 'Rembourser',
+      configure: 'Modifier les réglages de la boutique',
+      manageTeam: 'Gérer l’équipe et les rôles',
+    };
+
+    const roles: UserRole[] = ['OWNER', 'SUPERVISOR', 'AGENT', 'VIEWER'];
+
+    return reply.send({
+      roles,
+      rights: (Object.keys(LABELS) as Permission[]).map((permission) => ({
+        label: LABELS[permission],
+        allowed: roles.map((role) => can(role, permission)),
+      })),
+    });
+  });
+
   /* ------------------------------------------------- connexion nominative */
 
   // Ouvert sans session : c'est précisément la porte d'entrée.
