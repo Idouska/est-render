@@ -95,8 +95,16 @@ export async function ingestMerchantInbox(
     }
   }
 
+  // Un échec de mise en file ne doit pas emporter l'ingestion : le mail est
+  // déjà en base, et le perdre pour un problème de file serait le pire des
+  // deux. C'est ce qui s'est produit avec des identifiants de job invalides —
+  // le ticket existait, l'erreur remontait, et l'appelant croyait tout perdu.
   for (const ticketId of ticketIds) {
-    await enqueueTicket({ merchantId, ticketId });
+    try {
+      await enqueueTicket({ merchantId, ticketId });
+    } catch (error) {
+      logger.error({ merchantId, ticketId, err: error }, 'Mise en file du ticket impossible');
+    }
   }
 
   logger.info({ merchantId, ingested, tickets: ticketIds.size }, 'Ingestion terminée');

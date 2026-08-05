@@ -1,24 +1,17 @@
 import { Queue, type JobsOptions } from 'bullmq';
 import { Redis } from 'ioredis';
 import { env } from '../config/env.ts';
+import { ingestJobId, ticketJobId } from './ids.ts';
+
+export { ingestJobId, ticketJobId } from './ids.ts';
+export type { IngestJob, TicketJob } from './types.ts';
 
 export const connection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
 
 export const QUEUE_INGEST = 'gmail-ingest';
 export const QUEUE_TICKET = 'ticket-process';
 
-export interface IngestJob {
-  merchantId: string;
-  /** Boîte concernée : chacune a son propre curseur d'historique Gmail. */
-  mailboxId?: string;
-  /** historyId annoncé par la notification Pub/Sub, à titre de trace. */
-  historyId?: string;
-}
-
-export interface TicketJob {
-  merchantId: string;
-  ticketId: string;
-}
+import type { IngestJob, TicketJob } from './types.ts';
 
 const defaultJobOptions: JobsOptions = {
   attempts: 5,
@@ -37,19 +30,27 @@ export const ticketQueue = new Queue<TicketJob>(QUEUE_TICKET, {
   defaultJobOptions,
 });
 
+/*
+ * Les identifiants de job ne contiennent pas de deux-points.
+ *
+ * BullMQ les réserve à ses propres clés Redis et rejette la tâche avec
+ * « Custom Id cannot contain : ». L'erreur remonte au moment de la mise en
+ * file, donc après la création du ticket : le mail entrait bien en base, mais
+ * l'IA n'était jamais saisie et le webhook Pub/Sub échouait en boucle. Une
+ * panne invisible, où chaque étage semble faire son travail.
+ */
+
 /**
  * Une notification Pub/Sub par mail reçu, mais un seul job d'ingestion utile
  * par marchand : on déduplique sur une fenêtre courte via un jobId stable.
  */
 export async function enqueueIngest(job: IngestJob): Promise<void> {
   const bucket = Math.floor(Date.now() / 5000);
-  await ingestQueue.add('ingest', job, {
-    jobId: `ingest:${job.merchantId}:${job.mailboxId ?? 'default'}:${bucket}`,
-  });
+  await ingestQueue.add('ingest', job, { jobId: ingestJobId(job, bucket) });
 }
 
 export async function enqueueTicket(job: TicketJob): Promise<void> {
-  await ticketQueue.add('process', job, { jobId: `ticket:${job.ticketId}` });
+  await ticketQueue.add('process', job, { jobId: ticketJobId(job) });
 }
 
 export async function closeQueues(): Promise<void> {
