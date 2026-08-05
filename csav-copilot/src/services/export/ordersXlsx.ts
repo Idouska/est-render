@@ -102,23 +102,26 @@ export async function ordersToXlsx(rows: XlsxRowSource[]): Promise<Buffer> {
   const images = new Map<string, number>();
 
   for (const { order, storeUrl, parcels = [] } of rows) {
-    const items = order.lineItems ?? [];
+    // Une ligne = un colis, et un produit = un colis : deux exemplaires du même
+    // article partent dans deux cartons, la ligne de commande est donc dépliée
+    // par quantité. Sans ça, une commande de deux paires n'aurait qu'un rang de
+    // colis pour deux étiquettes à imprimer.
+    const units = (order.lineItems ?? []).flatMap((item) =>
+      Array.from({ length: Math.max(1, item.quantity) }, () => item),
+    );
 
-    for (const [position, item] of items.entries()) {
-      // Une ligne = un colis à préparer : quand une commande part en plusieurs
-      // envois, le rang de la ligne désigne le rang du colis. Répéter tous les
-      // numéros sur chaque ligne, comme avant, ne disait pas lequel coller sur
-      // quel carton.
+    for (const [position, item] of units.entries()) {
       const parcel = parcels.find((candidate) => candidate.index === position + 1);
       const row = sheet.addRow({
         order: order.name,
         items: '',
-        quantity: item.quantity,
+        // Toujours 1 : la ligne représente un exemplaire, donc un colis.
+        quantity: 1,
         size: item.variantTitle ? `Size : ${item.variantTitle}` : '',
         customer: customerBlock(order),
         note: '',
         link: '',
-        parcel: parcel ? `${parcel.index}/${parcel.total}` : `${position + 1}/${items.length}`,
+        parcel: parcel ? `${parcel.index}/${parcel.total}` : `${position + 1}/${units.length}`,
         tracking: parcel?.trackingNumber ?? '',
       });
 

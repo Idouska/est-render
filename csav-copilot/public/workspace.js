@@ -73,12 +73,19 @@ function photoUrl(parcelId) {
   )}&v=${Date.now()}`;
 }
 
+/** Articles dépliés par quantité : un exemplaire, un colis. */
+function orderUnits(order) {
+  return (order.lineItems ?? []).flatMap((item) =>
+    Array.from({ length: Math.max(1, item.quantity) }, () => item),
+  );
+}
+
 function parcelCard(order, index, total, saved) {
-  // L'article correspondant, quand il y en a autant que de colis : une
-  // commande dispatchée en plusieurs envois se prépare article par article, et
-  // « Colis 2/3 » seul ne dit pas ce qu'il faut mettre dedans.
-  const items = order.lineItems ?? [];
-  const item = items.length === total ? items[index - 1] : null;
+  // Un produit = un colis : la liste est dépliée par quantité, deux paires du
+  // même modèle faisant deux cartons. « Colis 2/3 » seul ne dirait pas quoi
+  // mettre dedans.
+  const units = orderUnits(order);
+  const item = units.length === total ? units[index - 1] : null;
 
   return `<div class="pk" data-order="${esc(order.id)}" data-index="${index}">
     <div class="pk-head">
@@ -87,7 +94,7 @@ function parcelCard(order, index, total, saved) {
     </div>
     ${
       item
-        ? `<div class="pk-item">${item.quantity} × ${esc(item.title)}${
+        ? `<div class="pk-item">${esc(item.title)}${
             item.variantTitle ? ` — ${esc(item.variantTitle)}` : ''
           }</div>`
         : ''
@@ -129,9 +136,9 @@ function renderOrders() {
       // Un numéro trop court bloquera la livraison : autant que l'atelier le
       // voie avant d'emballer, pas le transporteur devant la porte.
       const phoneShort = phone.replace(/\D/g, '').length < 9;
-      // Autant de colis que d'articles par défaut : c'est la règle d'expédition
-      // habituelle, un carton par paire, et le fournisseur peut la changer.
-      const total = order.parcels?.[0]?.total ?? Math.max(1, (order.lineItems ?? []).length);
+      // Un colis par exemplaire commandé, la règle d'expédition de l'atelier.
+      // Reste modifiable si deux paires partent finalement ensemble.
+      const total = order.parcels?.[0]?.total ?? Math.max(1, orderUnits(order).length);
 
       return `<article class="ord">
         <div class="ord-head">
