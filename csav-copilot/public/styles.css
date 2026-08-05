@@ -2737,3 +2737,7 @@ textarea:focus-visible {
    d'un seul enregistrement. Deux boutons qui disent tous deux « enregistrer »
    sans dire quoi obligeaient à cliquer pour comprendre. */
 #set-brand-apply::after { content: ' le logo et le nom'; font-weight: 400; }
+
+/* Zone d'écriture d'une escalade fournisseur : sans hauteur propre, le message
+   se rédigeait dans deux lignes visibles. */
+.esc-body { min-height: 130px; }

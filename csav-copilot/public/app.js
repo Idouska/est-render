@@ -3995,14 +3995,25 @@ function openCannedForm(id) {
       .join('');
 
   $('canned-f-delete').hidden = !item;
+  $('canned-modal').hidden = false;
   $('canned-modal').classList.add('open');
 }
 
 $('canned-new').addEventListener('click', () => openCannedForm(null));
-$('canned-f-cancel').addEventListener('click', () => $('canned-modal').classList.remove('open'));
+function closeCannedModal() {
+  const modal = $('canned-modal');
+  modal.classList.remove('open');
+  // `hidden` en plus de la classe : c'est lui qui garantit que la fenêtre
+  // reste invisible même si la règle d'affichage venait à manquer. Écrite avec
+  // une classe qui n'existait pas dans la feuille de style, cette fenêtre
+  // s'affichait au bas de tous les écrans.
+  modal.hidden = true;
+}
+
+$('canned-f-cancel').addEventListener('click', closeCannedModal);
 
 $('canned-modal').addEventListener('click', (event) => {
-  if (event.target === $('canned-modal')) $('canned-modal').classList.remove('open');
+  if (event.target === $('canned-modal')) closeCannedModal();
 });
 
 $('canned-f-save').addEventListener('click', async () => {
@@ -4027,7 +4038,7 @@ $('canned-f-save').addEventListener('click', async () => {
       await api('/api/canned-replies', { method: 'POST', body: JSON.stringify(payload) });
     }
 
-    $('canned-modal').classList.remove('open');
+    closeCannedModal();
     toast('Réponse type enregistrée.');
     await loadCanned();
   } catch (error) {
@@ -4041,7 +4052,7 @@ $('canned-f-delete').addEventListener('click', async () => {
 
   try {
     await api(`/api/canned-replies/${state.editingCanned}`, { method: 'DELETE' });
-    $('canned-modal').classList.remove('open');
+    closeCannedModal();
     toast('Réponse type supprimée.');
     await loadCanned();
   } catch (error) {
