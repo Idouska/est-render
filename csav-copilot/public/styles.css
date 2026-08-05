@@ -3808,3 +3808,8 @@ textarea:focus-visible {
 @media (max-width: 700px) {
   .qbar input[type='search'] { min-width: 100%; }
 }
+
+/* Un libellé peint par Gmail garde ses couleurs telles quelles ; seul le
+   contour intérieur cède, sinon il ternit une teinte choisie exprès. */
+.tag-label[style] { font-weight: 600; }
+.tag-label[style]::before { background: currentColor; opacity: 0.45; }

@@ -205,6 +205,45 @@ document.getElementById('side-fold')?.addEventListener('click', () => {
 
 applySideFold();
 
+/**
+ * Couleurs des libellés, telles que Gmail les connaît.
+ *
+ * Chargées une fois : elles ne changent qu'au rythme où l'on repeint ses
+ * étiquettes, alors que la file se recharge toutes les minutes.
+ */
+let labelStyles = {};
+
+async function loadLabelStyles() {
+  try {
+    const data = await api('/api/labels');
+    labelStyles = data.labels ?? {};
+  } catch {
+    // Sans couleurs, les étiquettes restent grises : lisibles, simplement
+    // moins reconnaissables.
+    labelStyles = {};
+  }
+}
+
+/**
+ * Étiquette d'un libellé, peinte comme dans Gmail.
+ *
+ * Un libellé imbriqué — « Administratif/Factures » — n'affiche que sa feuille :
+ * le chemin complet triple la largeur de la puce pour redire un classement que
+ * l'agent connaît déjà. Le chemin reste dans l'infobulle.
+ */
+function labelChip(name) {
+  const style = labelStyles[name];
+  const leaf = name.includes('/') ? name.slice(name.lastIndexOf('/') + 1) : name;
+
+  const paint = style?.background
+    ? ` style="background:${esc(style.background)};color:${esc(
+        style.text ?? '#000000',
+      )};box-shadow:none"`
+    : '';
+
+  return `<span class="tag tag-label" title="${esc(name)}"${paint}>${esc(leaf)}</span>`;
+}
+
 function renderMe() {
   const me = state.me;
   const shop = me.merchant.shopDomain ?? '';
@@ -1250,7 +1289,14 @@ async function loadAgents() {
   const labelSelect = $('q-label');
   labelSelect.innerHTML =
     '<option value="">Tous</option>' +
-    labels.map((name) => `<option value="${esc(name)}">${esc(name)}</option>`).join('');
+    labels
+      .map(
+        (name) =>
+          `<option value="${esc(name)}">${esc(
+            name.includes('/') ? name.slice(name.lastIndexOf('/') + 1) : name,
+          )}</option>`,
+      )
+      .join('');
   labelSelect.value = state.queue.label;
   labelSelect.closest('label').hidden = labels.length === 0;
 
@@ -4422,9 +4468,7 @@ function renderDiagnosis(report) {
   if (Array.isArray(report.labels)) {
     lines.push(
       report.labels.length > 0
-        ? `Libellés Gmail vus : ${report.labels
-            .map((name) => `<span class="tag tag-label">${esc(name)}</span>`)
-            .join(' ')}`
+        ? `Libellés Gmail vus : ${report.labels.map(labelChip).join(' ')}`
         : '<b class="set-alert">Aucun libellé personnel dans cette boîte.</b> ' +
           'Les catégories de Google (Promotions, Réseaux sociaux…) ne comptent pas : ' +
           'seules vos propres étiquettes sont reprises.',
@@ -5085,6 +5129,10 @@ async function boot() {
 
   $('gate').hidden = true;
   $('app').hidden = false;
+
+  // Sans attendre : les couleurs enrichissent l'affichage, elles ne le
+  // conditionnent pas. Un Gmail lent ne doit pas retarder l'ouverture.
+  void loadLabelStyles();
 
   // Mémorisé pour l'écran de session expirée, sur cet appareil uniquement.
   if (state.me.merchant.shopDomain) {

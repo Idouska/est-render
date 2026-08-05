@@ -14,8 +14,17 @@ import type { gmail_v1 } from 'googleapis';
  * système.
  */
 
+/** Un libellé tel que Gmail le décrit : son nom et ses couleurs. */
+export interface GmailLabel {
+  name: string;
+  /** Fond, en hexadécimal. Absent quand l'utilisateur n'a pas choisi de couleur. */
+  background: string | null;
+  text: string | null;
+}
+
 interface CacheEntry {
   names: Map<string, string>;
+  labels: Map<string, GmailLabel>;
   at: number;
 }
 
@@ -32,6 +41,7 @@ export async function loadLabelNames(
   if (cached && Date.now() - cached.at < TTL) return cached.names;
 
   const names = new Map<string, string>();
+  const labels = new Map<string, GmailLabel>();
 
   try {
     const { data } = await gmail.users.labels.list({ userId: 'me' });
@@ -41,6 +51,15 @@ export async function loadLabelNames(
       // marchand a créé, par opposition à ce que Google impose.
       if (label.type !== 'user' || !label.id || !label.name) continue;
       names.set(label.id, label.name);
+      labels.set(label.name, {
+        name: label.name,
+        // Les couleurs viennent de Gmail, pas d'une palette inventée ici :
+        // un agent qui a peint « Chargeback » en rouge dans sa boîte doit
+        // retrouver ce rouge, sinon il relit chaque étiquette au lieu de la
+        // reconnaître.
+        background: label.color?.backgroundColor ?? null,
+        text: label.color?.textColor ?? null,
+      });
     }
   } catch {
     // Sans la table, on n'affiche pas de libellés — mieux que d'afficher des
@@ -48,8 +67,17 @@ export async function loadLabelNames(
     return cached?.names ?? names;
   }
 
-  cache.set(mailboxId, { names, at: Date.now() });
+  cache.set(mailboxId, { names, labels, at: Date.now() });
   return names;
+}
+
+/** Les mêmes libellés, avec leurs couleurs, indexés par nom. */
+export async function loadLabelStyles(
+  gmail: gmail_v1.Gmail,
+  mailboxId: string,
+): Promise<Map<string, GmailLabel>> {
+  await loadLabelNames(gmail, mailboxId);
+  return cache.get(mailboxId)?.labels ?? new Map();
 }
 
 /** Traduit les identifiants d'un message en noms lisibles. */

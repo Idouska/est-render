@@ -7,7 +7,7 @@ import { prisma } from "../lib/prisma.ts";
 import { PREVIEW_COOKIE, requirePermission, requireSession } from "../plugins/auth.ts";
 import { backfillMailbox, backfillProgress } from "../services/gmail/backfill.ts";
 import { createOAuthClient, getGmailClient } from "../services/gmail/client.ts";
-import { loadLabelNames } from "../services/gmail/labels.ts";
+import { loadLabelNames, loadLabelStyles } from "../services/gmail/labels.ts";
 import { importMailboxHistory } from "../services/gmail/importHistory.ts";
 import { stopWatch } from "../services/gmail/watch.ts";
 import { ingestMerchantInbox } from "../services/tickets/ingest.ts";
@@ -545,6 +545,44 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
       }
     },
   );
+
+  /**
+   * Libellés du marchand avec leurs couleurs Gmail.
+   *
+   * Servi à part de la file : les couleurs viennent de Gmail et ne changent
+   * qu'au rythme où l'on repeint ses étiquettes, alors que la file se recharge
+   * toutes les minutes. Les transporter à chaque page serait payer cher une
+   * information immobile.
+   */
+  app.get("/api/labels", async (request, reply) => {
+    const { merchantId } = request.session;
+
+    const mailboxes = await prisma.gmailConnection.findMany({
+      where: { merchantId },
+      select: { id: true },
+      orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
+    });
+
+    const styles: Record<string, { background: string | null; text: string | null }> = {};
+
+    for (const mailbox of mailboxes) {
+      try {
+        const { gmail } = await getGmailClient(merchantId, mailbox.id);
+        const labels = await loadLabelStyles(gmail, mailbox.id);
+
+        for (const [name, label] of labels) {
+          // Première boîte gagnante : deux adresses peuvent porter une
+          // étiquette de même nom peinte différemment, et une couleur qui
+          // change selon la provenance du ticket n'apprend plus rien.
+          styles[name] ??= { background: label.background, text: label.text };
+        }
+      } catch {
+        // Une boîte muette ne prive pas les autres de leurs couleurs.
+      }
+    }
+
+    return reply.send({ labels: styles });
+  });
 
   /** Avancement d'un rattrapage en cours. */
   app.get<{ Params: { id: string } }>(
