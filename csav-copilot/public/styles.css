@@ -3448,8 +3448,14 @@ textarea:focus-visible {
 /* 248 px de navigation permanente, c'est une colonne de tickets en moins sur
    un portable. Repliée, elle garde ses icônes — la position reste lisible —
    et rend la largeur au travail. */
-.app { grid-template-columns: 224px 1fr; transition: grid-template-columns 0.22s var(--ease); }
-.app.folded { grid-template-columns: 62px 1fr; }
+/* Bornée au grand écran. Sans cette borne, la règle — écrite après le bloc
+   responsive — rétablissait une colonne de 224 px sur mobile, où la barre est
+   pourtant un tiroir : la page débordait de la largeur de la navigation, et le
+   défaut se voyait sur tous les écrans à la fois. */
+@media (min-width: 1081px) {
+  .app { grid-template-columns: 224px 1fr; transition: grid-template-columns 0.22s var(--ease); }
+  .app.folded { grid-template-columns: 62px 1fr; }
+}
 
 .side { padding: 12px 10px; position: relative; }
 
@@ -4002,4 +4008,114 @@ textarea:focus-visible {
   .ordv-total { font-size: 18px; }
   .ordv-item { grid-template-columns: 38px minmax(0, 1fr) auto; gap: 9px; }
   .ordv-item img, .ordv-noimg { width: 38px; height: 38px; }
+}
+
+/* ==========================================================================
+   CARNETS : COMMANDES, CLIENTS, CATALOGUE
+   ========================================================================== */
+
+/* Les barres de recherche des carnets parlent la même langue que celle de la
+   file : même hauteur, même loupe, même relief. Trois écrans qui font le même
+   geste ne doivent pas avoir trois apparences. */
+.browse-bar { padding: 10px 12px; }
+
+.browse-bar input[type='search'] {
+  padding: 9px 12px 9px 34px;
+  font-size: 13.5px;
+  background:
+    var(--inset)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23838aa0' stroke-width='1.5' stroke-linecap='round'%3E%3Ccircle cx='7' cy='7' r='4.6'/%3E%3Cpath d='m10.5 10.5 3 3'/%3E%3C/svg%3E")
+    no-repeat 11px 50% / 15px 15px;
+}
+
+/* Une ligne cliquable doit le dire avant le clic. */
+.grid-row { cursor: pointer; transition: background 0.12s ease; }
+.grid-row:hover { background: var(--inset); }
+
+.grid td { padding: 10px 13px; }
+.grid th { padding: 9px 13px; font-size: 10.5px; letter-spacing: 0.07em; }
+
+/* ------------------------------------------------------------- au doigt --- */
+
+@media (max-width: 760px) {
+  /* Sept colonnes sur 390 pixels ne se lisent pas : on perd la colonne de
+     gauche au premier défilement latéral et l'on ne sait plus de quelle ligne
+     vient la valeur qu'on regarde. Chaque ligne devient une fiche. */
+  .table-wrap { max-height: none; overflow: visible; border: 0; background: none; box-shadow: none; }
+
+  .grid thead { display: none; }
+  .grid, .grid tbody, .grid tr, .grid td { display: block; width: 100%; }
+
+  .grid tr {
+    margin-bottom: 9px;
+    padding: 4px 2px;
+    border-radius: var(--r-lg);
+    border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+    background-image: var(--grad-surface);
+    box-shadow: var(--e1), var(--edge);
+  }
+
+  .grid td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 7px 12px;
+    text-align: right;
+    border: 0;
+  }
+
+  .grid td + td { border-top: 1px solid var(--line-soft); }
+
+  /* L'intitulé recopié de l'en-tête tient la gauche : sans lui, une fiche
+     n'est qu'une pile de valeurs sans nom. */
+  .grid td::before {
+    content: attr(data-label);
+    flex: none;
+    text-align: left;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+  }
+
+  /* Une cellule sans intitulé — la colonne d'actions — reprend toute la
+     largeur plutôt que de laisser un vide à gauche. */
+  .grid td:not([data-label])::before { display: none; }
+  .grid td:not([data-label]) { justify-content: flex-end; }
+
+  .grid td.num { text-align: right; }
+
+  /* La première cellule fait le titre de la fiche. */
+  .grid td:first-child {
+    font-size: 14px;
+    font-weight: 600;
+    padding-top: 10px;
+  }
+
+  .grid td:first-child::before { display: none; }
+  .grid td:first-child { justify-content: flex-start; }
+}
+
+@media (max-width: 760px) {
+  /* Les menus des carnets prenaient leur largeur naturelle — celle du plus
+     long intitulé, « Commande la plus récente » — et poussaient la page de
+     cent dix pixels hors de l'écran. Chacun tient sa colonne, deux par ligne. */
+  .browse .qbar-selects {
+    display: grid;
+    /* Deux colonnes fixes, pas `auto-fit` : celui-ci calcule d'après la
+       largeur intrinsèque du contenu, et un menu contenant « Commande la plus
+       récente » réclame alors deux cents pixels que l'écran n'a pas. */
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .browse .qbar-selects label { display: grid; gap: 4px; min-width: 0; }
+  .browse .qbar-selects select { width: 100%; min-width: 0; }
+
+  /* La barre d'outils de l'en-tête débordait aussi : les boutons passent à la
+     ligne au lieu de pousser. */
+  .head-tools { flex-wrap: wrap; }
+  .head-acts { flex-wrap: wrap; }
 }

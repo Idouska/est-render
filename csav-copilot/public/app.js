@@ -5897,3 +5897,49 @@ document.addEventListener('click', (event) => {
   if (!button || button.closest('#tracking-rows')) return;
   void openTracking(button.dataset.track, button.dataset.trackUrl ?? null);
 });
+
+/* ==========================================================================
+   TABLEAUX LISIBLES AU DOIGT
+   ==========================================================================
+
+   Un tableau de sept colonnes sur un écran de 390 pixels ne se lit pas : il
+   défile latéralement, on perd la colonne de gauche, et l'on ne sait plus de
+   quelle ligne vient la valeur qu'on regarde. La solution connue est de le
+   replier en fiches, chaque cellule précédée de son intitulé.
+
+   Encore faut-il que la cellule connaisse son intitulé. Plutôt que de le
+   réécrire dans les neuf fonctions de rendu — neuf occasions d'oublier, et
+   neuf endroits à corriger le jour où une colonne bouge —, on le recopie
+   depuis l'en-tête après chaque rendu. Un observateur suffit, et il vaut aussi
+   pour les tableaux qui n'existent pas encore. */
+
+function stampCellLabels(tbody) {
+  const table = tbody.closest('table');
+  const heads = [...(table?.querySelectorAll('thead th') ?? [])].map((th) =>
+    th.textContent.trim(),
+  );
+  if (heads.length === 0) return;
+
+  for (const row of tbody.rows) {
+    // Les lignes de message — « aucun résultat », « chargement » — occupent
+    // toute la largeur et n'ont pas d'intitulé à porter.
+    if (row.cells.length !== heads.length) continue;
+
+    for (const [index, cell] of [...row.cells].entries()) {
+      const label = heads[index];
+      if (label) cell.dataset.label = label;
+    }
+  }
+}
+
+const tableWatcher = new MutationObserver((records) => {
+  for (const record of records) {
+    const target = record.target;
+    if (target instanceof HTMLElement && target.tagName === 'TBODY') stampCellLabels(target);
+  }
+});
+
+for (const tbody of document.querySelectorAll('.grid tbody')) {
+  stampCellLabels(tbody);
+  tableWatcher.observe(tbody, { childList: true });
+}
