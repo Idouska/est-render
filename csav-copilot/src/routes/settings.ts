@@ -440,14 +440,21 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
         report.tokenValid = true;
         report.totalMessages = profile.messagesTotal ?? null;
 
+        // `-from:me` écarte ce que la boutique a elle-même envoyé, que
+        // l'ingestion ignore délibérément. Sans cette exclusion, le rapport
+        // comptait comme « absents » des messages qui n'ont jamais eu vocation
+        // à entrer — et annonçait une panne là où il n'y avait qu'une règle.
         const { data: list } = await gmail.users.messages.list({
           userId: "me",
-          q: "in:inbox newer_than:7d",
-          maxResults: 25,
+          q: "in:inbox newer_than:7d -from:me",
+          // Cent plutôt que vingt-cinq : à vingt-cinq, le compte butait sur le
+          // plafond et se lisait comme un total alors qu'il était une troncature.
+          maxResults: 100,
         });
 
         const ids = (list.messages ?? []).map((m) => m.id!).filter(Boolean);
         report.inboxLast7Days = ids.length;
+        report.truncated = ids.length >= 100;
 
         // Combien de ces messages sont déjà en base : l'écart entre les deux
         // est exactement ce qui manque à la file.

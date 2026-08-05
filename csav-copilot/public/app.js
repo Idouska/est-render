@@ -4263,7 +4263,8 @@ function renderDiagnosis(report) {
 
   lines.push(
     `Boîte lisible · ${report.totalMessages ?? '—'} messages au total, ` +
-      `${report.inboxLast7Days} reçus dans les 7 derniers jours.`,
+      `${report.inboxLast7Days}${report.truncated ? ' ou plus' : ''} reçus de tiers ` +
+      'dans les 7 derniers jours.',
   );
 
   if (report.missing > 0) {
