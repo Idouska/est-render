@@ -21,12 +21,45 @@ export interface GenerationContext {
   order: OrderSummary | null;
   /** Renseigné quand plusieurs commandes correspondent au client. */
   ambiguousOrders?: OrderSummary[];
+
+  /**
+   * Règles de la boutique : délais, retours, remboursements, douane.
+   *
+   * C'est ce qui distingue une réponse utile d'une politesse vague. Sans elles
+   * le modèle ne peut qu'esquiver, puisqu'il lui est interdit d'inventer un
+   * délai ou une condition.
+   */
+  playbook?: string | null;
+
+  /**
+   * Ce que la boutique sait déjà de ce client.
+   *
+   * Un huitième achat ne se traite pas comme un premier, et un client remboursé
+   * le mois dernier n'entend pas la même phrase.
+   */
+  history?: {
+    orders: number;
+    spent: string | null;
+    currency: string | null;
+    previousTickets: number;
+    refunds: number;
+  } | null;
+
+  /**
+   * Langue du message reçu, en code ISO. La réponse est rédigée dedans :
+   * répondre en français à un client de Portland est une faute.
+   */
+  language?: string | null;
 }
 
 const SYSTEM_PROMPT = `Tu rédiges des réponses de service après-vente pour une boutique en ligne.
 Tu écris à la place de l'équipe SAV ; un humain relit avant envoi.
 
-Style : français, vouvoiement, chaleureux mais bref. Pas de formule creuse
+Langue : réponds dans la langue du message du client, jamais dans une autre.
+Le champ « Langue détectée » te la donne ; en cas de doute, suis la langue du
+dernier message reçu. Emploie la forme de politesse usuelle de cette langue.
+
+Style : chaleureux mais bref. Pas de formule creuse
 ("Nous comprenons votre frustration"), pas d'emoji, pas de titre ni de puce
 sauf si le contenu l'exige vraiment. Trois à six phrases suffisent presque
 toujours.
@@ -40,6 +73,12 @@ Contraintes absolues :
   au client une précision (numéro de commande ou email utilisé à l'achat) au
   lieu de supposer laquelle.
 - Signe du nom de la boutique, sans inventer de prénom d'agent.
+- Les règles de la boutique, quand elles sont fournies, font autorité : cite
+  le délai ou la condition exacte plutôt que de rester vague. Si la question
+  porte sur un point qu'elles ne couvrent pas, dis qu'un collègue confirmera —
+  n'extrapole pas une règle voisine.
+- L'historique du client sert à ajuster le ton, pas à être récité : ne lui
+  annonce pas son nombre de commandes.
 
 Réponds en JSON, sans texte autour.`;
 
@@ -104,6 +143,28 @@ function formatOrder(order: OrderSummary): string {
 
 function buildContextBlock(context: GenerationContext): string {
   const parts = [`Boutique : ${context.merchantName}`, `Intention détectée : ${context.intent}`];
+
+  if (context.language) parts.push(`Langue détectée : ${context.language}`);
+
+  // Les règles passent avant la commande : elles conditionnent ce qu'on a le
+  // droit de promettre, la commande ne fait que décrire l'existant.
+  if (context.playbook?.trim()) {
+    parts.push(
+      `\n--- Règles de la boutique (font autorité) ---\n${context.playbook.trim()}`,
+    );
+  }
+
+  if (context.history) {
+    const { orders, spent, currency, previousTickets, refunds } = context.history;
+    parts.push(
+      `\n--- Ce client chez nous ---\n` +
+        `${orders} commande(s)` +
+        `${spent ? `, ${spent} ${currency ?? ''} au total` : ''}` +
+        `, ${previousTickets} échange(s) précédent(s) avec le SAV` +
+        `, ${refunds} remboursement(s).` +
+        `\nAdapte le ton, ne récite pas ces chiffres au client.`,
+    );
+  }
 
   if (context.order) {
     parts.push(`\n--- Données de commande (source de vérité) ---\n${formatOrder(context.order)}`);

@@ -57,6 +57,16 @@ model Merchant {
   logoData  Bytes?
   logoMime  String?
 
+  /// Règles de la boutique, injectées telles quelles dans le prompt : délais
+  /// d'expédition, politique de retour, conditions d'échange, délais de
+  /// remboursement. Sans elles l'IA rédige du texte poli mais vague, et l'agent
+  /// réécrit tout — c'est le premier levier de qualité des brouillons.
+  playbook String? @db.Text
+
+  /// Délai de première réponse visé, en heures. Sert à dater l'échéance d'un
+  /// ticket : l'ancienneté dit qu'il traîne, l'échéance dit s'il est en faute.
+  slaHours Int @default(24)
+
   /// Gabarit de lien de suivi, `{tracking}` remplacé par le numéro. Vide, on
   /// utilise le lien fourni par Shopify — qui manque chez certains
   /// transporteurs, d'où la possibilité de le forcer.
@@ -73,6 +83,7 @@ model Merchant {
   refunds             Refund[]
   auditLogs           AuditLog[]
   suppliers           Supplier[]
+  cannedReplies       CannedReply[]
   supplierEscalations SupplierEscalation[]
   parcels             Parcel[]
 
@@ -197,6 +208,17 @@ model Ticket {
   /// Boîte mail qui a reçu le message. Détermine d'où part la réponse.
   mailboxId String?
 
+  /// Langue détectée du client, en code ISO. La réponse est rédigée dedans :
+  /// répondre en français à un client de Portland est une faute, pas un détail.
+  language String?
+
+  /// Échéance de première réponse, calculée à l'arrivée depuis le SLA.
+  dueAt DateTime?
+
+  /// Remis en file à cette date. Un ticket en attente d'un fournisseur n'a
+  /// rien à faire en haut de la pile pendant trois jours.
+  snoozedUntil DateTime?
+
   lastMessageAt DateTime
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -214,6 +236,34 @@ model Ticket {
   @@index([merchantId, lastMessageAt])
   @@index([merchantId, assignedToId])
   @@index([merchantId, mailboxId])
+  @@index([merchantId, dueAt])
+}
+
+/// Réponse type.
+///
+/// Cinq questions font les deux tiers du volume d'un SAV : où est mon colis,
+/// mauvaise taille, délai douane, changement d'adresse, retour. Les rédiger à
+/// chaque fois, même assisté par une IA, est du temps perdu sur des cas dont
+/// la réponse ne change pas.
+model CannedReply {
+  id         String  @id @default(cuid())
+  merchantId String
+  title      String
+  /// Corps du message. `{{prenom}}`, `{{commande}}`, `{{suivi}}` et
+  /// `{{boutique}}` sont remplacés à l'insertion.
+  body       String  @db.Text
+  /// Motif auquel la réponse se rattache, pour la proposer en tête.
+  intent     Intent?
+  /// Nombre d'insertions : les plus utilisées remontent d'elles-mêmes.
+  useCount   Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@unique([merchantId, title])
+  @@index([merchantId, intent])
 }
 
 enum Intent {

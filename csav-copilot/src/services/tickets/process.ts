@@ -4,6 +4,7 @@ import { prisma } from '../../lib/prisma.ts';
 import { classifyEmail } from '../ai/classify.ts';
 import { describeActiveModel } from '../ai/factory.ts';
 import { generateReply, type GenerationContext } from '../ai/generate.ts';
+import { detectLanguage } from '../ai/language.ts';
 import { createReplyDraft } from '../gmail/drafts.ts';
 import { matchOrder } from '../matching/orderMatcher.ts';
 import { getShopifyClient } from '../shopify/client.ts';
@@ -94,8 +95,46 @@ export async function processTicket(merchantId: string, ticketId: string): Promi
       },
     });
 
-    // 3. Génération
+    // 3. Ce que la boutique sait déjà de ce client, et dans quelle langue il
+    // écrit. Deux requêtes locales : le coût est négligeable devant l'appel au
+    // modèle, et l'écart de qualité de la réponse ne l'est pas.
+    const [previousTickets, refunds] = await Promise.all([
+      prisma.ticket.count({
+        where: {
+          merchantId,
+          customerEmail: ticket.customerEmail,
+          id: { not: ticket.id },
+        },
+      }),
+      prisma.refund.count({
+        where: { merchantId, ticket: { customerEmail: ticket.customerEmail } },
+      }),
+    ]);
+
+    const language = detectLanguage(lastInbound.bodyText, lastInbound.subject);
+
+    await prisma.ticket.update({
+      where: { id: ticket.id },
+      data: {
+        language,
+        // Échéance de première réponse : l'ancienneté dit qu'un ticket traîne,
+        // l'échéance dit s'il est en faute.
+        dueAt: new Date(
+          lastInbound.receivedAt.getTime() + ticket.merchant.slaHours * 60 * 60 * 1000,
+        ),
+      },
+    });
+
     const context: GenerationContext = {
+      playbook: ticket.merchant.playbook,
+      language,
+      history: {
+        orders: order ? (order.customer?.numberOfOrders ?? 1) : 0,
+        spent: order?.customer?.amountSpent ?? null,
+        currency: order?.currency ?? null,
+        previousTickets,
+        refunds,
+      },
       merchantName: ticket.merchant.name ?? ticket.merchant.shopDomain,
       intent: classification.intent,
       customerName: ticket.customerName,

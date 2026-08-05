@@ -29,6 +29,8 @@ const state = {
   },
   queueCounts: {},
   agents: [],
+  canned: [],
+  editingCanned: null,
   catalog: { items: [], cursor: null, hasNext: false, q: '', kind: 'products', loading: false, loaded: false, timer: null },
   editingUser: null,
   refundRows: [],
@@ -1308,6 +1310,7 @@ function renderDetail() {
   });
 
   renderActionBar();
+  renderCannedChips();
 
   // Ticket d'une autre boutique en mode agrégé : consultable, pas traitable.
   // Griser les actions sans le dire donnerait l'impression d'une panne.
@@ -2704,6 +2707,7 @@ const VIEW_META = {
   refunds: { icon: 'euro', label: 'Remboursements', group: 'Finance', title: 'Remboursements' },
   disputes: { icon: 'shield', label: 'Litiges Shopify', group: 'Finance', title: 'Litiges Shopify' },
   team: { icon: 'users', label: 'Équipe & rôles', group: 'Plateforme', title: 'Équipe & rôles' },
+  canned: { icon: 'inbox', label: 'Réponses types', group: 'Plateforme', title: 'Réponses types' },
   palettes: { icon: 'swatch', label: 'Palettes', group: 'Plateforme', title: 'Apparence' },
   settings: { icon: 'gear', label: 'Réglages', group: 'Plateforme', title: 'Réglages' },
 };
@@ -2845,6 +2849,7 @@ const VIEW_LOADERS = {
   team: () => loadTeam(),
   stats: () => loadStats(),
   palettes: () => renderPalettes(),
+  canned: () => loadCanned(),
   settings: () => openSettings(),
 };
 
@@ -3341,6 +3346,8 @@ function renderSettings() {
     );
 
   $('set-brand').value = merchant.brandName ?? '';
+  $('set-playbook').value = merchant.playbook ?? '';
+  $('set-sla').value = String(merchant.slaHours ?? 24);
   renderLogoPreview(merchant);
   $('set-logo').value = merchant.logoUrl ?? '';
   $('set-tracking').value = merchant.trackingUrlTemplate ?? '';
@@ -3365,6 +3372,8 @@ const SETTINGS_FIELDS = [
   'set-autosend',
   'set-threshold',
   'set-retention',
+  'set-playbook',
+  'set-sla',
 ];
 
 function markSettingsDirty() {
@@ -3387,6 +3396,8 @@ $('set-save').addEventListener('click', async () => {
       method: 'PATCH',
       body: JSON.stringify({
         brandName: $('set-brand').value.trim() || null,
+        playbook: $('set-playbook').value.trim() || null,
+        slaHours: Number($('set-sla').value),
         logoUrl: $('set-logo').value.trim() || null,
         trackingUrlTemplate: $('set-tracking').value.trim() || null,
         autoSendEnabled: $('set-autosend').checked,
@@ -3742,6 +3753,191 @@ async function patchMailbox(id, body) {
     toast(error.message, true);
   }
 }
+
+/* --------------------------------------------------------- réponses types */
+
+/**
+ * Réponses types.
+ *
+ * Cinq questions font les deux tiers du volume : où est mon colis, mauvaise
+ * taille, douane, changement d'adresse, retour. Faire rédiger l'IA à chaque
+ * fois pour un texte inchangé depuis six mois coûte du temps et de l'argent —
+ * et l'agent relit quand même.
+ */
+async function loadCanned() {
+  const data = await api('/api/canned-replies');
+  state.canned = data.replies ?? [];
+  renderCanned();
+  renderCannedChips();
+}
+
+function renderCanned() {
+  $('canned-count').textContent = state.canned.length
+    ? `${state.canned.length} réponse${state.canned.length > 1 ? 's' : ''} type${
+        state.canned.length > 1 ? 's' : ''
+      }`
+    : '';
+
+  $('canned-list').innerHTML = state.canned.length
+    ? state.canned
+        .map(
+          (item) => `<article class="dsp" data-canned="${esc(item.id)}" style="cursor:pointer">
+            <div class="dsp-head">
+              <b>${esc(item.title)}</b>
+              ${
+                item.intent
+                  ? `<span class="tag in-${item.intent}">${esc(
+                      INTENT_LABELS[item.intent] ?? item.intent,
+                    )}</span>`
+                  : '<span class="tag tag-order">tous motifs</span>'
+              }
+              <span class="dsp-amount mono">${item.useCount} ×</span>
+            </div>
+            <div class="dsp-reason">${esc(item.body.slice(0, 220))}${
+              item.body.length > 220 ? '…' : ''
+            }</div>
+          </article>`,
+        )
+        .join('')
+    : `<p class="empty">
+         Aucune réponse type. Commencez par les cinq questions qui reviennent :
+         où est ma commande, mauvaise taille, frais de douane, changement
+         d'adresse, retour.
+       </p>`;
+
+  $('canned-list')
+    .querySelectorAll('[data-canned]')
+    .forEach((card) =>
+      card.addEventListener('click', () => openCannedForm(card.dataset.canned)),
+    );
+}
+
+function openCannedForm(id) {
+  const item = id ? state.canned.find((candidate) => candidate.id === id) : null;
+  state.editingCanned = item?.id ?? null;
+
+  $('canned-title').textContent = item ? item.title : 'Nouvelle réponse type';
+  $('canned-f-title').value = item?.title ?? '';
+  $('canned-f-body').value = item?.body ?? '';
+
+  $('canned-f-intent').innerHTML =
+    '<option value="">Tous les motifs</option>' +
+    Object.entries(INTENT_LABELS)
+      .map(
+        ([key, label]) =>
+          `<option value="${key}"${key === item?.intent ? ' selected' : ''}>${esc(label)}</option>`,
+      )
+      .join('');
+
+  $('canned-f-delete').hidden = !item;
+  $('canned-modal').classList.add('open');
+}
+
+$('canned-new').addEventListener('click', () => openCannedForm(null));
+$('canned-f-cancel').addEventListener('click', () => $('canned-modal').classList.remove('open'));
+
+$('canned-modal').addEventListener('click', (event) => {
+  if (event.target === $('canned-modal')) $('canned-modal').classList.remove('open');
+});
+
+$('canned-f-save').addEventListener('click', async () => {
+  const payload = {
+    title: $('canned-f-title').value.trim(),
+    body: $('canned-f-body').value.trim(),
+    intent: $('canned-f-intent').value || null,
+  };
+
+  if (!payload.title || !payload.body) {
+    toast('Un titre et un message sont nécessaires.', true);
+    return;
+  }
+
+  try {
+    if (state.editingCanned) {
+      await api(`/api/canned-replies/${state.editingCanned}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      });
+    } else {
+      await api('/api/canned-replies', { method: 'POST', body: JSON.stringify(payload) });
+    }
+
+    $('canned-modal').classList.remove('open');
+    toast('Réponse type enregistrée.');
+    await loadCanned();
+  } catch (error) {
+    toast(error.message, true);
+  }
+});
+
+$('canned-f-delete').addEventListener('click', async () => {
+  if (!state.editingCanned) return;
+  if (!confirm('Supprimer cette réponse type ?')) return;
+
+  try {
+    await api(`/api/canned-replies/${state.editingCanned}`, { method: 'DELETE' });
+    $('canned-modal').classList.remove('open');
+    toast('Réponse type supprimée.');
+    await loadCanned();
+  } catch (error) {
+    toast(error.message, true);
+  }
+});
+
+/** Puces d'insertion au-dessus du brouillon, motif du ticket en tête. */
+function renderCannedChips() {
+  const ticket = state.detail?.ticket;
+  const bar = $('canned-bar');
+
+  if (!ticket || state.canned.length === 0) {
+    bar.hidden = true;
+    return;
+  }
+
+  const sorted = [...state.canned].sort((a, b) => {
+    const matchA = a.intent === ticket.intent ? 1 : 0;
+    const matchB = b.intent === ticket.intent ? 1 : 0;
+    return matchB - matchA || b.useCount - a.useCount;
+  });
+
+  bar.hidden = false;
+  $('canned-chips').innerHTML = sorted
+    .slice(0, 6)
+    .map(
+      (item) => `<button class="qchip" data-insert="${esc(item.id)}"${
+        item.intent === ticket.intent ? ' aria-pressed="true"' : ''
+      }>${esc(item.title)}</button>`,
+    )
+    .join('');
+}
+
+$('canned-chips').addEventListener('click', async (event) => {
+  const button = event.target.closest('[data-insert]');
+  if (!button) return;
+
+  const item = state.canned.find((candidate) => candidate.id === button.dataset.insert);
+  const ticket = state.detail?.ticket;
+  if (!item || !ticket) return;
+
+  const order = state.detail?.order;
+
+  // Variables résolues à l'insertion : un modèle qui laisse « {{prenom}} »
+  // dans le texte envoyé est pire que pas de modèle du tout.
+  const filled = item.body
+    .replaceAll('{{prenom}}', (ticket.customerName ?? '').split(' ')[0] ?? '')
+    .replaceAll('{{commande}}', ticket.orderName ?? '')
+    .replaceAll('{{suivi}}', order?.fulfillments?.[0]?.trackingNumber ?? '')
+    .replaceAll('{{boutique}}', state.me?.merchant?.brandName ?? state.me?.merchant?.name ?? '');
+
+  const body = $('d-body');
+  body.value = body.value.trim() ? `${body.value.trim()}\n\n${filled}` : filled;
+  body.focus();
+
+  // Le compteur classe la liste : les réponses les plus utilisées remontent
+  // sans que personne n'ait à ranger.
+  await api(`/api/canned-replies/${item.id}/used`, { method: 'POST' }).catch(() => {});
+  toast('Réponse insérée — à relire avant envoi.');
+});
 
 /* ------------------------------------------------------ identité de marque */
 

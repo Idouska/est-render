@@ -33,6 +33,8 @@ const patchBody = z
      */
     logo: photoSchema.nullish(),
     trackingUrlTemplate: z.string().max(300).nullish(),
+    playbook: z.string().max(8000).nullish(),
+    slaHours: z.number().int().min(1).max(240).optional(),
     autoSendEnabled: z.boolean().optional(),
     // Un seuil sous 0,5 reviendrait à envoyer des réponses que le modèle
     // lui-même juge douteuses. Le plancher est volontairement haut.
@@ -121,6 +123,8 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
         hasLogo: Boolean(merchant.logoMime),
         logoUpdatedAt: merchant.updatedAt,
         trackingUrlTemplate: merchant.trackingUrlTemplate,
+        playbook: merchant.playbook,
+        slaHours: merchant.slaHours,
         shopDomain: merchant.shopDomain,
         status: merchant.status,
         autoSendEnabled: merchant.autoSendEnabled,
@@ -362,6 +366,8 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
           hasLogo: Boolean(merchant.logoMime),
           logoUpdatedAt: merchant.updatedAt,
           trackingUrlTemplate: merchant.trackingUrlTemplate,
+        playbook: merchant.playbook,
+        slaHours: merchant.slaHours,
           shopDomain: merchant.shopDomain,
           status: merchant.status,
           autoSendEnabled: merchant.autoSendEnabled,

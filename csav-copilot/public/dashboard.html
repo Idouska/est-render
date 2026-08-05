@@ -227,6 +227,10 @@
                 <span class="conf-num" id="d-conf-num">—</span>
               </span>
             </div>
+            <div class="canned-bar" id="canned-bar" hidden>
+              <span class="panel-title">Réponses types</span>
+              <div id="canned-chips"></div>
+            </div>
             <textarea id="d-body" aria-label="Corps du brouillon"></textarea>
             <p class="reasoning"><span>Pourquoi</span><span id="d-reason"></span></p>
             <div class="actions">
@@ -542,6 +546,14 @@
         <div id="disputes-rows"></div>
       </section>
 
+      <section class="browse" id="view-canned" hidden aria-label="Réponses types">
+        <div class="browse-bar">
+          <span class="browse-count" id="canned-count"></span>
+          <button class="btn btn-small btn-primary" id="canned-new">Nouvelle réponse type</button>
+        </div>
+        <div id="canned-list"></div>
+      </section>
+
       <section class="browse" id="view-settings" hidden aria-label="Réglages">
         <div class="set-grid">
           <div class="panel">
@@ -622,15 +634,51 @@
           </div>
 
           <div class="panel">
+            <div class="panel-head"><span class="panel-title">Règles de la boutique</span></div>
+            <div class="card-body set-group">
+              <div class="field">
+                <label for="set-playbook">Ce que l'IA a le droit d'affirmer</label>
+                <textarea id="set-playbook" rows="9" placeholder="Délais d'expédition : 2 à 5 jours ouvrés vers la France, 7 à 12 jours hors UE.
+Retours : 30 jours après réception, article non porté, frais à la charge du client.
+Échange de taille : gratuit une fois, sous 30 jours.
+Remboursement : sous 5 jours ouvrés après réception du retour.
+Douane : les frais éventuels sont à la charge du destinataire hors UE."></textarea>
+                <small>
+                  Écrivez vos règles en clair, une par ligne. Elles sont données à l'IA
+                  comme source d'autorité : sans elles, elle ne peut que rester vague,
+                  puisqu'il lui est interdit d'inventer un délai ou une condition.
+                </small>
+              </div>
+              <div class="field">
+                <label for="set-sla">Délai de première réponse visé</label>
+                <select id="set-sla">
+                  <option value="4">4 heures</option>
+                  <option value="8">8 heures</option>
+                  <option value="24">24 heures</option>
+                  <option value="48">48 heures</option>
+                  <option value="72">72 heures</option>
+                </select>
+                <small>Fixe l'échéance de chaque ticket. Passée l'échéance, il apparaît en retard.</small>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
             <div class="panel-head"><span class="panel-title">Réponses automatiques</span></div>
             <div class="card-body set-group">
               <label class="confirm">
                 <input type="checkbox" id="set-autosend" />
                 <span>
                   <b>Envoyer sans relecture</b> les réponses dont la confiance dépasse le
-                  seuil ci-dessous. Désactivé, tout reste en brouillon.
+                  seuil ci-dessous.
                 </span>
               </label>
+              <p class="set-help set-alert" id="set-autosend-warn">
+                Pas encore actif : quel que soit ce réglage, toute réponse reste un
+                brouillon à valider. L'envoi sans relecture demande des garde-fous
+                — plafond quotidien, motifs autorisés, jamais sur un litige — qui
+                ne sont pas en place.
+              </p>
               <div class="field">
                 <label for="set-threshold">Seuil de confiance</label>
                 <input type="range" id="set-threshold" min="0.5" max="1" step="0.01" />
@@ -910,6 +958,42 @@
         <div class="modal-foot">
           <button class="btn" id="r-cancel">Annuler</button>
           <button class="btn btn-primary" id="r-go" disabled>Rembourser</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-wrap" id="canned-modal">
+      <div class="modal modal-wide">
+        <div class="modal-head">
+          <h2 id="canned-title">Réponse type</h2>
+          <p>Elle s'insère dans le brouillon en un clic, à relire avant envoi.</p>
+        </div>
+        <div class="modal-body">
+          <div class="field">
+            <label for="canned-f-title">Titre</label>
+            <input type="text" id="canned-f-title" placeholder="Où est ma commande" />
+          </div>
+          <div class="field">
+            <label for="canned-f-intent">Motif associé</label>
+            <select id="canned-f-intent">
+              <option value="">Tous les motifs</option>
+            </select>
+            <small>Proposée en tête quand le ticket porte ce motif.</small>
+          </div>
+          <div class="field">
+            <label for="canned-f-body">Message</label>
+            <textarea id="canned-f-body" rows="9"></textarea>
+            <small>
+              Variables remplacées à l'insertion :
+              <code>{{prenom}}</code>, <code>{{commande}}</code>,
+              <code>{{suivi}}</code>, <code>{{boutique}}</code>.
+            </small>
+          </div>
+        </div>
+        <div class="modal-foot modal-foot-wrap">
+          <button class="btn btn-danger" id="canned-f-delete" hidden>Supprimer</button>
+          <button class="btn" id="canned-f-cancel">Annuler</button>
+          <button class="btn btn-primary" id="canned-f-save">Enregistrer</button>
         </div>
       </div>
     </div>

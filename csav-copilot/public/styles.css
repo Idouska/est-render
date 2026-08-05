@@ -2040,3 +2040,14 @@ body {
   .sheet-row { align-items: flex-start; }
   .sheet-row .when { margin-left: 0; width: 100%; }
 }
+
+/* Puces de réponse type au-dessus du brouillon : à portée du curseur, pas
+   dans un menu à ouvrir. */
+.canned-bar {
+  padding: 10px 15px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.canned-bar #canned-chips { display: flex; gap: 6px; flex-wrap: wrap; }

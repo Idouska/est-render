@@ -12,6 +12,7 @@ import { adminRoutes } from './routes/admin.ts';
 import { commerceRoutes } from './routes/commerce.ts';
 import { devRoutes } from './routes/dev.ts';
 import { refundRoutes } from './routes/refunds.ts';
+import { cannedReplyRoutes } from './routes/cannedReplies.ts';
 import { parcelRoutes } from './routes/parcels.ts';
 import { settingsRoutes } from './routes/settings.ts';
 import { shopRoutes } from './routes/shops.ts';
@@ -92,6 +93,7 @@ export async function buildServer() {
   await app.register(ticketRoutes);
   await app.register(refundRoutes);
   await app.register(settingsRoutes);
+  await app.register(cannedReplyRoutes);
   await app.register(parcelRoutes);
   await app.register(shopRoutes);
   await app.register(commerceRoutes);

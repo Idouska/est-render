@@ -88,6 +88,14 @@ function buildTicketWhere(
             { customerEmail: { contains: term, mode: 'insensitive' as const } },
             { customerName: { contains: term, mode: 'insensitive' as const } },
             { orderName: { contains: term, mode: 'insensitive' as const } },
+            // Le corps des messages : chercher « semelle décollée » ne
+            // trouvait rien, alors que c'est ainsi qu'on repère un défaut de
+            // série.
+            {
+              messages: {
+                some: { bodyText: { contains: term, mode: 'insensitive' as const } },
+              },
+            },
           ],
         }
       : {}),
