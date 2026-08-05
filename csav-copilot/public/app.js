@@ -4445,8 +4445,15 @@ function backfillSummary(progress) {
 
   if (progress.ingested > 0) {
     parts.push(
-      `<b>${progress.ingested} nouveau${progress.ingested > 1 ? 'x' : ''}</b>, ` +
-        `${progress.tickets} ticket${progress.tickets > 1 ? 's' : ''} en file.`,
+      `<b>${progress.ingested} message${progress.ingested > 1 ? 's' : ''} ajouté${
+        progress.ingested > 1 ? 's' : ''
+      }</b> à la file.`,
+    );
+    parts.push(
+      progress.tickets > 0
+        ? `${progress.tickets} récent${progress.tickets > 1 ? 's' : ''} soumis à l’IA ; ` +
+          'les plus anciens entrent sans brouillon.'
+        : 'Aucun n’est assez récent pour appeler une réponse : ils entrent pour consultation.',
     );
   } else {
     parts.push('Aucun nouveau — tout ce courrier était déjà dans la file.');
@@ -4466,8 +4473,8 @@ function backfillSummary(progress) {
 
   if (progress.capped) {
     parts.push(
-      '<b class="set-alert">Plafond atteint</b> — il reste du courrier au-delà, ' +
-        'relancez pour continuer.',
+      '<b class="set-alert">Plafond atteint</b> — il reste du courrier au-delà. ' +
+        'Relancez : la reprise continue là où celle-ci s’est arrêtée.',
     );
   }
 

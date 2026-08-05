@@ -449,7 +449,7 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
         // à entrer — et annonçait une panne là où il n'y avait qu'une règle.
         const { data: list } = await gmail.users.messages.list({
           userId: "me",
-          q: "in:inbox newer_than:7d -from:me",
+          q: "newer_than:7d -from:me -in:spam -in:trash",
           // Cent plutôt que vingt-cinq : à vingt-cinq, le compte butait sur le
           // plafond et se lisait comme un total alors qu'il était une troncature.
           maxResults: 100,

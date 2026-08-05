@@ -22,6 +22,7 @@ import { parseMessage } from './messages.ts';
 export interface BackfillProgress {
   scanned: number;
   ingested: number;
+  /** Tickets récents soumis à l'IA. Les plus anciens entrent sans traitement. */
   tickets: number;
   /** Tickets déjà connus dont les libellés ont été mis à jour. */
   relabelled: number;
@@ -37,10 +38,16 @@ export async function backfillMailbox(params: {
   merchantId: string;
   mailboxId: string;
   days: number;
-  /** Plafond dur, pour ne pas transformer une erreur de saisie en facture. */
-  maxMessages?: number;
+  /**
+   * Plafond sur les messages *ingérés*, pas sur les messages examinés.
+   *
+   * L'inverse rendait les relances inutiles : le balayage recroisait les mêmes
+   * courriers déjà connus, épuisait son quota sur eux et s'arrêtait toujours au
+   * même point. On ne progressait jamais au-delà du premier lot.
+   */
+  maxIngested?: number;
 }): Promise<BackfillProgress> {
-  const { merchantId, mailboxId, days, maxMessages = 1500 } = params;
+  const { merchantId, mailboxId, days, maxIngested = 3000 } = params;
 
   const connection = await prisma.gmailConnection.findFirst({
     where: { id: mailboxId, merchantId },
@@ -61,6 +68,18 @@ export async function backfillMailbox(params: {
   };
   backfillProgress.set(mailboxId, progress);
 
+  // Tickets à soumettre à l'IA : seulement ceux dont le dernier message est
+  // récent.
+  //
+  // Trois mois d'archives, ce sont des milliers d'échanges dont la plupart sont
+  // clos depuis longtemps. Les faire tous rédiger coûterait une facture d'IA
+  // considérable pour produire des brouillons que personne n'enverra — on ne
+  // répond pas à un client qui écrivait il y a onze semaines. Le reste entre
+  // pour être consulté, ce qui est précisément ce qu'on demande à un
+  // rattrapage.
+  const AI_WINDOW_DAYS = 7;
+  const aiCutoff = new Date(Date.now() - AI_WINDOW_DAYS * 86_400_000);
+
   const touched = new Set<string>();
   let pageToken: string | undefined;
 
@@ -70,7 +89,10 @@ export async function backfillMailbox(params: {
         userId: 'me',
         // `-from:me` écarte ce que la boutique s'est envoyé : ce n'est pas une
         // demande client, et en faire un ticket créerait du travail fantôme.
-        q: `in:inbox newer_than:${days}d -from:me`,
+        // Toute la boîte, archivés compris : un mail traité puis rangé reste
+        // un échange client. Seuls le spam et la corbeille sont écartés — ce
+        // que le marchand a jeté n'a pas à revenir par une porte de service.
+        q: `newer_than:${days}d -from:me -in:spam -in:trash`,
         maxResults: 100,
         pageToken,
       });
@@ -146,19 +168,19 @@ export async function backfillMailbox(params: {
             },
           });
           progress.ingested += 1;
-          touched.add(ticket.id);
+          if (message.receivedAt >= aiCutoff) touched.add(ticket.id);
         } catch (error) {
           if ((error as { code?: string }).code !== 'P2002') throw error;
         }
 
-        if (progress.scanned >= maxMessages) {
+        if (progress.ingested >= maxIngested) {
           progress.capped = true;
           break;
         }
       }
 
       pageToken = data.nextPageToken ?? undefined;
-    } while (pageToken && progress.scanned < maxMessages);
+    } while (pageToken && progress.ingested < maxIngested);
 
     // Les libellés en dernier : c'est un confort, et il ne doit pas retarder
     // l'entrée du courrier dans la file.

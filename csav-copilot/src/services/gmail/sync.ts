@@ -52,7 +52,7 @@ export async function fetchRecentMessages(
     userId: 'me',
     // `-from:me` écarte ce que la boutique s'est envoyé : ce n'est pas du
     // courrier client, et le ramasser créerait des tickets sans demandeur.
-    q: `in:inbox newer_than:${days}d -from:me`,
+    q: `newer_than:${days}d -from:me -in:spam -in:trash`,
     maxResults: MAX_PER_RUN,
   });
 
