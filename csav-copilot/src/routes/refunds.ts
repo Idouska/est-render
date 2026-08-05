@@ -6,6 +6,7 @@ import { hmacSha256Hex, safeEqual } from '../lib/crypto.ts';
 import { logger } from '../lib/logger.ts';
 import { prisma } from '../lib/prisma.ts';
 import { requirePermission, requireSession } from '../plugins/auth.ts';
+import { fetchCommerceStats } from '../services/shopify/commerceStats.ts';
 import { fetchShopRefunds, type ShopRefund } from '../services/shopify/refundHistory.ts';
 import { getShopifyClient } from '../services/shopify/client.ts';
 import { createRefund, getRefundableTransactions } from '../services/shopify/refunds.ts';
@@ -176,15 +177,23 @@ export async function refundRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/refunds', async (request, reply) => {
     const { merchantId } = request.session;
 
+    // Fenêtre commune aux remboursements et au chiffre d'affaires : un ratio
+    // dont les deux termes ne couvrent pas la même période ne veut rien dire.
+    const window = z
+      .object({ days: z.coerce.number().int().min(7).max(365).default(90) })
+      .safeParse(request.query);
+    const days = window.success ? window.data.days : 90;
+    const since = new Date(Date.now() - days * 86_400_000);
+
     const [refunds, byStatus] = await Promise.all([
       prisma.refund.findMany({
-        where: { merchantId },
+        where: { merchantId, createdAt: { gte: since } },
         orderBy: { createdAt: 'desc' },
         take: 200,
       }),
       prisma.refund.groupBy({
         by: ['status'],
-        where: { merchantId },
+        where: { merchantId, createdAt: { gte: since } },
         _count: { _all: true },
         _sum: { amount: true },
       }),
@@ -208,13 +217,21 @@ export async function refundRoutes(app: FastifyInstance): Promise<void> {
      * leur motif, là où Shopify ne rend qu'un montant et une note.
      */
     let external: ShopRefund[] = [];
+    let revenue: number | null = null;
 
     try {
       const client = await getShopifyClient(merchantId);
       const known = new Set(refunds.map((refund) => refund.shopifyRefundId).filter(Boolean));
-      external = (await fetchShopRefunds(client, 180)).filter(
-        (refund) => !known.has(refund.id),
-      );
+
+      // Les deux appels partent ensemble : ils interrogent la même boutique sur
+      // la même fenêtre, les enchaîner doublerait l'attente pour rien.
+      const [shopRefunds, commerce] = await Promise.all([
+        fetchShopRefunds(client, days),
+        fetchCommerceStats(client, days),
+      ]);
+
+      external = shopRefunds.filter((refund) => !known.has(refund.id));
+      revenue = commerce.totals.revenue;
     } catch (error) {
       // Shopify muet ne doit pas vider l'écran de ce que l'outil sait déjà.
       request.log.warn({ err: error, merchantId }, 'Historique Shopify indisponible');
@@ -232,7 +249,27 @@ export async function refundRoutes(app: FastifyInstance): Promise<void> {
       amount: (totals.COMPLETED?.amount ?? 0) + externalSum,
     };
 
-    return reply.send({ refunds: merged, totals });
+    /*
+     * Part du chiffre d'affaires rendue.
+     *
+     * C'est le chiffre qui dit si le SAV coûte : un montant remboursé seul ne
+     * se juge pas — trente mille euros sur cent mille est une alarme, sur trois
+     * millions c'est du bruit. Nul quand Shopify n'a pas répondu, plutôt que
+     * zéro : un ratio à zéro se lirait comme une bonne nouvelle.
+     */
+    const refundedTotal = merged.reduce(
+      (sum, refund) => (refund.status === 'COMPLETED' ? sum + Number(refund.amount) : sum),
+      0,
+    );
+
+    return reply.send({
+      refunds: merged,
+      totals,
+      days,
+      revenue,
+      refundRate: revenue && revenue > 0 ? refundedTotal / revenue : null,
+      refundedTotal,
+    });
   });
 }
 

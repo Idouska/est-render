@@ -2959,12 +2959,22 @@ const REFUND_STATUS = {
 
 const REFUND_KIND = { FULL: 'Total', PARTIAL: 'Partiel', SHIPPING: 'Frais de port' };
 
+/** Fenêtre de l'écran Remboursements, commune au montant et au ratio. */
+let refundDays = 90;
+
 async function loadRefunds() {
   const body = $('refunds-rows');
   body.innerHTML = '<tr><td colspan="7" class="empty">Chargement…</td></tr>';
 
   try {
-    const { refunds, totals } = await api('/api/refunds');
+    const data = await api(`/api/refunds?days=${refundDays}`);
+    const { refunds, totals } = data;
+
+    $('refunds-range')
+      .querySelectorAll('button')
+      .forEach((button) =>
+        button.setAttribute('aria-pressed', String(Number(button.dataset.days) === refundDays)),
+      );
     state.refundRows = refunds;
 
     const pending = totals.PENDING ?? { count: 0, amount: 0 };
@@ -2972,20 +2982,38 @@ async function loadRefunds() {
     const failed = totals.FAILED ?? { count: 0, amount: 0 };
 
     $('refunds-kpis').innerHTML = [
-      ['En cours', euro(pending.amount), `${pending.count} demande${pending.count > 1 ? 's' : ''}`],
-      ['Effectués', euro(done.amount), `${done.count} remboursement${done.count > 1 ? 's' : ''}`],
-      ['En échec', String(failed.count), failed.count ? 'à reprendre à la main' : 'rien à reprendre'],
       [
-        'Total rendu',
-        euro(done.amount + pending.amount),
-        'effectués et engagés',
+        'Part du CA remboursée',
+        data.refundRate === null
+          ? '—'
+          : `${(data.refundRate * 100).toFixed(1).replace('.', ',')} %`,
+        data.revenue === null
+          ? 'chiffre d’affaires indisponible'
+          : `${euro(data.refundedTotal, 'EUR')} sur ${euro(data.revenue, 'EUR')}`,
+      ],
+      [
+        'Effectués',
+        euro(totals.COMPLETED?.amount ?? 0, 'EUR'),
+        `${totals.COMPLETED?.count ?? 0} remboursement${
+          (totals.COMPLETED?.count ?? 0) > 1 ? 's' : ''
+        }`,
+      ],
+      [
+        'En cours',
+        euro(totals.PENDING?.amount ?? 0, 'EUR'),
+        `${totals.PENDING?.count ?? 0} demande${(totals.PENDING?.count ?? 0) > 1 ? 's' : ''}`,
+      ],
+      [
+        'En échec',
+        totals.FAILED?.count ?? 0,
+        (totals.FAILED?.count ?? 0) > 0 ? 'à reprendre' : 'rien à reprendre',
       ],
     ]
       .map(
         ([label, value, note]) => `<div class="kpi">
-          <span class="kpi-label">${esc(label)}</span>
+          <span class="kpi-label">${esc(String(label))}</span>
           <span class="kpi-value">${esc(String(value))}</span>
-          <span class="kpi-note">${esc(note)}</span>
+          <span class="kpi-note">${esc(String(note))}</span>
         </div>`,
       )
       .join('');
@@ -6003,3 +6031,10 @@ for (const tbody of document.querySelectorAll('.grid tbody')) {
   stampCellLabels(tbody);
   tableWatcher.observe(tbody, { childList: true });
 }
+
+$('refunds-range')?.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-days]');
+  if (!button) return;
+  refundDays = Number(button.dataset.days);
+  void loadRefunds();
+});

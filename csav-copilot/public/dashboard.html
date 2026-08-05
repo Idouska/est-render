@@ -641,6 +641,16 @@
       </section>
 
       <section class="browse" id="view-refunds" hidden aria-label="Remboursements">
+        <!-- La période commande les deux termes du ratio : un montant remboursé
+             et un chiffre d'affaires qui ne couvrent pas la même fenêtre ne se
+             divisent pas. -->
+        <div class="stats-bar">
+          <div class="seg" id="refunds-range">
+            <button data-days="30">30 jours</button>
+            <button data-days="90" aria-pressed="true">90 jours</button>
+            <button data-days="180">6 mois</button>
+          </div>
+        </div>
         <div class="kpis" id="refunds-kpis"></div>
         <div class="browse-bar">
           <div class="filters" id="refunds-filters" style="padding: 0; border: 0">
