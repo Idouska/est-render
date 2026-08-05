@@ -15,7 +15,7 @@ import { processTicket } from './services/tickets/process.ts';
 const ingestWorker = new Worker<IngestJob>(
   QUEUE_INGEST,
   async (job) => {
-    await ingestMerchantInbox(job.data.merchantId);
+    await ingestMerchantInbox(job.data.merchantId, job.data.mailboxId);
   },
   { connection, concurrency: 5 },
 );

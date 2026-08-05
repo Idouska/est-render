@@ -114,6 +114,9 @@ export async function processTicket(merchantId: string, ticketId: string): Promi
     // 4. Brouillon Gmail
     const { draftId } = await createReplyDraft({
       merchantId,
+      // Le brouillon se crée dans la boîte qui a reçu le message : c'est
+      // l'adresse que le client connaît.
+      mailboxId: ticket.mailboxId,
       threadId: ticket.gmailThreadId,
       to: ticket.customerEmail,
       subject: ticket.subject ?? 'Votre demande',

@@ -63,7 +63,17 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
       where: { id: merchantId },
       include: {
         shopify: { select: { installedAt: true, uninstalledAt: true, scopes: true } },
-        gmail: { select: { emailAddress: true, watchExpiration: true, createdAt: true } },
+        mailboxes: {
+          orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+          select: {
+            id: true,
+            emailAddress: true,
+            label: true,
+            isDefault: true,
+            watchExpiration: true,
+            createdAt: true,
+          },
+        },
       },
     });
 
@@ -99,20 +109,126 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
           };
         })(),
         gmail: {
-          connected: Boolean(merchant.gmail),
+          connected: merchant.mailboxes.length > 0,
           simulated: env.GMAIL_MOCK,
-          emailAddress: merchant.gmail?.emailAddress ?? null,
-          connectedAt: merchant.gmail?.createdAt ?? null,
-          // Le watch expire au bout de 7 jours. Expiré, plus rien n'entre —
-          // sans la moindre erreur visible ailleurs.
-          watchExpiration: merchant.gmail?.watchExpiration ?? null,
-          watchActive: Boolean(
-            merchant.gmail?.watchExpiration && merchant.gmail.watchExpiration > new Date(),
-          ),
+          // Boîtes listées une à une : chacune a son propre watch, et une
+          // seule expirée suffit à faire disparaître silencieusement une
+          // partie du courrier.
+          mailboxes: merchant.mailboxes.map((mailbox) => ({
+            id: mailbox.id,
+            emailAddress: mailbox.emailAddress,
+            label: mailbox.label,
+            isDefault: mailbox.isDefault,
+            connectedAt: mailbox.createdAt,
+            watchExpiration: mailbox.watchExpiration,
+            watchActive: Boolean(mailbox.watchExpiration && mailbox.watchExpiration > new Date()),
+          })),
         },
       },
     });
   });
+
+  /**
+   * Réglages d'une boîte : libellé, boîte par défaut, débranchement.
+   *
+   * Débrancher n'efface pas les tickets reçus — la relation les laisse
+   * orphelins plutôt que de les emporter. Perdre l'historique du SAV parce
+   * qu'on retire une adresse serait une catastrophe silencieuse.
+   */
+  app.patch<{ Params: { id: string } }>(
+    '/api/mailboxes/:id',
+    { preHandler: requirePermission('configure') },
+    async (request, reply) => {
+      const parsed = z
+        .object({
+          label: z.string().max(60).nullish(),
+          isDefault: z.literal(true).optional(),
+        })
+        .safeParse(request.body);
+
+      if (!parsed.success) return reply.code(400).send({ error: 'Requête invalide' });
+
+      const { merchantId, userId } = request.session;
+
+      const mailbox = await prisma.gmailConnection.findFirst({
+        where: { id: request.params.id, merchantId },
+        select: { id: true, emailAddress: true },
+      });
+      if (!mailbox) return reply.code(404).send({ error: 'Boîte introuvable' });
+
+      // Une seule boîte par défaut : la désignation se fait en deux temps dans
+      // une transaction, sinon un échec laisserait la boutique sans aucune.
+      if (parsed.data.isDefault) {
+        await prisma.$transaction([
+          prisma.gmailConnection.updateMany({ where: { merchantId }, data: { isDefault: false } }),
+          prisma.gmailConnection.update({ where: { id: mailbox.id }, data: { isDefault: true } }),
+        ]);
+      }
+
+      if (parsed.data.label !== undefined) {
+        await prisma.gmailConnection.update({
+          where: { id: mailbox.id },
+          data: { label: parsed.data.label?.trim() || null },
+        });
+      }
+
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId: userId,
+        action: 'mailbox.updated',
+        targetType: 'GmailConnection',
+        targetId: mailbox.id,
+        metadata: { emailAddress: mailbox.emailAddress, ...parsed.data },
+        ipAddress: request.ip,
+      });
+
+      return reply.send({ ok: true });
+    },
+  );
+
+  app.delete<{ Params: { id: string } }>(
+    '/api/mailboxes/:id',
+    { preHandler: requirePermission('configure') },
+    async (request, reply) => {
+      const { merchantId, userId } = request.session;
+
+      const mailbox = await prisma.gmailConnection.findFirst({
+        where: { id: request.params.id, merchantId },
+        select: { id: true, emailAddress: true, isDefault: true },
+      });
+      if (!mailbox) return reply.code(404).send({ error: 'Boîte introuvable' });
+
+      const remaining = await prisma.gmailConnection.findFirst({
+        where: { merchantId, id: { not: mailbox.id } },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true },
+      });
+
+      // Débrancher la dernière boîte couperait toute entrée de courrier : on
+      // laisse faire, mais l'envoi automatique n'a plus de sens sans elle.
+      await prisma.$transaction([
+        prisma.gmailConnection.delete({ where: { id: mailbox.id } }),
+        ...(mailbox.isDefault && remaining
+          ? [prisma.gmailConnection.update({ where: { id: remaining.id }, data: { isDefault: true } })]
+          : []),
+        ...(remaining ? [] : [prisma.merchant.update({ where: { id: merchantId }, data: { autoSendEnabled: false } })]),
+      ]);
+
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId: userId,
+        action: 'mailbox.disconnected',
+        targetType: 'GmailConnection',
+        targetId: mailbox.id,
+        metadata: { emailAddress: mailbox.emailAddress },
+        ipAddress: request.ip,
+      });
+
+      return reply.send({ ok: true });
+    },
+  );
 
   app.patch('/api/settings', { preHandler: requirePermission('configure') }, async (request, reply) => {
     const parsed = patchBody.safeParse(request.body);
@@ -126,7 +242,7 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
     // l'activer tant que Gmail n'est pas connecté, sinon le réglage promet un
     // comportement que rien ne peut exécuter.
     if (parsed.data.autoSendEnabled === true) {
-      const gmail = await prisma.gmailConnection.findUnique({
+      const gmail = await prisma.gmailConnection.findFirst({
         where: { merchantId },
         select: { id: true },
       });

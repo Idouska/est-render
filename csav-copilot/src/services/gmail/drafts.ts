@@ -49,6 +49,8 @@ export function buildRawEmail(params: {
  */
 export async function createReplyDraft(params: {
   merchantId: string;
+  /** Boîte d'envoi. Nulle, on prend celle par défaut de la boutique. */
+  mailboxId?: string | null;
   threadId: string;
   to: string;
   subject: string;
@@ -60,7 +62,7 @@ export async function createReplyDraft(params: {
     return { draftId: `mock-draft-${Date.now()}` };
   }
 
-  const { gmail, emailAddress } = await getGmailClient(params.merchantId);
+  const { gmail, emailAddress } = await getGmailClient(params.merchantId, params.mailboxId);
 
   const subject = params.subject.toLowerCase().startsWith('re:')
     ? params.subject
@@ -91,6 +93,8 @@ export async function createReplyDraft(params: {
 
 export async function updateDraftBody(params: {
   merchantId: string;
+  /** Boîte d'envoi. Nulle, on prend celle par défaut de la boutique. */
+  mailboxId?: string | null;
   draftId: string;
   threadId: string;
   to: string;
@@ -99,7 +103,7 @@ export async function updateDraftBody(params: {
 }): Promise<void> {
   if (env.GMAIL_MOCK) return;
 
-  const { gmail, emailAddress } = await getGmailClient(params.merchantId);
+  const { gmail, emailAddress } = await getGmailClient(params.merchantId, params.mailboxId);
 
   await gmail.users.drafts.update({
     userId: 'me',
@@ -119,12 +123,18 @@ export async function updateDraftBody(params: {
 }
 
 /** Envoie un brouillon existant. Déclenché uniquement par une action humaine. */
-export async function sendDraft(merchantId: string, draftId: string): Promise<void> {
+export async function sendDraft(
+  merchantId: string,
+  draftId: string,
+  mailboxId?: string | null,
+): Promise<void> {
   if (env.GMAIL_MOCK) {
     logger.info({ draftId }, 'Gmail simulé : aucun mail envoyé');
     return;
   }
 
-  const { gmail } = await getGmailClient(merchantId);
+  // Le brouillon appartient à une boîte précise : le poster depuis une autre
+  // échouerait, l'identifiant y étant inconnu.
+  const { gmail } = await getGmailClient(merchantId, mailboxId);
   await gmail.users.drafts.send({ userId: 'me', requestBody: { id: draftId } });
 }

@@ -76,26 +76,35 @@ export async function googleAuthRoutes(app: FastifyInstance): Promise<void> {
         return reply.code(502).send({ error: 'Adresse Gmail introuvable' });
       }
 
-      await prisma.gmailConnection.upsert({
-        where: { merchantId },
+      // La première boîte connectée devient celle par défaut : sans elle, un
+      // message écrit hors ticket ne saurait pas d'où partir.
+      const existing = await prisma.gmailConnection.count({ where: { merchantId } });
+
+      // Clé (marchand, adresse) : reconnecter la même boîte la met à jour,
+      // en connecter une autre l'ajoute au lieu de remplacer la première.
+      const connection = await prisma.gmailConnection.upsert({
+        where: {
+          merchantId_emailAddress: { merchantId, emailAddress: profile.emailAddress },
+        },
         create: {
           merchantId,
           emailAddress: profile.emailAddress,
+          isDefault: existing === 0,
           refreshTokenEnc: encryptSecret(tokens.refresh_token),
           accessTokenEnc: tokens.access_token ? encryptSecret(tokens.access_token) : null,
           accessTokenExpiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
           lastHistoryId: profile.historyId ?? null,
         },
         update: {
-          emailAddress: profile.emailAddress,
           refreshTokenEnc: encryptSecret(tokens.refresh_token),
           accessTokenEnc: tokens.access_token ? encryptSecret(tokens.access_token) : null,
           accessTokenExpiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
         },
+        select: { id: true },
       });
 
       try {
-        await startWatch(merchantId);
+        await startWatch(merchantId, connection.id);
       } catch (watchError) {
         // Pas bloquant : le polling de secours prend le relais.
         logger.error({ merchantId, err: watchError }, 'Activation du watch Gmail en échec');

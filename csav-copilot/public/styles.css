@@ -1693,3 +1693,27 @@ body {
 }
 
 .auto-toggle input { accent-color: var(--accent); }
+
+/* Boîte mail d'origine : neutre, elle ne doit pas concurrencer le motif. */
+.tag-box { background: var(--inset); color: var(--ink-soft); font-family: var(--font-mono); }
+
+/* ----------------------------------------------------------- boîtes mail --- */
+
+.mbx { padding: 9px 0; }
+.mbx + .mbx { border-top: 1px solid var(--line-soft); }
+.mbx-head { display: flex; align-items: center; gap: 8px; }
+.mbx-head code { font-family: var(--font-mono); font-size: 12.5px; word-break: break-all; }
+.mbx-state { font-size: 12px; color: var(--ink-mute); margin: 2px 0 7px; }
+.mbx-acts { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+.mbx-acts input {
+  flex: 1;
+  min-width: 120px;
+  font: inherit;
+  font-size: 12.5px;
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--ink);
+}

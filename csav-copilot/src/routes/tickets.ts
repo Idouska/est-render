@@ -34,6 +34,8 @@ const listQuery = z.object({
   minAgeDays: z.coerce.number().int().min(0).max(365).optional(),
   /** Tickets sans commande rattachée : l'agent doit la retrouver à la main. */
   unlinked: z.coerce.boolean().optional(),
+  /** Boîte mail d'origine — utile quand `contact@` et `sav@` cohabitent. */
+  mailbox: z.string().max(60).optional(),
   sort: z.enum(['oldest', 'newest', 'confidence']).default('newest'),
   cursor: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(25),
@@ -73,6 +75,7 @@ function buildTicketWhere(
         }
       : {}),
     ...(filters.unlinked ? { shopifyOrderId: null } : {}),
+    ...(filters.mailbox ? { mailboxId: filters.mailbox } : {}),
     ...(term
       ? {
           OR: [
@@ -98,7 +101,10 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
       where: { id: merchantId },
       include: {
         shopify: { select: { installedAt: true, uninstalledAt: true, scopes: true } },
-        gmail: { select: { emailAddress: true, watchExpiration: true } },
+        mailboxes: {
+          orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+          select: { id: true, emailAddress: true, label: true, isDefault: true, watchExpiration: true },
+        },
         users: { where: { id: userId }, select: { email: true, name: true, role: true } },
       },
     });
@@ -123,12 +129,20 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
         simulated: env.SHOPIFY_MOCK,
       },
       gmail: {
-        connected: Boolean(merchant.gmail),
-        emailAddress: merchant.gmail?.emailAddress ?? null,
-        // Un watch expiré signifie que plus rien n'entre : c'est l'information
-        // la plus utile de tout le tableau de bord.
-        watchActive: Boolean(
-          merchant.gmail?.watchExpiration && merchant.gmail.watchExpiration > new Date(),
+        connected: merchant.mailboxes.length > 0,
+        // Adresse de la boîte principale, pour la barre haute.
+        emailAddress: merchant.mailboxes[0]?.emailAddress ?? null,
+        mailboxes: merchant.mailboxes.map((mailbox) => ({
+          id: mailbox.id,
+          emailAddress: mailbox.emailAddress,
+          label: mailbox.label,
+          isDefault: mailbox.isDefault,
+          watchActive: Boolean(mailbox.watchExpiration && mailbox.watchExpiration > new Date()),
+        })),
+        // Une seule boîte muette suffit à faire disparaître du courrier sans
+        // que rien ne le signale : l'alerte porte sur l'ensemble.
+        watchActive: merchant.mailboxes.every(
+          (mailbox) => mailbox.watchExpiration && mailbox.watchExpiration > new Date(),
         ),
       },
     });
@@ -171,6 +185,7 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
           createdAt: true,
           assignedToId: true,
           assignedTo: { select: { id: true, name: true, email: true } },
+          mailbox: { select: { id: true, emailAddress: true, label: true } },
         },
       }),
       // Compteurs calculés sur les mêmes filtres, statut exclu : sinon chaque
@@ -488,6 +503,7 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
       if (draft.gmailDraftId) {
         await updateDraftBody({
           merchantId,
+          mailboxId: draft.ticket.mailboxId,
           draftId: draft.gmailDraftId,
           threadId: draft.ticket.gmailThreadId,
           to: draft.ticket.customerEmail,
@@ -533,7 +549,7 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(409).send({ error: 'Aucun brouillon Gmail associé' });
     }
 
-    await sendDraft(merchantId, draft.gmailDraftId);
+    await sendDraft(merchantId, draft.gmailDraftId, draft.ticket.mailboxId);
 
     await prisma.$transaction([
       prisma.draft.update({

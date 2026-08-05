@@ -22,7 +22,10 @@ const state = {
   navQuery: '',
   refreshing: false,
   lastRefresh: null,
-  queue: { q: '', intent: '', assignee: '', sort: 'newest', urgent: false, unassigned: false, unlinked: false, timer: null },
+  queue: {
+    q: '', intent: '', assignee: '', mailbox: '', sort: 'newest',
+    urgent: false, unassigned: false, unlinked: false, timer: null,
+  },
   queueCounts: {},
   agents: [],
   catalog: { items: [], cursor: null, hasNext: false, q: '', kind: 'products', loading: false, loaded: false, timer: null },
@@ -379,6 +382,7 @@ function queueParams() {
   if (f.q.trim()) params.set('q', f.q.trim());
   if (f.intent) params.set('intent', f.intent);
   if (f.assignee) params.set('assignee', f.assignee);
+  if (f.mailbox) params.set('mailbox', f.mailbox);
   if (f.sort !== 'newest') params.set('sort', f.sort);
   if (f.urgent) params.set('minAgeDays', '3');
   if (f.unassigned) params.set('assignee', 'none');
@@ -390,7 +394,8 @@ function queueParams() {
 function queueIsFiltered() {
   const f = state.queue;
   return Boolean(
-    state.filter || f.q.trim() || f.intent || f.assignee || f.urgent || f.unassigned || f.unlinked,
+    state.filter || f.q.trim() || f.intent || f.assignee || f.mailbox || f.urgent ||
+      f.unassigned || f.unlinked,
   );
 }
 
@@ -430,6 +435,10 @@ async function loadQueue() {
     return;
   }
 
+  // Le badge de boîte n'a de sens qu'à partir de deux adresses : sinon il
+  // répète la même information sur chaque ligne.
+  const multiMailbox = (state.me?.gmail?.mailboxes?.length ?? 0) > 1;
+
   list.innerHTML = state.tickets
     .map((ticket) => {
       const label = STATUS_LABELS[ticket.status] ?? ticket.status;
@@ -455,6 +464,13 @@ async function loadQueue() {
             <span class="tag tag-order">${
               ticket.orderName ? esc(ticket.orderName) : 'commande ?'
             }</span>
+            ${
+              multiMailbox && ticket.mailbox
+                ? `<span class="tag tag-box">${esc(
+                    ticket.mailbox.label || ticket.mailbox.emailAddress.split('@')[0],
+                  )}</span>`
+                : ''
+            }
             <span class="who-dot${who ? '' : ' none'}" title="${
               who ? esc(who.name ?? who.email) : 'non assigné'
             }" style="margin-left:auto">${who ? initials(who.name ?? who.email) : '—'}</span>
@@ -762,6 +778,19 @@ async function loadAgents() {
   $('q-assignee').innerHTML =
     `<option value="">Tous</option><option value="none">Non assignés</option>${options}`;
 
+  const mailboxes = state.me?.gmail?.mailboxes ?? [];
+  $('q-mailbox').innerHTML =
+    '<option value="">Toutes</option>' +
+    mailboxes
+      .map(
+        (mailbox) =>
+          `<option value="${esc(mailbox.id)}">${esc(mailbox.label || mailbox.emailAddress)}</option>`,
+      )
+      .join('');
+
+  // Une seule boîte : le filtre n'aurait qu'une option utile.
+  $('q-mailbox').closest('label').hidden = mailboxes.length < 2;
+
   $('q-intent').innerHTML =
     '<option value="">Tous</option>' +
     Object.entries(INTENT_LABELS)
@@ -771,9 +800,13 @@ async function loadAgents() {
 
 function resetQueueFilters() {
   state.filter = '';
-  state.queue = { q: '', intent: '', assignee: '', sort: 'newest', urgent: false, unassigned: false, unlinked: false };
+  state.queue = {
+    q: '', intent: '', assignee: '', mailbox: '', sort: 'newest',
+    urgent: false, unassigned: false, unlinked: false,
+  };
 
   $('q-search').value = '';
+  $('q-mailbox').value = '';
   $('q-sort').value = 'newest';
   $('q-assignee').value = '';
   $('q-intent').value = '';
@@ -797,6 +830,11 @@ $('q-sort').addEventListener('change', (event) => {
 $('q-assignee').addEventListener('change', (event) => {
   state.queue.assignee = event.target.value;
   state.queue.unassigned = event.target.value === 'none';
+  void loadQueue();
+});
+
+$('q-mailbox').addEventListener('change', (event) => {
+  state.queue.mailbox = event.target.value;
   void loadQueue();
 });
 
@@ -2631,31 +2669,87 @@ function renderSettings() {
   });
 
   const gmail = connections.gmail;
-  let gmailDetail;
-  if (!gmail.connected) {
-    gmailDetail = 'Aucune boîte connectée — rien n’est ingéré.';
-  } else if (gmail.watchActive) {
-    gmailDetail = `<code>${esc(gmail.emailAddress)}</code> · écoute active jusqu’au ${fullDate(
-      gmail.watchExpiration,
-    )}`;
-  } else {
-    // Le watch Gmail expire au bout de 7 jours et rien ne le signale ailleurs :
-    // c'est la panne silencieuse la plus probable du produit.
-    gmailDetail = `<code>${esc(
-      gmail.emailAddress,
-    )}</code> · <b class="set-alert">écoute expirée</b> — reconnectez la boîte pour relancer l’ingestion.`;
-  }
+  const boxes = gmail.mailboxes ?? [];
+
+  // Une carte par boîte : chacune a son propre watch, et une seule expirée
+  // suffit à faire disparaître une partie du courrier sans le moindre signal.
+  const gmailDetail = boxes.length
+    ? boxes
+        .map(
+          (mailbox) => `<div class="mbx">
+            <div class="mbx-head">
+              <code>${esc(mailbox.emailAddress)}</code>
+              ${mailbox.isDefault ? '<span class="tag tag-intent">par défaut</span>' : ''}
+            </div>
+            <div class="mbx-state">${
+              mailbox.watchActive
+                ? `écoute active jusqu’au ${fullDate(mailbox.watchExpiration)}`
+                : '<b class="set-alert">écoute expirée</b> — reconnectez cette boîte'
+            }</div>
+            <div class="mbx-acts">
+              <input type="text" data-mbx-label="${esc(mailbox.id)}"
+                placeholder="Nom d’usage (ex. SAV)" value="${esc(mailbox.label ?? '')}" />
+              ${
+                mailbox.isDefault
+                  ? ''
+                  : `<button class="btn btn-small" data-mbx-default="${esc(
+                      mailbox.id,
+                    )}">Par défaut</button>`
+              }
+              <button class="btn btn-small btn-danger" data-mbx-off="${esc(
+                mailbox.id,
+              )}">Débrancher</button>
+            </div>
+          </div>`,
+        )
+        .join('')
+    : 'Aucune boîte connectée — rien n’est ingéré.';
 
   renderConnection($('set-gmail'), {
-    label: 'Gmail',
+    label: 'Boîtes mail',
     connected: gmail.connected,
     simulated: gmail.simulated,
     detail: gmailDetail,
-    actions: gmail.connected
-      ? `<a class="btn btn-small" href="/auth/google">Reconnecter</a>
-         <button class="btn btn-small btn-danger" id="set-gmail-off">Déconnecter</button>`
-      : '<a class="btn btn-small btn-primary" href="/auth/google">Connecter</a>',
+    // « Ajouter » et non « Reconnecter » : le même bouton sert aux deux, mais
+    // c'est l'ajout qu'on cherche une fois la première boîte en place.
+    actions: `<a class="btn btn-small${
+      gmail.connected ? '' : ' btn-primary'
+    }" href="/auth/google">${gmail.connected ? '＋ Ajouter une boîte' : 'Connecter Gmail'}</a>`,
   });
+
+  $('set-gmail')
+    .querySelectorAll('[data-mbx-default]')
+    .forEach((button) =>
+      button.addEventListener('click', () =>
+        patchMailbox(button.dataset.mbxDefault, { isDefault: true }),
+      ),
+    );
+
+  $('set-gmail')
+    .querySelectorAll('[data-mbx-off]')
+    .forEach((button) =>
+      button.addEventListener('click', async () => {
+        if (!confirm('Débrancher cette boîte ? Les tickets déjà reçus sont conservés.')) return;
+
+        try {
+          await api(`/api/mailboxes/${button.dataset.mbxOff}`, { method: 'DELETE' });
+          toast('Boîte débranchée.');
+          await openSettings();
+        } catch (error) {
+          toast(error.message, true);
+        }
+      }),
+    );
+
+  // Le libellé s'enregistre en quittant le champ : un bouton par boîte
+  // encombrerait une carte déjà chargée.
+  $('set-gmail')
+    .querySelectorAll('[data-mbx-label]')
+    .forEach((input) =>
+      input.addEventListener('change', () =>
+        patchMailbox(input.dataset.mbxLabel, { label: input.value }),
+      ),
+    );
 
   $('set-brand').value = merchant.brandName ?? '';
   $('set-logo').value = merchant.logoUrl ?? '';
@@ -2665,19 +2759,6 @@ function renderSettings() {
   $('set-threshold-echo').textContent = `${Math.round(merchant.autoSendThreshold * 100)} %`;
   $('set-retention').value = String(merchant.retentionDays);
 
-  const off = $('set-gmail-off');
-  if (off) {
-    off.addEventListener('click', async () => {
-      if (!confirm('Déconnecter la boîte Gmail ? L’ingestion des nouveaux mails s’arrête.')) return;
-      try {
-        await api('/auth/google/disconnect', { method: 'POST' });
-        toast('Boîte Gmail déconnectée.');
-        await Promise.all([openSettings(), loadAudit()]);
-      } catch (error) {
-        toast(error.message, true);
-      }
-    });
-  }
 }
 
 async function openSettings() {
@@ -3038,6 +3119,16 @@ $('r-go').addEventListener('click', async () => {
     toast(error.message, true);
   }
 });
+
+async function patchMailbox(id, body) {
+  try {
+    await api(`/api/mailboxes/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+    toast('Boîte mise à jour.');
+    await openSettings();
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
 
 /* ------------------------------------------------------- rafraîchissement */
 

@@ -33,11 +33,25 @@ export class GmailNotConnectedError extends Error {
  * Client Gmail scopé à un marchand. Le refresh token reste chiffré en base ;
  * la librairie Google rafraîchit l'access token, qu'on re-chiffre au passage.
  */
-export async function getGmailClient(merchantId: string): Promise<{
+export async function getGmailClient(
+  merchantId: string,
+  /**
+   * Boîte visée. Nulle, on prend celle par défaut, à défaut la plus ancienne :
+   * une boutique qui n'a jamais désigné de boîte principale doit quand même
+   * pouvoir répondre.
+   */
+  mailboxId?: string | null,
+): Promise<{
   gmail: gmail_v1.Gmail;
   emailAddress: string;
+  mailboxId: string;
 }> {
-  const connection = await prisma.gmailConnection.findUnique({ where: { merchantId } });
+  const connection = mailboxId
+    ? await prisma.gmailConnection.findFirst({ where: { id: mailboxId, merchantId } })
+    : await prisma.gmailConnection.findFirst({
+        where: { merchantId },
+        orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+      });
 
   if (!connection) {
     throw new GmailNotConnectedError(merchantId);
@@ -55,7 +69,7 @@ export async function getGmailClient(merchantId: string): Promise<{
     // Persistance best-effort : un échec ici ne doit pas casser la requête en cours.
     void prisma.gmailConnection
       .update({
-        where: { merchantId },
+        where: { id: connection.id },
         data: {
           accessTokenEnc: encryptSecret(tokens.access_token),
           accessTokenExpiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
@@ -70,5 +84,6 @@ export async function getGmailClient(merchantId: string): Promise<{
   return {
     gmail: google.gmail({ version: 'v1', auth }),
     emailAddress: connection.emailAddress,
+    mailboxId: connection.id,
   };
 }

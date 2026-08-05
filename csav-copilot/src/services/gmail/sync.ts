@@ -9,11 +9,19 @@ import { parseMessage, type ParsedMessage } from './messages.ts';
  * Si Gmail répond 404 (historyId trop ancien, > 1 semaine), on retombe sur un
  * `messages.list` borné dans le temps — le fallback polling du brief.
  */
-export async function fetchNewMessages(merchantId: string): Promise<ParsedMessage[]> {
-  const connection = await prisma.gmailConnection.findUnique({ where: { merchantId } });
+export async function fetchNewMessages(
+  merchantId: string,
+  mailboxId?: string | null,
+): Promise<ParsedMessage[]> {
+  const connection = mailboxId
+    ? await prisma.gmailConnection.findFirst({ where: { id: mailboxId, merchantId } })
+    : await prisma.gmailConnection.findFirst({
+        where: { merchantId },
+        orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+      });
   if (!connection) return [];
 
-  const { gmail } = await getGmailClient(merchantId);
+  const { gmail } = await getGmailClient(merchantId, connection.id);
 
   let messageIds: string[] = [];
   let newHistoryId: string | null = null;
@@ -80,7 +88,7 @@ export async function fetchNewMessages(merchantId: string): Promise<ParsedMessag
 
   if (profileHistoryId) {
     await prisma.gmailConnection.update({
-      where: { merchantId },
+      where: { id: connection.id },
       data: { lastHistoryId: profileHistoryId },
     });
   }

@@ -70,9 +70,11 @@ export async function gmailWebhookRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(204).send();
     }
 
+    // L'adresse notifiée désigne la boîte, et la boîte désigne le marchand :
+    // avec plusieurs boîtes par boutique, c'est le seul routage fiable.
     const connection = await prisma.gmailConnection.findFirst({
       where: { emailAddress: notification.emailAddress },
-      select: { merchantId: true, merchant: { select: { status: true } } },
+      select: { id: true, merchantId: true, merchant: { select: { status: true } } },
     });
 
     if (!connection || connection.merchant.status !== 'ACTIVE') {
@@ -87,6 +89,7 @@ export async function gmailWebhookRoutes(app: FastifyInstance): Promise<void> {
     // si la réponse tarde, ce qui multiplierait les ingestions concurrentes.
     await enqueueIngest({
       merchantId: connection.merchantId,
+      mailboxId: connection.id,
       historyId: String(notification.historyId),
     });
 

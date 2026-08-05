@@ -61,7 +61,7 @@ model Merchant {
 
   organization        Organization?      @relation(fields: [organizationId], references: [id])
   shopify             ShopifyConnection?
-  gmail               GmailConnection?
+  mailboxes           GmailConnection[]
   users               User[]
   tickets             Ticket[]
   refunds             Refund[]
@@ -127,10 +127,20 @@ model ShopifyConnection {
   merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
 }
 
+/// Une boîte mail surveillée.
+///
+/// Plusieurs par boutique : `contact@`, `sav@`, `retours@` arrivent dans la
+/// même file mais restent distinguables, et une réponse repart de la boîte qui
+/// a reçu le message — répondre à un client depuis une autre adresse que celle
+/// qu'il a écrite le fait douter de son interlocuteur.
 model GmailConnection {
-  id           String @id @default(cuid())
-  merchantId   String @unique
+  id           String  @id @default(cuid())
+  merchantId   String
   emailAddress String
+  /// Nom d'usage affiché dans l'application, à défaut de l'adresse elle-même.
+  label        String?
+  /// Boîte d'envoi par défaut, quand rien ne désigne celle d'origine.
+  isDefault    Boolean @default(false)
 
   refreshTokenEnc      String
   accessTokenEnc       String?
@@ -143,7 +153,11 @@ model GmailConnection {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  merchant Merchant  @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  tickets  Ticket[]
+
+  @@unique([merchantId, emailAddress])
+  @@index([merchantId, isDefault])
 }
 
 // ---------------------------------------------------------------------------
@@ -174,12 +188,16 @@ model Ticket {
   /// surveiller : un ticket sans propriétaire attend indéfiniment.
   assignedToId String?
 
+  /// Boîte mail qui a reçu le message. Détermine d'où part la réponse.
+  mailboxId String?
+
   lastMessageAt DateTime
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   merchant    Merchant             @relation(fields: [merchantId], references: [id], onDelete: Cascade)
   assignedTo  User?                @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
+  mailbox     GmailConnection?     @relation(fields: [mailboxId], references: [id], onDelete: SetNull)
   messages    Message[]
   drafts      Draft[]
   refunds     Refund[]
@@ -189,6 +207,7 @@ model Ticket {
   @@index([merchantId, status])
   @@index([merchantId, lastMessageAt])
   @@index([merchantId, assignedToId])
+  @@index([merchantId, mailboxId])
 }
 
 enum Intent {

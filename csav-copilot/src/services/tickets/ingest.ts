@@ -10,11 +10,14 @@ import { fetchNewMessages } from '../gmail/sync.ts';
  * Idempotent : un message déjà connu est ignoré silencieusement, car Pub/Sub
  * livre at-least-once.
  */
-export async function ingestMerchantInbox(merchantId: string): Promise<{
+export async function ingestMerchantInbox(
+  merchantId: string,
+  mailboxId?: string | null,
+): Promise<{
   ingested: number;
   ticketIds: string[];
 }> {
-  const messages = await fetchNewMessages(merchantId);
+  const messages = await fetchNewMessages(merchantId, mailboxId);
   const ticketIds = new Set<string>();
   let ingested = 0;
 
@@ -32,6 +35,9 @@ export async function ingestMerchantInbox(merchantId: string): Promise<{
         customerEmail: message.fromEmail,
         customerName: message.fromName,
         status: 'NEW',
+        // Mémorisée à la création : la réponse repartira de la boîte qui a
+        // reçu le message, pas d'une autre.
+        mailboxId: mailboxId ?? null,
         lastMessageAt: message.receivedAt,
       },
       update: {

@@ -16,6 +16,8 @@ import { buildRawEmail } from './drafts.ts';
  */
 export async function sendPlainEmail(params: {
   merchantId: string;
+  /** Boîte d'envoi. Nulle, on prend celle par défaut de la boutique. */
+  mailboxId?: string | null;
   to: string;
   subject: string;
   body: string;
@@ -25,7 +27,7 @@ export async function sendPlainEmail(params: {
     return;
   }
 
-  const { gmail, emailAddress } = await getGmailClient(params.merchantId);
+  const { gmail, emailAddress } = await getGmailClient(params.merchantId, params.mailboxId);
 
   await gmail.users.messages.send({
     userId: 'me',
