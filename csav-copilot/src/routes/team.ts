@@ -148,21 +148,49 @@ export async function teamRoutes(app: FastifyInstance): Promise<void> {
     const parsed = z.object({ email: z.string().email() }).safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Adresse email invalide' });
 
-    const user = await prisma.user.findFirst({
+    // Toutes les boutiques où cette adresse a un compte actif, pas la première
+    // venue : avec le même email sur plusieurs boutiques, `findFirst` renvoyait
+    // un lien arbitraire et l'on atterrissait souvent sur la mauvaise.
+    const accounts = await prisma.user.findMany({
       where: { email: parsed.data.email.toLowerCase(), active: true },
-      include: { merchant: { select: { id: true, name: true, shopDomain: true } } },
+      orderBy: [{ lastLoginAt: 'desc' }, { createdAt: 'asc' }],
+      include: {
+        merchant: { select: { id: true, name: true, brandName: true, shopDomain: true } },
+      },
     });
 
-    if (user) {
-      const token = signLoginToken({ userId: user.id, merchantId: user.merchantId, kind: 'login' });
+    if (accounts.length > 0) {
+      const links = accounts.map((account) => ({
+        label:
+          account.merchant.brandName ??
+          account.merchant.name ??
+          account.merchant.shopDomain,
+        url: `${env.APP_URL}/auth/link?token=${signLoginToken({
+          userId: account.id,
+          merchantId: account.merchantId,
+          kind: 'login',
+        })}`,
+      }));
+
+      // Un seul mail, avec un lien par boutique : en envoyer plusieurs ferait
+      // douter du bon, et n'en envoyer qu'un obligerait à basculer ensuite.
       await deliverLink({
-        merchantId: user.merchantId,
-        to: user.email,
+        merchantId: accounts[0]!.merchantId,
+        to: accounts[0]!.email,
         subject: 'Votre lien de connexion',
-        body: loginEmail({
-          merchantName: user.merchant.name ?? user.merchant.shopDomain,
-          url: `${env.APP_URL}/auth/link?token=${token}`,
-        }),
+        body:
+          links.length === 1
+            ? loginEmail({ merchantName: links[0]!.label, url: links[0]!.url })
+            : [
+                'Bonjour,',
+                '',
+                'Votre adresse donne accès à plusieurs boutiques. Choisissez celle',
+                'que vous voulez ouvrir :',
+                '',
+                ...links.map((link) => `${link.label} : ${link.url}`),
+                '',
+                'Chaque lien est valable une heure et ne sert qu’une fois.',
+              ].join('\n'),
       });
     }
 

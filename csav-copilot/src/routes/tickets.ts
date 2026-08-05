@@ -440,10 +440,15 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
 
   // Écran de détail : fil + brouillon + contexte commande/client/livraison.
   app.get<{ Params: { id: string } }>('/api/tickets/:id', async (request, reply) => {
-    const { merchantId } = request.session;
+    const { merchantId, email } = request.session;
+
+    // En mode « toutes les boutiques », la file agrège plusieurs boutiques :
+    // le détail doit suivre, sinon ouvrir un ticket listé renvoie une erreur.
+    // La lecture s'élargit, l'action non — c'est signalé par `readOnly`.
+    const readable = await accessibleMerchantIds({ merchantId, email });
 
     const ticket = await prisma.ticket.findFirst({
-      where: { id: request.params.id, merchantId },
+      where: { id: request.params.id, merchantId: { in: readable } },
       include: {
         messages: { orderBy: { receivedAt: 'asc' } },
         drafts: { orderBy: { createdAt: 'desc' }, take: 5 },
@@ -451,6 +456,11 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
     });
 
     if (!ticket) return reply.code(404).send({ error: 'Ticket introuvable' });
+
+    // Un ticket d'une autre boutique se consulte mais ne se traite pas : les
+    // droits de l'utilisateur y sont peut-être différents, et le brouillon
+    // partirait de la mauvaise boîte mail.
+    const readOnly = ticket.merchantId !== merchantId;
 
     // Les données de commande viennent de Shopify en direct. Si la boutique
     // n'est pas connectée ou répond mal, on sert quand même le ticket : perdre
@@ -460,7 +470,8 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
 
     if (ticket.shopifyOrderId) {
       try {
-        const shopify = await getShopifyClient(merchantId);
+        // Client Shopify de la boutique du ticket, pas de celle de la session.
+        const shopify = await getShopifyClient(ticket.merchantId);
         order = await getOrderById(shopify, ticket.shopifyOrderId);
       } catch (error) {
         orderError =
@@ -471,7 +482,7 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
       }
     }
 
-    return reply.send({ ticket, order, orderError });
+    return reply.send({ ticket, order, orderError, readOnly });
   });
 
   /**

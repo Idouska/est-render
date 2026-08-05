@@ -199,6 +199,16 @@
             <h1 class="thread-subject" id="d-subject">Sélectionnez un ticket</h1>
             <div class="thread-meta" id="d-meta"></div>
           </div>
+          <div class="notice" id="read-only" hidden>
+            <span class="notice-mark">Lecture</span>
+            <div>
+              <span id="read-only-text"></span>
+              <button class="btn btn-small" id="read-only-switch" style="margin-left: 8px">
+                Basculer
+              </button>
+            </div>
+          </div>
+
           <div class="messages" id="d-messages"></div>
 
           <div class="actbar" id="actbar" hidden>
@@ -809,6 +819,15 @@
           <div class="field">
             <label for="sup-f-name">Nom de l'entreprise</label>
             <input type="text" id="sup-f-name" placeholder="Atelier Nord" />
+          </div>
+          <div class="field">
+            <label for="sup-f-access">Commandes visibles depuis son lien</label>
+            <select id="sup-f-access">
+              <option value="ASSIGNED">Celles qu'on lui a confiées</option>
+              <option value="ALL">Tout le carnet de commandes</option>
+              <option value="NONE">Aucune</option>
+            </select>
+            <small id="sup-f-access-help"></small>
           </div>
           <div class="field">
             <label for="sup-f-email">Email de contact</label>

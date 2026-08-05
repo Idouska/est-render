@@ -861,6 +861,11 @@ function closeCustomerSheet() {
   $('sheet-wrap').hidden = true;
 }
 
+$('read-only-switch').addEventListener('click', (event) => {
+  const id = event.currentTarget.dataset.shop;
+  if (id) void switchShop(id);
+});
+
 $('sheet-close').addEventListener('click', closeCustomerSheet);
 
 $('sheet-wrap').addEventListener('click', (event) => {
@@ -1304,6 +1309,25 @@ function renderDetail() {
 
   renderActionBar();
 
+  // Ticket d'une autre boutique en mode agrégé : consultable, pas traitable.
+  // Griser les actions sans le dire donnerait l'impression d'une panne.
+  const otherShop = Boolean(state.detail.readOnly);
+  const shopLabel =
+    state.shops.find((shop) => shop.id === ticket.merchantId)?.label ?? 'une autre boutique';
+
+  $('read-only').hidden = !otherShop;
+  if (otherShop) {
+    $('read-only-text').textContent = `Ce ticket appartient à ${shopLabel}. Basculez sur cette boutique pour y répondre.`;
+    $('read-only-switch').dataset.shop = ticket.merchantId;
+  }
+
+  for (const id of ['btn-send', 'btn-save', 'btn-refund', 'd-assignee']) {
+    const el = $(id);
+    if (el) el.disabled = otherShop || el.disabled;
+  }
+
+  $('actbar').hidden = $('actbar').hidden || otherShop;
+
   $('d-messages').innerHTML = ticket.messages
     .map(
       (message) => `<div class="msg${message.direction === 'OUTBOUND' ? ' out' : ''}">
@@ -1671,6 +1695,8 @@ function openSupplierForm(id) {
 
   // Le lien n'existe que pour un fournisseur déjà enregistré : il porte son
   // identifiant.
+  $('sup-f-access').value = supplier?.ordersAccess ?? 'ASSIGNED';
+  describeSupplierAccess();
   $('sup-f-link').hidden = !supplier;
   $('sup-f-link').dataset.supplier = supplier?.id ?? '';
 
@@ -1686,6 +1712,26 @@ $('sup-f-link').addEventListener('click', async (event) => {
   await openSupplierLink(id, event.shiftKey);
 });
 
+/*
+ * « Tout le carnet » communique des noms, adresses et téléphones de clients à
+ * un tiers : le choix doit être éclairé au moment où on le fait, pas découvert
+ * après coup.
+ */
+const SUPPLIER_ACCESS_HELP = {
+  ASSIGNED:
+    'Seules les commandes escaladées vers lui ou dont il a saisi un colis. Recommandé.',
+  ALL:
+    'Il verra tous vos clients — noms, adresses, téléphones — y compris ceux qu’il ne prépare pas. À réserver au prestataire qui expédie réellement tout.',
+  NONE: 'Il ne peut que répondre aux escalades. Aucun accès aux commandes.',
+};
+
+function describeSupplierAccess() {
+  $('sup-f-access-help').textContent = SUPPLIER_ACCESS_HELP[$('sup-f-access').value] ?? '';
+  $('sup-f-access-help').classList.toggle('set-alert', $('sup-f-access').value === 'ALL');
+}
+
+$('sup-f-access').addEventListener('change', describeSupplierAccess);
+
 $('sup-new').addEventListener('click', () => openSupplierForm(null));
 $('sup-f-cancel').addEventListener('click', () => $('supplier-modal').classList.remove('open'));
 $('supplier-modal').addEventListener('click', (event) => {
@@ -1696,6 +1742,7 @@ $('sup-f-save').addEventListener('click', async () => {
   const payload = {
     name: $('sup-f-name').value.trim(),
     contactEmail: $('sup-f-email').value.trim(),
+    ordersAccess: $('sup-f-access').value,
     contactName: $('sup-f-contact').value.trim() || null,
     phone: $('sup-f-phone').value.trim() || null,
     notes: $('sup-f-notes').value.trim() || null,

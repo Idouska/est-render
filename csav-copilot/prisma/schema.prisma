@@ -373,6 +373,15 @@ model Supplier {
   active       Boolean      @default(true)
   notes        String?      @db.Text
 
+  /// Étendue des commandes visibles depuis son lien de travail.
+  ///
+  /// Par défaut, seulement celles qu'on lui a confiées. `ALL` ouvre tout le
+  /// carnet — noms, adresses, téléphones des clients — et n'a de sens que pour
+  /// un prestataire qui prépare réellement toutes les expéditions. Ce choix
+  /// communique des données personnelles à un tiers : il doit être explicite,
+  /// jamais implicite.
+  ordersAccess SupplierOrderAccess @default(ASSIGNED)
+
   /// Version du lien de travail permanent. L'incrémenter invalide d'un coup
   /// tous les liens déjà transmis à ce fournisseur — la seule façon de révoquer
   /// un jeton signé sans table de sessions.
@@ -462,6 +471,12 @@ model Parcel {
   @@unique([merchantId, trackingNumber])
   @@index([merchantId, shopifyOrderId])
   @@index([escalationId])
+}
+
+enum SupplierOrderAccess {
+  NONE // aucun accès au carnet de commandes
+  ASSIGNED // seulement les commandes qui lui ont été confiées
+  ALL // tout le carnet — données clients comprises
 }
 
 enum EscalationReason {

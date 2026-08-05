@@ -25,6 +25,7 @@ interface Workspace {
   merchantId: string;
   supplierId: string;
   supplierName: string;
+  ordersAccess: 'NONE' | 'ASSIGNED' | 'ALL';
 }
 
 /** Vérifie le jeton et l'accorde au fournisseur en base. */
@@ -41,7 +42,13 @@ async function authorize(
 
   const supplier = await prisma.supplier.findFirst({
     where: { id: payload.supplierId, merchantId: payload.merchantId },
-    select: { id: true, name: true, active: true, portalTokenVersion: true },
+    select: {
+      id: true,
+      name: true,
+      active: true,
+      portalTokenVersion: true,
+      ordersAccess: true,
+    },
   });
 
   // La version fait office de révocation : un lien émis avant le dernier
@@ -55,7 +62,48 @@ async function authorize(
     merchantId: payload.merchantId,
     supplierId: supplier.id,
     supplierName: supplier.name,
+    ordersAccess: supplier.ordersAccess,
   };
+}
+
+/**
+ * Commandes qu'un fournisseur a le droit de voir.
+ *
+ * Jusqu'ici son lien ouvrait tout le carnet — noms, adresses et téléphones de
+ * clients qu'il n'avait jamais préparés, y compris ceux d'un autre prestataire.
+ * L'accès se restreint désormais à ce qu'on lui a confié, sauf choix explicite
+ * du marchand.
+ *
+ * `null` signifie « aucune restriction » ; un tableau vide, « rien à voir ».
+ */
+async function allowedOrderIds(workspace: Workspace): Promise<string[] | null> {
+  if (workspace.ordersAccess === 'ALL') return null;
+  if (workspace.ordersAccess === 'NONE') return [];
+
+  // Confiée = une escalade lui a été adressée, ou un colis de cette commande
+  // porte son nom. Les deux traces existent déjà, rien à saisir en plus.
+  const [escalations, parcels] = await Promise.all([
+    prisma.supplierEscalation.findMany({
+      where: { merchantId: workspace.merchantId, supplierId: workspace.supplierId },
+      select: { ticket: { select: { shopifyOrderId: true } } },
+    }),
+    prisma.parcel.findMany({
+      where: {
+        merchantId: workspace.merchantId,
+        escalation: { supplierId: workspace.supplierId },
+      },
+      select: { shopifyOrderId: true },
+    }),
+  ]);
+
+  return [
+    ...new Set(
+      [
+        ...escalations.map((row) => row.ticket.shopifyOrderId),
+        ...parcels.map((row) => row.shopifyOrderId),
+      ].filter(Boolean) as string[],
+    ),
+  ];
 }
 
 /** Fenêtre de commandes demandée, « hier » par défaut. */
@@ -96,6 +144,18 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
       const parsed = rangeQuery.safeParse(request.query);
       if (!parsed.success) return reply.code(400).send({ error: 'Période invalide' });
 
+      const allowed = await allowedOrderIds(workspace);
+      if (allowed?.length === 0) {
+        return reply.send({
+          supplier: { name: workspace.supplierName, ordersAccess: workspace.ordersAccess },
+          orders: [],
+          reason:
+            workspace.ordersAccess === 'NONE'
+              ? 'Le marchand n’a pas ouvert le carnet de commandes pour ce compte.'
+              : 'Aucune commande ne vous a été confiée sur cette période.',
+        });
+      }
+
       const client = await getShopifyClient(workspace.merchantId);
       const page = await listOrders(client, {
         query: toShopifyRange(parsed.data.since, parsed.data.until),
@@ -103,12 +163,17 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
         cursor: null,
       });
 
+      // Le filtre s'applique après Shopify : la recherche par identifiant de
+      // commande n'accepte pas de liste, et l'écart tient à quelques dizaines
+      // de lignes sur une journée.
+      const visible = allowed ? page.orders.filter((order) => allowed.includes(order.id)) : page.orders;
+
       // Colis déjà saisis, rapprochés par identifiant de commande : le
       // fournisseur doit voir ce qu'il a fait hier sans le ressaisir.
       const parcels = await prisma.parcel.findMany({
         where: {
           merchantId: workspace.merchantId,
-          shopifyOrderId: { in: page.orders.map((order) => order.id) },
+          shopifyOrderId: { in: visible.map((order) => order.id) },
         },
         orderBy: { index: 'asc' },
         select: {
@@ -132,8 +197,8 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
       }
 
       return reply.send({
-        supplier: { name: workspace.supplierName },
-        orders: page.orders.map((order) => ({
+        supplier: { name: workspace.supplierName, ordersAccess: workspace.ordersAccess },
+        orders: visible.map((order) => ({
           ...order,
           parcels: (byOrder.get(order.id) ?? []).map(toParcelView),
         })),
@@ -150,6 +215,10 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
       const parsed = rangeQuery.safeParse(request.query);
       if (!parsed.success) return reply.code(400).send({ error: 'Période invalide' });
 
+      // Même restriction que la liste : sans ça, l'export contournerait la
+      // règle et rendrait tout le carnet en un fichier.
+      const allowed = await allowedOrderIds(workspace);
+
       const client = await getShopifyClient(workspace.merchantId);
       const page = await listOrders(client, {
         query: toShopifyRange(parsed.data.since, parsed.data.until),
@@ -157,10 +226,12 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
         cursor: null,
       });
 
+      const visible = allowed ? page.orders.filter((order) => allowed.includes(order.id)) : page.orders;
+
       const parcels = await prisma.parcel.findMany({
         where: {
           merchantId: workspace.merchantId,
-          shopifyOrderId: { in: page.orders.map((order) => order.id) },
+          shopifyOrderId: { in: visible.map((order) => order.id) },
         },
         orderBy: { index: 'asc' },
         select: {
@@ -174,7 +245,7 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
       });
 
       const csv = ordersToCsv(
-        page.orders.map((order) => ({
+        visible.map((order) => ({
           order,
           parcels: parcels
             .filter((parcel) => parcel.shopifyOrderId === order.id)

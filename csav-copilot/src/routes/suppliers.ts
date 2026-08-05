@@ -10,6 +10,7 @@ import { createEscalation, resolveEscalation, sendEscalation } from '../services
 const supplierBody = z.object({
   name: z.string().min(1).max(200),
   contactEmail: z.string().email(),
+  ordersAccess: z.enum(['NONE', 'ASSIGNED', 'ALL']).optional(),
   contactName: z.string().max(200).nullish(),
   phone: z.string().max(40).nullish(),
   notes: z.string().max(2000).nullish(),
@@ -46,6 +47,7 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
         contactName: supplier.contactName,
         phone: supplier.phone,
         active: supplier.active,
+        ordersAccess: supplier.ordersAccess,
         notes: supplier.notes,
         createdAt: supplier.createdAt,
         openEscalations: supplier._count.escalations,
