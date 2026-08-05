@@ -6,6 +6,7 @@ import { hmacSha256Hex, safeEqual } from '../lib/crypto.ts';
 import { logger } from '../lib/logger.ts';
 import { prisma } from '../lib/prisma.ts';
 import { requirePermission, requireSession } from '../plugins/auth.ts';
+import { fetchShopRefunds, type ShopRefund } from '../services/shopify/refundHistory.ts';
 import { getShopifyClient } from '../services/shopify/client.ts';
 import { createRefund, getRefundableTransactions } from '../services/shopify/refunds.ts';
 
@@ -191,14 +192,47 @@ export async function refundRoutes(app: FastifyInstance): Promise<void> {
 
     // Un remboursement en attente est de l'argent promis mais pas encore parti :
     // c'est le chiffre qui manque quand on rapproche la caisse.
-    const totals = Object.fromEntries(
+    const totals: Record<string, { count: number; amount: number }> = Object.fromEntries(
       byStatus.map((row) => [
         row.status,
         { count: row._count._all, amount: Number(row._sum.amount ?? 0) },
       ]),
     );
 
-    return reply.send({ refunds, totals });
+    /*
+     * Les remboursements Shopify complètent ceux de l'outil.
+     *
+     * Une boutique rembourse aussi depuis son administration, et l'écran
+     * restait vide en laissant croire qu'il ne s'était rien passé. Ceux qui
+     * viennent de l'outil priment : ils portent leur auteur, leur ticket et
+     * leur motif, là où Shopify ne rend qu'un montant et une note.
+     */
+    let external: ShopRefund[] = [];
+
+    try {
+      const client = await getShopifyClient(merchantId);
+      const known = new Set(refunds.map((refund) => refund.shopifyRefundId).filter(Boolean));
+      external = (await fetchShopRefunds(client, 180)).filter(
+        (refund) => !known.has(refund.id),
+      );
+    } catch (error) {
+      // Shopify muet ne doit pas vider l'écran de ce que l'outil sait déjà.
+      request.log.warn({ err: error, merchantId }, 'Historique Shopify indisponible');
+    }
+
+    const merged = [...refunds, ...external].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+
+    // Les totaux comptent les deux sources : rapprocher une caisse avec la
+    // moitié des lignes n'a aucun intérêt.
+    const externalSum = external.reduce((sum, refund) => sum + Number(refund.amount), 0);
+    totals.COMPLETED = {
+      count: (totals.COMPLETED?.count ?? 0) + external.length,
+      amount: (totals.COMPLETED?.amount ?? 0) + externalSum,
+    };
+
+    return reply.send({ refunds: merged, totals });
   });
 }
 

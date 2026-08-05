@@ -3008,7 +3008,12 @@ function renderRefundRows() {
       refunds
         .map(
           (refund) => `<tr>
-            <td class="mono"><b>${esc(refund.orderName ?? '—')}</b></td>
+            <td class="mono"><b>${esc(refund.orderName ?? '—')}</b>${
+              // L'origine se dit une fois, discrètement : un remboursement
+              // passé dans Shopify ne porte ni auteur ni ticket, et l'agent
+              // doit savoir pourquoi la ligne est plus pauvre.
+              refund.external ? '<span class="src">Shopify</span>' : ''
+            }</td>
             <td>${fullDate(refund.createdAt)}</td>
             <td>${esc(refund.reason ?? '—')}</td>
             <td>${esc(REFUND_KIND[refund.kind] ?? refund.kind)}</td>

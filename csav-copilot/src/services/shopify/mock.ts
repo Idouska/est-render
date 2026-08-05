@@ -453,6 +453,28 @@ export function createMockShopifyClient(shopDomain: string): ShopifyClient {
         } as T;
       }
 
+      if (query.includes('query RefundHistory')) {
+        return {
+          orders: {
+            pageInfo: { hasNextPage: false, endCursor: null },
+            nodes: [
+              {
+                id: 'gid://shopify/Order/10391',
+                name: '#10391',
+                refunds: [
+                  {
+                    id: 'gid://shopify/Refund/9001',
+                    createdAt: new Date(Date.now() - 3 * 86_400_000).toISOString(),
+                    note: 'Article endommagé',
+                    totalRefundedSet: { shopMoney: { amount: '74.00', currencyCode: 'EUR' } },
+                  },
+                ],
+              },
+            ],
+          },
+        } as T;
+      }
+
       if (query.includes('query CommerceStats')) {
         // Soixante jours de ventes plausibles, déterministes : un graphe de
         // démonstration qui change à chaque appel ferait douter du vrai.
