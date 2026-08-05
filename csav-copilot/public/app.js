@@ -4432,6 +4432,48 @@ function renderDiagnosis(report) {
  * de courrier ressembleraient à un bouton sans effet pendant plusieurs
  * minutes — exactement le défaut qu'on vient de corriger ailleurs.
  */
+/**
+ * Résultat d'un rattrapage, en phrases.
+ *
+ * « 0 message sur 1500 examinés » se lit comme un échec alors que c'est le
+ * signe que tout était déjà là. Chaque chiffre n'apparaît que s'il dit
+ * quelque chose, et le rapport se termine par la conclusion plutôt que par
+ * des nombres à interpréter.
+ */
+function backfillSummary(progress) {
+  const parts = [`${progress.scanned} messages examinés.`];
+
+  if (progress.ingested > 0) {
+    parts.push(
+      `<b>${progress.ingested} nouveau${progress.ingested > 1 ? 'x' : ''}</b>, ` +
+        `${progress.tickets} ticket${progress.tickets > 1 ? 's' : ''} en file.`,
+    );
+  } else {
+    parts.push('Aucun nouveau — tout ce courrier était déjà dans la file.');
+  }
+
+  if (progress.relabelled > 0) {
+    parts.push(
+      `${progress.relabelled} ticket${progress.relabelled > 1 ? 's' : ''} réétiqueté${
+        progress.relabelled > 1 ? 's' : ''
+      } depuis Gmail.`,
+    );
+  } else {
+    parts.push(
+      'Aucun libellé trouvé : ces messages ne portent pas d’étiquette dans Gmail.',
+    );
+  }
+
+  if (progress.capped) {
+    parts.push(
+      '<b class="set-alert">Plafond atteint</b> — il reste du courrier au-delà, ' +
+        'relancez pour continuer.',
+    );
+  }
+
+  return parts.join('<br>');
+}
+
 function watchBackfill(mailboxId, node, button, previousLabel) {
   let elapsed = 0;
 
@@ -4444,12 +4486,8 @@ function watchBackfill(mailboxId, node, button, previousLabel) {
     }
 
     if (progress) {
-      node.textContent = progress.done
-        ? `Rattrapage terminé — ${progress.ingested} message${
-            progress.ingested > 1 ? 's' : ''
-          } sur ${progress.scanned} examinés, ${progress.tickets} ticket${
-            progress.tickets > 1 ? 's' : ''
-          } en file.`
+      node.innerHTML = progress.done
+        ? backfillSummary(progress)
         : `Rattrapage… ${progress.scanned} messages examinés, ${progress.ingested} relevés.`;
     }
 

@@ -23,6 +23,10 @@ export interface BackfillProgress {
   scanned: number;
   ingested: number;
   tickets: number;
+  /** Tickets déjà connus dont les libellés ont été mis à jour. */
+  relabelled: number;
+  /** Le plafond a été atteint : il reste du courrier au-delà. */
+  capped: boolean;
   done: boolean;
 }
 
@@ -47,7 +51,14 @@ export async function backfillMailbox(params: {
   const address = connection.emailAddress.toLowerCase();
   const labelNames = await loadLabelNames(gmail, connection.id);
 
-  const progress: BackfillProgress = { scanned: 0, ingested: 0, tickets: 0, done: false };
+  const progress: BackfillProgress = {
+    scanned: 0,
+    ingested: 0,
+    tickets: 0,
+    relabelled: 0,
+    capped: false,
+    done: false,
+  };
   backfillProgress.set(mailboxId, progress);
 
   const touched = new Set<string>();
@@ -90,6 +101,7 @@ export async function backfillMailbox(params: {
               where: { id: known.ticketId },
               data: { labels: names },
             });
+            progress.relabelled += 1;
           }
           continue;
         }
@@ -156,7 +168,10 @@ export async function backfillMailbox(params: {
           if ((error as { code?: string }).code !== 'P2002') throw error;
         }
 
-        if (progress.scanned >= maxMessages) break;
+        if (progress.scanned >= maxMessages) {
+          progress.capped = true;
+          break;
+        }
       }
 
       pageToken = data.nextPageToken ?? undefined;
