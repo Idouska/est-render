@@ -152,3 +152,13 @@
   border-radius: var(--r-sm);
   border: 1px solid var(--line);
 }
+
+/* Article attendu dans le colis : sans lui, « Colis 2/3 » ne dit pas quoi
+   mettre dans le carton. */
+.pk-item {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  background: var(--surface);
+  border-radius: var(--r-sm);
+  padding: 6px 9px;
+}

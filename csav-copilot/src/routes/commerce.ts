@@ -553,16 +553,20 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
             shopifyOrderId: { in: page.orders.map((order) => order.id) },
           },
           orderBy: { index: 'asc' },
-          select: { shopifyOrderId: true, trackingNumber: true },
+          select: { shopifyOrderId: true, trackingNumber: true, index: true, total: true },
         });
 
         const file = await ordersToXlsx(
           page.orders.map((order) => ({
             order,
             storeUrl: `https://${merchant.shopDomain}`,
-            trackingNumbers: parcels
+            parcels: parcels
               .filter((parcel) => parcel.shopifyOrderId === order.id)
-              .map((parcel) => parcel.trackingNumber),
+              .map((parcel) => ({
+                index: parcel.index,
+                total: parcel.total,
+                trackingNumber: parcel.trackingNumber,
+              })),
           })),
         );
 

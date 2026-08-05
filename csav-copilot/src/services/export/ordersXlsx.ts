@@ -15,10 +15,16 @@ import type { OrderSummary } from '../shopify/orders.ts';
  * sa référence, et un classeur ouvert hors connexion n'afficherait rien.
  */
 
+export interface XlsxParcel {
+  index: number;
+  total: number;
+  trackingNumber: string;
+}
+
 export interface XlsxRowSource {
   order: OrderSummary;
   storeUrl: string;
-  trackingNumbers?: string[];
+  parcels?: XlsxParcel[];
 }
 
 /** Vignette Shopify redimensionnée : l'originale pèse souvent 1 Mo. */
@@ -79,6 +85,7 @@ export async function ordersToXlsx(rows: XlsxRowSource[]): Promise<Buffer> {
     { header: 'Customer', key: 'customer', width: 44 },
     { header: 'Note', key: 'note', width: 22 },
     { header: 'Product Link', key: 'link', width: 16 },
+    { header: 'Parcel', key: 'parcel', width: 10 },
     { header: 'Tracking', key: 'tracking', width: 24 },
   ];
 
@@ -94,8 +101,15 @@ export async function ordersToXlsx(rows: XlsxRowSource[]): Promise<Buffer> {
   // télécharge et ne l'incorpore qu'une fois par URL.
   const images = new Map<string, number>();
 
-  for (const { order, storeUrl, trackingNumbers = [] } of rows) {
-    for (const item of order.lineItems ?? []) {
+  for (const { order, storeUrl, parcels = [] } of rows) {
+    const items = order.lineItems ?? [];
+
+    for (const [position, item] of items.entries()) {
+      // Une ligne = un colis à préparer : quand une commande part en plusieurs
+      // envois, le rang de la ligne désigne le rang du colis. Répéter tous les
+      // numéros sur chaque ligne, comme avant, ne disait pas lequel coller sur
+      // quel carton.
+      const parcel = parcels.find((candidate) => candidate.index === position + 1);
       const row = sheet.addRow({
         order: order.name,
         items: '',
@@ -104,7 +118,8 @@ export async function ordersToXlsx(rows: XlsxRowSource[]): Promise<Buffer> {
         customer: customerBlock(order),
         note: '',
         link: '',
-        tracking: trackingNumbers.join('\n'),
+        parcel: parcel ? `${parcel.index}/${parcel.total}` : `${position + 1}/${items.length}`,
+        tracking: parcel?.trackingNumber ?? '',
       });
 
       // Cinq lignes de client tiennent dans 90 points ; en dessous, l'adresse

@@ -74,11 +74,24 @@ function photoUrl(parcelId) {
 }
 
 function parcelCard(order, index, total, saved) {
+  // L'article correspondant, quand il y en a autant que de colis : une
+  // commande dispatchée en plusieurs envois se prépare article par article, et
+  // « Colis 2/3 » seul ne dit pas ce qu'il faut mettre dedans.
+  const items = order.lineItems ?? [];
+  const item = items.length === total ? items[index - 1] : null;
+
   return `<div class="pk" data-order="${esc(order.id)}" data-index="${index}">
     <div class="pk-head">
       Colis ${index}/${total}
       ${saved ? '<span class="pk-done">enregistré</span>' : ''}
     </div>
+    ${
+      item
+        ? `<div class="pk-item">${item.quantity} × ${esc(item.title)}${
+            item.variantTitle ? ` — ${esc(item.variantTitle)}` : ''
+          }</div>`
+        : ''
+    }
     <input type="text" data-field="tracking" autocapitalize="characters"
       placeholder="Numéro de suivi" value="${esc(saved?.trackingNumber ?? '')}" />
     <input type="text" data-field="carrier" placeholder="Transporteur (facultatif)"
@@ -116,7 +129,9 @@ function renderOrders() {
       // Un numéro trop court bloquera la livraison : autant que l'atelier le
       // voie avant d'emballer, pas le transporteur devant la porte.
       const phoneShort = phone.replace(/\D/g, '').length < 9;
-      const total = order.parcels?.[0]?.total ?? 1;
+      // Autant de colis que d'articles par défaut : c'est la règle d'expédition
+      // habituelle, un carton par paire, et le fournisseur peut la changer.
+      const total = order.parcels?.[0]?.total ?? Math.max(1, (order.lineItems ?? []).length);
 
       return `<article class="ord">
         <div class="ord-head">
