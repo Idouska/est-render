@@ -22,7 +22,7 @@ import { parseMessage } from './messages.ts';
 export interface BackfillProgress {
   scanned: number;
   ingested: number;
-  /** Tickets récents soumis à l'IA. Les plus anciens entrent sans traitement. */
+  /** Tickets soumis à l'IA. */
   tickets: number;
   /** Tickets déjà connus dont les libellés ont été mis à jour. */
   relabelled: number;
@@ -68,18 +68,13 @@ export async function backfillMailbox(params: {
   };
   backfillProgress.set(mailboxId, progress);
 
-  // Tickets à soumettre à l'IA : seulement ceux dont le dernier message est
-  // récent.
+  // Tout le courrier rattrapé passe à l'IA, y compris les échanges anciens.
   //
-  // Trois mois d'archives, ce sont des milliers d'échanges dont la plupart sont
-  // clos depuis longtemps. Les faire tous rédiger coûterait une facture d'IA
-  // considérable pour produire des brouillons que personne n'enverra — on ne
-  // répond pas à un client qui écrivait il y a onze semaines. Le reste entre
-  // pour être consulté, ce qui est précisément ce qu'on demande à un
-  // rattrapage.
-  const AI_WINDOW_DAYS = 7;
-  const aiCutoff = new Date(Date.now() - AI_WINDOW_DAYS * 86_400_000);
-
+  // Choix du marchand, fait en connaissance du coût : trois mois d'archives
+  // représentent des milliers de rédactions dont beaucoup portent sur des
+  // dossiers clos. Ce qu'il y gagne est ailleurs — chaque ticket reçoit son
+  // motif et son résumé, ce qui rend l'historique consultable par intention et
+  // non seulement par date.
   const touched = new Set<string>();
   let pageToken: string | undefined;
 
@@ -168,7 +163,7 @@ export async function backfillMailbox(params: {
             },
           });
           progress.ingested += 1;
-          if (message.receivedAt >= aiCutoff) touched.add(ticket.id);
+          touched.add(ticket.id);
         } catch (error) {
           if ((error as { code?: string }).code !== 'P2002') throw error;
         }

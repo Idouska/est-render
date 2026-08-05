@@ -25,8 +25,26 @@ const ticketWorker = new Worker<TicketJob>(
   async (job) => {
     await processTicket(job.data.merchantId, job.data.ticketId);
   },
-  // Faible concurrence : chaque job consomme des appels Claude + Shopify.
-  { connection, concurrency: 3 },
+  {
+    connection,
+    // Faible concurrence : chaque job consomme des appels d'IA + Shopify.
+    concurrency: 3,
+    /*
+     * Débit plafonné, en plus de la concurrence.
+     *
+     * Un rattrapage de trois mois met des milliers de tickets en file d'un
+     * seul coup. Sans limite de cadence, le worker les enchaîne aussi vite que
+     * le réseau le permet et se fait couper par le fournisseur d'IA pour
+     * dépassement de quota — les jobs échouent alors en masse, retentent, et
+     * aggravent ce qu'ils subissent.
+     *
+     * Trente par minute laisse un gros rattrapage se déverser en quelques
+     * heures sans jamais franchir la limite de personne, et n'a aucun effet
+     * perceptible sur le trafic normal — un SAV reçoit rarement trente mails
+     * dans la même minute.
+     */
+    limiter: { max: 30, duration: 60_000 },
+  },
 );
 
 for (const worker of [ingestWorker, ticketWorker]) {

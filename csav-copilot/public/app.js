@@ -4450,10 +4450,8 @@ function backfillSummary(progress) {
       }</b> à la file.`,
     );
     parts.push(
-      progress.tickets > 0
-        ? `${progress.tickets} récent${progress.tickets > 1 ? 's' : ''} soumis à l’IA ; ` +
-          'les plus anciens entrent sans brouillon.'
-        : 'Aucun n’est assez récent pour appeler une réponse : ils entrent pour consultation.',
+      `${progress.tickets} ticket${progress.tickets > 1 ? 's' : ''} soumis à l’IA — ` +
+        'le classement et les résumés arrivent au fil du traitement.',
     );
   } else {
     parts.push('Aucun nouveau — tout ce courrier était déjà dans la file.');
