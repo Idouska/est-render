@@ -575,7 +575,7 @@ async function openSupplierLink(supplierId, revoke = false) {
  * reste « expédié » trois semaines. C'est 17TRACK qui sait où en est le colis,
  * et c'est cette réponse-là qu'attend le client.
  */
-async function openTracking(number) {
+async function openTracking(number, externalUrl = null) {
   $('sheet-name').textContent = 'Suivi du colis';
   $('sheet-email').textContent = number;
   $('sheet-body').innerHTML = '<p class="empty">Interrogation du transporteur…</p>';
@@ -603,9 +603,18 @@ async function openTracking(number) {
     return;
   }
 
+  // Le site du transporteur reste accessible, mais depuis la fenêtre et en
+  // choix secondaire : l'outil répond d'abord lui-même.
+  const external = externalUrl
+    ? `<p class="sheet-ext"><a href="${esc(externalUrl)}" target="_blank" rel="noopener">
+        Ouvrir chez le transporteur ↗</a></p>`
+    : '';
+
   $('sheet-body').innerHTML = `
     <section class="sheet-group">
-      <h3>${esc(parcel.orderName ?? 'Colis')} · ${parcel.index}/${parcel.total}</h3>
+      <h3>${esc(parcel.orderName ?? 'Colis')}${
+        parcel.total > 1 ? ` · ${parcel.index}/${parcel.total}` : ''
+      }</h3>
       <div class="sheet-row">
         <b>${esc(TRACK_LABELS[track.status] ?? track.status ?? '—')}</b>
         ${track.carrier ? `<span class="tag tag-order">${esc(track.carrier)}</span>` : ''}
@@ -632,7 +641,8 @@ async function openTracking(number) {
             : '<p>Aucun événement pour le moment.</p>'
         }
       </div>
-    </section>`;
+    </section>
+    ${external}`;
 }
 
 /* ----------------------------------------------- vue d'ensemble du groupe */
@@ -798,7 +808,7 @@ async function openCustomerSheet(email, displayName) {
     parcels.map(
       (parcel) => `<div class="sheet-row">
         <b>${parcel.index}/${parcel.total}</b>
-        <span class="mono">${esc(parcel.trackingNumber)}</span>
+        <button class="linklike mono" data-track="${esc(parcel.trackingNumber)}">${esc(parcel.trackingNumber)}</button>
         ${parcel.carrier ? `<span class="tag tag-order">${esc(parcel.carrier)}</span>` : ''}
         ${
           parcel.hasPhoto
@@ -934,7 +944,7 @@ async function renderParcels(ticket) {
               : '<span class="pcl-nophoto">sans photo</span>'
           }
         </div>
-        <code>${esc(parcel.trackingNumber)}</code>
+        <button class="linklike mono" data-track="${esc(parcel.trackingNumber)}">${esc(parcel.trackingNumber)}</button>
         ${parcel.carrier ? `<small>${esc(parcel.carrier)}</small>` : ''}
         ${
           parcel.hasPhoto
@@ -1698,7 +1708,11 @@ function renderShipping(order) {
   container.innerHTML =
     '<dl>' +
     row('Transporteur', fulfillment.trackingCompany ?? 'non précisé') +
-    row('Suivi', fulfillment.trackingNumber ?? '—', true) +
+    (fulfillment.trackingNumber
+      ? `<div class="row"><span>Suivi</span><button class="linklike mono" data-track="${esc(
+          fulfillment.trackingNumber,
+        )}">${esc(fulfillment.trackingNumber)}</button></div>`
+      : row('Suivi', '—')) +
     row('Statut', fulfillment.status) +
     (fulfillment.estimatedDeliveryAt
       ? row('Estimation', fullDate(fulfillment.estimatedDeliveryAt))
@@ -2546,11 +2560,11 @@ async function loadTracking() {
             <td>${esc(shipment.customer ?? '—')}</td>
             <td>${esc(shipment.carrier ?? '—')}</td>
             <td class="mono">${
-              shipment.trackingUrl
-                ? `<a href="${esc(shipment.trackingUrl)}" target="_blank" rel="noopener">${esc(
-                    shipment.trackingNumber,
-                  )}</a>`
-                : esc(shipment.trackingNumber ?? '—')
+              shipment.trackingNumber
+                ? `<button class="linklike" data-track="${esc(shipment.trackingNumber)}"${
+                    shipment.trackingUrl ? ` data-track-url="${esc(shipment.trackingUrl)}"` : ''
+                  }>${esc(shipment.trackingNumber)}</button>`
+                : '—'
             }</td>
             <td>${
               shipment.liveStatus
@@ -2567,9 +2581,9 @@ async function loadTracking() {
             }</td>
             <td>${
               shipment.trackingNumber
-                ? `<button class="btn btn-small" data-track="${esc(
-                    shipment.trackingNumber,
-                  )}">Chronologie</button>`
+                ? `<button class="btn btn-small" data-track="${esc(shipment.trackingNumber)}"${
+                    shipment.trackingUrl ? ` data-track-url="${esc(shipment.trackingUrl)}"` : ''
+                  }>Chronologie</button>`
                 : '—'
             }</td>
           </tr>`,
@@ -2578,7 +2592,9 @@ async function loadTracking() {
       '<tr><td colspan="6" class="empty">Aucun colis en cours d’acheminement.</td></tr>';
 
     body.querySelectorAll('[data-track]').forEach((button) =>
-      button.addEventListener('click', () => void openTracking(button.dataset.track)),
+      button.addEventListener('click', () =>
+        void openTracking(button.dataset.track, button.dataset.trackUrl ?? null),
+      ),
     );
 
     $('tracking-count').textContent = shipments.length
@@ -5180,4 +5196,15 @@ $('pal-input')?.addEventListener('keydown', (event) => {
 
 $('pal')?.addEventListener('click', (event) => {
   if (event.target === $('pal')) closePalette();
+});
+
+/* Tout numéro de suivi de l'application ouvre la même chronologie : la
+   délégation attrape ceux rendus après coup — fiche client, rail du ticket,
+   panneau colis — sans qu'aucun rendu n'ait à câbler son écouteur. Les lignes
+   du tableau Suivi gardent le leur, posé avant celui-ci ; le double appel est
+   évité en ne traitant ici que ce qui n'est pas déjà câblé. */
+document.addEventListener('click', (event) => {
+  const button = event.target.closest('.linklike[data-track]');
+  if (!button || button.closest('#tracking-rows')) return;
+  void openTracking(button.dataset.track, button.dataset.trackUrl ?? null);
 });

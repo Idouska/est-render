@@ -651,18 +651,53 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
   app.get<{ Params: { number: string } }>('/api/tracking/:number', async (request, reply) => {
     const number = request.params.number.trim();
 
-    // Le numéro doit appartenir à un colis du marchand : sans ce contrôle,
-    // l'application deviendrait un service de suivi ouvert à tous.
+    // Le numéro doit appartenir au marchand : sans ce contrôle, l'application
+    // deviendrait un service de suivi ouvert à tous. Deux sources légitimes —
+    // les colis saisis par le fournisseur, et les expéditions Shopify. Ne
+    // vérifier que la première renvoyait « Colis inconnu » pour tout numéro
+    // venu de Shopify, c'est-à-dire pour presque tous.
     const parcel = await prisma.parcel.findFirst({
       where: { merchantId: request.session.merchantId, trackingNumber: number },
       select: { id: true, orderName: true, carrier: true, index: true, total: true },
     });
 
-    if (!parcel) return reply.code(404).send({ error: 'Colis inconnu' });
+    let owned = parcel !== null;
+    let orderName = parcel?.orderName ?? null;
+
+    if (!owned) {
+      try {
+        const client = await getShopifyClient(request.session.merchantId);
+        // Shopify ne cherche pas par numéro de suivi : on relit les commandes
+        // expédiées récentes et on y cherche le numéro. Cinquante commandes
+        // couvrent la fenêtre où un suivi se consulte réellement.
+        const page = await listOrders(client, {
+          query: 'fulfillment_status:shipped OR fulfillment_status:partial',
+          limit: 50,
+          cursor: null,
+        });
+
+        for (const order of page.orders) {
+          if (order.fulfillments.some((f) => f.trackingNumber === number)) {
+            owned = true;
+            orderName = order.name;
+            break;
+          }
+        }
+      } catch {
+        // Shopify muet : on refuse plutôt que d'ouvrir le suivi sans preuve
+        // d'appartenance.
+      }
+    }
+
+    if (!owned) return reply.code(404).send({ error: 'Colis inconnu' });
 
     await registerTracking([number]);
     const track = (await getTracking([number])).get(number) ?? null;
 
-    return reply.send({ parcel, track, labels: TRACK_STATUS_LABELS });
+    return reply.send({
+      parcel: parcel ?? { orderName, carrier: null, index: 1, total: 1 },
+      track,
+      labels: TRACK_STATUS_LABELS,
+    });
   });
 }
