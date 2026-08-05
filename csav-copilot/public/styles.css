@@ -1812,3 +1812,58 @@ body {
 }
 
 .linkish:hover { text-decoration: underline; color: var(--accent-ink); }
+
+/* ------------------------------------------------ vue d'ensemble groupe --- */
+
+.shopcards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 13px; }
+
+.shopcard {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow);
+  padding: 14px 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.shopcard-head { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
+.shopcard-head i { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+
+.shopcard-open { display: flex; align-items: baseline; gap: 7px; }
+.shopcard-open b { font-size: 28px; font-weight: 600; letter-spacing: -0.03em; }
+.shopcard-open span { font-size: 12.5px; color: var(--ink-mute); }
+
+.shopcard-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* Barre de litiges : la position du repère est le seuil Shopify, pas le
+   maximum de l'échelle. Dépasser ce trait vaut gel des paiements. */
+.dispute-bar {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--inset);
+  overflow: visible;
+}
+
+.dispute-fill { position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: var(--ok); }
+.dispute-fill.over { background: var(--crit); }
+
+.dispute-mark {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  background: var(--ink-mute);
+  opacity: 0.55;
+}
+
+.shopcard-rate { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-mute); }
+.shopcard-rate b { font-family: var(--font-mono); color: var(--ink); }
+.shopcard-alert { font-size: 12px; color: var(--crit); font-weight: 600; }
+.shopcard .btn { align-self: flex-start; }
+
+/* Pastille de boutique sur une ligne de file : lue avant le nom du client,
+   elle n'apparaît qu'en mode « toutes les boutiques ». */
+.shop-pip { width: 8px; height: 8px; border-radius: 50%; flex: none; }

@@ -41,17 +41,56 @@ export async function listShopsFor(merchantId: string, email: string) {
 
   return merchants
     .filter((merchant) => merchant.users.length > 0)
-    .map((merchant) => ({
+    .map((merchant, index) => ({
       id: merchant.id,
       shopDomain: merchant.shopDomain,
       label: merchant.brandName || merchant.name || merchant.shopDomain.replace('.myshopify.com', ''),
       logoUrl: merchant.logoUrl,
       status: merchant.status,
+      color: SHOP_COLORS[index % SHOP_COLORS.length],
       role: merchant.users[0]!.role,
       userId: merchant.users[0]!.id,
       current: merchant.id === merchantId,
     }));
 }
+
+/**
+ * Boutiques que l'utilisateur courant a le droit de lire d'un seul tenant.
+ *
+ * C'est la seule dérogation à la règle « une requête, un `merchantId` », et
+ * elle est volontairement étroite : la liste est recalculée à chaque appel à
+ * partir des comptes actifs portant l'email de la session, jamais à partir de
+ * ce que le navigateur envoie. Un identifiant de boutique reçu du client n'est
+ * donc utilisable que s'il figure déjà ici.
+ *
+ * Réservée aux écrans de lecture. Toute écriture reste scopée au `merchantId`
+ * de la session : on consulte plusieurs boutiques, on n'en modifie qu'une.
+ */
+export async function accessibleMerchantIds(session: {
+  merchantId: string;
+  email: string;
+}): Promise<string[]> {
+  const shops = await listShopsFor(session.merchantId, session.email);
+  return shops.length > 0 ? shops.map((shop) => shop.id) : [session.merchantId];
+}
+
+/**
+ * Couleur d'une boutique, stable dans le temps.
+ *
+ * Dérivée du rang dans le groupe plutôt que stockée : une couleur en base
+ * demanderait un réglage de plus à remplir, et l'ordre de création ne change
+ * jamais.
+ */
+export const SHOP_COLORS = [
+  '#2f6fe4',
+  '#e5484d',
+  '#059669',
+  '#d97706',
+  '#6c5ce7',
+  '#0891b2',
+  '#be123c',
+  '#475569',
+] as const;
 
 export async function shopRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', requireSession);

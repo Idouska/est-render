@@ -19,6 +19,7 @@ const state = {
   team: { users: [], me: null },
   pendingCount: 0,
   shops: [],
+  allShops: false,
   navQuery: '',
   refreshing: false,
   lastRefresh: null,
@@ -180,10 +181,14 @@ function renderMe() {
   const me = state.me;
   const shop = me.merchant.shopDomain ?? '';
 
-  const brand = me.merchant.brandName || me.merchant.name || 'cSAV Copilot';
+  const brand = state.allShops
+    ? 'Toutes les boutiques'
+    : me.merchant.brandName || me.merchant.name || 'cSAV Copilot';
 
   $('merchant-name').textContent = brand;
-  $('merchant-shop').textContent = shop.replace('.myshopify.com', '');
+  $('merchant-shop').textContent = state.allShops
+    ? `${state.shops.length} boutiques`
+    : shop.replace('.myshopify.com', '');
   $('brand-mark').textContent = brand.slice(0, 2).toUpperCase();
 
   // Le logo remplace les initiales quand il est renseigné, et retombe dessus
@@ -260,12 +265,29 @@ async function loadShops() {
 
 function renderShopMenu() {
   const canAdd = canI('configure');
-  const rows = state.shops.map(
-    (shop) => `
-      <button class="shop-item" type="button" data-shop="${esc(shop.id)}" aria-current="${
-        shop.current ? 'true' : 'false'
+  const rows = [];
+
+  // Le mode agrégé n'a de sens qu'à partir de deux boutiques.
+  if (state.shops.length > 1) {
+    rows.push(`
+      <button class="shop-item" type="button" data-shop-all="1" aria-current="${
+        state.allShops ? 'true' : 'false'
       }">
         <span class="shop-dot"></span>
+        <span style="min-width:0">
+          <b>Toutes les boutiques</b>
+          <small>${state.shops.length} boutiques réunies dans une seule file</small>
+        </span>
+      </button>`);
+    rows.push('<hr />');
+  }
+
+  rows.push(...state.shops.map(
+    (shop) => `
+      <button class="shop-item" type="button" data-shop="${esc(shop.id)}" aria-current="${
+        shop.current && !state.allShops ? 'true' : 'false'
+      }">
+        <span class="shop-dot" style="background:${esc(shop.color ?? '')}"></span>
         <span style="min-width:0">
           <b>${esc(shop.label)}</b>
           <small>${esc(shop.shopDomain.replace('.myshopify.com', ''))} · ${
@@ -273,7 +295,7 @@ function renderShopMenu() {
           }</small>
         </span>
       </button>`,
-  );
+  ));
 
   if (canAdd) {
     rows.push('<hr />');
@@ -383,6 +405,7 @@ function queueParams() {
   if (f.intent) params.set('intent', f.intent);
   if (f.assignee) params.set('assignee', f.assignee);
   if (f.mailbox) params.set('mailbox', f.mailbox);
+  if (state.allShops) params.set('scope', 'all');
   if (f.sort !== 'newest') params.set('sort', f.sort);
   if (f.urgent) params.set('minAgeDays', '3');
   if (f.unassigned) params.set('assignee', 'none');
@@ -438,6 +461,7 @@ async function loadQueue() {
   // Le badge de boîte n'a de sens qu'à partir de deux adresses : sinon il
   // répète la même information sur chaque ligne.
   const multiMailbox = (state.me?.gmail?.mailboxes?.length ?? 0) > 1;
+  const shopById = new Map(state.shops.map((shop) => [shop.id, shop]));
 
   list.innerHTML = state.tickets
     .map((ticket) => {
@@ -448,6 +472,13 @@ async function loadQueue() {
         <button class="queue-item li-${ticket.intent ?? 'OTHER'}" data-id="${ticket.id}"
           aria-current="${ticket.id === state.currentId}">
           <span class="queue-top">
+            ${
+              state.allShops && shopById.has(ticket.merchantId)
+                ? `<span class="shop-pip" style="background:${esc(
+                    shopById.get(ticket.merchantId).color,
+                  )}" title="${esc(shopById.get(ticket.merchantId).label)}"></span>`
+                : ''
+            }
             <span class="queue-who">${esc(ticket.customerName ?? ticket.customerEmail)}</span>
             ${ageChip(ticket.lastMessageAt)}
           </span>
@@ -517,6 +548,100 @@ async function openSupplierLink(supplierId, revoke = false) {
   } catch (error) {
     toast(error.message, true);
   }
+}
+
+/* ----------------------------------------------- vue d'ensemble du groupe */
+
+/**
+ * Une carte par boutique : ce qui attend, ce qui traîne, ce qui coûte.
+ *
+ * Le taux de litiges y figure parce qu'il annonce une sanction et pas une
+ * charge de travail — au-delà de 1 % de commandes contestées, Shopify gèle les
+ * paiements d'une boutique. Un exploitant doit le voir avant de le subir.
+ */
+async function renderShopCards() {
+  let data;
+  try {
+    data = await api('/api/overview');
+  } catch {
+    $('ov-shops').innerHTML = '';
+    return;
+  }
+
+  const shops = data.shops ?? [];
+  const threshold = data.disputeThreshold ?? 1;
+
+  // Une seule boutique : la carte répéterait les indicateurs juste en dessous.
+  if (shops.length < 2) {
+    $('ov-shops').innerHTML = '';
+    return;
+  }
+
+  $('ov-shops').innerHTML = shops
+    .map((shop) => {
+      const over = shop.disputeRate > threshold;
+      // Échelle à deux fois le seuil : sinon un taux de 0,3 % donne une barre
+      // invisible et un taux de 1,2 % une barre pleine, tous deux illisibles.
+      const width = Math.min(100, (shop.disputeRate / (threshold * 2)) * 100);
+
+      return `<article class="shopcard">
+        <div class="shopcard-head">
+          <i style="background:${esc(shop.color)}"></i>
+          ${esc(shop.label)}
+        </div>
+
+        <div class="shopcard-open">
+          <b>${shop.open}</b><span>à traiter</span>
+        </div>
+
+        <div class="shopcard-tags">
+          ${
+            shop.late
+              ? `<span class="tag st-FAILED">${shop.late} en retard</span>`
+              : '<span class="tag st-CLOSED">rien en retard</span>'
+          }
+          ${shop.disputes ? `<span class="tag st-NEEDS_REVIEW">${shop.disputes} litige${
+            shop.disputes > 1 ? 's' : ''
+          }</span>` : ''}
+        </div>
+
+        <div class="shopcard-rate">
+          <span>Litiges 30 j</span>
+          <span class="dispute-bar" style="flex:1">
+            <span class="dispute-fill${over ? ' over' : ''}" style="width:${width}%"></span>
+            <span class="dispute-mark" style="left:50%"></span>
+          </span>
+          <b>${String(shop.disputeRate).replace('.', ',')} %</b>
+        </div>
+
+        ${
+          over
+            ? '<div class="shopcard-alert">Seuil Shopify dépassé — risque de gel des paiements</div>'
+            : ''
+        }
+
+        <button class="btn btn-small" data-open-shop="${esc(shop.id)}">${
+          shop.current ? 'Ouvrir la file' : 'Basculer et ouvrir'
+        }</button>
+      </article>`;
+    })
+    .join('');
+
+  $('ov-shops')
+    .querySelectorAll('[data-open-shop]')
+    .forEach((button) =>
+      button.addEventListener('click', async () => {
+        const id = button.dataset.openShop;
+        const shop = shops.find((candidate) => candidate.id === id);
+
+        // Basculer recharge la page : rien de la boutique précédente ne doit
+        // survivre en mémoire.
+        if (!shop?.current) return switchShop(id);
+
+        setView('tickets');
+        await loadQueue();
+      }),
+    );
 }
 
 /* ----------------------------------------------------------- fiche client */
@@ -1720,6 +1845,8 @@ $('team-f-resend').addEventListener('click', async () => {
    chargées au démarrage plutôt que de rappeler l'API : cet écran doit
    s'afficher instantanément, c'est le premier ouvert de la journée. */
 async function loadOverview() {
+  void renderShopCards();
+
   const metrics = await api('/api/metrics');
   const counts = metrics.tickets ?? {};
 
@@ -1749,6 +1876,13 @@ async function loadOverview() {
       .map(
         (ticket) => `<li><button class="queue-item" data-id="${esc(ticket.id)}">
           <span class="queue-top">
+            ${
+              state.allShops && shopById.has(ticket.merchantId)
+                ? `<span class="shop-pip" style="background:${esc(
+                    shopById.get(ticket.merchantId).color,
+                  )}" title="${esc(shopById.get(ticket.merchantId).label)}"></span>`
+                : ''
+            }
             <span class="queue-who">${esc(ticket.customerName ?? ticket.customerEmail)}</span>
             <span class="queue-time">${relativeTime(ticket.lastMessageAt)}</span>
           </span>
@@ -3420,6 +3554,12 @@ $('shop-switch').addEventListener('click', (event) => {
 });
 
 $('shop-menu').addEventListener('click', (event) => {
+  if (event.target.closest('[data-shop-all]')) {
+    toggleShopMenu(false);
+    setAllShops(true);
+    return;
+  }
+
   const add = event.target.closest('[data-shop-add]');
   if (add) {
     toggleShopMenu(false);
@@ -3431,8 +3571,34 @@ $('shop-menu').addEventListener('click', (event) => {
   if (!row) return;
 
   toggleShopMenu(false);
-  if (row.getAttribute('aria-current') !== 'true') void switchShop(row.dataset.shop);
+
+  // Revenir sur la boutique déjà active depuis le mode agrégé ne demande pas
+  // de changer de session, seulement de refermer la vue élargie.
+  if (row.dataset.shop === state.me?.merchant?.id) {
+    setAllShops(false);
+    return;
+  }
+
+  void switchShop(row.dataset.shop);
 });
+
+/**
+ * Mode « toutes les boutiques ».
+ *
+ * Lecture seule et sans rechargement : la session reste sur une boutique, seule
+ * la file s'élargit. Toute action — répondre, rembourser, escalader — continue
+ * de porter sur la boutique du ticket ouvert.
+ */
+function setAllShops(on) {
+  state.allShops = on;
+  localStorage.setItem('csav.allShops', on ? '1' : '0');
+
+  renderShopMenu();
+  renderMe();
+
+  if (state.view === 'tickets') void loadQueue();
+  else setView('tickets');
+}
 
 // Un menu ouvert qui reste ouvert quand on clique ailleurs recouvre la
 // navigation et donne l'impression d'une interface bloquée.
@@ -3458,6 +3624,7 @@ async function boot() {
     localStorage.setItem('csav.shop', state.me.merchant.shopDomain);
   }
 
+  state.allShops = localStorage.getItem('csav.allShops') === '1';
   $('auto-refresh').checked = localStorage.getItem('csav.autoRefresh') !== '0';
   state.lastRefresh = Date.now();
   renderRefreshLabel();

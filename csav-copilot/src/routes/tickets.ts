@@ -4,6 +4,7 @@ import { env } from '../config/env.ts';
 import { recordAudit } from '../lib/audit.ts';
 import { prisma } from '../lib/prisma.ts';
 import { requirePermission, requireSession } from '../plugins/auth.ts';
+import { accessibleMerchantIds, listShopsFor } from './shops.ts';
 import { sendDraft, updateDraftBody } from '../services/gmail/drafts.ts';
 import { sendPlainEmail } from '../services/gmail/send.ts';
 import { getShopifyClient, ShopifyError } from '../services/shopify/client.ts';
@@ -36,6 +37,8 @@ const listQuery = z.object({
   unlinked: z.coerce.boolean().optional(),
   /** Boîte mail d'origine — utile quand `contact@` et `sav@` cohabitent. */
   mailbox: z.string().max(60).optional(),
+  /** `all` élargit la file à toutes les boutiques du groupe. */
+  scope: z.enum(['shop', 'all']).default('shop'),
   sort: z.enum(['oldest', 'newest', 'confidence']).default('newest'),
   cursor: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(25),
@@ -49,14 +52,16 @@ const listQuery = z.object({
  * est pire que pas de compteur du tout.
  */
 function buildTicketWhere(
-  merchantId: string,
+  merchantIds: string[],
   filters: z.infer<typeof listQuery>,
   options: { withStatus: boolean },
 ) {
   const term = filters.q?.trim();
 
   return {
-    merchantId,
+    // Une liste, jamais un identifiant venu du client : `merchantIds` est
+    // toujours calculé serveur depuis la session.
+    merchantId: merchantIds.length === 1 ? merchantIds[0] : { in: merchantIds },
     ...(options.withStatus && filters.status ? { status: filters.status } : {}),
     ...(filters.intent ? { intent: filters.intent } : {}),
     ...(filters.assignee === 'none'
@@ -155,8 +160,13 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(400).send({ error: 'Paramètres invalides', details: query.error.issues });
     }
 
-    const { merchantId } = request.session;
+    const { merchantId, email } = request.session;
     const { cursor, limit, sort } = query.data;
+
+    const merchantIds =
+      query.data.scope === 'all'
+        ? await accessibleMerchantIds({ merchantId, email })
+        : [merchantId];
 
     const orderBy =
       sort === 'oldest'
@@ -167,7 +177,7 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
 
     const [tickets, byStatus] = await Promise.all([
       prisma.ticket.findMany({
-        where: buildTicketWhere(merchantId, query.data, { withStatus: true }),
+        where: buildTicketWhere(merchantIds, query.data, { withStatus: true }),
         orderBy,
         take: limit + 1,
         ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
@@ -186,13 +196,14 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
           assignedToId: true,
           assignedTo: { select: { id: true, name: true, email: true } },
           mailbox: { select: { id: true, emailAddress: true, label: true } },
+          merchantId: true,
         },
       }),
       // Compteurs calculés sur les mêmes filtres, statut exclu : sinon chaque
       // onglet afficherait son propre nombre et jamais celui des autres.
       prisma.ticket.groupBy({
         by: ['status'],
-        where: buildTicketWhere(merchantId, query.data, { withStatus: false }),
+        where: buildTicketWhere(merchantIds, query.data, { withStatus: false }),
         _count: true,
       }),
     ]);
@@ -316,6 +327,89 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
             : 'Catalogue indisponible.',
       });
     }
+  });
+
+  /**
+   * Vue d'ensemble du groupe : une carte par boutique.
+   *
+   * Ce qu'un exploitant de plusieurs boutiques regarde le matin — où ça brûle,
+   * et pas seulement combien il y a de tickets. D'où « en retard » et « litiges »
+   * en évidence : ce sont les deux chiffres qui coûtent de l'argent.
+   */
+  app.get('/api/overview', async (request, reply) => {
+    const { merchantId, email } = request.session;
+    const shops = await listShopsFor(merchantId, email);
+    const ids = shops.length > 0 ? shops.map((shop) => shop.id) : [merchantId];
+
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const lateBefore = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+
+    const OPEN = ['NEW', 'PROCESSING', 'DRAFT_READY', 'NEEDS_REVIEW', 'AWAITING_SUPPLIER'] as const;
+
+    const [open, late, disputes, closed] = await Promise.all([
+      prisma.ticket.groupBy({
+        by: ['merchantId'],
+        where: { merchantId: { in: ids }, status: { in: [...OPEN] } },
+        _count: true,
+      }),
+      // « En retard » se compte sur les tickets encore ouverts : un ticket clos
+      // il y a un mois n'est pas en retard, il est fini.
+      prisma.ticket.groupBy({
+        by: ['merchantId'],
+        where: {
+          merchantId: { in: ids },
+          status: { in: [...OPEN] },
+          lastMessageAt: { lte: lateBefore },
+        },
+        _count: true,
+      }),
+      prisma.ticket.groupBy({
+        by: ['merchantId'],
+        where: { merchantId: { in: ids }, intent: 'DISPUTE', status: { in: [...OPEN] } },
+        _count: true,
+      }),
+      prisma.ticket.groupBy({
+        by: ['merchantId'],
+        where: {
+          merchantId: { in: ids },
+          status: { in: ['CLOSED', 'AUTO_SENT'] },
+          lastMessageAt: { gte: since },
+        },
+        _count: true,
+      }),
+    ]);
+
+    const countOf = (rows: Array<{ merchantId: string; _count: number }>, id: string) =>
+      rows.find((row) => row.merchantId === id)?._count ?? 0;
+
+    return reply.send({
+      shops: (shops.length > 0
+        ? shops
+        : [{ id: merchantId, label: 'Ma boutique', color: '#2f6fe4', current: true }]
+      ).map((shop) => {
+        const openCount = countOf(open, shop.id);
+        const closedCount = countOf(closed, shop.id);
+        const disputeCount = countOf(disputes, shop.id);
+        const handled = openCount + closedCount;
+
+        return {
+          id: shop.id,
+          label: shop.label,
+          color: shop.color,
+          current: shop.current,
+          open: openCount,
+          late: countOf(late, shop.id),
+          disputes: disputeCount,
+          closed30d: closedCount,
+          // Part de litiges sur trente jours : au-delà de 1 %, Shopify gèle les
+          // paiements d'une boutique. C'est le seul indicateur de cet écran qui
+          // annonce une sanction plutôt qu'une charge de travail.
+          disputeRate: handled === 0 ? 0 : Number(((disputeCount / handled) * 100).toFixed(2)),
+        };
+      }),
+      /** Seuil Shopify, en pourcentage de commandes contestées. */
+      disputeThreshold: 1,
+    });
   });
 
   app.get('/api/metrics', async (request, reply) => {
