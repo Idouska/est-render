@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { env } from '../config/env.ts';
 import { prisma } from '../lib/prisma.ts';
 import { ordersToCsv } from '../services/export/ordersCsv.ts';
+import { ordersToXlsx } from '../services/export/ordersXlsx.ts';
 import {
   getTracking,
   registerTracking,
@@ -511,6 +512,74 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
    * les rassembler ici évite de les recopier à la main sous la pression du
    * délai.
    */
+  /** Même feuille de préparation, côté agent. */
+  app.get<{ Querystring: { since?: string; until?: string; limit?: string } }>(
+    '/api/orders/export.xlsx',
+    async (request, reply) => {
+      const parsed = z
+        .object({
+          since: z.string().date().optional(),
+          until: z.string().date().optional(),
+          limit: z.coerce.number().int().min(1).max(250).default(100),
+        })
+        .safeParse(request.query);
+
+      if (!parsed.success) return reply.code(400).send({ error: 'Période invalide' });
+
+      try {
+        const [client, merchant] = await Promise.all([
+          getShopifyClient(request.session.merchantId),
+          prisma.merchant.findUniqueOrThrow({
+            where: { id: request.session.merchantId },
+            select: { shopDomain: true },
+          }),
+        ]);
+
+        const query =
+          !parsed.data.since && !parsed.data.until
+            ? `created_at:>=${new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()}`
+            : [
+                parsed.data.since ? `created_at:>=${parsed.data.since}` : '',
+                parsed.data.until ? `created_at:<=${parsed.data.until}T23:59:59Z` : '',
+              ]
+                .filter(Boolean)
+                .join(' AND ');
+
+        const page = await listOrders(client, { query, limit: parsed.data.limit, cursor: null });
+
+        const parcels = await prisma.parcel.findMany({
+          where: {
+            merchantId: request.session.merchantId,
+            shopifyOrderId: { in: page.orders.map((order) => order.id) },
+          },
+          orderBy: { index: 'asc' },
+          select: { shopifyOrderId: true, trackingNumber: true },
+        });
+
+        const file = await ordersToXlsx(
+          page.orders.map((order) => ({
+            order,
+            storeUrl: `https://${merchant.shopDomain}`,
+            trackingNumbers: parcels
+              .filter((parcel) => parcel.shopifyOrderId === order.id)
+              .map((parcel) => parcel.trackingNumber),
+          })),
+        );
+
+        const stamp = new Date().toISOString().slice(0, 10);
+
+        return reply
+          .type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+          .header('Content-Disposition', `attachment; filename="commandes-${stamp}.xlsx"`)
+          .send(file);
+      } catch (error) {
+        const { status, message } = describeShopifyError(error);
+        request.log.error({ err: error }, 'Export Excel des commandes en échec');
+        return reply.code(status).send({ error: message });
+      }
+    },
+  );
+
   app.get('/api/disputes', async (request, reply) =>
     serveShopify(request, reply, 'Listing des litiges en échec', async (client) => {
       const disputes = await listDisputes(client);

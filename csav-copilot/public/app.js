@@ -2239,6 +2239,7 @@ $('catalog-more').addEventListener('click', () => loadCatalog());
 
 // Lien direct plutôt qu'un appel : le navigateur gère le téléchargement, et un
 // fichier reçu en mémoire puis re-téléchargé ne servirait à rien de plus.
+$('orders-xlsx').href = '/api/orders/export.xlsx?limit=250';
 $('orders-export').href = '/api/orders/export.csv?limit=250';
 
 // Les filtres de commandes rejouent la requête depuis le début : garder le

@@ -5,6 +5,7 @@ import { recordAudit } from '../lib/audit.ts';
 import { prisma } from '../lib/prisma.ts';
 import { verifySupplierWorkspaceToken } from '../lib/supplierToken.ts';
 import { ordersToCsv } from '../services/export/ordersCsv.ts';
+import { ordersToXlsx } from '../services/export/ordersXlsx.ts';
 import { getShopifyClient } from '../services/shopify/client.ts';
 import { listOrders } from '../services/shopify/orders.ts';
 import { decodePhoto, photoSchema, sendParcelPhoto, toParcelView } from './parcels.ts';
@@ -269,6 +270,70 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
         .type('text/csv; charset=utf-8')
         .header('Content-Disposition', `attachment; filename="commandes-${stamp}.csv"`)
         .send(csv);
+    },
+  );
+
+  /**
+   * Feuille de préparation au format Excel.
+   *
+   * Le CSV reste disponible pour qui veut retravailler les données ; celui-ci
+   * reprend la mise en page de l'atelier, une ligne par article avec la photo
+   * dans la cellule.
+   */
+  app.get<{ Params: { id: string }; Querystring: z.infer<typeof rangeQuery> }>(
+    '/api/workspace/:id/orders.xlsx',
+    async (request, reply) => {
+      const workspace = await authorize(request, reply);
+      if (!workspace) return;
+
+      const parsed = rangeQuery.safeParse(request.query);
+      if (!parsed.success) return reply.code(400).send({ error: 'Période invalide' });
+
+      const allowed = await allowedOrderIds(workspace);
+
+      const [client, merchant] = await Promise.all([
+        getShopifyClient(workspace.merchantId),
+        prisma.merchant.findUniqueOrThrow({
+          where: { id: workspace.merchantId },
+          select: { shopDomain: true },
+        }),
+      ]);
+
+      const page = await listOrders(client, {
+        query: toShopifyRange(parsed.data.since, parsed.data.until),
+        limit: parsed.data.limit,
+        cursor: null,
+      });
+
+      const visible = allowed
+        ? page.orders.filter((order) => allowed.includes(order.id))
+        : page.orders;
+
+      const parcels = await prisma.parcel.findMany({
+        where: {
+          merchantId: workspace.merchantId,
+          shopifyOrderId: { in: visible.map((order) => order.id) },
+        },
+        orderBy: { index: 'asc' },
+        select: { shopifyOrderId: true, trackingNumber: true },
+      });
+
+      const file = await ordersToXlsx(
+        visible.map((order) => ({
+          order,
+          storeUrl: `https://${merchant.shopDomain}`,
+          trackingNumbers: parcels
+            .filter((parcel) => parcel.shopifyOrderId === order.id)
+            .map((parcel) => parcel.trackingNumber),
+        })),
+      );
+
+      const stamp = new Date().toISOString().slice(0, 10);
+
+      return reply
+        .type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        .header('Content-Disposition', `attachment; filename="commandes-${stamp}.xlsx"`)
+        .send(file);
     },
   );
 

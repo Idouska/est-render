@@ -196,6 +196,9 @@ async function load() {
     $('ws-supplier').textContent = data.supplier?.name
       ? `Atelier ${data.supplier.name}`
       : '';
+    // Deux formats : la feuille Excel reprend la mise en page de l'atelier,
+    // le CSV sert à qui veut retravailler les données.
+    $('ws-xlsx').href = apiUrl(`/api/workspace/${supplierId}/orders.xlsx`).toString();
     $('ws-csv').href = apiUrl(`/api/workspace/${supplierId}/orders.csv`).toString();
 
     renderOrders();
