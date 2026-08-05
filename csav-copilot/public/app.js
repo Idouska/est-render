@@ -3784,7 +3784,15 @@ function renderSettings() {
     .querySelectorAll('[data-mbx-off]')
     .forEach((button) =>
       button.addEventListener('click', async () => {
-        if (!confirm('Débrancher cette boîte ? Les tickets déjà reçus sont conservés.')) return;
+        if (
+          !confirm(
+            'Débrancher cette boîte ?\n\n' +
+              'L’autorisation Google est révoquée : l’outil perd tout accès à cette ' +
+              'adresse. Les tickets déjà reçus sont conservés.',
+          )
+        ) {
+          return;
+        }
 
         try {
           await api(`/api/mailboxes/${button.dataset.mbxOff}`, { method: 'DELETE' });

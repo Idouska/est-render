@@ -2,10 +2,12 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { env } from "../config/env.ts";
 import { recordAudit } from "../lib/audit.ts";
+import { decryptSecret } from "../lib/crypto.ts";
 import { prisma } from "../lib/prisma.ts";
 import { PREVIEW_COOKIE, requirePermission, requireSession } from "../plugins/auth.ts";
-import { getGmailClient } from "../services/gmail/client.ts";
+import { createOAuthClient, getGmailClient } from "../services/gmail/client.ts";
 import { importMailboxHistory } from "../services/gmail/importHistory.ts";
+import { stopWatch } from "../services/gmail/watch.ts";
 import { ingestMerchantInbox } from "../services/tickets/ingest.ts";
 import { ShopifyScopeError } from "../services/shopify/client.ts";
 import { fetchShopPolicies, policiesToPlaybook } from "../services/shopify/policies.ts";
@@ -552,9 +554,41 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
 
       const mailbox = await prisma.gmailConnection.findFirst({
         where: { id: request.params.id, merchantId },
-        select: { id: true, emailAddress: true, isDefault: true },
+        select: {
+          id: true,
+          emailAddress: true,
+          isDefault: true,
+          refreshTokenEnc: true,
+        },
       });
       if (!mailbox) return reply.code(404).send({ error: "Boîte introuvable" });
+
+      /*
+       * Couper chez Google avant d'effacer chez nous.
+       *
+       * Supprimer la ligne en base ne retirait rien du côté Google :
+       * l'abonnement continuait de pousser des notifications pour une boîte
+       * devenue inconnue, et surtout l'autorisation restait vivante — le jeton
+       * permettait encore de lire la boîte que le marchand croyait débranchée.
+       * « Débrancher » doit vouloir dire ce qu'il dit.
+       *
+       * Les deux gestes sont tentés séparément et sans bloquer : si Google
+       * refuse, on retire quand même l'accès de l'application. Laisser une
+       * boîte branchée parce qu'une révocation a échoué serait le pire des
+       * deux mondes.
+       */
+      try {
+        await stopWatch(merchantId, mailbox.id);
+      } catch (error) {
+        request.log.warn({ err: error }, "Arrêt du watch Gmail en échec");
+      }
+
+      try {
+        const auth = await createOAuthClient();
+        await auth.revokeToken(decryptSecret(mailbox.refreshTokenEnc));
+      } catch (error) {
+        request.log.warn({ err: error }, "Révocation du jeton Google en échec");
+      }
 
       const remaining = await prisma.gmailConnection.findFirst({
         where: { merchantId, id: { not: mailbox.id } },
