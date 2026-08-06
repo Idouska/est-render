@@ -8,7 +8,7 @@ import { PREVIEW_COOKIE, requirePermission, requireSession } from "../plugins/au
 import { generateReply } from "../services/ai/generate.ts";
 import { backfillMailbox, backfillProgress } from "../services/gmail/backfill.ts";
 import { createOAuthClient, getGmailClient } from "../services/gmail/client.ts";
-import { loadLabelNames, loadLabelStyles } from "../services/gmail/labels.ts";
+import { loadLabelNames, loadLabelStyles, syncTicketLabels } from "../services/gmail/labels.ts";
 import { importMailboxHistory } from "../services/gmail/importHistory.ts";
 import { stopWatch } from "../services/gmail/watch.ts";
 import { ingestMerchantInbox } from "../services/tickets/ingest.ts";
@@ -686,6 +686,75 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
           count: row._count._all,
         })),
       });
+    },
+  );
+
+  /**
+   * Pose les libellés Gmail sur les tickets, sans rien réingérer.
+   *
+   * Jusqu'ici les étiquettes ne s'accrochaient qu'au cours d'un rattrapage
+   * complet — plusieurs minutes de balayage pour une opération qui prend
+   * quelques requêtes. Résultat : elles n'arrivaient jamais, et l'écran
+   * affichait des libellés que Gmail connaissait sans qu'aucun ticket ne les
+   * porte.
+   */
+  app.post(
+    "/api/labels/sync",
+    { preHandler: requirePermission("configure") },
+    async (request, reply) => {
+      const { merchantId } = request.session;
+
+      const mailboxes = await prisma.gmailConnection.findMany({
+        where: { merchantId },
+        select: { id: true },
+      });
+
+      let updated = 0;
+
+      for (const mailbox of mailboxes) {
+        try {
+          const { gmail } = await getGmailClient(merchantId, mailbox.id);
+
+          // Table rase sur la fenêtre traitée : un libellé retiré dans Gmail ne
+          // doit pas survivre ici, sans quoi l'étiquette décrit un classement
+          // abandonné.
+          await prisma.ticket.updateMany({
+            where: {
+              merchantId,
+              mailboxId: mailbox.id,
+              lastMessageAt: { gte: new Date(Date.now() - 180 * 86_400_000) },
+            },
+            data: { labels: [] },
+          });
+
+          updated += await syncTicketLabels({
+            gmail,
+            mailboxId: mailbox.id,
+            days: 180,
+            ticketsFor: async (messageIds) => {
+              const rows = await prisma.message.findMany({
+                where: { merchantId, gmailMessageId: { in: messageIds } },
+                select: { ticketId: true },
+              });
+              return [...new Set(rows.map((row) => row.ticketId))];
+            },
+            applyLabels: async (byTicket) => {
+              for (const [ticketId, labels] of byTicket) {
+                await prisma.ticket.update({
+                  where: { id: ticketId },
+                  data: {
+                    labels: [...new Set(labels)].sort((a, b) => a.localeCompare(b, "fr")),
+                  },
+                });
+              }
+            },
+          });
+        } catch (error) {
+          request.log.warn({ err: error, mailbox: mailbox.id }, "Libellés non posés");
+        }
+      }
+
+      return reply.send({ updated });
     },
   );
 

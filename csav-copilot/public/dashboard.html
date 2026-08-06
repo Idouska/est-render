@@ -216,6 +216,12 @@
         <!-- Origine du ticket : trois populations qui ne se traitent pas de la
              même façon. Un onglet plutôt qu'un filtre de plus, parce qu'on
              choisit son terrain avant de le filtrer. -->
+        <!-- Les libellés Gmail en boutons, pas dans un menu déroulant. Ce sont
+             les catégories que le marchand a créées lui-même : les cacher
+             derrière un « Tous » revient à les remplacer par un mot qui ne veut
+             rien dire. Ils portent leurs couleurs de Gmail. -->
+        <div class="qbar-row qbar-labels" id="q-labels" hidden></div>
+
         <div class="qbar-row qbar-origins">
           <button class="otab" data-origin="" aria-pressed="true">Tout</button>
           <button class="otab" data-origin="client">Client</button>
@@ -243,7 +249,7 @@
           <label>Assigné <select id="q-assignee"><option value="">Tous</option></select></label>
           <label>Motif <select id="q-intent"><option value="">Tous</option></select></label>
           <label>Boîte <select id="q-mailbox"><option value="">Toutes</option></select></label>
-          <label>Libellé <select id="q-label"><option value="">Tous</option></select></label>
+
           <span class="qbar-count" id="q-count"></span>
         </div>
       </section>
@@ -845,6 +851,20 @@
             <div class="card-body set-group">
               <button class="btn btn-small" id="ai-test">Tester la connexion</button>
               <div class="mbx-diag" id="ai-test-state"></div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head">
+              <span class="panel-title">Libellés Gmail</span>
+              <p class="set-help">
+                Vos étiquettes deviennent des filtres sur la file. Elles se posent
+                sur les tickets déjà présents sans rien réingérer.
+              </p>
+            </div>
+            <div class="card-body set-group">
+              <button class="btn btn-small" id="labels-sync">Poser les libellés sur les tickets</button>
+              <div class="mbx-diag" id="labels-sync-state"></div>
             </div>
           </div>
 

@@ -218,6 +218,7 @@ async function loadLabelStyles() {
   try {
     const data = await api('/api/labels');
     labelStyles = data.labels ?? {};
+    renderLabelChips();
   } catch {
     // Sans couleurs, les étiquettes restent grises : lisibles, simplement
     // moins reconnaissables.
@@ -244,6 +245,63 @@ function labelChip(name) {
 
   return `<span class="tag tag-label" title="${esc(name)}"${paint}>${esc(leaf)}</span>`;
 }
+
+/**
+ * Libellés Gmail en boutons, sur la file.
+ *
+ * Ils vivaient dans un menu déroulant réduit à « Tous » : autant dire nulle
+ * part. Ce sont pourtant les catégories que le marchand a créées lui-même —
+ * « Chargeback », « Out of stock », « Wismo » — et elles disent mieux que
+ * n'importe quel motif deviné ce qu'il y a à faire.
+ *
+ * Affichés dès que Gmail en connaît, même si aucun ticket n'en porte encore :
+ * les masquer tant que la file est vide laisserait croire qu'ils n'existent
+ * pas, alors qu'ils attendent seulement une synchronisation.
+ */
+function renderLabelChips() {
+  const bar = $('q-labels');
+  if (!bar) return;
+
+  const names = Object.keys(labelStyles).sort((a, b) => a.localeCompare(b, 'fr'));
+  bar.hidden = names.length === 0;
+  if (names.length === 0) return;
+
+  bar.innerHTML = names
+    .map((name) => {
+      const style = labelStyles[name];
+      const active = state.queue.label === name;
+      const leaf = name.includes('/') ? name.slice(name.lastIndexOf('/') + 1) : name;
+
+      // Actif, le bouton prend la couleur pleine du libellé ; au repos, il n'en
+      // porte qu'une pastille. Sans cette différence, dix libellés colorés
+      // côte à côte forment un bandeau où l'on ne voit plus lequel est choisi.
+      const paint =
+        style?.background && active
+          ? ` style="background:${esc(style.background)};color:${esc(
+              style.text ?? '#000',
+            )};border-color:transparent"`
+          : '';
+
+      const dot = style?.background
+        ? `<i class="lchip-dot" style="background:${esc(style.background)}"></i>`
+        : '<i class="lchip-dot"></i>';
+
+      return `<button class="lchip" data-label="${esc(name)}" aria-pressed="${active}"
+        title="${esc(name)}"${paint}>${dot}${esc(leaf)}</button>`;
+    })
+    .join('');
+}
+
+$('q-labels')?.addEventListener('click', (event) => {
+  const chip = event.target.closest('[data-label]');
+  if (!chip) return;
+
+  // Un second clic sur le libellé actif le retire : c'est le geste attendu
+  // d'un bouton qui s'allume.
+  const name = chip.dataset.label;
+  state.queue.label = state.queue.label === name ? '' : name;
+  void loadQueue();
+});
 
 function renderMe() {
   const me = state.me;
@@ -1411,6 +1469,8 @@ function renderQueueBar() {
       .setAttribute('aria-pressed', String(Boolean(state.queue[key])));
   }
 
+  renderLabelChips();
+
   $('q-reset').hidden = !queueIsFiltered();
   // « 25 affichés » sur 556 laissait croire que le reste était perdu. Le
   // total rend le rapport lisible, et le défilement fait le reste.
@@ -1451,6 +1511,7 @@ async function loadAgents() {
   // Une seule boîte : le filtre n'aurait qu'une option utile.
   $('q-mailbox').closest('label').hidden = mailboxes.length < 2;
 
+
   // La liste vient du serveur, qui la calcule sur l'ensemble des tickets. La
   // déduire des cinquante lignes affichées donnait un menu qui changeait à
   // chaque tri et n'offrait jamais le filtre qu'on cherchait.
@@ -1486,7 +1547,6 @@ function resetQueueFilters() {
 
   $('q-search').value = '';
   $('q-mailbox').value = '';
-  $('q-label').value = '';
   $('q-sort').value = 'newest';
   $('q-assignee').value = '';
   $('q-intent').value = '';
@@ -1510,11 +1570,6 @@ $('q-sort').addEventListener('change', (event) => {
 $('q-assignee').addEventListener('change', (event) => {
   state.queue.assignee = event.target.value;
   state.queue.unassigned = event.target.value === 'none';
-  void loadQueue();
-});
-
-$('q-label').addEventListener('change', (event) => {
-  state.queue.label = event.target.value;
   void loadQueue();
 });
 
@@ -6240,6 +6295,34 @@ $('ai-test')?.addEventListener('click', async () => {
       `<b class="set-alert">L’IA ne répond pas.</b><br>` +
       `<span class="mono" style="font-size:12px">${esc(error.message)}</span><br>` +
       `<span>Réglez la clé dans la console d’administration (<code>/admin</code>).</span>`;
+  } finally {
+    button.disabled = false;
+  }
+});
+
+/* Pose des libellés sur les tickets déjà en base. Séparé du rattrapage : les
+   étiquettes n'ont aucune raison d'attendre plusieurs minutes de balayage. */
+$('labels-sync')?.addEventListener('click', async () => {
+  const button = $('labels-sync');
+  const node = $('labels-sync-state');
+
+  button.disabled = true;
+  node.textContent = 'Lecture des libellés dans Gmail…';
+
+  try {
+    const result = await api('/api/labels/sync', { method: 'POST', body: '{}' });
+    node.innerHTML =
+      result.updated > 0
+        ? `<b style="color:var(--ok)">${result.updated} ticket${
+            result.updated > 1 ? 's' : ''
+          } étiqueté${result.updated > 1 ? 's' : ''}.</b> ` +
+          'Les libellés sont utilisables comme filtres sur la file.'
+        : '<b class="set-alert">Aucun ticket étiqueté.</b> Vos libellés existent dans ' +
+          'Gmail mais ne portent sur aucun message déjà entré dans la file.';
+
+    await loadLabelStyles();
+  } catch (error) {
+    node.innerHTML = `<b class="set-alert">${esc(error.message)}</b>`;
   } finally {
     button.disabled = false;
   }

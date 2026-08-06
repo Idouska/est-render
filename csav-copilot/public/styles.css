@@ -4301,3 +4301,76 @@ textarea:focus-visible {
 @media (max-width: 900px) {
   #new-escalation { order: 3; }
 }
+
+/* ==========================================================================
+   LIBELLÉS EN BOUTONS
+   ==========================================================================
+
+   Ils étaient dans un menu déroulant réduit à « Tous » : autant dire nulle
+   part. Ce sont pourtant les catégories que le marchand a créées lui-même, et
+   elles disent mieux que n'importe quel motif deviné ce qu'il y a à faire. */
+
+.qbar-labels { gap: 6px; flex-wrap: wrap; }
+
+.lchip {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background-image: var(--grad-raised);
+  box-shadow: var(--e1), var(--edge);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--ink-soft);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.14s var(--ease), color 0.14s var(--ease);
+}
+
+.lchip:hover { border-color: var(--ink-mute); color: var(--ink); }
+
+/* Au repos, le libellé ne montre sa couleur que par une pastille. Dix teintes
+   pleines côte à côte forment un bandeau où l'on ne voit plus lequel est
+   choisi — c'est le contraire du but. */
+.lchip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 3px;
+  background: var(--ink-mute);
+  flex: none;
+}
+
+.lchip[aria-pressed='true'] {
+  font-weight: 650;
+  box-shadow: none;
+}
+
+/* Le libellé actif porte sa couleur pleine ; sa pastille devient inutile. */
+.lchip[aria-pressed='true'] .lchip-dot { background: currentColor; opacity: 0.5; }
+
+/* Sans couleur choisie dans Gmail, l'accent de l'application prend le relais :
+   il faut bien que l'état actif se voie. */
+.lchip[aria-pressed='true']:not([style]) {
+  background-image: none;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+@media (max-width: 700px) {
+  /* Onze libellés sur un téléphone : ils défilent horizontalement plutôt que
+     d'empiler quatre rangées avant la première ligne de travail. */
+  .qbar-labels {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+
+  .qbar-labels::-webkit-scrollbar { display: none; }
+}
