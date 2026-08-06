@@ -272,22 +272,29 @@ function renderLabelChips() {
       const active = state.queue.label === name;
       const leaf = name.includes('/') ? name.slice(name.lastIndexOf('/') + 1) : name;
 
-      // Actif, le bouton prend la couleur pleine du libellé ; au repos, il n'en
-      // porte qu'une pastille. Sans cette différence, dix libellés colorés
-      // côte à côte forment un bandeau où l'on ne voit plus lequel est choisi.
-      const paint =
-        style?.background && active
+      /*
+       * Au repos le bouton porte sa couleur diluée, actif il la porte pleine.
+       *
+       * Une simple pastille ne suffisait pas : à cette taille elle se perd, et
+       * onze boutons gris alignés ne se distinguent que par leur texte — ce
+       * qui oblige à les lire un par un, exactement ce qu'une couleur doit
+       * épargner. Le fond teinté rend chaque libellé reconnaissable de loin,
+       * et l'écart entre dilué et plein dit lequel est choisi.
+       */
+      const paint = style?.background
+        ? active
           ? ` style="background:${esc(style.background)};color:${esc(
               style.text ?? '#000',
             )};border-color:transparent"`
-          : '';
-
-      const dot = style?.background
-        ? `<i class="lchip-dot" style="background:${esc(style.background)}"></i>`
-        : '<i class="lchip-dot"></i>';
+          : ` style="background:color-mix(in srgb, ${esc(
+              style.background,
+            )} 18%, transparent);border-color:color-mix(in srgb, ${esc(
+              style.background,
+            )} 40%, transparent);color:var(--ink)"`
+        : '';
 
       return `<button class="lchip" data-label="${esc(name)}" aria-pressed="${active}"
-        title="${esc(name)}"${paint}>${dot}${esc(leaf)}</button>`;
+        title="${esc(name)}"${paint}>${esc(leaf)}</button>`;
     })
     .join('');
 }
