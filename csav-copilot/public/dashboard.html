@@ -117,6 +117,9 @@
                   <span>auto</span>
                 </label>
               </div>
+              <button class="btn btn-primary btn-small" id="new-escalation" hidden>
+                ＋ Nouvelle escalade
+              </button>
               <div class="clocks" id="clocks"></div>
               <div class="conn" id="conn"></div>
             </div>
@@ -203,6 +206,8 @@
             <button class="qchip" data-quick="urgent" aria-pressed="false">Urgents 3 j+</button>
             <button class="qchip" data-quick="unassigned" aria-pressed="false">Non assignés</button>
             <button class="qchip" data-quick="unlinked" aria-pressed="false">Sans commande</button>
+            <button class="qchip" data-quick="dueSoon" aria-pressed="false">Litiges à échéance</button>
+            <button class="qchip" data-quick="bigAmount" aria-pressed="false">Montant &gt; 100 €</button>
             <button class="qchip" data-quick="historical" aria-pressed="false">Historique appris</button>
             <button class="qlink" id="q-reset" hidden>Réinitialiser</button>
           </div>
@@ -305,6 +310,7 @@
                 <button class="btn btn-small" id="compose-relay" hidden></button>
                 <span class="hint" id="compose-hint"></span>
                 <button class="btn" id="compose-cancel">Annuler</button>
+                <button class="btn" id="compose-resolve">Marquer résolu</button>
                 <button class="btn btn-primary" id="compose-send">Valider et envoyer</button>
               </div>
             </div>

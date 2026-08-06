@@ -4288,3 +4288,12 @@ textarea:focus-visible {
    l'œil : c'est la colonne des ✓ qui dessine le rôle. */
 .rights-yes { color: var(--ok); font-weight: 700; }
 .rights-no { color: var(--ink-mute); opacity: 0.4; }
+
+/* « Nouvelle escalade » vit dans l'en-tête, où l'on décide, et non au fond du
+   ticket où l'on rédige. Il ne paraît qu'avec un ticket ouvert : un bouton
+   sans objet se clique une fois, puis on cesse de le voir. */
+#new-escalation { white-space: nowrap; flex: none; }
+
+@media (max-width: 900px) {
+  #new-escalation { order: 3; }
+}

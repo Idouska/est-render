@@ -226,6 +226,14 @@ model Ticket {
   /// serveur — c'est-à-dire que personne ne regarde.
   failureReason String?
 
+  /// Montant de la commande rattachée, recopié au moment du rattachement.
+  ///
+  /// Dupliqué depuis Shopify à dessein : filtrer « au-dessus de cent euros »
+  /// exigerait sinon d'interroger Shopify pour chacun des cinq mille tickets
+  /// avant d'en afficher cinquante. La copie ne sert qu'au tri et au filtre —
+  /// le montant affiché vient toujours de la commande elle-même.
+  orderTotal Decimal? @db.Decimal(12, 2)
+
   /// Libellés Gmail portés par le fil, tels que le marchand les a créés.
   /// Les siens uniquement : les catégories automatiques de Google décrivent
   /// son classement à lui, pas l'organisation du SAV.

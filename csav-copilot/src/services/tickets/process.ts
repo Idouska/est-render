@@ -97,6 +97,9 @@ export async function processTicket(merchantId: string, ticketId: string): Promi
         intentConfidence: classification.confidence,
         shopifyOrderId: order?.id ?? null,
         orderName: order?.name ?? null,
+        // Recopié pour pouvoir filtrer et trier sans interroger Shopify à
+        // chaque affichage de la file.
+        orderTotal: order?.totalPrice ?? null,
         orderMatchMethod: match.status === 'NOT_FOUND' ? null : match.method,
         orderMatchScore: match.status === 'MATCHED' ? match.score : null,
       },

@@ -26,7 +26,7 @@ const state = {
   queue: {
     q: '', intent: '', assignee: '', mailbox: '', label: '', sort: 'newest',
     urgent: false, unassigned: false, unlinked: false, historical: false,
-    origin: '', timer: null,
+    dueSoon: false, bigAmount: false, origin: '', timer: null,
   },
   queueCounts: {},
   agents: [],
@@ -490,6 +490,13 @@ function queueParams() {
   if (f.unassigned) params.set('assignee', 'none');
   if (f.unlinked) params.set('unlinked', 'true');
   if (f.historical) params.set('historical', 'true');
+  // « Litiges à échéance » restreint au motif et à l'ancienneté : c'est ce que
+  // recouvre l'expression — un litige qui traîne, pas un litige quelconque.
+  if (f.dueSoon) {
+    params.set('intent', 'DISPUTE');
+    params.set('minAgeDays', '2');
+  }
+  if (f.bigAmount) params.set('minAmount', '100');
 
   return params;
 }
@@ -498,7 +505,7 @@ function queueIsFiltered() {
   const f = state.queue;
   return Boolean(
     state.filter || f.q.trim() || f.intent || f.assignee || f.mailbox || f.label ||
-      f.urgent || f.unassigned || f.unlinked || f.historical,
+      f.urgent || f.unassigned || f.unlinked || f.historical || f.dueSoon || f.bigAmount,
   );
 }
 
@@ -1178,6 +1185,51 @@ $('compose-cancel')?.addEventListener('click', () => {
   $('compose').hidden = true;
 });
 
+/*
+ * Clore sans répondre.
+ *
+ * Tout ne se règle pas par un mail : une notification de plateforme, un
+ * doublon, un client déjà satisfait. Sans ce geste, ces tickets restent dans la
+ * file et l'on finit par ne plus la croire.
+ */
+$('compose-resolve')?.addEventListener('click', async () => {
+  const ticket = state.detail?.ticket;
+  if (!ticket) return;
+
+  try {
+    const result = await api(`/api/tickets/${ticket.id}/resolve`, {
+      method: 'POST',
+      body: '{}',
+    });
+
+    $('compose').hidden = true;
+    await loadQueue();
+
+    // Annulable : refermer par erreur un ticket qui attendait un fournisseur
+    // doit se défaire, et une confirmation préalable aurait ralenti les
+    // quatre-vingt-dix-neuf fois où le geste est juste.
+    toastUndo('Ticket clos.', async () => {
+      await api(`/api/tickets/${ticket.id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: result.previousStatus }),
+      });
+      await loadQueue();
+    });
+  } catch (error) {
+    toast(error.message, true);
+  }
+});
+
+/* « Nouvelle escalade » : ouvre la rédaction fournisseur sur le ticket courant.
+   Le bouton ne paraît que là où il a un objet — un ticket ouvert. */
+$('new-escalation')?.addEventListener('click', () => {
+  const ticket = state.detail?.ticket;
+  if (!ticket) return;
+  $('actbar').hidden = false;
+  openCompose('supplier', ticket);
+  $('compose-body').scrollIntoView({ block: 'center', behavior: 'smooth' });
+});
+
 $('compose-relay')?.addEventListener('click', () => {
   const text = $('compose-body').value.trim();
   // WhatsApp Web plutôt qu'un envoi silencieux : le numéro du fournisseur
@@ -1351,6 +1403,8 @@ function renderQueueBar() {
     ['unassigned', 'unassigned'],
     ['unlinked', 'unlinked'],
     ['historical', 'historical'],
+    ['dueSoon', 'dueSoon'],
+    ['bigAmount', 'bigAmount'],
   ]) {
     $('queue-bar')
       .querySelector(`[data-quick="${id}"]`)
@@ -1613,6 +1667,10 @@ function renderDetail() {
   // Le détail de commande appartient à la consultation hors ticket : le
   // laisser affiché sous un vrai fil ferait lire deux dossiers à la fois.
   $('ordv').hidden = true;
+
+  // L'escalade n'a d'objet qu'avec un ticket ouvert et le droit d'escalader.
+  const escalate = $('new-escalation');
+  if (escalate) escalate.hidden = !ticket || !canI('escalate');
 
   $('d-subject').textContent = ticket.subject ?? '(sans objet)';
 

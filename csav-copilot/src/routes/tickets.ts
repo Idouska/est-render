@@ -44,6 +44,8 @@ const listQuery = z.object({
   historical: z.coerce.boolean().optional(),
   /** Libellé Gmail, tel que le marchand l'a créé dans sa boîte. */
   label: z.string().max(120).optional(),
+  /** Montant plancher de la commande rattachée. */
+  minAmount: z.coerce.number().min(0).max(100000).optional(),
   /** `all` élargit la file à toutes les boutiques du groupe. */
   scope: z.enum(['shop', 'all']).default('shop'),
   sort: z.enum(['oldest', 'newest', 'confidence']).default('newest'),
@@ -108,6 +110,7 @@ function buildTicketWhere(
         }),
     ...(filters.mailbox ? { mailboxId: filters.mailbox } : {}),
     ...(filters.label ? { labels: { has: filters.label } } : {}),
+    ...(filters.minAmount !== undefined ? { orderTotal: { gte: filters.minAmount } } : {}),
     ...(term
       ? {
           OR: [
@@ -300,6 +303,80 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
    * ne soit possible, et l'agent réapprend chaque matin qu'il n'y a rien à en
    * faire. Il revient de lui-même à la date dite.
    */
+  /**
+   * Rétablit l'état d'un ticket.
+   *
+   * Existe pour l'annulation d'une clôture, et rien d'autre : c'est pourquoi
+   * elle n'accepte que les états qu'un ticket peut légitimement retrouver. Un
+   * point d'entrée qui laisserait écrire n'importe quel statut ferait de la
+   * machine à états une décoration.
+   */
+  app.patch<{ Params: { id: string } }>(
+    '/api/tickets/:id/status',
+    { preHandler: requirePermission('reply') },
+    async (request, reply) => {
+      const parsed = z
+        .object({
+          status: z.enum(['NEW', 'DRAFT_READY', 'NEEDS_REVIEW', 'AWAITING_SUPPLIER', 'CLOSED']),
+        })
+        .safeParse(request.body);
+
+      if (!parsed.success) return reply.code(400).send({ error: 'État non rétablissable' });
+
+      const { merchantId } = request.session;
+
+      const updated = await prisma.ticket.updateMany({
+        where: { id: request.params.id, merchantId },
+        data: { status: parsed.data.status },
+      });
+
+      if (updated.count === 0) return reply.code(404).send({ error: 'Ticket introuvable' });
+
+      return reply.send({ status: parsed.data.status });
+    },
+  );
+
+  /**
+   * Clôt un ticket sans envoyer de réponse.
+   *
+   * Tout ne se règle pas par un mail : une notification de plateforme, un
+   * doublon, un client qui rappelle et raccroche satisfait. Sans ce geste,
+   * ces tickets restent dans la file et l'on finit par ne plus la croire.
+   */
+  app.post<{ Params: { id: string } }>(
+    '/api/tickets/:id/resolve',
+    { preHandler: requirePermission('reply') },
+    async (request, reply) => {
+      const { merchantId, userId } = request.session;
+
+      const ticket = await prisma.ticket.findFirst({
+        where: { id: request.params.id, merchantId },
+        select: { id: true, status: true },
+      });
+      if (!ticket) return reply.code(404).send({ error: 'Ticket introuvable' });
+
+      await prisma.ticket.update({
+        where: { id: ticket.id },
+        data: { status: 'CLOSED', snoozedUntil: null },
+      });
+
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId: userId,
+        action: 'ticket.resolved',
+        targetType: 'Ticket',
+        targetId: ticket.id,
+        // L'état d'avant permet l'annulation : refermer par erreur un ticket
+        // qui attendait un fournisseur doit se défaire.
+        metadata: { previousStatus: ticket.status },
+        ipAddress: request.ip,
+      });
+
+      return reply.send({ previousStatus: ticket.status });
+    },
+  );
+
   /**
    * Relance les tickets que l'IA n'a pas su traiter.
    *
