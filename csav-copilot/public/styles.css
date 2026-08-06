@@ -3649,11 +3649,15 @@ textarea:focus-visible {
   min-width: 0;
 }
 
-/* Les pastilles d'état passent en icônes : trois points de couleur disent
-   l'essentiel — connecté ou non — et le détail reste dans l'infobulle. */
-.conn { flex-wrap: nowrap; gap: 2px; }
-.conn-pill { padding: 3px 6px; font-size: 0; gap: 0; }
-.conn-pill .dot { width: 8px; height: 8px; }
+/* Les pastilles d'état passent en icônes dans l'en-tête : trois points de
+   couleur y disent l'essentiel, et le détail reste dans l'infobulle.
+   Strictement bornées à l'en-tête : la même classe sert dans les Réglages, où
+   elle porte « Shopify connecté » et « Boîte mail 1 connectée » — sans cette
+   borne, la règle effaçait ces phrases et l'écran n'affichait plus qu'un point
+   vert sans rien à côté. */
+.head .conn { flex-wrap: nowrap; gap: 2px; }
+.head .conn-pill { padding: 3px 6px; font-size: 0; gap: 0; }
+.head .conn-pill .dot { width: 8px; height: 8px; }
 
 /* Les horloges perdent le nom des villes : à cette taille, le cadran et son
    anneau national suffisent à reconnaître un fuseau. */

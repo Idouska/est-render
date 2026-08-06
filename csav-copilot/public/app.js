@@ -3687,6 +3687,12 @@ const VIEW_LOADERS = {
 
 function setView(view) {
   state.view = view;
+
+  // « Nouvelle escalade » n'a d'objet que sur un ticket : affiché ailleurs — sur
+  // les Réglages, par exemple — il promet une action que l'écran ne peut pas
+  // rendre.
+  const escalate = document.getElementById('new-escalation');
+  if (escalate && view !== 'tickets') escalate.hidden = true;
   const meta = VIEW_META[view];
 
   for (const name of VIEWS) {
