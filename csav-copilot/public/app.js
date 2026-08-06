@@ -597,6 +597,8 @@ async function loadQueue({ append = false } = {}) {
   // Compteurs de la navigation, dérivés des mêmes chiffres que la file : deux
   // sources donneraient deux vérités, et c'est celle qu'on ne regarde pas qui
   // finirait par mentir.
+  void checkFailures();
+
   state.navCounts = {
     suppliers: state.queueCounts?.AWAITING_SUPPLIER ?? 0,
     disputes: state.disputeCount ?? 0,
@@ -3755,6 +3757,11 @@ function setView(view) {
   // rendre.
   const escalate = document.getElementById('new-escalation');
   if (escalate && view !== 'tickets') escalate.hidden = true;
+
+  // L'alerte de traitement appartient à la file : ailleurs, elle décrirait un
+  // problème sans rapport avec l'écran qu'on regarde.
+  const alarm = document.getElementById('fail-alarm');
+  if (alarm && view !== 'tickets') alarm.hidden = true;
   const meta = VIEW_META[view];
 
   for (const name of VIEWS) {
@@ -6332,5 +6339,66 @@ $('labels-sync')?.addEventListener('click', async () => {
     node.innerHTML = `<b class="set-alert">${esc(error.message)}</b>`;
   } finally {
     button.disabled = false;
+  }
+});
+
+/* ==========================================================================
+   ALERTE DE TRAITEMENT
+   ==========================================================================
+
+   Le motif d'échec vivait dans un panneau des Réglages, sous un bouton de
+   test. Personne ne va dans les Réglages pour comprendre pourquoi sa file ne
+   produit rien : on regarde la file, on voit « Échec », et on n'a nulle part
+   où aller. L'alerte s'affiche donc là où le problème se constate. */
+
+async function checkFailures() {
+  const bar = $('fail-alarm');
+  if (!bar) return;
+
+  let data;
+  try {
+    data = await api('/api/tickets/failures');
+  } catch {
+    bar.hidden = true;
+    return;
+  }
+
+  if (!data.total) {
+    bar.hidden = true;
+    return;
+  }
+
+  bar.hidden = false;
+  $('fail-alarm-title').textContent =
+    `${data.total} ticket${data.total > 1 ? 's' : ''} n’${
+      data.total > 1 ? 'ont' : 'a'
+    } pas pu être traité${data.total > 1 ? 's' : ''} par l’IA.`;
+
+  // Le motif dominant seul : les quatre suivants sont presque toujours le même
+  // à une virgule près, et les lister ferait un mur là où il faut une phrase.
+  const first = data.reasons?.[0];
+  $('fail-alarm-reason').textContent = first
+    ? ` Cause principale : ${first.reason}`
+    : '';
+}
+
+$('fail-alarm-retry')?.addEventListener('click', async () => {
+  const button = $('fail-alarm-retry');
+  button.disabled = true;
+  button.textContent = 'Relance…';
+
+  try {
+    const out = await api('/api/tickets/retry-failed', { method: 'POST', body: '{}' });
+    toast(
+      `${out.queued} ticket${out.queued > 1 ? 's' : ''} remis en traitement${
+        out.remaining ? ' — relancez pour la suite.' : '.'
+      }`,
+    );
+    await loadQueue();
+  } catch (error) {
+    toast(error.message, true);
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Relancer';
   }
 });

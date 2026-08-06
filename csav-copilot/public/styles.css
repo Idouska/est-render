@@ -4366,3 +4366,27 @@ textarea:focus-visible {
 
   .qbar-labels::-webkit-scrollbar { display: none; }
 }
+
+/* Alerte de traitement : rouge, en tête de la file, avec son geste de reprise.
+   Un problème qui touche mille tickets ne se signale pas par une étiquette sur
+   chaque ligne — il se dit une fois, en haut, avec quoi le résoudre. */
+.alarm {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 11px 15px;
+  border-radius: var(--r-md);
+  background: var(--crit-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--crit) 30%, transparent);
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.alarm b { color: var(--crit); }
+.alarm span { color: var(--ink-soft); font-family: var(--font-mono); font-size: 12px; }
+.alarm .btn { margin-left: auto; }
+
+@media (max-width: 700px) {
+  .alarm .btn { margin-left: 0; width: 100%; justify-content: center; }
+}

@@ -171,6 +171,17 @@
         </div>
       </div>
 
+      <!-- Alerte de traitement, sur l'écran de travail. Le motif d'échec vivait
+           dans un panneau des Réglages : personne n'y va pour comprendre
+           pourquoi sa file ne produit rien. -->
+      <div class="alarm" id="fail-alarm" hidden>
+        <div>
+          <b id="fail-alarm-title"></b>
+          <span id="fail-alarm-reason"></span>
+        </div>
+        <button class="btn btn-small" id="fail-alarm-retry">Relancer</button>
+      </div>
+
       <section class="kpis" id="kpis" aria-label="Indicateurs des 30 derniers jours">
         <div class="kpi">
           <span class="kpi-label">Traités · 30 jours</span>
