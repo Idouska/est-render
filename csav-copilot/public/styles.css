@@ -4926,3 +4926,15 @@ textarea:focus-visible {
   .kgrid { grid-template-columns: repeat(2, 1fr); }
   .field-duo { flex-direction: column; }
 }
+
+/* Adresse dans le avant → après : une adresse ne se lit pas centrée en gros —
+   les champs passent en lecture longue le temps de cette nature. */
+.swap-row.swap-long { flex-direction: column; align-items: stretch; gap: 6px; }
+.swap-row.swap-long .swap-arrow { transform: rotate(90deg); align-self: center; padding: 0; }
+.swap-row.swap-long input {
+  font-size: 13.5px;
+  font-weight: 500;
+  text-align: left;
+  color: var(--ink);
+}
+.swap-row.swap-long input:last-child { color: var(--accent); }

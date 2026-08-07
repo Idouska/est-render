@@ -1503,7 +1503,6 @@ $('actbar-row').addEventListener('click', async (event) => {
  */
 function openChangeRequest(ticket) {
   const order = state.detail?.order;
-  const item = order?.lineItems?.[0];
 
   $('alert-modal').dataset.supplier = '';
   $('alert-modal').dataset.ticket = ticket.id;
@@ -1512,13 +1511,9 @@ function openChangeRequest(ticket) {
     ? `Commande ${order.name} · ${ticket.customerName ?? ticket.customerEmail}`
     : (ticket.customerName ?? ticket.customerEmail);
 
+  state.alertCtx = alertContextFromOrder(order);
   setAlertKind('SIZE');
   $('alert-order').value = order?.name ?? ticket.orderName ?? '';
-  // La déclinaison actuelle sert de valeur « avant » : dans presque tous les
-  // cas c'est ce que le client veut changer, et l'avoir sous les yeux évite
-  // d'aller la chercher dans Shopify.
-  $('alert-before').value = item?.variantTitle ?? '';
-  $('alert-after').value = '';
   $('alert-message').value = '';
 
   renderAlertSuppliers();
@@ -2979,10 +2974,9 @@ function openAlertModal(id) {
   $('alert-modal').dataset.ticket = '';
   $('alert-modal').dataset.order = '';
   $('alert-who').textContent = `${supplier.name} · ${supplier.contactEmail}`;
+  state.alertCtx = null;
   setAlertKind('HOLD');
   $('alert-order').value = '';
-  $('alert-before').value = '';
-  $('alert-after').value = '';
   $('alert-message').value = '';
   renderAlertSuppliers();
   $('alert-modal').hidden = false;
@@ -3005,12 +2999,79 @@ function closeAlertModal() {
  */
 const KINDS_WITH_SWAP = new Set(['SIZE', 'COLOR', 'PRODUCT', 'ADDRESS', 'PHONE']);
 
+/*
+ * Valeurs actuelles de la commande, par nature de changement.
+ *
+ * Choisir « Couleur » en gardant « 47.5 » dans le champ « avant » n'a aucun
+ * sens : chaque nature doit préremplir avec SA valeur actuelle. Le contexte
+ * est construit à l'ouverture depuis la commande, et le changement de nature
+ * rebascule les deux champs.
+ *
+ * La déclinaison Shopify arrive souvent en un seul libellé — « Blackened
+ * Blue / 45 » : on sépare la taille (le segment qui commence par un chiffre)
+ * de la couleur (l'autre). Faillible sur un catalogue exotique, mais sur des
+ * chaussures c'est la forme constante, et un champ prérempli faux se corrige
+ * d'un regard là où un champ vide se ressaisit à chaque fois.
+ */
+const ALERT_HINTS = {
+  SIZE: { before: '42.5', after: '45' },
+  COLOR: { before: 'Blackened Blue', after: 'Black Hyper Crimson' },
+  PRODUCT: { before: 'Nike Mind 001', after: 'Nike Vomero Plus' },
+  ADDRESS: { before: 'Adresse actuelle', after: 'Nouvelle adresse complète' },
+  PHONE: { before: '06 12 34 56 78', after: 'Nouveau numéro' },
+};
+
+state.alertCtx = null;
+
+function alertContextFromOrder(order) {
+  if (!order) return null;
+
+  const item = order.lineItems?.[0];
+  const address = order.shippingAddress ?? {};
+
+  const parts = String(item?.variantTitle ?? '')
+    .split('/')
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const size = parts.find((part) => /^\d/.test(part)) ?? (parts.length === 1 ? parts[0] : '');
+  const color = parts.find((part) => part !== size) ?? '';
+
+  return {
+    SIZE: size,
+    COLOR: color,
+    PRODUCT: item?.title ?? '',
+    ADDRESS: [
+      address.address1,
+      address.address2,
+      `${address.zip ?? ''} ${address.city ?? ''}`.trim(),
+      address.country,
+    ]
+      .filter(Boolean)
+      .join(', '),
+    PHONE: address.phone ?? '',
+  };
+}
+
 function setAlertKind(kind) {
   $('alert-kind').value = kind;
   document.querySelectorAll('#alert-kinds [data-kind]').forEach((button) =>
     button.setAttribute('aria-pressed', String(button.dataset.kind === kind)),
   );
-  $('alert-swap-field').hidden = !KINDS_WITH_SWAP.has(kind);
+
+  const swap = KINDS_WITH_SWAP.has(kind);
+  $('alert-swap-field').hidden = !swap;
+  if (!swap) return;
+
+  $('alert-before').value = state.alertCtx?.[kind] ?? '';
+  $('alert-after').value = '';
+  $('alert-before').placeholder = ALERT_HINTS[kind]?.before ?? '';
+  $('alert-after').placeholder = ALERT_HINTS[kind]?.after ?? '';
+
+  // Une adresse ne tient pas centrée en gros caractères : les champs passent
+  // en lecture longue le temps de cette nature.
+  document
+    .querySelector('#alert-swap-field .swap-row')
+    ?.classList.toggle('swap-long', kind === 'ADDRESS');
 }
 
 document.querySelectorAll('#alert-kinds [data-kind]').forEach((button) =>
@@ -4793,10 +4854,9 @@ $('changes-new')?.addEventListener('click', () => {
   $('alert-modal').dataset.ticket = '';
   $('alert-modal').dataset.order = '';
   $('alert-who').textContent = '';
+  state.alertCtx = null;
   setAlertKind('SIZE');
   $('alert-order').value = '';
-  $('alert-before').value = '';
-  $('alert-after').value = '';
   $('alert-message').value = '';
   renderAlertSuppliers();
   $('alert-modal').hidden = false;
@@ -5327,7 +5387,6 @@ async function openOrderSheet(id) {
       return;
     }
 
-    const item = order.lineItems?.[0];
     closeCustomerSheet();
     $('alert-modal').dataset.supplier = '';
     $('alert-modal').dataset.ticket = '';
@@ -5335,10 +5394,9 @@ async function openOrderSheet(id) {
     $('alert-who').textContent = `Commande ${order.name} · ${
       order.customer?.displayName ?? order.customer?.email ?? ''
     }`;
+    state.alertCtx = alertContextFromOrder(order);
     setAlertKind('SIZE');
     $('alert-order').value = order.name ?? '';
-    $('alert-before').value = item?.variantTitle ?? '';
-    $('alert-after').value = '';
     $('alert-message').value = '';
     renderAlertSuppliers();
     $('alert-modal').hidden = false;
