@@ -120,7 +120,8 @@
               <button class="btn btn-primary btn-small" id="new-escalation" hidden>
                 ＋ Nouvelle escalade
               </button>
-              <div class="clocks" id="clocks"></div>
+              <div class="clocks" id="clocks" role="button" tabindex="0"
+                title="Heures locales — cliquer pour le détail"></div>
               <div class="conn" id="conn"></div>
             </div>
           </header>
@@ -159,6 +160,11 @@
           <div class="pal-foot"><kbd>↑</kbd><kbd>↓</kbd> parcourir · <kbd>↵</kbd> exécuter · <kbd>esc</kbd> fermer</div>
         </div>
       </div>
+
+      <!-- Panneau des fuseaux : les cadrans de manufacture, en grand, avec
+           décalage horaire et état joignable. La barre haute n'en montre que
+           l'essentiel numérique. -->
+      <div class="clockpop" id="clockpop" hidden></div>
 
       <div class="notice" id="mock-notice" hidden>
         <span class="notice-mark">Simulation</span>

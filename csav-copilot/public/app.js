@@ -4142,60 +4142,132 @@ function clockStyle() {
   return localStorage.getItem('csav.clocks') === 'digital' ? 'digital' : 'analog';
 }
 
-function renderClocks() {
-  const now = new Date();
-  const digital = clockStyle() === 'digital';
-
-  $('clocks').classList.toggle('clocks-digital', digital);
-
-  $('clocks').innerHTML = CLOCKS.map(([city, zone, code, short]) => {
+/**
+ * L'état de chaque ville, calculé une fois et servi aux deux rendus.
+ *
+ * La barre haute et le panneau doivent dire la même chose : deux calculs
+ * séparés finiraient par diverger d'une minute, et une horloge qui se
+ * contredit ne sert plus à rien.
+ */
+function cityTimes(now) {
+  return CLOCKS.map(([city, zone, code, short]) => {
     const time = now.toLocaleTimeString('fr-FR', {
       timeZone: zone,
       hour: '2-digit',
       minute: '2-digit',
     });
 
-    // Heures ouvrées locales : appeler un fournisseur à 3 h du matin chez lui
-    // ne sert à rien, et c'est l'erreur que ces horloges évitent.
     const hour = Number(
       now.toLocaleString('en-GB', { timeZone: zone, hour: '2-digit', hour12: false }),
     );
-    const minute = now.getMinutes();
+
+    // Décalage avec l'heure du poste : c'est la question qu'on se pose avant
+    // d'appeler — « chez lui, il est quelle heure par rapport à moi ? ».
+    const there = new Date(now.toLocaleString('en-US', { timeZone: zone }));
+    const here = new Date(now.toLocaleString('en-US'));
+    const offset = Math.round((there - here) / 3600000);
+
+    // Heures ouvrées locales : appeler un fournisseur à 3 h du matin chez lui
+    // ne sert à rien, et c'est l'erreur que ces horloges évitent.
     const open = hour >= 9 && hour < 18;
-    const title = `${city} — ${open ? 'heures ouvrées' : 'hors horaires (9 h – 18 h locales)'}`;
 
-    // Numérique : l'écran d'une montre connectée — fond noir, chiffres
-    // lumineux. La couleur dit l'état : vert joignable, ambre nuit.
-    if (digital) {
-      return `<div class="wface${open ? '' : ' shut'}" title="${esc(title)}">
-        <b data-short="${esc(short)}">${esc(city)}</b>
-        <span class="wface-time">${time}</span>
-      </div>`;
-    }
-
-    // Aiguilles : un cadran de manufacture. L'angle des secondes cale
-    // l'animation continue — l'aiguille tourne vraiment, elle n'attend pas le
-    // prochain rendu.
-    const hourAngle = ((hour % 12) + minute / 60) * 30;
-    const minuteAngle = minute * 6 + now.getSeconds() / 10;
-    const secondsOffset = -(now.getSeconds() + now.getMilliseconds() / 1000);
-
-    return `<div class="clock clock-${code}${open ? '' : ' shut'}" title="${esc(title)}">
-      <span class="dial" aria-hidden="true">
-        <i class="dial-ring"></i>
-        <i class="dial-face"></i>
-        <i class="dial-h" style="transform: rotate(${hourAngle}deg)"></i>
-        <i class="dial-m" style="transform: rotate(${minuteAngle}deg)"></i>
-        <i class="dial-s" style="animation-delay: ${secondsOffset}s"></i>
-        <i class="dial-cap"></i>
-      </span>
-      <div>
-        <b data-short="${esc(short)}">${esc(city)}</b>
-        <span class="clock-time">${time}</span>
-      </div>
-    </div>`;
-  }).join('');
+    return { city, zone, code, short, time, hour, open, offset };
+  });
 }
+
+/*
+ * Deux étages.
+ *
+ * En barre haute : des pastilles numériques — sigle, heure en chiffres nets,
+ * point vert ou ambre. C'est ce qu'une barre haute sait faire : se lire en un
+ * coup d'œil, sans se déchiffrer.
+ *
+ * Au clic : un panneau où les cadrans de manufacture ont enfin la place
+ * d'être beaux — grands, nommés, avec le décalage horaire et l'état
+ * joignable. Le luxe en grand, l'utile en petit : à 36 px, une aiguille ne
+ * fait pas la manufacture, elle fait du bruit.
+ */
+function renderClocks() {
+  const now = new Date();
+
+  $('clocks').innerHTML = cityTimes(now)
+    .map(
+      (c) => `<button class="ckp${c.open ? '' : ' shut'}" type="button"
+        title="${esc(c.city)} — ${c.open ? 'heures ouvrées' : 'hors horaires (9 h – 18 h locales)'}">
+        <span class="ckp-dot" aria-hidden="true"></span>
+        <span class="ckp-city">${esc(c.short)}</span>
+        <b class="ckp-time">${c.time}</b>
+      </button>`,
+    )
+    .join('');
+
+  if (!$('clockpop')?.hidden) renderClockPop();
+}
+
+/** Grand cadran de manufacture — le même que la barre portait, en 96 px. */
+function bigDial(c, now) {
+  const minute = now.getMinutes();
+  const hourAngle = ((c.hour % 12) + minute / 60) * 30;
+  const minuteAngle = minute * 6 + now.getSeconds() / 10;
+  const secondsOffset = -(now.getSeconds() + now.getMilliseconds() / 1000);
+
+  return `<span class="dial-zoom clock-${c.code}"><span class="dial" aria-hidden="true">
+    <i class="dial-ring"></i>
+    <i class="dial-face"></i>
+    <i class="dial-h" style="transform: rotate(${hourAngle}deg)"></i>
+    <i class="dial-m" style="transform: rotate(${minuteAngle}deg)"></i>
+    <i class="dial-s" style="animation-delay: ${secondsOffset}s"></i>
+    <i class="dial-cap"></i>
+  </span></span>`;
+}
+
+function renderClockPop() {
+  const pop = $('clockpop');
+  if (!pop) return;
+
+  const now = new Date();
+  const digital = clockStyle() === 'digital';
+
+  pop.innerHTML = cityTimes(now)
+    .map(
+      (c) => `<div class="ckcard${c.open ? '' : ' shut'}">
+        ${
+          digital
+            ? `<div class="wface wface-big${c.open ? '' : ' shut'}">
+                 <b>${esc(c.city)}</b>
+                 <span class="wface-time">${c.time}</span>
+               </div>`
+            : bigDial(c, now)
+        }
+        <div class="ckcard-meta">
+          <b>${esc(c.city)}</b>
+          <span class="ckcard-time">${c.time}</span>
+          <span class="ckcard-sub">${
+            c.offset === 0 ? 'même heure' : `${c.offset > 0 ? '+' : '−'}${Math.abs(c.offset)} h`
+          } · ${c.open ? '<i class="ok">joignable</i>' : 'hors horaires'}</span>
+        </div>
+      </div>`,
+    )
+    .join('');
+}
+
+function toggleClockPop(force) {
+  const pop = $('clockpop');
+  if (!pop) return;
+
+  const show = force ?? pop.hidden;
+  pop.hidden = !show;
+  if (show) renderClockPop();
+}
+
+$('clocks')?.addEventListener('click', () => toggleClockPop());
+
+document.addEventListener('click', (event) => {
+  const pop = $('clockpop');
+  if (!pop || pop.hidden) return;
+  if (event.target.closest('#clockpop') || event.target.closest('#clocks')) return;
+  pop.hidden = true;
+});
 
 setInterval(renderClocks, 30000);
 

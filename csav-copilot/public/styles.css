@@ -4644,3 +4644,122 @@ textarea:focus-visible {
   .qpick { opacity: 1; }
   .qrow .queue-item { padding-left: 34px; }
 }
+
+/* ======================================================= horloges, v2 ====
+   Deux étages : pastilles numériques lisibles en barre haute, panneau de
+   cadrans de manufacture au clic. À 36 px une aiguille fait du bruit ; à
+   96 px elle fait l'horloger. */
+
+.ckp {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  color: var(--ink);
+  transition: background var(--t-fast) var(--ease);
+}
+.ckp:hover { background: var(--inset); }
+
+.ckp-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 5px color-mix(in srgb, var(--ok) 60%, transparent);
+  flex: none;
+}
+.ckp.shut .ckp-dot {
+  background: var(--warn);
+  box-shadow: 0 0 5px color-mix(in srgb, var(--warn) 50%, transparent);
+}
+
+.ckp-city {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--ink-mute);
+}
+
+.ckp-time {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.ckp.shut .ckp-time { color: var(--ink-mute); font-weight: 500; }
+
+/* Le panneau. Sous la barre, aligné à droite ; il flotte au-dessus de tout,
+   et se referme d'un clic ailleurs. */
+.clockpop {
+  position: absolute;
+  top: 62px;
+  right: 18px;
+  z-index: 45;
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  max-width: min(720px, calc(100vw - 36px));
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  background: var(--surface);
+  background-image: var(--grad-raised);
+  box-shadow: var(--e4), var(--edge);
+}
+
+.ckcard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 108px;
+}
+
+.ckcard-meta { text-align: center; }
+.ckcard-meta b { display: block; font-size: 12.5px; }
+.ckcard-time {
+  display: block;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+.ckcard-sub { font-size: 11px; color: var(--ink-mute); }
+.ckcard-sub .ok { font-style: normal; color: var(--ok); font-weight: 600; }
+.ckcard.shut .ckcard-time { color: var(--ink-mute); }
+
+/* Le grand cadran : le même DOM que le petit, agrandi par transformation —
+   deux jeux de cotes auraient divergé à la première retouche. */
+.dial-zoom {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  display: grid;
+  place-items: center;
+}
+.dial-zoom .dial {
+  width: 36px;
+  height: 36px;
+  transform: scale(2.55);
+}
+
+/* Grande version de l'écran de montre connectée. */
+.wface-big {
+  min-width: 108px;
+  padding: 14px 16px;
+  border-radius: 16px;
+}
+.wface-big .wface-time { font-size: 24px; }
+.wface-big b { font-size: 10px; }
+
+@media (max-width: 1400px) {
+  .ckp-city { display: none; }
+  .ckp { padding: 4px 8px; }
+}
