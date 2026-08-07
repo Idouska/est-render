@@ -3659,16 +3659,31 @@ textarea:focus-visible {
 .head .conn-pill { padding: 3px 6px; font-size: 0; gap: 0; }
 .head .conn-pill .dot { width: 8px; height: 8px; }
 
-/* Les horloges perdent le nom des villes : à cette taille, le cadran et son
-   anneau national suffisent à reconnaître un fuseau. */
-.head .clock b { display: none; }
+/* En barre haute, la ville s'abrège au lieu de disparaître.
+
+   Cinq cadrans anonymes obligeaient à retenir leur ordre pour savoir lequel
+   est Paris — autant dire à ne jamais les lire. Le sigle tient dans la largeur
+   de l'heure, et le nom complet reste dans l'infobulle. Le texte long est
+   effacé par la taille nulle et remplacé par `data-short` : deux rendus
+   distincts côté JavaScript se seraient désynchronisés à la première
+   modification. */
 .head .clock { padding: 4px 7px; }
 .head .clock .clock-time { font-size: 12.5px; }
 .head .wface { min-width: 0; padding: 4px 8px 5px; }
-.head .wface b { display: none; }
 .head .wface-time { font-size: 13px; }
 
-/* Sous 1200 px, les horloges cèdent la place : l'heure de Kuala Lumpur passe
+.head .clock b,
+.head .wface b { font-size: 0; display: block; text-align: center; }
+
+.head .clock b::after,
+.head .wface b::after {
+  content: attr(data-short);
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+/* Sous 1200 px, les horloges cèdent la place : l'heure de Los Angeles passe
    après le titre de l'écran qu'on est en train de lire. */
 @media (max-width: 1200px) {
   .head .clocks { display: none; }

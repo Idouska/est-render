@@ -114,7 +114,10 @@ Contraintes absolues :
   maison : inspire-t'en. Ne recopie jamais leurs faits — montants, numéros,
   dates appartiennent à d'autres dossiers.
 
-Avant de rédiger, résume le message du client :
+Avant de rédiger, résume le message du client. Le résumé et la demande
+s'écrivent TOUJOURS en français, quelle que soit la langue du client : ils
+s'adressent à l'agent du SAV, pas au client. Seule la réponse (« body ») suit
+la langue du client.
 - « summary » : deux à quatre points, une phrase courte chacun, à l'indicatif.
   Les faits que l'agent doit connaître pour trancher — ce qui s'est passé, ce
   qui a déjà été tenté, ce qui bloque, le ton s'il est menaçant ou détendu.

@@ -3810,12 +3810,14 @@ const TRACK_LABELS = {
 
 /* L'équipe travaille avec des fournisseurs en Asie et des clients en Europe :
    l'heure locale décide si un appel a une chance d'aboutir maintenant. */
+// Le sigle court est ce qui s'affiche en barre haute : cinq cadrans sans
+// aucun nom obligeaient à compter les positions pour savoir lequel est Paris.
 const CLOCKS = [
-  ['Agadir', 'Africa/Casablanca', 'ma'],
-  ['Paris', 'Europe/Paris', 'fr'],
-  ['Chine', 'Asia/Shanghai', 'cn'],
-  ['Malaisie', 'Asia/Kuala_Lumpur', 'my'],
-  ['New York', 'America/New_York', 'us'],
+  ['Agadir', 'Africa/Casablanca', 'ma', 'AGA'],
+  ['Paris', 'Europe/Paris', 'fr', 'PAR'],
+  ['Chine', 'Asia/Shanghai', 'cn', 'CHN'],
+  ['New York', 'America/New_York', 'us', 'NYC'],
+  ['Los Angeles', 'America/Los_Angeles', 'us', 'LAX'],
 ];
 
 /** Aiguilles ou chiffres — un goût, pas une vérité : mémorisé par navigateur. */
@@ -3829,7 +3831,7 @@ function renderClocks() {
 
   $('clocks').classList.toggle('clocks-digital', digital);
 
-  $('clocks').innerHTML = CLOCKS.map(([city, zone, code]) => {
+  $('clocks').innerHTML = CLOCKS.map(([city, zone, code, short]) => {
     const time = now.toLocaleTimeString('fr-FR', {
       timeZone: zone,
       hour: '2-digit',
@@ -3849,7 +3851,7 @@ function renderClocks() {
     // lumineux. La couleur dit l'état : vert joignable, ambre nuit.
     if (digital) {
       return `<div class="wface${open ? '' : ' shut'}" title="${esc(title)}">
-        <b>${esc(city)}</b>
+        <b data-short="${esc(short)}">${esc(city)}</b>
         <span class="wface-time">${time}</span>
       </div>`;
     }
@@ -3871,7 +3873,7 @@ function renderClocks() {
         <i class="dial-cap"></i>
       </span>
       <div>
-        <b>${esc(city)}</b>
+        <b data-short="${esc(short)}">${esc(city)}</b>
         <span class="clock-time">${time}</span>
       </div>
     </div>`;
