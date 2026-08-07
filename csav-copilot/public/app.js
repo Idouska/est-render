@@ -537,8 +537,15 @@ function ageChip(iso) {
   // Trois paliers seulement : au-delà, la couleur ne se lit plus comme une
   // échelle mais comme une décoration.
   const level = days >= 7 ? 'late' : days >= 3 ? 'warm' : 'fresh';
-  const label = days === 0 ? "aujourd'hui" : days === 1 ? '1 jour' : `${days} jours`;
-  return `<span class="age age-${level}">${label}</span>`;
+  // Les messages du jour affichent l'heure : sur une file où tout est
+  // « aujourd'hui », le jour ne trie plus rien, l'heure si.
+  const label =
+    days === 0
+      ? shortTime(iso)
+      : days === 1
+        ? `hier ${shortTime(iso)}`
+        : `${days} jours`;
+  return `<span class="age age-${level}" title="${esc(dateTime(iso))}">${label}</span>`;
 }
 
 function initials(value) {
@@ -625,7 +632,7 @@ async function loadQueue({ append = false } = {}) {
     // opposés.
     list.innerHTML = queueIsFiltered()
       ? `<li class="empty" style="padding:16px 14px">
-           Aucun ticket ne correspond à ces filtres.
+           Aucun message ne correspond à ces filtres.
            <button class="qlink" data-reset="1">Tout afficher</button>
          </li>`
       : `<li class="empty" style="padding:16px 14px">
@@ -975,7 +982,7 @@ async function openCustomerSheet(email, displayName) {
   sections.push(`<div class="sheet-stats">
     <div class="sheet-stat"><b>${totals.orders}</b><span>Commandes</span></div>
     <div class="sheet-stat"><b>${esc(money(totals.spent))}</b><span>Dépensé</span></div>
-    <div class="sheet-stat"><b>${totals.openTickets}/${totals.tickets}</b><span>Tickets ouverts</span></div>
+    <div class="sheet-stat"><b>${totals.openTickets}/${totals.tickets}</b><span>Messages ouverts</span></div>
     <div class="sheet-stat"><b>${esc(money(totals.refunded))}</b><span>Remboursé</span></div>
   </div>`);
 
@@ -1025,7 +1032,7 @@ async function openCustomerSheet(email, displayName) {
   ));
 
   sections.push(group(
-    'Tickets',
+    'Messages',
     tickets.map(
       (ticket) => `<div class="sheet-row clickable" data-ticket="${esc(ticket.id)}">
         <b>${esc(ticket.subject ?? '(sans objet)')}</b>
@@ -1288,7 +1295,7 @@ $('compose-resolve')?.addEventListener('click', async () => {
     // Annulable : refermer par erreur un ticket qui attendait un fournisseur
     // doit se défaire, et une confirmation préalable aurait ralenti les
     // quatre-vingt-dix-neuf fois où le geste est juste.
-    toastUndo('Ticket clos.', async () => {
+    toastUndo('Message clos.', async () => {
       await api(`/api/tickets/${ticket.id}/status`, {
         method: 'PATCH',
         body: JSON.stringify({ status: result.previousStatus }),
@@ -1363,10 +1370,10 @@ $('compose-send')?.addEventListener('click', async () => {
 function actionBlockedReason(key, ticket) {
   if (key === 'refund') {
     if (!canI('refund')) return 'Seuls le propriétaire et les superviseurs peuvent rembourser.';
-    if (!ticket.shopifyOrderId) return 'Aucune commande rattachée à ce ticket.';
+    if (!ticket.shopifyOrderId) return 'Aucune commande rattachée à ce message.';
   }
   if ((key === 'substitute' || key === 'tracking') && !ticket.shopifyOrderId) {
-    return 'Aucune commande rattachée à ce ticket.';
+    return 'Aucune commande rattachée à ce message.';
   }
   if (key === 'supplier' && !canI('escalate')) return 'Votre rôle ne permet pas d’escalader.';
   if (key === 'client' && !canI('reply')) return 'Vous êtes en lecture seule.';
@@ -1728,7 +1735,7 @@ async function selectTicket(id) {
   // réponse sans ticket : mieux vaut un message que l'écran blanc laissé par
   // une exception au milieu du rendu.
   if (!detail?.ticket) {
-    toast('Ce ticket n’existe plus.', true);
+    toast('Ce message n’existe plus.', true);
     await loadQueue();
     return;
   }
@@ -1793,7 +1800,7 @@ function renderDetail() {
       });
 
       ticket.assignedToId = userId;
-      toast(userId ? 'Ticket assigné.' : 'Ticket remis au pot commun.');
+      toast(userId ? 'Message assigné.' : 'Message remis au pot commun.');
       await loadQueue();
     } catch (error) {
       // On remet la valeur d'avant : laisser le sélecteur sur un choix qui n'a
@@ -1814,7 +1821,7 @@ function renderDetail() {
 
   $('read-only').hidden = !otherShop;
   if (otherShop) {
-    $('read-only-text').textContent = `Ce ticket appartient à ${shopLabel}. Basculez sur cette boutique pour y répondre.`;
+    $('read-only-text').textContent = `Ce message appartient à ${shopLabel}. Basculez sur cette boutique pour y répondre.`;
     $('read-only-switch').dataset.shop = ticket.merchantId;
   }
 
@@ -1956,7 +1963,7 @@ function renderDraft(draft, ticket) {
     $('no-draft-text').textContent =
       ticket.intent === 'POSITIVE' || ticket.intent === 'OTHER'
         ? "Ce message n'appelle pas de réponse automatique — il a été classé sans action."
-        : 'Aucun brouillon n’a encore été généré pour ce ticket.';
+        : 'Aucun brouillon n’a encore été généré pour ce message.';
     return;
   }
 
@@ -1991,7 +1998,7 @@ function renderDraft(draft, ticket) {
   }
   if (canI('refund')) $('btn-refund').title = ticket.shopifyOrderId
     ? ''
-    : 'Rattachez d’abord une commande à ce ticket.';
+    : 'Rattachez d’abord une commande à ce message.';
 }
 
 function row(label, value, mono = false) {
@@ -2840,7 +2847,7 @@ async function loadStats() {
   /* --------------------------------------------------------- équipe --- */
 
   $('stats-kpis').innerHTML = [
-    ['Tickets reçus', stats.tickets.total, `${statsDays} derniers jours`],
+    ['Messages reçus', stats.tickets.total, `${statsDays} derniers jours`],
     ['Première réponse', duration(stats.firstReply.medianMinutes), `médiane sur ${stats.firstReply.measured}`],
     ['Brouillons envoyés', `${Math.round(stats.drafts.sendRate * 100)} %`, `${stats.drafts.sent} sur ${stats.drafts.total}`],
     [
@@ -2875,7 +2882,7 @@ async function loadStats() {
     )
     .join('')}</div>
     <p class="set-help" style="margin-top:10px">
-      Barre pleine : tickets reçus. Barre foncée : tickets traités. Quand la
+      Barre pleine : messages reçus. Barre foncée : messages traités. Quand la
       seconde reste durablement sous la première, la file grossit.
     </p>`;
 
@@ -4395,7 +4402,7 @@ function renderSettings() {
 
         if (
           !confirm(
-            `Effacer TOUS les tickets venus de ${address} ?\n\n` +
+            `Effacer TOUS les messages venus de ${address} ?\n\n` +
               'Les messages, brouillons et pièces jointes partent avec eux. ' +
               'Irréversible.',
           )
@@ -4408,7 +4415,7 @@ function renderSettings() {
           const result = await api(`/api/mailboxes/${button.dataset.mbxPurge}/tickets`, {
             method: 'DELETE',
           });
-          toast(`${result.removed} ticket${result.removed > 1 ? 's' : ''} effacé${
+          toast(`${result.removed} message${result.removed > 1 ? 's' : ''} effacé${
             result.removed > 1 ? 's' : ''
           }.`);
           await loadQueue();
@@ -4552,7 +4559,7 @@ function renderSettings() {
           !confirm(
             'Débrancher cette boîte ?\n\n' +
               'L’autorisation Google est révoquée : l’outil perd tout accès à cette ' +
-              'adresse. Les tickets déjà reçus sont conservés.',
+              'adresse. Les messages déjà reçus sont conservés.',
           )
         ) {
           return;
@@ -5117,7 +5124,7 @@ function backfillSummary(progress) {
 
   if (progress.relabelled > 0) {
     parts.push(
-      `${progress.relabelled} ticket${progress.relabelled > 1 ? 's' : ''} réétiqueté${
+      `${progress.relabelled} message${progress.relabelled > 1 ? 's' : ''} réétiqueté${
         progress.relabelled > 1 ? 's' : ''
       } depuis Gmail.`,
     );
@@ -6082,13 +6089,13 @@ function buildCommands() {
     for (const choice of SNOOZE_CHOICES) {
       list.push({
         label: `Mettre en veille — ${choice.label.toLowerCase()}`,
-        hint: 'Ticket courant',
+        hint: 'Message courant',
         run: () => snoozeTicket(choice.hours, choice.label),
       });
     }
     list.push({
       label: 'Écrire la réponse',
-      hint: 'Ticket courant',
+      hint: 'Message courant',
       run: () => $('d-body').focus(),
     });
   }
@@ -6096,7 +6103,7 @@ function buildCommands() {
   if (hasTicket && canI('refund') && state.detail.ticket.shopifyOrderId) {
     list.push({
       label: 'Rembourser cette commande',
-      hint: 'Ticket courant',
+      hint: 'Message courant',
       run: () => $('btn-refund').click(),
     });
   }
@@ -6310,7 +6317,7 @@ $('ai-test')?.addEventListener('click', async () => {
       const failures = await api('/api/tickets/failures');
       if (failures.total > 0) {
         node.innerHTML +=
-          `<br><br><b class="set-alert">${failures.total} ticket${
+          `<br><br><b class="set-alert">${failures.total} message${
             failures.total > 1 ? 's' : ''
           } en échec.</b> Motifs :<br>` +
           failures.reasons
@@ -6333,7 +6340,7 @@ $('ai-test')?.addEventListener('click', async () => {
       const retry = document.createElement('button');
       retry.className = 'btn btn-small btn-primary';
       retry.style.marginTop = '9px';
-      retry.textContent = 'Relancer les tickets en échec';
+      retry.textContent = 'Relancer les messages en échec';
       retry.addEventListener('click', async () => {
         retry.disabled = true;
         retry.textContent = 'Relance…';
@@ -6348,7 +6355,7 @@ $('ai-test')?.addEventListener('click', async () => {
           toast(error.message, true);
         } finally {
           retry.disabled = false;
-          retry.textContent = 'Relancer les tickets en échec';
+          retry.textContent = 'Relancer les messages en échec';
         }
       });
       node.append(document.createElement('br'), retry);
@@ -6422,7 +6429,7 @@ async function checkFailures() {
 
   bar.hidden = false;
   $('fail-alarm-title').textContent =
-    `${data.total} ticket${data.total > 1 ? 's' : ''} n’${
+    `${data.total} message${data.total > 1 ? 's' : ''} n’${
       data.total > 1 ? 'ont' : 'a'
     } pas pu être traité${data.total > 1 ? 's' : ''} par l’IA.`;
 

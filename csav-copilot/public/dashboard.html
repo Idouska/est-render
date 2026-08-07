@@ -266,7 +266,7 @@
       </section>
 
       <main class="workspace" id="view-tickets">
-        <section class="panel" aria-label="File de tickets">
+        <section class="panel" aria-label="Messages clients">
           <ul class="queue-list" id="queue">
             <li class="skel-row"><span class="skel"></span><span class="skel"></span><span class="skel"></span></li>
             <li class="skel-row"><span class="skel"></span><span class="skel"></span><span class="skel"></span></li>
@@ -275,9 +275,9 @@
           </ul>
         </section>
 
-        <section class="panel" aria-label="Détail du ticket">
+        <section class="panel" aria-label="Détail du message">
           <div class="thread-head">
-            <h1 class="thread-subject" id="d-subject">Sélectionnez un ticket</h1>
+            <h1 class="thread-subject" id="d-subject">Sélectionnez un message</h1>
             <div class="thread-meta" id="d-meta"></div>
           </div>
           <div class="notice" id="read-only" hidden>
@@ -290,7 +290,7 @@
             </div>
           </div>
 
-          <!-- Le résumé passe avant le fil : un agent qui traite cent tickets
+          <!-- Le résumé passe avant le fil : un agent qui traite cent messages
                par jour décide sur ces quatre lignes et n'ouvre le fil que si
                quelque chose cloche. L'ordre inverse — lire puis résumer — est
                celui qui coûte la journée. -->
@@ -625,7 +625,7 @@
 
         <div class="kpis" id="stats-kpis"></div>
         <div class="panel">
-          <div class="panel-head"><span class="panel-title">Tickets par jour</span></div>
+          <div class="panel-head"><span class="panel-title">Messages par jour</span></div>
           <div class="card-body" id="stats-daily"></div>
         </div>
         <div class="table-wrap">
@@ -856,7 +856,7 @@
               <span class="panel-title">Intelligence artificielle</span>
               <p class="set-help">
                 C'est elle qui classe les demandes, résume le message du client et
-                propose la réponse. Sans elle, les tickets entrent mais restent bruts.
+                propose la réponse. Sans elle, les messages entrent mais restent bruts.
               </p>
             </div>
             <div class="card-body set-group">
@@ -870,11 +870,11 @@
               <span class="panel-title">Libellés Gmail</span>
               <p class="set-help">
                 Vos étiquettes deviennent des filtres sur la file. Elles se posent
-                sur les tickets déjà présents sans rien réingérer.
+                sur les messages déjà présents sans rien réingérer.
               </p>
             </div>
             <div class="card-body set-group">
-              <button class="btn btn-small" id="labels-sync">Poser les libellés sur les tickets</button>
+              <button class="btn btn-small" id="labels-sync">Poser les libellés sur les messages</button>
               <div class="mbx-diag" id="labels-sync-state"></div>
             </div>
           </div>
@@ -913,7 +913,7 @@ Douane : les frais éventuels sont à la charge du destinataire hors UE."></text
                   <option value="48">48 heures</option>
                   <option value="72">72 heures</option>
                 </select>
-                <small>Fixe l'échéance de chaque ticket. Passée l'échéance, il apparaît en retard.</small>
+                <small>Fixe l'échéance de chaque message. Passée l'échéance, il apparaît en retard.</small>
               </div>
             </div>
           </div>
@@ -1030,7 +1030,7 @@ Douane : les frais éventuels sont à la charge du destinataire hors UE."></text
         <div class="modal-head">
           <h2 id="mail-title">Écrire au client</h2>
           <p>
-            Le message part depuis votre boîte SAV connectée. Il n'ouvre pas de ticket :
+            Le message part depuis votre boîte SAV connectée. Il n'ouvre pas de conversation :
             la réponse du client, elle, en créera un.
           </p>
         </div>
@@ -1170,7 +1170,7 @@ Douane : les frais éventuels sont à la charge du destinataire hors UE."></text
           la veille, saisir un numéro de suivi et photographier l'étiquette de
           chaque colis, et signaler un problème — rupture sur un produit, une
           taille ou un coloris, adresse ou téléphone incomplet. Il ne voit ni
-          vos tickets clients, ni vos montants, ni vos autres contacts.
+          vos messages clients, ni vos montants, ni vos autres contacts.
         </p>
         <div class="modal-foot modal-foot-wrap">
           <button class="btn" id="sup-f-link" hidden>Lien de travail…</button>
@@ -1244,7 +1244,7 @@ Douane : les frais éventuels sont à la charge du destinataire hors UE."></text
             <select id="canned-f-intent">
               <option value="">Tous les motifs</option>
             </select>
-            <small>Proposée en tête quand le ticket porte ce motif.</small>
+            <small>Proposée en tête quand le message porte ce motif.</small>
           </div>
           <div class="field">
             <label for="canned-f-body">Message</label>
