@@ -13,28 +13,34 @@
   </head>
   <body>
     <div id="gate" class="gate" hidden>
-      <h1>Lien invalide</h1>
+      <h1 data-t="gate.title">Lien invalide</h1>
       <p id="gate-error"></p>
-      <p>Demandez au marchand de vous renvoyer votre lien d'accès.</p>
+      <p data-t="gate.help">Demandez au marchand de vous renvoyer votre lien d'accès.</p>
     </div>
 
     <div class="ws" id="app" hidden>
       <header class="ws-head">
         <div>
-          <div class="crumb">Atelier</div>
-          <h1 id="ws-title">Commandes à préparer</h1>
+          <div class="crumb" data-t="head.crumb">Atelier</div>
+          <h1 id="ws-title" data-t="head.title">Commandes à préparer</h1>
           <p class="hint" id="ws-supplier"></p>
         </div>
         <div class="ws-acts">
           <label class="ws-range">
-            Du <input type="date" id="ws-since" />
+            <span data-t="head.from">Du</span> <input type="date" id="ws-since" />
           </label>
           <label class="ws-range">
-            au <input type="date" id="ws-until" />
+            <span data-t="head.to">au</span> <input type="date" id="ws-until" />
           </label>
-          <button class="btn" id="ws-reload">Actualiser</button>
-          <a class="btn btn-primary" id="ws-xlsx" download>Feuille Excel</a>
-          <a class="btn" id="ws-csv" download>CSV</a>
+          <button class="btn" id="ws-reload" data-t="head.reload">Actualiser</button>
+          <a class="btn btn-primary" id="ws-xlsx" download data-t="head.xlsx">Feuille Excel</a>
+          <a class="btn" id="ws-csv" download data-t="head.csv">CSV</a>
+
+          <!-- Sélecteur de langue. L'atelier est le seul écran qu'une
+               personne extérieure ouvre chaque jour, souvent depuis la Chine :
+               lui demander de deviner « Numéro de suivi » fait partir des
+               colis avec la mauvaise taille. -->
+          <div class="ws-lang" id="ws-lang" role="group" aria-label="Langue"></div>
         </div>
       </header>
 
@@ -49,18 +55,18 @@
     <div class="modal-wrap" id="issue-modal">
       <div class="modal">
         <div class="modal-head">
-          <h2>Signaler un problème</h2>
+          <h2 data-t="issue.title">Signaler un problème</h2>
           <p id="issue-order"></p>
         </div>
         <div class="modal-body">
           <label class="field">
-            Nature du problème
+            <span data-t="issue.kind">Nature du problème</span>
             <select id="issue-kind">
-              <option value="PHONE">Numéro de téléphone incomplet ou invalide</option>
-              <option value="ADDRESS">Adresse incomplète ou incorrecte</option>
-              <option value="STOCK">Article indisponible</option>
-              <option value="DAMAGE">Article abîmé</option>
-              <option value="OTHER">Autre problème</option>
+              <option value="PHONE" data-t="issue.kind.PHONE">Numéro de téléphone incomplet ou invalide</option>
+              <option value="ADDRESS" data-t="issue.kind.ADDRESS">Adresse incomplète ou incorrecte</option>
+              <option value="STOCK" data-t="issue.kind.STOCK">Article indisponible</option>
+              <option value="DAMAGE" data-t="issue.kind.DAMAGE">Article abîmé</option>
+              <option value="OTHER" data-t="issue.kind.OTHER">Autre problème</option>
             </select>
           </label>
           <!-- Détail de l'article, pour une rupture. Replié tant que la
@@ -68,38 +74,38 @@
                téléphone erroné ferait renoncer au signalement. -->
           <div id="issue-item" hidden>
             <label class="field">
-              Modèle
-              <input id="issue-product" type="text" placeholder="Ex. : Nike Mind 001" />
+              <span data-t="issue.product">Modèle</span>
+              <input id="issue-product" type="text" data-tph="issue.productHint" placeholder="Ex. : Nike Mind 001" />
             </label>
             <div class="field-row">
               <label class="field">
-                Couleur
+                <span data-t="issue.color">Couleur</span>
                 <input id="issue-color" type="text" placeholder="Black Hyper Crimson" />
               </label>
               <label class="field">
-                Taille
+                <span data-t="issue.size">Taille</span>
                 <input id="issue-size" type="text" placeholder="45" />
               </label>
               <label class="field">
-                Quantité
+                <span data-t="issue.qty">Quantité</span>
                 <input id="issue-qty" type="number" min="1" max="999" value="1" />
               </label>
             </div>
             <label class="field">
-              Référence (SKU)
+              <span data-t="issue.sku">Référence (SKU)</span>
               <input id="issue-sku" type="text" placeholder="NIK-MIND001-BLK-45" />
             </label>
           </div>
 
           <label class="field">
-            Détail
-            <textarea id="issue-note" rows="4"
+            <span data-t="issue.note">Détail</span>
+            <textarea id="issue-note" rows="4" data-tph="issue.noteHint"
               placeholder="Ex. : le numéro fait 8 chiffres, il en manque un."></textarea>
           </label>
         </div>
         <div class="modal-foot">
-          <button class="btn" id="issue-cancel">Annuler</button>
-          <button class="btn btn-primary" id="issue-send">Envoyer au marchand</button>
+          <button class="btn" id="issue-cancel" data-t="issue.cancel">Annuler</button>
+          <button class="btn btn-primary" id="issue-send" data-t="issue.send">Envoyer au marchand</button>
         </div>
       </div>
     </div>

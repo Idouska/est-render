@@ -179,3 +179,27 @@
 
 .field-row { display: flex; gap: 10px; flex-wrap: wrap; }
 .field-row .field { flex: 1 1 110px; }
+
+/* Sélecteur de langue. Trois codes courts plutôt qu'un menu déroulant : le
+   fournisseur le règle une fois, et un menu fermé cache justement l'option à
+   celui qui ne lit pas la langue affichée. */
+.ws-lang {
+  display: inline-flex;
+  border: 1px solid #d9dae2;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #fff;
+}
+.ws-lang button {
+  border: 0;
+  background: none;
+  padding: 7px 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b6d7c;
+  cursor: pointer;
+  min-height: 38px;
+}
+.ws-lang button + button { border-left: 1px solid #eceef4; }
+.ws-lang button[aria-pressed='true'] { background: #111322; color: #fff; }

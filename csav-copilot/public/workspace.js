@@ -6,13 +6,67 @@
  * ce qui coince. L'export Excel donne la même liste hors ligne.
  */
 
+import { LANGS, LOCALES, pickLang, saveLang, translator } from './workspace.i18n.js';
+
 const $ = (id) => document.getElementById(id);
 
 const params = new URLSearchParams(window.location.search);
 const token = params.get('token');
 const supplierId = window.location.pathname.split('/').pop();
 
-const state = { orders: [], issueOrder: null };
+const state = { orders: [], issueOrder: null, lang: pickLang(supplierId) };
+
+/*
+ * `t` est réaffecté à chaque changement de langue plutôt que d'être une
+ * fonction qui relit l'état : les rendus le capturent, et une capture d'une
+ * traduction périmée afficherait deux langues sur le même écran.
+ */
+let t = translator(state.lang);
+let locale = LOCALES[state.lang];
+
+/**
+ * Applique la langue au document.
+ *
+ * Le HTML porte ses propres clés (`data-t`, `data-tph`) au lieu d'être
+ * reconstruit en JavaScript : la page reste lisible et fonctionnelle avec sa
+ * langue d'origine si le dictionnaire venait à manquer, et une chaîne se
+ * retrouve dans le fichier où elle s'affiche.
+ */
+function applyLang(lang) {
+  state.lang = lang;
+  t = translator(lang);
+  locale = LOCALES[lang];
+  saveLang(supplierId, lang);
+  document.documentElement.lang = lang;
+  document.title = t('doc.title');
+
+  for (const node of document.querySelectorAll('[data-t]')) {
+    node.textContent = t(node.dataset.t);
+  }
+  for (const node of document.querySelectorAll('[data-tph]')) {
+    node.placeholder = t(node.dataset.tph);
+  }
+
+  renderLangPicker();
+  // Les écrans construits en JavaScript se refont : ils ne portent pas de
+  // `data-t`, leur texte est écrit au moment du rendu.
+  if (state.orders.length) renderOrders();
+  void loadAlerts();
+}
+
+function renderLangPicker() {
+  const box = $('ws-lang');
+  if (!box) return;
+
+  box.innerHTML = LANGS.map(
+    (entry) => `<button type="button" data-lang="${entry.code}" title="${entry.name}"
+      aria-pressed="${entry.code === state.lang}">${entry.label}</button>`,
+  ).join('');
+
+  box.querySelectorAll('[data-lang]').forEach((button) =>
+    button.addEventListener('click', () => applyLang(button.dataset.lang)),
+  );
+}
 
 function esc(value) {
   return String(value ?? '')
@@ -47,7 +101,7 @@ async function api(path, options) {
   });
 
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error ?? `Erreur (${response.status})`);
+  if (!response.ok) throw new Error(data.error ?? t('error.generic', { status: response.status }));
   return data;
 }
 
@@ -89,8 +143,8 @@ function parcelCard(order, index, total, saved) {
 
   return `<div class="pk" data-order="${esc(order.id)}" data-index="${index}">
     <div class="pk-head">
-      Colis ${index}/${total}
-      ${saved ? '<span class="pk-done">enregistré</span>' : ''}
+      ${esc(t('parcel.head', { index, total }))}
+      ${saved ? `<span class="pk-done">${esc(t('parcel.saved'))}</span>` : ''}
     </div>
     ${
       item
@@ -100,32 +154,33 @@ function parcelCard(order, index, total, saved) {
         : ''
     }
     <input type="text" data-field="tracking" autocapitalize="characters"
-      placeholder="Numéro de suivi" value="${esc(saved?.trackingNumber ?? '')}" />
-    <input type="text" data-field="carrier" placeholder="Transporteur (facultatif)"
+      placeholder="${esc(t('parcel.tracking'))}" value="${esc(saved?.trackingNumber ?? '')}" />
+    <input type="text" data-field="carrier" placeholder="${esc(t('parcel.carrier'))}"
       value="${esc(saved?.carrier ?? '')}" />
     ${
       saved?.hasPhoto
-        ? `<img class="pk-thumb" src="${photoUrl(saved.id)}" alt="Étiquette ${index}" />`
+        ? `<img class="pk-thumb" src="${photoUrl(saved.id)}" alt="${esc(
+            t('parcel.label', { index }),
+          )}" />`
         : '<img class="pk-thumb" hidden alt="" />'
     }
     <div class="pk-row">
       <label class="btn btn-small pk-shot">
-        ${saved?.hasPhoto ? 'Reprendre la photo' : 'Prendre une photo'}
+        ${esc(saved?.hasPhoto ? t('parcel.reshoot') : t('parcel.shoot'))}
         <input type="file" accept="image/*" capture="environment" data-field="photo" />
       </label>
-      <button class="btn btn-small btn-primary" data-save="1">Enregistrer</button>
+      <button class="btn btn-small btn-primary" data-save="1">${esc(t('parcel.save'))}</button>
     </div>
   </div>`;
 }
 
 function renderOrders() {
   $('ws-count').textContent = state.orders.length
-    ? `${state.orders.length} commande${state.orders.length > 1 ? 's' : ''} sur la période`
+    ? t('orders.count', { n: state.orders.length })
     : '';
 
   if (state.orders.length === 0) {
-    $('ws-orders').innerHTML =
-      '<p class="empty">Aucune commande sur cette période. Changez les dates ci-dessus.</p>';
+    $('ws-orders').innerHTML = `<p class="empty">${esc(t('orders.empty'))}</p>`;
     return;
   }
 
@@ -144,16 +199,16 @@ function renderOrders() {
         <div class="ord-head">
           <b>${esc(order.name)}</b>
           <span class="tag tag-order">${esc(order.displayFulfillmentStatus ?? '—')}</span>
-          <span class="when">${new Date(order.createdAt).toLocaleString('fr-FR')}</span>
+          <span class="when">${new Date(order.createdAt).toLocaleString(locale)}</span>
         </div>
 
         <div class="ord-who">
-          <b>${esc(order.customer?.displayName ?? address.name ?? 'Client')}</b>
+          <b>${esc(order.customer?.displayName ?? address.name ?? t('orders.customer'))}</b>
           <small>${esc([address.address1, address.address2].filter(Boolean).join(' '))}</small>
           <small>${esc(`${address.zip ?? ''} ${address.city ?? ''} ${address.country ?? ''}`.trim())}</small>
-          <small>Téléphone :
+          <small>${esc(t('orders.phone'))}
             <span class="ord-phone${phoneShort ? ' missing' : ''}">${
-              esc(phone || 'absent')
+              esc(phone || t('orders.phoneMissing'))
             }</span>
           </small>
         </div>
@@ -173,12 +228,14 @@ function renderOrders() {
         </div>
 
         <label class="field">
-          Nombre de colis
+          ${esc(t('orders.parcelCount'))}
           <select data-total="${esc(order.id)}">
             ${[1, 2, 3, 4, 5, 6]
               .map(
                 (value) =>
-                  `<option value="${value}"${value === total ? ' selected' : ''}>${value} colis</option>`,
+                  `<option value="${value}"${value === total ? ' selected' : ''}>${esc(
+                    t('orders.parcelOption', { n: value }),
+                  )}</option>`,
               )
               .join('')}
           </select>
@@ -196,7 +253,7 @@ function renderOrders() {
         </div>
 
         <div class="ord-foot">
-          <button class="btn" data-issue="${esc(order.id)}">Signaler un problème</button>
+          <button class="btn" data-issue="${esc(order.id)}">${esc(t('orders.report'))}</button>
         </div>
       </article>`;
     })
@@ -206,7 +263,7 @@ function renderOrders() {
 async function load() {
   if (!token) {
     $('gate').hidden = false;
-    $('gate-error').textContent = 'Aucun jeton dans le lien.';
+    $('gate-error').textContent = t('gate.noToken');
     return;
   }
 
@@ -216,7 +273,7 @@ async function load() {
 
     $('app').hidden = false;
     $('ws-supplier').textContent = data.supplier?.name
-      ? `Atelier ${data.supplier.name}`
+      ? t('head.workshop', { name: data.supplier.name })
       : '';
     // Deux formats : la feuille Excel reprend la mise en page de l'atelier,
     // le CSV sert à qui veut retravailler les données.
@@ -261,7 +318,7 @@ $('ws-orders').addEventListener('change', async (event) => {
     thumb.src = card.dataset.photo;
     thumb.hidden = false;
   } catch {
-    toast('Photo illisible — reprenez-la.', true);
+    toast(t('parcel.badPhoto'), true);
   }
 });
 
@@ -269,7 +326,7 @@ $('ws-orders').addEventListener('click', async (event) => {
   const issue = event.target.closest('[data-issue]');
   if (issue) {
     state.issueOrder = state.orders.find((order) => order.id === issue.dataset.issue);
-    $('issue-order').textContent = `Commande ${state.issueOrder?.name ?? ''}`;
+    $('issue-order').textContent = t('issue.order', { name: state.issueOrder?.name ?? '' });
     $('issue-note').value = '';
     // Pré-rempli avec le premier article de la commande : dans neuf cas sur
     // dix c'est celui qui manque, et le fournisseur n'a plus qu'à corriger.
@@ -293,7 +350,7 @@ $('ws-orders').addEventListener('click', async (event) => {
   const trackingNumber = card.querySelector('[data-field="tracking"]').value.trim();
 
   if (!trackingNumber) {
-    toast('Le numéro de suivi est obligatoire.', true);
+    toast(t('parcel.needTracking'), true);
     return;
   }
 
@@ -318,7 +375,7 @@ $('ws-orders').addEventListener('click', async (event) => {
       parcel,
     ].sort((a, b) => a.index - b.index);
 
-    toast(`Colis ${parcel.index}/${parcel.total} enregistré.`);
+    toast(t('parcel.savedToast', { index: parcel.index, total: parcel.total }));
     renderOrders();
   } catch (error) {
     toast(error.message, true);
@@ -336,7 +393,7 @@ $('issue-modal').addEventListener('click', (event) => {
 $('issue-send').addEventListener('click', async () => {
   const note = $('issue-note').value.trim();
   if (!note) {
-    toast('Décrivez le problème en une phrase.', true);
+    toast(t('issue.needNote'), true);
     return;
   }
 
@@ -366,7 +423,7 @@ $('issue-send').addEventListener('click', async () => {
     });
 
     $('issue-modal').classList.remove('open');
-    toast('Signalement envoyé au marchand.');
+    toast(t('issue.sent'));
   } catch (error) {
     toast(error.message, true);
   } finally {
@@ -388,13 +445,12 @@ $('issue-kind').addEventListener('change', toggleIssueItem);
  * pendant qu'il emballe, et une alerte reçue à ce moment-là doit apparaître
  * sans qu'il ait à recharger — c'est tout l'objet d'une urgence.
  */
-const ALERT_TITLES = {
-  ADDRESS: 'Adresse à corriger',
-  PHONE: 'Téléphone à corriger',
-  PRODUCT: 'Article à changer',
-  HOLD: 'Ne pas expédier',
-  OTHER: 'Message urgent',
-};
+/* Le libellé de l'alerte suit la langue de l'atelier : « Ne pas expédier »
+   doit être compris en une seconde, c'est tout son intérêt. */
+function alertTitle(kind) {
+  const label = t(`alert.${kind}`);
+  return label === `alert.${kind}` ? t('alert.fallback') : label;
+}
 
 async function loadAlerts() {
   let alerts = [];
@@ -408,11 +464,11 @@ async function loadAlerts() {
   box.innerHTML = alerts
     .map(
       (alert) => `<div class="alert" data-alert="${alert.id}">
-        <b>${ALERT_TITLES[alert.kind] ?? 'Urgent'}${
-          alert.orderName ? ` · ${alert.orderName}` : ''
+        <b>${escapeHtml(alertTitle(alert.kind))}${
+          alert.orderName ? ` · ${escapeHtml(alert.orderName)}` : ''
         }</b>
         <p>${escapeHtml(alert.message)}</p>
-        <button class="btn btn-small" data-ack="${alert.id}">J'ai vu</button>
+        <button class="btn btn-small" data-ack="${alert.id}">${escapeHtml(t('alert.ack'))}</button>
       </div>`,
     )
     .join('');
@@ -421,7 +477,7 @@ async function loadAlerts() {
   // travaille dans son atelier, pas devant l'onglet.
   if (alerts.length && 'Notification' in window && Notification.permission === 'granted') {
     for (const alert of alerts.slice(0, 3)) {
-      new Notification(ALERT_TITLES[alert.kind] ?? 'Urgent', { body: alert.message });
+      new Notification(alertTitle(alert.kind), { body: alert.message });
     }
   }
 
@@ -455,7 +511,9 @@ if ('Notification' in window && Notification.permission === 'default') {
   document.addEventListener('click', () => Notification.requestPermission(), { once: true });
 }
 
-void loadAlerts();
+// `applyLang` déclenche déjà la première lecture des alertes : les appeler
+// deux fois afficherait brièvement la liste en double.
+applyLang(state.lang);
 setInterval(loadAlerts, 120000);
 
 $('ws-reload').addEventListener('click', load);
