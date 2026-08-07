@@ -24,6 +24,27 @@ export function createOpenAiCompatibleProvider(options: {
   maxRetries?: number;
   fetchImpl?: typeof fetch;
 }): AiProvider {
+  /*
+   * Clé nettoyée et vérifiée une fois pour toutes.
+   *
+   * Une clé recopiée depuis une page web arrive avec un retour à la ligne, une
+   * espace insécable ou une puce laissée par l'affichage masqué. `fetch` refuse
+   * alors l'en-tête d'autorisation avec « Cannot convert argument to a
+   * ByteString » — un message qui ne dit ni quel en-tête, ni quelle valeur, et
+   * qui ressemble à une panne du fournisseur alors que la clé seule est en
+   * cause. On coupe les blancs, et on nomme le caractère fautif s'il en reste.
+   */
+  const apiKey = options.apiKey.trim();
+  const bad = [...apiKey].findIndex((char) => char.charCodeAt(0) > 126);
+
+  if (bad !== -1) {
+    throw new Error(
+      `La clé d'API ${options.name} contient un caractère interdit en position ${
+        bad + 1
+      } (« ${apiKey[bad]} »). Recopiez-la depuis la console ${options.name}.`,
+    );
+  }
+
   const doFetch = options.fetchImpl ?? fetch;
   // Trois essais : le premier échoue souvent sur un débit dépassé, et deux
   // attentes doublantes suffisent à laisser passer le pic.
@@ -70,7 +91,7 @@ export function createOpenAiCompatibleProvider(options: {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              Authorization: `Bearer ${options.apiKey}`,
+              Authorization: `Bearer ${apiKey}`,
             },
             body: JSON.stringify({
               model: options.model,
