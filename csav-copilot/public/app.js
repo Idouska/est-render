@@ -6501,7 +6501,11 @@ function renderPreviewBar() {
 }
 
 document.querySelectorAll('#as-role [data-as]').forEach((button) =>
-  button.addEventListener('click', () => setPreviewRole(button.dataset.as)),
+  button.addEventListener('click', () => {
+    if (button.dataset.as === 'SUPPLIER') return;
+    toggleSupplierPreview('');
+    void setPreviewRole(button.dataset.as);
+  }),
 );
 
 $('asbar-exit')?.addEventListener('click', () => setPreviewRole(''));
@@ -6513,13 +6517,76 @@ function trimPreviewChoices() {
   const mine = rank[state.me?.realRole] ?? 0;
   document.querySelectorAll('#as-role [data-as]').forEach((button) => {
     const target = button.dataset.as;
-    button.hidden = Boolean(target) && (rank[target] ?? 0) >= mine;
+    // « Fournisseur » n'est pas un rôle de l'équipe : il n'entre pas dans la
+    // hiérarchie, et le comparer à la sienne le ferait disparaître pour tous.
+    button.hidden =
+      target !== 'SUPPLIER' && Boolean(target) && (rank[target] ?? 0) >= mine;
   });
 }
 
-$('as-supplier')?.addEventListener('click', () => {
-  setView('suppliers');
-  toast('Ouvrez « Espace de travail » sur un contact pour voir son écran.');
+/**
+ * Vue fournisseur.
+ *
+ * Ce n'est pas un rôle : le fournisseur n'a pas de compte, il travaille sur un
+ * lien signé. Sa « vue » est donc son atelier réel, ouvert avec son propre
+ * jeton — pas une imitation dans le dashboard, qui divergerait de son écran
+ * dès la première modification et donnerait confiance à tort.
+ *
+ * Le bouton menait jusqu'ici à l'écran Fournisseurs avec le conseil d'ouvrir
+ * un espace de travail qui n'existait nulle part.
+ */
+function toggleSupplierPreview(role) {
+  const box = $('as-supplier-box');
+  if (!box) return;
+
+  box.hidden = role !== 'SUPPLIER';
+  if (box.hidden) return;
+
+  const pick = $('as-supplier-pick');
+  const usable = activeSuppliers();
+
+  pick.innerHTML = usable.length
+    ? usable
+        .map((supplier) => `<option value="${esc(supplier.id)}">${esc(supplier.name)}</option>`)
+        .join('')
+    : '<option value="">Aucun fournisseur actif</option>';
+
+  $('as-supplier').disabled = usable.length === 0;
+}
+
+document.querySelectorAll('#as-role [data-as]').forEach((button) => {
+  if (button.dataset.as !== 'SUPPLIER') return;
+
+  button.addEventListener('click', () => {
+    // On ne change pas de rôle : on prépare l'ouverture de l'atelier.
+    document.querySelectorAll('#as-role [data-as]').forEach((other) => {
+      other.setAttribute('aria-pressed', String(other === button));
+    });
+    toggleSupplierPreview('SUPPLIER');
+  });
+});
+
+$('as-supplier')?.addEventListener('click', async () => {
+  const id = $('as-supplier-pick').value;
+  if (!id) return;
+
+  const button = $('as-supplier');
+  button.disabled = true;
+
+  try {
+    // Sans révocation : ouvrir l'atelier pour le regarder ne doit pas couper
+    // l'accès du fournisseur qui y travaille au même moment.
+    const { url } = await api(`/api/suppliers/${id}/portal-link`, {
+      method: 'POST',
+      body: JSON.stringify({ revoke: false }),
+    });
+
+    window.open(url, '_blank', 'noopener');
+  } catch (error) {
+    toast(error.message, true);
+  } finally {
+    button.disabled = false;
+  }
 });
 
 /* ==========================================================================

@@ -47,7 +47,28 @@ export function createAnthropicProvider(options: {
           messages: [{ role: 'user', content: request.user }],
         });
       } catch (error) {
-        throw new AiProviderError('anthropic', 'Appel à l’API Claude en échec', error);
+        /*
+         * Le motif exact voyage dans le message.
+         *
+         * « Appel à l'API Claude en échec » n'indiquait ni le code HTTP ni la
+         * raison : impossible de distinguer une clé invalide d'un crédit épuisé
+         * ou d'un modèle inconnu, trois pannes qui se règlent différemment. Le
+         * SDK porte l'un et l'autre — on les recopie.
+         */
+        const detail =
+          typeof error === 'object' && error !== null && 'status' in error
+            ? `HTTP ${(error as { status: unknown }).status} — ${
+                error instanceof Error ? error.message : String(error)
+              }`
+            : error instanceof Error
+              ? error.message
+              : String(error);
+
+        throw new AiProviderError(
+          'anthropic',
+          `Appel à l’API Claude en échec : ${detail.slice(0, 300)}`,
+          error,
+        );
       }
 
       const usage = {

@@ -788,16 +788,23 @@
                 <button type="button" data-as="SUPERVISOR">Superviseur</button>
                 <button type="button" data-as="AGENT">Agent</button>
                 <button type="button" data-as="VIEWER">Observateur</button>
+                <button type="button" data-as="SUPPLIER">Fournisseur</button>
               </div>
               <p class="set-help" id="as-note"></p>
-              <div class="field">
-                <label>Espace fournisseur</label>
-                <p class="set-help">
-                  Le fournisseur n'a pas de compte ici : il travaille sur un lien
-                  permanent, sur son téléphone. Ouvrez celui d'un contact depuis
-                  l'écran Fournisseurs pour voir exactement son écran.
-                </p>
-                <button class="btn btn-small" id="as-supplier">Ouvrir un espace fournisseur</button>
+
+              <!-- Le fournisseur n'a pas de rôle : il n'a pas de compte. Sa
+                   « vue » est son atelier, ouvert par son propre lien signé —
+                   la seule façon de voir exactement son écran plutôt qu'une
+                   imitation qui divergera. -->
+              <div class="field" id="as-supplier-box" hidden>
+                <label for="as-supplier-pick">Ouvrir l'atelier de</label>
+                <select id="as-supplier-pick"></select>
+                <small>
+                  Le fournisseur n'a pas de compte : il travaille sur un lien permanent,
+                  depuis son téléphone. Son atelier s'ouvre dans un nouvel onglet, avec
+                  exactement ce qu'il voit — ni plus, ni moins.
+                </small>
+                <button class="btn btn-small btn-primary" id="as-supplier">Ouvrir son atelier</button>
               </div>
             </div>
           </div>
