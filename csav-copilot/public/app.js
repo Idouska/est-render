@@ -689,6 +689,7 @@ async function loadQueue({ append = false } = {}) {
   void checkFailures();
 
   state.navCounts = {
+    ...state.navCounts,
     suppliers: state.queueCounts?.AWAITING_SUPPLIER ?? 0,
     disputes: state.disputeCount ?? 0,
     changes: state.changesPending ?? 0,
@@ -3049,9 +3050,12 @@ $('alert-send')?.addEventListener('click', async () => {
       !result.emailed,
     );
 
-    // Le mail rouvre pour afficher la demande en attente : sans ce
-    // rafraîchissement, il faudrait quitter l'écran et y revenir pour la voir.
-    if (state.currentId) {
+    // L'écran d'où l'on vient se rafraîchit : le mail pour montrer la
+    // demande en attente, l'écran Update pour montrer la nouvelle ligne.
+    if (state.view === 'changes') {
+      changesCountAt = 0;
+      await loadChanges();
+    } else if (state.currentId) {
       prefetched.delete(state.currentId);
       await selectTicket(state.currentId);
     }
@@ -4482,12 +4486,16 @@ async function refreshChangesCount() {
   changesCountAt = Date.now();
 
   try {
-    const { pending } = await api('/api/changes');
-    if (pending !== state.changesPending) {
-      state.changesPending = pending;
-      state.navCounts = { ...state.navCounts, changes: pending };
-      renderNav();
-    }
+    const [{ pending }, { counts }] = await Promise.all([
+      api('/api/changes'),
+      // Commandes, clients, catalogue, colis : les volumes, en gris. Seuls
+      // les comptes qui réclament une action sont rouges.
+      api('/api/nav-counts'),
+    ]);
+
+    state.changesPending = pending;
+    state.navCounts = { ...state.navCounts, ...counts, changes: pending };
+    renderNav();
   } catch {
     // Un compteur qui manque un tour vaut mieux qu'une erreur à l'écran.
   }
@@ -4517,13 +4525,24 @@ function renderNav() {
             view === 'tickets'
               ? (state.pendingCount ?? 0)
               : (state.navCounts?.[view] ?? 0);
-          // Les changements en attente sont une promesse faite à un client :
-          // leur compte est rouge, pas gris — il réclame, il n'informe pas.
+          /*
+           * Deux familles de pastilles, deux couleurs.
+           *
+           * Les volumes — commandes, clients, catalogue, colis — informent :
+           * ils sont gris. Les comptes qui réclament un geste — SAV, Update,
+           * litiges, fournisseurs en attente — restent rouges, et Update
+           * passe en rouge plein : une demande sans réponse est une promesse
+           * faite à un client.
+           */
+          const dim = ['orders', 'customers', 'catalog', 'tracking'].includes(view);
           const hot = view === 'changes' && tally > 0;
+          const shown = tally > 9999 ? '9999+' : tally;
           return `<button class="nav-item" data-view="${view}" aria-current="${
             view === state.view
           }">${ico(meta.icon)}<span class="nav-label">${esc(meta.label)}</span>${
-            tally ? `<span class="tally${hot ? ' tally-hot' : ''}">${tally}</span>` : ''
+            tally
+              ? `<span class="tally${hot ? ' tally-hot' : dim ? ' tally-dim' : ''}">${shown}</span>`
+              : ''
           }</button>`;
         })
         .join('')}
@@ -4734,6 +4753,34 @@ function renderChangesScreen() {
     }),
   );
 }
+
+/*
+ * Demande hors mail.
+ *
+ * Le bouton du mail pré-remplit depuis la commande rattachée ; ici tout part
+ * de zéro — le client a appelé, ou l'erreur s'est vue dans la commande. Sans
+ * ce chemin, l'écran Update savait afficher des demandes mais pas en créer.
+ */
+$('changes-new')?.addEventListener('click', () => {
+  if (activeSuppliers().length === 0) {
+    toast('Ajoutez d’abord un fournisseur dans l’écran Fournisseurs.', true);
+    return;
+  }
+
+  $('alert-modal').dataset.supplier = '';
+  $('alert-modal').dataset.ticket = '';
+  $('alert-modal').dataset.order = '';
+  $('alert-who').textContent = '';
+  $('alert-kind').value = 'SIZE';
+  $('alert-order').value = '';
+  $('alert-before').value = '';
+  $('alert-after').value = '';
+  $('alert-message').value = '';
+  renderAlertSuppliers();
+  $('alert-modal').hidden = false;
+  $('alert-modal').classList.add('open');
+  $('alert-order').focus();
+});
 
 $('changes-filters')?.addEventListener('click', (event) => {
   const chip = event.target.closest('[data-chg]');

@@ -131,6 +131,63 @@ async function serveShopify<T>(
 export async function commerceRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', requireSession);
 
+  /*
+   * Comptes pour les pastilles de la navigation.
+   *
+   * Trois nombres que Shopify sait donner sans paginer (`ordersCount`,
+   * `customersCount`, `productsCount`), plus les colis de notre base. Mis en
+   * cache cinq minutes par marchand : la navigation se repeint à chaque
+   * geste, et un carnet de commandes ne bouge pas à la seconde. Une pastille
+   * en retard de cinq minutes informe ; trois appels Shopify par clic
+   * factureraient.
+   */
+  const navCountsCache = new Map<string, { at: number; counts: Record<string, number> }>();
+
+  app.get('/api/nav-counts', async (request, reply) => {
+    const { merchantId } = request.session;
+
+    const cached = navCountsCache.get(merchantId);
+    if (cached && Date.now() - cached.at < 5 * 60_000) {
+      return reply.send({ counts: cached.counts });
+    }
+
+    const counts: Record<string, number> = {};
+
+    counts.tracking = await prisma.parcel.count({ where: { merchantId } });
+
+    try {
+      const client = await getShopifyClient(merchantId);
+      const data = await client.request<{
+        ordersCount: { count: number } | null;
+        customersCount: { count: number } | null;
+        productsCount: { count: number } | null;
+      }>(/* GraphQL */ `
+        query NavCounts {
+          ordersCount(limit: 10000) {
+            count
+          }
+          customersCount(limit: 10000) {
+            count
+          }
+          productsCount(limit: 10000) {
+            count
+          }
+        }
+      `);
+
+      counts.orders = data.ordersCount?.count ?? 0;
+      counts.customers = data.customersCount?.count ?? 0;
+      counts.catalog = data.productsCount?.count ?? 0;
+    } catch (error) {
+      // Boutique muette : les pastilles Shopify manquent, celles de la base
+      // restent. Une navigation sans chiffre vaut mieux qu'une erreur.
+      request.log.warn({ err: error }, 'Comptes de navigation indisponibles');
+    }
+
+    navCountsCache.set(merchantId, { at: Date.now(), counts });
+    return reply.send({ counts });
+  });
+
   app.get('/api/orders', async (request, reply) => {
     const parsed = orderQuery.safeParse(request.query);
     if (!parsed.success) {

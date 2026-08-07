@@ -4848,3 +4848,10 @@ textarea:focus-visible {
   .chgc-swap { font-size: 17px; }
   .chgc-when { flex-basis: 100%; margin-left: 0; }
 }
+
+/* Pastilles de volume : elles informent, elles ne réclament pas. */
+.nav-item .tally-dim {
+  background: var(--inset);
+  color: var(--ink-mute);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
