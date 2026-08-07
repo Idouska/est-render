@@ -390,26 +390,50 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const { merchantId } = request.session;
 
-      const failed = await prisma.ticket.findMany({
-        where: { merchantId, status: 'FAILED', isHistorical: false },
-        select: { id: true },
-        // Mille par appel : au-delà, la mise en file dépasse le temps d'une
-        // requête. Relancer deux fois reprend là où l'on s'est arrêté, puisque
-        // les tickets repris changent d'état.
-        take: 1000,
-      });
+      /*
+       * Toute la file en un clic, par pages de mille.
+       *
+       * La version précédente s'arrêtait à mille et demandait de recliquer.
+       * Le ticket ne quitte l'état FAILED qu'une fois le worker passé — bien
+       * après la réponse — donc « relancer pour la suite » repropose surtout
+       * les mêmes : sur trois mille échecs, le marchand cliquait sans voir la
+       * file avancer. On pagine ici par identifiant croissant, ce qui garantit
+       * d'avancer quel que soit l'état des tickets déjà remis en file.
+       */
+      const PAGE = 1000;
+      const MAX = 20_000;
 
+      let cursor: string | undefined;
       let queued = 0;
-      for (const ticket of failed) {
-        try {
-          await enqueueTicket({ merchantId, ticketId: ticket.id });
-          queued += 1;
-        } catch (error) {
-          request.log.error({ err: error, ticketId: ticket.id }, 'Relance impossible');
+      let seen = 0;
+
+      for (;;) {
+        const page = await prisma.ticket.findMany({
+          where: { merchantId, status: 'FAILED', isHistorical: false },
+          select: { id: true },
+          orderBy: { id: 'asc' },
+          ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+          take: PAGE,
+        });
+
+        if (page.length === 0) break;
+
+        for (const ticket of page) {
+          try {
+            await enqueueTicket({ merchantId, ticketId: ticket.id });
+            queued += 1;
+          } catch (error) {
+            request.log.error({ err: error, ticketId: ticket.id }, 'Relance impossible');
+          }
         }
+
+        seen += page.length;
+        cursor = page[page.length - 1]!.id;
+
+        if (page.length < PAGE || seen >= MAX) break;
       }
 
-      return reply.send({ queued, remaining: failed.length === 1000 });
+      return reply.send({ queued, remaining: seen >= MAX });
     },
   );
 
