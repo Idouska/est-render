@@ -25,7 +25,9 @@ export function createOpenAiCompatibleProvider(options: {
   fetchImpl?: typeof fetch;
 }): AiProvider {
   const doFetch = options.fetchImpl ?? fetch;
-  const maxRetries = options.maxRetries ?? 1;
+  // Trois essais : le premier échoue souvent sur un débit dépassé, et deux
+  // attentes doublantes suffisent à laisser passer le pic.
+  const maxRetries = options.maxRetries ?? 3;
   const endpoint = `${options.baseUrl.replace(/\/$/, '')}/chat/completions`;
 
   return {
@@ -79,7 +81,29 @@ export function createOpenAiCompatibleProvider(options: {
           });
 
           if (!response.ok) {
-            throw new Error(`HTTP ${response.status} — ${await response.text()}`);
+            const detail = (await response.text()).slice(0, 200);
+
+            /*
+             * Débit dépassé ou panne passagère : on attend et on recommence.
+             *
+             * Traiter cinq mille messages d'un coup sature n'importe quel
+             * fournisseur ; sans cette attente, la moitié de la file se
+             * marquait « en échec » pour une erreur qui se dissipait en deux
+             * secondes. L'attente double à chaque essai, et le corps de la
+             * réponse voyage dans le message : « en échec » tout court
+             * n'apprenait rien, « HTTP 402 Insufficient Balance » dit quoi
+             * faire.
+             */
+            if (
+              (response.status === 429 || response.status >= 500) &&
+              attempt < maxRetries
+            ) {
+              await new Promise((resolve) => setTimeout(resolve, 2000 * 2 ** attempt));
+              lastError = `HTTP ${response.status}`;
+              continue;
+            }
+
+            throw new Error(`HTTP ${response.status} — ${detail}`);
           }
 
           payload = (await response.json()) as {
@@ -89,7 +113,13 @@ export function createOpenAiCompatibleProvider(options: {
         } catch (error) {
           // Une panne réseau ou une erreur HTTP n'est pas un problème de format :
           // inutile de réessayer avec un message correctif.
-          throw new AiProviderError(options.name, `Appel à ${options.name} en échec`, error);
+          throw new AiProviderError(
+            options.name,
+            `Appel à ${options.name} en échec : ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            error,
+          );
         }
 
         usage.inputTokens += payload.usage?.prompt_tokens ?? 0;
