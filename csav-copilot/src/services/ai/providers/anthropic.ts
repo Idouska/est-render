@@ -26,7 +26,7 @@ export function createAnthropicProvider(options: {
    * plusieurs milliers de messages. Le réglage d'effort est un raffinement,
    * pas une exigence : on le retire quand le modèle ne le connaît pas.
    */
-  const supportsEffort = /-5(-|$)|^claude-(opus|sonnet|fable)-5/.test(options.model);
+  const supportsEffort = /^claude-(opus|sonnet|fable)-5/.test(options.model);
 
   return {
     name: 'anthropic',
