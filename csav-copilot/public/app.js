@@ -1258,13 +1258,13 @@ async function renderParcels(ticket) {
  * restent accessibles. L'ordre compte plus que la liste.
  */
 const ACTIONS_BY_INTENT = {
-  WISMO: ['tracking', 'client', 'supplier'],
-  RETURN: ['client', 'supplier', 'refund'],
+  WISMO: ['tracking', 'client', 'change', 'supplier'],
+  RETURN: ['change', 'client', 'supplier', 'refund'],
   DISPUTE: ['refund', 'client', 'supplier'],
   REFUND: ['refund', 'client'],
-  PRODUCT_QUESTION: ['substitute', 'client', 'supplier'],
+  PRODUCT_QUESTION: ['change', 'substitute', 'client', 'supplier'],
   POSITIVE: ['client'],
-  OTHER: ['client', 'supplier', 'refund'],
+  OTHER: ['client', 'change', 'supplier', 'refund'],
 };
 
 const ACTION_META = {
@@ -1273,6 +1273,10 @@ const ACTION_META = {
   client: { label: 'Écrire au client', note: 'Message direct, hors brouillon proposé.' },
   supplier: { label: 'Écrire au fournisseur', note: 'Ouvre une escalade suivie, avec relance automatique.' },
   tracking: { label: 'Voir le suivi', note: 'Position du colis d’après le transporteur.' },
+  change: {
+    label: '⚡ Demander un changement',
+    note: 'Taille, couleur, modèle, adresse — le fournisseur confirme depuis son atelier.',
+  },
 };
 
 function renderActionBar() {
@@ -1457,6 +1461,10 @@ function actionBlockedReason(key, ticket) {
     return 'Aucune commande rattachée à ce message.';
   }
   if (key === 'supplier' && !canI('escalate')) return 'Votre rôle ne permet pas d’escalader.';
+  if (key === 'change') {
+    if (!canI('escalate')) return 'Votre rôle ne permet pas d’escalader.';
+    if (activeSuppliers().length === 0) return 'Aucun fournisseur actif à qui adresser la demande.';
+  }
   if (key === 'client' && !canI('reply')) return 'Vous êtes en lecture seule.';
   return null;
 }
@@ -1479,7 +1487,60 @@ $('actbar-row').addEventListener('click', async (event) => {
   if (key === 'supplier') return openCompose('supplier', ticket);
   if (key === 'tracking') return setView('tracking');
   if (key === 'substitute') return loadSubstitutions(ticket.id);
+  if (key === 'change') return openChangeRequest(ticket);
 });
+
+/**
+ * Demande de changement adressée au fournisseur, depuis le mail du client.
+ *
+ * C'est le chemin naturel : le client écrit « finalement la 45 », et la
+ * demande part de là — avec sa commande, son article et sa déclinaison
+ * actuelle déjà remplis. Retaper tout cela dans l'écran Fournisseurs, c'est
+ * la garantie qu'on ne le fera pas, ou qu'on se trompera de commande.
+ */
+function openChangeRequest(ticket) {
+  const order = state.detail?.order;
+  const item = order?.lineItems?.[0];
+
+  $('alert-modal').dataset.supplier = '';
+  $('alert-modal').dataset.ticket = ticket.id;
+  $('alert-modal').dataset.order = order?.id ?? '';
+  $('alert-who').textContent = order?.name
+    ? `Commande ${order.name} · ${ticket.customerName ?? ticket.customerEmail}`
+    : (ticket.customerName ?? ticket.customerEmail);
+
+  $('alert-kind').value = 'SIZE';
+  $('alert-order').value = order?.name ?? ticket.orderName ?? '';
+  // La déclinaison actuelle sert de valeur « avant » : dans presque tous les
+  // cas c'est ce que le client veut changer, et l'avoir sous les yeux évite
+  // d'aller la chercher dans Shopify.
+  $('alert-before').value = item?.variantTitle ?? '';
+  $('alert-after').value = '';
+  $('alert-message').value = '';
+
+  renderAlertSuppliers();
+  $('alert-modal').hidden = false;
+  $('alert-modal').classList.add('open');
+  $('alert-after').focus();
+}
+
+/** Le fournisseur destinataire : celui par défaut d'abord, il traite le gros. */
+function renderAlertSuppliers() {
+  const pick = $('alert-supplier');
+  if (!pick) return;
+
+  const usable = activeSuppliers();
+  const preselect = $('alert-modal').dataset.supplier;
+
+  pick.innerHTML = usable
+    .map(
+      (supplier) =>
+        `<option value="${esc(supplier.id)}"${
+          supplier.id === preselect || (!preselect && supplier.isDefault) ? ' selected' : ''
+        }>${esc(supplier.name)}</option>`,
+    )
+    .join('');
+}
 
 async function loadSubstitutions(ticketId) {
   const box = $('subs');
@@ -1930,6 +1991,7 @@ function renderDetail() {
 
   bindTranslate(ticket);
   renderSiblings(state.detail?.siblings ?? [], ticket);
+  renderChanges(state.detail?.changes ?? []);
 
   const draft = ticket.drafts?.[0] ?? null;
   renderDraft(draft, ticket);
@@ -1939,6 +2001,62 @@ function renderDetail() {
 }
 
 
+
+const CHANGE_KINDS = {
+  ADDRESS: 'Adresse',
+  PHONE: 'Téléphone',
+  PRODUCT: 'Modèle',
+  SIZE: 'Taille',
+  COLOR: 'Couleur',
+  HOLD: 'Ne pas expédier',
+  CANCEL: 'Annulation',
+  OTHER: 'Autre',
+};
+
+const CHANGE_STATUS = {
+  PENDING: { tone: 'wait', label: 'en attente du fournisseur' },
+  ACKNOWLEDGED: { tone: 'ok', label: 'pris en compte' },
+  REFUSED: { tone: 'bad', label: 'refusé' },
+};
+
+/**
+ * Ce qu'on a demandé au fournisseur depuis ce mail, et sa réponse.
+ *
+ * Le statut est l'information utile : « pris en compte » autorise à répondre
+ * au client, « refusé » interdit de lui annoncer quoi que ce soit. Une
+ * demande sans réponse visible revient à ne pas l'avoir envoyée.
+ */
+function renderChanges(changes) {
+  const box = $('d-changes');
+  if (!box) return;
+
+  box.hidden = changes.length === 0;
+  if (changes.length === 0) return;
+
+  box.innerHTML =
+    `<div class="chg-head"><span class="panel-title">Demandé au fournisseur</span></div>` +
+    changes
+      .map((change) => {
+        const status = CHANGE_STATUS[change.status] ?? CHANGE_STATUS.PENDING;
+
+        return `<div class="chg-row">
+          <b>${esc(CHANGE_KINDS[change.kind] ?? change.kind)}</b>
+          ${
+            change.afterValue
+              ? `<span class="chg-swap">${esc(change.beforeValue ?? '—')} → <b>${esc(
+                  change.afterValue,
+                )}</b></span>`
+              : `<span class="chg-swap">${esc(change.message)}</span>`
+          }
+          <span class="tag tone-${status.tone}">${esc(status.label)}</span>
+          <span class="chg-who">${esc(change.supplier?.name ?? '')} · ${esc(
+            dateTime(change.createdAt),
+          )}</span>
+          ${change.supplierNote ? `<p class="chg-note">« ${esc(change.supplierNote)} »</p>` : ''}
+        </div>`;
+      })
+      .join('');
+}
 
 /**
  * Les autres messages en cours du même client.
@@ -2855,10 +2973,15 @@ function openAlertModal(id) {
   if (!supplier) return;
 
   $('alert-modal').dataset.supplier = id;
+  $('alert-modal').dataset.ticket = '';
+  $('alert-modal').dataset.order = '';
   $('alert-who').textContent = `${supplier.name} · ${supplier.contactEmail}`;
   $('alert-kind').value = 'HOLD';
   $('alert-order').value = '';
+  $('alert-before').value = '';
+  $('alert-after').value = '';
   $('alert-message').value = '';
+  renderAlertSuppliers();
   $('alert-modal').hidden = false;
   $('alert-modal').classList.add('open');
   $('alert-message').focus();
@@ -2882,8 +3005,18 @@ $('alert-modal')?.addEventListener('click', (event) => {
 
 $('alert-send')?.addEventListener('click', async () => {
   const message = $('alert-message').value.trim();
-  if (message.length < 3) {
-    toast('Écrivez le message de l’alerte.', true);
+  const after = $('alert-after').value.trim();
+
+  // L'un ou l'autre suffit : « ne pas expédier » n'a pas de valeur « après »,
+  // et « 44 → 45 » n'a pas besoin de phrase.
+  if (!after && message.length < 3) {
+    toast('Indiquez la nouvelle valeur, ou écrivez une précision.', true);
+    return;
+  }
+
+  const supplierId = $('alert-supplier').value || $('alert-modal').dataset.supplier;
+  if (!supplierId) {
+    toast('Choisissez le fournisseur destinataire.', true);
     return;
   }
 
@@ -2891,12 +3024,16 @@ $('alert-send')?.addEventListener('click', async () => {
   button.disabled = true;
 
   try {
-    const result = await api(`/api/suppliers/${$('alert-modal').dataset.supplier}/alert`, {
+    const result = await api(`/api/suppliers/${supplierId}/alert`, {
       method: 'POST',
       body: JSON.stringify({
         kind: $('alert-kind').value,
         message,
+        beforeValue: $('alert-before').value.trim() || null,
+        afterValue: after || null,
         orderName: $('alert-order').value.trim() || null,
+        shopifyOrderId: $('alert-modal').dataset.order || null,
+        ticketId: $('alert-modal').dataset.ticket || null,
       }),
     });
 
@@ -2905,10 +3042,17 @@ $('alert-send')?.addEventListener('click', async () => {
     // utile, à condition de ne pas croire que le fournisseur l'a reçue.
     toast(
       result.emailed
-        ? 'Alerte envoyée par mail et affichée dans son atelier.'
-        : 'Alerte affichée dans son atelier — le mail n’a pas pu partir.',
+        ? 'Demande envoyée par mail et affichée dans son atelier.'
+        : 'Demande affichée dans son atelier — le mail n’a pas pu partir.',
       !result.emailed,
     );
+
+    // Le mail rouvre pour afficher la demande en attente : sans ce
+    // rafraîchissement, il faudrait quitter l'écran et y revenir pour la voir.
+    if (state.currentId) {
+      prefetched.delete(state.currentId);
+      await selectTicket(state.currentId);
+    }
   } catch (error) {
     toast(error.message, true);
   } finally {

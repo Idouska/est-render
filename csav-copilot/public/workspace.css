@@ -203,3 +203,290 @@
 }
 .ws-lang button + button { border-left: 1px solid #eceef4; }
 .ws-lang button[aria-pressed='true'] { background: #111322; color: #fff; }
+
+/* ==========================================================================
+   ATELIER v2 — quatre écrans, pensé pour un téléphone tenu d'une main
+
+   Sur ordinateur : colonne de navigation à gauche, contenu à droite.
+   Sur téléphone : barre d'onglets fixée en bas. Le pouce atteint le bas de
+   l'écran, jamais le haut — un menu latéral à cette taille ne se déplie que
+   par accident.
+   ========================================================================== */
+
+.wsapp {
+  display: grid;
+  grid-template-columns: 208px 1fr;
+  min-height: 100vh;
+  align-items: start;
+}
+
+.wsnav {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 20px 12px;
+  height: 100vh;
+  border-right: 1px solid #e6e7ee;
+  background: #fff;
+}
+
+.wsnav button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 550;
+  color: #4a4c5c;
+  cursor: pointer;
+  text-align: left;
+  min-height: 46px;
+}
+.wsnav button:hover { background: #f4f5fa; }
+.wsnav button[aria-current='true'] { background: #edecfd; color: #4b3fd4; }
+
+.wsnav-icon { font-size: 15px; width: 18px; text-align: center; }
+
+.wsnav-badge {
+  margin-left: auto;
+  min-width: 21px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #d94141;
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.wsmain { padding: 20px 22px 40px; max-width: 980px; }
+
+/* --------------------------------------------------------- barre d'outils */
+
+.ws-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.ws-range-quick { display: inline-flex; border: 1px solid #d9dae2; border-radius: 10px; overflow: hidden; }
+.ws-range-quick button {
+  border: 0;
+  background: #fff;
+  padding: 9px 14px;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 550;
+  color: #4a4c5c;
+  cursor: pointer;
+  min-height: 42px;
+}
+.ws-range-quick button + button { border-left: 1px solid #eceef4; }
+.ws-range-quick button[aria-pressed='true'] { background: #111322; color: #fff; }
+
+.ws-search {
+  flex: 1;
+  min-width: 200px;
+  padding: 11px 13px;
+  border: 1px solid #d9dae2;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 15px;
+  min-height: 46px;
+}
+
+/* ------------------------------------------------------------ progression */
+
+.ws-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 14px;
+  font-size: 13px;
+  color: #5c5e6e;
+}
+.ws-progress-bar {
+  flex: 1;
+  height: 7px;
+  border-radius: 999px;
+  background: #e8e9f1;
+  overflow: hidden;
+}
+.ws-progress-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: #5b4ee0;
+  transition: width 0.3s ease;
+}
+.ws-progress.full .ws-progress-bar > i { background: #1a9e63; }
+.ws-progress.full span { color: #1a9e63; font-weight: 600; }
+
+/* La barre d'une commande est plus discrète que celle de la journée : elle se
+   répète cinquante fois, elle ne doit pas crier cinquante fois. */
+.ord .ws-progress { margin: 4px 0 10px; font-size: 12px; }
+.ord .ws-progress-bar { height: 5px; }
+
+.ord-done { border-color: #b8e2cd; }
+
+/* ------------------------------------------------------- article du colis */
+
+.pk-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.pk-photo {
+  width: 52px;
+  height: 52px;
+  object-fit: cover;
+  border-radius: 8px;
+  background: #f1f2f7;
+  flex: none;
+}
+.pk-photo-none { display: block; }
+.pk-item-text { display: flex; flex-direction: column; min-width: 0; }
+.pk-item-text b { font-size: 14px; }
+.pk-item-text small { color: #6b6d7c; font-size: 12.5px; }
+
+.pk.done { background: #f2fbf6; border-color: #b8e2cd; }
+.pk-done { color: #1a9e63; font-weight: 650; }
+
+/* ------------------------------------------------------------- suivi ----- */
+
+.trk, .cat {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 12px;
+  border: 1px solid #e6e7ee;
+  border-radius: 12px;
+  background: #fff;
+  margin-bottom: 8px;
+}
+.trk-photo, .cat-photo {
+  width: 46px;
+  height: 46px;
+  object-fit: cover;
+  border-radius: 8px;
+  background: #f1f2f7;
+  flex: none;
+}
+.trk-main, .cat-main { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.trk-main b, .cat-main b { font-size: 14.5px; }
+.trk-main small, .cat-main small { color: #6b6d7c; font-size: 12.5px; }
+.trk-when { font-size: 12.5px; color: #8a8c9b; white-space: nowrap; }
+
+/* -------------------------------------------------------- changements ---- */
+
+.upd {
+  border: 1px solid #e6e7ee;
+  border-left-width: 5px;
+  border-radius: 12px;
+  background: #fff;
+  padding: 13px 15px;
+  margin-bottom: 10px;
+}
+.upd-wait { border-left-color: #d9a03c; background: #fffaf0; }
+.upd-ok { border-left-color: #1a9e63; }
+.upd-bad { border-left-color: #d94141; }
+
+.upd-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.upd-head b { font-size: 15px; }
+.upd-when { margin-left: auto; font-size: 12.5px; color: #8a8c9b; }
+
+/* Le cœur de la carte : « 44 → 45 », en gros. Une taille à changer se lit en
+   une seconde ou ne se lit pas — c'est ce qui décide du colis. */
+.upd-swap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 12px 0 10px;
+  font-size: 21px;
+  font-weight: 650;
+}
+.upd-before { color: #8a8c9b; text-decoration: line-through; }
+.upd-arrow { color: #8a8c9b; font-size: 18px; }
+.upd-after { color: #4b3fd4; }
+
+.upd-msg { margin: 0 0 10px; font-size: 14px; white-space: pre-wrap; }
+.upd-note { margin: 0 0 10px; font-size: 13.5px; color: #6b6d7c; font-style: italic; }
+.upd-acts { display: flex; gap: 8px; flex-wrap: wrap; }
+.upd-acts .btn { min-height: 44px; padding: 0 16px; }
+
+.alert-swap { font-size: 17px; font-weight: 650; }
+
+/* ==========================================================================
+   TÉLÉPHONE
+   ========================================================================== */
+
+@media (max-width: 860px) {
+  .wsapp { grid-template-columns: 1fr; }
+
+  /* La navigation descend en barre d'onglets. `env(safe-area-inset-bottom)`
+     tient compte de la barre d'accueil des iPhone récents : sans elle, le
+     dernier onglet passe dessous et devient intouchable. */
+  .wsnav {
+    position: fixed;
+    inset: auto 0 0 0;
+    top: auto;
+    height: auto;
+    flex-direction: row;
+    padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+    border-right: 0;
+    border-top: 1px solid #e6e7ee;
+    box-shadow: 0 -2px 12px rgb(16 18 40 / 8%);
+    z-index: 40;
+  }
+  .wsnav button {
+    flex: 1;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 11.5px;
+    padding: 7px 4px;
+    min-height: 52px;
+    text-align: center;
+  }
+  .wsnav-icon { font-size: 17px; width: auto; }
+  .wsnav-badge {
+    position: absolute;
+    top: 4px;
+    right: 22%;
+    margin: 0;
+  }
+
+  /* La marge basse laisse passer la barre d'onglets : sans elle, le dernier
+     bouton « Enregistrer » de la page reste sous les onglets. */
+  .wsmain { padding: 14px 12px calc(78px + env(safe-area-inset-bottom)); }
+
+  .ws-bar { gap: 6px; }
+  .ws-range-quick { width: 100%; }
+  .ws-range-quick button { flex: 1; }
+  .ws-bar .btn, .ws-bar .ws-range { flex: 1 1 46%; justify-content: center; }
+
+  /* Cibles tactiles : un champ de 36 px se manque une fois sur trois avec des
+     mains d'atelier. */
+  .pk input, .ord select { min-height: 48px; font-size: 16px; }
+  .pk-shot, .pk .btn { min-height: 48px; }
+  .pk-row { flex-direction: column; align-items: stretch; gap: 8px; }
+  .pk-row .btn { width: 100%; }
+
+  .upd-swap { font-size: 19px; }
+  .upd-acts .btn { flex: 1; }
+}
+
+/* 16 px sur les champs : en dessous, iOS zoome à la mise au point et le
+   fournisseur perd sa page. */
+@media (max-width: 860px) {
+  input, select, textarea { font-size: 16px; }
+}

@@ -333,6 +333,11 @@
           <!-- Les autres fils du même client. Deux mails d'une même personne
                ouvrent deux fils Gmail : répondre à l'un sans voir l'autre,
                c'est envoyer deux réponses qui s'ignorent. -->
+          <!-- Demandes de changement envoyées au fournisseur depuis ce mail,
+               avec ce qu'il en a fait. Sans elles, la même demande part deux
+               fois — ou l'on annonce au client un changement refusé. -->
+          <section class="chg" id="d-changes" hidden></section>
+
           <section class="sibs" id="d-sibs" hidden></section>
 
           <div class="actbar" id="actbar" hidden>
@@ -1330,30 +1335,55 @@ Douane : les frais éventuels sont à la charge du destinataire hors UE."></text
     <div class="backdrop" id="alert-modal" hidden>
       <div class="modal">
         <div class="modal-head">
-          <h2>Alerte urgente</h2>
+          <h2>Demander un changement</h2>
           <p id="alert-who"></p>
         </div>
         <div class="modal-body">
+          <label for="alert-supplier">Fournisseur</label>
+          <select id="alert-supplier"></select>
+
           <label for="alert-kind">Nature</label>
           <select id="alert-kind">
-            <option value="HOLD">Ne pas expédier</option>
+            <option value="SIZE">Taille à changer</option>
+            <option value="COLOR">Couleur à changer</option>
+            <option value="PRODUCT">Modèle à changer</option>
             <option value="ADDRESS">Adresse à corriger</option>
             <option value="PHONE">Téléphone à corriger</option>
-            <option value="PRODUCT">Article à changer</option>
+            <option value="HOLD">Ne pas expédier</option>
+            <option value="CANCEL">Commande annulée</option>
             <option value="OTHER">Autre</option>
           </select>
 
-          <label for="alert-order">Commande concernée (facultatif)</label>
+          <!-- Avant → après plutôt qu'une phrase : « 44 → 45 » se lit en une
+               seconde sur un téléphone d'entrepôt, une phrase se relit trois
+               fois et c'est ainsi qu'on expédie la mauvaise pointure. -->
+          <div class="swap-row">
+            <label class="swap-field">
+              <span>Actuellement</span>
+              <input id="alert-before" type="text" placeholder="44" />
+            </label>
+            <span class="swap-arrow" aria-hidden="true">→</span>
+            <label class="swap-field">
+              <span>À la place</span>
+              <input id="alert-after" type="text" placeholder="45" />
+            </label>
+          </div>
+
+          <label for="alert-order">Commande concernée</label>
           <input id="alert-order" type="text" placeholder="#9739" />
 
-          <label for="alert-message">Message</label>
-          <textarea id="alert-message" rows="4"
-            placeholder="Ex. : n'expédie pas #9739, le client a changé d'adresse, je te la transmets dans l'heure."></textarea>
-          <small>Envoyé par mail depuis votre boîte SAV et affiché en tête de son atelier jusqu'à ce qu'il l'ouvre.</small>
+          <label for="alert-message">Précision (facultatif)</label>
+          <textarea id="alert-message" rows="3"
+            placeholder="Ex. : le client a écrit ce matin, le colis ne doit pas partir avant."></textarea>
+          <small>
+            Envoyé par mail depuis votre boîte SAV et affiché dans son atelier, onglet
+            « Changements ». Vous verrez ici quand il aura confirmé — ou expliqué pourquoi
+            il ne peut pas.
+          </small>
         </div>
         <div class="modal-foot">
           <button class="btn" id="alert-cancel">Annuler</button>
-          <button class="btn btn-danger" id="alert-send">Envoyer l'alerte</button>
+          <button class="btn btn-danger" id="alert-send">Envoyer au fournisseur</button>
         </div>
       </div>
     </div>

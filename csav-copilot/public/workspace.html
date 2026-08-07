@@ -18,38 +18,98 @@
       <p data-t="gate.help">Demandez au marchand de vous renvoyer votre lien d'accès.</p>
     </div>
 
-    <div class="ws" id="app" hidden>
-      <header class="ws-head">
-        <div>
-          <div class="crumb" data-t="head.crumb">Atelier</div>
-          <h1 id="ws-title" data-t="head.title">Commandes à préparer</h1>
-          <p class="hint" id="ws-supplier"></p>
-        </div>
-        <div class="ws-acts">
-          <label class="ws-range">
-            <span data-t="head.from">Du</span> <input type="date" id="ws-since" />
-          </label>
-          <label class="ws-range">
-            <span data-t="head.to">au</span> <input type="date" id="ws-until" />
-          </label>
-          <button class="btn" id="ws-reload" data-t="head.reload">Actualiser</button>
-          <a class="btn btn-primary" id="ws-xlsx" download data-t="head.xlsx">Feuille Excel</a>
-          <a class="btn" id="ws-csv" download data-t="head.csv">CSV</a>
+    <div class="wsapp" id="app" hidden>
+      <!-- Navigation. Colonne à gauche sur ordinateur, barre d'onglets en bas
+           sur téléphone : c'est un écran d'entrepôt, tenu d'une main, et le
+           pouce n'atteint pas le haut de l'écran. -->
+      <nav class="wsnav" id="ws-nav" aria-label="Sections">
+        <button type="button" data-view="orders" aria-current="true">
+          <span class="wsnav-icon" aria-hidden="true">▤</span>
+          <span data-t="nav.orders">Commandes</span>
+        </button>
+        <button type="button" data-view="tracking">
+          <span class="wsnav-icon" aria-hidden="true">◎</span>
+          <span data-t="nav.tracking">Suivi</span>
+        </button>
+        <button type="button" data-view="catalog">
+          <span class="wsnav-icon" aria-hidden="true">◫</span>
+          <span data-t="nav.catalog">Catalogue</span>
+        </button>
+        <button type="button" data-view="updates">
+          <span class="wsnav-icon" aria-hidden="true">⚡</span>
+          <span data-t="nav.updates">Changements</span>
+          <span class="wsnav-badge" id="ws-badge" hidden>0</span>
+        </button>
+      </nav>
 
-          <!-- Sélecteur de langue. L'atelier est le seul écran qu'une
-               personne extérieure ouvre chaque jour, souvent depuis la Chine :
-               lui demander de deviner « Numéro de suivi » fait partir des
-               colis avec la mauvaise taille. -->
+      <main class="wsmain">
+        <header class="ws-head">
+          <div>
+            <div class="crumb" data-t="head.crumb">Atelier</div>
+            <h1 id="ws-title" data-t="head.title">Commandes à préparer</h1>
+            <p class="hint" id="ws-supplier"></p>
+          </div>
           <div class="ws-lang" id="ws-lang" role="group" aria-label="Langue"></div>
-        </div>
-      </header>
+        </header>
 
-      <!-- Alertes urgentes du marchand. En tête, avant les commandes : elles
-           existent précisément pour interrompre le travail en cours. -->
-      <div id="ws-alerts"></div>
+        <!-- Alertes urgentes du marchand. En tête, avant les commandes : elles
+             existent précisément pour interrompre le travail en cours. -->
+        <div id="ws-alerts"></div>
 
-      <p class="hint" id="ws-count"></p>
-      <div id="ws-orders"></div>
+        <!-- ============================================ COMMANDES ======= -->
+        <section id="view-orders">
+          <div class="ws-bar">
+            <!-- La période en un geste. Les champs de date restent, mais le
+                 cas courant — « ce que j'expédie ce matin » — ne doit pas
+                 demander deux sélecteurs de calendrier. -->
+            <div class="ws-range-quick" id="ws-quick" role="group">
+              <button type="button" data-range="yesterday" data-t="range.yesterday">Hier</button>
+              <button type="button" data-range="today" data-t="range.today">Aujourd'hui</button>
+              <button type="button" data-range="week" data-t="range.week">7 jours</button>
+            </div>
+
+            <label class="ws-range">
+              <span data-t="head.from">Du</span> <input type="date" id="ws-since" />
+            </label>
+            <label class="ws-range">
+              <span data-t="head.to">au</span> <input type="date" id="ws-until" />
+            </label>
+
+            <button class="btn" id="ws-reload" data-t="head.reload">Actualiser</button>
+            <a class="btn btn-primary" id="ws-xlsx" download data-t="head.xlsx">Feuille Excel</a>
+            <a class="btn" id="ws-csv" download data-t="head.csv">CSV</a>
+          </div>
+
+          <!-- Avancement de la journée : la question qu'on se pose entre deux
+               colis n'est pas « combien y en a-t-il » mais « où j'en suis ». -->
+          <div class="ws-progress" id="ws-progress" hidden>
+            <div class="ws-progress-bar"><i id="ws-progress-fill"></i></div>
+            <span id="ws-progress-text"></span>
+          </div>
+
+          <p class="hint" id="ws-count"></p>
+          <div id="ws-orders"></div>
+        </section>
+
+        <!-- ============================================= SUIVI =========== -->
+        <section id="view-tracking" hidden>
+          <div class="ws-bar">
+            <input type="search" id="track-q" class="ws-search" data-tph="tracking.search"
+              placeholder="Numéro de suivi ou commande" />
+          </div>
+          <div id="track-rows"></div>
+        </section>
+
+        <!-- =========================================== CATALOGUE ========= -->
+        <section id="view-catalog" hidden>
+          <div id="catalog-rows"></div>
+        </section>
+
+        <!-- =========================================== CHANGEMENTS ======= -->
+        <section id="view-updates" hidden>
+          <div id="updates-rows"></div>
+        </section>
+      </main>
     </div>
 
     <div class="modal-wrap" id="issue-modal">

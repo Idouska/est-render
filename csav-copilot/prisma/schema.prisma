@@ -256,6 +256,7 @@ model Ticket {
   drafts      Draft[]
   refunds     Refund[]
   escalations SupplierEscalation[]
+  supplierAlerts SupplierAlert[]
 
   @@unique([merchantId, gmailThreadId])
   @@index([merchantId, status])
@@ -721,6 +722,29 @@ model SupplierAlert {
 
   message String @db.Text
 
+  /// Valeur actuelle et valeur demandée, pour une demande de changement.
+  ///
+  /// « Taille 44 → 45 » se lit en une seconde ; la même chose noyée dans une
+  /// phrase se relit trois fois, et c'est ainsi qu'on expédie la mauvaise
+  /// pointure. Les deux champs restent libres : une adresse, une couleur et
+  /// une taille n'ont pas la même forme, et un format strict ferait renoncer.
+  beforeValue String?
+  afterValue  String?
+
+  /// Mail client à l'origine de la demande.
+  ///
+  /// Une demande de changement vient presque toujours d'un client qui a écrit.
+  /// Garder le lien permet de revenir à sa phrase exacte — « la 45 » plutôt
+  /// que « une pointure au-dessus » — quand le fournisseur pose une question.
+  ticketId String?
+
+  /// Réponse du fournisseur : ce qu'il a fait de la demande.
+  status SupplierAlertStatus @default(PENDING)
+
+  /// Pourquoi il ne peut pas, le cas échéant. Sans ce champ, un refus se
+  /// résume à une absence, et le marchand répond au client une chose fausse.
+  supplierNote String? @db.Text
+
   /// Utilisateur qui a déclenché l'alerte.
   createdById String?
 
@@ -733,14 +757,36 @@ model SupplierAlert {
 
   merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
   supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  ticket   Ticket?  @relation(fields: [ticketId], references: [id], onDelete: SetNull)
 
   @@index([merchantId, supplierId, acknowledgedAt])
+  @@index([merchantId, supplierId, status])
+  @@index([ticketId])
 }
 
 enum SupplierAlertKind {
   ADDRESS
   PHONE
   PRODUCT
+  /// Changement de déclinaison : ce sont les deux demandes les plus
+  /// fréquentes après un mail client, et les confondre avec « produit »
+  /// obligerait le fournisseur à lire la phrase pour savoir quoi changer.
+  SIZE
+  COLOR
+  /// Ne pas expédier — la seule qui doit arrêter un geste en cours.
   HOLD
+  CANCEL
   OTHER
+}
+
+/// Cycle de vie d'une demande adressée au fournisseur.
+///
+/// `REFUSED` n'est pas un échec du produit, c'est une information : si le
+/// colis est déjà parti, le fournisseur doit pouvoir le dire. Sans ce troisième
+/// état, l'absence de réponse se confondrait avec un accord tacite et le
+/// marchand annoncerait au client un changement qui n'aura pas lieu.
+enum SupplierAlertStatus {
+  PENDING
+  ACKNOWLEDGED
+  REFUSED
 }

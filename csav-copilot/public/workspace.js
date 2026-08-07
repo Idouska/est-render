@@ -14,7 +14,15 @@ const params = new URLSearchParams(window.location.search);
 const token = params.get('token');
 const supplierId = window.location.pathname.split('/').pop();
 
-const state = { orders: [], issueOrder: null, lang: pickLang(supplierId) };
+const state = {
+  orders: [],
+  issueOrder: null,
+  lang: pickLang(supplierId),
+  view: 'orders',
+  parcels: [],
+  catalog: null,
+  updates: [],
+};
 
 /*
  * `t` est réaffecté à chaque changement de langue plutôt que d'être une
@@ -51,6 +59,8 @@ function applyLang(lang) {
   // Les écrans construits en JavaScript se refont : ils ne portent pas de
   // `data-t`, leur texte est écrit au moment du rendu.
   if (state.orders.length) renderOrders();
+  if (state.catalog) renderCatalog();
+  if (state.view !== 'orders') setView(state.view);
   void loadAlerts();
 }
 
@@ -141,19 +151,40 @@ function parcelCard(order, index, total, saved) {
   const units = orderUnits(order);
   const item = units.length === total ? units[index - 1] : null;
 
-  return `<div class="pk" data-order="${esc(order.id)}" data-index="${index}">
+  /*
+   * La photo du produit dans la carte du colis, pas sous l'adresse.
+   *
+   * Elle y figurait trois fois — sous le téléphone, dans le titre du colis, et
+   * dans le champ à remplir. Or elle ne sert qu'à un moment : celui où l'on
+   * attrape la paire avant de la mettre dans le carton. C'est donc là qu'elle
+   * doit être, et nulle part ailleurs.
+   */
+  return `<div class="pk${saved ? ' done' : ''}" data-order="${esc(order.id)}" data-index="${index}">
     <div class="pk-head">
       ${esc(t('parcel.head', { index, total }))}
-      ${saved ? `<span class="pk-done">${esc(t('parcel.saved'))}</span>` : ''}
+      ${saved ? `<span class="pk-done">✓ ${esc(t('parcel.saved'))}</span>` : ''}
     </div>
+
     ${
       item
-        ? `<div class="pk-item">${esc(item.title)}${
-            item.variantTitle ? ` — ${esc(item.variantTitle)}` : ''
-          }</div>`
+        ? `<div class="pk-item">
+             ${
+               item.image
+                 ? `<img class="pk-photo" src="${esc(item.image)}" alt="" loading="lazy" />`
+                 : '<span class="pk-photo pk-photo-none" aria-hidden="true"></span>'
+             }
+             <span class="pk-item-text">
+               <b>${esc(item.title)}</b>
+               <small>${esc(
+                 [item.variantTitle, item.sku].filter(Boolean).join(' · '),
+               )}</small>
+             </span>
+           </div>`
         : ''
     }
+
     <input type="text" data-field="tracking" autocapitalize="characters"
+      inputmode="latin" enterkeyhint="done"
       placeholder="${esc(t('parcel.tracking'))}" value="${esc(saved?.trackingNumber ?? '')}" />
     <input type="text" data-field="carrier" placeholder="${esc(t('parcel.carrier'))}"
       value="${esc(saved?.carrier ?? '')}" />
@@ -174,10 +205,45 @@ function parcelCard(order, index, total, saved) {
   </div>`;
 }
 
+/** Barre de progression : part remplie, et le compte en toutes lettres. */
+function progressBar(done, total, label) {
+  const pct = total === 0 ? 0 : Math.round((done / total) * 100);
+  return `<div class="ws-progress${done === total ? ' full' : ''}">
+    <div class="ws-progress-bar"><i style="width:${pct}%"></i></div>
+    <span>${esc(label)}</span>
+  </div>`;
+}
+
+/** Colis enregistrés sur une commande : ce qui fait avancer sa barre. */
+function orderDone(order, total) {
+  return (order.parcels ?? []).filter(
+    (parcel) => parcel.index <= total && parcel.trackingNumber,
+  ).length;
+}
+
 function renderOrders() {
   $('ws-count').textContent = state.orders.length
     ? t('orders.count', { n: state.orders.length })
     : '';
+
+  // Avancement de la journée, en tête : entre deux colis on ne se demande pas
+  // combien il y en a, on se demande où l'on en est.
+  const box = $('ws-progress');
+  const totals = state.orders.map((order) => parcelTotal(order));
+  const finished = state.orders.filter(
+    (order, position) => totals[position] > 0 && orderDone(order, totals[position]) === totals[position],
+  ).length;
+
+  box.hidden = state.orders.length === 0;
+  if (!box.hidden) {
+    const pct = Math.round((finished / state.orders.length) * 100);
+    $('ws-progress-fill').style.width = `${pct}%`;
+    box.classList.toggle('full', finished === state.orders.length);
+    $('ws-progress-text').textContent = t('progress.orders', {
+      done: finished,
+      total: state.orders.length,
+    });
+  }
 
   if (state.orders.length === 0) {
     $('ws-orders').innerHTML = `<p class="empty">${esc(t('orders.empty'))}</p>`;
@@ -191,11 +257,10 @@ function renderOrders() {
       // Un numéro trop court bloquera la livraison : autant que l'atelier le
       // voie avant d'emballer, pas le transporteur devant la porte.
       const phoneShort = phone.replace(/\D/g, '').length < 9;
-      // Un colis par exemplaire commandé, la règle d'expédition de l'atelier.
-      // Reste modifiable si deux paires partent finalement ensemble.
-      const total = order.parcels?.[0]?.total ?? Math.max(1, orderUnits(order).length);
+      const total = parcelTotal(order);
+      const done = orderDone(order, total);
 
-      return `<article class="ord">
+      return `<article class="ord${done === total ? ' ord-done' : ''}">
         <div class="ord-head">
           <b>${esc(order.name)}</b>
           <span class="tag tag-order">${esc(order.displayFulfillmentStatus ?? '—')}</span>
@@ -213,19 +278,7 @@ function renderOrders() {
           </small>
         </div>
 
-        <div class="ord-items">
-          ${(order.lineItems ?? [])
-            .map(
-              (item) => `<div class="ord-item">
-                ${item.image ? `<img src="${esc(item.image)}" alt="" loading="lazy" />` : ''}
-                <span>
-                  <b>${item.quantity} × ${esc(item.title)}</b>
-                  <small>${esc(item.variantTitle ?? item.sku ?? '')}</small>
-                </span>
-              </div>`,
-            )
-            .join('')}
-        </div>
+        ${progressBar(done, total, t('progress.parcels', { done, total }))}
 
         <label class="field">
           ${esc(t('orders.parcelCount'))}
@@ -258,6 +311,13 @@ function renderOrders() {
       </article>`;
     })
     .join('');
+}
+
+/* Un colis par exemplaire commandé, la règle d'expédition de l'atelier ; le
+   choix déjà enregistré l'emporte si deux paires sont finalement parties
+   ensemble. */
+function parcelTotal(order) {
+  return order.parcels?.[0]?.total ?? Math.max(1, orderUnits(order).length);
 }
 
 async function load() {
@@ -448,8 +508,7 @@ $('issue-kind').addEventListener('change', toggleIssueItem);
 /* Le libellé de l'alerte suit la langue de l'atelier : « Ne pas expédier »
    doit être compris en une seconde, c'est tout son intérêt. */
 function alertTitle(kind) {
-  const label = t(`alert.${kind}`);
-  return label === `alert.${kind}` ? t('alert.fallback') : label;
+  return kindLabel(kind);
 }
 
 async function loadAlerts() {
@@ -467,8 +526,17 @@ async function loadAlerts() {
         <b>${escapeHtml(alertTitle(alert.kind))}${
           alert.orderName ? ` · ${escapeHtml(alert.orderName)}` : ''
         }</b>
-        <p>${escapeHtml(alert.message)}</p>
-        <button class="btn btn-small" data-ack="${alert.id}">${escapeHtml(t('alert.ack'))}</button>
+        ${
+          alert.afterValue
+            ? `<p class="alert-swap">${escapeHtml(alert.beforeValue ?? '—')} → <b>${escapeHtml(
+                alert.afterValue,
+              )}</b></p>`
+            : ''
+        }
+        ${alert.message ? `<p>${escapeHtml(alert.message)}</p>` : ''}
+        <button class="btn btn-small" data-open-updates="1">${escapeHtml(
+          t('updates.accept'),
+        )}</button>
       </div>`,
     )
     .join('');
@@ -481,21 +549,14 @@ async function loadAlerts() {
     }
   }
 
-  box.querySelectorAll('[data-ack]').forEach((button) =>
-    button.addEventListener('click', async () => {
-      button.disabled = true;
-      try {
-        await api(`/api/workspace/${supplierId}/alerts/${button.dataset.ack}/ack`, {
-          method: 'POST',
-          body: {},
-        });
-        button.closest('[data-alert]').remove();
-      } catch (error) {
-        toast(error.message, true);
-        button.disabled = false;
-      }
-    }),
+  // La bannière ne confirme plus elle-même : elle emmène sur l'écran où la
+  // demande se lit en entier. Valider « pris en compte » sans avoir vu ce qui
+  // change n'engage personne.
+  box.querySelectorAll('[data-open-updates]').forEach((button) =>
+    button.addEventListener('click', () => setView('updates')),
   );
+
+  setBadge(alerts.length);
 }
 
 function escapeHtml(value) {
@@ -511,10 +572,315 @@ if ('Notification' in window && Notification.permission === 'default') {
   document.addEventListener('click', () => Notification.requestPermission(), { once: true });
 }
 
+// Hier par défaut : c'est la période qu'on regarde en ouvrant le matin, et
+// laisser les champs vides obligeait à saisir deux dates avant de travailler.
+{
+  const [since, until] = rangeDates('yesterday');
+  $('ws-since').value = since;
+  $('ws-until').value = until;
+  document
+    .querySelector('#ws-quick [data-range="yesterday"]')
+    ?.setAttribute('aria-pressed', 'true');
+}
+
 // `applyLang` déclenche déjà la première lecture des alertes : les appeler
 // deux fois afficherait brièvement la liste en double.
 applyLang(state.lang);
 setInterval(loadAlerts, 120000);
+
+
+/* ==========================================================================
+   NAVIGATION — quatre écrans
+
+   Colonne à gauche sur ordinateur, barre d'onglets en bas sur téléphone. Le
+   fournisseur tient son appareil d'une main pendant qu'il emballe de l'autre :
+   ce que le pouce n'atteint pas n'existe pas.
+   ========================================================================== */
+
+const VIEWS = {
+  orders: () => {},
+  tracking: loadParcels,
+  catalog: loadCatalog,
+  updates: loadUpdates,
+};
+
+function setView(view) {
+  state.view = view;
+
+  for (const section of ['orders', 'tracking', 'catalog', 'updates']) {
+    $(`view-${section}`).hidden = section !== view;
+  }
+
+  document.querySelectorAll('#ws-nav [data-view]').forEach((button) => {
+    button.setAttribute('aria-current', String(button.dataset.view === view));
+  });
+
+  const titles = {
+    orders: 'head.title',
+    tracking: 'tracking.title',
+    catalog: 'catalog.title',
+    updates: 'updates.title',
+  };
+  $('ws-title').textContent = t(titles[view]);
+
+  // Chaque écran recharge à l'ouverture : le fournisseur laisse l'onglet
+  // ouvert toute la journée, et des données de ce matin valent moins que rien.
+  void VIEWS[view]?.();
+}
+
+document.querySelectorAll('#ws-nav [data-view]').forEach((button) =>
+  button.addEventListener('click', () => setView(button.dataset.view)),
+);
+
+/* -------------------------------------------------------------- période -- */
+
+/** Bornes d'une période nommée, au format attendu par les champs date. */
+function rangeDates(name) {
+  const day = 86400000;
+  const iso = (date) => new Date(date).toISOString().slice(0, 10);
+  const now = Date.now();
+
+  if (name === 'today') return [iso(now), iso(now)];
+  if (name === 'week') return [iso(now - 6 * day), iso(now)];
+  return [iso(now - day), iso(now - day)];
+}
+
+document.querySelectorAll('#ws-quick [data-range]').forEach((button) =>
+  button.addEventListener('click', () => {
+    const [since, until] = rangeDates(button.dataset.range);
+    $('ws-since').value = since;
+    $('ws-until').value = until;
+
+    document.querySelectorAll('#ws-quick [data-range]').forEach((other) =>
+      other.setAttribute('aria-pressed', String(other === button)),
+    );
+
+    void load();
+  }),
+);
+
+/* ------------------------------------------------------------- suivi ----- */
+
+/**
+ * Les colis déjà saisis.
+ *
+ * Soixante numéros tapés au doigt sur un téléphone : il y en a un de travers,
+ * et sans écran pour les relire il ne le découvre qu'au retour du colis. Cette
+ * liste sert à vérifier, pas à ressaisir.
+ */
+async function loadParcels() {
+  const rows = $('track-rows');
+  rows.innerHTML = '<p class="empty">…</p>';
+
+  let parcels = [];
+  try {
+    const term = $('track-q').value.trim();
+    ({ parcels } = await api(
+      `/api/workspace/${supplierId}/parcels${term ? `?q=${encodeURIComponent(term)}` : ''}`,
+    ));
+  } catch (error) {
+    rows.innerHTML = `<p class="empty">${esc(error.message)}</p>`;
+    return;
+  }
+
+  state.parcels = parcels;
+
+  rows.innerHTML =
+    parcels
+      .map(
+        (parcel) => `<div class="trk">
+          ${
+            parcel.hasPhoto
+              ? `<img class="trk-photo" src="${photoUrl(parcel.id)}" alt="${esc(
+                  t('tracking.photo'),
+                )}" loading="lazy" />`
+              : '<span class="trk-photo trk-photo-none" aria-hidden="true"></span>'
+          }
+          <div class="trk-main">
+            <b class="mono">${esc(parcel.trackingNumber)}</b>
+            <small>${esc(parcel.orderName ?? '—')} · ${esc(
+              t('parcel.head', { index: parcel.index, total: parcel.total }),
+            )}${parcel.carrier ? ` · ${esc(parcel.carrier)}` : ''}</small>
+          </div>
+          <span class="trk-when">${new Date(parcel.updatedAt).toLocaleDateString(locale)}</span>
+        </div>`,
+      )
+      .join('') || `<p class="empty">${esc(t('tracking.empty'))}</p>`;
+}
+
+let trackTimer = null;
+$('track-q').addEventListener('input', () => {
+  clearTimeout(trackTimer);
+  // Une frappe = une requête serait une requête par lettre : on attend la
+  // pause, comme partout ailleurs dans l'outil.
+  trackTimer = setTimeout(loadParcels, 300);
+});
+
+/* ---------------------------------------------------------- catalogue ---- */
+
+/**
+ * Les articles que cet atelier prépare.
+ *
+ * Sa fiche de référence, pour lever l'ambiguïté d'un libellé de commande —
+ * « Blackened Blue », c'est laquelle des deux bleues ? Chargé une seule fois :
+ * un catalogue ne bouge pas dans la journée.
+ */
+async function loadCatalog() {
+  const rows = $('catalog-rows');
+  if (state.catalog) return renderCatalog();
+
+  rows.innerHTML = '<p class="empty">…</p>';
+
+  try {
+    const data = await api(`/api/workspace/${supplierId}/catalog`);
+    state.catalog = data.items ?? [];
+    renderCatalog(data.error);
+  } catch (error) {
+    rows.innerHTML = `<p class="empty">${esc(error.message)}</p>`;
+  }
+}
+
+function renderCatalog(error) {
+  const rows = $('catalog-rows');
+
+  rows.innerHTML =
+    (state.catalog ?? [])
+      .map(
+        (item) => `<div class="cat">
+          ${
+            item.image
+              ? `<img class="cat-photo" src="${esc(item.image)}" alt="" loading="lazy" />`
+              : '<span class="cat-photo cat-photo-none" aria-hidden="true"></span>'
+          }
+          <div class="cat-main">
+            <b>${esc(item.title)}</b>
+            <small>${esc(item.vendor ?? '')} · ${esc(
+              t('catalog.variants', { n: item.variantCount ?? 0 }),
+            )}${
+              item.totalInventory != null
+                ? ` · ${esc(t('catalog.stock', { n: item.totalInventory }))}`
+                : ''
+            }</small>
+          </div>
+        </div>`,
+      )
+      .join('') || `<p class="empty">${esc(error ?? t('catalog.empty'))}</p>`;
+}
+
+/* ------------------------------------------------------- changements ----- */
+
+/**
+ * Demandes de changement venues du marchand.
+ *
+ * Le cœur de l'écran est la paire « avant → après » en gros caractères : une
+ * taille à changer se lit en une seconde ou ne se lit pas. Le message libre
+ * vient après, pour ceux qui veulent le détail.
+ *
+ * Deux réponses possibles, et le refus compte autant que l'accord : si le
+ * colis est déjà parti, le dire évite au marchand d'annoncer au client un
+ * changement qui n'aura pas lieu.
+ */
+async function loadUpdates() {
+  const rows = $('updates-rows');
+
+  let data;
+  try {
+    data = await api(`/api/workspace/${supplierId}/updates`);
+  } catch (error) {
+    rows.innerHTML = `<p class="empty">${esc(error.message)}</p>`;
+    return;
+  }
+
+  state.updates = data.updates ?? [];
+  setBadge(data.pending ?? 0);
+
+  const STATUS = {
+    PENDING: { cls: 'wait', label: t('updates.pending') },
+    ACKNOWLEDGED: { cls: 'ok', label: t('updates.accepted') },
+    REFUSED: { cls: 'bad', label: t('updates.refused') },
+  };
+
+  rows.innerHTML =
+    state.updates
+      .map((update) => {
+        const status = STATUS[update.status] ?? STATUS.PENDING;
+
+        return `<div class="upd upd-${status.cls}" data-upd="${esc(update.id)}">
+          <div class="upd-head">
+            <b>${esc(kindLabel(update.kind))}</b>
+            ${update.orderName ? `<span class="tag tag-order">${esc(update.orderName)}</span>` : ''}
+            <span class="tag tone-${status.cls}">${esc(status.label)}</span>
+            <span class="upd-when">${new Date(update.createdAt).toLocaleDateString(locale)}</span>
+          </div>
+
+          ${
+            update.afterValue
+              ? `<div class="upd-swap">
+                   <span class="upd-before">${esc(update.beforeValue ?? '—')}</span>
+                   <span class="upd-arrow" aria-hidden="true">→</span>
+                   <span class="upd-after">${esc(update.afterValue)}</span>
+                 </div>`
+              : ''
+          }
+
+          ${update.message ? `<p class="upd-msg">${esc(update.message)}</p>` : ''}
+          ${update.supplierNote ? `<p class="upd-note">« ${esc(update.supplierNote)} »</p>` : ''}
+
+          ${
+            update.status === 'PENDING'
+              ? `<div class="upd-acts">
+                   <button class="btn btn-small btn-primary" data-accept="${esc(update.id)}">
+                     ${esc(t('updates.accept'))}
+                   </button>
+                   <button class="btn btn-small" data-refuse="${esc(update.id)}">
+                     ${esc(t('updates.refuse'))}
+                   </button>
+                 </div>`
+              : ''
+          }
+        </div>`;
+      })
+      .join('') || `<p class="empty">${esc(t('updates.empty'))}</p>`;
+
+  rows.querySelectorAll('[data-accept]').forEach((button) =>
+    button.addEventListener('click', () => respond(button.dataset.accept, 'ACKNOWLEDGED')),
+  );
+
+  rows.querySelectorAll('[data-refuse]').forEach((button) =>
+    button.addEventListener('click', () => {
+      // Un refus sans motif oblige le marchand à redemander : on exige le mot
+      // qui manque, ici et pas dans un second aller-retour.
+      const note = prompt(t('updates.why'));
+      if (note === null) return;
+      if (!note.trim()) return toast(t('updates.needWhy'), true);
+      respond(button.dataset.refuse, 'REFUSED', note.trim());
+    }),
+  );
+}
+
+function kindLabel(kind) {
+  const label = t(`kind.${kind}`);
+  return label === `kind.${kind}` ? t('alert.fallback') : label;
+}
+
+function setBadge(count) {
+  const badge = $('ws-badge');
+  badge.hidden = count === 0;
+  badge.textContent = String(count);
+}
+
+async function respond(id, status, note = null) {
+  try {
+    await api(`/api/workspace/${supplierId}/updates/${id}/respond`, {
+      method: 'POST',
+      body: { status, note },
+    });
+    toast(t('updates.sent'));
+    await Promise.all([loadUpdates(), loadAlerts()]);
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
 
 $('ws-reload').addEventListener('click', load);
 

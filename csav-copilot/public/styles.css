@@ -4763,3 +4763,39 @@ textarea:focus-visible {
   .ckp-city { display: none; }
   .ckp { padding: 4px 8px; }
 }
+
+/* --------------------------------------- demandes au fournisseur, sur le mail
+   Placé avant les autres messages du client : ce qu'on a promis engage la
+   réponse qu'on s'apprête à écrire. */
+.chg {
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 10px 12px 12px;
+  margin-top: 12px;
+  background: color-mix(in srgb, var(--accent) 4%, transparent);
+}
+.chg-head { margin-bottom: 6px; }
+.chg-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+  padding: 6px 0;
+}
+.chg-row + .chg-row { border-top: 1px solid var(--line-soft); }
+.chg-row > b { font-size: 13px; }
+.chg-swap { font-size: 13.5px; }
+.chg-who { margin-left: auto; font-size: 12px; color: var(--ink-mute); }
+.chg-note {
+  flex-basis: 100%;
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: var(--ink-mute);
+  font-style: italic;
+}
+
+/* Avant → après dans la fenêtre de demande. */
+.swap-row { display: flex; align-items: flex-end; gap: 10px; }
+.swap-field { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.swap-field span { font-size: 12px; color: var(--ink-mute); }
+.swap-arrow { padding-bottom: 10px; color: var(--ink-mute); font-size: 18px; }

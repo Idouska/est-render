@@ -246,10 +246,21 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const parsed = z
         .object({
-          kind: z.enum(['ADDRESS', 'PHONE', 'PRODUCT', 'HOLD', 'OTHER']),
-          message: z.string().min(3).max(1000),
+          kind: z.enum(['ADDRESS', 'PHONE', 'PRODUCT', 'SIZE', 'COLOR', 'HOLD', 'CANCEL', 'OTHER']),
+          message: z.string().max(1000).default(''),
           shopifyOrderId: z.string().max(120).nullish(),
           orderName: z.string().max(60).nullish(),
+          // Valeur actuelle et valeur demandée : « 44 → 45 » se lit d'un coup
+          // d'œil là où la même chose noyée dans une phrase se relit trois fois.
+          beforeValue: z.string().max(200).nullish(),
+          afterValue: z.string().max(200).nullish(),
+          /** Mail client à l'origine de la demande. */
+          ticketId: z.string().max(60).nullish(),
+        })
+        // Une demande sans rien à changer ni rien à dire n'apprend rien au
+        // fournisseur : on refuse plutôt que d'envoyer une alerte vide.
+        .refine((value) => value.message.trim() !== '' || value.afterValue, {
+          message: 'Précisez le changement demandé',
         })
         .safeParse(request.body);
 
@@ -263,14 +274,29 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
       });
       if (!supplier) return reply.code(404).send({ error: 'Fournisseur introuvable' });
 
+      // Le ticket est vérifié plutôt que recopié tel quel : un identifiant
+      // venu du client ne doit jamais rattacher une alerte au mail d'un autre
+      // marchand.
+      const ticketId = parsed.data.ticketId
+        ? (
+            await prisma.ticket.findFirst({
+              where: { id: parsed.data.ticketId, merchantId },
+              select: { id: true },
+            })
+          )?.id ?? null
+        : null;
+
       const alert = await prisma.supplierAlert.create({
         data: {
           merchantId,
           supplierId: supplier.id,
           kind: parsed.data.kind,
-          message: parsed.data.message,
+          message: parsed.data.message.trim(),
           shopifyOrderId: parsed.data.shopifyOrderId ?? null,
           orderName: parsed.data.orderName ?? null,
+          beforeValue: parsed.data.beforeValue ?? null,
+          afterValue: parsed.data.afterValue ?? null,
+          ticketId,
           createdById: userId,
         },
       });
@@ -278,8 +304,11 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
       const titles = {
         ADDRESS: 'Adresse à corriger',
         PHONE: 'Téléphone à corriger',
-        PRODUCT: 'Article à changer',
+        PRODUCT: 'Modèle à changer',
+        SIZE: 'Taille à changer',
+        COLOR: 'Couleur à changer',
         HOLD: 'Ne pas expédier',
+        CANCEL: 'Commande annulée',
         OTHER: 'Message urgent',
       } as const;
 
@@ -300,10 +329,20 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
           merchantId,
           to: supplier.contactEmail,
           subject,
-          body:
-            `${parsed.data.message}\n\n` +
-            `${parsed.data.orderName ? `Commande : ${parsed.data.orderName}\n` : ''}` +
-            `Ce message est également affiché en tête de votre espace de travail.`,
+          body: [
+            // Le changement en premier, avant toute phrase : c'est ce qu'on
+            // lit sur l'écran verrouillé d'un téléphone.
+            parsed.data.afterValue
+              ? `${parsed.data.beforeValue ?? '?'} → ${parsed.data.afterValue}`
+              : null,
+            parsed.data.orderName ? `Commande : ${parsed.data.orderName}` : null,
+            parsed.data.message.trim() || null,
+            '',
+            'Ouvrez votre espace de travail, onglet « Update », pour confirmer ' +
+              'que vous en tenez compte.',
+          ]
+            .filter((line) => line !== null)
+            .join('\n'),
         });
         emailed = true;
         await prisma.supplierAlert.update({

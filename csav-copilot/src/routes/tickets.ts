@@ -1106,7 +1106,33 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
       },
     });
 
-    return reply.send({ ticket, order, orderError, readOnly, siblings });
+    /*
+     * Demandes de changement adressées au fournisseur depuis ce mail.
+     *
+     * Affichées dans le fil : sans elles, l'agent qui rouvre le message deux
+     * jours plus tard ne sait pas si quelqu'un a déjà demandé la taille 45, et
+     * la demande part une seconde fois — ou pire, on répond au client que
+     * c'est fait alors que le fournisseur a refusé.
+     */
+    const changes = await prisma.supplierAlert.findMany({
+      where: { ticketId: ticket.id, merchantId: ticket.merchantId },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      select: {
+        id: true,
+        kind: true,
+        status: true,
+        beforeValue: true,
+        afterValue: true,
+        message: true,
+        supplierNote: true,
+        createdAt: true,
+        acknowledgedAt: true,
+        supplier: { select: { name: true } },
+      },
+    });
+
+    return reply.send({ ticket, order, orderError, readOnly, siblings, changes });
   });
 
   /**

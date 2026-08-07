@@ -8,6 +8,7 @@ import { ordersToCsv } from '../services/export/ordersCsv.ts';
 import { ordersToXlsx } from '../services/export/ordersXlsx.ts';
 import { getShopifyClient } from '../services/shopify/client.ts';
 import { listOrders } from '../services/shopify/orders.ts';
+import { listProducts } from '../services/shopify/catalog.ts';
 import { decodePhoto, photoSchema, sendParcelPhoto, toParcelView } from './parcels.ts';
 import { ordersForSupplier, type RoutingRules } from '../services/suppliers/routing.ts';
 
@@ -475,7 +476,7 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
         where: {
           merchantId: workspace.merchantId,
           supplierId: workspace.supplierId,
-          acknowledgedAt: null,
+          status: 'PENDING',
         },
         orderBy: { createdAt: 'desc' },
         take: 20,
@@ -484,11 +485,210 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
           kind: true,
           message: true,
           orderName: true,
+          beforeValue: true,
+          afterValue: true,
           createdAt: true,
         },
       });
 
       return reply.send({ alerts });
+    },
+  );
+
+  /**
+   * Toutes les demandes de changement, l'onglet « Update ».
+   *
+   * Distinct de `/alerts`, qui ne sert que la bannière d'urgence : ici on veut
+   * aussi l'historique récent, parce que la question qui suit « c'est pris en
+   * compte » est toujours « qu'est-ce qu'on m'a demandé la semaine dernière ».
+   */
+  app.get<{ Params: { id: string }; Querystring: { token?: string } }>(
+    '/api/workspace/:id/updates',
+    async (request, reply) => {
+      const workspace = await authorize(request, reply);
+      if (!workspace) return;
+
+      const updates = await prisma.supplierAlert.findMany({
+        where: { merchantId: workspace.merchantId, supplierId: workspace.supplierId },
+        // Les demandes en attente d'abord, quelle que soit leur date : c'est
+        // du travail à faire, pas de l'histoire.
+        orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+        take: 60,
+        select: {
+          id: true,
+          kind: true,
+          status: true,
+          message: true,
+          beforeValue: true,
+          afterValue: true,
+          orderName: true,
+          shopifyOrderId: true,
+          supplierNote: true,
+          createdAt: true,
+          acknowledgedAt: true,
+        },
+      });
+
+      return reply.send({
+        updates,
+        pending: updates.filter((update) => update.status === 'PENDING').length,
+      });
+    },
+  );
+
+  /**
+   * Réponse du fournisseur à une demande.
+   *
+   * Deux issues seulement, et le refus compte autant que l'accord : si le
+   * colis est déjà parti, le dire vaut mieux que se taire. Sans ce chemin, le
+   * marchand annoncerait au client un changement qui n'aura pas lieu.
+   */
+  app.post<{ Params: { id: string; alertId: string }; Querystring: { token?: string } }>(
+    '/api/workspace/:id/updates/:alertId/respond',
+    async (request, reply) => {
+      const workspace = await authorize(request, reply);
+      if (!workspace) return;
+
+      const parsed = z
+        .object({
+          status: z.enum(['ACKNOWLEDGED', 'REFUSED']),
+          note: z.string().max(600).nullish(),
+        })
+        .safeParse(request.body);
+
+      if (!parsed.success) return reply.code(400).send({ error: 'Réponse invalide' });
+
+      const updated = await prisma.supplierAlert.updateMany({
+        where: {
+          id: request.params.alertId,
+          merchantId: workspace.merchantId,
+          supplierId: workspace.supplierId,
+        },
+        data: {
+          status: parsed.data.status,
+          supplierNote: parsed.data.note?.trim() || null,
+          acknowledgedAt: new Date(),
+        },
+      });
+
+      if (updated.count === 0) return reply.code(404).send({ error: 'Demande introuvable' });
+
+      await recordAudit({
+        merchantId: workspace.merchantId,
+        actorType: 'SUPPLIER',
+        actorId: workspace.supplierId,
+        action:
+          parsed.data.status === 'ACKNOWLEDGED' ? 'supplier.change_accepted' : 'supplier.change_refused',
+        targetType: 'SupplierAlert',
+        targetId: request.params.alertId,
+        metadata: { note: parsed.data.note ?? null },
+        ipAddress: request.ip,
+      });
+
+      return reply.send({ status: parsed.data.status });
+    },
+  );
+
+  /**
+   * Colis déjà saisis — l'onglet « Tracking ».
+   *
+   * Le fournisseur saisit soixante numéros par jour au doigt sur un téléphone :
+   * il en tape un de travers, et sans écran pour les relire il ne le découvre
+   * qu'au retour du colis. Cette liste sert à vérifier, pas à ressaisir.
+   */
+  app.get<{ Params: { id: string }; Querystring: { token?: string; q?: string } }>(
+    '/api/workspace/:id/parcels',
+    async (request, reply) => {
+      const workspace = await authorize(request, reply);
+      if (!workspace) return;
+
+      const term = request.query.q?.trim();
+
+      const parcels = await prisma.parcel.findMany({
+        where: {
+          merchantId: workspace.merchantId,
+          // Les siens : ceux qu'il a saisis depuis ce lien portent son
+          // identifiant d'escalade ou, à défaut, aucun auteur — un colis saisi
+          // par un agent du SAV n'a rien à faire dans son écran.
+          ...(term
+            ? {
+                OR: [
+                  { trackingNumber: { contains: term, mode: 'insensitive' as const } },
+                  { orderName: { contains: term, mode: 'insensitive' as const } },
+                ],
+              }
+            : {}),
+        },
+        orderBy: { updatedAt: 'desc' },
+        take: 100,
+        select: {
+          id: true,
+          trackingNumber: true,
+          carrier: true,
+          orderName: true,
+          shopifyOrderId: true,
+          index: true,
+          total: true,
+          photoMime: true,
+          photoTakenAt: true,
+          updatedAt: true,
+        },
+      });
+
+      return reply.send({ parcels: parcels.map(toParcelView) });
+    },
+  );
+
+  /**
+   * Catalogue des articles que ce fournisseur prépare.
+   *
+   * Sa fiche de référence : la photo, la déclinaison, la référence exacte.
+   * Elle évite l'aller-retour par message quand un libellé de commande est
+   * ambigu — « Blackened Blue », c'est laquelle des deux bleues ?
+   *
+   * Filtré par ses propres règles d'affectation : lui montrer tout le
+   * catalogue de la boutique reviendrait à lui communiquer l'assortiment
+   * complet du marchand, ce qui ne le regarde pas.
+   */
+  app.get<{ Params: { id: string }; Querystring: { token?: string } }>(
+    '/api/workspace/:id/catalog',
+    async (request, reply) => {
+      const workspace = await authorize(request, reply);
+      if (!workspace) return;
+
+      if (workspace.ordersAccess === 'NONE') return reply.send({ items: [] });
+
+      /*
+       * Le filtre part chez Shopify plutôt que de trier ici.
+       *
+       * Rapatrier le catalogue entier pour n'en garder qu'une marque ferait
+       * payer la boutique complète à chaque ouverture, et le fournisseur
+       * ouvrira cet écran vingt fois par jour. `vendor:` et `sku:` sont
+       * compris par la recherche produits de Shopify.
+       *
+       * Sans aucune règle, la réponse est vide : mieux vaut un catalogue vide
+       * qu'un catalogue qui expose l'assortiment entier du marchand à un
+       * tiers.
+       */
+      const clauses = [
+        ...workspace.vendors.map((vendor) => `vendor:'${vendor.replace(/'/g, "")}'`),
+        ...workspace.skuPrefixes.map((prefix) => `sku:${prefix.replace(/[^\w.-]/g, '')}*`),
+      ];
+
+      if (clauses.length === 0) return reply.send({ items: [] });
+
+      try {
+        const client = await getShopifyClient(workspace.merchantId);
+        const page = await listProducts(client, {
+          query: clauses.join(' OR '),
+          limit: 100,
+        });
+
+        return reply.send({ items: page.products });
+      } catch (error) {
+        request.log.warn({ err: error }, 'Catalogue fournisseur indisponible');
+        return reply.send({ items: [], error: 'Catalogue indisponible pour le moment.' });
+      }
     },
   );
 
@@ -506,7 +706,7 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
           supplierId: workspace.supplierId,
           acknowledgedAt: null,
         },
-        data: { acknowledgedAt: new Date() },
+        data: { acknowledgedAt: new Date(), status: 'ACKNOWLEDGED' },
       });
 
       return reply.send({ acknowledged: updated.count });
