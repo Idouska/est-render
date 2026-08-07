@@ -590,6 +590,130 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
   );
 
   /**
+   * Correction d'un colis déjà saisi.
+   *
+   * Route distincte de la création, et c'est le cœur du correctif : la
+   * création est indexée par le numéro de suivi, donc « corriger » un numéro
+   * en le ressaisissant créait une seconde ligne et laissait la fausse en
+   * base — le SAV suivait alors un colis qui n'existe pas. Ici on vise la
+   * ligne par son identifiant, et le numéro peut changer sans se dédoubler.
+   */
+  app.patch<{ Params: { id: string; parcelId: string }; Querystring: { token?: string } }>(
+    '/api/workspace/:id/parcels/:parcelId',
+    { bodyLimit: 4 * 1024 * 1024 },
+    async (request, reply) => {
+      const workspace = await authorize(request, reply);
+      if (!workspace) return;
+
+      const parsed = z
+        .object({
+          trackingNumber: z.string().min(3).max(80),
+          carrier: z.string().max(80).nullish(),
+          photo: photoSchema.nullish(),
+        })
+        .safeParse(request.body);
+
+      if (!parsed.success) return reply.code(400).send({ error: 'Colis invalide' });
+
+      const existing = await prisma.parcel.findFirst({
+        where: { id: request.params.parcelId, merchantId: workspace.merchantId },
+        select: { id: true, trackingNumber: true },
+      });
+      if (!existing) return reply.code(404).send({ error: 'Colis introuvable' });
+
+      const trackingNumber = parsed.data.trackingNumber.trim();
+
+      // Le numéro corrigé ne doit pas percuter un autre colis : deux lignes au
+      // même numéro rendraient le suivi inattribuable.
+      const clash = await prisma.parcel.findFirst({
+        where: {
+          merchantId: workspace.merchantId,
+          trackingNumber,
+          id: { not: existing.id },
+        },
+        select: { id: true },
+      });
+      if (clash) {
+        return reply.code(409).send({ error: 'Ce numéro est déjà enregistré sur un autre colis.' });
+      }
+
+      const photo = parsed.data.photo ? decodePhoto(parsed.data.photo) : null;
+
+      const parcel = await prisma.parcel.update({
+        where: { id: existing.id },
+        data: {
+          trackingNumber,
+          carrier: parsed.data.carrier ?? null,
+          ...(photo ? { photoMime: photo.mime, photoData: photo.data, photoTakenAt: new Date() } : {}),
+        },
+        select: {
+          id: true,
+          trackingNumber: true,
+          carrier: true,
+          index: true,
+          total: true,
+          orderName: true,
+          photoMime: true,
+          photoTakenAt: true,
+          updatedAt: true,
+        },
+      });
+
+      await recordAudit({
+        merchantId: workspace.merchantId,
+        actorType: 'SUPPLIER',
+        actorId: workspace.supplierId,
+        action: 'supplier.parcel_corrected',
+        targetType: 'Parcel',
+        targetId: parcel.id,
+        // L'ancien numéro est consigné : c'est lui qu'un client a peut-être
+        // déjà reçu, et il faut pouvoir comprendre pourquoi il ne répond plus.
+        metadata: { from: existing.trackingNumber, to: parcel.trackingNumber },
+        ipAddress: request.ip,
+      });
+
+      return reply.send({ parcel: toParcelView(parcel) });
+    },
+  );
+
+  /**
+   * Suppression d'un colis saisi par erreur.
+   *
+   * Le cas réel : deux colis enregistrés sur la mauvaise commande, ou un
+   * doublon créé avant que la correction ci-dessus n'existe. Sans ce geste,
+   * l'erreur reste à l'écran tous les matins et le fournisseur apprend à
+   * ignorer sa propre liste — la pire habitude qu'un outil puisse enseigner.
+   */
+  app.delete<{ Params: { id: string; parcelId: string }; Querystring: { token?: string } }>(
+    '/api/workspace/:id/parcels/:parcelId',
+    async (request, reply) => {
+      const workspace = await authorize(request, reply);
+      if (!workspace) return;
+
+      const existing = await prisma.parcel.findFirst({
+        where: { id: request.params.parcelId, merchantId: workspace.merchantId },
+        select: { id: true, trackingNumber: true, orderName: true },
+      });
+      if (!existing) return reply.code(404).send({ error: 'Colis introuvable' });
+
+      await prisma.parcel.delete({ where: { id: existing.id } });
+
+      await recordAudit({
+        merchantId: workspace.merchantId,
+        actorType: 'SUPPLIER',
+        actorId: workspace.supplierId,
+        action: 'supplier.parcel_deleted',
+        targetType: 'Parcel',
+        targetId: existing.id,
+        metadata: { trackingNumber: existing.trackingNumber, orderName: existing.orderName },
+        ipAddress: request.ip,
+      });
+
+      return reply.send({ deleted: true });
+    },
+  );
+
+  /**
    * Colis déjà saisis — l'onglet « Tracking ».
    *
    * Le fournisseur saisit soixante numéros par jour au doigt sur un téléphone :

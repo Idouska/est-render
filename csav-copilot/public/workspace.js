@@ -170,7 +170,9 @@ function parcelCard(order, index, total, saved) {
    * attrape la paire avant de la mettre dans le carton. C'est donc là qu'elle
    * doit être, et nulle part ailleurs.
    */
-  return `<div class="pk${saved ? ' done' : ''}" data-order="${esc(order.id)}" data-index="${index}">
+  return `<div class="pk${saved ? ' done' : ''}" data-order="${esc(order.id)}" data-index="${index}"${
+    saved ? ` data-pid="${esc(saved.id)}"` : ''
+  }>
     <div class="pk-head">
       <span>${esc(t('parcel.head', { index, total }))}</span>
       ${
@@ -217,6 +219,12 @@ function parcelCard(order, index, total, saved) {
       </label>
       <button class="btn btn-small btn-primary" data-save="1">${esc(t('parcel.save'))}</button>
     </div>
+    ${
+      saved
+        ? `<button class="pk-del" data-del="${esc(saved.id)}"
+             data-number="${esc(saved.trackingNumber)}">${esc(t('parcel.delete'))}</button>`
+        : ''
+    }
   </div>`;
 }
 
@@ -444,6 +452,12 @@ $('ws-orders').addEventListener('change', async (event) => {
 });
 
 $('ws-orders').addEventListener('click', async (event) => {
+  const del = event.target.closest('[data-del]');
+  if (del) {
+    await deleteParcel(del.dataset.del, del.dataset.number, del);
+    return;
+  }
+
   const issue = event.target.closest('[data-issue]');
   if (issue) {
     state.issueOrder = state.orders.find((order) => order.id === issue.dataset.issue);
@@ -478,18 +492,37 @@ $('ws-orders').addEventListener('click', async (event) => {
   save.disabled = true;
 
   try {
-    const { parcel } = await api(`/api/workspace/${supplierId}/parcels`, {
-      method: 'POST',
-      body: {
-        shopifyOrderId: orderId,
-        orderName: order?.name ?? null,
-        trackingNumber,
-        carrier: card.querySelector('[data-field="carrier"]').value.trim() || null,
-        index: Number(card.dataset.index),
-        total: Number(document.querySelector(`[data-total="${CSS.escape(orderId)}"]`).value),
-        photo: card.dataset.photo ?? null,
+    /*
+     * Colis déjà enregistré : on corrige la ligne, on n'en crée pas une autre.
+     *
+     * La création est indexée par le numéro de suivi ; ressaisir un numéro
+     * corrigé fabriquait donc un doublon et laissait l'ancien numéro — le
+     * faux — dans la liste du marchand, qui suivait un colis fantôme.
+     */
+    const pid = card.dataset.pid;
+    const { parcel } = await api(
+      pid
+        ? `/api/workspace/${supplierId}/parcels/${pid}`
+        : `/api/workspace/${supplierId}/parcels`,
+      {
+        method: pid ? 'PATCH' : 'POST',
+        body: pid
+          ? {
+              trackingNumber,
+              carrier: card.querySelector('[data-field="carrier"]').value.trim() || null,
+              photo: card.dataset.photo ?? null,
+            }
+          : {
+              shopifyOrderId: orderId,
+              orderName: order?.name ?? null,
+              trackingNumber,
+              carrier: card.querySelector('[data-field="carrier"]').value.trim() || null,
+              index: Number(card.dataset.index),
+              total: Number(document.querySelector(`[data-total="${CSS.escape(orderId)}"]`).value),
+              photo: card.dataset.photo ?? null,
+            },
       },
-    });
+    );
 
     order.parcels = [
       ...(order.parcels ?? []).filter((existing) => existing.index !== parcel.index),
@@ -767,9 +800,44 @@ async function loadParcels() {
             )}${parcel.carrier ? ` · ${esc(parcel.carrier)}` : ''}</small>
           </div>
           <span class="trk-when">${new Date(parcel.updatedAt).toLocaleDateString(locale)}</span>
+          <button class="ico ico-del" data-del="${esc(parcel.id)}"
+            data-number="${esc(parcel.trackingNumber)}" title="${esc(t('parcel.delete'))}"
+            aria-label="${esc(t('parcel.delete'))}">
+            <svg viewBox="0 0 20 20" aria-hidden="true">
+              <path d="M4 6h12M8.5 6V4.5h3V6M6 6l.8 10h6.4L14 6M8.4 9v4.6M11.6 9v4.6" />
+            </svg>
+          </button>
         </div>`,
       )
       .join('') || `<p class="empty">${esc(t('tracking.empty'))}</p>`;
+
+  rows.querySelectorAll('[data-del]').forEach((button) =>
+    button.addEventListener('click', () =>
+      deleteParcel(button.dataset.del, button.dataset.number, button),
+    ),
+  );
+}
+
+/** Suppression d'un colis, avec confirmation nommant le numéro. */
+async function deleteParcel(parcelId, number, button) {
+  if (!confirm(t('parcel.deleteAsk', { number }))) return;
+
+  if (button) button.disabled = true;
+  try {
+    await api(`/api/workspace/${supplierId}/parcels/${parcelId}`, { method: 'DELETE' });
+    toast(t('parcel.deleted'));
+
+    // Les deux écrans qui montrent ce colis se rafraîchissent : la commande
+    // reprend sa carte vide, la liste de suivi perd sa ligne.
+    for (const order of state.orders) {
+      order.parcels = (order.parcels ?? []).filter((parcel) => parcel.id !== parcelId);
+    }
+    renderOrders();
+    if (state.view === 'tracking') await loadParcels();
+  } catch (error) {
+    toast(error.message, true);
+    if (button) button.disabled = false;
+  }
 }
 
 let trackTimer = null;

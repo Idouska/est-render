@@ -140,6 +140,10 @@ export const STRINGS = {
     'orders.allDone': 'Tout est préparé pour cette période.',
     'parcel.tracked': 'Suivi {number}',
 
+    'parcel.delete': 'Supprimer ce colis',
+    'parcel.deleteAsk': 'Supprimer le colis {number} ? Le numéro disparaît de votre liste et de celle du marchand.',
+    'parcel.deleted': 'Colis supprimé.',
+
     'error.generic': 'Erreur ({status})',
   },
 
@@ -258,6 +262,10 @@ export const STRINGS = {
     'orders.allDone': 'Everything is prepared for this period.',
     'parcel.tracked': 'Tracking {number}',
 
+    'parcel.delete': 'Delete this parcel',
+    'parcel.deleteAsk': 'Delete parcel {number}? The number disappears from your list and from the merchant\u2019s.',
+    'parcel.deleted': 'Parcel deleted.',
+
     'error.generic': 'Error ({status})',
   },
 
@@ -375,6 +383,10 @@ export const STRINGS = {
     'filter.all': '全部',
     'orders.allDone': '该时间段的订单已全部处理完毕。',
     'parcel.tracked': '运单号 {number}',
+
+    'parcel.delete': '删除该包裹',
+    'parcel.deleteAsk': '删除包裹 {number}？该运单号将从您和商家的列表中移除。',
+    'parcel.deleted': '包裹已删除。',
 
     'error.generic': '错误（{status}）',
   },
