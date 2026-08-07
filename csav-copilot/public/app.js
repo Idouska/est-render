@@ -1512,7 +1512,7 @@ function openChangeRequest(ticket) {
     ? `Commande ${order.name} · ${ticket.customerName ?? ticket.customerEmail}`
     : (ticket.customerName ?? ticket.customerEmail);
 
-  $('alert-kind').value = 'SIZE';
+  setAlertKind('SIZE');
   $('alert-order').value = order?.name ?? ticket.orderName ?? '';
   // La déclinaison actuelle sert de valeur « avant » : dans presque tous les
   // cas c'est ce que le client veut changer, et l'avoir sous les yeux évite
@@ -2979,7 +2979,7 @@ function openAlertModal(id) {
   $('alert-modal').dataset.ticket = '';
   $('alert-modal').dataset.order = '';
   $('alert-who').textContent = `${supplier.name} · ${supplier.contactEmail}`;
-  $('alert-kind').value = 'HOLD';
+  setAlertKind('HOLD');
   $('alert-order').value = '';
   $('alert-before').value = '';
   $('alert-after').value = '';
@@ -2994,6 +2994,28 @@ function closeAlertModal() {
   $('alert-modal').classList.remove('open');
   $('alert-modal').hidden = true;
 }
+
+
+/*
+ * Nature de la demande, en boutons.
+ *
+ * Le avant → après ne vaut que pour un changement de valeur : sur « ne pas
+ * expédier » ou « annulation », il n'y a rien à écrire dedans — on le masque
+ * au lieu de laisser deux champs vides interroger.
+ */
+const KINDS_WITH_SWAP = new Set(['SIZE', 'COLOR', 'PRODUCT', 'ADDRESS', 'PHONE']);
+
+function setAlertKind(kind) {
+  $('alert-kind').value = kind;
+  document.querySelectorAll('#alert-kinds [data-kind]').forEach((button) =>
+    button.setAttribute('aria-pressed', String(button.dataset.kind === kind)),
+  );
+  $('alert-swap-field').hidden = !KINDS_WITH_SWAP.has(kind);
+}
+
+document.querySelectorAll('#alert-kinds [data-kind]').forEach((button) =>
+  button.addEventListener('click', () => setAlertKind(button.dataset.kind)),
+);
 
 $('sup-f-alert')?.addEventListener('click', () => {
   const id = $('sup-f-link').dataset.supplier;
@@ -4771,7 +4793,7 @@ $('changes-new')?.addEventListener('click', () => {
   $('alert-modal').dataset.ticket = '';
   $('alert-modal').dataset.order = '';
   $('alert-who').textContent = '';
-  $('alert-kind').value = 'SIZE';
+  setAlertKind('SIZE');
   $('alert-order').value = '';
   $('alert-before').value = '';
   $('alert-after').value = '';
@@ -5313,7 +5335,7 @@ async function openOrderSheet(id) {
     $('alert-who').textContent = `Commande ${order.name} · ${
       order.customer?.displayName ?? order.customer?.email ?? ''
     }`;
-    $('alert-kind').value = 'SIZE';
+    setAlertKind('SIZE');
     $('alert-order').value = order.name ?? '';
     $('alert-before').value = item?.variantTitle ?? '';
     $('alert-after').value = '';

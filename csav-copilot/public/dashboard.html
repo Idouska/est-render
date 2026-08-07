@@ -1358,51 +1358,60 @@ Douane : les frais éventuels sont à la charge du destinataire hors UE."></text
           <p id="alert-who"></p>
         </div>
         <div class="modal-body">
-          <label for="alert-supplier">Fournisseur</label>
-          <select id="alert-supplier"></select>
-
-          <label for="alert-kind">Nature</label>
-          <select id="alert-kind">
-            <option value="SIZE">Taille à changer</option>
-            <option value="COLOR">Couleur à changer</option>
-            <option value="PRODUCT">Modèle à changer</option>
-            <option value="ADDRESS">Adresse à corriger</option>
-            <option value="PHONE">Téléphone à corriger</option>
-            <option value="HOLD">Ne pas expédier</option>
-            <option value="CANCEL">Commande annulée</option>
-            <option value="OTHER">Autre</option>
-          </select>
-
-          <!-- Avant → après plutôt qu'une phrase : « 44 → 45 » se lit en une
-               seconde sur un téléphone d'entrepôt, une phrase se relit trois
-               fois et c'est ainsi qu'on expédie la mauvaise pointure. -->
-          <div class="swap-row">
-            <label class="swap-field">
-              <span>Actuellement</span>
-              <input id="alert-before" type="text" placeholder="44" />
-            </label>
-            <span class="swap-arrow" aria-hidden="true">→</span>
-            <label class="swap-field">
-              <span>À la place</span>
-              <input id="alert-after" type="text" placeholder="45" />
-            </label>
+          <!-- La nature en boutons, pas en menu déroulant : huit choix se
+               voient d'un coup d'œil, un menu les cache derrière un clic — et
+               c'est le premier champ, celui qui oriente tous les autres. -->
+          <div class="field">
+            <label>Nature</label>
+            <div class="kgrid" id="alert-kinds" role="group">
+              <button type="button" data-kind="SIZE">Taille</button>
+              <button type="button" data-kind="COLOR">Couleur</button>
+              <button type="button" data-kind="PRODUCT">Modèle</button>
+              <button type="button" data-kind="ADDRESS">Adresse</button>
+              <button type="button" data-kind="PHONE">Téléphone</button>
+              <button type="button" data-kind="HOLD">Ne pas expédier</button>
+              <button type="button" data-kind="CANCEL">Annulation</button>
+              <button type="button" data-kind="OTHER">Autre</button>
+            </div>
+            <input type="hidden" id="alert-kind" value="SIZE" />
           </div>
 
-          <label for="alert-order">Commande concernée</label>
-          <input id="alert-order" type="text" placeholder="#9739" />
+          <!-- Le cœur de la demande, mis en scène comme il sera lu dans
+               l'atelier : avant, flèche, après — en gros. -->
+          <div class="field" id="alert-swap-field">
+            <label>Le changement</label>
+            <div class="swap-row">
+              <input id="alert-before" type="text" placeholder="42.5" aria-label="Actuellement" />
+              <span class="swap-arrow" aria-hidden="true">→</span>
+              <input id="alert-after" type="text" placeholder="45" aria-label="À la place" />
+            </div>
+          </div>
 
-          <label for="alert-message">Précision (facultatif)</label>
-          <textarea id="alert-message" rows="3"
-            placeholder="Ex. : le client a écrit ce matin, le colis ne doit pas partir avant."></textarea>
-          <small>
-            Envoyé par mail depuis votre boîte SAV et affiché dans son atelier, onglet
-            « Changements ». Vous verrez ici quand il aura confirmé — ou expliqué pourquoi
-            il ne peut pas.
-          </small>
+          <div class="field-duo">
+            <div class="field">
+              <label for="alert-supplier">Fournisseur</label>
+              <select id="alert-supplier"></select>
+            </div>
+            <div class="field">
+              <label for="alert-order">Commande</label>
+              <input id="alert-order" type="text" placeholder="#10480" />
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="alert-message">Précision (facultatif)</label>
+            <textarea id="alert-message" rows="2"
+              placeholder="Ex. : le client a écrit ce matin."></textarea>
+          </div>
+
+          <p class="modal-hint">
+            Part par mail depuis votre boîte SAV et s'affiche dans son atelier,
+            onglet Update — vous verrez ici sa réponse.
+          </p>
         </div>
         <div class="modal-foot">
           <button class="btn" id="alert-cancel">Annuler</button>
-          <button class="btn btn-danger" id="alert-send">Envoyer au fournisseur</button>
+          <button class="btn btn-primary" id="alert-send">⚡ Envoyer au fournisseur</button>
         </div>
       </div>
     </div>
