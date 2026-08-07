@@ -19,6 +19,7 @@ const state = {
   issueOrder: null,
   lang: pickLang(supplierId),
   view: 'orders',
+  filter: 'left',
   parcels: [],
   catalog: null,
   updates: [],
@@ -148,8 +149,18 @@ function parcelCard(order, index, total, saved) {
   // Un produit = un colis : la liste est dépliée par quantité, deux paires du
   // même modèle faisant deux cartons. « Colis 2/3 » seul ne dirait pas quoi
   // mettre dedans.
+  /*
+   * L'article de ce colis.
+   *
+   * La règle stricte « autant d'exemplaires que de colis » ne montrait rien
+   * dès qu'on passait une commande d'un article à trois colis — c'est-à-dire
+   * dans le cas où l'on a le plus besoin de savoir quoi mettre dedans. On
+   * prend donc l'exemplaire de rang correspondant, et à défaut le premier
+   * article de la commande : mieux vaut une photo approximative sur un colis
+   * groupé que pas de photo du tout.
+   */
   const units = orderUnits(order);
-  const item = units.length === total ? units[index - 1] : null;
+  const item = units[index - 1] ?? units[0] ?? null;
 
   /*
    * La photo du produit dans la carte du colis, pas sous l'adresse.
@@ -161,8 +172,12 @@ function parcelCard(order, index, total, saved) {
    */
   return `<div class="pk${saved ? ' done' : ''}" data-order="${esc(order.id)}" data-index="${index}">
     <div class="pk-head">
-      ${esc(t('parcel.head', { index, total }))}
-      ${saved ? `<span class="pk-done">✓ ${esc(t('parcel.saved'))}</span>` : ''}
+      <span>${esc(t('parcel.head', { index, total }))}</span>
+      ${
+        saved?.trackingNumber
+          ? `<span class="pk-done">✓ ${esc(t('parcel.saved'))}</span>`
+          : ''
+      }
     </div>
 
     ${
@@ -208,9 +223,11 @@ function parcelCard(order, index, total, saved) {
 /** Barre de progression : part remplie, et le compte en toutes lettres. */
 function progressBar(done, total, label) {
   const pct = total === 0 ? 0 : Math.round((done / total) * 100);
+  // Le libellé avant la barre : placé après, il poussait la barre hors de
+  // l'écran sur un téléphone, faute de pouvoir se replier.
   return `<div class="ws-progress${done === total ? ' full' : ''}">
-    <div class="ws-progress-bar"><i style="width:${pct}%"></i></div>
     <span>${esc(label)}</span>
+    <div class="ws-progress-bar"><i style="width:${pct}%"></i></div>
   </div>`;
 }
 
@@ -222,18 +239,21 @@ function orderDone(order, total) {
 }
 
 function renderOrders() {
-  $('ws-count').textContent = state.orders.length
-    ? t('orders.count', { n: state.orders.length })
-    : '';
+  const totals = new Map(state.orders.map((order) => [order.id, parcelTotal(order)]));
+  const isDone = (order) => {
+    const total = totals.get(order.id) ?? 1;
+    return total > 0 && orderDone(order, total) === total;
+  };
+
+  const finished = state.orders.filter(isDone).length;
+  const left = state.orders.length - finished;
+
+  $('count-left').textContent = String(left);
+  $('count-all').textContent = String(state.orders.length);
 
   // Avancement de la journée, en tête : entre deux colis on ne se demande pas
   // combien il y en a, on se demande où l'on en est.
   const box = $('ws-progress');
-  const totals = state.orders.map((order) => parcelTotal(order));
-  const finished = state.orders.filter(
-    (order, position) => totals[position] > 0 && orderDone(order, totals[position]) === totals[position],
-  ).length;
-
   box.hidden = state.orders.length === 0;
   if (!box.hidden) {
     const pct = Math.round((finished / state.orders.length) * 100);
@@ -245,43 +265,59 @@ function renderOrders() {
     });
   }
 
+  /*
+   * Par défaut, on ne montre que ce qu'il reste à faire.
+   *
+   * Quatre-vingt-six commandes affichées d'un bloc, dont la moitié déjà
+   * emballées, c'est une liste qu'on ne parcourt plus : on cherche sa place au
+   * lieu de travailler. « Toutes » reste à un clic pour vérifier ce qu'on a
+   * fait.
+   */
+  const shown =
+    state.filter === 'left' ? state.orders.filter((order) => !isDone(order)) : state.orders;
+
   if (state.orders.length === 0) {
-    $('ws-orders').innerHTML = `<p class="empty">${esc(t('orders.empty'))}</p>`;
+    $('ws-orders').innerHTML = emptyState(t('orders.empty'));
     return;
   }
 
-  $('ws-orders').innerHTML = state.orders
+  if (shown.length === 0) {
+    $('ws-orders').innerHTML = emptyState(t('orders.allDone'), true);
+    return;
+  }
+
+  $('ws-orders').innerHTML = shown
     .map((order) => {
       const address = order.shippingAddress ?? {};
       const phone = address.phone ?? '';
       // Un numéro trop court bloquera la livraison : autant que l'atelier le
       // voie avant d'emballer, pas le transporteur devant la porte.
       const phoneShort = phone.replace(/\D/g, '').length < 9;
-      const total = parcelTotal(order);
+      const total = totals.get(order.id) ?? 1;
       const done = orderDone(order, total);
 
       return `<article class="ord${done === total ? ' ord-done' : ''}">
         <div class="ord-head">
-          <b>${esc(order.name)}</b>
-          <span class="tag tag-order">${esc(order.displayFulfillmentStatus ?? '—')}</span>
-          <span class="when">${new Date(order.createdAt).toLocaleString(locale)}</span>
+          <b class="ord-no">${esc(order.name)}</b>
+          <span class="pill">${esc(order.displayFulfillmentStatus ?? '—')}</span>
+          <span class="ord-when">${esc(shortMoment(order.createdAt))}</span>
         </div>
 
         <div class="ord-who">
           <b>${esc(order.customer?.displayName ?? address.name ?? t('orders.customer'))}</b>
-          <small>${esc([address.address1, address.address2].filter(Boolean).join(' '))}</small>
-          <small>${esc(`${address.zip ?? ''} ${address.city ?? ''} ${address.country ?? ''}`.trim())}</small>
-          <small>${esc(t('orders.phone'))}
-            <span class="ord-phone${phoneShort ? ' missing' : ''}">${
+          <span>${esc([address.address1, address.address2].filter(Boolean).join(' '))}</span>
+          <span>${esc(`${address.zip ?? ''} ${address.city ?? ''} ${address.country ?? ''}`.trim())}</span>
+          <span class="ord-tel">
+            <a href="tel:${esc(phone)}" class="ord-phone${phoneShort ? ' missing' : ''}">${
               esc(phone || t('orders.phoneMissing'))
-            }</span>
-          </small>
+            }</a>
+          </span>
         </div>
 
         ${progressBar(done, total, t('progress.parcels', { done, total }))}
 
-        <label class="field">
-          ${esc(t('orders.parcelCount'))}
+        <label class="field field-inline">
+          <span>${esc(t('orders.parcelCount'))}</span>
           <select data-total="${esc(order.id)}">
             ${[1, 2, 3, 4, 5, 6]
               .map(
@@ -306,11 +342,38 @@ function renderOrders() {
         </div>
 
         <div class="ord-foot">
-          <button class="btn" data-issue="${esc(order.id)}">${esc(t('orders.report'))}</button>
+          <button class="btn btn-ghost" data-issue="${esc(order.id)}">${esc(
+            t('orders.report'),
+          )}</button>
         </div>
       </article>`;
     })
     .join('');
+}
+
+/** Écran vide illustré : un message seul ressemble à une page qui n'a pas fini. */
+function emptyState(message, good = false) {
+  return `<div class="empty${good ? ' empty-good' : ''}">
+    <span class="empty-mark" aria-hidden="true">${good ? '✓' : '—'}</span>
+    <p>${esc(message)}</p>
+  </div>`;
+}
+
+/**
+ * Moment court : l'heure seule pour aujourd'hui, jour + heure sinon.
+ *
+ * `06/08/2026 23:56:20` occupait la moitié de l'en-tête pour trois
+ * informations dont deux sont déjà données par le filtre de période, et des
+ * secondes que personne ne lit.
+ */
+function shortMoment(iso) {
+  const date = new Date(iso);
+  const today = new Date().toDateString() === date.toDateString();
+  const time = date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+
+  return today
+    ? time
+    : `${date.toLocaleDateString(locale, { day: '2-digit', month: '2-digit' })} ${time}`;
 }
 
 /* Un colis par exemplaire commandé, la règle d'expédition de l'atelier ; le
@@ -332,9 +395,7 @@ async function load() {
     state.orders = data.orders ?? [];
 
     $('app').hidden = false;
-    $('ws-supplier').textContent = data.supplier?.name
-      ? t('head.workshop', { name: data.supplier.name })
-      : '';
+    $('ws-supplier').textContent = data.supplier?.name ?? '';
     // Deux formats : la feuille Excel reprend la mise en page de l'atelier,
     // le CSV sert à qui veut retravailler les données.
     $('ws-xlsx').href = apiUrl(`/api/workspace/${supplierId}/orders.xlsx`).toString();
@@ -615,13 +676,6 @@ function setView(view) {
     button.setAttribute('aria-current', String(button.dataset.view === view));
   });
 
-  const titles = {
-    orders: 'head.title',
-    tracking: 'tracking.title',
-    catalog: 'catalog.title',
-    updates: 'updates.title',
-  };
-  $('ws-title').textContent = t(titles[view]);
 
   // Chaque écran recharge à l'ouverture : le fournisseur laisse l'onglet
   // ouvert toute la journée, et des données de ce matin valent moins que rien.
@@ -644,6 +698,16 @@ function rangeDates(name) {
   if (name === 'week') return [iso(now - 6 * day), iso(now)];
   return [iso(now - day), iso(now - day)];
 }
+
+document.querySelectorAll('#ws-filter [data-filter]').forEach((button) =>
+  button.addEventListener('click', () => {
+    state.filter = button.dataset.filter;
+    document.querySelectorAll('#ws-filter [data-filter]').forEach((other) =>
+      other.setAttribute('aria-pressed', String(other === button)),
+    );
+    renderOrders();
+  }),
+);
 
 document.querySelectorAll('#ws-quick [data-range]').forEach((button) =>
   button.addEventListener('click', () => {
@@ -881,6 +945,12 @@ async function respond(id, status, note = null) {
     toast(error.message, true);
   }
 }
+
+$('ws-more')?.addEventListener('click', () => {
+  const drawer = $('ws-drawer');
+  drawer.hidden = !drawer.hidden;
+  $('ws-more').setAttribute('aria-expanded', String(!drawer.hidden));
+});
 
 $('ws-reload').addEventListener('click', load);
 

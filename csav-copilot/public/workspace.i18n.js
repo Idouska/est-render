@@ -37,7 +37,7 @@ export const STRINGS = {
     'head.from': 'Du',
     'head.to': 'au',
     'head.reload': 'Actualiser',
-    'head.xlsx': 'Feuille Excel',
+    'head.xlsx': 'Télécharger .xlsx',
     'head.csv': 'CSV',
     'head.lang': 'Langue',
 
@@ -117,7 +117,7 @@ export const STRINGS = {
     'updates.title': 'Demandes de changement',
     'updates.empty': 'Aucune demande en cours.',
     'updates.pending': 'En attente',
-    'updates.accept': "C'est pris en compte",
+    'updates.accept': "C'est fait",
     'updates.refuse': 'Impossible',
     'updates.why': 'Pourquoi ? (colis déjà parti, article indisponible…)',
     'updates.accepted': 'Pris en compte',
@@ -135,6 +135,11 @@ export const STRINGS = {
     'kind.CANCEL': 'Commande annulée',
     'kind.OTHER': 'Message urgent',
 
+    'filter.left': 'À préparer',
+    'filter.all': 'Toutes',
+    'orders.allDone': 'Tout est préparé pour cette période.',
+    'parcel.tracked': 'Suivi {number}',
+
     'error.generic': 'Erreur ({status})',
   },
 
@@ -150,7 +155,7 @@ export const STRINGS = {
     'head.from': 'From',
     'head.to': 'to',
     'head.reload': 'Refresh',
-    'head.xlsx': 'Excel sheet',
+    'head.xlsx': 'Download .xlsx',
     'head.csv': 'CSV',
     'head.lang': 'Language',
 
@@ -230,8 +235,8 @@ export const STRINGS = {
     'updates.title': 'Change requests',
     'updates.empty': 'No pending requests.',
     'updates.pending': 'Pending',
-    'updates.accept': 'Done, taken into account',
-    'updates.refuse': 'Not possible',
+    'updates.accept': 'Confirm',
+    'updates.refuse': "Can't do",
     'updates.why': 'Why? (parcel already shipped, item unavailable…)',
     'updates.accepted': 'Taken into account',
     'updates.refused': 'Refused',
@@ -248,6 +253,11 @@ export const STRINGS = {
     'kind.CANCEL': 'Order cancelled',
     'kind.OTHER': 'Urgent message',
 
+    'filter.left': 'To prepare',
+    'filter.all': 'All',
+    'orders.allDone': 'Everything is prepared for this period.',
+    'parcel.tracked': 'Tracking {number}',
+
     'error.generic': 'Error ({status})',
   },
 
@@ -263,7 +273,7 @@ export const STRINGS = {
     'head.from': '从',
     'head.to': '至',
     'head.reload': '刷新',
-    'head.xlsx': 'Excel 表格',
+    'head.xlsx': '下载 .xlsx',
     'head.csv': 'CSV',
     'head.lang': '语言',
 
@@ -360,6 +370,11 @@ export const STRINGS = {
     'kind.HOLD': '请勿发货',
     'kind.CANCEL': '订单已取消',
     'kind.OTHER': '紧急消息',
+
+    'filter.left': '待处理',
+    'filter.all': '全部',
+    'orders.allDone': '该时间段的订单已全部处理完毕。',
+    'parcel.tracked': '运单号 {number}',
 
     'error.generic': '错误（{status}）',
   },
