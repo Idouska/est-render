@@ -3140,10 +3140,17 @@ async function fillVariantPicker(box, input, scope) {
           ${option.detail ? `<small>${esc(option.detail)}</small>` : ''}
         </span>
         ${
-          option.stock !== null && option.stock !== undefined
-            ? `<span class="pick-stock${option.stock > 0 ? '' : ' out'}">${
-                option.stock > 0 ? `${option.stock} en stock` : 'épuisé'
-              }</span>`
+          /*
+           * La pastille n'apparaît que sur un stock réellement positif.
+           *
+           * Un `0` ne veut pas dire « épuisé » : sur une boutique qui ne suit
+           * pas ses stocks — le cas du dropshipping — Shopify renvoie zéro
+           * pour tout le catalogue. Afficher « épuisé » partout ferait refuser
+           * des échanges parfaitement possibles, ce qui est plus grave que de
+           * ne rien afficher.
+           */
+          option.stock > 0
+            ? `<span class="pick-stock">${option.stock} en stock</span>`
             : ''
         }
       </button>`,

@@ -224,10 +224,56 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
         }
 
         /*
-         * Taille et couleur : on part du modèle de la commande quand on le
-         * connaît, sinon de la recherche libre. Sans aucun des deux il n'y a
-         * rien à proposer — mieux vaut une liste vide qu'un échantillon
-         * arbitraire du catalogue.
+         * La couleur vit dans le titre du produit, pas dans la déclinaison.
+         *
+         * Sur ce catalogue — et c'est la règle chez les revendeurs de
+         * sneakers — un coloris est un produit à part entière : « Nike Mind
+         * 001 Blackened Blue » et « Nike Mind 001 Black Hyper Crimson » sont
+         * deux fiches, dont les déclinaisons ne portent que la pointure. La
+         * chercher dans `variantTitle` ne trouvait donc jamais rien.
+         *
+         * On repart du modèle en retirant son coloris : les trois premiers
+         * mots du titre suffisent à retrouver la famille (« Nike Mind 001 »),
+         * et chaque produit frère donne son coloris — ce que son titre porte
+         * au-delà du préfixe commun.
+         */
+        if (scope === 'COLOR') {
+          const family = product.split(/\s+/).slice(0, 3).join(' ');
+          const page = await listProducts(client, {
+            query: family ? `title:${quoteSearchValue(family)}*` : term,
+            limit: 60,
+          });
+
+          const seen = new Map<string, { value: string; detail: string; image: string | null; stock: number | null }>();
+
+          for (const item of page.products) {
+            // Le coloris est ce qui reste une fois le modèle retiré. Si le
+            // titre ne commence pas par la famille attendue, on garde le titre
+            // entier : mieux vaut une entrée trop longue qu'une entrée fausse.
+            const color = item.title.toLowerCase().startsWith(family.toLowerCase())
+              ? item.title.slice(family.length).trim()
+              : item.title;
+
+            if (!color) continue;
+            if (term && !color.toLowerCase().includes(term.toLowerCase())) continue;
+            if (seen.has(color)) continue;
+
+            seen.set(color, {
+              value: color,
+              detail: item.vendor ?? '',
+              image: item.image,
+              stock: item.totalInventory,
+            });
+          }
+
+          return reply.send({ options: [...seen.values()] });
+        }
+
+        /*
+         * Taille : là, ce sont bien les déclinaisons du produit. On part du
+         * modèle de la commande quand on le connaît, sinon de la recherche
+         * libre — sans aucun des deux il n'y a rien à proposer, et mieux vaut
+         * une liste vide qu'un échantillon arbitraire du catalogue.
          */
         const query = product
           ? `product_title:${quoteSearchValue(product)}`
@@ -242,31 +288,30 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
         const seen = new Map<string, { value: string; detail: string; image: string | null; stock: number | null }>();
 
         for (const variant of variants) {
-          // « Blackened Blue / 45 » : le segment qui commence par un chiffre
-          // est la taille, l'autre la couleur. Constant sur des chaussures.
-          const parts = String(variant.variantTitle ?? '')
-            .split('/')
-            .map((part) => part.trim())
-            .filter(Boolean);
+          // « Default Title » est la déclinaison fantôme d'un produit qui n'en
+          // a pas : la proposer ferait choisir une taille qui n'existe pas.
+          const raw = String(variant.variantTitle ?? '').trim();
+          if (!raw || raw === 'Default Title') continue;
 
-          const size = parts.find((part) => /^\d/.test(part)) ?? (parts.length === 1 ? parts[0] : '');
-          const color = parts.find((part) => part !== size) ?? '';
-          const value = scope === 'SIZE' ? size : color;
+          // Une déclinaison composée — « Blackened Blue / 45 » — garde son
+          // segment numérique ; sinon le libellé entier est la pointure.
+          const parts = raw.split('/').map((part) => part.trim()).filter(Boolean);
+          const value = parts.find((part) => /^\d/.test(part)) ?? parts[0] ?? '';
 
           if (!value) continue;
           if (term && !value.toLowerCase().includes(term.toLowerCase())) continue;
 
           const existing = seen.get(value);
           if (existing) {
-            // Le stock s'additionne : la même taille existe en plusieurs
-            // couleurs, et c'est le total qui dit si l'échange est possible.
+            // Le stock s'additionne : la même taille peut exister sur
+            // plusieurs fiches, et c'est le total qui dit si l'échange tient.
             existing.stock = (existing.stock ?? 0) + (variant.inventoryQuantity ?? 0);
             continue;
           }
 
           seen.set(value, {
             value,
-            detail: scope === 'SIZE' ? color : variant.productTitle,
+            detail: variant.productTitle,
             image: variant.image,
             stock: variant.inventoryQuantity,
           });
