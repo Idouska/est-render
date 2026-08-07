@@ -100,7 +100,7 @@
             </button>
             <div class="head-main">
               <div class="crumb" id="crumb"></div>
-              <h1 id="view-title">File de traitement</h1>
+              <h1 id="view-title">SAV client</h1>
             </div>
             <div class="head-acts">
               <div class="head-tools">
@@ -279,6 +279,10 @@
           <div class="thread-head">
             <h1 class="thread-subject" id="d-subject">Sélectionnez un message</h1>
             <div class="thread-meta" id="d-meta"></div>
+            <!-- Libellés du message, modifiables sur place, et suppression.
+                 Reclasser en rouvrant Gmail est un aller-retour qu'on ne fait
+                 pas : le classement se perd, et la file cesse d'être triable. -->
+            <div class="thread-labels" id="d-labels" hidden></div>
           </div>
           <div class="notice" id="read-only" hidden>
             <span class="notice-mark">Lecture</span>

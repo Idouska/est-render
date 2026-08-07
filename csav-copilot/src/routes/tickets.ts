@@ -337,6 +337,95 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
   );
 
   /**
+   * Supprime un message pour de bon.
+   *
+   * Clore range, supprimer efface. Les deux sont nécessaires : un mail de
+   * démarchage, une notification de plateforme ou un doublon n'ont pas à
+   * rester consultables sous prétexte qu'ils sont clos — ils gonflent les
+   * compteurs et polluent la recherche. Réservé à `configure` : c'est
+   * irréversible, un agent n'a pas à pouvoir faire disparaître un échange.
+   *
+   * Rien n'est touché dans Gmail : le mail reste dans la boîte du marchand.
+   * Supprimer ici veut dire « sortir du SAV », pas « détruire le courrier ».
+   */
+  app.delete<{ Params: { id: string } }>(
+    '/api/tickets/:id',
+    { preHandler: requirePermission('configure') },
+    async (request, reply) => {
+      const { merchantId, userId } = request.session;
+
+      const ticket = await prisma.ticket.findFirst({
+        where: { id: request.params.id, merchantId },
+        select: { id: true, subject: true, customerEmail: true },
+      });
+      if (!ticket) return reply.code(404).send({ error: 'Message introuvable' });
+
+      await prisma.ticket.delete({ where: { id: ticket.id } });
+
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId: userId,
+        action: 'ticket.deleted',
+        targetType: 'Ticket',
+        targetId: ticket.id,
+        metadata: { subject: ticket.subject, customerEmail: ticket.customerEmail },
+        ipAddress: request.ip,
+      });
+
+      return reply.send({ deleted: true });
+    },
+  );
+
+  /**
+   * Change les libellés d'un message.
+   *
+   * Les libellés viennent de Gmail, mais le classement se fait ici : les
+   * autorisations Google accordées sont en lecture, composition et envoi —
+   * pas en modification d'étiquettes. Reclasser depuis le dashboard ne
+   * repeint donc pas la boîte du marchand, et c'est le bon compromis :
+   * demander l'accès en écriture à toute la messagerie pour déplacer une
+   * étiquette serait hors de proportion.
+   */
+  app.put<{ Params: { id: string } }>(
+    '/api/tickets/:id/labels',
+    { preHandler: requirePermission('reply') },
+    async (request, reply) => {
+      const parsed = z
+        .object({ labels: z.array(z.string().min(1).max(120)).max(20) })
+        .safeParse(request.body);
+
+      if (!parsed.success) return reply.code(400).send({ error: 'Libellés invalides' });
+
+      const { merchantId, userId } = request.session;
+
+      // Doublons écartés : deux fois le même libellé afficherait deux boutons
+      // identiques sur la ligne.
+      const labels = [...new Set(parsed.data.labels)];
+
+      const updated = await prisma.ticket.updateMany({
+        where: { id: request.params.id, merchantId },
+        data: { labels },
+      });
+
+      if (updated.count === 0) return reply.code(404).send({ error: 'Message introuvable' });
+
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId: userId,
+        action: 'ticket.labels_changed',
+        targetType: 'Ticket',
+        targetId: request.params.id,
+        metadata: { labels },
+        ipAddress: request.ip,
+      });
+
+      return reply.send({ labels });
+    },
+  );
+
+  /**
    * Clôt un ticket sans envoyer de réponse.
    *
    * Tout ne se règle pas par un mail : une notification de plateforme, un

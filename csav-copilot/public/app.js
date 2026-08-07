@@ -1838,6 +1838,8 @@ function renderDetail() {
        </select>
      </span>`;
 
+  renderTicketLabels(ticket);
+
   $('d-who')?.addEventListener('click', () =>
     void openCustomerSheet(ticket.customerEmail, ticket.customerName ?? ''),
   );
@@ -1964,6 +1966,89 @@ function formatBytes(size) {
   if (size < 1024) return `${size} o`;
   if (size < 1024 * 1024) return `${Math.round(size / 1024)} Ko`;
   return `${(size / (1024 * 1024)).toFixed(1).replace('.', ',')} Mo`;
+}
+
+
+/**
+ * Libellés du message et suppression, dans l'en-tête du détail.
+ *
+ * Un libellé posé par Gmail décrit ce que le marchand a déjà décidé ; encore
+ * faut-il pouvoir le corriger quand l'automatisme s'est trompé, sans rouvrir
+ * Gmail. Le changement reste dans le SAV : les autorisations Google accordées
+ * ne permettent pas de repeindre la boîte, et c'est délibéré.
+ */
+function renderTicketLabels(ticket) {
+  const bar = $('d-labels');
+  if (!bar) return;
+
+  const mine = new Set(ticket.labels ?? []);
+  const known = Object.keys(labelStyles).sort((a, b) => a.localeCompare(b, 'fr'));
+  // Un libellé porté mais inconnu du catalogue reste proposé : il vient d'une
+  // boîte débranchée ou d'une étiquette renommée, et le retirer de la liste
+  // le rendrait impossible à décocher.
+  for (const name of mine) if (!known.includes(name)) known.push(name);
+
+  bar.hidden = false;
+  bar.innerHTML =
+    known
+      .map((name) => {
+        const on = mine.has(name);
+        const style = labelStyles[name];
+        const leaf = name.includes('/') ? name.slice(name.lastIndexOf('/') + 1) : name;
+        const paint =
+          style?.background && on
+            ? ` style="background:${esc(style.background)};color:${esc(
+                style.text ?? '#000',
+              )};border-color:transparent"`
+            : '';
+        return `<button class="lchip" data-tlabel="${esc(name)}" aria-pressed="${on}"
+          title="${esc(name)}"${paint}>${esc(leaf)}</button>`;
+      })
+      .join('') +
+    `<button class="btn btn-small btn-danger" id="d-delete">Supprimer ce message</button>`;
+
+  bar.querySelectorAll('[data-tlabel]').forEach((chip) =>
+    chip.addEventListener('click', async () => {
+      const name = chip.dataset.tlabel;
+      const next = mine.has(name)
+        ? [...mine].filter((label) => label !== name)
+        : [...mine, name];
+
+      try {
+        const result = await api(`/api/tickets/${ticket.id}/labels`, {
+          method: 'PUT',
+          body: JSON.stringify({ labels: next }),
+        });
+        ticket.labels = result.labels;
+        renderTicketLabels(ticket);
+        await loadQueue();
+      } catch (error) {
+        toast(error.message, true);
+      }
+    }),
+  );
+
+  $('d-delete')?.addEventListener('click', async () => {
+    if (
+      !confirm(
+        `Supprimer définitivement « ${ticket.subject ?? '(sans objet)'} » ?\n\n` +
+          'Le fil, les brouillons et les pièces jointes partent avec lui. ' +
+          'Le mail reste dans votre boîte Gmail. Irréversible.',
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await api(`/api/tickets/${ticket.id}`, { method: 'DELETE' });
+      toast('Message supprimé.');
+      state.currentId = null;
+      bar.hidden = true;
+      await loadQueue();
+    } catch (error) {
+      toast(error.message, true);
+    }
+  });
 }
 
 function renderBrief(draft) {
@@ -3659,7 +3744,7 @@ function ico(name) {
    pastille quand il y a quelque chose à traiter. */
 const VIEW_META = {
   overview: { icon: 'grid', label: "Vue d'ensemble", group: 'Pilotage', title: "Vue d'ensemble" },
-  tickets: { icon: 'inbox', label: 'File de traitement', group: 'Pilotage', title: 'File de traitement' },
+  tickets: { icon: 'inbox', label: 'SAV client', group: 'Pilotage', title: 'SAV client' },
   stats: { icon: 'chart', label: "Statistiques", group: 'Pilotage', title: "Statistiques d'équipe" },
   orders: { icon: 'bag', label: 'Commandes', group: 'Commerce', title: 'Commandes' },
   customers: { icon: 'users', label: 'Clients', group: 'Commerce', title: 'Clients' },

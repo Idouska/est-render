@@ -4405,3 +4405,15 @@ textarea:focus-visible {
   gap: 10px;
   flex-wrap: wrap;
 }
+
+/* Libellés du message et suppression, sous l'objet. Les puces reprennent la
+   couleur Gmail une fois posées ; éteintes elles restent lisibles, sans quoi
+   la barre devient un mur de couleur où rien ne ressort. */
+.thread-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 8px;
+}
+.thread-labels #d-delete { margin-left: auto; }
