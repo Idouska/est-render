@@ -267,6 +267,10 @@
 
       <main class="workspace" id="view-tickets">
         <section class="panel" aria-label="Messages clients">
+          <!-- Barre d'actions groupées. Elle n'apparaît qu'une fois quelque
+               chose de coché : une barre d'actions permanente sur une file
+               vide est un bruit permanent. -->
+          <div class="bulk" id="bulk" hidden></div>
           <ul class="queue-list" id="queue">
             <li class="skel-row"><span class="skel"></span><span class="skel"></span><span class="skel"></span></li>
             <li class="skel-row"><span class="skel"></span><span class="skel"></span><span class="skel"></span></li>

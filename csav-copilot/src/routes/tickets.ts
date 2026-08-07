@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { env } from '../config/env.ts';
 import { recordAudit } from '../lib/audit.ts';
 import { prisma } from '../lib/prisma.ts';
-import { PREVIEW_COOKIE, requirePermission, requireSession } from '../plugins/auth.ts';
+import { PERMISSIONS, PREVIEW_COOKIE, requirePermission, requireSession } from '../plugins/auth.ts';
 import { enqueueTicket } from '../queue/index.ts';
 import { accessibleMerchantIds, listShopsFor } from './shops.ts';
 import { sendDraft, updateDraftBody } from '../services/gmail/drafts.ts';
@@ -337,6 +337,138 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
       return reply.send({ status: parsed.data.status });
     },
   );
+
+  /**
+   * Une action sur plusieurs messages à la fois.
+   *
+   * Sur une file de cinq mille lignes, le traitement un par un n'est pas un
+   * inconfort : c'est l'abandon. Trois cents notifications de plateforme se
+   * closent d'un geste ou ne se closent jamais.
+   *
+   * Une seule route pour toutes les actions groupées, parce que la partie
+   * délicate leur est commune : n'agir que sur les messages du marchand
+   * connecté, quoi qu'il arrive dans la liste d'identifiants reçue. Le filtre
+   * `merchantId` est appliqué dans chaque `where`, jamais déduit du corps de
+   * la requête.
+   */
+  app.post('/api/tickets/bulk', async (request, reply) => {
+    const parsed = z
+      .object({
+        ids: z.array(z.string().min(1)).min(1).max(500),
+        action: z.enum(['close', 'reopen', 'delete', 'label-add', 'label-remove', 'assign', 'analyze']),
+        label: z.string().min(1).max(120).optional(),
+        /** Identifiant d'agent, ou null pour remettre au pot commun. */
+        assignee: z.string().max(60).nullable().optional(),
+      })
+      .safeParse(request.body);
+
+    if (!parsed.success) return reply.code(400).send({ error: 'Requête invalide' });
+
+    const { ids, action, label, assignee } = parsed.data;
+    const { merchantId, userId, role } = request.session;
+
+    // La suppression est irréversible : elle demande le droit de configurer,
+    // pas seulement celui de répondre.
+    const needed = action === 'delete' ? 'configure' : 'reply';
+    if (!(PERMISSIONS[needed] as readonly string[]).includes(role)) {
+      return reply.code(403).send({ error: 'Action non autorisée pour votre rôle' });
+    }
+
+    if ((action === 'label-add' || action === 'label-remove') && !label) {
+      return reply.code(400).send({ error: 'Libellé manquant' });
+    }
+
+    const scope = { id: { in: ids }, merchantId };
+    let affected = 0;
+
+    switch (action) {
+      case 'close': {
+        affected = (
+          await prisma.ticket.updateMany({
+            where: scope,
+            data: { status: 'CLOSED', snoozedUntil: null },
+          })
+        ).count;
+        break;
+      }
+
+      case 'reopen': {
+        affected = (
+          await prisma.ticket.updateMany({ where: scope, data: { status: 'NEEDS_REVIEW' } })
+        ).count;
+        break;
+      }
+
+      case 'delete': {
+        affected = (await prisma.ticket.deleteMany({ where: scope })).count;
+        break;
+      }
+
+      case 'assign': {
+        affected = (
+          await prisma.ticket.updateMany({ where: scope, data: { assignedToId: assignee ?? null } })
+        ).count;
+        break;
+      }
+
+      case 'analyze': {
+        // Remises en file, pas traitées ici : cinq cents appels de modèle dans
+        // une requête HTTP dépasseraient tous les délais d'attente.
+        const targets = await prisma.ticket.findMany({ where: scope, select: { id: true } });
+        for (const target of targets) {
+          try {
+            await enqueueTicket({ merchantId, ticketId: target.id }, { replace: true });
+            affected += 1;
+          } catch (error) {
+            request.log.error({ err: error, ticketId: target.id }, 'Mise en file en échec');
+          }
+        }
+        break;
+      }
+
+      case 'label-add':
+      case 'label-remove': {
+        /*
+         * Les libellés sont un tableau : `updateMany` ne sait ni y ajouter ni
+         * y retirer une valeur. On relit donc chaque ligne pour recalculer son
+         * tableau — cinq cents lectures et cinq cents écritures, groupées en
+         * une transaction pour qu'un échec à mi-chemin ne laisse pas la moitié
+         * des messages classés.
+         */
+        const targets = await prisma.ticket.findMany({
+          where: scope,
+          select: { id: true, labels: true },
+        });
+
+        await prisma.$transaction(
+          targets.map((target) => {
+            const labels =
+              action === 'label-add'
+                ? [...new Set([...target.labels, label!])]
+                : target.labels.filter((name) => name !== label);
+
+            return prisma.ticket.update({ where: { id: target.id }, data: { labels } });
+          }),
+        );
+
+        affected = targets.length;
+        break;
+      }
+    }
+
+    await recordAudit({
+      merchantId,
+      actorType: 'USER',
+      actorId: userId,
+      action: `tickets.bulk.${action}`,
+      targetType: 'Ticket',
+      targetId: `${affected} message(s)`,
+      metadata: { action, affected, label, assignee, requested: ids.length },
+      ipAddress: request.ip,
+    });
+
+    return reply.send({ affected });
+  });
 
   /**
    * Traduit le fil en français.

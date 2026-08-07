@@ -29,6 +29,9 @@ const state = {
     dueSoon: false, bigAmount: false, origin: '', timer: null,
   },
   queueCounts: {},
+  /* Messages cochés dans la file. Un Set et non un tableau : on teste
+     l'appartenance à chaque ligne rendue, cinquante fois par rafraîchissement. */
+  picked: new Set(),
   agents: [],
   canned: [],
   editingCanned: null,
@@ -659,6 +662,20 @@ async function loadQueue({ append = false } = {}) {
   // pas à chaque tour de molette.
   params.set('limit', '50');
 
+  /*
+   * Un changement de filtre annule la sélection.
+   *
+   * Cocher trente messages, changer d'onglet, puis cliquer « Marquer résolu »
+   * refermerait trente messages qu'on ne voit plus. Le rafraîchissement
+   * automatique, lui, ne touche à rien : la signature des filtres n'a pas
+   * bougé, la sélection reste.
+   */
+  const signature = params.toString().replace(/&?cursor=[^&]*/, '');
+  if (!append && state.queueSignature && state.queueSignature !== signature) {
+    state.picked.clear();
+  }
+  state.queueSignature = signature;
+
   const data = await api(`/api/tickets?${params}`);
 
   state.queueCursor = data.nextCursor ?? null;
@@ -716,7 +733,16 @@ async function loadQueue({ append = false } = {}) {
       const label = STATUS_LABELS[ticket.status] ?? ticket.status;
       const who = ticket.assignedTo;
 
-      return `<li>
+      // La case vit hors du bouton : un contrôle imbriqué dans un bouton n'est
+      // pas cliquable au clavier et avale le clic de la souris une fois sur
+      // deux. Elle est en position absolue par-dessus, la ligne garde sa
+      // surface cliquable pleine.
+      return `<li class="qrow${state.picked.has(ticket.id) ? ' picked' : ''}">
+        <label class="qpick" title="Sélectionner">
+          <input type="checkbox" data-pick="${ticket.id}"${
+            state.picked.has(ticket.id) ? ' checked' : ''
+          } />
+        </label>
         <button class="queue-item li-${ticket.intent ?? 'OTHER'}" data-id="${ticket.id}"
           aria-current="${ticket.id === state.currentId}">
           <span class="queue-top">
@@ -758,6 +784,9 @@ async function loadQueue({ append = false } = {}) {
       </li>`;
     })
     .join('');
+
+  bindPickers();
+  renderBulk();
 
   // Sentinelle de fin de liste : quand elle entre dans le champ, la page
   // suivante se charge. Un bouton « charger la suite » sur une file de travail
@@ -2023,6 +2052,156 @@ function bindTranslate(ticket) {
       button.disabled = false;
     }
   };
+}
+
+
+/* ================================================== actions groupées ===== */
+
+/**
+ * Sélection multiple dans la file.
+ *
+ * Sur cinq mille messages, le traitement ligne à ligne n'est pas pénible :
+ * il est impossible. Trois cents notifications de plateforme se closent d'un
+ * geste, ou ne se closent jamais et la file cesse d'être crue.
+ *
+ * La sélection survit au rechargement de la file — elle est dans `state`, pas
+ * dans le DOM — mais pas au changement de filtre : cocher trente messages puis
+ * changer d'onglet et agir sur un ensemble qu'on ne voit plus est la meilleure
+ * façon de clore ce qu'on ne voulait pas.
+ */
+function bindPickers() {
+  document.querySelectorAll('[data-pick]').forEach((box) =>
+    box.addEventListener('change', (event) => {
+      const id = box.dataset.pick;
+      if (box.checked) state.picked.add(id);
+      else state.picked.delete(id);
+
+      // Maj + clic coche toute la plage depuis la dernière case touchée :
+      // c'est le geste attendu de toute liste, et sans lui on coche
+      // cinquante cases une par une.
+      if (event.shiftKey && state.lastPick) {
+        const ids = state.tickets.map((ticket) => ticket.id);
+        const from = ids.indexOf(state.lastPick);
+        const to = ids.indexOf(id);
+        if (from !== -1 && to !== -1) {
+          for (const between of ids.slice(Math.min(from, to), Math.max(from, to) + 1)) {
+            if (box.checked) state.picked.add(between);
+            else state.picked.delete(between);
+          }
+          document.querySelectorAll('[data-pick]').forEach((other) => {
+            other.checked = state.picked.has(other.dataset.pick);
+            other.closest('.qrow')?.classList.toggle('picked', other.checked);
+          });
+        }
+      }
+
+      state.lastPick = id;
+      box.closest('.qrow')?.classList.toggle('picked', box.checked);
+      renderBulk();
+    }),
+  );
+}
+
+function clearPicked() {
+  state.picked.clear();
+  document.querySelectorAll('[data-pick]').forEach((box) => {
+    box.checked = false;
+    box.closest('.qrow')?.classList.remove('picked');
+  });
+  renderBulk();
+}
+
+function renderBulk() {
+  const bar = $('bulk');
+  if (!bar) return;
+
+  const count = state.picked.size;
+  bar.hidden = count === 0;
+  if (count === 0) return;
+
+  const labels = Object.keys(labelStyles).sort((a, b) => a.localeCompare(b, 'fr'));
+
+  bar.innerHTML = `
+    <b>${count} sélectionné${count > 1 ? 's' : ''}</b>
+    <button class="btn btn-small" data-bulk="close">Marquer résolu</button>
+    <button class="btn btn-small" data-bulk="analyze">Relancer l’IA</button>
+    ${
+      labels.length
+        ? `<select class="bulk-label" id="bulk-label">
+             <option value="">Poser un libellé…</option>
+             ${labels
+               .map((name) => `<option value="${esc(name)}">${esc(name)}</option>`)
+               .join('')}
+           </select>`
+        : ''
+    }
+    <select class="bulk-label" id="bulk-assign">
+      <option value="">Assigner à…</option>
+      <option value="none">Personne</option>
+      ${state.agents
+        .map((user) => `<option value="${esc(user.id)}">${esc(user.name ?? user.email)}</option>`)
+        .join('')}
+    </select>
+    ${
+      canI('configure')
+        ? `<button class="btn btn-small btn-danger" data-bulk="delete">Supprimer</button>`
+        : ''
+    }
+    <button class="btn btn-small" data-bulk="clear" style="margin-left:auto">Tout décocher</button>`;
+
+  bar.querySelectorAll('[data-bulk]').forEach((button) =>
+    button.addEventListener('click', () => {
+      if (button.dataset.bulk === 'clear') return clearPicked();
+      void runBulk(button.dataset.bulk, {}, button);
+    }),
+  );
+
+  $('bulk-label')?.addEventListener('change', (event) => {
+    if (event.target.value) void runBulk('label-add', { label: event.target.value });
+  });
+
+  $('bulk-assign')?.addEventListener('change', (event) => {
+    if (!event.target.value) return;
+    void runBulk('assign', {
+      assignee: event.target.value === 'none' ? null : event.target.value,
+    });
+  });
+}
+
+const BULK_CONFIRM = {
+  delete:
+    'Supprimer définitivement %n message(s) ?\n\n' +
+    'Fils, brouillons et pièces jointes partent avec eux. ' +
+    'Les mails restent dans votre boîte Gmail. Irréversible.',
+};
+
+async function runBulk(action, extra, button) {
+  const ids = [...state.picked];
+  const ask = BULK_CONFIRM[action];
+  if (ask && !confirm(ask.replace('%n', String(ids.length)))) return;
+
+  if (button) button.disabled = true;
+
+  try {
+    const result = await api('/api/tickets/bulk', {
+      method: 'POST',
+      body: JSON.stringify({ ids, action, ...extra }),
+    });
+
+    const done = result.affected;
+    toast(
+      action === 'analyze'
+        ? `${done} message${done > 1 ? 's' : ''} remis en traitement.`
+        : `${done} message${done > 1 ? 's' : ''} mis à jour.`,
+    );
+
+    state.picked.clear();
+    await loadQueue();
+  } catch (error) {
+    toast(error.message, true);
+  } finally {
+    if (button) button.disabled = false;
+  }
 }
 
 /** Droits de l'utilisateur connecté, tels que renvoyés par /api/me. */

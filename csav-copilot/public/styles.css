@@ -4585,3 +4585,62 @@ textarea:focus-visible {
   .sib { flex-wrap: wrap; }
   .sib b { flex-basis: 100%; white-space: normal; }
 }
+
+/* ------------------------------------------------- sélection multiple ---
+   La case se pose par-dessus la ligne, à gauche : hors du bouton pour rester
+   cliquable, mais visuellement dedans. Elle ne se montre qu'au survol ou
+   quand elle est cochée — cinquante cases vides sur une file qu'on parcourt
+   ajoutent une colonne de bruit à ce qu'on essaie de lire. */
+.qrow { position: relative; }
+.qpick {
+  position: absolute;
+  z-index: 3;
+  top: 10px;
+  left: 8px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--t-fast) var(--ease);
+}
+.qrow:hover .qpick,
+.qrow:focus-within .qpick,
+.qrow.picked .qpick { opacity: 1; }
+.qpick input { width: 15px; height: 15px; cursor: pointer; accent-color: var(--accent); }
+.qrow:hover .queue-item,
+.qrow.picked .queue-item { padding-left: 34px; }
+.qrow.picked .queue-item { background: color-mix(in srgb, var(--accent) 9%, transparent); }
+
+/* Barre d'actions groupées, collée en tête de la file : elle doit rester
+   visible pendant qu'on fait défiler pour cocher. */
+.bulk {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 9px 11px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  background-image: var(--grad-raised);
+  box-shadow: var(--e2);
+}
+.bulk b { font-size: 13px; white-space: nowrap; }
+.bulk-label {
+  font-size: 12.5px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  max-width: 170px;
+}
+
+@media (max-width: 760px) {
+  .qpick { opacity: 1; }
+  .qrow .queue-item { padding-left: 34px; }
+}
