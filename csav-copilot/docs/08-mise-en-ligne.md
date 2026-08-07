@@ -486,3 +486,61 @@ Quatre chantiers, indépendants les uns des autres :
 - **Le plan gratuit de Render met les services en veille** après inactivité. Un
   service web endormi ne répond pas assez vite à Pub/Sub, qui abandonne la
   notification. Prenez un plan payant pour l'API et le worker.
+
+---
+
+## Domaine propre : `sav.runningupscale.com`
+
+L'adresse `csav-api.onrender.com` fonctionne, mais elle dit « prestataire
+technique » à un fournisseur ou à un agent, et elle est impossible à dicter au
+téléphone. Un sous-domaine de la boutique règle les deux.
+
+Le domaine est déclaré dans `render.yaml` (`services[csav-api].domains`) et non
+posé à la main dans l'interface : un domaine cliqué disparaît au prochain
+environnement recréé depuis ce fichier, et personne ne se souvient de le
+remettre.
+
+### 1. L'enregistrement DNS
+
+Chez le gestionnaire DNS de `runningupscale.com` — dans l'admin Shopify si le
+domaine y est géré (**Paramètres → Domaines**), chez le registrar sinon :
+
+| Type | Nom | Valeur |
+|---|---|---|
+| CNAME | `sav` | `csav-api.onrender.com` |
+
+Un CNAME et non un A : l'adresse IP de Render change sans prévenir, le nom
+d'hôte non.
+
+Render détecte l'enregistrement en quelques minutes et demande seul le
+certificat TLS. Tant qu'il n'est pas émis, le navigateur affiche un
+avertissement de sécurité — c'est attendu, pas une panne.
+
+### 2. Ce qu'il faut basculer *ensuite*, dans cet ordre
+
+`APP_URL` sert à fabriquer trois choses qui vivent hors de l'application : les
+adresses de retour OAuth, l'URL du webhook Pub/Sub, et les liens de travail
+transmis aux fournisseurs. La changer sans prévenir les tiers concernés coupe
+les connexions.
+
+1. **Google Cloud Console** → identifiants OAuth → ajouter l'URI de redirection
+   `https://sav.runningupscale.com/auth/google/callback`. **Ajouter**, pas
+   remplacer : l'ancienne doit rester le temps de la bascule.
+2. **Shopify Partners** → l'application → URL de l'app et URLs de redirection
+   autorisées, même logique d'ajout.
+3. **Render** → service `csav-api` → `APP_URL` =
+   `https://sav.runningupscale.com`. Le worker et le cron la recopient
+   automatiquement (`fromService`), rien à faire de leur côté.
+4. Reconnecter Gmail une fois : le watch Pub/Sub porte l'ancienne adresse de
+   webhook jusqu'à son renouvellement.
+
+L'adresse `onrender.com` continue de répondre après la bascule, et c'est
+voulu : les liens de travail déjà transmis aux fournisseurs la portent en dur.
+Les couper au moment précis où l'on gagne une jolie URL serait un mauvais
+échange.
+
+### 3. Et `runningupscale.com/resolv` ?
+
+Une redirection d'URL Shopify (**Boutique en ligne → Navigation → Redirections
+d'URL**) accepte une cible externe : `/resolv` → `https://sav.runningupscale.com`.
+Elle reste utile après la bascule — c'est l'adresse qu'on retient de tête.

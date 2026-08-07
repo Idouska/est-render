@@ -37,6 +37,20 @@ services:
     plan: starter
     region: frankfurt
     healthCheckPath: /health
+
+    # Domaine propre du SAV.
+    #
+    # Déclaré ici plutôt que cliqué dans l'interface Render : un domaine posé
+    # à la main disparaît au prochain environnement recréé depuis ce fichier,
+    # et personne ne se souvient de le remettre. Render demande le certificat
+    # dès que l'enregistrement DNS pointe sur lui.
+    #
+    # L'ancienne adresse continue de répondre : les liens de travail déjà
+    # transmis aux fournisseurs la portent en dur, et les couper au moment où
+    # l'on gagne une jolie URL serait un mauvais échange.
+    domains:
+      - sav.runningupscale.com
+
     # Les migrations tournent avant la bascule du trafic, une seule fois par
     # déploiement — surtout pas au démarrage de chaque processus.
     preDeployCommand: npx prisma migrate deploy
