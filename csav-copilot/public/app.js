@@ -76,6 +76,12 @@ function fullDate(iso) {
   });
 }
 
+/** Date + heure : sur les commandes, l'heure sert à trancher les litiges. */
+function dateTime(iso) {
+  if (!iso) return '';
+  return `${fullDate(iso)} à ${shortTime(iso)}`;
+}
+
 /** Échappe le texte avant insertion : les mails viennent de l'extérieur. */
 function esc(value) {
   return String(value ?? '')
@@ -2027,7 +2033,7 @@ function renderOrder(ticket, order, orderError) {
     container.innerHTML =
       '<dl>' +
       row('Numéro', order.name, true) +
-      row('Passée le', fullDate(order.createdAt)) +
+      row('Passée le', dateTime(order.createdAt)) +
       row('Montant', euro(order.totalPrice, order.currency), true) +
       row('Paiement', order.displayFinancialStatus ?? '—') +
       row('Préparation', order.displayFulfillmentStatus ?? '—') +
@@ -2092,7 +2098,7 @@ async function searchCandidates(ticketId) {
         (order) => `<li>
           <button class="candidate" data-order="${esc(order.id)}">
             <b>${esc(order.name)}</b>
-            <span>${fullDate(order.createdAt)} · ${euro(order.totalPrice, order.currency)}</span>
+            <span>${dateTime(order.createdAt)} · ${euro(order.totalPrice, order.currency)}</span>
           </button>
         </li>`,
       )
@@ -3960,7 +3966,7 @@ function renderOrders() {
         (order) => `<tr class="grid-row" data-order="${esc(order.id)}">
           <td class="mono"><b>${esc(order.name)}</b></td>
           <td>${esc(order.customer?.displayName ?? order.customer?.email ?? 'Client inconnu')}</td>
-          <td>${fullDate(order.createdAt)}</td>
+          <td>${dateTime(order.createdAt)}</td>
           <td>${statusTag(order.displayFinancialStatus, FINANCIAL_LABELS, ['PENDING', 'PARTIALLY_PAID', 'EXPIRED'])}</td>
           <td>${statusTag(order.displayFulfillmentStatus, FULFILLMENT_LABELS, ['UNFULFILLED', 'ON_HOLD'])}</td>
           <td class="num mono">${euro(order.totalPrice, order.currency)}</td>
@@ -4058,7 +4064,7 @@ function renderOrderDetail(order) {
         <span class="tag ${
           ful === 'FULFILLED' || ful === 'DELIVERED' ? 'st-CLOSED' : 'st-NEW'
         }">${esc(FUL_LABELS[ful] ?? ful ?? '—')}</span>
-        <span class="ordv-when">${fullDate(order.createdAt)}</span>
+        <span class="ordv-when">${dateTime(order.createdAt)}</span>
       </div>
       <b class="ordv-total mono">${esc(euro(order.totalPrice, order.currency))}</b>
     </div>
@@ -4340,6 +4346,9 @@ function renderSettings() {
               <button class="btn btn-small" data-mbx-learn="${esc(
                 mailbox.id,
               )}">Apprendre de l’historique</button>
+              <button class="btn btn-small btn-danger" data-mbx-purge="${esc(
+                mailbox.id,
+              )}">Effacer ses tickets</button>
               <button class="btn btn-small btn-danger" data-mbx-off="${esc(
                 mailbox.id,
               )}">Débrancher</button>
@@ -4367,6 +4376,42 @@ function renderSettings() {
       gmail.connected ? '' : ' btn-primary'
     }" href="/auth/google">${gmail.connected ? '＋ Ajouter une boîte' : 'Connecter Gmail'}</a>`,
   });
+
+  // Effacement des tickets d'une boîte. Séparé du débranchement, qui conserve
+  // l'historique à dessein : une boîte de travail débranchée garde son SAV, une
+  // boîte branchée par erreur doit pouvoir disparaître entièrement.
+  $('set-gmail')
+    .querySelectorAll('[data-mbx-purge]')
+    .forEach((button) =>
+      button.addEventListener('click', async () => {
+        const address = button.closest('.mbx')?.querySelector('code')?.textContent ?? '';
+
+        if (
+          !confirm(
+            `Effacer TOUS les tickets venus de ${address} ?\n\n` +
+              'Les messages, brouillons et pièces jointes partent avec eux. ' +
+              'Irréversible.',
+          )
+        ) {
+          return;
+        }
+
+        button.disabled = true;
+        try {
+          const result = await api(`/api/mailboxes/${button.dataset.mbxPurge}/tickets`, {
+            method: 'DELETE',
+          });
+          toast(`${result.removed} ticket${result.removed > 1 ? 's' : ''} effacé${
+            result.removed > 1 ? 's' : ''
+          }.`);
+          await loadQueue();
+        } catch (error) {
+          toast(error.message, true);
+        } finally {
+          button.disabled = false;
+        }
+      }),
+    );
 
   // Relève manuelle : court-circuite Pub/Sub, Redis et le worker. Si elle
   // ramène du courrier que l'arrivée automatique n'avait pas vu, la panne est

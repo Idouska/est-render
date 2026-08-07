@@ -813,6 +813,50 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
+  /**
+   * Efface les tickets venus d'une boîte.
+   *
+   * Débrancher conserve l'historique, et c'est le bon choix par défaut : perdre
+   * le SAV parce qu'on retire une adresse serait une catastrophe silencieuse.
+   * Mais une boîte branchée par erreur — une adresse personnelle, un essai —
+   * laisse des milliers de messages qui ne sont pas du service après-vente :
+   * factures, alertes bancaires, rendez-vous médicaux. Ils faussent les
+   * compteurs, encombrent la file et donnent à l'IA une matière qui n'a rien à
+   * voir avec la boutique.
+   */
+  app.delete<{ Params: { id: string } }>(
+    "/api/mailboxes/:id/tickets",
+    { preHandler: requirePermission("configure") },
+    async (request, reply) => {
+      const { merchantId, userId } = request.session;
+
+      const mailbox = await prisma.gmailConnection.findFirst({
+        where: { id: request.params.id, merchantId },
+        select: { id: true, emailAddress: true },
+      });
+      if (!mailbox) return reply.code(404).send({ error: "Boîte introuvable" });
+
+      // Les messages et pièces jointes suivent par cascade ; les brouillons
+      // aussi. Rien à supprimer à la main, rien à oublier.
+      const removed = await prisma.ticket.deleteMany({
+        where: { merchantId, mailboxId: mailbox.id },
+      });
+
+      await recordAudit({
+        merchantId,
+        actorType: "USER",
+        actorId: userId,
+        action: "mailbox.tickets.purged",
+        targetType: "GmailConnection",
+        targetId: mailbox.id,
+        metadata: { emailAddress: mailbox.emailAddress, removed: removed.count },
+        ipAddress: request.ip,
+      });
+
+      return reply.send({ removed: removed.count });
+    },
+  );
+
   app.delete<{ Params: { id: string } }>(
     "/api/mailboxes/:id",
     { preHandler: requirePermission("configure") },
