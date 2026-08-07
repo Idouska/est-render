@@ -1802,7 +1802,6 @@ function renderDetail() {
 
   // Le détail de commande appartient à la consultation hors ticket : le
   // laisser affiché sous un vrai fil ferait lire deux dossiers à la fois.
-  $('ordv').hidden = true;
 
   // L'escalade n'a d'objet qu'avec un ticket ouvert et le droit d'escalader.
   const escalate = $('new-escalation');
@@ -4335,10 +4334,7 @@ const FUL_LABELS = {
  * Ici elle occupe la place qui lui revient — articles avec leurs vignettes,
  * montants, statuts, adresse, colis.
  */
-function renderOrderDetail(order) {
-  const view = $('ordv');
-  view.hidden = false;
-
+function orderDetailMarkup(order) {
   const fin = order.displayFinancialStatus;
   const ful = order.displayFulfillmentStatus;
 
@@ -4377,7 +4373,7 @@ function renderOrderDetail(order) {
 
   const address = order.shippingAddress;
 
-  view.innerHTML = `
+  return `
     <div class="ordv-head">
       <div class="ordv-badges">
         <span class="tag ${fin === 'PAID' ? 'st-CLOSED' : 'st-NEEDS_REVIEW'}">${esc(
@@ -4419,29 +4415,69 @@ function renderOrderDetail(order) {
     </div>`;
 }
 
+/**
+ * Fiche complète d'une commande, par-dessus l'écran courant.
+ *
+ * Elle basculait sur l'écran SAV et se servait des panneaux du ticket : on
+ * cliquait sur une commande et on se retrouvait dans les mails, la liste des
+ * commandes perdue et rien à quoi revenir. Or consulter une commande n'est
+ * pas traiter un mail — c'est une lecture, et une lecture se fait sans quitter
+ * ce qu'on faisait.
+ *
+ * Le panneau réutilise la feuille latérale déjà employée pour la fiche client :
+ * même geste pour fermer, même comportement au clavier, rien de nouveau à
+ * apprendre.
+ */
 async function openOrderSheet(id) {
-  try {
-    const { order } = await api(`/api/orders/${encodeURIComponent(id)}`);
-    // On réutilise les panneaux de la fiche ticket : ce sont les mêmes
-    // informations, et le remboursement y est déjà câblé.
-    renderCustomer(order);
-    renderOrder(null, order, null);
-    renderShipping(order);
-    setView('tickets');
-    $('d-subject').textContent = `Commande ${order.name}`;
-    $('d-meta').innerHTML = `${esc(order.customer?.displayName ?? '')} · <code>${esc(
-      order.customer?.email ?? '—',
-    )}</code>`;
+  $('sheet-name').textContent = 'Commande';
+  $('sheet-email').textContent = '';
+  $('sheet-body').innerHTML = '<p class="empty">Chargement…</p>';
+  $('sheet-wrap').hidden = false;
 
-    renderOrderDetail(order);
-    renderBrief(null);
-    $('d-fold').hidden = true;
-    $('draft-zone').hidden = true;
-    $('actbar').hidden = true;
-    $('no-draft').hidden = true;
+  let order;
+  try {
+    ({ order } = await api(`/api/orders/${encodeURIComponent(id)}`));
   } catch (error) {
-    toast(error.message, true);
+    $('sheet-body').innerHTML = `<p class="empty">${esc(error.message)}</p>`;
+    return;
   }
+
+  $('sheet-name').textContent = `Commande ${order.name}`;
+  $('sheet-email').textContent = order.customer?.email ?? '';
+
+  const tracking = (order.fulfillments ?? [])
+    .flatMap((fulfillment) => fulfillment.trackingInfo ?? [])
+    .find((info) => info.number);
+
+  $('sheet-body').innerHTML =
+    `<section class="sheet-group">${orderDetailMarkup(order)}</section>` +
+    // Les deux gestes qui suivent une lecture de commande : voir où est le
+    // colis, ou voir qui est le client. Les chercher ailleurs annulerait le
+    // bénéfice de ne pas avoir changé d'écran.
+    `<section class="sheet-group sheet-acts">
+       ${
+         tracking
+           ? `<button class="btn btn-small btn-primary" data-track="${esc(
+               tracking.number,
+             )}"${
+               tracking.url ? ` data-track-url="${esc(tracking.url)}"` : ''
+             }>Suivre le colis</button>`
+           : ''
+       }
+       ${
+         order.customer?.email
+           ? `<button class="btn btn-small" id="ordv-customer">Fiche client</button>`
+           : ''
+       }
+       <a class="btn btn-small" target="_blank" rel="noopener"
+         href="https://${esc(state.me?.merchant?.shopDomain ?? '')}/admin/orders/${esc(
+           String(order.id ?? '').split('/').pop() ?? '',
+         )}">Ouvrir dans Shopify</a>
+     </section>`;
+
+  $('ordv-customer')?.addEventListener('click', () =>
+    void openCustomerSheet(order.customer.email, order.customer.displayName ?? ''),
+  );
 }
 
 $('orders-more').addEventListener('click', () => loadOrders());

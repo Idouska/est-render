@@ -4500,3 +4500,12 @@ textarea:focus-visible {
   flex-wrap: wrap;
 }
 .thread-fold > summary #d-translate { margin-left: auto; }
+
+/* Actions au pied de la fiche commande : les trois gestes qui suivent une
+   lecture, alignés et de même poids. */
+.sheet-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
