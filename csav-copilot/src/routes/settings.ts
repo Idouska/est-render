@@ -857,6 +857,54 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
+  /*
+   * Messages orphelins : arrivés par une boîte qui n'est plus branchée.
+   *
+   * Débrancher une adresse dénoue le lien sans effacer ce qu'elle a apporté —
+   * le message reste, sa provenance disparaît. Le bouton « Effacer ses
+   * tickets » de la carte devient alors inatteignable : la carte n'existe
+   * plus. Restait une file peuplée de courrier privé qu'aucun geste de
+   * l'interface ne pouvait retirer.
+   */
+  app.get(
+    "/api/tickets/orphans",
+    { preHandler: requirePermission("configure") },
+    async (request, reply) => {
+      const { merchantId } = request.session;
+
+      const count = await prisma.ticket.count({
+        where: { merchantId, mailboxId: null },
+      });
+
+      return reply.send({ count });
+    },
+  );
+
+  app.delete(
+    "/api/tickets/orphans",
+    { preHandler: requirePermission("configure") },
+    async (request, reply) => {
+      const { merchantId, userId } = request.session;
+
+      const removed = await prisma.ticket.deleteMany({
+        where: { merchantId, mailboxId: null },
+      });
+
+      await recordAudit({
+        merchantId,
+        actorType: "USER",
+        actorId: userId,
+        action: "tickets.orphans.purged",
+        targetType: "Merchant",
+        targetId: merchantId,
+        metadata: { removed: removed.count },
+        ipAddress: request.ip,
+      });
+
+      return reply.send({ removed: removed.count });
+    },
+  );
+
   app.delete<{ Params: { id: string } }>(
     "/api/mailboxes/:id",
     { preHandler: requirePermission("configure") },
@@ -910,6 +958,15 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
       // Débrancher la dernière boîte couperait toute entrée de courrier : on
       // laisse faire, mais l'envoi automatique n'a plus de sens sans elle.
       await prisma.$transaction([
+        /*
+         * Le courrier part avec l'adresse qui l'a apporté.
+         *
+         * Le laisser en place rendait la file impossible à nettoyer : sans son
+         * lien de provenance, plus rien ne distinguait un message d'une boîte
+         * débranchée par erreur d'un message de la boîte du SAV. Débrancher
+         * est déjà un geste délibéré, précédé de sa confirmation.
+         */
+        prisma.ticket.deleteMany({ where: { merchantId, mailboxId: mailbox.id } }),
         prisma.gmailConnection.delete({ where: { id: mailbox.id } }),
         ...(mailbox.isDefault && remaining
           ? [

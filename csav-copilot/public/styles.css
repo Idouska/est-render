@@ -4390,3 +4390,18 @@ textarea:focus-visible {
 @media (max-width: 700px) {
   .alarm .btn { margin-left: 0; width: 100%; justify-content: center; }
 }
+
+/* Bandeau des messages orphelins, dans la carte Gmail des Réglages. Teinté
+   comme une alerte : c'est du courrier qui n'aurait jamais dû entrer. */
+.mbx-orphans {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--crit) 35%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--crit) 8%, transparent);
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}

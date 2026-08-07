@@ -525,6 +525,58 @@ async function loadMetrics() {
     : 'toute réponse passe par vous';
 }
 
+/**
+ * Messages restés d'une boîte débranchée.
+ *
+ * Ils n'ont plus de carte : « Effacer ses messages » vit sur la boîte, et la
+ * boîte a disparu. Sans ce bandeau, du courrier privé — banque, santé,
+ * abonnements — reste dans la file sans aucun geste pour l'en sortir.
+ */
+async function renderOrphans() {
+  const box = $('mbx-orphans');
+  if (!box) return;
+
+  let count = 0;
+  try {
+    count = (await api('/api/tickets/orphans')).count ?? 0;
+  } catch {
+    return;
+  }
+
+  box.hidden = count === 0;
+  if (count === 0) return;
+
+  box.innerHTML =
+    `<b class="set-alert">${count} message${count > 1 ? 's' : ''}</b> ` +
+    `${count > 1 ? 'proviennent' : 'provient'} d’une boîte débranchée. ` +
+    `<button class="btn btn-small btn-danger" id="orphans-purge">Les effacer</button>`;
+
+  $('orphans-purge').addEventListener('click', async () => {
+    if (
+      !confirm(
+        `Effacer ${count} message${count > 1 ? 's' : ''} venus de boîtes débranchées ?\n\n` +
+          'Les brouillons et pièces jointes partent avec eux. Irréversible.',
+      )
+    ) {
+      return;
+    }
+
+    const button = $('orphans-purge');
+    button.disabled = true;
+    try {
+      const result = await api('/api/tickets/orphans', { method: 'DELETE' });
+      toast(`${result.removed} message${result.removed > 1 ? 's' : ''} effacé${
+        result.removed > 1 ? 's' : ''
+      }.`);
+      box.hidden = true;
+      await loadQueue();
+    } catch (error) {
+      toast(error.message, true);
+      button.disabled = false;
+    }
+  });
+}
+
 /* -------------------------------------------------------- file de tickets */
 
 /** Ancienneté en jours depuis la dernière prise de parole. */
@@ -4362,7 +4414,7 @@ function renderSettings() {
               )}">Apprendre de l’historique</button>
               <button class="btn btn-small btn-danger" data-mbx-purge="${esc(
                 mailbox.id,
-              )}">Effacer ses tickets</button>
+              )}">Effacer ses messages</button>
               <button class="btn btn-small btn-danger" data-mbx-off="${esc(
                 mailbox.id,
               )}">Débrancher</button>
@@ -4374,6 +4426,10 @@ function renderSettings() {
         .join('')
     : 'Aucune boîte connectée — rien n’est ingéré.';
 
+  // Emplacement du bandeau des messages orphelins. Rempli après coup : leur
+  // nombre demande un comptage que la page des connexions n'a pas à attendre.
+  const gmailBlock = `${gmailDetail}<div class="mbx-orphans" id="mbx-orphans" hidden></div>`;
+
   renderConnection($('set-gmail'), {
     label: boxes.length > 1 ? 'Boîtes mail' : 'Boîte mail',
     status: gmail.simulated
@@ -4383,7 +4439,7 @@ function renderSettings() {
         : `${boxes.length} connectée${boxes.length > 1 ? 's' : ''}`,
     connected: gmail.connected,
     simulated: gmail.simulated,
-    detail: gmailDetail,
+    detail: gmailBlock,
     // « Ajouter » et non « Reconnecter » : le même bouton sert aux deux, mais
     // c'est l'ajout qu'on cherche une fois la première boîte en place.
     actions: `<a class="btn btn-small${
@@ -4394,6 +4450,9 @@ function renderSettings() {
   // Effacement des tickets d'une boîte. Séparé du débranchement, qui conserve
   // l'historique à dessein : une boîte de travail débranchée garde son SAV, une
   // boîte branchée par erreur doit pouvoir disparaître entièrement.
+  //
+  // Voir aussi renderOrphans() plus bas : le courrier des boîtes débranchées
+  // avant ce correctif n'a plus de carte d'où être effacé.
   $('set-gmail')
     .querySelectorAll('[data-mbx-purge]')
     .forEach((button) =>
@@ -4426,6 +4485,8 @@ function renderSettings() {
         }
       }),
     );
+
+  renderOrphans();
 
   // Relève manuelle : court-circuite Pub/Sub, Redis et le worker. Si elle
   // ramène du courrier que l'arrivée automatique n'avait pas vu, la panne est
