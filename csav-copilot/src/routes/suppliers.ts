@@ -255,6 +255,7 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
         createdAt: true,
         acknowledgedAt: true,
         emailedAt: true,
+        handledAt: true,
         supplier: { select: { id: true, name: true } },
         ticket: { select: { id: true, subject: true, customerName: true, customerEmail: true } },
       },
@@ -288,6 +289,81 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
       })),
     });
   });
+
+  /**
+   * Ce que les fournisseurs ont renvoyé et qui attend le marchand.
+   *
+   * Symétrique du compteur « Update » : celui-ci compte ce que j'attends
+   * d'eux, celui-là ce qu'ils m'ont rendu et que je n'ai pas traité. Trois
+   * sources, un seul chiffre — l'agent n'a pas à savoir laquelle a bougé pour
+   * savoir qu'il doit ouvrir l'écran.
+   */
+  app.get('/api/supplier-activity', async (request, reply) => {
+    const { merchantId } = request.session;
+
+    const [answered, issues, changes] = await Promise.all([
+      // Escalades auxquelles le fournisseur a répondu, pas encore reprises.
+      prisma.supplierEscalation.count({ where: { merchantId, status: 'ANSWERED' } }),
+      /*
+       * Signalements venus de l'atelier : téléphone incomplet, rupture,
+       * article abîmé. Ils entrent dans la file comme des messages, avec une
+       * adresse d'origine reconnaissable — c'est ce qui permet de les compter
+       * ici sans les confondre avec du courrier client.
+       */
+      prisma.ticket.count({
+        where: {
+          merchantId,
+          status: { in: ['NEW', 'NEEDS_REVIEW'] },
+          customerEmail: { startsWith: 'fournisseur+' },
+        },
+      }),
+      // Demandes auxquelles il a répondu — accord ou refus — et dont je n'ai
+      // pas encore pris acte auprès du client.
+      prisma.supplierAlert.count({
+        where: { merchantId, status: { not: 'PENDING' }, handledAt: null },
+      }),
+    ]);
+
+    return reply.send({
+      total: answered + issues + changes,
+      answered,
+      issues,
+      changes,
+    });
+  });
+
+  /**
+   * « J'ai traité » : le marchand a répondu au client, la demande sort du
+   * compteur. Elle reste dans l'historique — c'est un accusé, pas un effacement.
+   */
+  app.post<{ Params: { id: string } }>(
+    '/api/changes/:id/handled',
+    { preHandler: requirePermission('reply') },
+    async (request, reply) => {
+      const { merchantId, userId } = request.session;
+
+      const updated = await prisma.supplierAlert.updateMany({
+        where: { id: request.params.id, merchantId, status: { not: 'PENDING' } },
+        data: { handledAt: new Date() },
+      });
+
+      if (updated.count === 0) {
+        return reply.code(404).send({ error: 'Demande introuvable, ou toujours en attente.' });
+      }
+
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId: userId,
+        action: 'supplier.change_handled',
+        targetType: 'SupplierAlert',
+        targetId: request.params.id,
+        ipAddress: request.ip,
+      });
+
+      return reply.send({ handled: true });
+    },
+  );
 
   /**
    * Annulation d'une demande de changement.

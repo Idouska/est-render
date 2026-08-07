@@ -758,6 +758,14 @@ model SupplierAlert {
   /// marchand de décrocher son téléphone, pas à l'outil d'insister.
   remindedAt     DateTime?
 
+  /// Le marchand a pris acte de la réponse du fournisseur.
+  ///
+  /// Sans ce champ, une demande confirmée resterait comptée indéfiniment
+  /// parmi les choses à traiter : le compteur ne redescendrait jamais, et un
+  /// compteur qui ne redescend pas cesse d'être regardé. C'est le geste qui
+  /// dit « j'ai répondu au client », pas « le fournisseur a répondu ».
+  handledAt      DateTime?
+
   merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
   supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
   ticket   Ticket?  @relation(fields: [ticketId], references: [id], onDelete: SetNull)

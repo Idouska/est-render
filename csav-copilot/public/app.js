@@ -690,9 +690,9 @@ async function loadQueue({ append = false } = {}) {
 
   state.navCounts = {
     ...state.navCounts,
-    suppliers: state.queueCounts?.AWAITING_SUPPLIER ?? 0,
     disputes: state.disputeCount ?? 0,
     changes: state.changesPending ?? 0,
+    suppliers: state.supplierActivity?.total ?? state.navCounts?.suppliers ?? 0,
   };
   void refreshChangesCount();
   renderNav();
@@ -2924,6 +2924,51 @@ function splitList(value) {
     .filter(Boolean);
 }
 
+
+/**
+ * Ce que les ateliers ont renvoyé, en tête de l'écran Fournisseurs.
+ *
+ * Un chiffre dans la navigation dit qu'il y a quelque chose ; encore faut-il
+ * que l'écran dise quoi, et y mène. Trois natures, trois destinations — sans
+ * ça la pastille devient une alarme qu'on apprend à ignorer.
+ */
+async function renderSupplierActivity() {
+  const box = $('sup-activity');
+  if (!box) return;
+
+  let activity = state.supplierActivity;
+  try {
+    activity = await api('/api/supplier-activity');
+    state.supplierActivity = activity;
+    state.navCounts = { ...state.navCounts, suppliers: activity.total };
+    renderNav();
+  } catch {
+    // Le carnet de contacts reste utilisable sans ce bandeau.
+  }
+
+  box.hidden = !activity || activity.total === 0;
+  if (box.hidden) return;
+
+  const line = (count, label, view) =>
+    count > 0
+      ? `<button class="sup-act" data-goto="${view}">
+           <b>${count}</b><span>${esc(label)}</span>
+         </button>`
+      : '';
+
+  box.innerHTML =
+    `<span class="rail-title">Retours de vos ateliers</span>
+     <div class="sup-act-row">
+       ${line(activity.answered, activity.answered > 1 ? 'escalades répondues' : 'escalade répondue', 'tickets')}
+       ${line(activity.issues, activity.issues > 1 ? 'signalements d’atelier' : 'signalement d’atelier', 'tickets')}
+       ${line(activity.changes, activity.changes > 1 ? 'changements à répercuter' : 'changement à répercuter', 'changes')}
+     </div>`;
+
+  box.querySelectorAll('[data-goto]').forEach((button) =>
+    button.addEventListener('click', () => setView(button.dataset.goto)),
+  );
+}
+
 /** `id` absent : création. Sinon édition, avec la suppression proposée. */
 function openSupplierForm(id) {
   const supplier = id ? state.suppliers.find((candidate) => candidate.id === id) : null;
@@ -4696,15 +4741,32 @@ async function refreshChangesCount() {
   changesCountAt = Date.now();
 
   try {
-    const [{ pending }, { counts }] = await Promise.all([
+    const [{ pending }, { counts }, activity] = await Promise.all([
       api('/api/changes'),
       // Commandes, clients, catalogue, colis : les volumes, en gris. Seuls
       // les comptes qui réclament une action sont rouges.
       api('/api/nav-counts'),
+      // Ce que les ateliers ont renvoyé : réponses aux escalades, signalements
+      // depuis l'atelier, demandes traitées dont il faut informer le client.
+      api('/api/supplier-activity'),
     ]);
 
     state.changesPending = pending;
-    state.navCounts = { ...state.navCounts, ...counts, changes: pending };
+    state.supplierActivity = activity;
+    state.navCounts = {
+      ...state.navCounts,
+      ...counts,
+      changes: pending,
+      /*
+       * Deux compteurs, deux attentes opposées.
+       *
+       * « Update » compte ce que j'attends du fournisseur ; « Fournisseurs »
+       * ce qu'il m'a rendu et que je n'ai pas repris. Les confondre dans un
+       * seul chiffre ferait clignoter la navigation pour du travail qui n'est
+       * pas le mien.
+       */
+      suppliers: activity.total,
+    };
     renderNav();
   } catch {
     // Un compteur qui manque un tour vaut mieux qu'une erreur à l'écran.
@@ -4745,7 +4807,7 @@ function renderNav() {
            * faite à un client.
            */
           const dim = ['orders', 'customers', 'catalog', 'tracking'].includes(view);
-          const hot = view === 'changes' && tally > 0;
+          const hot = ['changes', 'suppliers'].includes(view) && tally > 0;
           const shown = tally > 9999 ? '9999+' : tally;
           return `<button class="nav-item" data-view="${view}" aria-current="${
             view === state.view
@@ -4948,7 +5010,11 @@ function renderChangesScreen() {
               ? `<button class="chgc-cancel" data-chg-cancel="${esc(
                   change.id,
                 )}">Annuler la demande</button>`
-              : ''
+              : change.handledAt
+                ? '<span class="chgc-done">✓ répercuté au client</span>'
+                : `<button class="chgc-handled" data-chg-handled="${esc(
+                    change.id,
+                  )}">J’ai prévenu le client</button>`
           }
         </div>`;
       })
@@ -4967,6 +5033,25 @@ function renderChangesScreen() {
       if (!ticketId) return;
       setView('tickets');
       void selectTicket(ticketId);
+    }),
+  );
+
+  rows.querySelectorAll('[data-chg-handled]').forEach((button) =>
+    button.addEventListener('click', async (event) => {
+      event.stopPropagation();
+      button.disabled = true;
+      try {
+        await api(`/api/changes/${button.dataset.chgHandled}/handled`, {
+          method: 'POST',
+          body: '{}',
+        });
+        toast('Noté — la demande sort de vos retours fournisseur.');
+        changesCountAt = 0;
+        await loadChanges();
+      } catch (error) {
+        toast(error.message, true);
+        button.disabled = false;
+      }
     }),
   );
 
@@ -5041,7 +5126,10 @@ const VIEW_LOADERS = {
   orders: () => !state.orders.loaded && loadOrders({ reset: true }),
   customers: () => !state.customers.loaded && loadCustomers({ reset: true }),
   catalog: () => !state.catalog.loaded && loadCatalog({ reset: true }),
-  suppliers: () => renderSuppliers(),
+  suppliers: () => {
+    renderSuppliers();
+    void renderSupplierActivity();
+  },
   changes: () => loadChanges(),
   tracking: () => loadTracking(),
   refunds: () => loadRefunds(),

@@ -5033,3 +5033,51 @@ textarea:focus-visible {
 .pickwrap:last-of-type .pickbox { left: auto; right: 0; }
 
 .pick-empty { padding: 14px 10px; font-size: 13px; color: var(--ink-mute); text-align: center; }
+
+/* --------------------------------------------- retours des ateliers -------
+   En tête de l'écran Fournisseurs : le détail du chiffre que porte la
+   navigation, et le chemin vers l'écran qui le traite. */
+.sup-activity {
+  border: 1px solid color-mix(in srgb, var(--crit) 30%, var(--line));
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--crit) 5%, transparent);
+  padding: 11px 14px 13px;
+  margin-bottom: 14px;
+}
+.sup-act-row { display: flex; gap: 9px; flex-wrap: wrap; margin-top: 7px; }
+
+.sup-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 13px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.sup-act:hover { border-color: var(--crit); }
+.sup-act b {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--crit);
+  font-variant-numeric: tabular-nums;
+}
+
+.chgc-handled {
+  margin-top: 8px;
+  padding: 7px 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--ink);
+  cursor: pointer;
+}
+.chgc-handled:hover { border-color: var(--accent); color: var(--accent); }
+.chgc-done { display: inline-block; margin-top: 8px; font-size: 12.5px; color: var(--ok); }
