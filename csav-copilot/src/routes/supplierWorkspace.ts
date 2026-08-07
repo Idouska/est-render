@@ -9,6 +9,7 @@ import { ordersToXlsx } from '../services/export/ordersXlsx.ts';
 import { getShopifyClient } from '../services/shopify/client.ts';
 import { listOrders } from '../services/shopify/orders.ts';
 import { decodePhoto, photoSchema, sendParcelPhoto, toParcelView } from './parcels.ts';
+import { ordersForSupplier, type RoutingRules } from '../services/suppliers/routing.ts';
 
 /**
  * Espace de travail permanent du fournisseur.
@@ -27,6 +28,9 @@ interface Workspace {
   supplierId: string;
   supplierName: string;
   ordersAccess: 'NONE' | 'ASSIGNED' | 'ALL';
+  vendors: string[];
+  skuPrefixes: string[];
+  isDefault: boolean;
 }
 
 /** Vérifie le jeton et l'accorde au fournisseur en base. */
@@ -49,6 +53,9 @@ async function authorize(
       active: true,
       portalTokenVersion: true,
       ordersAccess: true,
+      vendors: true,
+      skuPrefixes: true,
+      isDefault: true,
     },
   });
 
@@ -64,6 +71,9 @@ async function authorize(
     supplierId: supplier.id,
     supplierName: supplier.name,
     ordersAccess: supplier.ordersAccess,
+    vendors: supplier.vendors,
+    skuPrefixes: supplier.skuPrefixes,
+    isDefault: supplier.isDefault,
   };
 }
 
@@ -105,6 +115,14 @@ async function allowedOrderIds(workspace: Workspace): Promise<string[] | null> {
       ].filter(Boolean) as string[],
     ),
   ];
+}
+
+/** Règles des autres ateliers du marchand : elles bornent l'atelier par défaut. */
+async function otherSupplierRules(workspace: Workspace): Promise<RoutingRules[]> {
+  return prisma.supplier.findMany({
+    where: { merchantId: workspace.merchantId, active: true, id: { not: workspace.supplierId } },
+    select: { id: true, vendors: true, skuPrefixes: true, isDefault: true },
+  });
 }
 
 /** Fenêtre de commandes demandée, « hier » par défaut. */
@@ -164,10 +182,25 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
         cursor: null,
       });
 
-      // Le filtre s'applique après Shopify : la recherche par identifiant de
-      // commande n'accepte pas de liste, et l'écart tient à quelques dizaines
-      // de lignes sur une journée.
-      const visible = allowed ? page.orders.filter((order) => allowed.includes(order.id)) : page.orders;
+      /*
+       * Le filtre s'applique après Shopify : la recherche par identifiant de
+       * commande n'accepte pas de liste, et l'écart tient à quelques dizaines
+       * de lignes sur une journée.
+       *
+       * Aux commandes explicitement confiées s'ajoutent celles que les règles
+       * du fournisseur réclament — sa marque, son préfixe de référence — et,
+       * s'il est l'atelier par défaut, celles qu'aucun autre ne réclame. Les
+       * règles des autres sont donc nécessaires ici : c'est ce qui distingue
+       * « personne ne la prend » de « quelqu'un d'autre la prend ».
+       */
+      const visible = allowed
+        ? ordersForSupplier(
+            page.orders,
+            { id: workspace.supplierId, ...workspace },
+            await otherSupplierRules(workspace),
+            allowed,
+          )
+        : page.orders;
 
       // Colis déjà saisis, rapprochés par identifiant de commande : le
       // fournisseur doit voir ce qu'il a fait hier sans le ressaisir.
@@ -424,6 +457,62 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
     },
   );
 
+  /**
+   * Alertes urgentes non encore vues.
+   *
+   * Servies à part des commandes : elles doivent s'afficher même quand la
+   * période demandée ne contient aucune commande, et surtout ne pas dépendre
+   * d'un appel Shopify qui peut échouer. Une alerte qu'on ne voit pas parce
+   * que la boutique répond mal ne vaut pas mieux que pas d'alerte.
+   */
+  app.get<{ Params: { id: string }; Querystring: { token?: string } }>(
+    '/api/workspace/:id/alerts',
+    async (request, reply) => {
+      const workspace = await authorize(request, reply);
+      if (!workspace) return;
+
+      const alerts = await prisma.supplierAlert.findMany({
+        where: {
+          merchantId: workspace.merchantId,
+          supplierId: workspace.supplierId,
+          acknowledgedAt: null,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+        select: {
+          id: true,
+          kind: true,
+          message: true,
+          orderName: true,
+          createdAt: true,
+        },
+      });
+
+      return reply.send({ alerts });
+    },
+  );
+
+  /** Accusé de lecture : l'alerte disparaît de l'atelier, pas de l'historique. */
+  app.post<{ Params: { id: string; alertId: string }; Querystring: { token?: string } }>(
+    '/api/workspace/:id/alerts/:alertId/ack',
+    async (request, reply) => {
+      const workspace = await authorize(request, reply);
+      if (!workspace) return;
+
+      const updated = await prisma.supplierAlert.updateMany({
+        where: {
+          id: request.params.alertId,
+          merchantId: workspace.merchantId,
+          supplierId: workspace.supplierId,
+          acknowledgedAt: null,
+        },
+        data: { acknowledgedAt: new Date() },
+      });
+
+      return reply.send({ acknowledged: updated.count });
+    },
+  );
+
   app.get<{ Params: { id: string; parcelId: string }; Querystring: { token?: string } }>(
     '/api/workspace/:id/parcels/:parcelId/photo',
     async (request, reply) => {
@@ -454,6 +543,20 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
           customerEmail: z.string().email().max(200).nullish(),
           kind: z.enum(['PHONE', 'ADDRESS', 'STOCK', 'DAMAGE', 'OTHER']),
           note: z.string().min(3).max(2000),
+          /*
+           * Détail de l'article, pour une rupture.
+           *
+           * « Article indisponible » oblige l'agent à rouvrir la commande pour
+           * savoir lequel, dans quelle couleur, dans quelle taille — et à
+           * réécrire au fournisseur pour ce qu'il savait au moment où il l'a
+           * signalé. Les champs sont libres et facultatifs : un formulaire
+           * strict ferait renoncer au signalement.
+           */
+          product: z.string().max(200).nullish(),
+          color: z.string().max(80).nullish(),
+          size: z.string().max(40).nullish(),
+          sku: z.string().max(80).nullish(),
+          quantity: z.number().int().min(1).max(999).nullish(),
         })
         .safeParse(request.body);
 
@@ -505,7 +608,26 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
           direction: 'INBOUND',
           fromEmail: `fournisseur+${workspace.supplierId}@local`,
           subject,
-          bodyText: `Signalé par ${workspace.supplierName} depuis l'atelier.\n\n${parsed.data.note}`,
+          bodyText: [
+            `Signalé par ${workspace.supplierName} depuis l'atelier.`,
+            '',
+            // Le détail de l'article avant la note libre : c'est ce qui décide
+            // de la réponse au client, la note ne fait que l'expliquer.
+            [
+              parsed.data.product ? `Article : ${parsed.data.product}` : null,
+              parsed.data.color ? `Couleur : ${parsed.data.color}` : null,
+              parsed.data.size ? `Taille : ${parsed.data.size}` : null,
+              parsed.data.sku ? `Référence : ${parsed.data.sku}` : null,
+              parsed.data.quantity ? `Quantité : ${parsed.data.quantity}` : null,
+            ]
+              .filter(Boolean)
+              .join('\n'),
+            '',
+            parsed.data.note,
+          ]
+            .filter((line) => line !== '' || true)
+            .join('\n')
+            .replace(/\n{3,}/g, '\n\n'),
           receivedAt: new Date(),
         },
       });

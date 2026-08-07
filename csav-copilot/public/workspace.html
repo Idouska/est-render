@@ -38,6 +38,10 @@
         </div>
       </header>
 
+      <!-- Alertes urgentes du marchand. En tête, avant les commandes : elles
+           existent précisément pour interrompre le travail en cours. -->
+      <div id="ws-alerts"></div>
+
       <p class="hint" id="ws-count"></p>
       <div id="ws-orders"></div>
     </div>
@@ -59,6 +63,34 @@
               <option value="OTHER">Autre problème</option>
             </select>
           </label>
+          <!-- Détail de l'article, pour une rupture. Replié tant que la
+               nature n'est pas « indisponible » : demander la taille pour un
+               téléphone erroné ferait renoncer au signalement. -->
+          <div id="issue-item" hidden>
+            <label class="field">
+              Modèle
+              <input id="issue-product" type="text" placeholder="Ex. : Nike Mind 001" />
+            </label>
+            <div class="field-row">
+              <label class="field">
+                Couleur
+                <input id="issue-color" type="text" placeholder="Black Hyper Crimson" />
+              </label>
+              <label class="field">
+                Taille
+                <input id="issue-size" type="text" placeholder="45" />
+              </label>
+              <label class="field">
+                Quantité
+                <input id="issue-qty" type="number" min="1" max="999" value="1" />
+              </label>
+            </div>
+            <label class="field">
+              Référence (SKU)
+              <input id="issue-sku" type="text" placeholder="NIK-MIND001-BLK-45" />
+            </label>
+          </div>
+
           <label class="field">
             Détail
             <textarea id="issue-note" rows="4"

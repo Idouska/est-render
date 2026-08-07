@@ -271,6 +271,15 @@ $('ws-orders').addEventListener('click', async (event) => {
     state.issueOrder = state.orders.find((order) => order.id === issue.dataset.issue);
     $('issue-order').textContent = `Commande ${state.issueOrder?.name ?? ''}`;
     $('issue-note').value = '';
+    // Pré-rempli avec le premier article de la commande : dans neuf cas sur
+    // dix c'est celui qui manque, et le fournisseur n'a plus qu'à corriger.
+    const first = state.issueOrder?.lineItems?.[0];
+    $('issue-product').value = first?.title ?? '';
+    $('issue-color').value = first?.variantTitle ?? '';
+    $('issue-size').value = '';
+    $('issue-sku').value = first?.sku ?? '';
+    $('issue-qty').value = String(first?.quantity ?? 1);
+    toggleIssueItem();
     $('issue-modal').classList.add('open');
     return;
   }
@@ -342,6 +351,17 @@ $('issue-send').addEventListener('click', async () => {
         customerEmail: state.issueOrder.customer?.email ?? null,
         kind: $('issue-kind').value,
         note,
+        // Champs d'article : envoyés seulement pour une rupture, et seulement
+        // s'ils sont remplis — un champ vide n'apprend rien au marchand.
+        ...($('issue-kind').value === 'STOCK'
+          ? {
+              product: $('issue-product').value.trim() || null,
+              color: $('issue-color').value.trim() || null,
+              size: $('issue-size').value.trim() || null,
+              sku: $('issue-sku').value.trim() || null,
+              quantity: Number($('issue-qty').value) || null,
+            }
+          : {}),
       },
     });
 
@@ -353,6 +373,90 @@ $('issue-send').addEventListener('click', async () => {
     $('issue-send').disabled = false;
   }
 });
+
+/* Les champs d'article ne concernent que la rupture. */
+function toggleIssueItem() {
+  $('issue-item').hidden = $('issue-kind').value !== 'STOCK';
+}
+
+$('issue-kind').addEventListener('change', toggleIssueItem);
+
+/**
+ * Alertes urgentes du marchand, en tête de l'atelier.
+ *
+ * Relues toutes les deux minutes : le fournisseur laisse la page ouverte
+ * pendant qu'il emballe, et une alerte reçue à ce moment-là doit apparaître
+ * sans qu'il ait à recharger — c'est tout l'objet d'une urgence.
+ */
+const ALERT_TITLES = {
+  ADDRESS: 'Adresse à corriger',
+  PHONE: 'Téléphone à corriger',
+  PRODUCT: 'Article à changer',
+  HOLD: 'Ne pas expédier',
+  OTHER: 'Message urgent',
+};
+
+async function loadAlerts() {
+  let alerts = [];
+  try {
+    ({ alerts } = await api(`/api/workspace/${supplierId}/alerts`));
+  } catch {
+    return;
+  }
+
+  const box = $('ws-alerts');
+  box.innerHTML = alerts
+    .map(
+      (alert) => `<div class="alert" data-alert="${alert.id}">
+        <b>${ALERT_TITLES[alert.kind] ?? 'Urgent'}${
+          alert.orderName ? ` · ${alert.orderName}` : ''
+        }</b>
+        <p>${escapeHtml(alert.message)}</p>
+        <button class="btn btn-small" data-ack="${alert.id}">J'ai vu</button>
+      </div>`,
+    )
+    .join('');
+
+  // Une notification système quand le navigateur l'autorise : le fournisseur
+  // travaille dans son atelier, pas devant l'onglet.
+  if (alerts.length && 'Notification' in window && Notification.permission === 'granted') {
+    for (const alert of alerts.slice(0, 3)) {
+      new Notification(ALERT_TITLES[alert.kind] ?? 'Urgent', { body: alert.message });
+    }
+  }
+
+  box.querySelectorAll('[data-ack]').forEach((button) =>
+    button.addEventListener('click', async () => {
+      button.disabled = true;
+      try {
+        await api(`/api/workspace/${supplierId}/alerts/${button.dataset.ack}/ack`, {
+          method: 'POST',
+          body: {},
+        });
+        button.closest('[data-alert]').remove();
+      } catch (error) {
+        toast(error.message, true);
+        button.disabled = false;
+      }
+    }),
+  );
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+if ('Notification' in window && Notification.permission === 'default') {
+  // Demandée au premier clic et non au chargement : un navigateur refuse la
+  // demande qui n'a pas été provoquée par un geste.
+  document.addEventListener('click', () => Notification.requestPermission(), { once: true });
+}
+
+void loadAlerts();
+setInterval(loadAlerts, 120000);
 
 $('ws-reload').addEventListener('click', load);
 

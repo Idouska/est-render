@@ -1159,6 +1159,22 @@ Douane : les frais éventuels sont à la charge du destinataire hors UE."></text
               <option value="NONE">Aucune</option>
             </select>
             <small id="sup-f-access-help"></small>
+
+            <!-- Affectation automatique. Sans ces règles, une commande
+                 n'arrive dans l'atelier qu'après un geste manuel : le
+                 fournisseur ouvre son lien sur une page vide et attend. -->
+            <label for="sup-f-vendors">Marques qu'il prépare</label>
+            <input id="sup-f-vendors" type="text" placeholder="Nike, Adidas — séparées par des virgules" />
+            <small>Toute commande contenant un article de ces marques apparaît dans son atelier.</small>
+
+            <label for="sup-f-skus">Préfixes de référence</label>
+            <input id="sup-f-skus" type="text" placeholder="NIK-, AD- — séparés par des virgules" />
+            <small>Utile quand plusieurs marques passent par le même atelier.</small>
+
+            <label class="switch">
+              <input type="checkbox" id="sup-f-default" />
+              <span>Atelier par défaut — reçoit les commandes qu'aucune règle ne réclame</span>
+            </label>
           </div>
           <div class="field">
             <label for="sup-f-email">Email de contact</label>
@@ -1190,6 +1206,10 @@ Douane : les frais éventuels sont à la charge du destinataire hors UE."></text
         </p>
         <div class="modal-foot modal-foot-wrap">
           <button class="btn" id="sup-f-link" hidden>Lien de travail…</button>
+          <!-- Alerte urgente : mail immédiat + bandeau rouge en tête de son
+               atelier. Le canal normal est l'atelier, qu'il ouvre le matin ;
+               « n'expédie pas » ne peut pas attendre demain matin. -->
+          <button class="btn btn-danger" id="sup-f-alert" hidden>⚡ Alerte urgente</button>
           <button class="btn btn-danger" id="sup-f-delete" hidden>Supprimer</button>
           <button class="btn" id="sup-f-cancel">Annuler</button>
           <button class="btn btn-primary" id="sup-f-save">Enregistrer</button>
@@ -1290,6 +1310,38 @@ Douane : les frais éventuels sont à la charge du destinataire hors UE."></text
           <button class="btn btn-small" id="sheet-close" type="button">Fermer</button>
         </div>
         <div class="sheet-body" id="sheet-body"></div>
+      </div>
+    </div>
+
+    <!-- Composition de l'alerte urgente vers un fournisseur. -->
+    <div class="backdrop" id="alert-modal" hidden>
+      <div class="modal">
+        <div class="modal-head">
+          <h2>Alerte urgente</h2>
+          <p id="alert-who"></p>
+        </div>
+        <div class="modal-body">
+          <label for="alert-kind">Nature</label>
+          <select id="alert-kind">
+            <option value="HOLD">Ne pas expédier</option>
+            <option value="ADDRESS">Adresse à corriger</option>
+            <option value="PHONE">Téléphone à corriger</option>
+            <option value="PRODUCT">Article à changer</option>
+            <option value="OTHER">Autre</option>
+          </select>
+
+          <label for="alert-order">Commande concernée (facultatif)</label>
+          <input id="alert-order" type="text" placeholder="#9739" />
+
+          <label for="alert-message">Message</label>
+          <textarea id="alert-message" rows="4"
+            placeholder="Ex. : n'expédie pas #9739, le client a changé d'adresse, je te la transmets dans l'heure."></textarea>
+          <small>Envoyé par mail depuis votre boîte SAV et affiché en tête de son atelier jusqu'à ce qu'il l'ouvre.</small>
+        </div>
+        <div class="modal-foot">
+          <button class="btn" id="alert-cancel">Annuler</button>
+          <button class="btn btn-danger" id="alert-send">Envoyer l'alerte</button>
+        </div>
       </div>
     </div>
 

@@ -6,6 +6,7 @@ import { signSupplierWorkspaceToken } from '../lib/supplierToken.ts';
 import { prisma } from '../lib/prisma.ts';
 import { requirePermission, requireSession } from '../plugins/auth.ts';
 import { createEscalation, resolveEscalation, sendEscalation } from '../services/suppliers/escalate.ts';
+import { sendPlainEmail } from '../services/gmail/send.ts';
 
 const supplierBody = z.object({
   name: z.string().min(1).max(200),
@@ -15,6 +16,10 @@ const supplierBody = z.object({
   phone: z.string().max(40).nullish(),
   notes: z.string().max(2000).nullish(),
   active: z.boolean().default(true),
+  /** Marques Shopify et préfixes de référence préparés par cet atelier. */
+  vendors: z.array(z.string().min(1).max(120)).max(50).optional(),
+  skuPrefixes: z.array(z.string().min(1).max(60)).max(50).optional(),
+  isDefault: z.boolean().optional(),
 });
 
 const escalationBody = z.object({
@@ -218,6 +223,109 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
         url: `${env.APP_URL}/fournisseur/${supplier.id}?token=${encodeURIComponent(token)}`,
         revoked: Boolean(request.body?.revoke),
       });
+    },
+  );
+
+  /**
+   * Alerte urgente vers un fournisseur.
+   *
+   * L'atelier est le canal du quotidien : il l'ouvre le matin, il y trouve ses
+   * commandes. Mais « cette adresse est fausse, n'expédie pas » ne peut pas
+   * attendre demain matin — le colis sera parti. L'alerte part donc par mail,
+   * qui arrive sur son téléphone, et s'affiche en tête de son atelier jusqu'à
+   * ce qu'il l'ouvre.
+   *
+   * Elle est consignée en base et non seulement envoyée : un mail tombé dans
+   * les indésirables ne laisse aucune trace, et personne ne pourrait dire si
+   * le fournisseur a été prévenu — exactement la question qu'on se pose quand
+   * le colis part quand même.
+   */
+  app.post<{ Params: { id: string } }>(
+    '/api/suppliers/:id/alert',
+    { preHandler: requirePermission('escalate') },
+    async (request, reply) => {
+      const parsed = z
+        .object({
+          kind: z.enum(['ADDRESS', 'PHONE', 'PRODUCT', 'HOLD', 'OTHER']),
+          message: z.string().min(3).max(1000),
+          shopifyOrderId: z.string().max(120).nullish(),
+          orderName: z.string().max(60).nullish(),
+        })
+        .safeParse(request.body);
+
+      if (!parsed.success) return reply.code(400).send({ error: 'Alerte incomplète' });
+
+      const { merchantId, userId } = request.session;
+
+      const supplier = await prisma.supplier.findFirst({
+        where: { id: request.params.id, merchantId, active: true },
+        select: { id: true, name: true, contactEmail: true },
+      });
+      if (!supplier) return reply.code(404).send({ error: 'Fournisseur introuvable' });
+
+      const alert = await prisma.supplierAlert.create({
+        data: {
+          merchantId,
+          supplierId: supplier.id,
+          kind: parsed.data.kind,
+          message: parsed.data.message,
+          shopifyOrderId: parsed.data.shopifyOrderId ?? null,
+          orderName: parsed.data.orderName ?? null,
+          createdById: userId,
+        },
+      });
+
+      const titles = {
+        ADDRESS: 'Adresse à corriger',
+        PHONE: 'Téléphone à corriger',
+        PRODUCT: 'Article à changer',
+        HOLD: 'Ne pas expédier',
+        OTHER: 'Message urgent',
+      } as const;
+
+      const subject = `URGENT — ${titles[parsed.data.kind]}${
+        parsed.data.orderName ? ` · ${parsed.data.orderName}` : ''
+      }`;
+
+      /*
+       * L'envoi ne bloque pas l'alerte.
+       *
+       * Si la boîte Gmail refuse, l'alerte existe quand même et s'affichera
+       * dans l'atelier : perdre le mail est ennuyeux, perdre l'alerte
+       * laisserait partir le colis.
+       */
+      let emailed = false;
+      try {
+        await sendPlainEmail({
+          merchantId,
+          to: supplier.contactEmail,
+          subject,
+          body:
+            `${parsed.data.message}\n\n` +
+            `${parsed.data.orderName ? `Commande : ${parsed.data.orderName}\n` : ''}` +
+            `Ce message est également affiché en tête de votre espace de travail.`,
+        });
+        emailed = true;
+        await prisma.supplierAlert.update({
+          where: { id: alert.id },
+          data: { emailedAt: new Date() },
+        });
+      } catch (error) {
+        request.log.error({ err: error, supplierId: supplier.id }, 'Alerte fournisseur non envoyée');
+      }
+
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId: userId,
+        action: 'supplier.alerted',
+        targetType: 'Supplier',
+        targetId: supplier.id,
+        metadata: { kind: parsed.data.kind, orderName: parsed.data.orderName, emailed },
+        ipAddress: request.ip,
+      });
+
+      return reply.send({ alert, emailed });
     },
   );
 

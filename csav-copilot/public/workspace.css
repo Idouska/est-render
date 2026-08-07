@@ -162,3 +162,20 @@
   border-radius: var(--r-sm);
   padding: 6px 9px;
 }
+
+/* Alerte urgente du marchand, en tête de l'atelier. Rouge franc et bouton
+   d'accusé de lecture : elle doit interrompre, et le marchand doit savoir
+   qu'elle a été vue. */
+.alert {
+  border: 1px solid #d94141;
+  border-left-width: 5px;
+  border-radius: 10px;
+  background: #fff2f2;
+  padding: 11px 13px;
+  margin-bottom: 10px;
+}
+.alert b { display: block; font-size: 14px; color: #a51f1f; }
+.alert p { margin: 4px 0 8px; font-size: 14px; white-space: pre-wrap; }
+
+.field-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.field-row .field { flex: 1 1 110px; }

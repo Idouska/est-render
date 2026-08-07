@@ -8,6 +8,8 @@ export interface OrderLineItem {
   /// vite qu'à sa référence, et c'est ce qui rend l'export exploitable.
   image: string | null;
   sku: string | null;
+  /// Marque Shopify de l'article : c'est elle qui désigne l'atelier.
+  vendor?: string | null;
 }
 
 export interface Fulfillment {
@@ -96,6 +98,7 @@ const ORDER_FIELDS = /* GraphQL */ `
         quantity
         variantTitle
         sku
+        vendor
         image {
           url
         }
@@ -145,6 +148,7 @@ interface RawOrder {
       quantity: number;
       variantTitle: string | null;
       sku: string | null;
+      vendor: string | null;
       image: { url: string } | null;
     }>;
   };
@@ -193,6 +197,7 @@ function toSummary(order: RawOrder): OrderSummary {
       quantity: item.quantity,
       variantTitle: item.variantTitle,
       sku: item.sku,
+      vendor: item.vendor ?? null,
       image: item.image?.url ?? null,
     })),
     fulfillments: order.fulfillments.map((f) => ({

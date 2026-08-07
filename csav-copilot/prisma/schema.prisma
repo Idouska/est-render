@@ -85,6 +85,7 @@ model Merchant {
   suppliers           Supplier[]
   cannedReplies       CannedReply[]
   supplierEscalations SupplierEscalation[]
+  supplierAlerts      SupplierAlert[]
   parcels             Parcel[]
 
   @@index([organizationId])
@@ -496,11 +497,27 @@ model Supplier {
   /// un jeton signé sans table de sessions.
   portalTokenVersion Int @default(1)
 
+  /// Marques Shopify préparées par ce fournisseur.
+  ///
+  /// L'affectation d'une commande était jusqu'ici manuelle : tant que personne
+  /// n'avait escaladé ou saisi un colis, le fournisseur ouvrait son lien sur
+  /// une page vide. Or le lien entre une commande et son atelier est déjà
+  /// écrit dans la commande — c'est la marque de l'article, ou le préfixe de
+  /// sa référence.
+  vendors     String[]
+  /// Préfixes de référence (SKU) préparés par ce fournisseur, ex. « NIK- ».
+  skuPrefixes String[]
+
+  /// Reçoit les commandes qu'aucune règle ne réclame. Un seul par marchand :
+  /// deux ateliers par défaut prépareraient deux fois le même colis.
+  isDefault Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   merchant    Merchant             @relation(fields: [merchantId], references: [id], onDelete: Cascade)
   escalations SupplierEscalation[]
+  alerts      SupplierAlert[]
 
   // Deux fiches pour la même adresse chez un même marchand n'ont pas de sens :
   // les réponses arrivant par mail seraient impossibles à attribuer.
@@ -680,4 +697,50 @@ model PlatformSetting {
   valueEnc  String
   updatedAt DateTime @updatedAt
   updatedBy String? // identifiant libre de l'administrateur, pour le journal
+}
+
+/// Alerte urgente adressée à un fournisseur.
+///
+/// Le canal du quotidien est l'atelier : le fournisseur l'ouvre le matin et y
+/// trouve ses commandes. Mais « cette adresse est fausse, n'expédie pas » ne
+/// peut pas attendre demain matin. L'alerte part par mail — donc sur son
+/// téléphone — et s'affiche en tête de son atelier jusqu'à ce qu'il l'ait vue.
+///
+/// Conservée en base plutôt que simplement envoyée : un mail perdu dans les
+/// indésirables ne laisse aucune trace, et personne ne saurait dire si le
+/// fournisseur a été prévenu.
+model SupplierAlert {
+  id         String @id @default(cuid())
+  merchantId String
+  supplierId String
+
+  kind    SupplierAlertKind
+  /// Commande concernée, quand l'alerte en vise une.
+  shopifyOrderId String?
+  orderName      String?
+
+  message String @db.Text
+
+  /// Utilisateur qui a déclenché l'alerte.
+  createdById String?
+
+  createdAt      DateTime  @default(now())
+  /// Horodatage de l'ouverture de l'atelier après l'envoi : la preuve qu'elle
+  /// a été vue, pas seulement envoyée.
+  acknowledgedAt DateTime?
+  /// Le mail est parti — ou non, si la boîte du marchand a refusé.
+  emailedAt      DateTime?
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId, supplierId, acknowledgedAt])
+}
+
+enum SupplierAlertKind {
+  ADDRESS
+  PHONE
+  PRODUCT
+  HOLD
+  OTHER
 }

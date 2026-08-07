@@ -2800,6 +2800,14 @@ function renderSuppliers() {
     .forEach((row) => row.addEventListener('click', () => openSupplierForm(row.dataset.supplier)));
 }
 
+/** « Nike, Adidas ,, » → ['Nike', 'Adidas']. Les vides sont écartés. */
+function splitList(value) {
+  return String(value ?? '')
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
 /** `id` absent : création. Sinon édition, avec la suppression proposée. */
 function openSupplierForm(id) {
   const supplier = id ? state.suppliers.find((candidate) => candidate.id === id) : null;
@@ -2820,12 +2828,93 @@ function openSupplierForm(id) {
   // Le lien n'existe que pour un fournisseur déjà enregistré : il porte son
   // identifiant.
   $('sup-f-access').value = supplier?.ordersAccess ?? 'ASSIGNED';
+  $('sup-f-vendors').value = (supplier?.vendors ?? []).join(', ');
+  $('sup-f-skus').value = (supplier?.skuPrefixes ?? []).join(', ');
+  $('sup-f-default').checked = supplier?.isDefault ?? false;
   describeSupplierAccess();
   $('sup-f-link').hidden = !supplier;
   $('sup-f-link').dataset.supplier = supplier?.id ?? '';
+  // Alerter un contact qui n'existe pas encore n'a pas de sens.
+  $('sup-f-alert').hidden = !supplier || !supplier.active;
 
   $('supplier-modal').classList.add('open');
 }
+
+/* ------------------------------------------------- alerte urgente ------- */
+
+/**
+ * Alerte urgente vers un fournisseur.
+ *
+ * Son canal normal est l'atelier, qu'il ouvre le matin : parfait pour le
+ * travail du jour, inutile pour « n'expédie pas cette commande ». L'alerte
+ * part par mail — donc sur son téléphone — et reste affichée en rouge en tête
+ * de son atelier tant qu'il n'a pas cliqué « J'ai vu ».
+ */
+function openAlertModal(id) {
+  const supplier = state.suppliers.find((candidate) => candidate.id === id);
+  if (!supplier) return;
+
+  $('alert-modal').dataset.supplier = id;
+  $('alert-who').textContent = `${supplier.name} · ${supplier.contactEmail}`;
+  $('alert-kind').value = 'HOLD';
+  $('alert-order').value = '';
+  $('alert-message').value = '';
+  $('alert-modal').hidden = false;
+  $('alert-modal').classList.add('open');
+  $('alert-message').focus();
+}
+
+function closeAlertModal() {
+  $('alert-modal').classList.remove('open');
+  $('alert-modal').hidden = true;
+}
+
+$('sup-f-alert')?.addEventListener('click', () => {
+  const id = $('sup-f-link').dataset.supplier;
+  $('supplier-modal').classList.remove('open');
+  openAlertModal(id);
+});
+
+$('alert-cancel')?.addEventListener('click', closeAlertModal);
+$('alert-modal')?.addEventListener('click', (event) => {
+  if (event.target === $('alert-modal')) closeAlertModal();
+});
+
+$('alert-send')?.addEventListener('click', async () => {
+  const message = $('alert-message').value.trim();
+  if (message.length < 3) {
+    toast('Écrivez le message de l’alerte.', true);
+    return;
+  }
+
+  const button = $('alert-send');
+  button.disabled = true;
+
+  try {
+    const result = await api(`/api/suppliers/${$('alert-modal').dataset.supplier}/alert`, {
+      method: 'POST',
+      body: JSON.stringify({
+        kind: $('alert-kind').value,
+        message,
+        orderName: $('alert-order').value.trim() || null,
+      }),
+    });
+
+    closeAlertModal();
+    // On distingue les deux : une alerte enregistrée mais non envoyée reste
+    // utile, à condition de ne pas croire que le fournisseur l'a reçue.
+    toast(
+      result.emailed
+        ? 'Alerte envoyée par mail et affichée dans son atelier.'
+        : 'Alerte affichée dans son atelier — le mail n’a pas pu partir.',
+      !result.emailed,
+    );
+  } catch (error) {
+    toast(error.message, true);
+  } finally {
+    button.disabled = false;
+  }
+});
 
 $('sup-f-link').addEventListener('click', async (event) => {
   const id = event.currentTarget.dataset.supplier;
@@ -2871,6 +2960,11 @@ $('sup-f-save').addEventListener('click', async () => {
     phone: $('sup-f-phone').value.trim() || null,
     notes: $('sup-f-notes').value.trim() || null,
     active: $('sup-f-active').checked,
+    // Saisi en une ligne, stocké en liste : demander un champ par marque
+    // ferait renoncer dès la troisième.
+    vendors: splitList($('sup-f-vendors').value),
+    skuPrefixes: splitList($('sup-f-skus').value),
+    isDefault: $('sup-f-default').checked,
   };
 
   if (!payload.name || !payload.contactEmail) {
