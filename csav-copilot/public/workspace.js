@@ -500,7 +500,7 @@ $('ws-orders').addEventListener('click', async (event) => {
      * faux — dans la liste du marchand, qui suivait un colis fantôme.
      */
     const pid = card.dataset.pid;
-    const { parcel } = await api(
+    const { parcel, shopify } = await api(
       pid
         ? `/api/workspace/${supplierId}/parcels/${pid}`
         : `/api/workspace/${supplierId}/parcels`,
@@ -529,7 +529,15 @@ $('ws-orders').addEventListener('click', async (event) => {
       parcel,
     ].sort((a, b) => a.index - b.index);
 
-    toast(t('parcel.savedToast', { index: parcel.index, total: parcel.total }));
+    // Le dernier colis déclenche l'expédition Shopify : le fournisseur doit
+    // savoir si le client est prévenu, ou pourquoi il ne l'est pas.
+    if (shopify?.fulfilled) {
+      toast(t('parcel.shipped'));
+    } else if (shopify?.reason) {
+      toast(t('parcel.shipFail', { reason: shopify.reason }), true);
+    } else {
+      toast(t('parcel.savedToast', { index: parcel.index, total: parcel.total }));
+    }
     renderOrders();
   } catch (error) {
     toast(error.message, true);

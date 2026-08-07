@@ -227,6 +227,69 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
   );
 
   /**
+   * Toutes les demandes de changement du marchand — l'écran « Changements ».
+   *
+   * La boucle se fermait à moitié : le fournisseur répondait dans son atelier,
+   * et le marchand ne l'apprenait qu'en rouvrant le mail concerné. Ici tout
+   * est au même endroit, les demandes sans réponse d'abord, avec pour chacune
+   * l'état d'expédition de la commande au moment où l'on regarde — une taille
+   * à changer sur une commande déjà partie n'a plus la même urgence.
+   */
+  app.get('/api/changes', async (request, reply) => {
+    const { merchantId } = request.session;
+
+    const changes = await prisma.supplierAlert.findMany({
+      where: { merchantId },
+      orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+      take: 100,
+      select: {
+        id: true,
+        kind: true,
+        status: true,
+        message: true,
+        beforeValue: true,
+        afterValue: true,
+        orderName: true,
+        shopifyOrderId: true,
+        supplierNote: true,
+        createdAt: true,
+        acknowledgedAt: true,
+        emailedAt: true,
+        supplier: { select: { id: true, name: true } },
+        ticket: { select: { id: true, subject: true, customerName: true, customerEmail: true } },
+      },
+    });
+
+    /*
+     * Expédiée ou non : lu dans nos colis plutôt que demandé à Shopify.
+     *
+     * Cent demandes feraient cent appels API pour une information que la
+     * saisie du fournisseur nous a déjà donnée — et qui déclenche désormais le
+     * fulfillment, donc les deux sources se confondent.
+     */
+    const orderIds = [
+      ...new Set(changes.map((change) => change.shopifyOrderId).filter(Boolean)),
+    ] as string[];
+
+    const shipped = new Set(
+      (
+        await prisma.parcel.findMany({
+          where: { merchantId, shopifyOrderId: { in: orderIds } },
+          select: { shopifyOrderId: true },
+        })
+      ).map((parcel) => parcel.shopifyOrderId),
+    );
+
+    return reply.send({
+      pending: changes.filter((change) => change.status === 'PENDING').length,
+      changes: changes.map((change) => ({
+        ...change,
+        orderShipped: change.shopifyOrderId ? shipped.has(change.shopifyOrderId) : null,
+      })),
+    });
+  });
+
+  /**
    * Alerte urgente vers un fournisseur.
    *
    * L'atelier est le canal du quotidien : il l'ouvre le matin, il y trouve ses

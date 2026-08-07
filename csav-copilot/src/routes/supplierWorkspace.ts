@@ -9,6 +9,7 @@ import { ordersToXlsx } from '../services/export/ordersXlsx.ts';
 import { getShopifyClient } from '../services/shopify/client.ts';
 import { listOrders } from '../services/shopify/orders.ts';
 import { listProducts } from '../services/shopify/catalog.ts';
+import { fulfillOrder } from '../services/shopify/fulfill.ts';
 import { decodePhoto, photoSchema, sendParcelPhoto, toParcelView } from './parcels.ts';
 import { ordersForSupplier, type RoutingRules } from '../services/suppliers/routing.ts';
 
@@ -454,7 +455,62 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
         ipAddress: request.ip,
       });
 
-      return reply.send({ parcel: toParcelView(parcel) });
+      /*
+       * Dernier colis saisi → la commande part vraiment.
+       *
+       * Un seul fulfillment portant tous les numéros, créé quand tous les
+       * colis annoncés sont enregistrés : Shopify passe la commande en
+       * expédiée et envoie au client son mail avec les suivis. C'est le but
+       * de toute la saisie — sans lui, le client écrit « où est mon colis »
+       * pour un colis déjà en route.
+       *
+       * L'échec n'annule pas la saisie : le colis est enregistré chez nous
+       * quoi qu'il arrive, et le motif remonte au fournisseur pour que le
+       * marchand soit prévenu (autorisation manquante, commande déjà close).
+       */
+      let shopify: { fulfilled: boolean; reason?: string } | null = null;
+
+      const recorded = await prisma.parcel.findMany({
+        where: {
+          merchantId: workspace.merchantId,
+          shopifyOrderId: parsed.data.shopifyOrderId,
+        },
+        select: { trackingNumber: true, carrier: true, index: true },
+        orderBy: { index: 'asc' },
+      });
+
+      if (new Set(recorded.map((row) => row.index)).size >= parsed.data.total) {
+        try {
+          const client = await getShopifyClient(workspace.merchantId);
+          shopify = await fulfillOrder(client, parsed.data.shopifyOrderId, {
+            numbers: recorded.map((row) => row.trackingNumber),
+            company: recorded.find((row) => row.carrier)?.carrier ?? null,
+          });
+
+          await recordAudit({
+            merchantId: workspace.merchantId,
+            actorType: 'SUPPLIER',
+            actorId: workspace.supplierId,
+            action: shopify.fulfilled ? 'supplier.order_fulfilled' : 'supplier.fulfill_failed',
+            targetType: 'Order',
+            targetId: parsed.data.shopifyOrderId,
+            metadata: {
+              orderName: parsed.data.orderName,
+              numbers: recorded.map((row) => row.trackingNumber),
+              reason: shopify.reason ?? null,
+            },
+            ipAddress: request.ip,
+          });
+        } catch (error) {
+          request.log.error(
+            { err: error, orderId: parsed.data.shopifyOrderId },
+            'Fulfillment Shopify en échec',
+          );
+          shopify = { fulfilled: false, reason: 'Shopify n’a pas répondu.' };
+        }
+      }
+
+      return reply.send({ parcel: toParcelView(parcel), shopify });
     },
   );
 

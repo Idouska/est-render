@@ -144,6 +144,9 @@ export const STRINGS = {
     'parcel.deleteAsk': 'Supprimer le colis {number} ? Le numéro disparaît de votre liste et de celle du marchand.',
     'parcel.deleted': 'Colis supprimé.',
 
+    'parcel.shipped': 'Commande expédiée — le client est prévenu par mail.',
+    'parcel.shipFail': "Colis enregistré, mais Shopify n'a pas validé l'expédition : {reason}",
+
     'error.generic': 'Erreur ({status})',
   },
 
@@ -266,6 +269,9 @@ export const STRINGS = {
     'parcel.deleteAsk': 'Delete parcel {number}? The number disappears from your list and from the merchant\u2019s.',
     'parcel.deleted': 'Parcel deleted.',
 
+    'parcel.shipped': 'Order shipped — the customer has been emailed.',
+    'parcel.shipFail': 'Parcel saved, but Shopify rejected the shipment: {reason}',
+
     'error.generic': 'Error ({status})',
   },
 
@@ -387,6 +393,9 @@ export const STRINGS = {
     'parcel.delete': '删除该包裹',
     'parcel.deleteAsk': '删除包裹 {number}？该运单号将从您和商家的列表中移除。',
     'parcel.deleted': '包裹已删除。',
+
+    'parcel.shipped': '订单已发货 — 已通过邮件通知客户。',
+    'parcel.shipFail': '包裹已保存，但 Shopify 未确认发货：{reason}',
 
     'error.generic': '错误（{status}）',
   },

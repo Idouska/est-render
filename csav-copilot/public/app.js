@@ -691,7 +691,9 @@ async function loadQueue({ append = false } = {}) {
   state.navCounts = {
     suppliers: state.queueCounts?.AWAITING_SUPPLIER ?? 0,
     disputes: state.disputeCount ?? 0,
+    changes: state.changesPending ?? 0,
   };
+  void refreshChangesCount();
   renderNav();
   renderQueueBar();
 
@@ -4420,6 +4422,7 @@ setInterval(renderClocks, 30000);
 /* Icônes en ligne : une police d'icônes ou un CDN ne passerait pas la
    politique de sécurité, et douze glyphes ne justifient pas un build. */
 const ICONS = {
+  bolt: '<path d="M9 1.5 3.5 9h3.6L7 14.5 12.5 7H8.9z"/>',
   grid: '<path d="M2.5 2.5h4.5v4.5H2.5zM9 2.5h4.5v4.5H9zM2.5 9h4.5v4.5H2.5zM9 9h4.5v4.5H9z"/>',
   inbox: '<path d="M2 9.5h3l1 2h4l1-2h3"/><path d="M2.5 9.5 4 3h8l1.5 6.5v4h-11z"/>',
   chart: '<path d="M2.5 13.5V7M6.5 13.5V3M10.5 13.5v-4M14 13.5V5.5"/>',
@@ -4451,6 +4454,7 @@ const VIEW_META = {
   customers: { icon: 'users', label: 'Clients', group: 'Commerce', title: 'Clients' },
   catalog: { icon: 'box', label: 'Catalogue', group: 'Commerce', title: 'Catalogue' },
   suppliers: { icon: 'truck', label: 'Fournisseurs', group: 'Fournisseur', title: 'Contacts fournisseurs' },
+  changes: { icon: 'bolt', label: 'Changements', group: 'Fournisseur', title: 'Demandes de changement' },
   tracking: { icon: 'pin', label: 'Suivi colis', group: 'Fournisseur', title: 'Suivi des colis' },
   refunds: { icon: 'euro', label: 'Remboursements', group: 'Finance', title: 'Remboursements' },
   disputes: { icon: 'shield', label: 'Litiges Shopify', group: 'Finance', title: 'Litiges Shopify' },
@@ -4463,6 +4467,31 @@ const VIEW_META = {
 const NAV_GROUPS = ['Pilotage', 'Commerce', 'Fournisseur', 'Finance', 'Plateforme'];
 
 const VIEWS = Object.keys(VIEW_META);
+
+/**
+ * Compte des demandes de changement en attente, pour la pastille rouge.
+ *
+ * Rafraîchi avec la file, mais au plus une fois par minute : la file se
+ * recharge à chaque geste, et ce compte ne bouge que lorsqu'un fournisseur
+ * répond.
+ */
+let changesCountAt = 0;
+
+async function refreshChangesCount() {
+  if (Date.now() - changesCountAt < 60_000) return;
+  changesCountAt = Date.now();
+
+  try {
+    const { pending } = await api('/api/changes');
+    if (pending !== state.changesPending) {
+      state.changesPending = pending;
+      state.navCounts = { ...state.navCounts, changes: pending };
+      renderNav();
+    }
+  } catch {
+    // Un compteur qui manque un tour vaut mieux qu'une erreur à l'écran.
+  }
+}
 
 function renderNav() {
   // Recherche : on ne masque pas les groupes vides en les laissant en place,
@@ -4488,10 +4517,13 @@ function renderNav() {
             view === 'tickets'
               ? (state.pendingCount ?? 0)
               : (state.navCounts?.[view] ?? 0);
+          // Les changements en attente sont une promesse faite à un client :
+          // leur compte est rouge, pas gris — il réclame, il n'informe pas.
+          const hot = view === 'changes' && tally > 0;
           return `<button class="nav-item" data-view="${view}" aria-current="${
             view === state.view
           }">${ico(meta.icon)}<span class="nav-label">${esc(meta.label)}</span>${
-            tally ? `<span class="tally">${tally}</span>` : ''
+            tally ? `<span class="tally${hot ? ' tally-hot' : ''}">${tally}</span>` : ''
           }</button>`;
         })
         .join('')}
@@ -4589,6 +4621,133 @@ document.addEventListener('keydown', (event) => {
   }
 });
 
+/* --------------------------------------------------- demandes de changement */
+
+/**
+ * L'écran « Changements » : toutes les demandes envoyées aux fournisseurs.
+ *
+ * Trié par le serveur, en attente d'abord. Chaque carte dit trois choses dans
+ * l'ordre où l'on décide : ce qui change (44 → 45), ce que le fournisseur en
+ * a fait, et si la commande était déjà expédiée — une taille à changer sur un
+ * colis parti n'appelle plus la même réponse au client.
+ */
+state.changesRows = [];
+state.changesFilter = 'PENDING';
+
+async function loadChanges() {
+  const rows = $('changes-rows');
+  rows.innerHTML = '<p class="empty" style="padding:14px">Chargement…</p>';
+
+  let data;
+  try {
+    data = await api('/api/changes');
+  } catch (error) {
+    rows.innerHTML = `<p class="empty" style="padding:14px">${esc(error.message)}</p>`;
+    return;
+  }
+
+  state.changesRows = data.changes ?? [];
+  state.changesPending = data.pending ?? 0;
+  state.navCounts = { ...state.navCounts, changes: state.changesPending };
+  renderNav();
+  renderChangesScreen();
+}
+
+function renderChangesScreen() {
+  const rows = $('changes-rows');
+  const filter = state.changesFilter;
+  const shown = filter
+    ? state.changesRows.filter((change) => change.status === filter)
+    : state.changesRows;
+
+  $('changes-count').textContent = shown.length
+    ? `${shown.length} demande${shown.length > 1 ? 's' : ''}`
+    : '';
+
+  rows.innerHTML =
+    shown
+      .map((change) => {
+        const status = CHANGE_STATUS[change.status] ?? CHANGE_STATUS.PENDING;
+
+        return `<div class="chgc chgc-${status.tone}" data-chg-ticket="${esc(
+          change.ticket?.id ?? '',
+        )}">
+          <div class="chgc-head">
+            <b>${esc(CHANGE_KINDS[change.kind] ?? change.kind)}</b>
+            ${change.orderName ? `<span class="tag tag-order">${esc(change.orderName)}</span>` : ''}
+            <span class="tag tone-${status.tone}">${esc(status.label)}</span>
+            ${
+              change.orderShipped === null
+                ? ''
+                : change.orderShipped
+                  ? '<span class="tag tone-bad">déjà expédiée</span>'
+                  : '<span class="tag tone-ok">pas encore expédiée</span>'
+            }
+            <span class="chgc-when">${esc(dateTime(change.createdAt))}</span>
+          </div>
+
+          ${
+            change.afterValue
+              ? `<div class="chgc-swap">
+                   <s>${esc(change.beforeValue ?? '—')}</s>
+                   <span aria-hidden="true">→</span>
+                   <b>${esc(change.afterValue)}</b>
+                 </div>`
+              : change.message
+                ? `<p class="chgc-msg">${esc(change.message)}</p>`
+                : ''
+          }
+
+          <div class="chgc-meta">
+            <span>${esc(change.supplier?.name ?? '—')}</span>
+            ${
+              change.ticket
+                ? `<span>· ${esc(
+                    change.ticket.customerName ?? change.ticket.customerEmail ?? '',
+                  )}</span>`
+                : ''
+            }
+            ${change.emailedAt ? '' : '<span class="set-alert">· mail non parti</span>'}
+          </div>
+          ${
+            change.supplierNote
+              ? `<p class="chgc-note">« ${esc(change.supplierNote)} »</p>`
+              : ''
+          }
+        </div>`;
+      })
+      .join('') ||
+    `<p class="empty" style="padding:14px">${
+      filter === 'PENDING'
+        ? 'Aucune demande en attente — les fournisseurs sont à jour.'
+        : 'Aucune demande.'
+    }</p>`;
+
+  // La carte ouvre le mail d'origine : c'est là qu'on répond au client une
+  // fois le changement confirmé ou refusé.
+  rows.querySelectorAll('[data-chg-ticket]').forEach((card) =>
+    card.addEventListener('click', () => {
+      const ticketId = card.dataset.chgTicket;
+      if (!ticketId) return;
+      setView('tickets');
+      void selectTicket(ticketId);
+    }),
+  );
+}
+
+$('changes-filters')?.addEventListener('click', (event) => {
+  const chip = event.target.closest('[data-chg]');
+  if (!chip) return;
+
+  state.changesFilter = chip.dataset.chg;
+  $('changes-filters')
+    .querySelectorAll('.chip')
+    .forEach((other) =>
+      other.setAttribute('aria-pressed', String(other.dataset.chg === state.changesFilter)),
+    );
+  renderChangesScreen();
+});
+
 /* Chaque vue charge à sa première ouverture. Interroger Shopify pour un écran
    que personne ne regarde coûte une latence pour rien. */
 const VIEW_LOADERS = {
@@ -4597,6 +4756,7 @@ const VIEW_LOADERS = {
   customers: () => !state.customers.loaded && loadCustomers({ reset: true }),
   catalog: () => !state.catalog.loaded && loadCatalog({ reset: true }),
   suppliers: () => renderSuppliers(),
+  changes: () => loadChanges(),
   tracking: () => loadTracking(),
   refunds: () => loadRefunds(),
   disputes: () => loadDisputes(),

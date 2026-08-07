@@ -691,6 +691,22 @@
         </div>
       </section>
 
+      <!-- Demandes de changement envoyées aux fournisseurs : la boucle se
+           fermait à moitié — le fournisseur répondait dans son atelier, et on
+           ne l'apprenait qu'en rouvrant le mail concerné. -->
+      <section class="browse" id="view-changes" hidden aria-label="Demandes de changement">
+        <div class="browse-bar">
+          <div class="filters" id="changes-filters">
+            <button class="chip" data-chg="PENDING" aria-pressed="true">En attente</button>
+            <button class="chip" data-chg="" aria-pressed="false">Toutes</button>
+            <button class="chip" data-chg="ACKNOWLEDGED" aria-pressed="false">Faites</button>
+            <button class="chip" data-chg="REFUSED" aria-pressed="false">Refusées</button>
+          </div>
+          <span class="browse-count" id="changes-count"></span>
+        </div>
+        <div id="changes-rows"></div>
+      </section>
+
       <section class="browse" id="view-tracking" hidden aria-label="Suivi colis">
         <div class="browse-bar">
           <span class="browse-count" id="tracking-count"></span>
