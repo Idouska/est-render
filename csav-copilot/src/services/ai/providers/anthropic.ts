@@ -17,6 +17,17 @@ export function createAnthropicProvider(options: {
 }): AiProvider {
   const client = new Anthropic({ apiKey: options.apiKey });
 
+  /*
+   * `effort` n'existe que sur les modèles de la génération 5.
+   *
+   * Le passer à un Haiku 4.5 fait échouer l'appel en 400 — « This model does
+   * not support the effort parameter » — et rend le modèle économique
+   * inutilisable au moment précis où l'on en a besoin : un rattrapage de
+   * plusieurs milliers de messages. Le réglage d'effort est un raffinement,
+   * pas une exigence : on le retire quand le modèle ne le connaît pas.
+   */
+  const supportsEffort = /-5(-|$)|^claude-(opus|sonnet|fable)-5/.test(options.model);
+
   return {
     name: 'anthropic',
     model: options.model,
@@ -30,7 +41,7 @@ export function createAnthropicProvider(options: {
           max_tokens: request.maxTokens,
           system: request.system,
           output_config: {
-            ...(request.effort ? { effort: request.effort } : {}),
+            ...(request.effort && supportsEffort ? { effort: request.effort } : {}),
             format: { type: 'json_schema', schema: request.schema },
           },
           messages: [{ role: 'user', content: request.user }],
