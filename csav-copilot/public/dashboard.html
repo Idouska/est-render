@@ -320,6 +320,11 @@
             <div class="messages" id="d-messages"></div>
           </details>
 
+          <!-- Les autres fils du même client. Deux mails d'une même personne
+               ouvrent deux fils Gmail : répondre à l'un sans voir l'autre,
+               c'est envoyer deux réponses qui s'ignorent. -->
+          <section class="sibs" id="d-sibs" hidden></section>
+
           <div class="actbar" id="actbar" hidden>
             <span class="panel-title">Action</span>
             <div class="actbar-row" id="actbar-row"></div>

@@ -144,8 +144,44 @@ export async function processTicket(merchantId: string, ticketId: string): Promi
       },
     });
 
+    /*
+     * Les autres fils ouverts par ce client.
+     *
+     * Un client pressé n'attend pas : il écrit un second mail plutôt que de
+     * répondre au sien. Deux fils, deux traitements, et deux réponses qui
+     * s'ignorent — dont l'une redemande ce que l'autre a déjà reçu. Le premier
+     * extrait suffit à le savoir ; charger les fils entiers coûterait autant
+     * que le ticket lui-même.
+     */
+    const otherThreads = await prisma.ticket.findMany({
+      where: {
+        merchantId,
+        customerEmail: ticket.customerEmail,
+        id: { not: ticket.id },
+        isHistorical: false,
+        status: { notIn: ['CLOSED', 'AUTO_SENT'] },
+      },
+      orderBy: { lastMessageAt: 'desc' },
+      take: 3,
+      select: {
+        subject: true,
+        lastMessageAt: true,
+        messages: {
+          where: { direction: 'INBOUND' },
+          orderBy: { receivedAt: 'desc' },
+          take: 1,
+          select: { bodyText: true },
+        },
+      },
+    });
+
     const context: GenerationContext = {
       playbook: ticket.merchant.playbook,
+      otherThreads: otherThreads.map((other) => ({
+        subject: other.subject,
+        at: other.lastMessageAt,
+        excerpt: (other.messages[0]?.bodyText ?? '').slice(0, 600),
+      })),
       // Les fichiers du dernier message reçu : ce sont ceux dont le client
       // parle, pas ceux d'un échange d'il y a trois semaines.
       attachments: (lastInbound.attachments ?? []).map((file) => ({

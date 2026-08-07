@@ -944,7 +944,37 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
       }
     }
 
-    return reply.send({ ticket, order, orderError, readOnly });
+    /*
+     * Les autres messages du même client.
+     *
+     * Un client qui écrit deux fois en une semaine ouvre deux fils Gmail,
+     * donc deux lignes chez nous. Répondre à l'un sans savoir que l'autre
+     * existe, c'est envoyer deux réponses qui s'ignorent — au mieux le client
+     * les trouve incohérentes, au pire elles se contredisent.
+     *
+     * Rapprochés par adresse email : c'est la seule clé fiable. Le nom
+     * s'écrit de dix façons, le numéro de commande manque une fois sur deux.
+     */
+    const siblings = await prisma.ticket.findMany({
+      where: {
+        merchantId: ticket.merchantId,
+        customerEmail: ticket.customerEmail,
+        id: { not: ticket.id },
+        isHistorical: false,
+      },
+      orderBy: { lastMessageAt: 'desc' },
+      take: 10,
+      select: {
+        id: true,
+        subject: true,
+        status: true,
+        intent: true,
+        orderName: true,
+        lastMessageAt: true,
+      },
+    });
+
+    return reply.send({ ticket, order, orderError, readOnly, siblings });
   });
 
   /**

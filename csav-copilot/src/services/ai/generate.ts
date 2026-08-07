@@ -77,6 +77,16 @@ export interface GenerationContext {
    * répondre en français à un client de Portland est une faute.
    */
   language?: string | null;
+
+  /**
+   * Autres fils ouverts par le même client, en ce moment.
+   *
+   * Un client pressé écrit deux fois plutôt que de répondre à son propre mail :
+   * deux fils Gmail, deux traitements, deux réponses qui s'ignorent. Le modèle
+   * doit savoir qu'il y en a d'autres pour ne pas redemander ce que le client
+   * a déjà donné ailleurs, ni promettre l'inverse de ce qu'on lui a répondu.
+   */
+  otherThreads?: Array<{ subject: string | null; at: Date; excerpt: string }>;
 }
 
 const SYSTEM_PROMPT = `Tu rédiges des réponses de service après-vente pour une boutique en ligne.
@@ -246,6 +256,21 @@ function buildContextBlock(context: GenerationContext): string {
     parts.push(
       `\n--- Aucune commande rattachée ---\n` +
         `Demande au client son numéro de commande ou l'adresse email utilisée lors de l'achat.`,
+    );
+  }
+
+  if (context.otherThreads?.length) {
+    parts.push(
+      `\n--- Autres messages en cours du même client (${context.otherThreads.length}) ---\n` +
+        context.otherThreads
+          .map(
+            (thread) =>
+              `${thread.at.toISOString().slice(0, 10)} — ${thread.subject ?? '(sans objet)'}\n${thread.excerpt}`,
+          )
+          .join('\n\n') +
+        `\nTraite le message principal, mais tiens compte de ceux-ci : ne redemande ` +
+        `pas ce qu'il y a déjà donné, et signale-lui d'un mot que tu as bien vu ses ` +
+        `autres messages si cela évite une relance.`,
     );
   }
 

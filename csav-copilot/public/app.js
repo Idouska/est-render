@@ -1900,6 +1900,7 @@ function renderDetail() {
     .join('');
 
   bindTranslate(ticket);
+  renderSiblings(state.detail?.siblings ?? [], ticket);
 
   const draft = ticket.drafts?.[0] ?? null;
   renderDraft(draft, ticket);
@@ -1908,6 +1909,49 @@ function renderDetail() {
   renderShipping(order);
 }
 
+
+
+/**
+ * Les autres messages en cours du même client.
+ *
+ * Un client qui relance ouvre un second fil plutôt que de répondre au sien :
+ * deux lignes dans la file, traitées séparément, répondues deux fois. Ce bloc
+ * les rassemble sous le fil qu'on lit — l'IA en tient compte de son côté dans
+ * son résumé et sa proposition.
+ */
+function renderSiblings(siblings, ticket) {
+  const box = $('d-sibs');
+  if (!box) return;
+
+  box.hidden = siblings.length === 0;
+  if (siblings.length === 0) return;
+
+  const who = ticket.customerName ?? ticket.customerEmail;
+
+  box.innerHTML =
+    `<div class="sibs-head">
+       <span class="panel-title">Autres messages de ${esc(who)}</span>
+       <span class="sibs-count">${siblings.length}</span>
+     </div>` +
+    siblings
+      .map(
+        (sib) => `<button class="sib" data-sib="${esc(sib.id)}">
+          <span class="sib-when">${esc(dateTime(sib.lastMessageAt))}</span>
+          <b>${esc(sib.subject ?? '(sans objet)')}</b>
+          <span class="sib-tags">
+            <span class="tag tag-status st-${esc(sib.status)}">${esc(
+              STATUS_LABELS[sib.status] ?? sib.status,
+            )}</span>
+            ${sib.orderName ? `<span class="tag">${esc(sib.orderName)}</span>` : ''}
+          </span>
+        </button>`,
+      )
+      .join('');
+
+  box.querySelectorAll('[data-sib]').forEach((button) =>
+    button.addEventListener('click', () => void selectTicket(button.dataset.sib)),
+  );
+}
 
 /**
  * Traduction du fil en français, à la demande.
