@@ -4454,7 +4454,7 @@ const VIEW_META = {
   customers: { icon: 'users', label: 'Clients', group: 'Commerce', title: 'Clients' },
   catalog: { icon: 'box', label: 'Catalogue', group: 'Commerce', title: 'Catalogue' },
   suppliers: { icon: 'truck', label: 'Fournisseurs', group: 'Fournisseur', title: 'Contacts fournisseurs' },
-  changes: { icon: 'bolt', label: 'Changements', group: 'Fournisseur', title: 'Demandes de changement' },
+  changes: { icon: 'bolt', label: 'Update', group: 'Fournisseur', title: 'Update — demandes de changement' },
   tracking: { icon: 'pin', label: 'Suivi colis', group: 'Fournisseur', title: 'Suivi des colis' },
   refunds: { icon: 'euro', label: 'Remboursements', group: 'Finance', title: 'Remboursements' },
   disputes: { icon: 'shield', label: 'Litiges Shopify', group: 'Finance', title: 'Litiges Shopify' },

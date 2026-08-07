@@ -94,7 +94,7 @@ export const STRINGS = {
     'nav.orders': 'Commandes',
     'nav.tracking': 'Suivi',
     'nav.catalog': 'Catalogue',
-    'nav.updates': 'Changements',
+    'nav.updates': 'Update',
 
     'range.yesterday': 'Hier',
     'range.today': "Aujourd'hui",
@@ -114,7 +114,7 @@ export const STRINGS = {
     'catalog.variants': '{n} déclinaison(s)',
     'catalog.stock': 'stock {n}',
 
-    'updates.title': 'Demandes de changement',
+    'updates.title': 'Update — demandes de changement',
     'updates.empty': 'Aucune demande en cours.',
     'updates.pending': 'En attente',
     'updates.accept': "C'est fait",
@@ -219,7 +219,7 @@ export const STRINGS = {
     'nav.orders': 'Orders',
     'nav.tracking': 'Tracking',
     'nav.catalog': 'Catalogue',
-    'nav.updates': 'Changes',
+    'nav.updates': 'Update',
 
     'range.yesterday': 'Yesterday',
     'range.today': 'Today',
@@ -239,7 +239,7 @@ export const STRINGS = {
     'catalog.variants': '{n} variant(s)',
     'catalog.stock': 'stock {n}',
 
-    'updates.title': 'Change requests',
+    'updates.title': 'Update — change requests',
     'updates.empty': 'No pending requests.',
     'updates.pending': 'Pending',
     'updates.accept': 'Confirm',
@@ -344,7 +344,7 @@ export const STRINGS = {
     'nav.orders': '订单',
     'nav.tracking': '物流',
     'nav.catalog': '产品目录',
-    'nav.updates': '变更',
+    'nav.updates': 'Update',
 
     'range.yesterday': '昨天',
     'range.today': '今天',
@@ -364,7 +364,7 @@ export const STRINGS = {
     'catalog.variants': '{n} 个规格',
     'catalog.stock': '库存 {n}',
 
-    'updates.title': '变更请求',
+    'updates.title': 'Update — 变更请求',
     'updates.empty': '暂无待处理请求。',
     'updates.pending': '待处理',
     'updates.accept': '已确认处理',
