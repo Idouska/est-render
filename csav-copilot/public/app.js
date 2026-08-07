@@ -1893,17 +1893,93 @@ function renderDetail() {
           <b>${esc(message.fromEmail)}</b>
           <span>${shortTime(message.receivedAt)}</span>
         </div>
-        <div class="msg-body">${esc(message.bodyText)}</div>
+        <div class="msg-body" data-msg="${esc(message.id)}">${esc(message.bodyText)}</div>
+        <div class="msg-fr" data-fr="${esc(message.id)}" hidden></div>
         ${renderAttachments(message.attachments)}
       </div>`,
     )
     .join('');
+
+  bindTranslate(ticket);
 
   const draft = ticket.drafts?.[0] ?? null;
   renderDraft(draft, ticket);
   renderCustomer(order);
   renderOrder(ticket, order, orderError);
   renderShipping(order);
+}
+
+
+/**
+ * Traduction du fil en français, à la demande.
+ *
+ * La traduction s'ajoute sous le message d'origine, elle ne le remplace pas :
+ * ce que le client a écrit reste la seule version qui fait foi, et un doute
+ * sur une formulation se lève en regardant deux lignes plus haut.
+ */
+function bindTranslate(ticket) {
+  const button = $('d-translate');
+  if (!button) return;
+
+  // Le bouton disparaît sur un fil reconnu français : proposer de traduire du
+  // français en français ferait douter de tout le reste. Une langue inconnue
+  // le garde — un message pas encore analysé n'a pas de langue, et c'est
+  // justement là qu'on a besoin de traduire.
+  const label = ticket.language
+    ? `Traduire en français (${ticket.language})`
+    : 'Traduire en français';
+
+  button.hidden = ticket.language === 'fr';
+  if (button.hidden) return;
+
+  button.disabled = false;
+  button.textContent = label;
+
+  button.onclick = async () => {
+    // Deuxième clic : on masque, sans redemander au modèle.
+    const shown = document.querySelector('#d-messages .msg-fr:not([hidden])');
+    if (shown) {
+      document.querySelectorAll('#d-messages .msg-fr').forEach((node) => {
+        node.hidden = true;
+      });
+      button.textContent = label;
+      return;
+    }
+
+    const already = document.querySelector('#d-messages .msg-fr[data-done]');
+    if (already) {
+      document.querySelectorAll('#d-messages .msg-fr[data-done]').forEach((node) => {
+        node.hidden = false;
+      });
+      button.textContent = 'Masquer la traduction';
+      return;
+    }
+
+    button.disabled = true;
+    button.textContent = 'Traduction…';
+
+    try {
+      const result = await api(`/api/tickets/${ticket.id}/translate`, {
+        method: 'POST',
+        body: '{}',
+      });
+
+      for (const line of result.messages) {
+        const node = document.querySelector(`[data-fr="${CSS.escape(line.id)}"]`);
+        if (!node) continue;
+        node.textContent = line.text;
+        node.dataset.done = '1';
+        node.hidden = false;
+      }
+
+      button.textContent = 'Masquer la traduction';
+    } catch (error) {
+      toast(error.message, true);
+      button.textContent = label;
+    } finally {
+      button.disabled = false;
+    }
+  };
 }
 
 /** Droits de l'utilisateur connecté, tels que renvoyés par /api/me. */
@@ -1988,24 +2064,42 @@ function renderTicketLabels(ticket) {
   // le rendrait impossible à décocher.
   for (const name of mine) if (!known.includes(name)) known.push(name);
 
+  const chip = (name, on) => {
+    const style = labelStyles[name];
+    const leaf = name.includes('/') ? name.slice(name.lastIndexOf('/') + 1) : name;
+    const paint =
+      style?.background && on
+        ? ` style="background:${esc(style.background)};color:${esc(
+            style.text ?? '#000',
+          )};border-color:transparent"`
+        : '';
+    return `<button class="lchip" data-tlabel="${esc(name)}" aria-pressed="${on}"
+      title="${esc(name)}"${paint}>${esc(leaf)}</button>`;
+  };
+
+  /*
+   * Les libellés posés restent visibles, les autres se déplient.
+   *
+   * Onze boutons affichés en permanence occupaient deux lignes au-dessus du
+   * mail — plus de place que le mail lui-même sur un portable. Or on classe
+   * une fois et on relit dix : c'est l'état du classement qui doit tenir à
+   * l'écran, pas le catalogue des étiquettes possibles.
+   */
+  const posed = known.filter((name) => mine.has(name));
+  const rest = known.filter((name) => !mine.has(name));
+
   bar.hidden = false;
   bar.innerHTML =
-    known
-      .map((name) => {
-        const on = mine.has(name);
-        const style = labelStyles[name];
-        const leaf = name.includes('/') ? name.slice(name.lastIndexOf('/') + 1) : name;
-        const paint =
-          style?.background && on
-            ? ` style="background:${esc(style.background)};color:${esc(
-                style.text ?? '#000',
-              )};border-color:transparent"`
-            : '';
-        return `<button class="lchip" data-tlabel="${esc(name)}" aria-pressed="${on}"
-          title="${esc(name)}"${paint}>${esc(leaf)}</button>`;
-      })
-      .join('') +
-    `<button class="btn btn-small btn-danger" id="d-delete">Supprimer ce message</button>`;
+    posed.map((name) => chip(name, true)).join('') +
+    (rest.length
+      ? `<details class="lmore">
+           <summary class="lchip lchip-more">${
+             posed.length ? '＋ Libellé' : '＋ Classer ce message'
+           }</summary>
+           <div class="lmore-box">${rest.map((name) => chip(name, false)).join('')}</div>
+         </details>`
+      : '') +
+    `<button class="btn btn-small btn-danger" id="d-delete">Supprimer</button>`;
 
   bar.querySelectorAll('[data-tlabel]').forEach((chip) =>
     chip.addEventListener('click', async () => {
@@ -2368,6 +2462,18 @@ function renderShipping(order) {
       ? row('Estimation', fullDate(fulfillment.estimatedDeliveryAt))
       : '') +
     '</dl>' +
+    /*
+     * Bouton plein format, en plus du numéro cliquable.
+     *
+     * « Où est mon colis » est la question la plus fréquente d'un SAV : la
+     * réponse ne doit pas se mériter en repérant un numéro en petit dans une
+     * liste de définitions. Le numéro reste cliquable pour qui l'a déjà sous
+     * les yeux ; le bouton sert à celui qui vient de lire le mail.
+     */
+    (fulfillment.trackingNumber
+      ? `<button class="btn btn-small btn-primary ship-go"
+           data-track="${esc(fulfillment.trackingNumber)}">Suivre le colis</button>`
+      : '') +
     '<div class="track">' +
     steps
       .map(
@@ -4002,6 +4108,10 @@ function setView(view) {
   // ferait croire qu'ils décrivent l'écran affiché — la barre de filtres est
   // apparue au-dessus des Réglages, où elle ne veut rien dire.
   $('kpis').hidden = view !== 'tickets';
+  // Bandeau mince sur l'écran SAV : quatre cartes hautes repoussaient la file
+  // sous la ligne de flottaison, alors que ces chiffres se consultent d'un
+  // coup d'œil et ne se travaillent pas.
+  $('kpis').classList.toggle('kpis-slim', view === 'tickets');
   $('queue-bar').hidden = view !== 'tickets';
 
   renderNav();
@@ -6437,7 +6547,9 @@ $('pal')?.addEventListener('click', (event) => {
    du tableau Suivi gardent le leur, posé avant celui-ci ; le double appel est
    évité en ne traitant ici que ce qui n'est pas déjà câblé. */
 document.addEventListener('click', (event) => {
-  const button = event.target.closest('.linklike[data-track]');
+  // Tout porteur de `data-track`, et non les seuls liens : le bouton « Suivre
+  // le colis » n'est pas un lien, et le câbler à part le ferait diverger.
+  const button = event.target.closest('[data-track]');
   if (!button || button.closest('#tracking-rows')) return;
   void openTracking(button.dataset.track, button.dataset.trackUrl ?? null);
 });

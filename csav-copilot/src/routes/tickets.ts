@@ -12,6 +12,7 @@ import { getShopifyClient, ShopifyError } from '../services/shopify/client.ts';
 import { listVariants } from '../services/shopify/catalog.ts';
 import { getOrderById, quoteSearchValue, searchOrders } from '../services/shopify/orders.ts';
 import { processTicket } from '../services/tickets/process.ts';
+import { translateToFrench } from '../services/ai/translate.ts';
 
 const TICKET_STATUSES = [
   'NEW',
@@ -334,6 +335,55 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
       if (updated.count === 0) return reply.code(404).send({ error: 'Ticket introuvable' });
 
       return reply.send({ status: parsed.data.status });
+    },
+  );
+
+  /**
+   * Traduit le fil en français.
+   *
+   * À la demande et non d'office : la plupart des mails sont déjà lisibles, et
+   * traduire systématiquement ferait payer un appel de modèle pour rien sur
+   * chaque ouverture. La traduction n'est pas stockée — l'original reste la
+   * seule version qui fait foi.
+   */
+  app.post<{ Params: { id: string } }>(
+    '/api/tickets/:id/translate',
+    { preHandler: requirePermission('read') },
+    async (request, reply) => {
+      const { merchantId, email } = request.session;
+      const readable = await accessibleMerchantIds({ merchantId, email });
+
+      const messages = await prisma.message.findMany({
+        where: { ticket: { id: request.params.id, merchantId: { in: readable } } },
+        orderBy: { receivedAt: 'asc' },
+        select: { id: true, bodyText: true },
+        take: 20,
+      });
+
+      if (messages.length === 0) {
+        return reply.code(404).send({ error: 'Message introuvable' });
+      }
+
+      try {
+        const { translations, model } = await translateToFrench(
+          // Tronqué : un fil qui cite dix fois l'échange précédent ferait
+          // exploser la facture sans rien apprendre de plus.
+          messages.map((message) => message.bodyText.slice(0, 4000)),
+        );
+
+        return reply.send({
+          model,
+          messages: messages.map((message, index) => ({
+            id: message.id,
+            text: translations[index] ?? '',
+          })),
+        });
+      } catch (error) {
+        request.log.error({ err: error, ticketId: request.params.id }, 'Traduction en échec');
+        return reply.code(502).send({
+          error: error instanceof Error ? error.message : 'La traduction a échoué',
+        });
+      }
     },
   );
 

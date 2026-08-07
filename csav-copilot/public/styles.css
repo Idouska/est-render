@@ -4417,3 +4417,86 @@ textarea:focus-visible {
   margin-top: 8px;
 }
 .thread-labels #d-delete { margin-left: auto; }
+
+/* ---------------------------------------------- indicateurs en bandeau ---
+   Sur l'écran SAV, les quatre indicateurs tiennent sur une ligne basse : la
+   file est le sujet de la page, et quatre cartes de 90 px la repoussaient
+   hors de l'écran au premier chargement. L'intitulé passe à côté du chiffre
+   plutôt qu'au-dessus, et la note explicative disparaît — elle a sa place sur
+   la vue d'ensemble, pas au-dessus d'une liste qu'on vient traiter. */
+.kpis-slim {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+}
+.kpis-slim .kpi {
+  padding: 8px 12px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.kpis-slim .kpi-value {
+  font-size: 19px;
+  margin-top: 0;
+  order: -1;
+}
+.kpis-slim .kpi-label {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+.kpis-slim .kpi-note { display: none; }
+
+/* Catalogue des libellés non posés, replié. Le menu flotte au-dessus du fil :
+   poussé dans le flux, il déplaçait le message à chaque ouverture. */
+.lmore { position: relative; }
+.lmore > summary { list-style: none; cursor: pointer; }
+.lmore > summary::-webkit-details-marker { display: none; }
+.lchip-more { border-style: dashed; }
+.lmore-box {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 240px;
+  max-height: 260px;
+  overflow-y: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  background-image: var(--grad-raised);
+  box-shadow: var(--e4), var(--edge);
+}
+
+/* Bouton de suivi du rail latéral : pleine largeur, il ne se cherche pas. */
+.ship-go {
+  display: block;
+  width: 100%;
+  margin: 10px 0 4px;
+  text-align: center;
+}
+
+/* Traduction sous le message d'origine, en retrait : c'est une aide à la
+   lecture, pas la parole du client. */
+.msg-fr {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-left: 3px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  border-radius: 0 8px 8px 0;
+  white-space: pre-wrap;
+  font-size: 13.5px;
+}
+
+/* L'en-tête du fil porte maintenant le bouton de traduction : il se pose à
+   droite du libellé plutôt que sous lui. */
+.thread-fold > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.thread-fold > summary #d-translate { margin-left: auto; }
