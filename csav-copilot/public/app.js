@@ -260,15 +260,22 @@ function labelChip(name) {
  * « Chargeback », « Out of stock », « Wismo » — et elles disent mieux que
  * n'importe quel motif deviné ce qu'il y a à faire.
  *
- * Affichés dès que Gmail en connaît, même si aucun ticket n'en porte encore :
- * les masquer tant que la file est vide laisserait croire qu'ils n'existent
- * pas, alors qu'ils attendent seulement une synchronisation.
+ * Seuls les libellés réellement portés par un ticket sont proposés. Lister
+ * tout ce que Gmail connaît remplissait la barre des étiquettes privées du
+ * compte — Doctolib, Impôts, EDF — qui ne filtrent rien ici et n'ont aucune
+ * raison de s'afficher dans un outil de SAV. Gmail ne fournit plus que la
+ * couleur ; c'est la file qui décide de la liste.
  */
 function renderLabelChips() {
   const bar = $('q-labels');
   if (!bar) return;
 
-  const names = Object.keys(labelStyles).sort((a, b) => a.localeCompare(b, 'fr'));
+  const used = new Set(state.queueLabels ?? []);
+  // Le libellé actif reste visible même si le filtre en cours vide la file :
+  // sinon le bouton qu'on vient de presser disparaîtrait sous le doigt.
+  if (state.queue.label) used.add(state.queue.label);
+
+  const names = [...used].sort((a, b) => a.localeCompare(b, 'fr'));
   bar.hidden = names.length === 0;
   if (names.length === 0) return;
 
