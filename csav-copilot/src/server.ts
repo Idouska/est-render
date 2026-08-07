@@ -68,14 +68,73 @@ export async function buildServer() {
   await app.register(fastifyStatic, {
     root: join(projectRoot, 'public'),
     prefix: '/static/',
+    /*
+     * Revalidation obligatoire à chaque chargement.
+     *
+     * Sans en-tête de cache explicite, le navigateur applique son heuristique
+     * et garde `app.js` plusieurs heures : on déploie un correctif, on
+     * recharge, et l'ancien fichier s'exécute. Le symptôme est le pire qui
+     * soit — « je ne vois aucune différence » — parce qu'il ressemble à un
+     * code qui ne marche pas. `max-age=0` avec l'ETag ne coûte qu'un aller-
+     * retour de quelques octets quand le fichier n'a pas bougé.
+     */
+    cacheControl: true,
+    maxAge: 0,
+    setHeaders(response) {
+      response.setHeader('Cache-Control', 'no-cache, must-revalidate');
+    },
   });
+
+  /**
+   * Empreinte des fichiers servis, pour forcer le rechargement après un
+   * déploiement.
+   *
+   * Calculée au démarrage depuis la date de modification des fichiers : un
+   * nouveau conteneur, donc un nouveau déploiement, donc une nouvelle
+   * empreinte. Elle s'ajoute aux URL des scripts et feuilles de style de la
+   * page, ce qui rend le cache du navigateur inoffensif sans l'empêcher de
+   * servir les chargements suivants.
+   */
+  const assetVersion = await (async () => {
+    const { stat } = await import('node:fs/promises');
+    const files = ['app.js', 'styles.css', 'workspace.js', 'workspace.css'];
+    const times = await Promise.all(
+      files.map((file) =>
+        stat(join(projectRoot, 'public', file))
+          .then((info) => info.mtimeMs)
+          .catch(() => 0),
+      ),
+    );
+    return Math.max(...times).toString(36);
+  })();
+
+  const { readFile } = await import('node:fs/promises');
+  const pageCache = new Map<string, string>();
+
+  /** Sert une page en marquant ses ressources de l'empreinte du déploiement. */
+  async function sendPage(reply: import('fastify').FastifyReply, file: string) {
+    let html = pageCache.get(file);
+
+    if (!html) {
+      html = (await readFile(join(projectRoot, 'public', file), 'utf8')).replace(
+        /(\/static\/[\w.-]+\.(?:js|css))/g,
+        `$1?v=${assetVersion}`,
+      );
+      pageCache.set(file, html);
+    }
+
+    // La page elle-même n'est jamais mise en cache : c'est elle qui porte
+    // l'empreinte, la garder reviendrait à garder l'ancienne version.
+    return reply
+      .header('Cache-Control', 'no-store')
+      .type('text/html')
+      .send(html);
+  }
 
   // Le dashboard est une page unique servie par l'API : pas de second serveur
   // à lancer, pas de CORS, pas d'étape de build.
   app.get('/', async (request, reply) => reply.redirect('/dashboard'));
-  app.get('/dashboard', async (request, reply) =>
-    reply.type('text/html').sendFile('dashboard.html'),
-  );
+  app.get('/dashboard', async (request, reply) => sendPage(reply, 'dashboard.html'));
 
   // Politique de confidentialité et CGU : URL stables, exigées telles quelles
   // par l'écran de consentement OAuth Google et par la fiche Shopify Partners.

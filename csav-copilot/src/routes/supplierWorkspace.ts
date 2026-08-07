@@ -153,6 +153,8 @@ function toShopifyRange(since: string | undefined, until: string | undefined): s
 
 export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<void> {
   app.get<{ Params: { id: string } }>('/fournisseur/:id', async (request, reply) =>
+    // Servi par le plugin statique, qui pose `no-cache` : sans lui, l'atelier
+    // d'un fournisseur restait figé sur la version de la veille.
     reply.type('text/html').sendFile('workspace.html'),
   );
 
