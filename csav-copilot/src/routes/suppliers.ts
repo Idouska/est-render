@@ -290,6 +290,44 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
   });
 
   /**
+   * Annulation d'une demande de changement.
+   *
+   * Une demande envoyée sur la mauvaise commande restait plantée « en
+   * attente » pour toujours : le fournisseur la voyait chaque matin, le
+   * marchand ne pouvait pas la reprendre. Seules les demandes encore sans
+   * réponse s'annulent — une demande traitée est un fait, pas un brouillon.
+   */
+  app.delete<{ Params: { id: string } }>(
+    '/api/changes/:id',
+    { preHandler: requirePermission('escalate') },
+    async (request, reply) => {
+      const { merchantId, userId } = request.session;
+
+      const removed = await prisma.supplierAlert.deleteMany({
+        where: { id: request.params.id, merchantId, status: 'PENDING' },
+      });
+
+      if (removed.count === 0) {
+        return reply.code(409).send({
+          error: 'Introuvable, ou le fournisseur a déjà répondu — une demande traitée ne s’annule plus.',
+        });
+      }
+
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId: userId,
+        action: 'supplier.change_cancelled',
+        targetType: 'SupplierAlert',
+        targetId: request.params.id,
+        ipAddress: request.ip,
+      });
+
+      return reply.send({ cancelled: true });
+    },
+  );
+
+  /**
    * Alerte urgente vers un fournisseur.
    *
    * L'atelier est le canal du quotidien : il l'ouvre le matin, il y trouve ses

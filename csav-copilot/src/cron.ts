@@ -12,6 +12,7 @@
  */
 
 import { logger } from './lib/logger.ts';
+import { sendPlainEmail } from './services/gmail/send.ts';
 import { disconnectPrisma, prisma } from './lib/prisma.ts';
 import { renewExpiringWatches } from './services/gmail/watch.ts';
 
@@ -86,6 +87,73 @@ export async function purgeExpiredData(): Promise<{
   return { messages, drafts, tickets };
 }
 
+/**
+ * Rappel aux fournisseurs restés muets sur une demande de changement.
+ *
+ * Une demande sans réponse est une promesse faite à un client qui attend. Le
+ * cron tourne chaque jour : toute demande en attente depuis plus de douze
+ * heures reçoit un rappel par mail — un seul. Au-delà, l'outil n'insiste
+ * plus : c'est au marchand de décrocher son téléphone, et la demande reste
+ * en rouge chez lui précisément pour ça.
+ */
+async function remindSilentSuppliers(): Promise<number> {
+  const stale = await prisma.supplierAlert.findMany({
+    where: {
+      status: 'PENDING',
+      remindedAt: null,
+      createdAt: { lte: new Date(Date.now() - 12 * 60 * 60 * 1000) },
+    },
+    take: 100,
+    select: {
+      id: true,
+      merchantId: true,
+      kind: true,
+      beforeValue: true,
+      afterValue: true,
+      message: true,
+      orderName: true,
+      supplier: { select: { name: true, contactEmail: true, active: true } },
+    },
+  });
+
+  let sent = 0;
+
+  for (const alert of stale) {
+    if (!alert.supplier.active) continue;
+
+    try {
+      await sendPlainEmail({
+        merchantId: alert.merchantId,
+        to: alert.supplier.contactEmail,
+        subject: `RAPPEL — demande sans réponse${alert.orderName ? ` · ${alert.orderName}` : ''}`,
+        body: [
+          alert.afterValue ? `${alert.beforeValue ?? '?'} → ${alert.afterValue}` : null,
+          alert.orderName ? `Commande : ${alert.orderName}` : null,
+          alert.message || null,
+          '',
+          'Cette demande attend votre réponse depuis hier. Ouvrez votre espace',
+          'de travail, onglet Update, pour confirmer — ou dire pourquoi c’est',
+          'impossible.',
+        ]
+          .filter((line) => line !== null)
+          .join('\n'),
+      });
+
+      await prisma.supplierAlert.update({
+        where: { id: alert.id },
+        data: { remindedAt: new Date() },
+      });
+      sent += 1;
+    } catch (error) {
+      // Une boîte en panne ne bloque pas les autres rappels ; la demande
+      // restera candidate au prochain passage.
+      logger.warn({ err: error, alertId: alert.id }, 'Rappel non envoyé');
+    }
+  }
+
+  return sent;
+}
+
 async function main(): Promise<void> {
   const task = process.argv[2] ?? 'all';
   let failed = false;
@@ -97,6 +165,16 @@ async function main(): Promise<void> {
     } catch (error) {
       failed = true;
       logger.error({ err: error }, 'Renouvellement des watch Gmail en échec');
+    }
+  }
+
+  if (task === 'all' || task === 'remind') {
+    try {
+      const reminded = await remindSilentSuppliers();
+      logger.info({ reminded }, 'Rappels de demandes de changement envoyés');
+    } catch (error) {
+      failed = true;
+      logger.error({ err: error }, 'Rappels fournisseurs en échec');
     }
   }
 

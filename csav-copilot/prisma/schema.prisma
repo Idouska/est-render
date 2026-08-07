@@ -754,6 +754,9 @@ model SupplierAlert {
   acknowledgedAt DateTime?
   /// Le mail est parti — ou non, si la boîte du marchand a refusé.
   emailedAt      DateTime?
+  /// Rappel envoyé au fournisseur resté muet. Un seul : au-delà, c'est au
+  /// marchand de décrocher son téléphone, pas à l'outil d'insister.
+  remindedAt     DateTime?
 
   merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
   supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)

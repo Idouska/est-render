@@ -4816,6 +4816,13 @@ function renderChangesScreen() {
               ? `<p class="chgc-note">« ${esc(change.supplierNote)} »</p>`
               : ''
           }
+          ${
+            change.status === 'PENDING'
+              ? `<button class="chgc-cancel" data-chg-cancel="${esc(
+                  change.id,
+                )}">Annuler la demande</button>`
+              : ''
+          }
         </div>`;
       })
       .join('') ||
@@ -4833,6 +4840,29 @@ function renderChangesScreen() {
       if (!ticketId) return;
       setView('tickets');
       void selectTicket(ticketId);
+    }),
+  );
+
+  rows.querySelectorAll('[data-chg-cancel]').forEach((button) =>
+    button.addEventListener('click', async (event) => {
+      // Le clic sur « Annuler » ne doit pas aussi ouvrir le mail : la carte
+      // entière est cliquable, et les deux gestes n'ont rien à voir.
+      event.stopPropagation();
+
+      if (!confirm('Annuler cette demande ? Elle disparaît aussi de l’atelier du fournisseur.')) {
+        return;
+      }
+
+      button.disabled = true;
+      try {
+        await api(`/api/changes/${button.dataset.chgCancel}`, { method: 'DELETE' });
+        toast('Demande annulée.');
+        changesCountAt = 0;
+        await loadChanges();
+      } catch (error) {
+        toast(error.message, true);
+        button.disabled = false;
+      }
     }),
   );
 }

@@ -4938,3 +4938,18 @@ textarea:focus-visible {
   color: var(--ink);
 }
 .swap-row.swap-long input:last-child { color: var(--accent); }
+
+/* Annulation d'une demande en attente : un lien discret — le geste est rare,
+   et la carte reste avant tout un chemin vers le mail. */
+.chgc-cancel {
+  margin-top: 8px;
+  padding: 6px 10px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--crit);
+  cursor: pointer;
+  border-radius: 8px;
+}
+.chgc-cancel:hover { background: var(--crit-soft); }
