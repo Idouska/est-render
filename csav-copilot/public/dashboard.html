@@ -1381,9 +1381,18 @@ Douane : les frais éventuels sont à la charge du destinataire hors UE."></text
           <div class="field" id="alert-swap-field">
             <label>Le changement</label>
             <div class="swap-row">
-              <input id="alert-before" type="text" placeholder="42.5" aria-label="Actuellement" />
+              <!-- Les deux champs ouvrent le catalogue au clic : une couleur
+                   écrite de mémoire part fausse chez l'atelier, qui la lira à
+                   la lettre. -->
+              <span class="pickwrap">
+                <input id="alert-before" type="text" placeholder="42.5"
+                  aria-label="Actuellement" autocomplete="off" />
+              </span>
               <span class="swap-arrow" aria-hidden="true">→</span>
-              <input id="alert-after" type="text" placeholder="45" aria-label="À la place" />
+              <span class="pickwrap">
+                <input id="alert-after" type="text" placeholder="45"
+                  aria-label="À la place" autocomplete="off" />
+              </span>
             </div>
           </div>
 

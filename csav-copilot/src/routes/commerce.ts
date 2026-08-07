@@ -11,7 +11,7 @@ import {
 } from '../services/tracking/index.ts';
 import { requireSession } from '../plugins/auth.ts';
 import { getShopifyClient, ShopifyError, ShopifyScopeError } from '../services/shopify/client.ts';
-import { listCollections, listDisputes, listProducts } from '../services/shopify/catalog.ts';
+import { listCollections, listDisputes, listProducts, listVariants } from '../services/shopify/catalog.ts';
 import { listCustomers } from '../services/shopify/customers.ts';
 import { getOrderById, listOrders, quoteSearchValue } from '../services/shopify/orders.ts';
 
@@ -187,6 +187,102 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
     navCountsCache.set(merchantId, { at: Date.now(), counts });
     return reply.send({ counts });
   });
+
+  /**
+   * Déclinaisons du catalogue, pour choisir au lieu de saisir.
+   *
+   * Une demande de changement se jouait à la frappe : « 45 », « Blackened
+   * Blue », « Nike Vomero Plus » — écrits de mémoire, donc parfois faux, et
+   * envoyés tels quels à un atelier qui les lira à la lettre. Une couleur mal
+   * orthographiée, c'est une paire qui part de travers.
+   *
+   * `scope` dit ce qu'on cherche : une taille et une couleur se cherchent
+   * dans les déclinaisons d'un même modèle, un modèle se cherche dans tout le
+   * catalogue. Les valeurs sont dédupliquées — proposer douze fois « 45 »
+   * parce que douze modèles la portent n'aide personne.
+   */
+  app.get<{ Querystring: { q?: string; scope?: string; product?: string } }>(
+    '/api/variant-options',
+    async (request, reply) => {
+      const scope = request.query.scope === 'PRODUCT' ? 'PRODUCT' : request.query.scope === 'COLOR' ? 'COLOR' : 'SIZE';
+      const term = (request.query.q ?? '').trim();
+      const product = (request.query.product ?? '').trim();
+
+      try {
+        const client = await getShopifyClient(request.session.merchantId);
+
+        if (scope === 'PRODUCT') {
+          const page = await listProducts(client, { query: term, limit: 30 });
+          return reply.send({
+            options: page.products.map((item) => ({
+              value: item.title,
+              detail: item.vendor ?? '',
+              image: item.image,
+              stock: item.totalInventory,
+            })),
+          });
+        }
+
+        /*
+         * Taille et couleur : on part du modèle de la commande quand on le
+         * connaît, sinon de la recherche libre. Sans aucun des deux il n'y a
+         * rien à proposer — mieux vaut une liste vide qu'un échantillon
+         * arbitraire du catalogue.
+         */
+        const query = product
+          ? `product_title:${quoteSearchValue(product)}`
+          : term
+            ? quoteSearchValue(term)
+            : '';
+
+        if (!query) return reply.send({ options: [] });
+
+        const variants = await listVariants(client, { query, limit: 100 });
+
+        const seen = new Map<string, { value: string; detail: string; image: string | null; stock: number | null }>();
+
+        for (const variant of variants) {
+          // « Blackened Blue / 45 » : le segment qui commence par un chiffre
+          // est la taille, l'autre la couleur. Constant sur des chaussures.
+          const parts = String(variant.variantTitle ?? '')
+            .split('/')
+            .map((part) => part.trim())
+            .filter(Boolean);
+
+          const size = parts.find((part) => /^\d/.test(part)) ?? (parts.length === 1 ? parts[0] : '');
+          const color = parts.find((part) => part !== size) ?? '';
+          const value = scope === 'SIZE' ? size : color;
+
+          if (!value) continue;
+          if (term && !value.toLowerCase().includes(term.toLowerCase())) continue;
+
+          const existing = seen.get(value);
+          if (existing) {
+            // Le stock s'additionne : la même taille existe en plusieurs
+            // couleurs, et c'est le total qui dit si l'échange est possible.
+            existing.stock = (existing.stock ?? 0) + (variant.inventoryQuantity ?? 0);
+            continue;
+          }
+
+          seen.set(value, {
+            value,
+            detail: scope === 'SIZE' ? color : variant.productTitle,
+            image: variant.image,
+            stock: variant.inventoryQuantity,
+          });
+        }
+
+        return reply.send({
+          options: [...seen.values()].sort((a, b) =>
+            a.value.localeCompare(b.value, 'fr', { numeric: true }),
+          ),
+        });
+      } catch (error) {
+        request.log.warn({ err: error }, 'Déclinaisons indisponibles');
+        return reply.send({ options: [], error: 'Catalogue indisponible.' });
+      }
+    },
+  );
 
   app.get('/api/orders', async (request, reply) => {
     const parsed = orderQuery.safeParse(request.query);

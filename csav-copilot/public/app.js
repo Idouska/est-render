@@ -3053,6 +3053,7 @@ function alertContextFromOrder(order) {
 }
 
 function setAlertKind(kind) {
+  closeVariantPicker();
   $('alert-kind').value = kind;
   document.querySelectorAll('#alert-kinds [data-kind]').forEach((button) =>
     button.setAttribute('aria-pressed', String(button.dataset.kind === kind)),
@@ -3077,6 +3078,125 @@ function setAlertKind(kind) {
 document.querySelectorAll('#alert-kinds [data-kind]').forEach((button) =>
   button.addEventListener('click', () => setAlertKind(button.dataset.kind)),
 );
+
+
+/* ------------------------------------------- choisir plutôt que saisir ---- */
+
+/**
+ * Liste déroulante des déclinaisons du catalogue, sous un champ du
+ * « avant → après ».
+ *
+ * Écrire « Blackened Blue » de mémoire, c'est l'écrire faux une fois sur
+ * trois — et l'atelier lira ce qu'on lui a écrit. Le champ reste libre (un
+ * fournisseur peut avoir une référence qu'on n'a pas), mais le catalogue est
+ * à un clic, avec sa recherche et son stock.
+ *
+ * La liste se cherche sur le modèle de la commande quand on le connaît : la
+ * question n'est pas « quelles tailles existent » mais « quelles tailles
+ * existent pour CETTE paire ».
+ */
+let pickerTimer = null;
+
+function closeVariantPicker() {
+  document.querySelectorAll('.pickbox').forEach((box) => box.remove());
+}
+
+async function fillVariantPicker(box, input, scope) {
+  const term = input.value.trim();
+  const product = scope === 'PRODUCT' ? '' : (state.alertCtx?.PRODUCT ?? '');
+
+  box.innerHTML = '<div class="pick-empty">Recherche…</div>';
+
+  let options = [];
+  try {
+    const params = new URLSearchParams({ scope });
+    if (term) params.set('q', term);
+    if (product) params.set('product', product);
+    ({ options } = await api(`/api/variant-options?${params}`));
+  } catch (error) {
+    box.innerHTML = `<div class="pick-empty">${esc(error.message)}</div>`;
+    return;
+  }
+
+  if (options.length === 0) {
+    box.innerHTML = `<div class="pick-empty">${
+      scope === 'PRODUCT'
+        ? 'Aucun produit trouvé.'
+        : 'Aucune déclinaison trouvée pour ce modèle.'
+    }</div>`;
+    return;
+  }
+
+  box.innerHTML = options
+    .map(
+      (option) => `<button type="button" class="pick-item" data-value="${esc(option.value)}">
+        ${
+          option.image
+            ? `<img src="${esc(option.image)}" alt="" loading="lazy" />`
+            : '<span class="pick-noimg" aria-hidden="true"></span>'
+        }
+        <span class="pick-text">
+          <b>${esc(option.value)}</b>
+          ${option.detail ? `<small>${esc(option.detail)}</small>` : ''}
+        </span>
+        ${
+          option.stock !== null && option.stock !== undefined
+            ? `<span class="pick-stock${option.stock > 0 ? '' : ' out'}">${
+                option.stock > 0 ? `${option.stock} en stock` : 'épuisé'
+              }</span>`
+            : ''
+        }
+      </button>`,
+    )
+    .join('');
+
+  box.querySelectorAll('.pick-item').forEach((item) =>
+    item.addEventListener('mousedown', (event) => {
+      // `mousedown` et non `click` : le champ perd le focus avant le clic, et
+      // la liste se refermerait sous le doigt.
+      event.preventDefault();
+      input.value = item.dataset.value;
+      closeVariantPicker();
+    }),
+  );
+}
+
+function openVariantPicker(input) {
+  const kind = $('alert-kind').value;
+  const scope = kind === 'PRODUCT' ? 'PRODUCT' : kind === 'COLOR' ? 'COLOR' : 'SIZE';
+
+  // Adresse et téléphone n'ont pas de catalogue : rien à proposer.
+  if (!['SIZE', 'COLOR', 'PRODUCT'].includes(kind)) return;
+
+  closeVariantPicker();
+
+  const box = document.createElement('div');
+  box.className = 'pickbox';
+  input.parentElement.append(box);
+  void fillVariantPicker(box, input, scope);
+}
+
+for (const id of ['alert-before', 'alert-after']) {
+  const input = $(id);
+  if (!input) continue;
+
+  input.addEventListener('focus', () => openVariantPicker(input));
+
+  input.addEventListener('input', () => {
+    const box = input.parentElement.querySelector('.pickbox');
+    if (!box) return openVariantPicker(input);
+
+    clearTimeout(pickerTimer);
+    // Une requête par lettre serait une requête Shopify par lettre : on
+    // attend la pause de frappe, comme partout ailleurs.
+    pickerTimer = setTimeout(() => {
+      const kind = $('alert-kind').value;
+      void fillVariantPicker(box, input, kind === 'PRODUCT' ? 'PRODUCT' : kind === 'COLOR' ? 'COLOR' : 'SIZE');
+    }, 250);
+  });
+
+  input.addEventListener('blur', () => setTimeout(closeVariantPicker, 120));
+}
 
 $('sup-f-alert')?.addEventListener('click', () => {
   const id = $('sup-f-link').dataset.supplier;

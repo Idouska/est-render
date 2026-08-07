@@ -4953,3 +4953,83 @@ textarea:focus-visible {
   border-radius: 8px;
 }
 .chgc-cancel:hover { background: var(--crit-soft); }
+
+/* ------------------------------------------- catalogue sous le champ ------
+   La liste flotte sous le champ plutôt que de pousser le formulaire : ouverte
+   dans le flux, elle déplacerait le bouton d'envoi à chaque frappe. */
+.pickwrap { position: relative; flex: 1; display: block; }
+
+.pickbox {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + 5px);
+  left: 0;
+  /* Plus large que le champ : à la largeur d'une case « taille », la couleur
+     se réduisait à « Black… » et la liste ne servait plus à distinguer. */
+  min-width: min(320px, 74vw);
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  background-image: var(--grad-raised);
+  box-shadow: var(--e4), var(--edge);
+  padding: 5px;
+}
+
+.pick-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  font: inherit;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+.pick-item:hover { background: var(--inset); }
+
+.pick-item img,
+.pick-noimg {
+  width: 34px;
+  height: 34px;
+  object-fit: cover;
+  border-radius: 7px;
+  background: var(--inset);
+  border: 1px solid var(--line);
+  flex: none;
+  display: block;
+}
+
+.pick-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.pick-text b { font-size: 14px; font-weight: 600; }
+.pick-text small {
+  font-size: 11.5px;
+  color: var(--ink-mute);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Le stock décide de la réponse au client : proposer un échange vers une
+   taille épuisée, c'est promettre ce qu'on ne peut pas tenir. */
+.pick-stock {
+  flex: none;
+  font-size: 11px;
+  font-weight: 650;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+.pick-stock.out { background: var(--crit-soft); color: var(--crit); }
+
+/* La liste du champ de droite s'aligne à droite : ancrée à gauche, elle
+   débordait de la fenêtre. */
+.pickwrap:last-of-type .pickbox { left: auto; right: 0; }
+
+.pick-empty { padding: 14px 10px; font-size: 13px; color: var(--ink-mute); text-align: center; }
