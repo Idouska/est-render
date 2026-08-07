@@ -11,6 +11,7 @@ import { sendPlainEmail } from '../services/gmail/send.ts';
 import { getShopifyClient, ShopifyError } from '../services/shopify/client.ts';
 import { listVariants } from '../services/shopify/catalog.ts';
 import { getOrderById, quoteSearchValue, searchOrders } from '../services/shopify/orders.ts';
+import { processTicket } from '../services/tickets/process.ts';
 
 const TICKET_STATUSES = [
   'NEW',
@@ -337,6 +338,54 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
   );
 
   /**
+   * Analyse un message à la demande, tout de suite.
+   *
+   * La file de fond traite le courrier à trente messages par minute pour ne
+   * pas saturer le fournisseur d'IA — parfait pour rattraper des milliers de
+   * mails, inutilisable quand on a ce mail-ci sous les yeux et qu'on veut son
+   * résumé maintenant. Cet appel court-circuite la file : un seul ticket, en
+   * direct, le temps d'un café.
+   *
+   * Le traitement est identique à celui du worker — même classification, même
+   * rattachement de commande, même brouillon — pour qu'un message analysé à la
+   * main ne diffère en rien d'un message analysé tout seul.
+   */
+  app.post<{ Params: { id: string } }>(
+    '/api/tickets/:id/analyze',
+    { preHandler: requirePermission('reply') },
+    async (request, reply) => {
+      const { merchantId } = request.session;
+
+      const ticket = await prisma.ticket.findFirst({
+        where: { id: request.params.id, merchantId },
+        select: { id: true },
+      });
+      if (!ticket) return reply.code(404).send({ error: 'Message introuvable' });
+
+      try {
+        await processTicket(merchantId, ticket.id);
+      } catch (error) {
+        request.log.error({ err: error, ticketId: ticket.id }, 'Analyse à la demande en échec');
+        return reply.code(502).send({
+          error: error instanceof Error ? error.message : "L'analyse a échoué",
+        });
+      }
+
+      const draft = await prisma.draft.findFirst({
+        where: { ticketId: ticket.id },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      const fresh = await prisma.ticket.findUnique({
+        where: { id: ticket.id },
+        select: { status: true, intent: true, failureReason: true, labels: true },
+      });
+
+      return reply.send({ ...fresh, draft });
+    },
+  );
+
+  /**
    * Supprime un message pour de bon.
    *
    * Clore range, supprimer efface. Les deux sont nécessaires : un mail de
@@ -509,7 +558,10 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
 
         for (const ticket of page) {
           try {
-            await enqueueTicket({ merchantId, ticketId: ticket.id });
+            // `replace` : la tâche précédente de ce ticket existe encore et
+            // ferait rejeter la nouvelle en silence — c'est ce qui rendait ce
+            // bouton sans effet.
+            await enqueueTicket({ merchantId, ticketId: ticket.id }, { replace: true });
             queued += 1;
           } catch (error) {
             request.log.error({ err: error, ticketId: ticket.id }, 'Relance impossible');

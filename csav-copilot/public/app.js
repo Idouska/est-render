@@ -2076,6 +2076,63 @@ function renderBrief(draft) {
   $('d-summary').innerHTML = points.map((line) => `<li>${esc(line)}</li>`).join('');
 }
 
+
+/*
+ * Analyse à la demande.
+ *
+ * La file de fond avale des milliers de messages à cadence bridée : quand on
+ * ouvre un mail précis, on n'attend pas son tour, on veut son résumé. Le
+ * bouton lance le même traitement que le worker, sur ce seul message.
+ *
+ * Déclenché tout seul à l'ouverture quand le message n'a jamais été analysé —
+ * c'est le geste qu'on ferait de toute façon, et le faire faire à la main
+ * transformerait chaque lecture en corvée. Une seule tentative par message et
+ * par session : un mail que l'IA refuse ne doit pas relancer un appel à chaque
+ * clic.
+ */
+const analysed = new Set();
+
+function analyseButton(label) {
+  return `<br><button class="btn btn-small btn-primary" id="d-analyse"
+    style="margin-top:9px">${label}</button>`;
+}
+
+async function runAnalyse(ticketId, button) {
+  analysed.add(ticketId);
+
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'L’IA lit le message…';
+  }
+
+  try {
+    await api(`/api/tickets/${ticketId}/analyze`, { method: 'POST', body: '{}' });
+    // On recharge le détail plutôt que de recoller la réponse : le statut, le
+    // libellé et la commande rattachée changent aussi. Le préchargement est
+    // vidé d'abord, sinon on réafficherait la version d'avant l'analyse.
+    prefetched.delete(ticketId);
+    if (state.currentId === ticketId) await selectTicket(ticketId);
+    await loadQueue();
+  } catch (error) {
+    if (button) {
+      button.disabled = false;
+      button.textContent = 'Réessayer';
+    }
+    toast(error.message, true);
+  }
+}
+
+function bindAnalyse(ticket) {
+  const button = $('d-analyse');
+  button?.addEventListener('click', () => void runAnalyse(ticket.id, button));
+
+  // Jamais deux fois de suite sur le même message, et jamais sur un message
+  // clos : relire une archive ne doit pas coûter un appel au modèle.
+  if (!analysed.has(ticket.id) && ticket.status !== 'CLOSED' && ticket.status !== 'AUTO_SENT') {
+    void runAnalyse(ticket.id, button);
+  }
+}
+
 function renderDraft(draft, ticket) {
   const zone = $('draft-zone');
   const none = $('no-draft');
@@ -2090,17 +2147,21 @@ function renderDraft(draft, ticket) {
     none.hidden = false;
     $('no-draft-text').innerHTML =
       `<b class="set-alert">Le traitement a échoué.</b><br>` +
-      `<span class="mono" style="font-size:12px">${esc(ticket.failureReason)}</span>`;
+      `<span class="mono" style="font-size:12px">${esc(ticket.failureReason)}</span>` +
+      analyseButton('Réessayer maintenant');
+    bindAnalyse(ticket);
     return;
   }
 
   if (!draft) {
     zone.hidden = true;
     none.hidden = false;
-    $('no-draft-text').textContent =
-      ticket.intent === 'POSITIVE' || ticket.intent === 'OTHER'
+    $('no-draft-text').innerHTML =
+      (ticket.intent === 'POSITIVE' || ticket.intent === 'OTHER'
         ? "Ce message n'appelle pas de réponse automatique — il a été classé sans action."
-        : 'Aucun brouillon n’a encore été généré pour ce message.';
+        : 'Pas encore de résumé ni de réponse pour ce message.') +
+      analyseButton('Résumer et proposer une réponse');
+    bindAnalyse(ticket);
     return;
   }
 

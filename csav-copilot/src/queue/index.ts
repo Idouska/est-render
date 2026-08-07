@@ -49,8 +49,40 @@ export async function enqueueIngest(job: IngestJob): Promise<void> {
   await ingestQueue.add('ingest', job, { jobId: ingestJobId(job, bucket) });
 }
 
-export async function enqueueTicket(job: TicketJob): Promise<void> {
-  await ticketQueue.add('process', job, { jobId: ticketJobId(job) });
+/**
+ * Met un ticket en traitement.
+ *
+ * L'identifiant stable évite qu'un même ticket soit traité deux fois quand
+ * plusieurs mails d'un même fil arrivent coup sur coup. Mais BullMQ garde la
+ * tâche après son passage — un jour si elle a réussi, sept si elle a échoué —
+ * et **ignore silencieusement** tout ajout portant un identifiant déjà connu.
+ *
+ * Conséquence observée en production : « Relancer les messages en échec »
+ * répondait « 3621 remis en traitement » sans que rien ne bouge. Les tâches
+ * portaient le même identifiant que celles qui avaient échoué la veille, et
+ * étaient jetées à l'entrée. Le compteur d'échecs restait figé, motifs
+ * périmés compris, alors que la cause avait été corrigée.
+ *
+ * `replace` supprime la trace de la tâche précédente avant d'ajouter la
+ * nouvelle. La suppression échoue si la tâche est en cours d'exécution : c'est
+ * exactement ce qu'on veut — le ticket est déjà en train d'être traité, il n'y
+ * a rien à relancer.
+ */
+export async function enqueueTicket(
+  job: TicketJob,
+  options: { replace?: boolean } = {},
+): Promise<void> {
+  const jobId = ticketJobId(job);
+
+  if (options.replace) {
+    try {
+      await ticketQueue.remove(jobId);
+    } catch {
+      // Tâche en cours : elle fait déjà le travail demandé.
+    }
+  }
+
+  await ticketQueue.add('process', job, { jobId });
 }
 
 export async function closeQueues(): Promise<void> {
