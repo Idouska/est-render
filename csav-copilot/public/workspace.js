@@ -637,7 +637,10 @@ async function loadAlerts() {
         }
         ${alert.message ? `<p>${escapeHtml(alert.message)}</p>` : ''}
         <button class="btn btn-small" data-open-updates="1">${escapeHtml(
-          t('updates.accept'),
+          // « Voir » et non « C'est fait » : ce bouton ouvre l'écran, il ne
+          // confirme rien. Une étiquette qui promet une action que le clic ne
+          // fait pas est celle qu'on presse sans lire.
+          t('alert.open'),
         )}</button>
       </div>`,
     )

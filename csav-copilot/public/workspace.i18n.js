@@ -147,6 +147,8 @@ export const STRINGS = {
     'parcel.shipped': 'Commande expédiée — le client est prévenu par mail.',
     'parcel.shipFail': "Colis enregistré, mais Shopify n'a pas validé l'expédition : {reason}",
 
+    'alert.open': 'Voir la demande',
+
     'error.generic': 'Erreur ({status})',
   },
 
@@ -272,6 +274,8 @@ export const STRINGS = {
     'parcel.shipped': 'Order shipped — the customer has been emailed.',
     'parcel.shipFail': 'Parcel saved, but Shopify rejected the shipment: {reason}',
 
+    'alert.open': 'View request',
+
     'error.generic': 'Error ({status})',
   },
 
@@ -396,6 +400,8 @@ export const STRINGS = {
 
     'parcel.shipped': '订单已发货 — 已通过邮件通知客户。',
     'parcel.shipFail': '包裹已保存，但 Shopify 未确认发货：{reason}',
+
+    'alert.open': '查看请求',
 
     'error.generic': '错误（{status}）',
   },
