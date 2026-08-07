@@ -5170,19 +5170,29 @@ function orderDetailMarkup(order) {
  * même geste pour fermer, même comportement au clavier, rien de nouveau à
  * apprendre.
  */
+/**
+ * Fiche complète d'une commande, par-dessus l'écran courant.
+ *
+ * Une fiche où l'on ne peut rien décider est une impasse : celle-ci porte les
+ * trois fils que l'outil connaît — les mails du client sur cette commande, les
+ * colis saisis par l'atelier, les demandes de changement en cours — et le
+ * geste qui manquait : demander un changement au fournisseur depuis ici.
+ */
 async function openOrderSheet(id) {
   $('sheet-name').textContent = 'Commande';
   $('sheet-email').textContent = '';
   $('sheet-body').innerHTML = '<p class="empty">Chargement…</p>';
   $('sheet-wrap').hidden = false;
 
-  let order;
+  let data;
   try {
-    ({ order } = await api(`/api/orders/${encodeURIComponent(id)}`));
+    data = await api(`/api/orders/${encodeURIComponent(id)}`);
   } catch (error) {
     $('sheet-body').innerHTML = `<p class="empty">${esc(error.message)}</p>`;
     return;
   }
+
+  const { order, tickets = [], parcels = [], changes = [] } = data;
 
   $('sheet-name').textContent = `Commande ${order.name}`;
   $('sheet-email').textContent = order.customer?.email ?? '';
@@ -5191,17 +5201,17 @@ async function openOrderSheet(id) {
     .flatMap((fulfillment) => fulfillment.trackingInfo ?? [])
     .find((info) => info.number);
 
+  const section = (title, body) =>
+    `<section class="sheet-group"><span class="rail-title">${title}</span>${body}</section>`;
+
   $('sheet-body').innerHTML =
     `<section class="sheet-group">${orderDetailMarkup(order)}</section>` +
-    // Les deux gestes qui suivent une lecture de commande : voir où est le
-    // colis, ou voir qui est le client. Les chercher ailleurs annulerait le
-    // bénéfice de ne pas avoir changé d'écran.
+    // Les gestes d'abord : c'est pour eux qu'on a ouvert la fiche.
     `<section class="sheet-group sheet-acts">
+       <button class="btn btn-small btn-primary" id="ordv-change">⚡ Demander un changement</button>
        ${
          tracking
-           ? `<button class="btn btn-small btn-primary" data-track="${esc(
-               tracking.number,
-             )}"${
+           ? `<button class="btn btn-small" data-track="${esc(tracking.number)}"${
                tracking.url ? ` data-track-url="${esc(tracking.url)}"` : ''
              }>Suivre le colis</button>`
            : ''
@@ -5215,11 +5225,114 @@ async function openOrderSheet(id) {
          href="https://${esc(state.me?.merchant?.shopDomain ?? '')}/admin/orders/${esc(
            String(order.id ?? '').split('/').pop() ?? '',
          )}">Ouvrir dans Shopify</a>
-     </section>`;
+     </section>` +
+    // Les demandes de changement : ce qu'on a déjà promis sur cette commande.
+    (changes.length
+      ? section(
+          'Demandes au fournisseur',
+          changes
+            .map((change) => {
+              const status = CHANGE_STATUS[change.status] ?? CHANGE_STATUS.PENDING;
+              return `<div class="sheet-row" style="display:block">
+                <b>${esc(CHANGE_KINDS[change.kind] ?? change.kind)}</b>
+                ${
+                  change.afterValue
+                    ? ` <span class="mono">${esc(change.beforeValue ?? '—')} → ${esc(
+                        change.afterValue,
+                      )}</span>`
+                    : ''
+                }
+                <span class="tag tone-${status.tone}">${esc(status.label)}</span>
+                <span class="sub"> ${esc(change.supplier?.name ?? '')} · ${esc(
+                  dateTime(change.createdAt),
+                )}</span>
+                ${
+                  change.supplierNote
+                    ? `<br><span class="sub">« ${esc(change.supplierNote)} »</span>`
+                    : ''
+                }
+              </div>`;
+            })
+            .join(''),
+        )
+      : '') +
+    // Les mails du client sur cette commande : la fiche mène à la conversation.
+    (tickets.length
+      ? section(
+          'Messages SAV liés',
+          tickets
+            .map(
+              (ticket) => `<div class="sheet-row clickable" data-ticket="${esc(ticket.id)}">
+                <b>${esc(ticket.subject ?? '(sans objet)')}</b>
+                <span class="tag tag-status st-${esc(ticket.status)}">${esc(
+                  STATUS_LABELS[ticket.status] ?? ticket.status,
+                )}</span>
+                <span class="when">${esc(dateTime(ticket.lastMessageAt))}</span>
+              </div>`,
+            )
+            .join(''),
+        )
+      : '') +
+    // Les colis de l'atelier : ce que le fournisseur a réellement saisi,
+    // photos d'étiquettes comprises — la version Shopify n'en sait rien.
+    (parcels.length
+      ? section(
+          "Colis saisis par l'atelier",
+          parcels
+            .map(
+              (parcel) => `<div class="sheet-row">
+                <button class="linklike mono" data-track="${esc(
+                  parcel.trackingNumber,
+                )}">${esc(parcel.trackingNumber)}</button>
+                <span class="sub">colis ${parcel.index}/${parcel.total}${
+                  parcel.carrier ? ` · ${esc(parcel.carrier)}` : ''
+                }${parcel.photoMime ? ' · 📷 étiquette' : ''}</span>
+              </div>`,
+            )
+            .join(''),
+        )
+      : '');
 
   $('ordv-customer')?.addEventListener('click', () =>
     void openCustomerSheet(order.customer.email, order.customer.displayName ?? ''),
   );
+
+  // La demande part pré-remplie : commande, article et déclinaison actuelle.
+  // Ne rester à saisir que la nouvelle valeur, c'est ce qui fait qu'on le fait.
+  $('ordv-change')?.addEventListener('click', () => {
+    if (activeSuppliers().length === 0) {
+      toast('Ajoutez d’abord un fournisseur dans l’écran Fournisseurs.', true);
+      return;
+    }
+
+    const item = order.lineItems?.[0];
+    closeCustomerSheet();
+    $('alert-modal').dataset.supplier = '';
+    $('alert-modal').dataset.ticket = '';
+    $('alert-modal').dataset.order = order.id ?? '';
+    $('alert-who').textContent = `Commande ${order.name} · ${
+      order.customer?.displayName ?? order.customer?.email ?? ''
+    }`;
+    $('alert-kind').value = 'SIZE';
+    $('alert-order').value = order.name ?? '';
+    $('alert-before').value = item?.variantTitle ?? '';
+    $('alert-after').value = '';
+    $('alert-message').value = '';
+    renderAlertSuppliers();
+    $('alert-modal').hidden = false;
+    $('alert-modal').classList.add('open');
+    $('alert-after').focus();
+  });
+
+  $('sheet-body')
+    .querySelectorAll('[data-ticket]')
+    .forEach((row) =>
+      row.addEventListener('click', () => {
+        closeCustomerSheet();
+        setView('tickets');
+        void selectTicket(row.dataset.ticket);
+      }),
+    );
 }
 
 $('orders-more').addEventListener('click', () => loadOrders());

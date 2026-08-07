@@ -222,7 +222,60 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
       const order = await getOrderById(client, gid);
       if (!order) return reply.code(404).send({ error: 'Commande introuvable' });
 
-      return reply.send({ order });
+      /*
+       * Ce que l'outil sait de cette commande, au-delà de Shopify.
+       *
+       * La fiche affichait la commande nue : impossible d'y voir les mails du
+       * client à son sujet, les colis saisis par l'atelier, ou les demandes de
+       * changement en cours — donc impossible d'y décider quoi que ce soit.
+       * Trois lectures de base, servies avec la commande.
+       */
+      const { merchantId } = request.session;
+
+      const [tickets, parcels, changes] = await Promise.all([
+        prisma.ticket.findMany({
+          where: { merchantId, shopifyOrderId: gid, isHistorical: false },
+          orderBy: { lastMessageAt: 'desc' },
+          take: 5,
+          select: {
+            id: true,
+            subject: true,
+            status: true,
+            intent: true,
+            lastMessageAt: true,
+          },
+        }),
+        prisma.parcel.findMany({
+          where: { merchantId, shopifyOrderId: gid },
+          orderBy: { index: 'asc' },
+          select: {
+            id: true,
+            trackingNumber: true,
+            carrier: true,
+            index: true,
+            total: true,
+            photoMime: true,
+          },
+        }),
+        prisma.supplierAlert.findMany({
+          where: { merchantId, shopifyOrderId: gid },
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+          select: {
+            id: true,
+            kind: true,
+            status: true,
+            beforeValue: true,
+            afterValue: true,
+            message: true,
+            supplierNote: true,
+            createdAt: true,
+            supplier: { select: { name: true } },
+          },
+        }),
+      ]);
+
+      return reply.send({ order, tickets, parcels, changes });
     } catch (error) {
       const { status, message } = describeShopifyError(error);
       request.log.error({ err: error }, 'Lecture de commande en échec');
