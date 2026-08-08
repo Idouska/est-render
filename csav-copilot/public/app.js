@@ -7413,6 +7413,7 @@ function renderSettings() {
 
   $('set-brand').value = merchant.brandName ?? '';
   $('set-playbook').value = merchant.playbook ?? '';
+  $('set-signature').value = merchant.emailSignature ?? '';
   $('set-sla').value = String(merchant.slaHours ?? 24);
   renderLogoPreview(merchant);
   $('set-logo').value = merchant.logoUrl ?? '';
@@ -7440,6 +7441,7 @@ const SETTINGS_FIELDS = [
   'set-threshold',
   'set-retention',
   'set-playbook',
+  'set-signature',
   'set-sla',
 ];
 
@@ -7507,6 +7509,7 @@ $('set-save').addEventListener('click', async () => {
       body: JSON.stringify({
         brandName: $('set-brand').value.trim() || null,
         playbook: $('set-playbook').value.trim() || null,
+        emailSignature: $('set-signature').value.trim() || null,
         slaHours: Number($('set-sla').value),
         logoUrl: $('set-logo').value.trim() || null,
         trackingUrlTemplate: $('set-tracking').value.trim() || null,

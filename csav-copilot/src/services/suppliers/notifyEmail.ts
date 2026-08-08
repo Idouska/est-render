@@ -3,13 +3,15 @@
  *
  * Le précédent portait en objet un identifiant technique de vingt-cinq
  * caractères — « commande cmsj3nfsu000liz01f92sk2c7 » — et pour tout corps
- * trois lignes suivies d'une URL de trois cents caractères, nue. Aucun nom de
- * boutique, aucune commande lisible, aucune signature. Les filtres le
- * classaient en indésirables, et l'atelier qui le trouvait quand même n'y
- * apprenait rien qu'il n'ait déjà.
+ * trois lignes suivies d'une URL nue de trois cents caractères. Ni nom de
+ * boutique, ni commande lisible, ni signature. Les filtres le classaient en
+ * indésirables, et l'atelier qui le trouvait quand même n'y apprenait rien.
  *
- * Ce qu'un mail professionnel doit faire ici : dire de qui il vient, sur quelle
- * commande, ce qu'on attend, et offrir un bouton — pas un pavé de jeton.
+ * La correction n'est pas d'en faire une carte : un mail de travail entre un
+ * marchand et son atelier n'est pas une infolettre, et le déguiser en bandeau
+ * coloré le rend plus suspect, pas moins. C'est un message ordinaire, écrit
+ * comme le marchand l'écrirait dans Gmail — quelques phrases, le lien sur sa
+ * ligne, la signature de la maison. Rien de plus.
  */
 
 const REASON_LABELS: Record<string, string> = {
@@ -27,22 +29,22 @@ export interface EscalationMailContext {
   orderName: string | null;
   reason: string;
   portalUrl: string;
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+  /**
+   * Signature du marchand, telle qu'il l'a écrite dans les réglages. Absente,
+   * le nom de la boutique en tient lieu : mieux vaut une signature minimale
+   * qu'un message qui s'arrête net.
+   */
+  signature?: string | null;
+  /** Note laissée par l'agent au moment de l'escalade, s'il en a laissé une. */
+  note?: string | null;
 }
 
 /**
  * L'objet du mail.
  *
- * Le numéro de commande quand on l'a — c'est ce que l'atelier cherche dans sa
- * boîte trois jours plus tard. Jamais d'identifiant interne : il ne veut rien
- * dire pour le destinataire, et un objet incompréhensible est le premier
+ * Le numéro de commande quand on l'a — c'est ce que l'atelier cherchera dans
+ * sa boîte trois jours plus tard. Jamais d'identifiant interne : il ne veut
+ * rien dire pour le destinataire, et un objet incompréhensible est le premier
  * critère de mise en indésirables.
  */
 export function escalationSubject(context: EscalationMailContext): string {
@@ -50,83 +52,45 @@ export function escalationSubject(context: EscalationMailContext): string {
   return `${context.merchantName} — ${about} : ${REASON_LABELS[context.reason] ?? 'demande'}`;
 }
 
-/** Version texte. Elle doit se suffire : certains clients n'affichent qu'elle. */
+/**
+ * Le corps du mail, en texte.
+ *
+ * Volontairement sans HTML. Un message tapé à la main dans Gmail part en
+ * texte, et c'est exactement ce qu'on veut imiter : le fournisseur doit avoir
+ * l'impression qu'une personne lui écrit, parce que c'est le cas — un agent
+ * vient de cliquer.
+ */
 export function escalationText(context: EscalationMailContext): string {
-  return [
+  const reason = REASON_LABELS[context.reason] ?? 'demande particulière';
+
+  const lines = [
     `Bonjour ${context.supplierName},`,
     '',
     context.orderName
-      ? `Nous avons une demande à vous soumettre sur la commande ${context.orderName}.`
-      : 'Nous avons une demande à vous soumettre sur une commande.',
-    `Motif : ${REASON_LABELS[context.reason] ?? 'demande particulière'}.`,
+      ? `Nous avons besoin de vous sur la commande ${context.orderName} : ${reason}.`
+      : `Nous avons besoin de vous sur une commande en cours : ${reason}.`,
+  ];
+
+  // La note de l'agent, quand il en a écrit une : c'est le seul endroit où le
+  // fournisseur apprend ce qu'on attend précisément de lui.
+  const note = context.note?.trim();
+  if (note) {
+    lines.push('', note);
+  }
+
+  lines.push(
     '',
     'Le détail et le formulaire de réponse sont ici :',
     context.portalUrl,
     '',
-    'Ce lien vous est réservé : il ouvre directement la demande, sans mot de',
-    'passe. Merci de ne pas le transférer.',
+    'Le lien ouvre directement la demande, sans mot de passe — merci de ne pas',
+    'le transférer.',
     '',
-    `— ${context.merchantName}`,
-  ].join('\n');
-}
+    'Merci d’avance,',
+  );
 
-/**
- * Version HTML.
- *
- * Volontairement sobre et en styles en ligne : les clients de messagerie
- * ignorent les feuilles de style, et un mail qui tente une mise en page riche
- * finit décomposé une fois sur deux. Le lien devient un bouton — c'est tout ce
- * qui manquait pour que le message cesse de ressembler à un hameçonnage.
- */
-export function escalationHtml(context: EscalationMailContext): string {
-  const merchant = escapeHtml(context.merchantName);
-  const supplier = escapeHtml(context.supplierName);
-  const reason = escapeHtml(REASON_LABELS[context.reason] ?? 'demande particulière');
-  const order = context.orderName ? escapeHtml(context.orderName) : null;
-  const url = escapeHtml(context.portalUrl);
+  const signature = context.signature?.trim() || context.merchantName;
+  lines.push(signature);
 
-  return `<!doctype html>
-<html lang="fr">
-  <body style="margin:0;padding:24px;background:#f5f6fa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#14162a">
-    <table role="presentation" cellpadding="0" cellspacing="0" style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e6e7ef;border-radius:14px">
-      <tr>
-        <td style="padding:26px 28px">
-          <p style="margin:0 0 4px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#8b8ea3">${merchant}</p>
-          <h1 style="margin:0 0 18px;font-size:19px;line-height:1.35;font-weight:650">
-            ${order ? `Demande sur la commande ${order}` : 'Demande sur une commande'}
-          </h1>
-
-          <p style="margin:0 0 16px;font-size:14.5px;line-height:1.6">
-            Bonjour ${supplier},<br />
-            nous avons une demande à vous soumettre. Motif : <b>${reason}</b>.
-          </p>
-
-          <p style="margin:0 0 24px;font-size:14.5px;line-height:1.6">
-            Le détail complet et le formulaire de réponse vous attendent sur votre
-            espace. Vous pouvez répondre directement depuis la page.
-          </p>
-
-          <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 24px">
-            <tr>
-              <td style="border-radius:10px;background:#5b4ee0">
-                <a href="${url}" style="display:inline-block;padding:13px 22px;font-size:14.5px;font-weight:600;color:#ffffff;text-decoration:none">
-                  Voir la demande et répondre
-                </a>
-              </td>
-            </tr>
-          </table>
-
-          <p style="margin:0;font-size:12.5px;line-height:1.6;color:#8b8ea3">
-            Ce lien vous est réservé : il ouvre directement la demande, sans mot de
-            passe. Merci de ne pas le transférer.
-          </p>
-        </td>
-      </tr>
-    </table>
-
-    <p style="max-width:520px;margin:14px auto 0;font-size:11.5px;color:#8b8ea3;text-align:center">
-      Message envoyé par ${merchant} à propos d'une commande en cours.
-    </p>
-  </body>
-</html>`;
+  return lines.join('\n');
 }

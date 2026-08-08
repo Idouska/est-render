@@ -68,6 +68,7 @@ const patchBody = z
     logo: photoSchema.nullish(),
     trackingUrlTemplate: z.string().max(300).nullish(),
     playbook: z.string().max(8000).nullish(),
+    emailSignature: z.string().max(600).nullish(),
     slaHours: z.number().int().min(1).max(240).optional(),
     autoSendEnabled: z.boolean().optional(),
     // Un seuil sous 0,5 reviendrait à envoyer des réponses que le modèle
@@ -158,6 +159,7 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
         logoUpdatedAt: merchant.updatedAt,
         trackingUrlTemplate: merchant.trackingUrlTemplate,
         playbook: merchant.playbook,
+        emailSignature: merchant.emailSignature,
         slaHours: merchant.slaHours,
         shopDomain: merchant.shopDomain,
         status: merchant.status,
@@ -1302,6 +1304,7 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
           logoUpdatedAt: merchant.updatedAt,
           trackingUrlTemplate: merchant.trackingUrlTemplate,
         playbook: merchant.playbook,
+        emailSignature: merchant.emailSignature,
         slaHours: merchant.slaHours,
           shopDomain: merchant.shopDomain,
           status: merchant.status,

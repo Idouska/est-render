@@ -65,6 +65,13 @@ model Merchant {
 
   /// Délai de première réponse visé, en heures. Sert à dater l'échéance d'un
   /// ticket : l'ancienneté dit qu'il traîne, l'échéance dit s'il est en faute.
+  /// Signature apposée au bas des mails partant de l'outil.
+  ///
+  /// Un mail de service sans signature se lit comme une notification de
+  /// robot — et se classe comme telle. Celle-ci est celle du marchand, telle
+  /// qu'il l'écrirait dans Gmail : nom, boutique, ce qu'il veut y mettre.
+  emailSignature String? @db.Text
+
   slaHours Int @default(24)
 
   /// Gabarit de lien de suivi, `{tracking}` remplacé par le numéro. Vide, on

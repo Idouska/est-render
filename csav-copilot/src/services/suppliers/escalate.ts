@@ -4,7 +4,7 @@ import { signSupplierToken } from '../../lib/supplierToken.ts';
 import { prisma } from '../../lib/prisma.ts';
 import { generateSupplierDraft } from '../ai/supplierDraft.ts';
 import { sendPlainEmail } from '../gmail/send.ts';
-import { escalationHtml, escalationSubject, escalationText } from './notifyEmail.ts';
+import { escalationSubject, escalationText } from './notifyEmail.ts';
 import { getShopifyClient } from '../shopify/client.ts';
 import { formatAddress, getOrderById } from '../shopify/orders.ts';
 
@@ -145,7 +145,7 @@ export async function sendEscalation(params: {
 
   const merchant = await prisma.merchant.findUniqueOrThrow({
     where: { id: params.merchantId },
-    select: { name: true, brandName: true, shopDomain: true },
+    select: { name: true, brandName: true, shopDomain: true, emailSignature: true },
   });
 
   const context = {
@@ -157,6 +157,8 @@ export async function sendEscalation(params: {
     orderName: escalation.ticket.orderName,
     reason: escalation.reason,
     portalUrl,
+    signature: merchant.emailSignature,
+    note: escalation.note,
   };
 
   await sendPlainEmail({
@@ -165,7 +167,6 @@ export async function sendEscalation(params: {
     fromName: context.merchantName,
     subject: escalationSubject(context),
     body: escalationText(context),
-    html: escalationHtml(context),
   });
 
   await prisma.$transaction([

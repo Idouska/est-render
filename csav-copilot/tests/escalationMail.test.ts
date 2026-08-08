@@ -1,10 +1,6 @@
 import { equal, match, ok } from 'node:assert/strict';
 import { test } from 'node:test';
-import {
-  escalationHtml,
-  escalationSubject,
-  escalationText,
-} from '../src/services/suppliers/notifyEmail.ts';
+import { escalationSubject, escalationText } from '../src/services/suppliers/notifyEmail.ts';
 
 /*
  * Le mail reçu en production portait en objet « Nouvelle demande — commande
@@ -45,21 +41,27 @@ test('la version texte se suffit à elle-même et porte le lien', () => {
   match(body, /commande #11363/);
   match(body, /rupture de stock/);
   ok(body.includes(context.portalUrl));
-  match(body, /— Running Upscale$/);
+  // La signature ferme le message : le nom de la boutique à défaut de réglage.
+  ok(body.endsWith('Running Upscale'));
 });
 
-test('la version HTML porte un bouton, pas une URL nue', () => {
-  const html = escalationHtml(context);
-  match(html, /Voir la demande et répondre/);
-  ok(html.includes(`href="${context.portalUrl}"`));
-  // Le jeton ne doit jamais s'afficher en clair dans le corps visible.
-  ok(!html.includes('>https://csav-api'));
+test('la signature du marchand ferme le message', () => {
+  const body = escalationText({ ...context, signature: 'Rachid\nRunning Upscale' });
+  ok(body.endsWith('Merci d’avance,\nRachid\nRunning Upscale'));
 });
 
-test('le nom du fournisseur est échappé — un apostrophe ne casse pas le gabarit', () => {
-  const html = escalationHtml({ ...context, supplierName: 'Atelier <b>Nord</b>' });
-  ok(html.includes('Atelier &lt;b&gt;Nord&lt;/b&gt;'));
-  ok(!html.includes('<b>Nord</b>'));
+test('sans signature réglée, le nom de la boutique en tient lieu', () => {
+  ok(escalationText(context).endsWith('Merci d’avance,\nRunning Upscale'));
+});
+
+test('la note de l’agent est reprise : c’est ce qu’on attend précisément', () => {
+  const body = escalationText({ ...context, note: 'Le 44 est parti à la place du 45.' });
+  match(body, /Le 44 est parti à la place du 45\./);
+});
+
+test('une note vide ne laisse pas de trou dans le message', () => {
+  const body = escalationText({ ...context, note: '   ' });
+  ok(!body.includes('\n\n\n'));
 });
 
 test('un motif inconnu ne laisse pas de code technique à l’écran', () => {
