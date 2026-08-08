@@ -32,6 +32,9 @@ const state = {
   /* Messages cochés dans la file. Un Set et non un tableau : on teste
      l'appartenance à chaque ligne rendue, cinquante fois par rafraîchissement. */
   picked: new Set(),
+  /* Tableau ou liste, mémorisé : c'est une habitude de travail, pas un
+     réglage qu'on repose chaque matin. */
+  queueView: localStorage.getItem('csav.queueView') === 'table' ? 'table' : 'list',
   agents: [],
   canned: [],
   editingCanned: null,
@@ -810,6 +813,8 @@ async function loadQueue({ append = false } = {}) {
       </li>`;
     })
     .join('');
+
+  if (state.queueView === 'table') renderQueueTable(multiMailbox, shopById);
 
   bindPickers();
   renderBulk();
@@ -2193,6 +2198,216 @@ function bindTranslate(ticket) {
   };
 }
 
+
+
+/* ==========================================================================
+   LA FILE EN TABLEAU
+
+   Vingt lignes lues d'un coup d'œil, contre six en cartes. Ce qu'un agent
+   cherche avant d'ouvrir un message tient en cinq colonnes : qui écrit, ce
+   qu'il veut, combien vaut sa commande, dans combien de temps on est en
+   faute, et qui s'en occupe. Tout le reste appartient au message lui-même.
+
+   Le tableau prend toute la largeur et masque le rail de droite : à 350 px,
+   cinq colonnes ne sont plus un tableau mais une bouillie. Un clic ouvre le
+   message et rend la vue partagée — parcourir et traiter sont deux gestes,
+   ils méritent deux dispositions.
+   ========================================================================== */
+
+/** Temps restant avant l'échéance, en barre : la seule chose qui dise l'ordre. */
+function slaCell(ticket) {
+  if (!ticket.dueAt) return '<span class="sub">—</span>';
+
+  const left = new Date(ticket.dueAt).getTime() - Date.now();
+  const hours = left / 3600000;
+
+  // Trois paliers, comme partout ailleurs : au-delà, la couleur devient une
+  // décoration au lieu d'une échelle.
+  const tone = left < 0 ? 'bad' : hours < 4 ? 'warn' : 'ok';
+  const label =
+    left < 0
+      ? `en retard de ${formatSpan(-left)}`
+      : `${formatSpan(left)}`;
+
+  // La barre se vide à mesure : pleine à vingt-quatre heures, vide à
+  // l'échéance. Un pourcentage exact n'apporterait rien, l'ordre de grandeur
+  // suffit à décider.
+  const pct = Math.max(0, Math.min(100, (hours / 24) * 100));
+
+  return `<span class="sla sla-${tone}" title="${esc(dateTime(ticket.dueAt))}">
+    <i style="width:${left < 0 ? 100 : pct}%"></i>
+    <b>${esc(label)}</b>
+  </span>`;
+}
+
+/** Heure pour aujourd'hui, jour + heure sinon. Sur une ligne de tableau, la
+    date complète mange la colonne pour deux informations déjà connues. */
+function shortMoment(iso) {
+  const date = new Date(iso);
+  const today = new Date().toDateString() === date.toDateString();
+  const time = date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  return today
+    ? time
+    : `${date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })} ${time}`;
+}
+
+function formatSpan(ms) {
+  const hours = Math.round(ms / 3600000);
+  if (hours < 1) return "moins d'1 h";
+  if (hours < 48) return `${hours} h`;
+  return `${Math.round(hours / 24)} j`;
+}
+
+function renderQueueTable(multiMailbox, shopById) {
+  const box = $('queue-table');
+  if (!box) return;
+
+  const cols = [
+    { key: 'customer', label: 'Client' },
+    { key: 'subject', label: 'Message' },
+    { key: 'intent', label: 'Motif' },
+    { key: 'amount', label: 'Montant', sort: 'amount', num: true },
+    { key: 'due', label: 'Échéance', sort: 'due' },
+    { key: 'assignee', label: 'Assigné' },
+  ];
+
+  box.innerHTML = `<table class="qtable">
+    <thead><tr>
+      <th class="qt-pick"></th>
+      ${cols
+        .map(
+          (col) =>
+            `<th class="qt-${col.key}${col.num ? ' num' : ''}"${
+              col.sort ? ` data-sort="${col.sort}"` : ''
+            }>${esc(col.label)}${
+              col.sort
+                ? `<span class="qt-arrow${state.queue.sort === col.sort ? ' on' : ''}">↓</span>`
+                : ''
+            }</th>`,
+        )
+        .join('')}
+    </tr></thead>
+    <tbody>${state.tickets
+      .map((ticket) => {
+        const who = ticket.assignedTo;
+        const picked = state.picked.has(ticket.id);
+
+        return `<tr class="qt-row${picked ? ' picked' : ''}${
+          ticket.id === state.currentId ? ' on' : ''
+        }" data-id="${esc(ticket.id)}">
+          <td class="qt-pick">
+            <input type="checkbox" data-pick="${esc(ticket.id)}"${picked ? ' checked' : ''} />
+          </td>
+
+          <td class="qt-customer">
+            ${
+              state.allShops && shopById.has(ticket.merchantId)
+                ? `<span class="shop-pip" style="background:${esc(
+                    shopById.get(ticket.merchantId).color,
+                  )}"></span>`
+                : ''
+            }
+            <b>${esc(ticket.customerName ?? ticket.customerEmail)}</b>
+            ${segmentChip(ticket)}
+          </td>
+
+          <td class="qt-subject">
+            <b>${esc(ticket.subject ?? '(sans objet)')}</b>
+            <span class="qt-when">${esc(shortMoment(ticket.lastMessageAt))}</span>
+          </td>
+
+          <td class="qt-intent">
+            ${
+              ticket.intent
+                ? `<span class="tag in-${ticket.intent}">${esc(
+                    INTENT_LABELS[ticket.intent] ?? ticket.intent,
+                  )}</span>`
+                : '<span class="sub">—</span>'
+            }
+            <span class="tag tag-status st-${ticket.status}">${esc(
+              STATUS_LABELS[ticket.status] ?? ticket.status,
+            )}</span>
+          </td>
+
+          <td class="qt-amount num mono">
+            ${
+              ticket.orderTotal != null
+                ? esc(euro(ticket.orderTotal))
+                : '<span class="sub">—</span>'
+            }
+            ${ticket.orderName ? `<span class="qt-order">${esc(ticket.orderName)}</span>` : ''}
+          </td>
+
+          <td class="qt-due">${slaCell(ticket)}</td>
+
+          <td class="qt-assignee">
+            <span class="who-dot${who ? '' : ' none'}" title="${
+              who ? esc(who.name ?? who.email) : 'non assigné'
+            }">${who ? esc(initials(who.name ?? who.email)) : '—'}</span>
+          </td>
+        </tr>`;
+      })
+      .join('')}</tbody>
+  </table>`;
+
+  box.querySelectorAll('.qt-row').forEach((row) =>
+    row.addEventListener('click', (event) => {
+      // La case à cocher ne doit pas ouvrir le message : on coche pour agir en
+      // masse, précisément pour ne pas les ouvrir un par un.
+      if (event.target.closest('.qt-pick')) return;
+      void selectTicket(row.dataset.id);
+      setQueueView('list');
+    }),
+  );
+
+  box.querySelectorAll('[data-sort]').forEach((head) =>
+    head.addEventListener('click', () => {
+      state.queue.sort = head.dataset.sort;
+      $('q-sort').value = head.dataset.sort;
+      void loadQueue();
+    }),
+  );
+}
+
+/**
+ * Ce que ce client représente, avant d'ouvrir son message.
+ *
+ * Compté sur nos échanges, pas sur ses achats — et nommé en conséquence. Un
+ * huitième message ne se traite pas comme un premier : soit le client est
+ * fidèle, soit son problème traîne depuis trois semaines, et dans les deux
+ * cas le ton change.
+ */
+function segmentChip(ticket) {
+  const threads = ticket.threads ?? 1;
+  if (threads <= 1) return '<span class="seg-chip seg-new">nouveau</span>';
+  if (threads >= 5) return `<span class="seg-chip seg-vip">${threads} échanges</span>`;
+  return `<span class="seg-chip">${threads} échanges</span>`;
+}
+
+function setQueueView(view) {
+  state.queueView = view;
+  localStorage.setItem('csav.queueView', view);
+
+  $('queue-table').hidden = view !== 'table';
+  $('queue').hidden = view === 'table';
+  // Le tableau prend toute la largeur : à 350 px, six colonnes ne sont plus un
+  // tableau mais une bouillie.
+  $('view-tickets')?.classList.toggle('wide-queue', view === 'table');
+
+  document.querySelectorAll('#queue-view [data-qview]').forEach((button) =>
+    button.setAttribute('aria-pressed', String(button.dataset.qview === view)),
+  );
+
+  if (view === 'table' && state.tickets.length) void loadQueue();
+}
+
+document.querySelectorAll('#queue-view [data-qview]').forEach((button) =>
+  button.addEventListener('click', () => setQueueView(button.dataset.qview)),
+);
+
+// Le mode mémorisé s'applique dès le chargement, avant la première file :
+// sinon le tableau apparaîtrait après coup, en déplaçant tout l'écran.
+setQueueView(state.queueView);
 
 /* ================================================== actions groupées ===== */
 

@@ -5088,3 +5088,140 @@ textarea:focus-visible {
   font-weight: 600;
   color: var(--accent);
 }
+
+/* ==========================================================================
+   LA FILE EN TABLEAU
+
+   Vingt lignes lues d'un coup d'œil contre six en cartes. Cinq colonnes, pas
+   plus : qui écrit, ce qu'il veut, ce que vaut sa commande, dans combien de
+   temps on est en faute, qui s'en occupe. Le reste appartient au message.
+   ========================================================================== */
+
+/* Le tableau exige la largeur : le rail de droite s'efface, le panneau de la
+   file s'étend. À 350 px, six colonnes ne sont plus un tableau. */
+.workspace.wide-queue { grid-template-columns: minmax(0, 1fr); }
+.workspace.wide-queue > .panel:not(:first-child) { display: none; }
+
+.seg2 {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-left: 8px;
+}
+.seg2 button {
+  border: 0;
+  background: var(--surface);
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--ink-mute);
+  cursor: pointer;
+}
+.seg2 button + button { border-left: 1px solid var(--line); }
+.seg2 button[aria-pressed='true'] { background: var(--accent); color: #fff; }
+
+.qtable-wrap { overflow-x: auto; }
+
+.qtable { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+
+.qtable thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 9px 12px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.qtable th[data-sort] { cursor: pointer; user-select: none; }
+.qtable th[data-sort]:hover { color: var(--ink); }
+.qt-arrow { opacity: 0; margin-left: 4px; }
+.qt-arrow.on { opacity: 1; color: var(--accent); }
+.qtable th.num, .qtable td.num { text-align: right; }
+
+.qt-row { border-bottom: 1px solid var(--line-soft); cursor: pointer; }
+.qt-row:hover { background: var(--inset); }
+.qt-row.on { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.qt-row.picked { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.qtable td { padding: 9px 12px; vertical-align: middle; }
+
+.qt-pick { width: 34px; padding-right: 0 !important; }
+.qt-pick input { width: 15px; height: 15px; cursor: pointer; accent-color: var(--accent); }
+
+.qt-customer { max-width: 210px; }
+.qt-customer b {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Ce que le client représente, avant d'ouvrir. Compté sur nos échanges — le
+   libellé le dit, parce que l'annoncer comme des achats serait un mensonge
+   utile jusqu'au jour où il coûte cher. */
+.seg-chip {
+  display: inline-block;
+  margin-top: 2px;
+  font-size: 10.5px;
+  font-weight: 650;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--inset);
+  color: var(--ink-mute);
+}
+.seg-new { background: var(--ok-soft); color: var(--ok); }
+.seg-vip { background: var(--warn-soft); color: var(--warn); }
+
+.qt-subject { max-width: 420px; }
+.qt-subject b {
+  display: block;
+  font-weight: 550;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.qt-when { font-size: 11.5px; color: var(--ink-mute); }
+
+.qt-intent { white-space: nowrap; }
+.qt-intent .tag + .tag { margin-left: 4px; }
+
+.qt-amount { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.qt-order { display: block; font-size: 11px; color: var(--ink-mute); }
+
+/* L'échéance en barre qui se vide : c'est elle qui dit dans quel ordre
+   travailler, et un texte seul ne se compare pas d'une ligne à l'autre. */
+.qt-due { width: 130px; }
+.sla { display: block; }
+.sla i {
+  display: block;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--ok);
+  margin-bottom: 3px;
+  max-width: 100%;
+}
+.sla b { font-size: 11.5px; font-weight: 600; color: var(--ink-mute); }
+.sla-ok i { background: var(--ok); }
+.sla-warn i { background: var(--warn); }
+.sla-warn b { color: var(--warn); }
+.sla-bad i { background: var(--crit); }
+.sla-bad b { color: var(--crit); }
+
+.qt-assignee { width: 56px; text-align: center; }
+
+/* Sous 1100 px le tableau devient illisible : la liste reprend la main, et le
+   sélecteur disparaît pour ne pas proposer une vue inutilisable. */
+@media (max-width: 1100px) {
+  #queue-view { display: none; }
+  .workspace.wide-queue { grid-template-columns: minmax(0, 1fr); }
+}

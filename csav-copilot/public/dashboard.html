@@ -264,11 +264,21 @@
           <label>Trier <select id="q-sort">
             <option value="newest">Plus récent d'abord</option>
             <option value="oldest">Plus ancien d'abord</option>
+            <option value="due">Échéance la plus proche</option>
+            <option value="amount">Montant le plus élevé</option>
             <option value="confidence">Confiance la plus basse</option>
           </select></label>
           <label>Assigné <select id="q-assignee"><option value="">Tous</option></select></label>
           <label>Motif <select id="q-intent"><option value="">Tous</option></select></label>
           <label>Boîte <select id="q-mailbox"><option value="">Toutes</option></select></label>
+
+          <!-- Tableau ou liste : parcourir et traiter sont deux gestes
+               différents. Le tableau prend toute la largeur et se lit à vingt
+               lignes ; la liste garde le mail ouvert à côté. -->
+          <div class="seg2" id="queue-view" role="group">
+            <button type="button" data-qview="list" aria-pressed="true">Liste</button>
+            <button type="button" data-qview="table" aria-pressed="false">Tableau</button>
+          </div>
 
           <span class="qbar-count" id="q-count"></span>
         </div>
@@ -280,6 +290,7 @@
                chose de coché : une barre d'actions permanente sur une file
                vide est un bruit permanent. -->
           <div class="bulk" id="bulk" hidden></div>
+          <div class="qtable-wrap" id="queue-table" hidden></div>
           <ul class="queue-list" id="queue">
             <li class="skel-row"><span class="skel"></span><span class="skel"></span><span class="skel"></span></li>
             <li class="skel-row"><span class="skel"></span><span class="skel"></span><span class="skel"></span></li>

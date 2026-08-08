@@ -50,7 +50,7 @@ const listQuery = z.object({
   minAmount: z.coerce.number().min(0).max(100000).optional(),
   /** `all` élargit la file à toutes les boutiques du groupe. */
   scope: z.enum(['shop', 'all']).default('shop'),
-  sort: z.enum(['oldest', 'newest', 'confidence']).default('newest'),
+  sort: z.enum(['oldest', 'newest', 'confidence', 'amount', 'due']).default('newest'),
   cursor: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(25),
 });
@@ -232,12 +232,24 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
         ? await accessibleMerchantIds({ merchantId, email })
         : [merchantId];
 
+    /*
+     * Les nuls en dernier, sur les deux nouveaux tris.
+     *
+     * Un message sans commande rattachée n'a pas de montant, et un message
+     * jamais traité par l'IA n'a pas d'échéance : sans cette précision,
+     * Postgres les remonterait en tête et le tri « les plus gros d'abord »
+     * commencerait par cinquante lignes vides.
+     */
     const orderBy =
       sort === 'oldest'
         ? ({ lastMessageAt: 'asc' } as const)
         : sort === 'confidence'
           ? ({ intentConfidence: 'asc' } as const)
-          : ({ lastMessageAt: 'desc' } as const);
+          : sort === 'amount'
+            ? ({ orderTotal: { sort: 'desc', nulls: 'last' } } as const)
+            : sort === 'due'
+              ? ({ dueAt: { sort: 'asc', nulls: 'last' } } as const)
+              : ({ lastMessageAt: 'desc' } as const);
 
     const [tickets, byStatus] = await Promise.all([
       prisma.ticket.findMany({
@@ -257,6 +269,11 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
           shopifyOrderId: true,
           lastMessageAt: true,
           createdAt: true,
+          // Montant et échéance : déjà en base, jamais affichés. Un message à
+          // 19 € et un message à 3 200 € ne se traitent pas dans le même
+          // ordre, et l'agent ne pouvait pas le savoir sans ouvrir.
+          orderTotal: true,
+          dueAt: true,
           labels: true,
           failureReason: true,
           assignedToId: true,
@@ -277,10 +294,41 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
     const hasMore = tickets.length > limit;
     if (hasMore) tickets.pop();
 
+    /*
+     * Combien de fois ce client nous a déjà écrit.
+     *
+     * Un premier contact et un huitième ne se traitent pas du même ton, et
+     * c'est l'information que l'agent n'a jamais sous les yeux avant d'ouvrir.
+     * Comptée sur les seuls emails affichés, en une requête : la calculer sur
+     * tout le carnet coûterait le prix de la page pour cinquante lignes.
+     *
+     * On compte nos échanges, pas ses achats. Les deux se ressemblent mais ne
+     * sont pas la même chose, et l'écran le dira ainsi — annoncer « 8
+     * commandes » sur la foi de huit mails serait un mensonge utile jusqu'au
+     * jour où il coûte cher.
+     */
+    const emails = [...new Set(tickets.map((ticket) => ticket.customerEmail))];
+
+    const history = emails.length
+      ? await prisma.ticket.groupBy({
+          by: ['customerEmail'],
+          where: { merchantId: { in: merchantIds }, customerEmail: { in: emails } },
+          _count: true,
+        })
+      : [];
+
+    const threadsByEmail = Object.fromEntries(
+      history.map((row) => [row.customerEmail, row._count]),
+    );
+
     const counts = Object.fromEntries(byStatus.map((row) => [row.status, row._count]));
 
     return reply.send({
-      tickets,
+      tickets: tickets.map((ticket) => ({
+        ...ticket,
+        /** Nombre d'échanges avec ce client, celui-ci compris. */
+        threads: threadsByEmail[ticket.customerEmail] ?? 1,
+      })),
       counts: { ...counts, ALL: byStatus.reduce((sum, row) => sum + row._count, 0) },
       // Tous les libellés du marchand, pas seulement ceux de la page affichée.
       // Les déduire des cinquante tickets à l'écran donnait une liste qui
