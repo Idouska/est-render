@@ -674,7 +674,27 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
          * le courrier en attente doit être entré avant qu'on y change quoi que
          * ce soit.
          */
-        const result = await ingestMerchantInbox(merchantId, mailbox.id);
+        /*
+         * L'incrémental peut échouer sans que la boîte soit perdue.
+         *
+         * Jeton momentanément refusé, curseur que Gmail ne reconnaît plus,
+         * hoquet réseau : dans tous ces cas la recherche par date, qui ne
+         * dépend d'aucun curseur, a toutes les chances de fonctionner. Faire
+         * tomber la relève entière sur la première erreur revenait à priver le
+         * marchand du seul chemin qui marchait — et c'est exactement ce qu'il
+         * a vu.
+         */
+        let result = { ingested: 0 };
+        try {
+          result = await ingestMerchantInbox(merchantId, mailbox.id);
+        } catch (error) {
+          request.log.warn(
+            { err: error, mailboxId: mailbox.id },
+            'Relève incrémentale en échec, rattrapage par date',
+          );
+          detail.error = error instanceof Error ? error.message : 'Erreur inconnue';
+        }
+
         ingested += result.ingested;
         detail.incremental = result.ingested;
 
@@ -704,11 +724,22 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
         const dueForBackfill =
           Date.now() - (lastBackfillAt.get(mailbox.id) ?? 0) > BACKFILL_EVERY_MS;
 
-        if (result.ingested === 0 && (revive || dueForBackfill)) {
+        // Après un échec de l'incrémental, le rattrapage n'attend pas son tour :
+        // c'est précisément le moment où il est la seule voie ouverte.
+        if (
+          (result.ingested === 0 || detail.error) &&
+          (revive || dueForBackfill || detail.error)
+        ) {
           lastBackfillAt.set(mailbox.id, Date.now());
           const caught = await ingestMerchantInbox(merchantId, mailbox.id, { backfillDays: 2 });
           ingested += caught.ingested;
           detail.backfill = caught.ingested;
+
+          // Le rattrapage a tourné : l'échec de l'incrémental n'est plus une
+          // panne à signaler, seulement un chemin qui n'a pas servi. Le
+          // marchand n'a pas à connaître la mécanique interne quand le
+          // courrier est entré.
+          detail.error = null;
           if (caught.ingested > 0) {
             request.log.info(
               { mailboxId: mailbox.id, ingested: caught.ingested },

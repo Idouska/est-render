@@ -1,6 +1,7 @@
 import { logger } from '../../lib/logger.ts';
 import { prisma } from '../../lib/prisma.ts';
 import { getGmailClient } from './client.ts';
+import { isUnknownCursor } from './errors.ts';
 import { parseMessage, type ParsedMessage } from './messages.ts';
 
 /**
@@ -124,10 +125,23 @@ export async function fetchNewMessages(
 
       messageIds = [...ids];
     } catch (error) {
-      const status = (error as { code?: number }).code;
-      if (status !== 404) throw error;
+      if (!isUnknownCursor(error)) throw error;
+
       logger.warn({ merchantId }, 'historyId périmé, bascule sur le polling');
       messageIds = await listRecentMessageIds(gmail);
+
+      /*
+       * Le curseur mort est effacé.
+       *
+       * Le garder faisait rejouer la même erreur à chaque relève, indéfiniment :
+       * la boîte restait muette et l'écran répétait « Requested entity was not
+       * found » sans que rien ne puisse en sortir. Vidé, la relève suivante
+       * repart sur un balayage et repose un curseur valide.
+       */
+      await prisma.gmailConnection.update({
+        where: { id: connection.id },
+        data: { lastHistoryId: null },
+      });
     }
   } else {
     messageIds = await listRecentMessageIds(gmail);
