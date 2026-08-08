@@ -11,6 +11,7 @@ import { listOrders } from '../services/shopify/orders.ts';
 import { listProducts } from '../services/shopify/catalog.ts';
 import { fulfillOrder } from '../services/shopify/fulfill.ts';
 import { draftChangeReply } from '../services/ai/changeReply.ts';
+import { createReplyDraft } from '../services/gmail/drafts.ts';
 import { decodePhoto, photoSchema, sendParcelPhoto, toParcelView } from './parcels.ts';
 import { ordersForSupplier, type RoutingRules } from '../services/suppliers/routing.ts';
 
@@ -178,12 +179,16 @@ async function draftReplyAfterChange(alertId: string, merchantId: string): Promi
         select: {
           id: true,
           customerName: true,
+          customerEmail: true,
+          subject: true,
           language: true,
+          gmailThreadId: true,
+          mailboxId: true,
           messages: {
             where: { direction: 'INBOUND' },
             orderBy: { receivedAt: 'desc' },
             take: 1,
-            select: { bodyText: true },
+            select: { bodyText: true, gmailMessageId: true },
           },
         },
       },
@@ -206,10 +211,31 @@ async function draftReplyAfterChange(alertId: string, merchantId: string): Promi
     lastCustomerMessage: alert.ticket.messages[0]?.bodyText ?? null,
   });
 
+  /*
+   * Le brouillon existe d'abord dans Gmail, ensuite chez nous.
+   *
+   * L'envoi passe par `drafts.send` et exige donc un identifiant Gmail : une
+   * ligne créée sans lui s'affiche parfaitement à l'écran, et le bouton
+   * « Envoyer la réponse » répond « Aucun brouillon Gmail associé ». Le pire
+   * moment pour l'apprendre est celui où l'on veut répondre à un client déjà
+   * mécontent.
+   */
+  const { draftId } = await createReplyDraft({
+    merchantId,
+    // La boîte qui a reçu le message : c'est l'adresse que le client connaît.
+    mailboxId: alert.ticket.mailboxId,
+    threadId: alert.ticket.gmailThreadId,
+    to: alert.ticket.customerEmail,
+    subject: alert.ticket.subject ?? 'Votre demande',
+    body: draft.body,
+    inReplyToMessageId: alert.ticket.messages[0]?.gmailMessageId ?? null,
+  });
+
   await prisma.draft.create({
     data: {
       merchantId,
       ticketId: alert.ticket.id,
+      gmailDraftId: draftId,
       body: draft.body,
       model: draft.model,
       confidence: draft.confidence,
