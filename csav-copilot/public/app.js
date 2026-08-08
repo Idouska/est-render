@@ -7897,10 +7897,41 @@ function renderDiagnosis(report) {
     lines.push(
       `<b class="set-alert">${report.missing} message${report.missing > 1 ? 's' : ''} ` +
         `absent${report.missing > 1 ? 's' : ''} de la file.</b> ` +
-        'Cliquez « Relever maintenant » pour les faire entrer.',
+        'Cliquez « Relever » pour les faire entrer.',
     );
   } else {
     lines.push('Tout le courrier récent est bien dans la file.');
+  }
+
+  /*
+   * Le verdict sur la relève par curseur.
+   *
+   * C'est la panne qui se voit le moins : Gmail répond, le jeton est bon, la
+   * veille est active — et « Actualiser » ne ramène rien parce que le curseur
+   * d'historique est passé devant les messages. Le rapport le nomme, au lieu
+   * de laisser conclure que l'outil est cassé.
+   */
+  if (report.cursorStale) {
+    lines.push(
+      '<b class="set-alert">Curseur d’historique périmé.</b> Gmail ne conserve ' +
+        'l’historique que quelques jours : la relève par curseur ne peut plus ' +
+        'rien voir. Le rattrapage par date prend le relais à chaque clic sur ' +
+        '« Actualiser ».',
+    );
+  } else if (report.hasCursor && report.historyAhead === 0 && report.missing > 0) {
+    lines.push(
+      '<b class="set-alert">Le curseur est passé devant le courrier.</b> ' +
+        'L’historique n’annonce plus rien alors que des messages manquent : la ' +
+        'relève incrémentale restera muette sur eux. Le rattrapage par date, ' +
+        'déclenché au clic sur « Actualiser », est le chemin qui fonctionne.',
+    );
+  } else if (report.historyAhead > 0) {
+    lines.push(
+      `${report.historyAhead} message${report.historyAhead > 1 ? 's' : ''} ` +
+        `en attente dans l’historique Gmail — « Actualiser » ${
+          report.historyAhead > 1 ? 'les' : 'le'
+        } fera entrer.`,
+    );
   }
 
   // Les libellés dits par leur nom : « je ne vois pas mes libellés » se règle

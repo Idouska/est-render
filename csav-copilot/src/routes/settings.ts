@@ -475,6 +475,44 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
         // n'existe peut-être pas.
         const labelNames = await loadLabelNames(gmail, mailbox.id);
         report.labels = [...labelNames.values()].sort((a, b) => a.localeCompare(b, "fr"));
+
+        /*
+         * Ce que la relève incrémentale verrait, maintenant.
+         *
+         * C'est le point qui manquait au rapport, et c'est le seul qui
+         * distingue « la boîte est à jour » de « le curseur a dérivé ». Quand
+         * des messages manquent en base alors que l'historique n'en annonce
+         * aucun, la relève par curseur est aveugle : elle répondra « rien de
+         * nouveau » indéfiniment, et seul un rattrapage par date les fera
+         * entrer.
+         */
+        if (mailbox.lastHistoryId) {
+          try {
+            const { data: history } = await gmail.users.history.list({
+              userId: "me",
+              startHistoryId: mailbox.lastHistoryId,
+              historyTypes: ["messageAdded"],
+              labelId: "INBOX",
+            });
+
+            const added = new Set<string>();
+            for (const entry of history.history ?? []) {
+              for (const message of entry.messagesAdded ?? []) {
+                if (message.message?.id) added.add(message.message.id);
+              }
+            }
+
+            report.historyAhead = added.size;
+            report.cursorStale = false;
+          } catch (error) {
+            // 404 : le curseur est plus vieux que ce que Gmail conserve.
+            report.historyAhead = null;
+            report.cursorStale = (error as { code?: number }).code === 404;
+          }
+        } else {
+          report.historyAhead = null;
+          report.cursorStale = false;
+        }
       } catch (error) {
         report.tokenValid = false;
         report.error =
