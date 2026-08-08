@@ -3441,6 +3441,9 @@ function openAlertModal(id) {
 function closeAlertModal() {
   $('alert-modal').classList.remove('open');
   $('alert-modal').hidden = true;
+  // Le mode correction ne doit pas survivre à la fermeture : la prochaine
+  // ouverture serait une création qui réécrirait l'ancienne demande.
+  delete $('alert-modal').dataset.editing;
 }
 
 
@@ -3691,27 +3694,44 @@ $('alert-send')?.addEventListener('click', async () => {
   button.disabled = true;
 
   try {
-    const result = await api(`/api/suppliers/${supplierId}/alert`, {
-      method: 'POST',
-      body: JSON.stringify({
-        kind: $('alert-kind').value,
-        message,
-        beforeValue: $('alert-before').value.trim() || null,
-        afterValue: after || null,
-        orderName: $('alert-order').value.trim() || null,
-        shopifyOrderId: $('alert-modal').dataset.order || null,
-        ticketId: $('alert-modal').dataset.ticket || null,
-      }),
-    });
+    // Le même formulaire crée et corrige : en mode correction, la demande
+    // existante est réécrite sur place — l'atelier voit la version corrigée,
+    // sans second mail ni carte en double.
+    const editing = $('alert-modal').dataset.editing;
+    const result = editing
+      ? await api(`/api/changes/${editing}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            kind: $('alert-kind').value,
+            message,
+            beforeValue: $('alert-before').value.trim() || null,
+            afterValue: after || null,
+            orderName: $('alert-order').value.trim() || null,
+          }),
+        })
+      : await api(`/api/suppliers/${supplierId}/alert`, {
+          method: 'POST',
+          body: JSON.stringify({
+            kind: $('alert-kind').value,
+            message,
+            beforeValue: $('alert-before').value.trim() || null,
+            afterValue: after || null,
+            orderName: $('alert-order').value.trim() || null,
+            shopifyOrderId: $('alert-modal').dataset.order || null,
+            ticketId: $('alert-modal').dataset.ticket || null,
+          }),
+        });
 
     closeAlertModal();
     // On distingue les deux : une alerte enregistrée mais non envoyée reste
     // utile, à condition de ne pas croire que le fournisseur l'a reçue.
     toast(
-      result.emailed
-        ? 'Demande envoyée par mail et affichée dans son atelier.'
-        : 'Demande affichée dans son atelier — le mail n’a pas pu partir.',
-      !result.emailed,
+      result.updated
+        ? 'Demande corrigée — l’atelier voit la nouvelle version.'
+        : result.emailed
+          ? 'Demande envoyée par mail et affichée dans son atelier.'
+          : 'Demande affichée dans son atelier — le mail n’a pas pu partir.',
+      !result.updated && !result.emailed,
     );
 
     // L'écran d'où l'on vient se rafraîchit : le mail pour montrer la
@@ -6032,7 +6052,10 @@ function renderChangesScreen() {
           }
           ${
             change.status === 'PENDING'
-              ? `<button class="chgc-cancel" data-chg-cancel="${esc(
+              ? `<button class="chgc-edit" data-chg-edit="${esc(
+                  change.id,
+                )}">Modifier</button>
+                 <button class="chgc-cancel" data-chg-cancel="${esc(
                   change.id,
                 )}">Annuler la demande</button>`
               : change.handledAt
@@ -6077,6 +6100,36 @@ function renderChangesScreen() {
         toast(error.message, true);
         button.disabled = false;
       }
+    }),
+  );
+
+  // Corriger une demande en attente : le même formulaire que la création,
+  // pré-rempli — l'annuler pour la refaire enverrait un second mail.
+  rows.querySelectorAll('[data-chg-edit]').forEach((button) =>
+    button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const change = state.changesRows.find(
+        (candidate) => candidate.id === button.dataset.chgEdit,
+      );
+      if (!change) return;
+
+      $('alert-modal').dataset.supplier = change.supplier?.id ?? '';
+      $('alert-modal').dataset.ticket = '';
+      $('alert-modal').dataset.order = change.shopifyOrderId ?? '';
+      $('alert-modal').dataset.editing = change.id;
+      $('alert-who').textContent = change.supplier?.name
+        ? `Demande à ${change.supplier.name}`
+        : '';
+      state.alertCtx = null;
+      setAlertKind(change.kind);
+      $('alert-before').value = change.beforeValue ?? '';
+      $('alert-after').value = change.afterValue ?? '';
+      $('alert-order').value = change.orderName ?? '';
+      $('alert-message').value = change.message ?? '';
+      renderAlertSuppliers();
+      if (change.supplier?.id) $('alert-supplier').value = change.supplier.id;
+      $('alert-modal').hidden = false;
+      $('alert-modal').classList.add('open');
     }),
   );
 

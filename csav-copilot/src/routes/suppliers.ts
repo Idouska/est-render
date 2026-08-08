@@ -526,6 +526,58 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
   );
 
   /**
+   * Correction d'une demande encore en attente.
+   *
+   * Une faute de frappe dans la nouvelle taille, la mauvaise commande citée :
+   * tant que le fournisseur n'a pas répondu, la demande se corrige sur place —
+   * l'annuler pour la recréer enverrait un second mail et laisserait deux
+   * cartes dans l'atelier. Après réponse, plus rien ne bouge : le fournisseur
+   * a validé un contenu précis, le réécrire ferait mentir sa réponse.
+   */
+  app.patch<{ Params: { id: string } }>(
+    '/api/changes/:id',
+    { preHandler: requirePermission('escalate') },
+    async (request, reply) => {
+      const { merchantId, userId } = request.session;
+
+      const parsed = z
+        .object({
+          kind: z.enum(['ADDRESS', 'PHONE', 'PRODUCT', 'SIZE', 'COLOR', 'HOLD', 'CANCEL', 'OTHER']).optional(),
+          beforeValue: z.string().max(500).nullish(),
+          afterValue: z.string().max(500).nullish(),
+          message: z.string().max(4000).optional(),
+          orderName: z.string().max(60).nullish(),
+        })
+        .safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Champs invalides' });
+
+      const updated = await prisma.supplierAlert.updateMany({
+        where: { id: request.params.id, merchantId, status: 'PENDING' },
+        data: parsed.data,
+      });
+
+      if (updated.count === 0) {
+        return reply.code(409).send({
+          error: 'Introuvable, ou le fournisseur a déjà répondu — une demande traitée ne se modifie plus.',
+        });
+      }
+
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId: userId,
+        action: 'supplier.change_edited',
+        targetType: 'SupplierAlert',
+        targetId: request.params.id,
+        metadata: parsed.data,
+        ipAddress: request.ip,
+      });
+
+      return reply.send({ updated: true });
+    },
+  );
+
+  /**
    * Alerte urgente vers un fournisseur.
    *
    * L'atelier est le canal du quotidien : il l'ouvre le matin, il y trouve ses
