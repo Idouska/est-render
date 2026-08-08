@@ -495,6 +495,18 @@
         </aside>
       </main>
 
+      <!-- Les raccourcis sous les yeux tant qu'ils ne sont pas dans les
+           doigts. La barre appartient à la file : elle disparaît avec elle. -->
+      <div class="keybar" id="keybar">
+        <span><kbd>J</kbd><kbd>K</kbd> naviguer</span>
+        <span><kbd>X</kbd> sélectionner</span>
+        <span><kbd>E</kbd> clore</span>
+        <span><kbd>R</kbd> actualiser</span>
+        <span><kbd>/</kbd> rechercher</span>
+        <span><kbd>W</kbd> WISMO</span>
+        <span class="kb-right" id="kb-state"></span>
+      </div>
+
       <section class="browse" id="view-orders" hidden aria-label="Commandes">
         <div class="qbar">
           <div class="qbar-row">
@@ -957,10 +969,6 @@
           <div class="panel">
             <div class="panel-head"><span class="panel-title">Connexions</span></div>
             <div class="card-body set-group">
-              <p class="set-help">
-                Aucune clé d'API à saisir : l'accès passe par une autorisation que vous
-                donnez, et que vous pouvez retirer à tout moment.
-              </p>
               <div class="set-conn" id="set-shopify"></div>
               <div class="set-conn" id="set-gmail"></div>
               <!-- Ce que ce navigateur exécute vraiment, et ce qu'a fait la

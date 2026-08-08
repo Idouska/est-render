@@ -5849,3 +5849,233 @@ textarea:focus-visible {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* =========================================================================
+   DENSITÉ MÉTIER — la couche qui fait passer l'outil de « démo IA » à
+   « logiciel de travail ».
+
+   Diagnostic posé sur captures : 6 messages visibles là où Front ou Linear en
+   montrent 26, du violet par défaut — la couleur de tout ce que génère une
+   IA —, des coins à 16 px, des ombres douces partout, du texte qui explique
+   l'écran au lieu de le laisser se pratiquer.
+
+   Les règles vivent en fin de feuille et gagnent la cascade : c'est un
+   recalibrage assumé de tout ce qui précède, pas une retouche. Chaque bloc
+   dit ce qu'il corrige.
+   ========================================================================= */
+
+:root {
+  /* L'accent par défaut quitte le violet. Le bleu encre se lit comme un outil
+     — GitHub, Notion, Linear — là où l'indigo se lit comme une démo. Les
+     palettes restent disponibles dans Réglages pour qui préfère. */
+  --accent: #2563eb;
+  --accent-strong: #1d4ed8;
+  --accent-soft: #e8f0fe;
+  --accent-ink: #1d4ed8;
+  --frame: #2f6fe4;
+
+  /* Coins : 6 px d'angle disent « précis », 16 px disent « jouet ». Les
+     grands rayons sont réservés aux surfaces flottantes (menus, modales). */
+  --r-xl: 12px;
+  --r-lg: 8px;
+  --r-md: 6px;
+  --r-sm: 5px;
+  --r: 6px;
+
+  /* Le fond se rapproche des cartes : moins de « cartes qui flottent », plus
+     de plans de travail séparés par des filets. */
+  --ground: #f2f3f7;
+
+  /* Les dégradés de surface s'aplatissent : un outil n'a pas de relief, il a
+     des bords. */
+  --grad-surface: #ffffff;
+  --grad-raised: #ffffff;
+  --edge: none;
+
+  /* Les ombres de repos disparaissent — le filet suffit. Seul ce qui flotte
+     réellement (menus, modales) garde son élévation. */
+  --e1: none;
+  --e2: none;
+  --shadow: none;
+
+  /* Typographie recalée d'un cran : la lecture de masse se fait à 13 px. */
+  --t-display: 22px;
+  --t-title: 17px;
+  --t-lead: 14.5px;
+  --t-body: 13.5px;
+  --t-meta: 12px;
+}
+
+/* ------------------------------------------------------------ structure -- */
+
+.app { grid-template-columns: 204px 1fr; padding: 8px; gap: 8px; }
+
+.side { padding: 10px 8px; gap: 10px; }
+
+.nav-item { padding: 5px 8px; font-size: 13px; gap: 8px; }
+.nav-item svg { width: 15px; height: 15px; }
+.nav-title { font-size: 10px; margin: 8px 8px 3px; }
+
+.head { padding: 2px 2px 0; gap: 12px; }
+.head h1 { font-size: 17px; letter-spacing: -0.01em; }
+.crumb { font-size: 10px; }
+
+/* --------------------------------------------------------------- boutons -- */
+
+.btn { font-size: 12.5px; }
+.btn-small { padding: 4px 10px; }
+
+/* Les pilules deviennent des rectangles doux : la forme ronde était le
+   premier marqueur « généré ». */
+.chip,
+.qchip,
+.lchip {
+  border-radius: var(--r-md);
+  font-size: 12px;
+  padding: 4px 9px;
+}
+
+/* L'état actif d'un statut : blanc posé sur le fond, cerné d'un filet — plus
+   de dégradé violet plein. Le compte porte l'accent, pas le fond. */
+.filters .chip[aria-pressed='true'] {
+  background: var(--surface);
+  color: var(--ink);
+  border-color: var(--line);
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-weight: 650;
+}
+
+.filters .chip[aria-pressed='true'] .count { color: var(--accent-ink); opacity: 1; }
+
+.tag {
+  font-size: 11px;
+  border-radius: 4px;
+  padding: 1.5px 6px;
+}
+
+/* ------------------------------------------------------------------ file -- */
+
+.qbar { padding: 8px 10px; gap: 7px; }
+.qbar input[type='search'] { padding: 6px 10px; font-size: 12.5px; }
+.qbtn { height: 30px; font-size: 12px; }
+.qsort { height: 30px; }
+.seg2 button { min-height: 30px; height: 30px; padding: 0 11px; font-size: 12px; }
+
+.queue-list { padding: 4px; }
+
+/* La ligne de file perd la moitié de son air : 6 px de padding, 2 px d'écart
+   interne. À l'écran, cela double ce qu'on voit sans rien retirer. */
+.queue-item { padding: 6px 9px; gap: 2px; border-radius: var(--r-sm); }
+.queue-subject { font-size: 13px; font-weight: 550; }
+.queue-who { font-size: 12.5px; }
+
+/* ---------------------------------------------------------------- tables -- */
+
+.grid th { font-size: 10.5px; padding: 6px 10px; }
+.grid td { padding: 6px 10px; font-size: 13px; }
+
+/* ----------------------------------------------------------------- KPI --- */
+
+.kpi { padding: 10px 13px; gap: 2px; }
+.kpi-value { font-size: 20px; }
+.kpi-label { font-size: 10.5px; }
+
+/* ------------------------------------------------------- textes d'écran -- */
+
+/* L'outil ne s'explique plus dans ses écrans : les aides passent en note de
+   bas de champ, petites et grises. Ce qui mérite un paragraphe mérite une
+   page de documentation. */
+.set-help { font-size: 11.5px; line-height: 1.5; }
+
+/* Ce qui flotte garde son ombre : c'est elle qui dit « au-dessus ». */
+.qpop,
+.modal,
+.shop-menu,
+.pop { box-shadow: 0 8px 24px rgb(16 18 40 / 14%), 0 1px 3px rgb(16 18 40 / 10%); }
+
+/* ------------------------------------------------------- barre d'état ---- */
+
+/* La barre du bas : les raccourcis sous les yeux tant qu'ils ne sont pas
+   dans les doigts, et l'état de la file à droite. C'est la signature des
+   outils qu'on pilote au clavier. */
+.keybar {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  font-size: 11.5px;
+  color: var(--ink-mute);
+}
+
+.keybar kbd {
+  font: 10.5px var(--font-mono);
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 0 4px;
+  background: var(--sunk);
+  color: var(--ink-soft);
+  margin-right: 3px;
+}
+
+.keybar .kb-right { margin-left: auto; }
+
+@media (max-width: 900px) {
+  /* Pas de clavier sur un téléphone : la barre n'a rien à y dire. */
+  .keybar { display: none; }
+}
+
+/* La ligne de file en deux étages : client + heure, puis point de statut +
+   sujet + commande. Le motif reste dit par le filet gauche coloré. */
+.queue-line2 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  width: 100%;
+}
+
+.qdot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--ink-mute);
+}
+
+.qdot.st-NEW,
+.qdot.st-PROCESSING { background: var(--accent); }
+.qdot.st-NEEDS_REVIEW,
+.qdot.st-AWAITING_SUPPLIER { background: var(--warn); }
+.qdot.st-DRAFT_READY { background: var(--ok); }
+.qdot.st-FAILED { background: var(--crit); }
+.qdot.st-CLOSED,
+.qdot.st-AUTO_SENT { background: var(--ink-mute); opacity: 0.5; }
+
+.queue-line2 .queue-subject {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queue-ord {
+  flex: none;
+  font: 11px var(--font-mono);
+  color: var(--ink-mute);
+}
+
+.queue-line2 .who-dot { flex: none; width: 18px; height: 18px; font-size: 8.5px; }
+
+/* La liste occupe la hauteur qu'elle a, au lieu d'un plafond à 66 % : chaque
+   centimètre rendu, c'est une ligne de plus sous les yeux. */
+.queue-list { max-height: calc(100vh - 240px); }
+
+.queue-item { padding: 5px 9px; gap: 1px; }
+.queue-item .age { font-size: 10.5px; padding: 1px 6px; }
+.queue-who { font-size: 12px; }
+.queue-line2 .queue-subject { font-size: 12.5px; }

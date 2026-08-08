@@ -851,30 +851,28 @@ async function loadQueue({ append = false } = {}) {
             <span class="queue-who">${esc(ticket.customerName ?? ticket.customerEmail)}</span>
             ${ageChip(ticket.lastMessageAt)}
           </span>
-          <div class="queue-subject">${esc(ticket.subject ?? '(sans objet)')}</div>
-          <span class="queue-tags">
-            ${
-              ticket.intent
-                ? `<span class="tag in-${ticket.intent}">${
-                    INTENT_LABELS[ticket.intent] ?? ticket.intent
-                  }</span>`
-                : ''
-            }
-            <span class="tag tag-status st-${ticket.status}">${label}</span>
-            <span class="tag tag-order">${
-              ticket.orderName ? esc(ticket.orderName) : 'commande ?'
+          <!--
+            Deux étages, plus trois. La ligne disait tout de front — motif,
+            statut, commande, boîte, assigné — et n'en montrait que huit à
+            l'écran. Ce qui départage un survol tient en deux informations :
+            le statut (point coloré, pas pilule) et la commande. Le motif
+            reste dit par le filet gauche coloré ; le reste vit dans le
+            détail, à un clic.
+          -->
+          <div class="queue-line2">
+            <span class="qdot st-${ticket.status}" title="${label}"></span>
+            <span class="queue-subject">${esc(ticket.subject ?? '(sans objet)')}</span>
+            <span class="queue-ord">${
+              ticket.orderName ? esc(ticket.orderName) : ''
             }</span>
             ${
-              multiMailbox && ticket.mailbox
-                ? `<span class="tag tag-box">${esc(
-                    ticket.mailbox.label || ticket.mailbox.emailAddress.split('@')[0],
+              who
+                ? `<span class="who-dot" title="${esc(who.name ?? who.email)}">${initials(
+                    who.name ?? who.email,
                   )}</span>`
                 : ''
             }
-            <span class="who-dot${who ? '' : ' none'}" title="${
-              who ? esc(who.name ?? who.email) : 'non assigné'
-            }" style="margin-left:auto">${who ? initials(who.name ?? who.email) : '—'}</span>
-          </span>
+          </div>
         </button>
       </li>`;
     })
@@ -1846,6 +1844,7 @@ function renderQueueBar() {
   $('q-filters-btn').setAttribute('aria-pressed', String(active > 0));
 
   $('q-reset').hidden = !queueIsFiltered();
+  renderKeybarState();
   // « 25 affichés » sur 556 laissait croire que le reste était perdu. Le
   // total rend le rapport lisible, et le défilement fait le reste.
   const total = state.queueCounts?.ALL ?? null;
@@ -3122,12 +3121,16 @@ async function searchCandidates(ticketId) {
       `/api/tickets/${ticketId}/order-candidates${query ? `?q=${encodeURIComponent(query)}` : ''}`,
     );
 
-    if (data.orders.length === 0) {
+    // Une réponse sans liste — Shopify indisponible — affichait l'erreur
+    // technique dans le rail au lieu d'un simple « rien trouvé ».
+    const candidates = data.orders ?? [];
+
+    if (candidates.length === 0) {
       list.innerHTML = '<li class="empty">Aucune commande trouvée.</li>';
       return;
     }
 
-    list.innerHTML = data.orders
+    list.innerHTML = candidates
       .map(
         (order) => `<li>
           <button class="candidate" data-order="${esc(order.id)}">
@@ -6434,6 +6437,10 @@ const VIEW_LOADERS = {
 };
 
 function setView(view) {
+  // La barre de raccourcis appartient à la file : ailleurs, elle mentirait.
+  const keybar = $('keybar');
+  if (keybar) keybar.hidden = view !== 'tickets';
+
   state.view = view;
 
   // « Nouvelle escalade » n'a d'objet que sur un ticket : affiché ailleurs — sur
@@ -8633,11 +8640,89 @@ document.addEventListener('visibilitychange', () => {
   void refreshCurrent({ silent: true });
 });
 
+/*
+ * Le clavier, sur la file.
+ *
+ * Un agent qui traite deux cents messages par jour ne peut pas payer un
+ * aller-retour de souris par message : J/K parcourent, X sélectionne, E clôt,
+ * / cherche, W isole les WISMO, R actualise. Les raccourcis ne s'appliquent
+ * qu'à l'écran SAV et jamais pendant une saisie — un « e » tapé dans une
+ * réponse ne doit pas fermer le dossier qu'on est en train de traiter.
+ */
+function queueMove(step) {
+  const at = state.tickets.findIndex((ticket) => ticket.id === state.currentId);
+  const next = state.tickets[at + step] ?? state.tickets[at === -1 ? 0 : at];
+  if (next && next.id !== state.currentId) {
+    void selectTicket(next.id);
+    document
+      .querySelector(`.queue-item[data-id="${CSS.escape(next.id)}"]`)
+      ?.scrollIntoView({ block: 'nearest' });
+  }
+}
+
+function renderKeybarState() {
+  const box = $('kb-state');
+  if (!box) return;
+  const picked = state.picked.size;
+  box.textContent = `${picked ? `${picked} sélectionné${picked > 1 ? 's' : ''} · ` : ''}${
+    state.tickets.length
+  } sur ${state.queueCounts?.ALL ?? state.tickets.length}`;
+}
+
 document.addEventListener('keydown', (event) => {
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName ?? '');
-  if (!typing && (event.key === 'r' || event.key === 'R')) {
+  if (typing || event.metaKey || event.ctrlKey || event.altKey) return;
+
+  const key = event.key.toLowerCase();
+
+  if (key === 'r') {
     event.preventDefault();
     void refreshCurrent();
+    return;
+  }
+
+  // Le reste du clavier appartient à la file : ailleurs, il surprendrait.
+  if (state.view !== 'tickets') return;
+
+  if (key === 'j' || key === 'k') {
+    event.preventDefault();
+    queueMove(key === 'j' ? 1 : -1);
+  } else if (key === 'x') {
+    event.preventDefault();
+    if (!state.currentId) return;
+    if (state.picked.has(state.currentId)) state.picked.delete(state.currentId);
+    else state.picked.add(state.currentId);
+    // La case de la ligne se met à jour sur place : recharger la file pour
+    // une coche perdrait la position de défilement.
+    const box = document.querySelector(`[data-pick="${CSS.escape(state.currentId)}"]`);
+    if (box) box.checked = state.picked.has(state.currentId);
+    document
+      .querySelector(`.qrow:has([data-pick="${CSS.escape(state.currentId)}"])`)
+      ?.classList.toggle('picked', state.picked.has(state.currentId));
+    renderBulk();
+    renderKeybarState();
+  } else if (key === 'e') {
+    event.preventDefault();
+    if (state.currentId) {
+      void api(`/api/tickets/${state.currentId}/resolve`, { method: 'POST', body: '{}' })
+        .then(async () => {
+          toast('Message clos.');
+          // Le curseur avance tout seul : clore puis chercher la ligne
+          // suivante à la souris annulerait le gain du raccourci.
+          queueMove(1);
+          await loadQueue();
+        })
+        .catch((error) => toast(error.message, true));
+    }
+  } else if (key === '/') {
+    event.preventDefault();
+    $('q-search')?.focus();
+  } else if (key === 'w') {
+    event.preventDefault();
+    state.queue.intent = state.queue.intent === 'WISMO' ? '' : 'WISMO';
+    const intentSelect = $('q-intent');
+    if (intentSelect) intentSelect.value = state.queue.intent;
+    void loadQueue();
   }
 });
 
