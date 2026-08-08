@@ -20,10 +20,38 @@ const state = {
   lang: pickLang(supplierId),
   view: 'orders',
   filter: 'left',
+  /**
+   * Commande ouverte en plein écran, ou `null` pour la liste.
+   *
+   * L'atelier traite une commande à la fois, téléphone en main : quatre-vingt-
+   * dix formulaires dépliés d'un bloc, c'est chercher sa place au lieu de
+   * travailler. La liste ne sert qu'à choisir ; le travail se fait au guichet,
+   * une commande plein écran, et « Enregistrer » passe à la suivante.
+   */
+  focus: null,
+  /* Ordre de la file : par heure d'arrivée, ou par modèle — emballer quinze
+     Pegasus d'affilée épargne quatorze changements de carton. Mémorisé : c'est
+     une façon de travailler, pas un réglage du matin. */
+  sort: localStorage.getItem(`ws.sort.${supplierId}`) ?? 'time',
   parcels: [],
   catalog: null,
   updates: [],
 };
+
+/*
+ * Le transporteur, retenu d'un colis à l'autre.
+ *
+ * Un atelier expédie avec le même transporteur toute la journée : le
+ * ressaisir quatre-vingt-treize fois est du temps volé, l'oublier laisse le
+ * marchand deviner. Pré-rempli sur les nouveaux colis, modifiable d'un geste.
+ */
+const CARRIER_KEY = `ws.carrier.${supplierId}`;
+function lastCarrier() {
+  return localStorage.getItem(CARRIER_KEY) ?? '';
+}
+function rememberCarrier(value) {
+  if (value) localStorage.setItem(CARRIER_KEY, value);
+}
 
 /*
  * `t` est réaffecté à chaque changement de langue plutôt que d'être une
@@ -132,6 +160,75 @@ async function shrinkPhoto(file) {
   return canvas.toDataURL('image/jpeg', 0.72);
 }
 
+/**
+ * Lecture du code-barres de l'étiquette, dans le champ de suivi.
+ *
+ * Chaque étiquette porte son numéro en code-barres ; le taper au doigt —
+ * treize chiffres, un œil sur l'étiquette, un œil sur l'écran — est à la fois
+ * le geste le plus lent de la journée et la source des colis introuvables.
+ * `BarcodeDetector` est natif sur Chrome Android, le téléphone des ateliers ;
+ * ailleurs le bouton n'existe pas, et le clavier reste le chemin.
+ */
+let scanStream = null;
+
+async function scanInto(input) {
+  const modal = $('scan-modal');
+  const video = $('scan-video');
+
+  let detector;
+  try {
+    detector = new BarcodeDetector({
+      // Les formats des transporteurs : Code 128 pour la quasi-totalité des
+      // étiquettes, et les autres par prudence — détecter trop coûte moins
+      // cher que rater le bon.
+      formats: ['code_128', 'code_39', 'ean_13', 'itf', 'qr_code', 'data_matrix'],
+    });
+    scanStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment' },
+    });
+  } catch {
+    toast(t('scan.fail'), true);
+    return;
+  }
+
+  video.srcObject = scanStream;
+  await video.play().catch(() => {});
+  modal.classList.add('open');
+
+  const tick = async () => {
+    if (!scanStream) return;
+    try {
+      const codes = await detector.detect(video);
+      const value = codes[0]?.rawValue?.trim();
+      if (value) {
+        input.value = value;
+        // La vibration est l'accusé de réception : les yeux sont sur le
+        // colis, pas sur l'écran.
+        navigator.vibrate?.(80);
+        closeScan();
+        toast(t('scan.got', { code: value }));
+        return;
+      }
+    } catch {
+      // Une frame illisible n'est pas une panne : on attend la suivante.
+    }
+    setTimeout(tick, 180);
+  };
+  void tick();
+}
+
+function closeScan() {
+  $('scan-modal').classList.remove('open');
+  $('scan-video').srcObject = null;
+  scanStream?.getTracks().forEach((track) => track.stop());
+  scanStream = null;
+}
+
+$('scan-cancel')?.addEventListener('click', closeScan);
+$('scan-modal')?.addEventListener('click', (event) => {
+  if (event.target === $('scan-modal')) closeScan();
+});
+
 function photoUrl(parcelId) {
   return `/api/workspace/${supplierId}/parcels/${parcelId}/photo?token=${encodeURIComponent(
     token ?? '',
@@ -200,11 +297,28 @@ function parcelCard(order, index, total, saved) {
         : ''
     }
 
-    <input type="text" data-field="tracking" autocapitalize="characters"
-      inputmode="latin" enterkeyhint="done"
-      placeholder="${esc(t('parcel.tracking'))}" value="${esc(saved?.trackingNumber ?? '')}" />
+    <div class="pk-track">
+      <input type="text" data-field="tracking" autocapitalize="characters"
+        inputmode="latin" enterkeyhint="done"
+        placeholder="${esc(t('parcel.tracking'))}" value="${esc(saved?.trackingNumber ?? '')}" />
+      ${
+        // Toutes les étiquettes portent un code-barres ; treize chiffres au
+        // doigt sont la vraie perte de temps de la journée, et la vraie source
+        // de colis introuvables. Le bouton n'apparaît que si le navigateur
+        // sait lire les codes — un bouton qui échoue toujours est un piège.
+        'BarcodeDetector' in window
+          ? `<button type="button" class="pk-scan" data-scan="1"
+               title="${esc(t('scan.button'))}" aria-label="${esc(t('scan.button'))}">
+               <svg viewBox="0 0 20 20" aria-hidden="true">
+                 <path d="M3 6V3.5h3M17 6V3.5h-3M3 14v2.5h3M17 14v2.5h-3" />
+                 <path d="M5.5 7v6M8 7v6M10.5 7v6M12.5 7v6M14.5 7v6" />
+               </svg>
+             </button>`
+          : ''
+      }
+    </div>
     <input type="text" data-field="carrier" placeholder="${esc(t('parcel.carrier'))}"
-      value="${esc(saved?.carrier ?? '')}" />
+      value="${esc(saved?.carrier ?? lastCarrier())}" />
     ${
       saved?.hasPhoto
         ? `<img class="pk-thumb" src="${photoUrl(saved.id)}" alt="${esc(
@@ -246,18 +360,35 @@ function orderDone(order, total) {
   ).length;
 }
 
-function renderOrders() {
-  const totals = new Map(state.orders.map((order) => [order.id, parcelTotal(order)]));
-  const isDone = (order) => {
-    const total = totals.get(order.id) ?? 1;
-    return total > 0 && orderDone(order, total) === total;
-  };
+function orderIsDone(order) {
+  const total = parcelTotal(order);
+  return total > 0 && orderDone(order, total) === total;
+}
 
-  const finished = state.orders.filter(isDone).length;
+/**
+ * La file dans l'ordre de travail.
+ *
+ * « Par modèle » regroupe les commandes du même article : quinze Pegasus
+ * s'emballent d'affilée dans le même carton, au lieu d'en changer à chaque
+ * commande. Le tri est stable — à modèle égal, l'heure d'arrivée départage.
+ */
+function shownOrders() {
+  const kept =
+    state.filter === 'left' ? state.orders.filter((order) => !orderIsDone(order)) : state.orders;
+
+  if (state.sort !== 'model') return kept;
+  return [...kept].sort((a, b) =>
+    (a.lineItems?.[0]?.title ?? '').localeCompare(b.lineItems?.[0]?.title ?? '', locale),
+  );
+}
+
+function renderOrders() {
+  const finished = state.orders.filter(orderIsDone).length;
   const left = state.orders.length - finished;
 
   $('count-left').textContent = String(left);
   $('count-all').textContent = String(state.orders.length);
+  $('ws-sort')?.setAttribute('aria-pressed', String(state.sort === 'model'));
 
   // Avancement de la journée, en tête : entre deux colis on ne se demande pas
   // combien il y en a, on se demande où l'on en est.
@@ -273,16 +404,22 @@ function renderOrders() {
     });
   }
 
-  /*
-   * Par défaut, on ne montre que ce qu'il reste à faire.
-   *
-   * Quatre-vingt-six commandes affichées d'un bloc, dont la moitié déjà
-   * emballées, c'est une liste qu'on ne parcourt plus : on cherche sa place au
-   * lieu de travailler. « Toutes » reste à un clic pour vérifier ce qu'on a
-   * fait.
-   */
-  const shown =
-    state.filter === 'left' ? state.orders.filter((order) => !isDone(order)) : state.orders;
+  const shown = shownOrders();
+
+  // Le guichet ne survit pas à un rafraîchissement qui a retiré sa commande
+  // de la période : on retombe sur la liste plutôt que sur un écran vide.
+  if (state.focus && !state.orders.some((order) => order.id === state.focus)) {
+    state.focus = null;
+  }
+
+  // Plein écran veut dire plein écran : au guichet, la période, les chips et
+  // la progression du jour disparaissent — on y revient par « Liste ».
+  document.body.classList.toggle('ws-focus', Boolean(state.focus));
+
+  if (state.focus) {
+    renderFocus(shown);
+    return;
+  }
 
   if (state.orders.length === 0) {
     $('ws-orders').innerHTML = emptyState(t('orders.empty'));
@@ -294,69 +431,160 @@ function renderOrders() {
     return;
   }
 
+  /*
+   * La liste ne travaille pas, elle oriente.
+   *
+   * Une ligne par commande : le modèle en photo, le numéro, le client et la
+   * ville, l'état. Tout le reste — adresse complète, champs de saisie, photo
+   * d'étiquette — vit au guichet, une commande à la fois. Une liste de
+   * quatre-vingt-treize formulaires dépliés n'est pas une liste, c'est un
+   * couloir dans lequel on se perd.
+   */
   $('ws-orders').innerHTML = shown
     .map((order) => {
       const address = order.shippingAddress ?? {};
-      const phone = address.phone ?? '';
-      // Un numéro trop court bloquera la livraison : autant que l'atelier le
-      // voie avant d'emballer, pas le transporteur devant la porte.
-      const phoneShort = phone.replace(/\D/g, '').length < 9;
-      const total = totals.get(order.id) ?? 1;
-      const done = orderDone(order, total);
+      const item = order.lineItems?.[0];
+      const done = orderIsDone(order);
+      const total = parcelTotal(order);
+      const phoneShort = (address.phone ?? '').replace(/\D/g, '').length < 9;
 
-      return `<article class="ord${done === total ? ' ord-done' : ''}">
-        <div class="ord-head">
-          <b class="ord-no">${esc(order.name)}</b>
-          <span class="pill">${esc(order.displayFulfillmentStatus ?? '—')}</span>
-          <span class="ord-when">${esc(shortMoment(order.createdAt))}</span>
-        </div>
-
-        <div class="ord-who">
-          <b>${esc(order.customer?.displayName ?? address.name ?? t('orders.customer'))}</b>
-          <span>${esc([address.address1, address.address2].filter(Boolean).join(' '))}</span>
-          <span>${esc(`${address.zip ?? ''} ${address.city ?? ''} ${address.country ?? ''}`.trim())}</span>
-          <span class="ord-tel">
-            <a href="tel:${esc(phone)}" class="ord-phone${phoneShort ? ' missing' : ''}">${
-              esc(phone || t('orders.phoneMissing'))
-            }</a>
+      return `<button type="button" class="rowo${done ? ' rowo-done' : ''}" data-open="${esc(
+        order.id,
+      )}">
+        ${
+          item?.image
+            ? `<img class="rowo-photo" src="${esc(item.image)}" alt="" loading="lazy" />`
+            : '<span class="rowo-photo rowo-photo-none" aria-hidden="true"></span>'
+        }
+        <span class="rowo-main">
+          <span class="rowo-top">
+            <b>${esc(order.name)}</b>
+            <span>${esc(order.customer?.displayName ?? address.name ?? t('orders.customer'))}
+              · ${esc(address.city ?? '')}</span>
           </span>
-        </div>
-
-        ${progressBar(done, total, t('progress.parcels', { done, total }))}
-
-        <label class="field field-inline">
-          <span>${esc(t('orders.parcelCount'))}</span>
-          <select data-total="${esc(order.id)}">
-            ${[1, 2, 3, 4, 5, 6]
-              .map(
-                (value) =>
-                  `<option value="${value}"${value === total ? ' selected' : ''}>${esc(
-                    t('orders.parcelOption', { n: value }),
-                  )}</option>`,
-              )
-              .join('')}
-          </select>
-        </label>
-
-        <div class="pk-list" data-parcels="${esc(order.id)}">
-          ${Array.from({ length: total }, (unused, position) =>
-            parcelCard(
-              order,
-              position + 1,
-              total,
-              order.parcels?.find((parcel) => parcel.index === position + 1),
-            ),
-          ).join('')}
-        </div>
-
-        <div class="ord-foot">
-          <button class="btn btn-ghost" data-issue="${esc(order.id)}">${esc(
-            t('orders.report'),
-          )}</button>
-        </div>
-      </article>`;
+          <small>${esc(item?.title ?? '')}${
+            item?.variantTitle ? ` · ${esc(item.variantTitle)}` : ''
+          }${phoneShort ? ` <b class="rowo-warn">☎ ${esc(t('orders.phoneMissing'))}</b>` : ''}</small>
+        </span>
+        <span class="rowo-state${done ? ' ok' : ''}">${
+          done
+            ? '✓'
+            : esc(t('progress.parcels', { done: orderDone(order, total), total }))
+        }</span>
+        <svg class="rowo-car" viewBox="0 0 20 20" aria-hidden="true"><path d="m7.5 4.5 5.5 5.5-5.5 5.5" /></svg>
+      </button>`;
     })
     .join('');
+}
+
+/**
+ * Le guichet : une commande plein écran, et la suivante au bout du pouce.
+ *
+ * La barre de tête dit où l'on en est dans la file (« 12 / 93 ») et permet de
+ * naviguer sans repasser par la liste. Tout ce que la carte longue affichait
+ * est là — adresse en grand, article en photo, saisie des colis — mais pour
+ * une seule commande, celle qu'on tient dans les mains.
+ */
+function renderFocus(shown) {
+  const order = state.orders.find((candidate) => candidate.id === state.focus);
+  // La commande peut avoir quitté la file visible (filtrée « À préparer » et
+  // tout juste finie) : la position se lit alors dans la liste complète.
+  const list = shown.some((candidate) => candidate.id === order.id) ? shown : state.orders;
+  const at = list.findIndex((candidate) => candidate.id === order.id);
+
+  const address = order.shippingAddress ?? {};
+  const phone = address.phone ?? '';
+  // Un numéro trop court bloquera la livraison : autant que l'atelier le
+  // voie avant d'emballer, pas le transporteur devant la porte.
+  const phoneShort = phone.replace(/\D/g, '').length < 9;
+  const total = parcelTotal(order);
+  const done = orderDone(order, total);
+
+  $('ws-orders').innerHTML = `
+    <div class="focus-bar">
+      <button type="button" class="btn btn-small" data-back="1">← ${esc(t('focus.back'))}</button>
+      <span class="focus-pos">${at + 1} / ${list.length}</span>
+      <span class="focus-nav">
+        <button type="button" class="btn btn-small" data-nav="prev" ${at <= 0 ? 'disabled' : ''}
+          aria-label="${esc(t('focus.prev'))}">←</button>
+        <button type="button" class="btn btn-small" data-nav="next"
+          ${at >= list.length - 1 ? 'disabled' : ''}
+          aria-label="${esc(t('focus.next'))}">→</button>
+      </span>
+    </div>
+
+    <article class="ord ord-focus${done === total ? ' ord-done' : ''}">
+      <div class="ord-head">
+        <b class="ord-no">${esc(order.name)}</b>
+        <span class="pill">${esc(order.displayFulfillmentStatus ?? '—')}</span>
+        <span class="ord-when">${esc(shortMoment(order.createdAt))}</span>
+      </div>
+
+      <div class="ord-who">
+        <b>${esc(order.customer?.displayName ?? address.name ?? t('orders.customer'))}</b>
+        <span>${esc([address.address1, address.address2].filter(Boolean).join(' '))}</span>
+        <span>${esc(`${address.zip ?? ''} ${address.city ?? ''} ${address.country ?? ''}`.trim())}</span>
+        <span class="ord-tel">
+          <a href="tel:${esc(phone)}" class="ord-phone${phoneShort ? ' missing' : ''}">${
+            esc(phone || t('orders.phoneMissing'))
+          }</a>
+        </span>
+      </div>
+
+      ${progressBar(done, total, t('progress.parcels', { done, total }))}
+
+      <label class="field field-inline">
+        <span>${esc(t('orders.parcelCount'))}</span>
+        <select data-total="${esc(order.id)}">
+          ${[1, 2, 3, 4, 5, 6]
+            .map(
+              (value) =>
+                `<option value="${value}"${value === total ? ' selected' : ''}>${esc(
+                  t('orders.parcelOption', { n: value }),
+                )}</option>`,
+            )
+            .join('')}
+        </select>
+      </label>
+
+      <div class="pk-list" data-parcels="${esc(order.id)}">
+        ${Array.from({ length: total }, (unused, position) =>
+          parcelCard(
+            order,
+            position + 1,
+            total,
+            order.parcels?.find((parcel) => parcel.index === position + 1),
+          ),
+        ).join('')}
+      </div>
+
+      <div class="ord-foot">
+        <button class="btn btn-ghost" data-issue="${esc(order.id)}">${esc(
+          t('orders.report'),
+        )}</button>
+      </div>
+    </article>`;
+
+  // Le guichet s'ouvre en haut de la commande, pas là où la liste en était.
+  $('ws-orders').scrollIntoView({ block: 'start' });
+}
+
+/**
+ * Après un « Enregistrer » qui finit la commande : la suivante, toute seule.
+ *
+ * C'est le geste qui fait du guichet un poste de travail — enregistrer, poser
+ * le carton, attraper le suivant, et l'écran a déjà changé. La file est celle
+ * des commandes restantes ; quand elle est vide, on revient à la liste, qui
+ * affiche alors « tout est préparé ».
+ */
+function advanceFocus() {
+  const remaining = shownOrders().filter((order) => !orderIsDone(order));
+  const next = remaining.find((order) => order.id !== state.focus) ?? null;
+
+  state.focus = next?.id ?? null;
+  renderOrders();
+  // Pas de toast ici : celui de l'enregistrement — « colis expédié, client
+  // prévenu » — vient de partir, et l'écran qui change dit déjà le reste.
 }
 
 /** Écran vide illustré : un message seul ressemble à une page qui n'a pas fini. */
@@ -452,6 +680,40 @@ $('ws-orders').addEventListener('change', async (event) => {
 });
 
 $('ws-orders').addEventListener('click', async (event) => {
+  const open = event.target.closest('[data-open]');
+  if (open) {
+    state.focus = open.dataset.open;
+    renderOrders();
+    return;
+  }
+
+  const back = event.target.closest('[data-back]');
+  if (back) {
+    state.focus = null;
+    renderOrders();
+    return;
+  }
+
+  const nav = event.target.closest('[data-nav]');
+  if (nav) {
+    const shown = shownOrders();
+    const list = shown.some((order) => order.id === state.focus) ? shown : state.orders;
+    const at = list.findIndex((order) => order.id === state.focus);
+    const target = list[at + (nav.dataset.nav === 'next' ? 1 : -1)];
+    if (target) {
+      state.focus = target.id;
+      renderOrders();
+    }
+    return;
+  }
+
+  const scan = event.target.closest('[data-scan]');
+  if (scan) {
+    const input = scan.closest('.pk-track').querySelector('[data-field="tracking"]');
+    void scanInto(input);
+    return;
+  }
+
   const del = event.target.closest('[data-del]');
   if (del) {
     await deleteParcel(del.dataset.del, del.dataset.number, del);
@@ -529,6 +791,8 @@ $('ws-orders').addEventListener('click', async (event) => {
       parcel,
     ].sort((a, b) => a.index - b.index);
 
+    rememberCarrier(parcel.carrier ?? '');
+
     // Le dernier colis déclenche l'expédition Shopify : le fournisseur doit
     // savoir si le client est prévenu, ou pourquoi il ne l'est pas.
     if (shopify?.fulfilled) {
@@ -538,7 +802,14 @@ $('ws-orders').addEventListener('click', async (event) => {
     } else {
       toast(t('parcel.savedToast', { index: parcel.index, total: parcel.total }));
     }
-    renderOrders();
+
+    // Au guichet, la commande finie appelle la suivante d'elle-même : c'est
+    // tout l'intérêt d'un guichet. Tant qu'il reste un colis, on reste.
+    if (state.focus === orderId && orderIsDone(order)) {
+      advanceFocus();
+    } else {
+      renderOrders();
+    }
   } catch (error) {
     toast(error.message, true);
   } finally {
@@ -742,6 +1013,12 @@ function rangeDates(name) {
   if (name === 'week') return [iso(now - 6 * day), iso(now)];
   return [iso(now - day), iso(now - day)];
 }
+
+$('ws-sort')?.addEventListener('click', () => {
+  state.sort = state.sort === 'model' ? 'time' : 'model';
+  localStorage.setItem(`ws.sort.${supplierId}`, state.sort);
+  renderOrders();
+});
 
 document.querySelectorAll('#ws-filter [data-filter]').forEach((button) =>
   button.addEventListener('click', () => {

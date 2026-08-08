@@ -136,6 +136,12 @@
               <span data-t="filter.all">Toutes</span>
               <b id="count-all">0</b>
             </button>
+            <!-- Regrouper par modèle : quinze paires du même article
+                 s'emballent d'affilée dans le même carton. Un interrupteur,
+                 pas un menu — il n'y a que deux ordres possibles. -->
+            <button type="button" class="chip-sort" id="ws-sort" aria-pressed="false">
+              <span data-t="sort.model">Par modèle</span>
+            </button>
           </div>
 
           <div id="ws-orders"></div>
@@ -229,6 +235,21 @@
         <div class="modal-foot">
           <button class="btn" id="issue-cancel" data-t="issue.cancel">Annuler</button>
           <button class="btn btn-primary" id="issue-send" data-t="issue.send">Envoyer au marchand</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Lecture du code-barres de l'étiquette. La caméra plein cadre, un seul
+         bouton : viser suffit, la détection ferme l'écran toute seule. -->
+    <div class="modal-wrap" id="scan-modal">
+      <div class="modal modal-scan">
+        <div class="modal-head">
+          <h2 data-t="scan.title">Scanner le code-barres</h2>
+          <p data-t="scan.hint">Visez le code-barres de l'étiquette.</p>
+        </div>
+        <video id="scan-video" playsinline muted></video>
+        <div class="modal-foot">
+          <button class="btn" id="scan-cancel" data-t="scan.cancel">Annuler</button>
         </div>
       </div>
     </div>

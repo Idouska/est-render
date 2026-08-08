@@ -887,3 +887,159 @@ input:focus, select:focus, textarea:focus {
 
 .ico-del { color: var(--ink-mute); border-color: transparent; background: none; width: 40px; height: 40px; }
 .ico-del:hover { color: var(--bad); background: var(--bad-soft); }
+
+/* ------------------------------------------------------ liste compacte ----
+   La liste oriente, le guichet travaille. Une ligne par commande : photo du
+   modèle, numéro, client, état — et tout le formulaire vit derrière le tap. */
+
+.rowo {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  min-height: var(--tap);
+  padding: 9px 11px;
+  margin-bottom: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--card);
+  box-shadow: var(--shadow);
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.rowo:active { background: var(--line-soft); }
+.rowo-done { border-color: #bfe6d3; background: var(--ok-soft); }
+
+.rowo-photo {
+  width: 46px;
+  height: 46px;
+  flex: none;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  background: var(--line-soft);
+}
+.rowo-photo-none { display: block; }
+
+.rowo-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+
+.rowo-top {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  min-width: 0;
+}
+.rowo-top b { font-size: 14.5px; }
+.rowo-top span {
+  font-size: 13px;
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowo-main small {
+  font-size: 12px;
+  color: var(--ink-mute);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowo-warn { color: var(--bad); font-weight: 650; }
+
+.rowo-state {
+  flex: none;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.rowo-state.ok { color: var(--ok); font-size: 16px; }
+
+.rowo-car { width: 15px; height: 15px; flex: none; stroke: var(--ink-mute); fill: none;
+  stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+/* --------------------------------------------------------------- guichet --
+   Une commande plein écran ; la barre dit où l'on en est dans la file et
+   permet d'avancer sans repasser par la liste. Collante : sur une commande à
+   six colis, « Suivante » ne doit pas être à trois écrans de défilement. */
+
+.focus-bar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  margin-bottom: 8px;
+  background: var(--paper);
+}
+
+.focus-pos {
+  margin-left: auto;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.focus-nav { display: flex; gap: 6px; }
+.focus-nav .btn { min-width: var(--tap); font-size: 16px; }
+
+/* ------------------------------------------------------------- scan -------
+   Le champ de suivi et son bouton caméra, côte à côte. */
+
+.pk-track { display: flex; gap: 8px; }
+.pk-track input { flex: 1; min-width: 0; }
+
+.pk-scan {
+  flex: none;
+  width: var(--tap);
+  min-height: var(--tap);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--card);
+  color: var(--ink-soft);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.pk-scan:active { background: var(--brand-soft); color: var(--brand); }
+.pk-scan svg { width: 22px; height: 22px; stroke: currentColor; fill: none;
+  stroke-width: 1.5; stroke-linecap: round; }
+
+.modal-scan { max-width: 480px; }
+.modal-scan video {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border-radius: var(--r-sm);
+  background: #000;
+}
+
+/* Le tri « Par modèle » se distingue des deux chips de filtre : il ne
+   restreint pas la liste, il la réordonne. Bord pointillé pour le dire. */
+.chips .chip-sort { border-style: dashed; margin-left: auto; }
+.chips .chip-sort[aria-pressed='true'] { border-style: solid; }
+
+/* Au guichet, l'écran appartient à la commande : l'en-tête, la période, les
+   chips et la progression du jour se retirent — la barre du guichet ramène à
+   la liste, où tout cela reprend sa place. Les alertes urgentes restent :
+   elles existent précisément pour interrompre le travail en cours. */
+.ws-focus #view-orders .wshead,
+.ws-focus #ws-quick,
+.ws-focus #ws-drawer,
+.ws-focus #ws-progress,
+.ws-focus #ws-filter { display: none; }
+
+@media (max-width: 860px) {
+  /* Le sélecteur de langue flotte en haut à droite : exactement là où vivent
+     les flèches du guichet. Il s'efface pendant qu'on emballe. */
+  .ws-focus .wsnav-foot { display: none; }
+}

@@ -135,6 +135,19 @@ export const STRINGS = {
     'kind.CANCEL': 'Commande annulée',
     'kind.OTHER': 'Message urgent',
 
+    'sort.model': 'Par modèle',
+
+    'focus.back': 'Liste',
+    'focus.prev': 'Commande précédente',
+    'focus.next': 'Commande suivante',
+
+    'scan.button': 'Scanner le code-barres',
+    'scan.title': 'Scanner le code-barres',
+    'scan.hint': "Visez le code-barres de l'étiquette.",
+    'scan.cancel': 'Annuler',
+    'scan.fail': 'Caméra inaccessible — vérifiez l’autorisation.',
+    'scan.got': 'Numéro lu : {code}',
+
     'filter.left': 'À préparer',
     'filter.all': 'Toutes',
     'orders.allDone': 'Tout est préparé pour cette période.',
@@ -262,6 +275,19 @@ export const STRINGS = {
     'kind.CANCEL': 'Order cancelled',
     'kind.OTHER': 'Urgent message',
 
+    'sort.model': 'By model',
+
+    'focus.back': 'List',
+    'focus.prev': 'Previous order',
+    'focus.next': 'Next order',
+
+    'scan.button': 'Scan barcode',
+    'scan.title': 'Scan the barcode',
+    'scan.hint': 'Point at the barcode on the shipping label.',
+    'scan.cancel': 'Cancel',
+    'scan.fail': 'Camera unavailable — check the permission.',
+    'scan.got': 'Number read: {code}',
+
     'filter.left': 'To prepare',
     'filter.all': 'All',
     'orders.allDone': 'Everything is prepared for this period.',
@@ -388,6 +414,19 @@ export const STRINGS = {
     'kind.HOLD': '请勿发货',
     'kind.CANCEL': '订单已取消',
     'kind.OTHER': '紧急消息',
+
+    'sort.model': '按型号',
+
+    'focus.back': '返回列表',
+    'focus.prev': '上一个订单',
+    'focus.next': '下一个订单',
+
+    'scan.button': '扫描条形码',
+    'scan.title': '扫描条形码',
+    'scan.hint': '对准快递面单上的条形码。',
+    'scan.cancel': '取消',
+    'scan.fail': '无法使用摄像头——请检查权限。',
+    'scan.got': '已读取：{code}',
 
     'filter.left': '待处理',
     'filter.all': '全部',
