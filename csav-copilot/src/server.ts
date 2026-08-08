@@ -64,7 +64,6 @@ export async function buildServer() {
 
   // Lue par le dashboard avant toute session, pour proposer le bon chemin de
   // connexion : installation Shopify en production, raccourci en local.
-  app.get('/api/config', async () => ({ devMode }));
 
   await app.register(fastifyStatic, {
     root: join(projectRoot, 'public'),
@@ -108,6 +107,19 @@ export async function buildServer() {
     );
     return Math.max(...times).toString(36);
   })();
+
+  const startedAt = new Date().toISOString();
+
+  /*
+   * Ce que le navigateur exécute réellement.
+   *
+   * Deux fois déjà, une panne signalée n'en était pas une : le serveur avait
+   * la correction, le navigateur servait encore l'ancien fichier. L'empreinte
+   * du déploiement, affichée dans les Réglages, distingue « ça ne marche pas »
+   * de « ce n'est pas encore déployé » en une seconde — au lieu d'un
+   * aller-retour et d'une correction cherchée là où elle n'est pas.
+   */
+  app.get('/api/config', async () => ({ devMode, assetVersion, startedAt }));
 
   const { readFile } = await import('node:fs/promises');
   const pageCache = new Map<string, string>();

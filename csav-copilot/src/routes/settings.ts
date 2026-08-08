@@ -587,7 +587,31 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
     let revived = 0;
     const failed: string[] = [];
 
+    /*
+     * Le détail par boîte, rendu au navigateur.
+     *
+     * Une relève qui ne ramène rien peut le faire pour cinq raisons — jeton
+     * périmé, boîte vraiment vide, curseur dérivé, quota, panne réseau — et
+     * elles n'appellent pas les mêmes gestes. Sans ce détail, le marchand n'a
+     * qu'un bouton muet, et la panne se diagnostique dans des journaux que
+     * personne ne lit au moment où elle se produit.
+     */
+    const details: Array<{
+      mailbox: string;
+      incremental: number;
+      backfill: number | null;
+      error: string | null;
+    }> = [];
+
     for (const mailbox of mailboxes) {
+      const detail = {
+        mailbox: mailbox.emailAddress,
+        incremental: 0,
+        backfill: null as number | null,
+        error: null as string | null,
+      };
+      details.push(detail);
+
       try {
         /*
          * Relever d'abord, rallumer ensuite.
@@ -598,6 +622,7 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
          */
         const result = await ingestMerchantInbox(merchantId, mailbox.id);
         ingested += result.ingested;
+        detail.incremental = result.ingested;
 
         /*
          * Le filet : quand le curseur ne rend rien, chercher par date.
@@ -617,6 +642,7 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
         if (result.ingested === 0 && revive) {
           const caught = await ingestMerchantInbox(merchantId, mailbox.id, { backfillDays: 2 });
           ingested += caught.ingested;
+          detail.backfill = caught.ingested;
           if (caught.ingested > 0) {
             request.log.info(
               { mailboxId: mailbox.id, ingested: caught.ingested },
@@ -649,11 +675,12 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
         // branchées, un jeton expiré sur l'une, et le courrier de la seconde
         // continue d'entrer. L'échec est rendu, pas avalé.
         request.log.error({ err: error, mailboxId: mailbox.id }, "Relève auto en échec");
+        detail.error = error instanceof Error ? error.message : "Erreur inconnue";
         failed.push(mailbox.emailAddress);
       }
     }
 
-    return reply.send({ ingested, revived, failed, mailboxes: mailboxes.length });
+    return reply.send({ ingested, revived, failed, details, mailboxes: mailboxes.length });
   });
 
   /**

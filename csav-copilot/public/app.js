@@ -149,6 +149,7 @@ async function showGate(message) {
   let devMode = false;
   try {
     const config = await fetch('/api/config').then((r) => r.json());
+    state.build = config;
     devMode = Boolean(config.devMode);
   } catch {
     devMode = false;
@@ -5568,6 +5569,53 @@ function renderReturnAgencies(box) {
     </div>`;
 }
 
+/**
+ * Version déployée et dernière relève, en bas des Réglages.
+ *
+ * Deux pannes signalées n'en étaient pas : le serveur avait la correction, le
+ * navigateur servait l'ancien fichier. Ces deux lignes tranchent la question
+ * avant qu'on cherche ailleurs — et disent, boîte par boîte, ce que le dernier
+ * clic sur « Actualiser » a réellement lu.
+ */
+function renderBuildInfo() {
+  const box = $('set-build');
+  if (!box) return;
+
+  const version = state.build?.assetVersion ?? '—';
+  const started = state.build?.startedAt ? dateTime(state.build.startedAt) : '—';
+
+  const sync = state.lastSync;
+  const syncLine = !sync
+    ? 'Aucune relève depuis l’ouverture de cet écran.'
+    : sync.error
+      ? `Dernière relève : échec — ${esc(sync.error)}`
+      : (sync.details ?? [])
+          .map((entry) =>
+            entry.error
+              ? `${esc(entry.mailbox)} : ${esc(entry.error)}`
+              : `${esc(entry.mailbox)} : ${entry.incremental} nouveau(x)${
+                  entry.backfill === null ? '' : `, ${entry.backfill} par rattrapage`
+                }`,
+          )
+          .join(' · ') || 'Aucune boîte connectée.';
+
+  box.innerHTML = `Version déployée <code>${esc(version)}</code>, serveur démarré le ${esc(
+    started,
+  )}.<br />${syncLine}<br /><button class="qlink" id="set-sync-now"
+    style="padding:4px 0">Relever maintenant et afficher le détail</button>`;
+
+  // Le geste de diagnostic : relever, puis réécrire ces deux lignes avec ce
+  // qui vient de se passer — sans quitter l'écran où on cherche la panne.
+  $('set-sync-now')?.addEventListener('click', async () => {
+    const button = $('set-sync-now');
+    button.disabled = true;
+    button.textContent = 'Relève en cours…';
+    await pullMail({ revive: true });
+    await loadQueue();
+    renderBuildInfo();
+  });
+}
+
 $('open-palettes')?.addEventListener('click', () => setView('palettes'));
 
 $('ret-tabs').addEventListener('click', (event) => {
@@ -7379,6 +7427,7 @@ function renderSettings() {
 async function openSettings() {
   state.settings = await api('/api/settings');
   renderSettings();
+  renderBuildInfo();
 }
 
 /* Repère de modification : sans lui, on ne sait pas si l'on a déjà enregistré,
@@ -8366,18 +8415,33 @@ async function pullMail({ revive = false } = {}) {
       body: JSON.stringify({ revive }),
     });
 
+    // Le détail de la dernière relève, gardé pour l'écran de diagnostic : une
+    // panne qu'on ne peut pas décrire est une panne qu'on ne corrige pas.
+    state.lastSync = { at: Date.now(), ...result };
+
     // La veille rallumée se dit : c'est elle qui fera entrer le courrier tout
     // seul ensuite, et le marchand doit savoir qu'il n'aura plus à cliquer.
     if (result.revived > 0) toast('Arrivée automatique du courrier réactivée.');
 
-    // Une boîte muette parmi d'autres passerait inaperçue derrière un total
-    // qui monte : elle se nomme, une fois, au moment où on la découvre.
-    if (result.failed?.length) {
-      toast(`Relève impossible sur ${result.failed.join(', ')}.`, true);
+    // Une boîte en échec se nomme, avec son motif : « relève impossible » tout
+    // court n'a jamais aidé personne à comprendre quoi faire.
+    const broken = (result.details ?? []).filter((entry) => entry.error);
+    if (broken.length > 0 && revive) {
+      toast(`${broken[0].mailbox} : ${broken[0].error}`, true);
     }
 
     return result.ingested ?? 0;
-  } catch {
+  } catch (error) {
+    /*
+     * L'échec de la relève ne bloque pas l'actualisation, mais il ne doit plus
+     * être muet.
+     *
+     * Il l'était : la file se rechargeait sans un mot, et le bouton répondait
+     * « à l'instant » sur une boîte qu'on n'avait pas su lire. Sur un clic
+     * délibéré, on dit ce qui a échoué.
+     */
+    state.lastSync = { at: Date.now(), error: error.message };
+    if (revive) toast(`Relève impossible : ${error.message}`, true);
     return null;
   }
 }
@@ -8426,10 +8490,17 @@ async function refreshCurrent({ silent = false } = {}) {
     // trouvé quelque chose d'une relève qui n'a rien trouvé — et c'est
     // exactement la question qu'on se pose en cliquant.
     if (!silent && fetched !== null) {
+      // Le compte des boîtes réellement interrogées : « aucun nouveau
+      // message » sur zéro boîte lue n'est pas la même nouvelle que sur une
+      // boîte lue jusqu'au bout.
+      const read = (state.lastSync?.details ?? []).filter((entry) => !entry.error).length;
+
       toast(
         fetched > 0
           ? `${fetched} nouveau${fetched > 1 ? 'x' : ''} message${fetched > 1 ? 's' : ''} — en haut de la file.`
-          : 'Aucun nouveau message dans la boîte.',
+          : read > 0
+            ? 'Aucun nouveau message dans la boîte.'
+            : 'Aucune boîte n’a pu être relevée — voir Réglages ▸ Gmail.',
       );
     }
   } catch (error) {
@@ -8587,6 +8658,15 @@ async function boot() {
   // Sans attendre : les couleurs enrichissent l'affichage, elles ne le
   // conditionnent pas. Un Gmail lent ne doit pas retarder l'ouverture.
   void loadLabelStyles();
+
+  // L'empreinte du déploiement, pour les Réglages. Elle n'était lue que sur
+  // l'écran de session expirée — c'est-à-dire jamais quand on en a besoin.
+  void fetch('/api/config')
+    .then((response) => response.json())
+    .then((config) => {
+      state.build = config;
+    })
+    .catch(() => {});
 
   // Mémorisé pour l'écran de session expirée, sur cet appareil uniquement.
   if (state.me.merchant.shopDomain) {
