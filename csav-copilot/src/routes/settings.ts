@@ -798,11 +798,12 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
    *   DISCARDED — les brouillons de tickets encore ouverts sont épargnés,
    *   l'agent peut encore vouloir les envoyer ;
    *
-   * — `mode: "all"` : TOUS les brouillons de la boîte, listés directement
-   *   chez Gmail — y compris ceux écrits à la main. C'est le geste demandé
-   *   quand la boîte est une adresse SAV où plus rien de manuscrit n'a de
-   *   valeur ; l'interface le fait précéder d'une confirmation explicite,
-   *   parce qu'il n'y a pas de corbeille pour un brouillon supprimé.
+   * — `mode: "all"` : tous les brouillons créés par l'outil, tickets ouverts
+   *   compris. Le périmètre est la base, pas la boîte : seuls les brouillons
+   *   dont on détient l'identifiant Gmail — donc ceux que l'IA a écrits —
+   *   sont touchés. Un brouillon tapé à la main dans Gmail n'est jamais
+   *   supprimé, l'outil n'en connaît pas l'existence. Pour un ticket encore
+   *   ouvert, l'IA refera son brouillon au prochain traitement.
    *
    * Par lots de 300 — Gmail est appelé une fois par brouillon, au-delà la
    * requête HTTP expirerait — la réponse dit ce qui reste, et l'interface
@@ -814,66 +815,15 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
       .object({ mode: z.enum(["closed", "all"]).default("closed") })
       .parse(request.body ?? {});
 
-    if (mode === "all") {
-      const mailboxes = await prisma.gmailConnection.findMany({
-        where: { merchantId },
-        select: { id: true },
-        orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
-      });
-
-      let purged = 0;
-      let remaining = 0;
-
-      for (const mailbox of mailboxes) {
-        const { gmail } = await getGmailClient(merchantId, mailbox.id);
-        const listed = await gmail.users.drafts.list({ userId: "me", maxResults: 300 });
-        const drafts = listed.data.drafts ?? [];
-
-        for (const draft of drafts) {
-          if (!draft.id) continue;
-          try {
-            await gmail.users.drafts.delete({ userId: "me", id: draft.id });
-            purged += 1;
-          } catch (error) {
-            request.log.warn({ err: error, draftId: draft.id }, "Brouillon Gmail non supprimé");
-          }
-        }
-
-        // Ce qui reste après ce lot : Gmail ne donne qu'une estimation, mais
-        // elle suffit à l'interface pour savoir s'il faut rappeler.
-        const recount = await gmail.users.drafts.list({ userId: "me", maxResults: 1 });
-        remaining += (recount.data.drafts?.length ?? 0) > 0
-          ? Math.max(1, (recount.data.resultSizeEstimate ?? 1))
-          : 0;
-      }
-
-      // Côté base : plus aucun brouillon « en attente » ne pointe vers un
-      // brouillon Gmail existant. Les marquer DISCARDED évite qu'un clic
-      // « Envoyer » cherche un identifiant qui ne répond plus.
-      await prisma.draft.updateMany({
-        where: { merchantId, status: { in: ["PENDING_REVIEW", "EDITED"] } },
-        data: { status: "DISCARDED" },
-      });
-
-      await recordAudit({
-        merchantId,
-        actorType: "USER",
-        actorId: userId,
-        action: "drafts.cleanup.all",
-        targetType: "Merchant",
-        targetId: merchantId,
-        metadata: { purged, remaining },
-        ipAddress: request.ip,
-      });
-
-      return reply.send({ purged, remaining });
-    }
-
+    // Le périmètre : toujours les brouillons de l'outil — identifiant Gmail
+    // connu, jamais envoyés. En mode « all », on lève simplement la condition
+    // « ticket clos » : les brouillons de tickets ouverts partent aussi, l'IA
+    // les refera au prochain traitement.
     const where = {
       merchantId,
       status: { in: ["PENDING_REVIEW", "EDITED"] },
       gmailDraftId: { not: null },
-      ticket: { status: { in: ["CLOSED", "AUTO_SENT"] } },
+      ...(mode === "all" ? {} : { ticket: { status: { in: ["CLOSED", "AUTO_SENT"] } } }),
     } satisfies NonNullable<Parameters<typeof prisma.draft.count>[0]>["where"];
 
     const batch = await prisma.draft.findMany({
@@ -908,7 +858,7 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
       action: "drafts.cleanup",
       targetType: "Merchant",
       targetId: merchantId,
-      metadata: { purged: batch.length, remaining },
+      metadata: { mode, purged: batch.length, remaining },
       ipAddress: request.ip,
     });
 

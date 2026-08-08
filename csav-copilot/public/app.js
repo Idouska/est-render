@@ -7236,8 +7236,8 @@ function renderSettings() {
   // nombre demande un comptage que la page des connexions n'a pas à attendre.
   const gmailBlock = `${gmailDetail}<div class="mbx-orphans" id="mbx-orphans" hidden></div>
     <div class="mbx-acts" style="margin-top:8px">
-      <button class="btn btn-small" id="btn-drafts-cleanup">Nettoyer les brouillons de l’outil</button>
-      <button class="btn btn-small btn-danger" id="btn-drafts-purge-all">Supprimer TOUS les brouillons Gmail</button>
+      <button class="btn btn-small" id="btn-drafts-cleanup">Nettoyer les brouillons (tickets clos)</button>
+      <button class="btn btn-small btn-danger" id="btn-drafts-purge-all">Supprimer tous les brouillons IA</button>
       <span class="mbx-diag" id="drafts-cleanup-state"></span>
     </div>`;
 
@@ -7334,15 +7334,16 @@ function renderSettings() {
     void runDraftsCleanup(this, 'closed');
   });
 
-  // Le grand ménage : tout ce que la boîte compte de brouillons, y compris
-  // ceux écrits à la main. Pas de corbeille pour un brouillon supprimé, d'où
-  // la confirmation en toutes lettres.
+  // Le grand ménage — mais borné à ce que l'outil a écrit : seuls les
+  // brouillons dont on détient l'identifiant Gmail sont touchés. Un brouillon
+  // tapé à la main dans Gmail n'est jamais supprimé, l'outil ignore jusqu'à
+  // son existence.
   $('btn-drafts-purge-all')?.addEventListener('click', function () {
     if (
       !confirm(
-        'Supprimer TOUS les brouillons de la boîte Gmail ?\n\n' +
-          'Y compris ceux écrits à la main, hors de l’outil. ' +
-          'Un brouillon supprimé ne passe pas par la corbeille : irréversible.',
+        'Supprimer tous les brouillons générés par l’IA ?\n\n' +
+          'Tickets ouverts compris — l’IA les regénérera au prochain traitement. ' +
+          'Vos brouillons écrits à la main dans Gmail ne sont pas touchés.',
       )
     ) {
       return;
