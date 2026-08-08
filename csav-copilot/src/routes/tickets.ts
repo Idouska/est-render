@@ -1002,13 +1002,36 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
     const { merchantId } = request.session;
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-    const [byStatus, sentDrafts, totalDrafts] = await Promise.all([
+    /*
+     * Deux fenêtres différentes, et c'est tout le sujet.
+     *
+     * L'état de la file — combien attendent, combien ont échoué — se compte
+     * sur l'ensemble, sans borne de date : un mail de mars qui attend toujours
+     * attend toujours, l'oublier parce qu'il est vieux serait exactement
+     * l'erreur qu'un SAV ne peut pas se permettre.
+     *
+     * Le travail accompli, lui, se compte sur trente jours — mais d'après la
+     * date où on l'a fait (`updatedAt`), pas d'après la date du dernier message
+     * du client. La version précédente filtrait sur `lastMessageAt` : clore
+     * aujourd'hui cinquante mails vieux de deux mois n'incrémentait rien, et le
+     * compteur affichait « 0 traités » à quelqu'un qui venait d'en traiter
+     * cinquante. Un chiffre faux en tête d'écran décrédibilise les vrais.
+     */
+    const [byStatus, handled, sentDrafts, totalDrafts] = await Promise.all([
       prisma.ticket.groupBy({
         by: ['status'],
-        where: { merchantId, isHistorical: false, lastMessageAt: { gte: since } },
+        where: { merchantId, isHistorical: false },
         _count: true,
       }),
-      prisma.draft.count({ where: { merchantId, status: 'SENT', createdAt: { gte: since } } }),
+      prisma.ticket.count({
+        where: {
+          merchantId,
+          isHistorical: false,
+          status: { in: ['CLOSED', 'AUTO_SENT'] },
+          updatedAt: { gte: since },
+        },
+      }),
+      prisma.draft.count({ where: { merchantId, status: 'SENT', sentAt: { gte: since } } }),
       prisma.draft.count({ where: { merchantId, createdAt: { gte: since } } }),
     ]);
 
@@ -1017,9 +1040,16 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({
       window: '30j',
       tickets: counts,
+      /** Traités sur la fenêtre, d'après la date de traitement. */
+      handled,
+      /** Réponses réellement parties, sous-ensemble du précédent. */
+      sent: sentDrafts,
+      failed: counts.FAILED ?? 0,
       pending: (counts.NEEDS_REVIEW ?? 0) + (counts.DRAFT_READY ?? 0),
       // Taux d'automatisation = part des brouillons IA effectivement envoyés.
-      automationRate: totalDrafts === 0 ? 0 : Number((sentDrafts / totalDrafts).toFixed(3)),
+      // `null` et non zéro quand il n'y a aucun brouillon : « 0 % » se lit
+      // comme un échec, alors qu'il n'y a simplement rien à mesurer.
+      automationRate: totalDrafts === 0 ? null : Number((sentDrafts / totalDrafts).toFixed(3)),
     });
   });
 

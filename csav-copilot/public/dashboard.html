@@ -192,7 +192,7 @@
         <div class="kpi">
           <span class="kpi-label">Traités · 30 jours</span>
           <span class="kpi-value" id="kpi-done">—</span>
-          <span class="kpi-note">réponses envoyées</span>
+          <span class="kpi-note" id="kpi-done-note">clos ou répondus</span>
         </div>
         <div class="kpi">
           <span class="kpi-label">En attente de vous</span>
@@ -204,10 +204,13 @@
           <span class="kpi-value" id="kpi-rate">—</span>
           <span class="kpi-note">brouillons effectivement envoyés</span>
         </div>
+        <!-- Ce qui n'est pas passé. « Envoi automatique : Inactif » occupait
+             cette place pour répéter un réglage immuable pendant que des
+             milliers d'échecs n'apparaissaient nulle part. -->
         <div class="kpi">
-          <span class="kpi-label">Envoi automatique</span>
-          <span class="kpi-value" id="kpi-auto">—</span>
-          <span class="kpi-note" id="kpi-auto-note"></span>
+          <span class="kpi-label">Non traités par l'IA</span>
+          <span class="kpi-value" id="kpi-failed">—</span>
+          <span class="kpi-note" id="kpi-failed-note"></span>
         </div>
       </section>
 

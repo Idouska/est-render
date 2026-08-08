@@ -512,20 +512,43 @@ async function loadMetrics() {
   const metrics = await api('/api/metrics');
   const counts = metrics.tickets ?? {};
 
-  $('kpi-done').textContent = String((counts.CLOSED ?? 0) + (counts.AUTO_SENT ?? 0));
+  // Traités sur la fenêtre, d'après la date de traitement — et non celle du
+  // dernier message du client, qui faisait afficher zéro à qui venait d'en
+  // clore cinquante.
+  $('kpi-done').textContent = String(metrics.handled ?? 0);
+  $('kpi-done-note').textContent =
+    metrics.sent > 0
+      ? `dont ${metrics.sent} réponse${metrics.sent > 1 ? 's' : ''} envoyée${
+          metrics.sent > 1 ? 's' : ''
+        }`
+      : 'clos ou répondus';
+
   $('kpi-pending').textContent = String(metrics.pending ?? 0);
   state.pendingCount = metrics.pending ?? 0;
   renderNav();
   $('kpi-pending-note').textContent = `${counts.NEEDS_REVIEW ?? 0} à valider · ${
     counts.DRAFT_READY ?? 0
   } prêts`;
-  $('kpi-rate').textContent = `${Math.round((metrics.automationRate ?? 0) * 100)} %`;
 
-  const auto = state.me.merchant.autoSendEnabled;
-  $('kpi-auto').textContent = auto ? 'Actif' : 'Inactif';
-  $('kpi-auto-note').textContent = auto
-    ? `seuil ${state.me.merchant.autoSendThreshold}`
-    : 'toute réponse passe par vous';
+  // Aucun brouillon : « — » et non « 0 % ». Un zéro se lit comme un échec,
+  // alors qu'il n'y a rien à mesurer.
+  $('kpi-rate').textContent =
+    metrics.automationRate === null || metrics.automationRate === undefined
+      ? '—'
+      : `${Math.round(metrics.automationRate * 100)} %`;
+
+  /*
+   * Quatrième indicateur : ce qui n'est pas passé.
+   *
+   * « Envoi automatique : Inactif » occupait la place la plus visible de
+   * l'écran pour répéter un réglage qui ne change jamais, pendant que trois
+   * mille cinq cents messages en échec n'apparaissaient nulle part. Un
+   * indicateur doit dire ce qu'on ignore, pas ce qu'on sait déjà.
+   */
+  const failed = metrics.failed ?? 0;
+  $('kpi-failed').textContent = String(failed);
+  $('kpi-failed').classList.toggle('set-alert', failed > 0);
+  $('kpi-failed-note').textContent = failed > 0 ? 'à relancer' : 'tout est passé';
 }
 
 /**
