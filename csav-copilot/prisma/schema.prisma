@@ -87,6 +87,8 @@ model Merchant {
   supplierEscalations SupplierEscalation[]
   supplierAlerts      SupplierAlert[]
   parcels             Parcel[]
+  returnCases         ReturnCase[]
+  returnAgencies      ReturnAgency[]
 
   @@index([organizationId])
 }
@@ -800,4 +802,123 @@ enum SupplierAlertStatus {
   PENDING
   ACKNOWLEDGED
   REFUSED
+}
+
+
+/// Retour client — le dossier « Reshipment ».
+///
+/// Un retour est deux choses successives : un dossier à suivre (le client a
+/// son bon de retour ? le colis est arrivé ? dans quel état ?), puis, s'il est
+/// remis en stock, une paire disponible en France — réexpédiable à la
+/// prochaine commande du même article, au lieu de refaire partir un colis de
+/// l'atelier. Le même enregistrement porte les deux vies : séparer « retour »
+/// et « stock » ferait recopier le produit d'une table à l'autre.
+model ReturnCase {
+  id         String @id @default(cuid())
+  merchantId String
+
+  orderName      String?
+  shopifyOrderId String?
+  customerName   String?
+  customerEmail  String?
+  /// Numéro WhatsApp du client, pour la relance en un geste.
+  customerPhone  String?
+  /// Pays du client : FR, ES, IT, BE — décide de l'agence qui réceptionne.
+  country        String?
+
+  productTitle String
+  variantTitle String?
+  sku          String?
+
+  /// Pourquoi le client renvoie : c'est la première question du marchand,
+  /// et la statistique qui dit quel modèle taille petit.
+  reason     ReturnReason     @default(OTHER)
+  /// Ce que veut le client : échanger, ou être remboursé sans échange.
+  resolution ReturnResolution @default(EXCHANGE)
+
+  /// Le bon de retour a-t-il été fourni au client ? Tant que non, le dossier
+  /// n'avance pas — c'est la case à vérifier en premier.
+  labelSent Boolean @default(false)
+
+  status ReturnStatus @default(OPEN)
+
+  /// Numéro de suivi du colis retour, quand le client l'a communiqué.
+  trackingNumber String?
+
+  /// Agence qui réceptionne ce retour.
+  agencyId String?
+
+  /// Commande sur laquelle la paire remise en stock a été réutilisée. Posée,
+  /// elle sort la paire du stock disponible — sans suppression : le dossier
+  /// raconte alors le cycle complet, du retour au réemploi.
+  reusedOrderName String?
+  reusedAt        DateTime?
+
+  note String? @db.Text
+
+  /// Dernier échange avec le client, pour repérer les dossiers silencieux :
+  /// trois jours sans nouvelle et la relance WhatsApp se propose d'elle-même.
+  lastContactAt DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  merchant Merchant      @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  agency   ReturnAgency? @relation(fields: [agencyId], references: [id], onDelete: SetNull)
+
+  @@index([merchantId, status])
+  @@index([merchantId, sku])
+}
+
+enum ReturnReason {
+  SIZE
+  DEFECT
+  MODEL
+  OTHER
+}
+
+enum ReturnResolution {
+  EXCHANGE
+  REFUND
+}
+
+enum ReturnStatus {
+  /// Dossier ouvert, bon de retour pas encore fourni.
+  OPEN
+  /// Bon envoyé, on attend le colis.
+  LABEL_SENT
+  /// Colis retour reçu par l'agence.
+  RECEIVED
+  /// Contrôlé, remis en stock France : disponible au réemploi.
+  RESTOCKED
+  /// Contrôlé, inutilisable.
+  UNUSABLE
+  /// Terminé (remboursé, réexpédié, clos).
+  CLOSED
+}
+
+/// Agence de traitement des retours, une ou plusieurs par pays.
+///
+/// C'est elle qui réceptionne, contrôle et stocke : ses coordonnées complètes
+/// vivent ici pour être sous la main au moment d'ouvrir un dossier — pas dans
+/// un carnet d'adresses à côté de l'outil.
+model ReturnAgency {
+  id         String @id @default(cuid())
+  merchantId String
+
+  /// FR, ES, IT, BE.
+  country String
+  name    String
+  email   String?
+  phone   String?
+  address String? @db.Text
+  notes   String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  merchant Merchant     @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  returns  ReturnCase[]
+
+  @@index([merchantId, country])
 }

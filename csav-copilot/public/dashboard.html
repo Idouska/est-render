@@ -793,6 +793,107 @@
         </div>
       </section>
 
+      <!-- Reshipment : les retours clients, et le stock France qu'ils
+           deviennent. Quatre onglets : les dossiers à suivre, les matchs
+           commande × stock, le stock disponible, et les agences par pays. -->
+      <section class="browse" id="view-returns" hidden aria-label="Reshipment">
+        <div class="browse-bar">
+          <div class="chips" id="ret-tabs" role="group" style="margin:0">
+            <button type="button" data-rtab="cases" aria-pressed="true">Dossiers <b id="ret-n-open">0</b></button>
+            <button type="button" data-rtab="matches" aria-pressed="false">Match <b id="ret-n-match">0</b></button>
+            <button type="button" data-rtab="stock" aria-pressed="false">Stock France <b id="ret-n-stock">0</b></button>
+            <button type="button" data-rtab="agencies" aria-pressed="false">Agences</button>
+          </div>
+          <button class="btn btn-primary" id="ret-new" style="margin-left:auto">Nouveau retour</button>
+        </div>
+        <div id="ret-body"></div>
+      </section>
+
+      <div class="backdrop" id="return-modal" role="dialog" aria-modal="true"
+        aria-labelledby="retmodal-title">
+        <div class="modal">
+          <div class="modal-head">
+            <h2 id="retmodal-title">Nouveau retour</h2>
+            <p>
+              La raison décide de la suite : une taille s'échange, un défaut se
+              rembourse — et la paire revenue en bon état repart chez le
+              prochain client au lieu de dormir.
+            </p>
+          </div>
+          <div class="modal-body">
+            <div class="field-row">
+              <div class="field">
+                <label for="ret-f-order">Commande</label>
+                <input type="text" id="ret-f-order" placeholder="#11363" />
+              </div>
+              <div class="field">
+                <label for="ret-f-country">Pays</label>
+                <select id="ret-f-country">
+                  <option value="FR">France</option>
+                  <option value="ES">Espagne</option>
+                  <option value="IT">Italie</option>
+                  <option value="BE">Belgique</option>
+                </select>
+              </div>
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label for="ret-f-name">Client</label>
+                <input type="text" id="ret-f-name" placeholder="Nom du client" />
+              </div>
+              <div class="field">
+                <label for="ret-f-phone">WhatsApp</label>
+                <input type="text" id="ret-f-phone" placeholder="+33 6…" />
+              </div>
+            </div>
+            <div class="field">
+              <label for="ret-f-product">Article retourné</label>
+              <input type="text" id="ret-f-product" placeholder="Nike Pegasus Premium SP Black" />
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label for="ret-f-variant">Taille / déclinaison</label>
+                <input type="text" id="ret-f-variant" placeholder="44.5" />
+              </div>
+              <div class="field">
+                <label for="ret-f-sku">Référence (SKU)</label>
+                <input type="text" id="ret-f-sku" placeholder="IH4369-001" />
+              </div>
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label for="ret-f-reason">Raison du retour</label>
+                <select id="ret-f-reason">
+                  <option value="SIZE">Problème de taille</option>
+                  <option value="DEFECT">Article défectueux</option>
+                  <option value="MODEL">Le modèle ne plaît pas</option>
+                  <option value="OTHER">Autre</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="ret-f-resolution">Le client veut</label>
+                <select id="ret-f-resolution">
+                  <option value="EXCHANGE">Un échange</option>
+                  <option value="REFUND">Un remboursement, sans échange</option>
+                </select>
+              </div>
+            </div>
+            <div class="field">
+              <label for="ret-f-agency">Agence de retour</label>
+              <select id="ret-f-agency"><option value="">—</option></select>
+            </div>
+            <div class="field">
+              <label for="ret-f-note">Note (facultatif)</label>
+              <textarea id="ret-f-note" placeholder="État annoncé, précisions du client…"></textarea>
+            </div>
+          </div>
+          <div class="modal-foot">
+            <button class="btn" id="ret-f-cancel">Annuler</button>
+            <button class="btn btn-primary" id="ret-f-save">Créer le dossier</button>
+          </div>
+        </div>
+      </div>
+
       <section class="browse" id="view-refunds" hidden aria-label="Remboursements">
         <!-- La période commande les deux termes du ratio : un montant remboursé
              et un chiffre d'affaires qui ne couvrent pas la même fenêtre ne se

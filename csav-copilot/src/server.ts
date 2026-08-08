@@ -20,6 +20,7 @@ import { shopRoutes } from './routes/shops.ts';
 import { supplierWorkspaceRoutes } from './routes/supplierWorkspace.ts';
 import { supplierPortalRoutes } from './routes/supplierPortal.ts';
 import { statsRoutes } from './routes/stats.ts';
+import { returnRoutes } from './routes/returns.ts';
 import { supplierRoutes } from './routes/suppliers.ts';
 import { teamRoutes } from './routes/team.ts';
 import { ticketRoutes } from './routes/tickets.ts';
@@ -160,6 +161,7 @@ export async function buildServer() {
   await app.register(commerceRoutes);
   await app.register(statsRoutes);
   await app.register(supplierRoutes);
+  await app.register(returnRoutes);
   await app.register(teamRoutes);
   await app.register(supplierPortalRoutes);
   await app.register(supplierWorkspaceRoutes);

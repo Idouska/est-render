@@ -4975,6 +4975,451 @@ function ico(name) {
 
 /* Une entrée par écran : icône, libellé, groupe, et le compteur affiché en
    pastille quand il y a quelque chose à traiter. */
+/* ============================================================ reshipment --
+   Les retours clients, et le stock France qu'ils deviennent.
+
+   Le circuit : le client renvoie (taille, défaut, modèle, ou remboursement
+   sec) → l'agence du pays réceptionne → la paire contrôlée est remise en
+   stock France → la prochaine commande du même article part de ce stock au
+   lieu de l'atelier. Rien ne se gâche, le client proche est livré en trois
+   jours.
+
+   Et le nerf du suivi : un dossier sans nouvelle depuis trois jours se
+   signale tout seul, avec la relance WhatsApp pré-écrite à un tap. */
+
+const RETURN_REASONS = {
+  SIZE: 'Taille',
+  DEFECT: 'Défectueux',
+  MODEL: 'Ne plaît pas',
+  OTHER: 'Autre',
+};
+
+const RETURN_RESOLUTIONS = {
+  EXCHANGE: 'Échange',
+  REFUND: 'Remboursement',
+};
+
+const RETURN_STATUSES = {
+  OPEN: 'Ouvert',
+  LABEL_SENT: 'Bon envoyé',
+  RECEIVED: 'Reçu agence',
+  RESTOCKED: 'En stock France',
+  UNUSABLE: 'Inutilisable',
+  CLOSED: 'Clos',
+};
+
+const RETURN_COUNTRIES = { FR: 'France', ES: 'Espagne', IT: 'Italie', BE: 'Belgique' };
+
+state.returns = { cases: [], counts: {}, agencies: [], matches: [], tab: 'cases', country: 'FR' };
+
+async function loadReturns() {
+  try {
+    const [data, agencies] = await Promise.all([
+      api('/api/returns'),
+      api('/api/return-agencies'),
+    ]);
+    state.returns.cases = data.cases ?? [];
+    state.returns.counts = data.counts ?? {};
+    state.returns.agencies = agencies.agencies ?? [];
+  } catch (error) {
+    toast(error.message, true);
+    return;
+  }
+
+  // Le match interroge Shopify : plus lent, il arrive après coup plutôt que
+  // de retenir tout l'écran.
+  renderReturns();
+  void api('/api/returns/matches')
+    .then((data) => {
+      state.returns.matches = data.matches ?? [];
+      renderReturns();
+    })
+    .catch(() => {});
+}
+
+/** Relance WhatsApp pré-écrite : le message part du contexte du dossier. */
+function returnWaLink(item) {
+  const digits = (item.customerPhone ?? '').replace(/[^\d+]/g, '').replace(/^\+/, '');
+  if (!digits) return null;
+
+  const brand = state.me?.merchant?.brandName || state.me?.merchant?.name || '';
+  const text = item.labelSent
+    ? `Bonjour${item.customerName ? ` ${item.customerName}` : ''}, avez-vous pu déposer le colis retour de votre commande ${item.orderName ?? ''} (${item.productTitle}) ? Dites-nous si quelque chose bloque. — ${brand}`
+    : `Bonjour${item.customerName ? ` ${item.customerName}` : ''}, nous revenons vers vous au sujet du retour de votre commande ${item.orderName ?? ''} (${item.productTitle}). — ${brand}`;
+
+  return `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
+}
+
+function renderReturns() {
+  const box = $('ret-body');
+  const r = state.returns;
+
+  $('ret-n-open').textContent = String(r.counts.open ?? 0);
+  $('ret-n-match').textContent = String(r.matches.length);
+  $('ret-n-stock').textContent = String(r.counts.stock ?? 0);
+
+  document
+    .querySelectorAll('#ret-tabs [data-rtab]')
+    .forEach((tab) => tab.setAttribute('aria-pressed', String(tab.dataset.rtab === r.tab)));
+
+  if (r.tab === 'cases') return renderReturnCases(box);
+  if (r.tab === 'matches') return renderReturnMatches(box);
+  if (r.tab === 'stock') return renderReturnStock(box);
+  renderReturnAgencies(box);
+}
+
+function renderReturnCases(box) {
+  const items = state.returns.cases.filter(
+    (item) => !['CLOSED', 'UNUSABLE'].includes(item.status),
+  );
+  const silentSince = Date.now() - 3 * 24 * 60 * 60 * 1000;
+
+  if (items.length === 0) {
+    box.innerHTML =
+      '<p class="empty" style="padding:20px">Aucun dossier en cours. « Nouveau retour » ouvre le premier.</p>';
+    return;
+  }
+
+  box.innerHTML = `<div class="table-wrap"><table class="grid"><thead><tr>
+      <th>Commande</th><th>Client</th><th>Article</th><th>Raison</th>
+      <th>Souhait</th><th>Bon de retour</th><th>Statut</th><th></th>
+    </tr></thead><tbody>
+    ${items
+      .map((item) => {
+        const silent =
+          ['OPEN', 'LABEL_SENT'].includes(item.status) &&
+          new Date(item.lastContactAt).getTime() < silentSince;
+        const wa = returnWaLink(item);
+
+        return `<tr data-ret="${esc(item.id)}"${silent ? ' class="ret-silent"' : ''}>
+          <td><b>${esc(item.orderName ?? '—')}</b><br /><small>${esc(
+            RETURN_COUNTRIES[item.country] ?? item.country ?? '',
+          )}</small></td>
+          <td>${esc(item.customerName ?? '—')}${
+            silent
+              ? '<br /><span class="ret-tag bad">3 j sans réponse</span>'
+              : ''
+          }</td>
+          <td>${esc(item.productTitle)}${
+            item.variantTitle ? `<br /><small>${esc(item.variantTitle)}</small>` : ''
+          }</td>
+          <td><span class="ret-tag ${item.reason === 'DEFECT' ? 'warn' : 'dim'}">${esc(
+            RETURN_REASONS[item.reason] ?? item.reason,
+          )}</span></td>
+          <td><span class="ret-tag ${item.resolution === 'REFUND' ? 'warn' : 'ok'}">${esc(
+            RETURN_RESOLUTIONS[item.resolution] ?? item.resolution,
+          )}</span></td>
+          <td>
+            <label class="switch" style="margin:0">
+              <input type="checkbox" data-ret-label="${esc(item.id)}"${
+                item.labelSent ? ' checked' : ''
+              } />
+              <span>${item.labelSent ? 'Fourni' : 'À fournir'}</span>
+            </label>
+          </td>
+          <td>
+            <select data-ret-status="${esc(item.id)}">
+              ${Object.entries(RETURN_STATUSES)
+                .map(
+                  ([key, label]) =>
+                    `<option value="${key}"${key === item.status ? ' selected' : ''}>${esc(
+                      label,
+                    )}</option>`,
+                )
+                .join('')}
+            </select>
+          </td>
+          <td style="white-space:nowrap">
+            ${
+              wa
+                ? `<button class="ret-wa" data-ret-wa="${esc(item.id)}" title="Relancer sur WhatsApp">✆ WhatsApp</button>`
+                : ''
+            }
+            <button class="ico ico-del" data-ret-del="${esc(item.id)}" title="Supprimer">
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <path d="M4 6h12M8.5 6V4.5h3V6M6 6l.8 10h6.4L14 6M8.4 9v4.6M11.6 9v4.6" />
+              </svg>
+            </button>
+          </td>
+        </tr>`;
+      })
+      .join('')}
+    </tbody></table></div>`;
+}
+
+function renderReturnMatches(box) {
+  const matches = state.returns.matches;
+
+  box.innerHTML = matches.length
+    ? `<div class="table-wrap"><table class="grid"><thead><tr>
+        <th>Commande en attente</th><th>Client</th><th>Article</th>
+        <th>Paire disponible</th><th></th>
+      </tr></thead><tbody>
+      ${matches
+        .map(
+          (match) => `<tr>
+            <td><b>${esc(match.orderName)}</b><br /><small>${esc(
+              RETURN_COUNTRIES[match.country] ?? match.country,
+            )}</small></td>
+            <td>${esc(match.customer ?? '—')}</td>
+            <td>${esc(match.productTitle)}${
+              match.variantTitle ? `<br /><small>${esc(match.variantTitle)}</small>` : ''
+            }</td>
+            <td><span class="ret-tag ok">retour ${esc(match.fromOrder ?? '—')}</span></td>
+            <td><button class="btn btn-small btn-primary" data-ret-use="${esc(
+              match.returnId,
+            )}" data-ret-order="${esc(match.orderName)}">Réexpédier cette paire</button></td>
+          </tr>`,
+        )
+        .join('')}
+      </tbody></table></div>`
+    : `<p class="empty" style="padding:20px">
+        Aucun match pour le moment. Dès qu'une commande FR / ES / IT / BE porte
+        un article présent dans le stock France, elle apparaît ici.
+      </p>`;
+}
+
+function renderReturnStock(box) {
+  const stock = state.returns.cases.filter(
+    (item) => item.status === 'RESTOCKED' && !item.reusedAt,
+  );
+
+  box.innerHTML = stock.length
+    ? `<div class="ret-grid">${stock
+        .map(
+          (item) => `<div class="ret-card">
+            <b>${esc(item.productTitle)}</b>
+            <small>${esc([item.variantTitle, item.sku].filter(Boolean).join(' · '))}</small>
+            <small>retour ${esc(item.orderName ?? '—')} · ${esc(
+              RETURN_REASONS[item.reason] ?? '',
+            )}</small>
+          </div>`,
+        )
+        .join('')}</div>`
+    : `<p class="empty" style="padding:20px">
+        Rien en stock France. Les retours passés « En stock France » dans les
+        dossiers arrivent ici, prêts au réemploi.
+      </p>`;
+}
+
+function renderReturnAgencies(box) {
+  const country = state.returns.country;
+  const agencies = state.returns.agencies.filter((agency) => agency.country === country);
+
+  box.innerHTML = `
+    <div class="ret-country-tabs chips" style="margin:0 0 12px">
+      ${Object.entries(RETURN_COUNTRIES)
+        .map(
+          ([code, label]) =>
+            `<button type="button" data-ret-country="${code}" aria-pressed="${
+              code === country
+            }">${esc(label)}</button>`,
+        )
+        .join('')}
+    </div>
+    ${
+      agencies.length
+        ? `<div class="ret-grid">${agencies
+            .map(
+              (agency) => `<div class="ret-card">
+                <b>${esc(agency.name)}</b>
+                ${agency.email ? `<small>✉ ${esc(agency.email)}</small>` : ''}
+                ${agency.phone ? `<small>✆ ${esc(agency.phone)}</small>` : ''}
+                ${agency.address ? `<small>${esc(agency.address)}</small>` : ''}
+                ${agency.notes ? `<small>${esc(agency.notes)}</small>` : ''}
+                <button class="qlink" data-agency-del="${esc(agency.id)}"
+                  style="align-self:flex-start;padding:2px 0">Supprimer</button>
+              </div>`,
+            )
+            .join('')}</div>`
+        : `<p class="empty" style="padding:8px 0 16px">Aucune agence en ${esc(
+            RETURN_COUNTRIES[country],
+          )} pour le moment.</p>`
+    }
+    <div class="ret-card" style="max-width:420px;margin-top:12px">
+      <b>Ajouter une agence — ${esc(RETURN_COUNTRIES[country])}</b>
+      <input type="text" id="agency-f-name" placeholder="Nom de l'agence" />
+      <input type="email" id="agency-f-email" placeholder="Email" />
+      <input type="text" id="agency-f-phone" placeholder="Téléphone" />
+      <textarea id="agency-f-address" placeholder="Adresse complète"></textarea>
+      <textarea id="agency-f-notes" placeholder="Notes (horaires, interlocuteur…)"></textarea>
+      <button class="btn btn-primary" id="agency-f-save">Ajouter</button>
+    </div>`;
+}
+
+$('ret-tabs').addEventListener('click', (event) => {
+  const tab = event.target.closest('[data-rtab]');
+  if (!tab) return;
+  state.returns.tab = tab.dataset.rtab;
+  renderReturns();
+});
+
+$('ret-body').addEventListener('click', async (event) => {
+  const countryTab = event.target.closest('[data-ret-country]');
+  if (countryTab) {
+    state.returns.country = countryTab.dataset.retCountry;
+    renderReturns();
+    return;
+  }
+
+  const save = event.target.closest('#agency-f-save');
+  if (save) {
+    const name = $('agency-f-name').value.trim();
+    if (!name) return toast("Le nom de l'agence est obligatoire.", true);
+    try {
+      await api('/api/return-agencies', {
+        method: 'POST',
+        body: JSON.stringify({
+          country: state.returns.country,
+          name,
+          email: $('agency-f-email').value.trim() || null,
+          phone: $('agency-f-phone').value.trim() || null,
+          address: $('agency-f-address').value.trim() || null,
+          notes: $('agency-f-notes').value.trim() || null,
+        }),
+      });
+      toast('Agence ajoutée.');
+      await loadReturns();
+    } catch (error) {
+      toast(error.message, true);
+    }
+    return;
+  }
+
+  const delAgency = event.target.closest('[data-agency-del]');
+  if (delAgency) {
+    if (!confirm('Supprimer cette agence ?')) return;
+    try {
+      await api(`/api/return-agencies/${delAgency.dataset.agencyDel}`, { method: 'DELETE' });
+      await loadReturns();
+    } catch (error) {
+      toast(error.message, true);
+    }
+    return;
+  }
+
+  const wa = event.target.closest('[data-ret-wa]');
+  if (wa) {
+    const item = state.returns.cases.find((candidate) => candidate.id === wa.dataset.retWa);
+    const link = item && returnWaLink(item);
+    if (!link) return;
+    window.open(link, '_blank', 'noopener');
+    // Le message est parti (ou presque) : le compteur de silence repart,
+    // sinon le dossier resterait rouge après la relance.
+    try {
+      await api(`/api/returns/${item.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ touch: true }),
+      });
+      await loadReturns();
+    } catch {}
+    return;
+  }
+
+  const use = event.target.closest('[data-ret-use]');
+  if (use) {
+    if (
+      !confirm(
+        `Confier la commande ${use.dataset.retOrder} à cette paire du stock France ? Le dossier de retour sera clos.`,
+      )
+    )
+      return;
+    try {
+      await api(`/api/returns/${use.dataset.retUse}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ reusedOrderName: use.dataset.retOrder }),
+      });
+      toast(`Paire réservée pour ${use.dataset.retOrder}. Pensez à prévenir l'agence.`);
+      await loadReturns();
+    } catch (error) {
+      toast(error.message, true);
+    }
+    return;
+  }
+
+  const del = event.target.closest('[data-ret-del]');
+  if (del) {
+    if (!confirm('Supprimer ce dossier de retour ?')) return;
+    try {
+      await api(`/api/returns/${del.dataset.retDel}`, { method: 'DELETE' });
+      await loadReturns();
+    } catch (error) {
+      toast(error.message, true);
+    }
+  }
+});
+
+$('ret-body').addEventListener('change', async (event) => {
+  const label = event.target.closest('[data-ret-label]');
+  const status = event.target.closest('[data-ret-status]');
+  if (!label && !status) return;
+
+  const id = label?.dataset.retLabel ?? status?.dataset.retStatus;
+  try {
+    await api(`/api/returns/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(label ? { labelSent: label.checked } : { status: status.value }),
+    });
+    await loadReturns();
+  } catch (error) {
+    toast(error.message, true);
+    await loadReturns();
+  }
+});
+
+$('ret-new').addEventListener('click', () => {
+  for (const id of ['ret-f-order', 'ret-f-name', 'ret-f-phone', 'ret-f-product', 'ret-f-variant', 'ret-f-sku', 'ret-f-note']) {
+    $(id).value = '';
+  }
+  $('ret-f-reason').value = 'SIZE';
+  $('ret-f-resolution').value = 'EXCHANGE';
+  $('ret-f-country').value = 'FR';
+  $('ret-f-agency').innerHTML =
+    '<option value="">—</option>' +
+    state.returns.agencies
+      .map(
+        (agency) =>
+          `<option value="${esc(agency.id)}">${esc(agency.name)} (${esc(agency.country)})</option>`,
+      )
+      .join('');
+  $('return-modal').classList.add('open');
+});
+
+$('ret-f-cancel').addEventListener('click', () => $('return-modal').classList.remove('open'));
+$('return-modal').addEventListener('click', (event) => {
+  if (event.target === $('return-modal')) $('return-modal').classList.remove('open');
+});
+
+$('ret-f-save').addEventListener('click', async () => {
+  const productTitle = $('ret-f-product').value.trim();
+  if (!productTitle) return toast("L'article retourné est obligatoire.", true);
+
+  try {
+    await api('/api/returns', {
+      method: 'POST',
+      body: JSON.stringify({
+        orderName: $('ret-f-order').value.trim() || null,
+        customerName: $('ret-f-name').value.trim() || null,
+        customerPhone: $('ret-f-phone').value.trim() || null,
+        country: $('ret-f-country').value,
+        productTitle,
+        variantTitle: $('ret-f-variant').value.trim() || null,
+        sku: $('ret-f-sku').value.trim() || null,
+        reason: $('ret-f-reason').value,
+        resolution: $('ret-f-resolution').value,
+        agencyId: $('ret-f-agency').value || null,
+        note: $('ret-f-note').value.trim() || null,
+      }),
+    });
+    $('return-modal').classList.remove('open');
+    toast('Dossier de retour créé.');
+    state.returns.tab = 'cases';
+    await loadReturns();
+  } catch (error) {
+    toast(error.message, true);
+  }
+});
+
 const VIEW_META = {
   overview: { icon: 'grid', label: "Vue d'ensemble", group: 'Pilotage', title: "Vue d'ensemble" },
   tickets: { icon: 'inbox', label: 'SAV client', group: 'Pilotage', title: 'SAV client' },
@@ -4983,6 +5428,7 @@ const VIEW_META = {
   customers: { icon: 'users', label: 'Clients', group: 'Commerce', title: 'Clients' },
   catalog: { icon: 'box', label: 'Catalogue', group: 'Commerce', title: 'Catalogue' },
   suppliers: { icon: 'truck', label: 'Fournisseurs', group: 'Fournisseur', title: 'Contacts fournisseurs' },
+  returns: { icon: 'box', label: 'Reshipment', group: 'Fournisseur', title: 'Reshipment — retours clients' },
   changes: { icon: 'bolt', label: 'Update', group: 'Fournisseur', title: 'Update — demandes de changement' },
   tracking: { icon: 'pin', label: 'Suivi colis', group: 'Fournisseur', title: 'Suivi des colis' },
   refunds: { icon: 'euro', label: 'Remboursements', group: 'Finance', title: 'Remboursements' },
@@ -5011,7 +5457,7 @@ async function refreshChangesCount() {
   changesCountAt = Date.now();
 
   try {
-    const [{ pending }, { counts }, activity] = await Promise.all([
+    const [{ pending }, { counts }, activity, returns] = await Promise.all([
       api('/api/changes'),
       // Commandes, clients, catalogue, colis : les volumes, en gris. Seuls
       // les comptes qui réclament une action sont rouges.
@@ -5019,6 +5465,9 @@ async function refreshChangesCount() {
       // Ce que les ateliers ont renvoyé : réponses aux escalades, signalements
       // depuis l'atelier, demandes traitées dont il faut informer le client.
       api('/api/supplier-activity'),
+      // Retours silencieux : trois jours sans nouvelle du client, la pastille
+      // rouge le dit avant que la paire ne soit perdue.
+      api('/api/returns').catch(() => null),
     ]);
 
     state.changesPending = pending;
@@ -5036,6 +5485,7 @@ async function refreshChangesCount() {
        * pas le mien.
        */
       suppliers: activity.total,
+      returns: returns?.counts?.silent ?? state.navCounts?.returns ?? 0,
     };
     renderNav();
   } catch {
@@ -5077,7 +5527,7 @@ function renderNav() {
            * faite à un client.
            */
           const dim = ['orders', 'customers', 'catalog', 'tracking'].includes(view);
-          const hot = ['changes', 'suppliers'].includes(view) && tally > 0;
+          const hot = ['changes', 'suppliers', 'returns'].includes(view) && tally > 0;
           const shown = tally > 9999 ? '9999+' : tally;
           return `<button class="nav-item" data-view="${view}" aria-current="${
             view === state.view
@@ -5408,6 +5858,7 @@ const VIEW_LOADERS = {
     void renderSupplierActivity();
   },
   changes: () => loadChanges(),
+  returns: () => loadReturns(),
   tracking: () => loadTracking(),
   refunds: () => loadRefunds(),
   disputes: () => loadDisputes(),
