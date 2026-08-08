@@ -2408,13 +2408,17 @@ function renderQueueTable(multiMailbox, shopById) {
   const box = $('queue-table');
   if (!box) return;
 
+  // Une ligne = un ticket, 31 px, aucune cellule sur deux étages : c'est ce
+  // qui fait tenir vingt-six dossiers à l'écran au lieu de dix.
   const cols = [
+    { key: 'status', label: 'Statut' },
     { key: 'customer', label: 'Client' },
-    { key: 'subject', label: 'Message' },
+    { key: 'subject', label: 'Sujet' },
     { key: 'intent', label: 'Motif' },
+    { key: 'order', label: 'Cmde' },
     { key: 'amount', label: 'Montant', sort: 'amount', num: true },
-    { key: 'due', label: 'Échéance', sort: 'due' },
-    { key: 'assignee', label: 'Assigné' },
+    { key: 'due', label: 'Échéance', sort: 'due', num: true },
+    { key: 'assignee', label: '' },
   ];
 
   box.innerHTML = `<table class="qtable">
@@ -2445,7 +2449,13 @@ function renderQueueTable(multiMailbox, shopById) {
             <input type="checkbox" data-pick="${esc(ticket.id)}"${picked ? ' checked' : ''} />
           </td>
 
-          <td class="qt-customer">
+          <td class="qt-status">
+            <span class="qdot st-${ticket.status}"></span>${esc(
+              STATUS_LABELS[ticket.status] ?? ticket.status,
+            )}
+          </td>
+
+          <td class="qt-customer" title="${esc(ticket.customerEmail ?? '')}">
             ${
               state.allShops && shopById.has(ticket.merchantId)
                 ? `<span class="shop-pip" style="background:${esc(
@@ -2454,12 +2464,13 @@ function renderQueueTable(multiMailbox, shopById) {
                 : ''
             }
             <b>${esc(ticket.customerName ?? ticket.customerEmail)}</b>
-            ${segmentChip(ticket)}
           </td>
 
           <td class="qt-subject">
             <b>${esc(ticket.subject ?? '(sans objet)')}</b>
-            <span class="qt-when">${esc(shortMoment(ticket.lastMessageAt))}</span>
+            <span class="qt-when"> — ${esc(shortMoment(ticket.lastMessageAt))}${
+              (ticket.threads ?? 1) > 1 ? ` · ${ticket.threads} échanges` : ''
+            }</span>
           </td>
 
           <td class="qt-intent">
@@ -2470,21 +2481,17 @@ function renderQueueTable(multiMailbox, shopById) {
                   )}</span>`
                 : '<span class="sub">—</span>'
             }
-            <span class="tag tag-status st-${ticket.status}">${esc(
-              STATUS_LABELS[ticket.status] ?? ticket.status,
-            )}</span>
           </td>
 
-          <td class="qt-amount num mono">
-            ${
-              ticket.orderTotal != null
-                ? esc(euro(ticket.orderTotal))
-                : '<span class="sub">—</span>'
-            }
-            ${ticket.orderName ? `<span class="qt-order">${esc(ticket.orderName)}</span>` : ''}
-          </td>
+          <td class="qt-order mono">${
+            ticket.orderName ? esc(ticket.orderName) : '<span class="sub">—</span>'
+          }</td>
 
-          <td class="qt-due">${slaCell(ticket)}</td>
+          <td class="qt-amount num mono">${
+            ticket.orderTotal != null ? esc(euro(ticket.orderTotal)) : '<span class="sub">—</span>'
+          }</td>
+
+          <td class="qt-due num">${slaCell(ticket)}</td>
 
           <td class="qt-assignee">
             <span class="who-dot${who ? '' : ' none'}" title="${
@@ -2513,21 +2520,6 @@ function renderQueueTable(multiMailbox, shopById) {
       void loadQueue();
     }),
   );
-}
-
-/**
- * Ce que ce client représente, avant d'ouvrir son message.
- *
- * Compté sur nos échanges, pas sur ses achats — et nommé en conséquence. Un
- * huitième message ne se traite pas comme un premier : soit le client est
- * fidèle, soit son problème traîne depuis trois semaines, et dans les deux
- * cas le ton change.
- */
-function segmentChip(ticket) {
-  const threads = ticket.threads ?? 1;
-  if (threads <= 1) return '<span class="seg-chip seg-new">nouveau</span>';
-  if (threads >= 5) return `<span class="seg-chip seg-vip">${threads} échanges</span>`;
-  return `<span class="seg-chip">${threads} échanges</span>`;
 }
 
 function setQueueView(view) {
