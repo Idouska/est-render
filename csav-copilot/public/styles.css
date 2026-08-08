@@ -5601,3 +5601,43 @@ textarea:focus-visible {
   border-radius: var(--r-sm);
 }
 .chgc-edit:hover { background: var(--accent-soft); }
+
+/* =========================================================================
+   Réassertions de fin de feuille.
+
+   `.side { position: relative }` (posé pour ancrer le bouton de repli)
+   écrasait le tiroir mobile déclaré plus haut : la colonne restait dans le
+   flux, poussait tout le contenu sous l'écran, et le dashboard paraissait
+   blanc sur téléphone. La règle vit en fin de feuille pour gagner la cascade
+   quoi qu'il arrive — même famille de panne que [hidden], même remède.
+   ========================================================================= */
+@media (max-width: 1080px) {
+  .side {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+  }
+}
+
+.ret-tags { display: flex; gap: 5px; margin-top: 4px; flex-wrap: wrap; }
+
+/* Les sélecteurs et cases de la table des retours prennent l'habit de
+   l'outil : un <select> nu au milieu de pilules dessinées trahit le bricolage. */
+#ret-body select {
+  font: inherit;
+  font-size: 12.5px;
+  padding: 6px 26px 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--ink);
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink-mute) 50%),
+    linear-gradient(135deg, var(--ink-mute) 50%, transparent 50%);
+  background-position: calc(100% - 13px) 55%, calc(100% - 9px) 55%;
+  background-size: 4px 4px;
+  background-repeat: no-repeat;
+}
+
+#ret-body input[type='checkbox'] { accent-color: var(--accent); width: 15px; height: 15px; }

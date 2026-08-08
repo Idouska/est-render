@@ -784,11 +784,11 @@
            commande × stock, le stock disponible, et les agences par pays. -->
       <section class="browse" id="view-returns" hidden aria-label="Reshipment">
         <div class="browse-bar">
-          <div class="chips" id="ret-tabs" role="group" style="margin:0">
-            <button type="button" data-rtab="cases" aria-pressed="true">Dossiers <b id="ret-n-open">0</b></button>
-            <button type="button" data-rtab="matches" aria-pressed="false">Match <b id="ret-n-match">0</b></button>
-            <button type="button" data-rtab="stock" aria-pressed="false">Stock France <b id="ret-n-stock">0</b></button>
-            <button type="button" data-rtab="agencies" aria-pressed="false">Agences</button>
+          <div class="filters" id="ret-tabs" role="group">
+            <button type="button" class="chip" data-rtab="cases" aria-pressed="true">Dossiers <span class="count" id="ret-n-open">0</span></button>
+            <button type="button" class="chip" data-rtab="matches" aria-pressed="false">Match <span class="count" id="ret-n-match">0</span></button>
+            <button type="button" class="chip" data-rtab="stock" aria-pressed="false">Stock France <span class="count" id="ret-n-stock">0</span></button>
+            <button type="button" class="chip" data-rtab="agencies" aria-pressed="false">Agences</button>
           </div>
           <button class="btn btn-primary" id="ret-new" style="margin-left:auto">Nouveau retour</button>
         </div>

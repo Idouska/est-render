@@ -502,8 +502,11 @@ function renderShopMenu() {
         <span class="shop-dot" style="background:${esc(shop.color ?? '')}"></span>
         <span style="min-width:0">
           <b>${esc(shop.label)}</b>
-          <small>${esc(shop.shopDomain.replace('.myshopify.com', ''))} · ${
-            ROLE_LABELS[shop.role] ?? shop.role
+          <small>${esc((shop.shopDomain ?? '').replace('.myshopify.com', '') || '—')}${
+            // La route mono-boutique ne renvoie ni domaine ni rôle : la ligne
+            // reste lisible au lieu de faire tomber tout le menu — et le boot
+            // avec lui.
+            shop.role ? ` · ${esc(ROLE_LABELS[shop.role] ?? shop.role)}` : ''
           }</small>
         </span>
       </button>`,
@@ -664,7 +667,9 @@ function ageInDays(iso) {
 }
 
 function ageChip(iso) {
-  const days = ageInDays(iso);
+  // Jamais négatif : une horloge serveur en avance de quelques minutes
+  // affichait « -1 jours » sur des messages tout frais.
+  const days = Math.max(0, ageInDays(iso));
   // Trois paliers seulement : au-delà, la couleur ne se lit plus comme une
   // échelle mais comme une décoration.
   const level = days >= 7 ? 'late' : days >= 3 ? 'warm' : 'fresh';
@@ -5259,8 +5264,8 @@ function renderReturnCases(box) {
   }
 
   box.innerHTML = `<div class="table-wrap"><table class="grid"><thead><tr>
-      <th>Commande</th><th>Client</th><th>Article</th><th>Raison</th>
-      <th>Souhait</th><th>Bon de retour</th><th>Colis retour</th><th>Statut</th><th></th>
+      <th>Commande</th><th>Client</th><th>Article</th>
+      <th>Bon de retour</th><th>Colis retour</th><th>Statut</th><th></th>
     </tr></thead><tbody>
     ${items
       .map((item) => {
@@ -5278,15 +5283,19 @@ function renderReturnCases(box) {
               ? '<br /><span class="ret-tag bad">3 j sans réponse</span>'
               : ''
           }</td>
-          <td>${esc(item.productTitle)}${
-            item.variantTitle ? `<br /><small>${esc(item.variantTitle)}</small>` : ''
-          }</td>
-          <td><span class="ret-tag ${item.reason === 'DEFECT' ? 'warn' : 'dim'}">${esc(
-            RETURN_REASONS[item.reason] ?? item.reason,
-          )}</span></td>
-          <td><span class="ret-tag ${item.resolution === 'REFUND' ? 'warn' : 'ok'}">${esc(
-            RETURN_RESOLUTIONS[item.resolution] ?? item.resolution,
-          )}</span></td>
+          <td>
+            <b>${esc(item.productTitle)}</b>${
+              item.variantTitle ? ` <small>${esc(item.variantTitle)}</small>` : ''
+            }
+            <div class="ret-tags">
+              <span class="ret-tag ${item.reason === 'DEFECT' ? 'warn' : 'dim'}">${esc(
+                RETURN_REASONS[item.reason] ?? item.reason,
+              )}</span>
+              <span class="ret-tag ${item.resolution === 'REFUND' ? 'warn' : 'ok'}">${esc(
+                RETURN_RESOLUTIONS[item.resolution] ?? item.resolution,
+              )}</span>
+            </div>
+          </td>
           <td>
             <label class="switch" style="margin:0">
               <input type="checkbox" data-ret-label="${esc(item.id)}"${
