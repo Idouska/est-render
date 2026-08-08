@@ -334,6 +334,18 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
 
     const counts = Object.fromEntries(byStatus.map((row) => [row.status, row._count]));
 
+    // Le motif n°1 d'une boutique de dropshipping a sa pastille dédiée dans la
+    // file : le compte porte sur les WISMO encore ouverts, pas sur l'histoire.
+    counts.WISMO = await prisma.ticket.count({
+      where: {
+        merchantId: { in: merchantIds },
+        intent: 'WISMO',
+        isHistorical: false,
+        status: { notIn: ['CLOSED', 'AUTO_SENT'] },
+      },
+    });
+
+
     return reply.send({
       tickets: tickets.map((ticket) => ({
         ...ticket,

@@ -320,6 +320,10 @@
             <button class="chip" data-filter="NEW" aria-pressed="false">Nouveaux</button>
             <button class="chip" data-filter="AWAITING_SUPPLIER" aria-pressed="false">Fournisseur</button>
             <button class="chip" data-filter="CLOSED" aria-pressed="false">Clos</button>
+            <!-- WISMO est un motif, pas un statut : la pastille filtre par
+                 intention. À part visuellement, parce qu'elle croise l'autre
+                 rangée au lieu de s'y substituer. -->
+            <button class="chip chip-wismo" id="chip-wismo" aria-pressed="false">WISMO</button>
           </div>
           <span class="qbar-count" id="q-count"></span>
         </div>
@@ -938,6 +942,18 @@
 
       <section class="browse" id="view-settings" hidden aria-label="Réglages">
         <div class="set-grid">
+          <div class="panel">
+            <div class="panel-head">
+              <span class="panel-title">Apparence</span>
+            </div>
+            <div class="card-body set-group">
+              <p class="set-help">
+                Couleur d'accent et palettes de l'interface — propre à cet appareil.
+              </p>
+              <button class="btn" id="open-palettes" type="button">Choisir les couleurs</button>
+            </div>
+          </div>
+
           <div class="panel">
             <div class="panel-head"><span class="panel-title">Connexions</span></div>
             <div class="card-body set-group">

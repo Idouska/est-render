@@ -417,7 +417,14 @@ function renderMe() {
     $('brand-mark').hidden = false;
   }
 
-  const who = me.user?.name ?? me.user?.email ?? '—';
+  // Jamais l'identifiant technique : « owner@rjd8fe-… » n'est le nom de
+  // personne. À défaut d'un prénom renseigné (écran Équipe), la boutique
+  // elle-même — c'est le propriétaire, la maison parle pour lui.
+  const who =
+    me.user?.name ||
+    (me.user?.role === 'OWNER' ? me.merchant?.brandName || me.merchant?.name : null) ||
+    me.user?.email ||
+    '—';
   $('me-name').textContent = who;
   // L'adresse est coupée à l'affichage : l'infobulle rend la version entière.
   $('me-name').title = who;
@@ -1560,7 +1567,7 @@ $('compose-send')?.addEventListener('click', async () => {
       });
       toast('Message envoyé au client.');
     } else {
-      await api(`/api/tickets/${ticket.id}/escalations`, {
+      const { escalation } = await api(`/api/tickets/${ticket.id}/escalations`, {
         method: 'POST',
         // Le motif suit l'intention détectée : une rupture escalade autrement
         // qu'une adresse incomplète, et le service route d'après lui.
@@ -1572,7 +1579,18 @@ $('compose-send')?.addEventListener('click', async () => {
           note: text,
         }),
       });
-      toast('Escalade envoyée au fournisseur.');
+
+      /*
+       * Créer PUIS envoyer : la création ne fait qu'un brouillon.
+       *
+       * Sans ce second appel, l'escalade restait en brouillon pour toujours —
+       * le fournisseur ne recevait rien, le ticket ne passait pas « Chez le
+       * fournisseur », l'écran Fournisseurs restait vide, et le toast
+       * « envoyée » mentait. L'agent vient d'écrire son message lui-même :
+       * il n'y a rien à relire, l'envoi suit immédiatement.
+       */
+      await api(`/api/escalations/${escalation.id}/send`, { method: 'POST', body: '{}' });
+      toast('Escalade envoyée au fournisseur — le ticket passe « Chez le fournisseur ».');
     }
     zone.hidden = true;
     await selectTicket(ticket.id);
@@ -1729,7 +1747,7 @@ async function loadSubstitutions(ticketId) {
 /* ------------------------------------------------- barre de filtres file */
 
 const INTENT_LABELS = {
-  WISMO: 'Où est ma commande',
+  WISMO: 'WISMO',
   RETURN: 'Retour',
   DISPUTE: 'Litige',
   REFUND: 'Remboursement',
@@ -1764,6 +1782,15 @@ function renderQueueBar() {
     $('queue-bar')
       .querySelector(`[data-quick="${id}"]`)
       .setAttribute('aria-pressed', String(Boolean(state.queue[key])));
+  }
+
+  // La pastille WISMO filtre par motif, pas par statut : elle s'allume et se
+  // compte à part — c'est la question n°1 de la boîte, elle a droit à son
+  // bouton.
+  const wismo = $('chip-wismo');
+  if (wismo) {
+    wismo.setAttribute('aria-pressed', String(state.queue.intent === 'WISMO'));
+    wismo.innerHTML = `WISMO<span class="count">${counts.WISMO ?? 0}</span>`;
   }
 
   renderLabelChips();
@@ -2976,7 +3003,8 @@ function renderCustomer(order) {
   $('c-customer').innerHTML =
     '<dl>' +
     row('Nom', customer.displayName ?? '—') +
-    (customer.createdAt ? row('Client depuis', fullDate(customer.createdAt)) : '') +
+    // « Client depuis » ne décidait rien : la fiche complète le garde pour qui
+    // le cherche, le rail ne montre que ce qui change une réponse.
     row('Commandes', String(customer.numberOfOrders ?? 0), true) +
     (customer.amountSpent
       ? row('Total dépensé', euro(customer.amountSpent, order.currency), true)
@@ -2993,13 +3021,17 @@ function renderOrder(ticket, order, orderError) {
   const container = $('c-order');
 
   if (order) {
+    // Les états Shopify bruts — PAID, FULFILLED — se lisent en anglais
+    // administratif ; traduits en pastilles, ils se voient sans se lire.
     container.innerHTML =
+      `<div class="c-order-tags">
+        ${statusTag(order.displayFinancialStatus, FINANCIAL_LABELS, ['PENDING', 'PARTIALLY_PAID', 'EXPIRED'])}
+        ${statusTag(order.displayFulfillmentStatus, FULFILLMENT_LABELS, ['UNFULFILLED', 'ON_HOLD'])}
+      </div>` +
       '<dl>' +
       row('Numéro', order.name, true) +
       row('Passée le', dateTime(order.createdAt)) +
       row('Montant', euro(order.totalPrice, order.currency), true) +
-      row('Paiement', order.displayFinancialStatus ?? '—') +
-      row('Préparation', order.displayFulfillmentStatus ?? '—') +
       '</dl>' +
       '<ul class="items">' +
       order.lineItems
@@ -3114,7 +3146,9 @@ function renderShipping(order) {
           fulfillment.trackingNumber,
         )}">${esc(fulfillment.trackingNumber)}</button></div>`
       : row('Suivi', '—')) +
-    row('Statut', fulfillment.status) +
+    // Le statut brut (« SUCCESS ») disait en anglais ce que la frise dessous
+    // dit en français : une information, un seul endroit.
+
     (fulfillment.estimatedDeliveryAt
       ? row('Estimation', fullDate(fulfillment.estimatedDeliveryAt))
       : '') +
@@ -5473,6 +5507,8 @@ function renderReturnAgencies(box) {
     </div>`;
 }
 
+$('open-palettes')?.addEventListener('click', () => setView('palettes'));
+
 $('ret-tabs').addEventListener('click', (event) => {
   const tab = event.target.closest('[data-rtab]');
   if (!tab) return;
@@ -5774,7 +5810,9 @@ const VIEW_META = {
   disputes: { icon: 'shield', label: 'Litiges Shopify', group: 'Finance', title: 'Litiges Shopify' },
   team: { icon: 'users', label: 'Équipe & rôles', group: 'Plateforme', title: 'Équipe & rôles' },
   canned: { icon: 'inbox', label: 'Réponses types', group: 'Plateforme', title: 'Réponses types' },
-  palettes: { icon: 'swatch', label: 'Palettes', group: 'Plateforme', title: 'Apparence' },
+  // Absent de la navigation : l'apparence est un réglage, pas un écran de
+  // travail — on y accède depuis Réglages.
+  palettes: { icon: 'swatch', label: 'Palettes', group: 'Plateforme', title: 'Apparence', hidden: true },
   settings: { icon: 'gear', label: 'Réglages', group: 'Plateforme', title: 'Réglages' },
 };
 
@@ -5841,7 +5879,9 @@ function renderNav() {
     `${VIEW_META[view].label} ${VIEW_META[view].group}`.toLowerCase().includes(needle);
 
   $('nav').innerHTML = NAV_GROUPS.map((group) => {
-    const items = VIEWS.filter((view) => VIEW_META[view].group === group && matches(view));
+    const items = VIEWS.filter(
+      (view) => !VIEW_META[view].hidden && VIEW_META[view].group === group && matches(view),
+    );
     if (items.length === 0) return '';
 
     return `<div class="nav-group">
@@ -7532,6 +7572,15 @@ async function loadAudit() {
 $('filters').addEventListener('click', async (event) => {
   const chip = event.target.closest('.chip');
   if (!chip) return;
+
+  // WISMO croise les statuts au lieu de les remplacer : « WISMO à valider »
+  // est une combinaison qui a du sens, un statut de plus n'en aurait pas.
+  if (chip.id === 'chip-wismo') {
+    state.queue.intent = state.queue.intent === 'WISMO' ? '' : 'WISMO';
+    $('q-intent').value = state.queue.intent;
+    await loadQueue();
+    return;
+  }
 
   state.filter = chip.dataset.filter;
   await loadQueue();

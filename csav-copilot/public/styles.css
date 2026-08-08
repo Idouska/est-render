@@ -392,8 +392,13 @@ body {
   border-radius: 50%;
   background: linear-gradient(150deg, var(--accent), var(--accent-strong));
   color: var(--on-accent);
-  display: grid;
-  place-items: center;
+  /* Flex + line-height 1 : `place-items` seul laissait les initiales dériver
+     vers le coin quand une règle tardive changeait le display. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  text-align: center;
   font-size: 12.5px;
   font-weight: 600;
   flex: none;
@@ -5652,3 +5657,10 @@ textarea:focus-visible {
 }
 .empty-block b { display: block; margin-bottom: 6px; color: var(--ink); font-size: 15px; }
 .empty-block p { margin: 0 0 8px; }
+
+/* WISMO : la question n°1 de la boîte, marquée comme telle. Bord pointillé au
+   repos — c'est un motif qui croise les statuts, pas un statut de plus. */
+.chip-wismo { border-style: dashed; font-weight: 650; letter-spacing: 0.02em; }
+.chip-wismo[aria-pressed='true'] { border-style: solid; }
+
+.c-order-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
