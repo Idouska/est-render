@@ -566,11 +566,15 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
   app.post("/api/mailboxes/sync", async (request, reply) => {
     const { merchantId } = request.session;
 
-    // Rallumer la veille est un geste délibéré, réservé au clic sur
-    // « Actualiser ». L'actualisation automatique passe toutes les minutes :
-    // sur une veille qui refuse de repartir — sujet Pub/Sub absent, projet
-    // Google mal configuré — elle réessaierait indéfiniment et noierait les
-    // journaux sous le même avertissement.
+    /*
+     * Le drapeau du geste délibéré : l'utilisateur a cliqué « Actualiser ».
+     *
+     * Il commande les deux opérations qu'on ne veut pas voir tourner toutes
+     * les minutes en arrière-plan : rallumer une veille éteinte, et le
+     * rattrapage par date quand l'incrémental ne rend rien. Sur une veille qui
+     * refuse de repartir, l'automatique réessaierait soixante fois par heure
+     * et noierait les journaux sous le même avertissement.
+     */
     const revive = (request.body as { revive?: unknown } | null)?.revive === true;
 
     const mailboxes = await prisma.gmailConnection.findMany({
@@ -586,6 +590,42 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
     for (const mailbox of mailboxes) {
       try {
         /*
+         * Relever d'abord, rallumer ensuite.
+         *
+         * L'ordre compte : réactiver la veille touche à l'état de la boîte, et
+         * le courrier en attente doit être entré avant qu'on y change quoi que
+         * ce soit.
+         */
+        const result = await ingestMerchantInbox(merchantId, mailbox.id);
+        ingested += result.ingested;
+
+        /*
+         * Le filet : quand le curseur ne rend rien, chercher par date.
+         *
+         * La relève incrémentale suit un curseur d'historique. S'il a dérivé —
+         * veille renouvelée, worker arrêté pendant des heures, historique
+         * Gmail expiré au bout de sept jours — elle répond « rien de nouveau »
+         * sur une boîte pleine, et c'est exactement ce que le marchand a vécu :
+         * « Actualiser » muet, « Relever » plein.
+         *
+         * Une recherche sur les deux derniers jours ne dépend d'aucun curseur.
+         * Réservée au clic sur « Actualiser » : c'est là qu'on attend une
+         * réponse franche. L'actualisation automatique, elle, passe toutes les
+         * minutes et se contente de l'incrémental — désormais fiable, le
+         * curseur ne sautant plus.
+         */
+        if (result.ingested === 0 && revive) {
+          const caught = await ingestMerchantInbox(merchantId, mailbox.id, { backfillDays: 2 });
+          ingested += caught.ingested;
+          if (caught.ingested > 0) {
+            request.log.info(
+              { mailboxId: mailbox.id, ingested: caught.ingested },
+              'Relève incrémentale vide, rattrapage par date',
+            );
+          }
+        }
+
+        /*
          * Rallumer la veille au passage.
          *
          * Le watch Gmail expire au bout de sept jours ; le cron quotidien le
@@ -593,10 +633,6 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
          * déployée — la boîte devient muette et rien ne le dit. Le marchand
          * voit alors une file qui ne bouge plus et un bouton qui répond « à
          * l'instant ».
-         *
-         * Puisqu'on est ici pour aller chercher le courrier, autant remettre
-         * en marche l'arrivée automatique : c'est le geste qu'on descendait
-         * faire dans les Réglages, et il n'a aucune raison d'être manuel.
          */
         if (revive && (!mailbox.watchExpiration || mailbox.watchExpiration <= new Date())) {
           try {
@@ -608,9 +644,6 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
             request.log.warn({ err: error, mailboxId: mailbox.id }, "Watch non rallumé");
           }
         }
-
-        const result = await ingestMerchantInbox(merchantId, mailbox.id);
-        ingested += result.ingested;
       } catch (error) {
         // Une boîte en panne ne doit pas emporter les autres : deux adresses
         // branchées, un jeton expiré sur l'une, et le courrier de la seconde

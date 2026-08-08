@@ -8428,8 +8428,8 @@ async function refreshCurrent({ silent = false } = {}) {
     if (!silent && fetched !== null) {
       toast(
         fetched > 0
-          ? `${fetched} nouveau${fetched > 1 ? 'x' : ''} message${fetched > 1 ? 's' : ''}.`
-          : 'Aucun nouveau message.',
+          ? `${fetched} nouveau${fetched > 1 ? 'x' : ''} message${fetched > 1 ? 's' : ''} — en haut de la file.`
+          : 'Aucun nouveau message dans la boîte.',
       );
     }
   } catch (error) {

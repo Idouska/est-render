@@ -10,6 +10,11 @@ import { getGmailClient } from './client.ts';
 export async function startWatch(merchantId: string, mailboxId?: string | null): Promise<void> {
   const { gmail, mailboxId: id } = await getGmailClient(merchantId, mailboxId);
 
+  const connection = await prisma.gmailConnection.findUniqueOrThrow({
+    where: { id },
+    select: { lastHistoryId: true },
+  });
+
   const topicName = await requireCredential(
     'GOOGLE_PUBSUB_TOPIC',
     'Nécessaire pour abonner une boîte Gmail aux notifications.',
@@ -24,10 +29,28 @@ export async function startWatch(merchantId: string, mailboxId?: string | null):
     },
   });
 
+  /*
+   * Le curseur d'historique appartient à l'ingestion, pas à la veille.
+   *
+   * `watch` renvoie l'historyId de l'instant, et on l'écrivait à chaque appel.
+   * Or le cron renouvelle la veille tous les jours : le curseur sautait donc
+   * quotidiennement à « maintenant », et tout ce qui était arrivé depuis la
+   * dernière ingestion réussie devenait invisible à la relève incrémentale —
+   * définitivement, ces messages n'étant plus dans aucun historique à lire.
+   *
+   * D'où le symptôme : « Actualiser » ne ramenait rien, alors que « Relever »,
+   * qui cherche par date et ignore le curseur, ramenait tout.
+   *
+   * On ne pose donc l'historyId qu'à la première activation, quand il n'y en a
+   * aucun. Ensuite, seule l'ingestion l'avance, et seulement sur ce qu'elle a
+   * réellement traité.
+   */
   await prisma.gmailConnection.update({
     where: { id },
     data: {
-      lastHistoryId: response.data.historyId ?? undefined,
+      ...(connection.lastHistoryId
+        ? {}
+        : { lastHistoryId: response.data.historyId ?? undefined }),
       watchExpiration: response.data.expiration
         ? new Date(Number(response.data.expiration))
         : null,
