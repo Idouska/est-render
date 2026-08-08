@@ -845,6 +845,11 @@ model ReturnCase {
   /// Numéro de suivi du colis retour, quand le client l'a communiqué.
   trackingNumber String?
 
+  /// Photo de l'article retourné — la preuve. Envoyée par le client (un
+  /// défaut se photographie avant de repartir) ou prise à la réception.
+  photoData Bytes?
+  photoMime String?
+
   /// Agence qui réceptionne ce retour.
   agencyId String?
 
@@ -887,6 +892,10 @@ enum ReturnStatus {
   OPEN
   /// Bon envoyé, on attend le colis.
   LABEL_SENT
+  /// Le client a déposé le colis : il voyage.
+  SHIPPED
+  /// En transit, suivi à l'appui.
+  IN_TRANSIT
   /// Colis retour reçu par l'agence.
   RECEIVED
   /// Contrôlé, remis en stock France : disponible au réemploi.

@@ -1137,7 +1137,7 @@ async function openCustomerSheet(email, displayName) {
     return;
   }
 
-  const { totals, customer, orders, tickets, refunds, parcels, shopifyError } = data;
+  const { totals, customer, orders, tickets, refunds, parcels, returns, shopifyError } = data;
   if (customer?.displayName) $('sheet-name').textContent = customer.displayName;
 
   const money = (value) => euro(value, totals.currency ?? 'EUR');
@@ -1216,6 +1216,48 @@ async function openCustomerSheet(email, displayName) {
     ),
     'Aucun échange avec ce client.',
   ));
+
+  // Les retours : la preuve au dossier. Raison, souhait du client, trajet du
+  // colis, photo — tout ce qu'on cite dans un litige.
+  if (returns?.length) {
+    sections.push(group(
+      'Retours',
+      returns.map(
+        (item) => `<div class="sheet-row">
+          <b>${esc(item.productTitle)}${
+            item.variantTitle ? ` · ${esc(item.variantTitle)}` : ''
+          }</b>
+          <span class="tag tag-order">${esc(item.orderName ?? '—')}</span>
+          <span class="ret-tag dim">${esc(RETURN_REASONS[item.reason] ?? item.reason)}</span>
+          <span class="ret-tag ${item.resolution === 'REFUND' ? 'warn' : 'ok'}">${esc(
+            RETURN_RESOLUTIONS[item.resolution] ?? item.resolution,
+          )}</span>
+          <span class="ret-tag ${
+            ['RESTOCKED', 'CLOSED'].includes(item.status)
+              ? 'ok'
+              : item.status === 'UNUSABLE'
+                ? 'bad'
+                : 'dim'
+          }">${esc(RETURN_STATUSES[item.status] ?? item.status)}</span>
+          ${
+            item.trackingNumber
+              ? `<a class="linklike mono" href="${esc(trackUrl(item.trackingNumber))}"
+                  target="_blank" rel="noopener">${esc(item.trackingNumber)}</a>`
+              : ''
+          }
+          ${
+            item.hasPhoto
+              ? `<a class="btn btn-small" href="/api/returns/${esc(
+                  item.id,
+                )}/photo" target="_blank" rel="noopener">Photo</a>`
+              : ''
+          }
+          <span class="when">${relativeTime(item.createdAt)}</span>
+        </div>`,
+      ),
+      '',
+    ));
+  }
 
   sections.push(group(
     'Remboursements',
@@ -5002,11 +5044,30 @@ const RETURN_RESOLUTIONS = {
 const RETURN_STATUSES = {
   OPEN: 'Ouvert',
   LABEL_SENT: 'Bon envoyé',
-  RECEIVED: 'Reçu agence',
+  SHIPPED: 'Expédié',
+  IN_TRANSIT: 'En transit',
+  RECEIVED: "Livré à l'agence",
   RESTOCKED: 'En stock France',
   UNUSABLE: 'Inutilisable',
   CLOSED: 'Clos',
 };
+
+/** Suivi universel : 17track connaît les transporteurs chinois et européens. */
+function trackUrl(number) {
+  return `https://t.17track.net/fr#nums=${encodeURIComponent(number)}`;
+}
+
+/* La photo au dossier : compressée avant l'envoi, comme celles des colis. */
+async function shrinkReturnPhoto(file) {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, 1400 / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close?.();
+  return canvas.toDataURL('image/jpeg', 0.72);
+}
 
 const RETURN_COUNTRIES = { FR: 'France', ES: 'Espagne', IT: 'Italie', BE: 'Belgique' };
 
@@ -5082,7 +5143,7 @@ function renderReturnCases(box) {
 
   box.innerHTML = `<div class="table-wrap"><table class="grid"><thead><tr>
       <th>Commande</th><th>Client</th><th>Article</th><th>Raison</th>
-      <th>Souhait</th><th>Bon de retour</th><th>Statut</th><th></th>
+      <th>Souhait</th><th>Bon de retour</th><th>Colis retour</th><th>Statut</th><th></th>
     </tr></thead><tbody>
     ${items
       .map((item) => {
@@ -5118,6 +5179,18 @@ function renderReturnCases(box) {
             </label>
           </td>
           <td>
+            <div class="ret-track">
+              <input type="text" class="mono" data-ret-track="${esc(item.id)}"
+                placeholder="N° de suivi" value="${esc(item.trackingNumber ?? '')}" />
+              ${
+                item.trackingNumber
+                  ? `<a class="qlink" href="${esc(trackUrl(item.trackingNumber))}"
+                      target="_blank" rel="noopener">Où est-il ?</a>`
+                  : ''
+              }
+            </div>
+          </td>
+          <td>
             <select data-ret-status="${esc(item.id)}">
               ${Object.entries(RETURN_STATUSES)
                 .map(
@@ -5135,6 +5208,21 @@ function renderReturnCases(box) {
                 ? `<button class="ret-wa" data-ret-wa="${esc(item.id)}" title="Relancer sur WhatsApp">✆ WhatsApp</button>`
                 : ''
             }
+            ${
+              item.hasPhoto
+                ? `<a class="btn btn-small" href="/api/returns/${esc(
+                    item.id,
+                  )}/photo" target="_blank" rel="noopener">Photo</a>`
+                : ''
+            }
+            <label class="ico" title="${item.hasPhoto ? 'Remplacer la photo' : 'Ajouter une photo de l’article'}">
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <rect x="2.5" y="5.5" width="15" height="11" rx="2" />
+                <circle cx="10" cy="11" r="3.2" />
+                <path d="M7 5.5 8.2 3.5h3.6L13 5.5" />
+              </svg>
+              <input type="file" accept="image/*" hidden data-ret-photo="${esc(item.id)}" />
+            </label>
             <button class="ico ico-del" data-ret-del="${esc(item.id)}" title="Supprimer">
               <svg viewBox="0 0 20 20" aria-hidden="true">
                 <path d="M4 6h12M8.5 6V4.5h3V6M6 6l.8 10h6.4L14 6M8.4 9v4.6M11.6 9v4.6" />
@@ -5350,15 +5438,48 @@ $('ret-body').addEventListener('click', async (event) => {
 });
 
 $('ret-body').addEventListener('change', async (event) => {
+  const photoInput = event.target.closest('[data-ret-photo]');
+  if (photoInput?.files?.[0]) {
+    try {
+      const photo = await shrinkReturnPhoto(photoInput.files[0]);
+      await api(`/api/returns/${photoInput.dataset.retPhoto}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ photo }),
+      });
+      toast('Photo ajoutée au dossier.');
+      await loadReturns();
+    } catch (error) {
+      toast(error.message, true);
+    }
+    return;
+  }
+
+  const track = event.target.closest('[data-ret-track]');
   const label = event.target.closest('[data-ret-label]');
   const status = event.target.closest('[data-ret-status]');
-  if (!label && !status) return;
+  if (!track && !label && !status) return;
 
-  const id = label?.dataset.retLabel ?? status?.dataset.retStatus;
+  const id = track?.dataset.retTrack ?? label?.dataset.retLabel ?? status?.dataset.retStatus;
   try {
     await api(`/api/returns/${id}`, {
       method: 'PATCH',
-      body: JSON.stringify(label ? { labelSent: label.checked } : { status: status.value }),
+      body: JSON.stringify(
+        track
+          ? // Un numéro saisi vaut colis expédié : le statut suit tout seul,
+            // sauf s'il est déjà plus avancé.
+            {
+              trackingNumber: track.value.trim() || null,
+              ...(track.value.trim() &&
+              ['OPEN', 'LABEL_SENT'].includes(
+                state.returns.cases.find((candidate) => candidate.id === id)?.status,
+              )
+                ? { status: 'SHIPPED' }
+                : {}),
+            }
+          : label
+            ? { labelSent: label.checked }
+            : { status: status.value },
+      ),
     });
     await loadReturns();
   } catch (error) {
@@ -5374,6 +5495,9 @@ $('ret-new').addEventListener('click', () => {
   $('ret-f-reason').value = 'SIZE';
   $('ret-f-resolution').value = 'EXCHANGE';
   $('ret-f-country').value = 'FR';
+  $('ret-f-items').innerHTML = '';
+  retLookupEmail = null;
+  retLookupOrderId = null;
   $('ret-f-agency').innerHTML =
     '<option value="">—</option>' +
     state.returns.agencies
@@ -5383,6 +5507,81 @@ $('ret-new').addEventListener('click', () => {
       )
       .join('');
   $('return-modal').classList.add('open');
+});
+
+/*
+ * Le numéro de commande remplit le formulaire tout seul.
+ *
+ * Tout ce que le dossier demande est déjà dans la commande : client,
+ * téléphone, pays, article. On tape « 11363 », le reste s'écrit — et quand la
+ * commande porte plusieurs articles, chacun se choisit d'un clic.
+ */
+let retLookupEmail = null;
+let retLookupOrderId = null;
+let retLookupTimer = null;
+
+$('ret-f-order').addEventListener('input', () => {
+  clearTimeout(retLookupTimer);
+  const name = $('ret-f-order').value.trim();
+  if (name.replace(/\D/g, '').length < 3) return;
+
+  retLookupTimer = setTimeout(async () => {
+    let order;
+    try {
+      ({ order } = await api(`/api/returns/order-lookup?name=${encodeURIComponent(name)}`));
+    } catch {
+      return; // Un numéro en cours de frappe n'est pas une erreur.
+    }
+
+    $('ret-f-order').value = order.orderName;
+    $('ret-f-name').value = order.customerName ?? '';
+    $('ret-f-phone').value = order.customerPhone ?? '';
+    if (order.country && $('ret-f-country').querySelector(`[value="${order.country}"]`)) {
+      $('ret-f-country').value = order.country;
+    }
+    retLookupEmail = order.customerEmail;
+    retLookupOrderId = order.shopifyOrderId;
+
+    const items = order.lineItems ?? [];
+    if (items[0]) {
+      $('ret-f-product').value = items[0].title;
+      $('ret-f-variant').value = items[0].variantTitle ?? '';
+      $('ret-f-sku').value = items[0].sku ?? '';
+    }
+
+    // Plusieurs articles : des puces sous le champ, l'article se choisit au
+    // doigt au lieu de se recopier.
+    $('ret-f-items').innerHTML =
+      items.length > 1
+        ? items
+            .map(
+              (item, index) =>
+                `<button type="button" class="qchip" data-ret-item="${index}"
+                  aria-pressed="${index === 0}">${esc(item.title)}${
+                    item.variantTitle ? ` · ${esc(item.variantTitle)}` : ''
+                  }</button>`,
+            )
+            .join('')
+        : '';
+    $('ret-f-items').dataset.items = JSON.stringify(items);
+
+    toast(`Commande ${order.orderName} : champs remplis.`);
+  }, 450);
+});
+
+$('ret-f-items').addEventListener('click', (event) => {
+  const chip = event.target.closest('[data-ret-item]');
+  if (!chip) return;
+  const items = JSON.parse($('ret-f-items').dataset.items ?? '[]');
+  const item = items[Number(chip.dataset.retItem)];
+  if (!item) return;
+
+  $('ret-f-product').value = item.title;
+  $('ret-f-variant').value = item.variantTitle ?? '';
+  $('ret-f-sku').value = item.sku ?? '';
+  $('ret-f-items')
+    .querySelectorAll('[data-ret-item]')
+    .forEach((other) => other.setAttribute('aria-pressed', String(other === chip)));
 });
 
 $('ret-f-cancel').addEventListener('click', () => $('return-modal').classList.remove('open'));
@@ -5399,6 +5598,8 @@ $('ret-f-save').addEventListener('click', async () => {
       method: 'POST',
       body: JSON.stringify({
         orderName: $('ret-f-order').value.trim() || null,
+        shopifyOrderId: retLookupOrderId,
+        customerEmail: retLookupEmail,
         customerName: $('ret-f-name').value.trim() || null,
         customerPhone: $('ret-f-phone').value.trim() || null,
         country: $('ret-f-country').value,

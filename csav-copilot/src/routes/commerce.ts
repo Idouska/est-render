@@ -539,6 +539,22 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
         })
       : [];
 
+    // Les retours du client : la preuve au dossier. Par adresse email, et à
+    // défaut par numéro de commande — un dossier ouvert sans email doit
+    // quand même apparaître sur la fiche.
+    const returns = await prisma.returnCase.findMany({
+      where: {
+        merchantId,
+        OR: [
+          { customerEmail: email },
+          ...(orders.length ? [{ orderName: { in: orders.map((order) => order.name) } }] : []),
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 25,
+      omit: { photoData: true },
+    });
+
     const spent = orders.reduce((sum, order) => sum + Number(order.totalPrice ?? 0), 0);
 
     return reply.send({
@@ -552,6 +568,10 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
         ...parcel,
         hasPhoto: Boolean(parcel.photoMime),
         photoMime: undefined,
+      })),
+      returns: returns.map(({ photoMime, ...item }) => ({
+        ...item,
+        hasPhoto: Boolean(photoMime),
       })),
       // Repères calculés ici plutôt qu'à l'écran : ce sont des chiffres, pas
       // de la mise en forme, et l'agent les cite au client.

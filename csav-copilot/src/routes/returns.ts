@@ -3,8 +3,9 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.ts';
 import { recordAudit } from '../lib/audit.ts';
 import { requireSession } from '../plugins/auth.ts';
+import { decodePhoto, photoSchema } from './parcels.ts';
 import { getShopifyClient } from '../services/shopify/client.ts';
-import { listOrders } from '../services/shopify/orders.ts';
+import { listOrders, quoteSearchValue } from '../services/shopify/orders.ts';
 
 /**
  * Reshipment — les retours clients, et ce qu'on en refait.
@@ -42,8 +43,10 @@ const caseBody = z.object({
 
 const casePatch = caseBody.partial().extend({
   labelSent: z.boolean().optional(),
-  status: z.enum(['OPEN', 'LABEL_SENT', 'RECEIVED', 'RESTOCKED', 'UNUSABLE', 'CLOSED']).optional(),
+  status: z.enum(['OPEN', 'LABEL_SENT', 'SHIPPED', 'IN_TRANSIT', 'RECEIVED', 'RESTOCKED', 'UNUSABLE', 'CLOSED']).optional(),
   trackingNumber: z.string().max(120).nullish(),
+  /** Photo de l'article retourné, en data URL — la preuve au dossier. */
+  photo: photoSchema.nullish(),
   /** Marque le dossier « contacté aujourd'hui » : la relance repart de zéro. */
   touch: z.boolean().optional(),
   /** Consomme la paire remise en stock sur cette commande. */
@@ -65,12 +68,17 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/returns', async (request, reply) => {
     const { merchantId } = request.session;
 
-    const cases = await prisma.returnCase.findMany({
-      where: { merchantId },
-      orderBy: { createdAt: 'desc' },
-      take: 300,
-      include: { agency: { select: { id: true, name: true, country: true } } },
-    });
+    const cases = (
+      await prisma.returnCase.findMany({
+        where: { merchantId },
+        orderBy: { createdAt: 'desc' },
+        take: 300,
+        // Les octets de la photo restent en base : la liste n'a besoin que de
+        // savoir qu'elle existe, l'image se sert par sa propre route.
+        omit: { photoData: true },
+        include: { agency: { select: { id: true, name: true, country: true } } },
+      })
+    ).map(({ photoMime, ...item }) => ({ ...item, hasPhoto: Boolean(photoMime) }));
 
     // Les dossiers silencieux : ouverts, et sans contact depuis trois jours.
     // C'est le compte qui doit faire mal — un retour qu'on laisse mourir est
@@ -127,12 +135,24 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
     });
     if (!existing) return reply.code(404).send({ error: 'Dossier introuvable' });
 
-    const { touch, reusedOrderName, ...fields } = parsed.data;
+    const { touch, reusedOrderName, photo, ...fields } = parsed.data;
+
+    // `photo: null` retire la photo ; absente, elle ne bouge pas.
+    const photoFields =
+      photo === undefined
+        ? {}
+        : photo === null
+          ? { photoData: null, photoMime: null }
+          : (() => {
+              const decoded = decodePhoto(photo);
+              return { photoData: decoded.data, photoMime: decoded.mime };
+            })();
 
     const updated = await prisma.returnCase.update({
       where: { id: existing.id },
       data: {
         ...fields,
+        ...photoFields,
         // Fournir le bon fait avancer le statut tout seul : deux gestes pour
         // dire la même chose finiraient par se contredire.
         ...(fields.labelSent === true ? { status: fields.status ?? 'LABEL_SENT' } : {}),
@@ -152,7 +172,7 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
       action: 'return.updated',
       targetType: 'return',
       targetId: updated.id,
-      metadata: parsed.data,
+      metadata: { ...fields, photo: photo === undefined ? undefined : Boolean(photo) },
     });
 
     return reply.send({ case: updated });
@@ -176,6 +196,72 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
     });
 
     return reply.send({ deleted: true });
+  });
+
+  /** La photo de l'article retourné — la preuve, en pleine taille. */
+  app.get<{ Params: { id: string } }>('/api/returns/:id/photo', async (request, reply) => {
+    const { merchantId } = request.session;
+
+    const item = await prisma.returnCase.findFirst({
+      where: { id: request.params.id, merchantId },
+      select: { photoData: true, photoMime: true },
+    });
+    if (!item?.photoData || !item.photoMime) {
+      return reply.code(404).send({ error: 'Aucune photo' });
+    }
+
+    return reply
+      .type(item.photoMime)
+      .header('Cache-Control', 'private, max-age=300')
+      .send(Buffer.from(item.photoData));
+  });
+
+  /**
+   * Pré-remplissage du dossier depuis le numéro de commande.
+   *
+   * Tout ce que le formulaire demande est déjà dans la commande : le client,
+   * son téléphone, son pays, l'article. Le ressaisir est du temps volé et des
+   * fautes de frappe — le numéro suffit, le reste se remplit tout seul.
+   */
+  app.get<{ Querystring: { name?: string } }>('/api/returns/order-lookup', async (request, reply) => {
+    const { merchantId } = request.session;
+    const raw = (request.query.name ?? '').trim();
+    if (!raw) return reply.code(400).send({ error: 'Numéro de commande requis' });
+
+    // « 11363 » et « #11363 » désignent la même commande : on cherche le nom
+    // exact tel que Shopify le connaît, dièse compris.
+    const name = raw.startsWith('#') ? raw : `#${raw}`;
+
+    try {
+      const client = await getShopifyClient(merchantId);
+      const { orders } = await listOrders(client, {
+        query: `name:${quoteSearchValue(name)}`,
+        limit: 1,
+      });
+
+      const order = orders[0];
+      if (!order) return reply.code(404).send({ error: `Commande ${name} introuvable.` });
+
+      const address = order.shippingAddress;
+      return reply.send({
+        order: {
+          orderName: order.name,
+          shopifyOrderId: order.id,
+          customerName: order.customer?.displayName ?? address?.name ?? null,
+          customerEmail: order.customer?.email ?? null,
+          customerPhone: address?.phone ?? null,
+          country: address?.country ?? null,
+          lineItems: (order.lineItems ?? []).map((item) => ({
+            title: item.title,
+            variantTitle: item.variantTitle ?? null,
+            sku: item.sku ?? null,
+          })),
+        },
+      });
+    } catch (error) {
+      request.log.warn({ err: error }, 'Lookup commande retour en échec');
+      return reply.code(502).send({ error: 'Commande injoignable pour le moment.' });
+    }
   });
 
   /* ------------------------------------------------------------ agences -- */
