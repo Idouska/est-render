@@ -7,6 +7,7 @@ import { generateReply, type GenerationContext } from '../ai/generate.ts';
 import { findSimilarExchanges } from '../ai/examples.ts';
 import { detectLanguage } from '../ai/language.ts';
 import { createReplyDraft } from '../gmail/drafts.ts';
+import { discardPendingDrafts } from './discardDrafts.ts';
 import { matchOrder } from '../matching/orderMatcher.ts';
 import { getShopifyClient } from '../shopify/client.ts';
 import type { OrderSummary } from '../shopify/orders.ts';
@@ -212,7 +213,11 @@ export async function processTicket(merchantId: string, ticketId: string): Promi
 
     const generated = await generateReply(context);
 
-    // 4. Brouillon Gmail
+    // 4. Brouillon Gmail — après avoir écarté ceux d'un passage précédent :
+    // sans ce geste, chaque retraitement ajoutait un brouillon de plus dans
+    // la boîte Gmail, sans jamais retirer l'ancien.
+    await discardPendingDrafts(merchantId, ticket.id);
+
     const { draftId } = await createReplyDraft({
       merchantId,
       // Le brouillon se crée dans la boîte qui a reçu le message : c'est

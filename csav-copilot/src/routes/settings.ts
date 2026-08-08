@@ -10,6 +10,7 @@ import { backfillMailbox, backfillProgress } from "../services/gmail/backfill.ts
 import { createOAuthClient, getGmailClient } from "../services/gmail/client.ts";
 import { loadLabelNames, loadLabelStyles, syncTicketLabels } from "../services/gmail/labels.ts";
 import { importMailboxHistory } from "../services/gmail/importHistory.ts";
+import { deleteReplyDraft } from "../services/gmail/drafts.ts";
 import { startWatch, stopWatch } from "../services/gmail/watch.ts";
 import { ingestMerchantInbox } from "../services/tickets/ingest.ts";
 import { ShopifyScopeError } from "../services/shopify/client.ts";
@@ -780,6 +781,69 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
     }
 
     return reply.send({ ingested, revived, failed, details, mailboxes: mailboxes.length });
+  });
+
+  /**
+   * Purge des brouillons Gmail orphelins.
+   *
+   * Historique : chaque traitement IA créait un brouillon réel dans Gmail et
+   * rien ne le supprimait jamais — clôture, retraitement, envoi d'une réponse
+   * écrite à la main, tout laissait le brouillon derrière lui. Après 3 600
+   * messages traités, la boîte comptait plus de deux mille brouillons.
+   *
+   * Cette route rattrape le stock : elle prend les brouillons encore « en
+   * attente » dont le ticket est clos (ou parti en envoi automatique), efface
+   * chacun dans Gmail et le marque DISCARDED. Par lots de 300 — Gmail est
+   * appelé une fois par brouillon, au-delà la requête HTTP expirerait — la
+   * réponse dit ce qui reste, et l'interface propose de continuer.
+   */
+  app.post("/api/drafts/cleanup", { preHandler: requirePermission("configure") }, async (request, reply) => {
+    const { merchantId, userId } = request.session;
+
+    const where = {
+      merchantId,
+      status: { in: ["PENDING_REVIEW", "EDITED"] },
+      gmailDraftId: { not: null },
+      ticket: { status: { in: ["CLOSED", "AUTO_SENT"] } },
+    } satisfies NonNullable<Parameters<typeof prisma.draft.count>[0]>["where"];
+
+    const batch = await prisma.draft.findMany({
+      where,
+      take: 300,
+      select: { id: true, gmailDraftId: true, ticket: { select: { mailboxId: true } } },
+    });
+
+    for (const draft of batch) {
+      if (draft.gmailDraftId) {
+        try {
+          await deleteReplyDraft(merchantId, draft.gmailDraftId, draft.ticket?.mailboxId);
+        } catch (error) {
+          request.log.warn({ err: error, draftId: draft.id }, "Brouillon Gmail non supprimé");
+        }
+      }
+    }
+
+    if (batch.length > 0) {
+      await prisma.draft.updateMany({
+        where: { id: { in: batch.map((draft) => draft.id) } },
+        data: { status: "DISCARDED" },
+      });
+    }
+
+    const remaining = await prisma.draft.count({ where });
+
+    await recordAudit({
+      merchantId,
+      actorType: "USER",
+      actorId: userId,
+      action: "drafts.cleanup",
+      targetType: "Merchant",
+      targetId: merchantId,
+      metadata: { purged: batch.length, remaining },
+      ipAddress: request.ip,
+    });
+
+    return reply.send({ purged: batch.length, remaining });
   });
 
   /**

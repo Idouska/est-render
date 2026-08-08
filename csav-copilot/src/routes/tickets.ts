@@ -14,6 +14,7 @@ import { getShopifyClient, ShopifyError } from '../services/shopify/client.ts';
 import { listVariants } from '../services/shopify/catalog.ts';
 import { getOrderById, quoteSearchValue, searchOrders } from '../services/shopify/orders.ts';
 import { processTicket } from '../services/tickets/process.ts';
+import { discardPendingDrafts } from '../services/tickets/discardDrafts.ts';
 import { translateToFrench } from '../services/ai/translate.ts';
 
 const TICKET_STATUSES = [
@@ -506,6 +507,12 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
             data: { status: 'CLOSED', snoozedUntil: null },
           })
         ).count;
+        // Les brouillons Gmail des tickets clos, en arrière-plan : sur une
+        // sélection de cinq cents tickets, les appels Gmail dépasseraient le
+        // délai de la requête.
+        void (async () => {
+          for (const id of ids) await discardPendingDrafts(merchantId, id).catch(() => {});
+        })();
         break;
       }
 
@@ -517,6 +524,9 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
       }
 
       case 'delete': {
+        // Avant l'effacement : la cascade emporte les lignes Draft, et avec
+        // elles le seul lien vers les brouillons Gmail.
+        for (const id of ids) await discardPendingDrafts(merchantId, id).catch(() => {});
         affected = (await prisma.ticket.deleteMany({ where: scope })).count;
         break;
       }
@@ -708,6 +718,10 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
       });
       if (!ticket) return reply.code(404).send({ error: 'Message introuvable' });
 
+      // Avant l'effacement en base : après, la ligne Draft (et son identifiant
+      // Gmail) disparaît en cascade et le brouillon Gmail devient orphelin.
+      await discardPendingDrafts(merchantId, ticket.id).catch(() => {});
+
       await prisma.ticket.delete({ where: { id: ticket.id } });
 
       await recordAudit({
@@ -796,6 +810,10 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
         where: { id: ticket.id },
         data: { status: 'CLOSED', snoozedUntil: null },
       });
+
+      // Un ticket clos n'attend plus de réponse : son brouillon Gmail non
+      // envoyé n'a plus de raison d'encombrer la boîte du marchand.
+      await discardPendingDrafts(merchantId, ticket.id).catch(() => {});
 
       await recordAudit({
         merchantId,

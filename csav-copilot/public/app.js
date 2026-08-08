@@ -7242,7 +7242,11 @@ function renderSettings() {
 
   // Emplacement du bandeau des messages orphelins. Rempli après coup : leur
   // nombre demande un comptage que la page des connexions n'a pas à attendre.
-  const gmailBlock = `${gmailDetail}<div class="mbx-orphans" id="mbx-orphans" hidden></div>`;
+  const gmailBlock = `${gmailDetail}<div class="mbx-orphans" id="mbx-orphans" hidden></div>
+    <div class="mbx-acts" style="margin-top:8px">
+      <button class="btn btn-small" id="btn-drafts-cleanup">Nettoyer les brouillons Gmail</button>
+      <span class="mbx-diag" id="drafts-cleanup-state"></span>
+    </div>`;
 
   renderConnection($('set-gmail'), {
     label: boxes.length > 1 ? 'Boîtes mail' : 'Boîte mail',
@@ -7299,6 +7303,36 @@ function renderSettings() {
         }
       }),
     );
+
+  // Purge des brouillons Gmail orphelins — ceux que l'IA a créés pour des
+  // tickets aujourd'hui clos et que rien n'a jamais supprimés. Par lots de
+  // 300 côté serveur : on boucle ici jusqu'à épuisement, en montrant le compte.
+  $('btn-drafts-cleanup')?.addEventListener('click', async function () {
+    const stateEl = $('drafts-cleanup-state');
+    this.disabled = true;
+    let total = 0;
+    try {
+      let remaining = Infinity;
+      while (remaining > 0) {
+        const result = await api('/api/drafts/cleanup', { method: 'POST' });
+        total += result.purged;
+        remaining = result.remaining;
+        if (stateEl) {
+          stateEl.textContent =
+            remaining > 0
+              ? `${total} supprimés… ${remaining} restants`
+              : total > 0
+                ? `${total} brouillon${total > 1 ? 's' : ''} Gmail supprimé${total > 1 ? 's' : ''}.`
+                : 'Aucun brouillon orphelin à supprimer.';
+        }
+        if (result.purged === 0) break;
+      }
+    } catch (error) {
+      toast(error.message, true);
+    } finally {
+      this.disabled = false;
+    }
+  });
 
   renderOrphans();
 

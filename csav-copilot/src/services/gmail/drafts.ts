@@ -130,6 +130,40 @@ export async function createReplyDraft(params: {
   return { draftId: response.data.id };
 }
 
+/**
+ * Supprime un brouillon Gmail.
+ *
+ * Chaque traitement d'un ticket créait un brouillon réel dans Gmail — et rien
+ * ne le supprimait jamais : retraitement, relance, clôture, tout laissait le
+ * brouillon derrière lui. À 3 600 messages traités, la boîte comptait plus de
+ * 2 000 brouillons orphelins. Tolérante au 404 : un brouillon déjà envoyé ou
+ * supprimé à la main n'est pas une erreur, c'est l'état qu'on visait.
+ */
+export async function deleteReplyDraft(
+  merchantId: string,
+  draftId: string,
+  mailboxId?: string | null,
+): Promise<void> {
+  if (env.GMAIL_MOCK) return;
+
+  const { gmail } = await getGmailClient(merchantId, mailboxId);
+  try {
+    await gmail.users.drafts.delete({ userId: 'me', id: draftId });
+  } catch (error) {
+    const status =
+      (error as { code?: number | string; status?: number; response?: { status?: number } }) ?? {};
+    if (
+      status.code === 404 ||
+      status.code === '404' ||
+      status.status === 404 ||
+      status.response?.status === 404
+    ) {
+      return; // déjà disparu — c'est le résultat voulu
+    }
+    logger.warn({ draftId, err: error }, 'Suppression de brouillon Gmail impossible');
+  }
+}
+
 export async function updateDraftBody(params: {
   merchantId: string;
   /** Boîte d'envoi. Nulle, on prend celle par défaut de la boutique. */
