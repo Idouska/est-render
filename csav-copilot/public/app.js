@@ -7236,7 +7236,8 @@ function renderSettings() {
   // nombre demande un comptage que la page des connexions n'a pas à attendre.
   const gmailBlock = `${gmailDetail}<div class="mbx-orphans" id="mbx-orphans" hidden></div>
     <div class="mbx-acts" style="margin-top:8px">
-      <button class="btn btn-small" id="btn-drafts-cleanup">Nettoyer les brouillons Gmail</button>
+      <button class="btn btn-small" id="btn-drafts-cleanup">Nettoyer les brouillons de l’outil</button>
+      <button class="btn btn-small btn-danger" id="btn-drafts-purge-all">Supprimer TOUS les brouillons Gmail</button>
       <span class="mbx-diag" id="drafts-cleanup-state"></span>
     </div>`;
 
@@ -7299,31 +7300,54 @@ function renderSettings() {
   // Purge des brouillons Gmail orphelins — ceux que l'IA a créés pour des
   // tickets aujourd'hui clos et que rien n'a jamais supprimés. Par lots de
   // 300 côté serveur : on boucle ici jusqu'à épuisement, en montrant le compte.
-  $('btn-drafts-cleanup')?.addEventListener('click', async function () {
+  const runDraftsCleanup = async (button, mode) => {
     const stateEl = $('drafts-cleanup-state');
-    this.disabled = true;
+    button.disabled = true;
     let total = 0;
     try {
       let remaining = Infinity;
       while (remaining > 0) {
-        const result = await api('/api/drafts/cleanup', { method: 'POST' });
+        const result = await api('/api/drafts/cleanup', {
+          method: 'POST',
+          body: JSON.stringify({ mode }),
+        });
         total += result.purged;
         remaining = result.remaining;
         if (stateEl) {
           stateEl.textContent =
             remaining > 0
-              ? `${total} supprimés… ${remaining} restants`
+              ? `${total} supprimés… environ ${remaining} restants`
               : total > 0
                 ? `${total} brouillon${total > 1 ? 's' : ''} Gmail supprimé${total > 1 ? 's' : ''}.`
-                : 'Aucun brouillon orphelin à supprimer.';
+                : 'Aucun brouillon à supprimer.';
         }
         if (result.purged === 0) break;
       }
     } catch (error) {
       toast(error.message, true);
     } finally {
-      this.disabled = false;
+      button.disabled = false;
     }
+  };
+
+  $('btn-drafts-cleanup')?.addEventListener('click', function () {
+    void runDraftsCleanup(this, 'closed');
+  });
+
+  // Le grand ménage : tout ce que la boîte compte de brouillons, y compris
+  // ceux écrits à la main. Pas de corbeille pour un brouillon supprimé, d'où
+  // la confirmation en toutes lettres.
+  $('btn-drafts-purge-all')?.addEventListener('click', function () {
+    if (
+      !confirm(
+        'Supprimer TOUS les brouillons de la boîte Gmail ?\n\n' +
+          'Y compris ceux écrits à la main, hors de l’outil. ' +
+          'Un brouillon supprimé ne passe pas par la corbeille : irréversible.',
+      )
+    ) {
+      return;
+    }
+    void runDraftsCleanup(this, 'all');
   });
 
   renderOrphans();
