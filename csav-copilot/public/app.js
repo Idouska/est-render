@@ -9326,6 +9326,35 @@ function buildCommands() {
   list.push(
     { label: 'Actualiser', hint: 'Écran', run: () => refreshCurrent() },
     {
+      label: 'Relever la boîte mail',
+      hint: 'Gmail',
+      run: () => void pullMail({ revive: true }),
+    },
+    {
+      label: 'File en tableau',
+      hint: 'SAV client',
+      run: () => {
+        setView('tickets');
+        setQueueView('table');
+      },
+    },
+    {
+      label: 'File en liste',
+      hint: 'SAV client',
+      run: () => {
+        setView('tickets');
+        setQueueView('list');
+      },
+    },
+    {
+      label: 'Filtrer les WISMO',
+      hint: 'SAV client',
+      run: () => {
+        setView('tickets');
+        $('chip-wismo')?.click();
+      },
+    },
+    {
       label: 'Basculer clair / sombre',
       hint: 'Apparence',
       run: () => {
@@ -9383,6 +9412,19 @@ function fuzzyMatch(needle, haystack) {
 
 function renderPalette(query) {
   const matches = paletteItems.filter((item) => fuzzyMatch(query, item.label));
+
+  // Le texte tapé ne correspond à aucune commande : c'est une recherche.
+  // La proposer plutôt qu'un « aucune commande » — la palette ne doit jamais
+  // être un cul-de-sac, et c'est le même routage que la barre latérale
+  // (numéro de commande, email, texte libre).
+  if (query && matches.length === 0) {
+    matches.push({
+      label: `Chercher « ${query} »`,
+      hint: 'Commande, client ou texte libre',
+      run: () => routeSearch(query),
+    });
+  }
+
   paletteIndex = Math.min(paletteIndex, Math.max(0, matches.length - 1));
 
   $('pal-list').innerHTML = matches.length

@@ -6148,3 +6148,19 @@ textarea:focus-visible {
 
 .qt-assignee { width: 40px; }
 .qt-assignee .who-dot { width: 20px; height: 20px; font-size: 9px; }
+
+/* ------------------------------------------------------------------ */
+/* DENSITÉ MÉTIER — étape 3 : Commerce & Fournisseur.                  */
+/* Les tableaux .grid (Commandes, Clients, Catalogue, Suivi colis)     */
+/* passent au même régime que la file : 31 px la ligne, en-têtes       */
+/* resserrés, et la hauteur utile calculée sur l'écran plutôt que      */
+/* figée aux deux tiers.                                               */
+/* ------------------------------------------------------------------ */
+
+.grid th { padding: 6px 10px; }
+.grid td { padding: 0 10px; height: 31px; }
+
+.table-wrap { max-height: calc(100vh - 250px); }
+
+/* Les vignettes du catalogue à l'échelle de la ligne. */
+.grid .thumb { width: 24px; height: 24px; border-radius: 4px; }
