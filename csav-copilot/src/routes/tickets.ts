@@ -44,8 +44,14 @@ const listQuery = z.object({
   snoozed: z.coerce.boolean().optional(),
   /** Consulter les échanges importés de l'historique, invisibles autrement. */
   historical: z.coerce.boolean().optional(),
-  /** Libellé Gmail, tel que le marchand l'a créé dans sa boîte. */
-  label: z.string().max(120).optional(),
+  /**
+   * Libellés Gmail, tels que le marchand les a créés dans sa boîte. Plusieurs
+   * séparés par des virgules, entendus comme « au moins l'un d'eux » : deux
+   * catégories voisines — « Refund » et « Litige » — se regardent ensemble, et
+   * les croiser en « et » ne rendrait jamais rien, un mail portant rarement
+   * deux libellés à la fois.
+   */
+  label: z.string().max(600).optional(),
   /** Montant plancher de la commande rattachée. */
   minAmount: z.coerce.number().min(0).max(100000).optional(),
   /** `all` élargit la file à toutes les boutiques du groupe. */
@@ -68,6 +74,11 @@ function buildTicketWhere(
   options: { withStatus: boolean },
 ) {
   const term = filters.q?.trim();
+
+  const labelNames = (filters.label ?? '')
+    .split(',')
+    .map((name) => name.trim())
+    .filter((name) => name !== '');
 
   return {
     // Une liste, jamais un identifiant venu du client : `merchantIds` est
@@ -111,7 +122,7 @@ function buildTicketWhere(
           ],
         }),
     ...(filters.mailbox ? { mailboxId: filters.mailbox } : {}),
-    ...(filters.label ? { labels: { has: filters.label } } : {}),
+    ...(labelNames.length > 0 ? { labels: { hasSome: labelNames } } : {}),
     ...(filters.minAmount !== undefined ? { orderTotal: { gte: filters.minAmount } } : {}),
     ...(term
       ? {

@@ -215,62 +215,93 @@
       </section>
 
       <section class="qbar" id="queue-bar" aria-label="Filtres de la file">
-        <div class="qbar-row">
+        <!--
+          Deux lignes, pas cinq.
+
+          La barre occupait 231 px et vingt-cinq contrôles pour une file qu'on
+          filtre trois fois par jour : six raccourcis, onze libellés, quatre
+          onglets d'origine, six statuts, quatre menus. Plusieurs disaient la
+          même chose deux fois — l'onglet « Litige » et le raccourci « Litiges à
+          échéance », l'onglet « Fournisseur » et le statut « Fournisseur », le
+          menu « Motif » et les onglets d'origine, qui n'étaient que des motifs
+          déguisés. Les onglets disparaissent, le reste rentre dans deux menus.
+
+          Ce qui reste dehors est ce qu'on touche à chaque tri : la recherche,
+          les libellés, les statuts. Le nombre sur le bouton dit combien de
+          filtres sont posés — un menu fermé ne doit jamais cacher un filtre
+          actif sans le signaler.
+        -->
+        <div class="qbar-row qbar-main">
           <input
             id="q-search"
             type="search"
             placeholder="N° de commande, client, objet…"
             autocomplete="off"
           />
-          <div class="qbar-quick">
-            <button class="qchip" data-quick="urgent" aria-pressed="false">Urgents 3 j+</button>
-            <button class="qchip" data-quick="unassigned" aria-pressed="false">Non assignés</button>
-            <button class="qchip" data-quick="unlinked" aria-pressed="false">Sans commande</button>
-            <button class="qchip" data-quick="dueSoon" aria-pressed="false">Litiges à échéance</button>
-            <button class="qchip" data-quick="bigAmount" aria-pressed="false">Montant &gt; 100 €</button>
-            <button class="qchip" data-quick="historical" aria-pressed="false">Historique appris</button>
-            <button class="qlink" id="q-reset" hidden>Réinitialiser</button>
+
+          <!-- Les libellés Gmail : les catégories que le marchand a créées
+               lui-même. En liste cochable avec leurs couleurs, et plusieurs à
+               la fois — « Refund » et « Litige » se regardent ensemble. -->
+          <div class="qmenu" id="qm-labels" hidden>
+            <button
+              type="button"
+              class="qbtn"
+              id="q-labels-btn"
+              aria-expanded="false"
+              aria-haspopup="true"
+            >Libellés<span class="qbtn-n" id="q-labels-n" hidden></span><span class="qbtn-car" aria-hidden="true"></span></button>
+            <div class="qpop" id="q-labels-pop" hidden>
+              <input
+                type="search"
+                class="qpop-search"
+                id="q-labels-q"
+                placeholder="Chercher un libellé…"
+                autocomplete="off"
+              />
+              <div class="qpop-list" id="q-labels-list"></div>
+            </div>
           </div>
-        </div>
 
-        <!-- Origine du ticket : trois populations qui ne se traitent pas de la
-             même façon. Un onglet plutôt qu'un filtre de plus, parce qu'on
-             choisit son terrain avant de le filtrer. -->
-        <!-- Les libellés Gmail en boutons, pas dans un menu déroulant. Ce sont
-             les catégories que le marchand a créées lui-même : les cacher
-             derrière un « Tous » revient à les remplacer par un mot qui ne veut
-             rien dire. Ils portent leurs couleurs de Gmail. -->
-        <div class="qbar-row qbar-labels" id="q-labels" hidden></div>
-
-        <div class="qbar-row qbar-origins">
-          <button class="otab" data-origin="" aria-pressed="true">Tout</button>
-          <button class="otab" data-origin="client">Client</button>
-          <button class="otab" data-origin="supplier">Fournisseur</button>
-          <button class="otab" data-origin="dispute">Litige</button>
-        </div>
-
-        <div class="qbar-row">
-          <div class="filters" id="filters">
-            <button class="chip" data-filter="" aria-pressed="true">Tous</button>
-            <button class="chip" data-filter="DRAFT_READY" aria-pressed="false">Brouillon prêt</button>
-            <button class="chip" data-filter="NEEDS_REVIEW" aria-pressed="false">À valider</button>
-            <button class="chip" data-filter="NEW" aria-pressed="false">Nouveaux</button>
-            <button class="chip" data-filter="AWAITING_SUPPLIER" aria-pressed="false">Fournisseur</button>
-            <button class="chip" data-filter="CLOSED" aria-pressed="false">Clos</button>
+          <div class="qmenu" id="qm-filters">
+            <button
+              type="button"
+              class="qbtn"
+              id="q-filters-btn"
+              aria-expanded="false"
+              aria-haspopup="true"
+            >Filtres<span class="qbtn-n" id="q-filters-n" hidden></span><span class="qbtn-car" aria-hidden="true"></span></button>
+            <div class="qpop qpop-wide" id="q-filters-pop" hidden>
+              <div class="qpop-head">Raccourcis</div>
+              <div class="qbar-quick">
+                <button class="qchip" data-quick="urgent" aria-pressed="false">Urgents 3 j+</button>
+                <button class="qchip" data-quick="unassigned" aria-pressed="false">Non assignés</button>
+                <button class="qchip" data-quick="unlinked" aria-pressed="false">Sans commande</button>
+                <button class="qchip" data-quick="dueSoon" aria-pressed="false">Litiges à échéance</button>
+                <button class="qchip" data-quick="bigAmount" aria-pressed="false">Montant &gt; 100 €</button>
+                <button class="qchip" data-quick="historical" aria-pressed="false">Historique appris</button>
+              </div>
+              <div class="qpop-head">Affiner</div>
+              <div class="qbar-selects">
+                <label>Motif <select id="q-intent"><option value="">Tous</option></select></label>
+                <label>Assigné <select id="q-assignee"><option value="">Tous</option></select></label>
+                <label>Boîte <select id="q-mailbox"><option value="">Toutes</option></select></label>
+              </div>
+              <div class="qpop-foot">
+                <button class="qlink" id="q-reset" hidden>Tout réinitialiser</button>
+              </div>
+            </div>
           </div>
-        </div>
 
-        <div class="qbar-row qbar-selects">
-          <label>Trier <select id="q-sort">
-            <option value="newest">Plus récent d'abord</option>
-            <option value="oldest">Plus ancien d'abord</option>
-            <option value="due">Échéance la plus proche</option>
-            <option value="amount">Montant le plus élevé</option>
-            <option value="confidence">Confiance la plus basse</option>
-          </select></label>
-          <label>Assigné <select id="q-assignee"><option value="">Tous</option></select></label>
-          <label>Motif <select id="q-intent"><option value="">Tous</option></select></label>
-          <label>Boîte <select id="q-mailbox"><option value="">Toutes</option></select></label>
+          <label class="qsort">
+            <select id="q-sort" aria-label="Trier la file">
+              <option value="newest">Plus récent</option>
+              <option value="oldest">Plus ancien</option>
+              <option value="due">Échéance proche</option>
+              <option value="amount">Montant élevé</option>
+              <option value="confidence">Confiance basse</option>
+            </select>
+            <span class="qsort-car" aria-hidden="true"></span>
+          </label>
 
           <!-- Tableau ou liste : parcourir et traiter sont deux gestes
                différents. Le tableau prend toute la largeur et se lit à vingt
@@ -279,7 +310,17 @@
             <button type="button" data-qview="list" aria-pressed="true">Liste</button>
             <button type="button" data-qview="table" aria-pressed="false">Tableau</button>
           </div>
+        </div>
 
+        <div class="qbar-row qbar-status">
+          <div class="filters" id="filters">
+            <button class="chip" data-filter="" aria-pressed="true">Tous</button>
+            <button class="chip" data-filter="DRAFT_READY" aria-pressed="false">Brouillon prêt</button>
+            <button class="chip" data-filter="NEEDS_REVIEW" aria-pressed="false">À valider</button>
+            <button class="chip" data-filter="NEW" aria-pressed="false">Nouveaux</button>
+            <button class="chip" data-filter="AWAITING_SUPPLIER" aria-pressed="false">Fournisseur</button>
+            <button class="chip" data-filter="CLOSED" aria-pressed="false">Clos</button>
+          </div>
           <span class="qbar-count" id="q-count"></span>
         </div>
       </section>

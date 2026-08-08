@@ -3916,40 +3916,6 @@ textarea:focus-visible {
   .compose-foot .hint { flex: 1 1 100%; margin-right: 0; }
 }
 
-/* Onglets d'origine : un choix de terrain, pas un filtre de plus. Ils portent
-   donc la forme d'un onglet — soulignement, pas de cadre — pour se distinguer
-   des pilules qui restreignent la liste juste en dessous. */
-.qbar-origins { gap: 2px; border-bottom: 1px solid var(--line-soft); padding-bottom: 0; }
-
-.otab {
-  appearance: none;
-  border: 0;
-  background: none;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 550;
-  color: var(--ink-mute);
-  padding: 7px 13px 9px;
-  cursor: pointer;
-  position: relative;
-  transition: color 0.14s var(--ease);
-}
-
-.otab:hover { color: var(--ink); }
-
-.otab[aria-pressed='true'] { color: var(--accent-ink); }
-
-.otab[aria-pressed='true']::after {
-  content: '';
-  position: absolute;
-  left: 10px;
-  right: 10px;
-  bottom: -1px;
-  height: 2px;
-  border-radius: 2px 2px 0 0;
-  background: var(--accent);
-}
-
 /* Quatre actions sur une colonne de cinq cents pixels, c'est « Écrire au
    client » cassé sur trois lignes. Elles passent en deux rangées de deux dès
    que la largeur ne suffit plus — deux boutons lisibles valent mieux que
@@ -4325,8 +4291,6 @@ textarea:focus-visible {
    part. Ce sont pourtant les catégories que le marchand a créées lui-même, et
    elles disent mieux que n'importe quel motif deviné ce qu'il y a à faire. */
 
-.qbar-labels { gap: 6px; flex-wrap: wrap; }
-
 .lchip {
   appearance: none;
   display: inline-flex;
@@ -4367,19 +4331,6 @@ textarea:focus-visible {
   background: var(--accent-soft);
   color: var(--accent-ink);
   border-color: color-mix(in srgb, var(--accent) 35%, transparent);
-}
-
-@media (max-width: 700px) {
-  /* Onze libellés sur un téléphone : ils défilent horizontalement plutôt que
-     d'empiler quatre rangées avant la première ligne de travail. */
-  .qbar-labels {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scrollbar-width: none;
-    padding-bottom: 2px;
-  }
-
-  .qbar-labels::-webkit-scrollbar { display: none; }
 }
 
 /* Alerte de traitement : rouge, en tête de la file, avec son geste de reprise.
@@ -5224,4 +5175,263 @@ textarea:focus-visible {
 @media (max-width: 1100px) {
   #queue-view { display: none; }
   .workspace.wide-queue { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ------------------------------------------------ la barre de file, en deux
+   lignes.
+
+   Elle en occupait cinq et 231 px pour vingt-cinq contrôles, sur un écran dont
+   le reste sert à lire des mails. Ce qu'on touche à chaque tri reste dehors —
+   recherche, libellés, statuts ; le reste passe dans deux menus qui portent le
+   nombre de filtres qu'ils referment. Un menu qui cache un filtre actif sans le
+   dire est un piège ; avec le chiffre, c'est un rangement. */
+
+.qbar-main { gap: 8px; }
+
+.qmenu { position: relative; }
+
+.qbtn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background-image: var(--grad-raised);
+  box-shadow: var(--e1), var(--edge);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.14s var(--ease), background 0.14s var(--ease);
+}
+
+.qbtn:hover { border-color: var(--ink-mute); }
+
+/* Ouvert ou porteur d'un filtre : deux raisons de se voir, un seul aspect. Le
+   menu refermé sur un filtre actif doit se distinguer d'un menu vide même
+   quand on ne le regarde pas. */
+.qbtn[aria-expanded='true'],
+.qbtn[aria-pressed='true'] {
+  background-image: none;
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  color: var(--accent-ink);
+  box-shadow: none;
+}
+
+.qbtn-n {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+}
+
+.qbtn-car,
+.qsort-car {
+  width: 0;
+  height: 0;
+  border-left: 3.5px solid transparent;
+  border-right: 3.5px solid transparent;
+  border-top: 4px solid currentColor;
+  opacity: 0.55;
+}
+
+/* Le tri garde son <select> natif : c'est un choix unique parmi cinq, et le
+   sélecteur du système se manipule mieux au clavier et au doigt que tout ce
+   qu'on redessinerait par-dessus. Il prend simplement l'aspect des boutons
+   voisins pour ne pas trahir l'alignement. */
+.qsort {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background-image: var(--grad-raised);
+  box-shadow: var(--e1), var(--edge);
+  color: var(--ink-mute);
+}
+
+.qsort select {
+  appearance: none;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--ink);
+  cursor: pointer;
+  padding: 0;
+}
+
+.qsort select:focus { outline: none; }
+
+/* Le sélecteur natif se dimensionne sur son option la plus longue ; sans cette
+   contrainte, « Échéance proche » réservait sa largeur en permanence et la
+   barre gardait un vide à droite du tri. */
+.qsort select { max-width: 112px; }
+
+.qbar-main .seg2 { margin-left: auto; }
+
+.qpop {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 264px;
+  padding: 7px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: 0 18px 44px rgb(14 16 32 / 22%);
+}
+
+.qpop-wide { width: 320px; }
+
+/* Près du bord droit, un menu ancré à gauche sortirait de l'écran. */
+@media (min-width: 701px) {
+  #q-filters-pop { left: auto; right: 0; }
+}
+
+.qpop-search {
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  margin-bottom: 5px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--inset);
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ink);
+}
+
+/* Onze libellés tiennent ici ; au-delà la liste défile plutôt que de pousser
+   le bas du menu hors de l'écran. */
+.qpop-list { max-height: 268px; overflow-y: auto; }
+
+.qpop-item {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.qpop-item:hover { background: var(--inset); }
+
+.qpop-box {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  border: 1.5px solid var(--line);
+  border-radius: 4px;
+}
+
+.qpop-item[aria-pressed='true'] { font-weight: 600; }
+
+.qpop-item[aria-pressed='true'] .qpop-box {
+  background: var(--accent);
+  border-color: var(--accent);
+  position: relative;
+}
+
+/* La coche est dessinée plutôt qu'écrite : un caractère ✓ hérite de la police
+   du système et se décale d'un pixel selon la plateforme. Deux bords et une
+   rotation donnent le même angle partout. */
+.qpop-item[aria-pressed='true'] .qpop-box::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(42deg);
+}
+
+.qpop-dot { width: 9px; height: 9px; flex: none; border-radius: 3px; }
+
+.qpop-empty { margin: 10px 8px; font-size: 12.5px; color: var(--ink-mute); }
+
+.qpop-head {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  padding: 7px 8px 5px;
+}
+
+.qpop .qbar-quick { padding: 0 4px; }
+
+.qpop .qbar-selects {
+  display: grid;
+  gap: 8px;
+  padding: 2px 4px 4px;
+}
+
+.qpop .qbar-selects label { justify-content: space-between; }
+
+.qpop .qbar-selects select { min-width: 150px; }
+
+.qpop-foot {
+  display: flex;
+  justify-content: flex-end;
+  border-top: 1px solid var(--line-soft);
+  margin-top: 5px;
+  padding-top: 3px;
+}
+
+.qbar-status { gap: 8px; }
+
+@media (max-width: 700px) {
+  /* Sur téléphone le menu se colle aux deux bords : 264 px fixes débordaient
+     d'un écran de 360. */
+  .qpop,
+  .qpop-wide {
+    width: auto;
+    left: 0;
+    right: 0;
+  }
+
+  .qbar-main input[type='search'] { flex: 1 1 100%; min-width: 100%; }
+
+  .qbar-main .seg2 { margin-left: auto; }
+
+  /* Six statuts sur un écran étroit : ils défilent plutôt que d'empiler trois
+     rangées avant la première ligne de travail. */
+  .qbar-status .filters {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .qbar-status .filters::-webkit-scrollbar { display: none; }
+
+  /* Sans cela, la rangée qui défile comprime les pilules et « Brouillon prêt »
+     se casse sur deux lignes au lieu de sortir de l'écran. */
+  .qbar-status .chip { flex: none; white-space: nowrap; }
+
+  .qbar-count { margin-left: auto; width: auto; }
 }
