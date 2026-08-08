@@ -14,6 +14,7 @@ import { getShopifyClient, ShopifyError, ShopifyScopeError } from '../services/s
 import { listCollections, listDisputes, listProducts, listVariants } from '../services/shopify/catalog.ts';
 import { listCustomers } from '../services/shopify/customers.ts';
 import { getOrderById, listOrders, quoteSearchValue } from '../services/shopify/orders.ts';
+import { customerOrderNames, missingOrderIds } from '../services/customers/sheet.ts';
 
 /**
  * Consultation du carnet de commandes et du fichier client.
@@ -477,6 +478,7 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
           status: true,
           intent: true,
           orderName: true,
+          shopifyOrderId: true,
           lastMessageAt: true,
           createdAt: true,
           assignedTo: { select: { name: true, email: true } },
@@ -512,32 +514,81 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
       });
 
       orders = page.orders;
+
+      /*
+       * Les commandes que les messages citent déjà, même sous un autre email.
+       *
+       * La recherche `email:` ne trouve que les commandes passées avec
+       * l'adresse d'où le client écrit. Or il écrit très souvent d'ailleurs :
+       * un relais iCloud, l'adresse PayPal, une seconde boîte. Résultat, une
+       * fiche annonçait « Aucune commande à cette adresse » pendant que le
+       * message d'à côté citait la commande #6561 — que l'outil avait pourtant
+       * rattachée lui-même. Et sans commande, ni colis, ni suivi, ni montant :
+       * la fiche entière s'effondrait sur cette seule recherche.
+       *
+       * On complète donc par les commandes que les tickets de ce client
+       * portent déjà. Le rattachement a été fait ou confirmé en amont : ce
+       * sont bien ses commandes.
+       */
+      const missing = missingOrderIds(
+        tickets,
+        orders.map((order) => order.id),
+      );
+
+      if (missing.length > 0) {
+        const extra = await Promise.all(
+          missing.map((id) => getOrderById(client, id).catch(() => null)),
+        );
+        orders = [...orders, ...extra.filter((order) => order !== null)].sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        );
+      }
+
       // L'identité vient de la commande la plus récente : chercher le client
       // séparément coûterait un appel de plus pour la même information.
-      customer = page.orders[0]?.customer ?? null;
+      customer = orders[0]?.customer ?? null;
     } catch (error) {
       shopifyError = describeShopifyError(error).message;
       request.log.warn({ err: error }, 'Fiche client : lecture Shopify en échec');
     }
 
-    const parcels = orders.length
-      ? await prisma.parcel.findMany({
-          where: { merchantId, shopifyOrderId: { in: orders.map((order) => order.id) } },
-          orderBy: [{ orderName: 'asc' }, { index: 'asc' }],
-          select: {
-            id: true,
-            shopifyOrderId: true,
-            orderName: true,
-            trackingNumber: true,
-            carrier: true,
-            index: true,
-            total: true,
-            photoMime: true,
-            photoTakenAt: true,
-            updatedAt: true,
-          },
-        })
-      : [];
+    /*
+     * Les colis se cherchent aussi par numéro de commande.
+     *
+     * Ils étaient conditionnés à la réussite de la recherche Shopify : une
+     * commande introuvable, et le suivi saisi par l'atelier disparaissait de
+     * la fiche alors qu'il est en base, chez nous. Le fournisseur, lui, ne
+     * connaît que le numéro — c'est par là qu'on retrouve son travail.
+     */
+    const orderNames = customerOrderNames(orders, tickets);
+
+    const parcels =
+      orders.length || orderNames.length
+        ? await prisma.parcel.findMany({
+            where: {
+              merchantId,
+              OR: [
+                ...(orders.length
+                  ? [{ shopifyOrderId: { in: orders.map((order) => order.id) } }]
+                  : []),
+                ...(orderNames.length ? [{ orderName: { in: orderNames } }] : []),
+              ],
+            },
+            orderBy: [{ orderName: 'asc' }, { index: 'asc' }],
+            select: {
+              id: true,
+              shopifyOrderId: true,
+              orderName: true,
+              trackingNumber: true,
+              carrier: true,
+              index: true,
+              total: true,
+              photoMime: true,
+              photoTakenAt: true,
+              updatedAt: true,
+            },
+          })
+        : [];
 
     // Les retours du client : la preuve au dossier. Par adresse email, et à
     // défaut par numéro de commande — un dossier ouvert sans email doit
@@ -547,7 +598,7 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
         merchantId,
         OR: [
           { customerEmail: email },
-          ...(orders.length ? [{ orderName: { in: orders.map((order) => order.name) } }] : []),
+          ...(orderNames.length ? [{ orderName: { in: orderNames } }] : []),
         ],
       },
       orderBy: { createdAt: 'desc' },
