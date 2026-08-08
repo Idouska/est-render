@@ -5680,3 +5680,172 @@ textarea:focus-visible {
   vertical-align: middle;
 }
 .msg.out .msg-head b { color: var(--accent-ink); }
+
+/* =========================================================================
+   L'en-tête, remis dans l'ordre des priorités.
+
+   À 1 440 px — un MacBook Pro 14 pouces, l'écran de travail le plus répandu —
+   le titre s'affichait « Update — demandes de changeme… » pendant que cinq
+   horloges occupaient le quart de la ligne, et « à l'instant » cassait sur
+   deux lignes. La page annonçait donc l'écran à moitié pour afficher l'heure
+   à Los Angeles.
+
+   L'ordre est le suivant, et il ne se discute pas : le titre dit où l'on est,
+   les actions font travailler, les horloges sont un confort. C'est le confort
+   qui cède en premier.
+   ========================================================================= */
+
+.head h1 {
+  /* Deux lignes plutôt qu'une troncature : un titre coupé par des points de
+     suspension oblige à survoler pour savoir sur quel écran on se trouve. */
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+
+.head-tools { align-items: center; }
+
+/* Aucun bouton de la barre ne casse sur deux lignes : « à l'instant » lu sur
+   deux étages se lit deux fois plus lentement, et déforme toute la rangée. */
+.head-tools .btn,
+.head-tools label { white-space: nowrap; }
+
+/* Sous 1 600 px, les horloges rendent la main : elles gardent leur place mais
+   défilent au lieu de pousser le titre. */
+@media (max-width: 1600px) {
+  .clocks {
+    max-width: 46vw;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .clocks::-webkit-scrollbar { display: none; }
+}
+
+/* Sous 1 280 px, elles s'effacent. À cette largeur, chaque pixel sert à lire
+   des messages clients — l'heure de Los Angeles se trouve ailleurs. */
+@media (max-width: 1280px) {
+  .clocks { display: none; }
+}
+
+/* Le sélecteur « Voir en tant que » compte cinq rôles : sur un téléphone, ils
+   poussaient la page 72 px hors de l'écran et le dernier — Fournisseur —
+   n'était plus atteignable. Ils défilent maintenant, comme les statuts de la
+   file. */
+@media (max-width: 700px) {
+  #as-role {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  #as-role::-webkit-scrollbar { display: none; }
+  #as-role button { flex: none; white-space: nowrap; }
+}
+
+/* La table des retours débordait de 44 px sur un écran de 1 440 : le bouton de
+   suppression tombait hors vue, et il fallait défiler latéralement pour
+   atteindre une action de la ligne qu'on regarde. Les actions passent en
+   icônes — WhatsApp et la photo se reconnaissent sans être lus — et le champ
+   de suivi cède la largeur qu'il ne remplissait pas. */
+.ret-track input { width: 128px; }
+.ret-wa { padding: 4px 9px; font-size: 13px; }
+#ret-body td:last-child { display: flex; align-items: center; gap: 5px; }
+#ret-body .ico { width: 30px; height: 30px; }
+
+/* =========================================================================
+   Micro-interactions.
+
+   Un outil métier ne se juge pas à ses animations, mais à sa réponse. Les
+   deux se rejoignent sur un point : quand un clic ne produit aucun effet
+   visible avant que le serveur réponde, l'agent reclique. Sur une file de
+   trois mille messages, ce doute coûte plus cher que n'importe quel défaut
+   esthétique.
+
+   Rien de décoratif ici. Chaque transition répond à une question que
+   l'utilisateur se pose : « est-ce que mon clic a été pris ? », « qu'est-ce
+   qui vient de changer ? », « où suis-je ? ».
+   ========================================================================= */
+
+/* L'enfoncement du bouton : le retour tactile qu'un écran ne donne pas. */
+.btn,
+.chip,
+.qchip,
+.qbtn,
+.ico,
+.lchip,
+.nav-item {
+  transition:
+    background-color 0.14s var(--ease),
+    border-color 0.14s var(--ease),
+    color 0.14s var(--ease),
+    transform 0.08s var(--ease),
+    box-shadow 0.14s var(--ease);
+}
+
+.btn:active,
+.chip:active,
+.qchip:active,
+.qbtn:active,
+.ico:active { transform: scale(0.97); }
+
+/* La ligne survolée se soulève à peine : de quoi suivre le curseur sur
+   cinquante lignes identiques sans que rien ne saute. */
+.queue-item,
+.grid-row,
+.rowo,
+.supc,
+.ret-card,
+.catc {
+  transition: background-color 0.14s var(--ease), box-shadow 0.16s var(--ease);
+}
+
+/* Le changement d'écran, en un souffle. Sans lui, le contenu se substitue
+   d'un coup et l'œil doit retrouver seul ce qui a bougé. 120 ms : perceptible
+   sans jamais faire attendre. */
+@keyframes view-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+.main > section:not([hidden]),
+.browse:not([hidden]) { animation: view-in 0.12s var(--ease); }
+
+/* Le tiroir latéral (fiche client, fiche commande) glisse depuis son bord :
+   il vient de quelque part, il y retourne. */
+@keyframes sheet-in {
+  from { opacity: 0; transform: translateX(18px); }
+  to { opacity: 1; transform: none; }
+}
+
+.sheet { animation: sheet-in 0.16s var(--ease); }
+
+/* Les fenêtres modales : une ouverture qui pose, plutôt qu'une apparition
+   brutale au milieu de l'écran. */
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+
+.backdrop.open .modal,
+#alert-modal:not([hidden]) .modal { animation: modal-in 0.16s var(--ease); }
+
+/* Le bouton d'actualisation tourne pendant qu'il travaille : la seule façon
+   de distinguer « en cours » de « rien ne s'est passé ». */
+@keyframes spin { to { transform: rotate(360deg); } }
+.btn.busy svg { animation: spin 0.9s linear infinite; }
+
+/*
+ * Respect du réglage système.
+ *
+ * Certaines personnes désactivent les animations parce qu'elles leur donnent
+ * la nausée — ce n'est pas une préférence esthétique, c'est un trouble
+ * vestibulaire. Ignorer ce réglage rend l'outil inutilisable pour elles.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

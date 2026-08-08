@@ -3988,6 +3988,15 @@ async function renderRights() {
     return;
   }
 
+  // Une réponse sans droits — appel dégradé, proxy, version d'API décalée —
+  // laissait le tableau à moitié dessiné sur une exception, et l'écran Équipe
+  // vide sans un mot.
+  if (!Array.isArray(data?.rights)) {
+    body.innerHTML =
+      '<tr><td colspan="5" class="empty">Tableau des droits indisponible.</td></tr>';
+    return;
+  }
+
   body.innerHTML = data.rights
     .map(
       (right) => `<tr>
@@ -4320,7 +4329,10 @@ function svgBars(days, pick, format, options = {}) {
 /** Répartition en barres horizontales : à sept catégories, plus lisible qu'un
     camembert — les angles proches se comparent mal, les longueurs bien. */
 function intentBars(byIntent) {
-  const rows = Object.entries(byIntent).sort((a, b) => b[1] - a[1]);
+  // Une réponse d'API sans la ventilation par motif emportait tout l'écran
+  // Statistiques sur une exception. Un graphe manquant vaut mieux qu'une page
+  // blanche : le reste des chiffres, lui, est là.
+  const rows = Object.entries(byIntent ?? {}).sort((a, b) => b[1] - a[1]);
   if (rows.length === 0) return '<p class="empty">Aucune demande sur la période.</p>';
 
   const total = rows.reduce((sum, [, count]) => sum + count, 0);
@@ -4341,10 +4353,33 @@ function intentBars(byIntent) {
 async function loadStats() {
   // Les deux sources partent ensemble et échouent séparément : Shopify en
   // panne ne doit pas priver l'écran des chiffres d'équipe, ni l'inverse.
-  const [stats, commerce] = await Promise.all([
+  const [raw, commerce] = await Promise.all([
     api(`/api/stats?days=${statsDays}`),
     api(`/api/stats/commerce?days=${statsDays}`).catch(() => null),
   ]);
+
+  /*
+   * La réponse est complétée avant d'être lue.
+   *
+   * L'écran piochait dans une dizaine de champs imbriqués sans jamais vérifier
+   * qu'ils existent : une réponse partielle — appel dégradé, version d'API
+   * décalée — et toute la page Statistiques tombait sur une exception, sans
+   * un mot. Un chiffre à zéro se lit ; un écran blanc, non.
+   */
+  const stats = {
+    ...raw,
+    tickets: { total: 0, byIntent: {}, daily: [], ...(raw?.tickets ?? {}) },
+    firstReply: { medianMinutes: null, measured: 0, ...(raw?.firstReply ?? {}) },
+    team: raw?.team ?? [],
+    drafts: {
+      total: 0,
+      sent: 0,
+      sendRate: 0,
+      averageConfidence: null,
+      ...(raw?.drafts ?? {}),
+    },
+    agents: raw?.agents ?? [],
+  };
 
   $('stats-range')
     .querySelectorAll('button')
@@ -4381,8 +4416,10 @@ async function loadStats() {
       (value) => money(value, commerce.currency),
     );
     $('ca-note').textContent =
-      commerce.refundsViaTool.count > 0
-        ? `${commerce.refundsViaTool.count} remboursement${commerce.refundsViaTool.count > 1 ? 's' : ''} via l’outil`
+      (commerce.refundsViaTool?.count ?? 0) > 0
+        ? `${commerce.refundsViaTool.count} remboursement${
+            commerce.refundsViaTool.count > 1 ? 's' : ''
+          } via l’outil`
         : '';
 
     $('chart-orders').innerHTML = svgBars(
@@ -4399,7 +4436,7 @@ async function loadStats() {
     $('ca-note').textContent = '';
   }
 
-  $('chart-intents').innerHTML = intentBars(stats.tickets.byIntent);
+  $('chart-intents').innerHTML = intentBars(stats.tickets?.byIntent);
 
   /* --------------------------------------------------------- équipe --- */
 
@@ -5439,14 +5476,19 @@ function renderReturnCases(box) {
           <td style="white-space:nowrap">
             ${
               wa
-                ? `<button class="ret-wa" data-ret-wa="${esc(item.id)}" title="Relancer sur WhatsApp">✆ WhatsApp</button>`
+                ? `<button class="ret-wa" data-ret-wa="${esc(item.id)}"
+                    title="Relancer ce client sur WhatsApp" aria-label="Relancer sur WhatsApp">✆</button>`
                 : ''
             }
             ${
               item.hasPhoto
-                ? `<a class="btn btn-small" href="/api/returns/${esc(
-                    item.id,
-                  )}/photo" target="_blank" rel="noopener">Photo</a>`
+                ? `<a class="ico" href="/api/returns/${esc(item.id)}/photo" target="_blank"
+                    rel="noopener" title="Voir la photo de l’article" aria-label="Voir la photo">
+                    <svg viewBox="0 0 20 20" aria-hidden="true">
+                      <rect x="2.5" y="5.5" width="15" height="11" rx="2" />
+                      <circle cx="10" cy="11" r="3.2" />
+                    </svg>
+                  </a>`
                 : ''
             }
             <label class="ico" title="${item.hasPhoto ? 'Remplacer la photo' : 'Ajouter une photo de l’article'}">
