@@ -111,6 +111,10 @@ export const STRINGS = {
 
     'catalog.title': 'Catalogue',
     'catalog.empty': "Aucun article ne vous est encore attribué. Le marchand doit renseigner vos marques.",
+    'catalog.search': 'Modèle ou marque',
+    'catalog.back': 'Catalogue',
+    'catalog.noMatch': 'Aucun modèle ne correspond.',
+    'catalog.out': 'épuisé',
     'catalog.variants': '{n} déclinaison(s)',
     'catalog.stock': 'stock {n}',
 
@@ -251,6 +255,10 @@ export const STRINGS = {
 
     'catalog.title': 'Catalogue',
     'catalog.empty': 'No items assigned to you yet. The merchant needs to set your brands.',
+    'catalog.search': 'Model or brand',
+    'catalog.back': 'Catalogue',
+    'catalog.noMatch': 'No matching model.',
+    'catalog.out': 'sold out',
     'catalog.variants': '{n} variant(s)',
     'catalog.stock': 'stock {n}',
 
@@ -391,6 +399,10 @@ export const STRINGS = {
 
     'catalog.title': '产品目录',
     'catalog.empty': '暂无分配给您的商品。请商家设置您的品牌。',
+    'catalog.search': '型号或品牌',
+    'catalog.back': '返回目录',
+    'catalog.noMatch': '没有匹配的型号。',
+    'catalog.out': '售罄',
     'catalog.variants': '{n} 个规格',
     'catalog.stock': '库存 {n}',
 

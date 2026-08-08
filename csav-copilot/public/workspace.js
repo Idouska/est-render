@@ -35,6 +35,9 @@ const state = {
   sort: localStorage.getItem(`ws.sort.${supplierId}`) ?? 'time',
   parcels: [],
   catalog: null,
+  /* Fiche produit ouverte dans le catalogue, et fiches déjà chargées. */
+  catalogFocus: null,
+  catalogSheets: {},
   updates: [],
 };
 
@@ -1142,8 +1145,12 @@ $('track-q').addEventListener('input', () => {
  * Les articles que cet atelier prépare.
  *
  * Sa fiche de référence, pour lever l'ambiguïté d'un libellé de commande —
- * « Blackened Blue », c'est laquelle des deux bleues ? Chargé une seule fois :
- * un catalogue ne bouge pas dans la journée.
+ * « Blackened Blue », c'est laquelle des deux bleues ? La réponse est dans la
+ * photo : le catalogue est donc une grille d'images, pas une liste de lignes.
+ * Et la question suivante — « la 44.5 existe-t-elle, sous quelle référence » —
+ * s'ouvre au tap : la fiche du produit liste chaque déclinaison avec son SKU
+ * et son stock. Chargé une seule fois : un catalogue ne bouge pas dans la
+ * journée.
  */
 async function loadCatalog() {
   const rows = $('catalog-rows');
@@ -1163,29 +1170,137 @@ async function loadCatalog() {
 function renderCatalog(error) {
   const rows = $('catalog-rows');
 
-  rows.innerHTML =
-    (state.catalog ?? [])
-      .map(
-        (item) => `<div class="cat">
-          ${
-            item.image
-              ? `<img class="cat-photo" src="${esc(item.image)}" alt="" loading="lazy" />`
-              : '<span class="cat-photo cat-photo-none" aria-hidden="true"></span>'
-          }
-          <div class="cat-main">
-            <b>${esc(item.title)}</b>
-            <small>${esc(item.vendor ?? '')} · ${esc(
-              t('catalog.variants', { n: item.variantCount ?? 0 }),
-            )}${
-              item.totalInventory != null
-                ? ` · ${esc(t('catalog.stock', { n: item.totalInventory }))}`
-                : ''
-            }</small>
-          </div>
-        </div>`,
-      )
-      .join('') || `<p class="empty">${esc(error ?? t('catalog.empty'))}</p>`;
+  if (state.catalogFocus) {
+    renderProductSheet();
+    return;
+  }
+
+  // Le champ de recherche filtre sur place : cent produits sont déjà là, une
+  // requête par frappe n'apporterait que l'attente.
+  const needle = ($('catalog-q')?.value ?? '').trim().toLowerCase();
+  const items = (state.catalog ?? []).filter(
+    (item) =>
+      !needle ||
+      item.title.toLowerCase().includes(needle) ||
+      (item.vendor ?? '').toLowerCase().includes(needle),
+  );
+
+  $('catalog-search').hidden = (state.catalog ?? []).length === 0;
+
+  rows.innerHTML = items.length
+    ? `<div class="cat-grid">${items
+        .map(
+          (item) => `<button type="button" class="catc" data-product="${esc(item.id)}">
+            ${
+              item.image
+                ? `<img class="catc-photo" src="${esc(item.image)}" alt="" loading="lazy" />`
+                : '<span class="catc-photo catc-photo-none" aria-hidden="true"></span>'
+            }
+            <span class="catc-main">
+              <b>${esc(item.title)}</b>
+              <small>${esc(t('catalog.variants', { n: item.variantCount ?? 0 }))}${
+                item.totalInventory != null && item.totalInventory > 0
+                  ? ` · ${esc(t('catalog.stock', { n: item.totalInventory }))}`
+                  : ''
+              }</small>
+            </span>
+          </button>`,
+        )
+        .join('')}</div>`
+    : `<p class="empty">${esc(
+        error ?? (needle ? t('catalog.noMatch') : t('catalog.empty')),
+      )}</p>`;
 }
+
+/**
+ * La fiche d'un produit : ses déclinaisons, une par ligne.
+ *
+ * L'atelier vient vérifier une taille et une référence, pas contempler le
+ * modèle : la liste dit pour chaque déclinaison son SKU, son stock, et
+ * « épuisé » quand Shopify la déclare invendable — c'est le mot qui évite un
+ * ticket de rupture découvert au moment d'emballer.
+ */
+async function renderProductSheet() {
+  const rows = $('catalog-rows');
+  $('catalog-search').hidden = true;
+
+  const back = `<div class="focus-bar">
+    <button type="button" class="btn btn-small" data-cat-back="1">← ${esc(
+      t('catalog.back'),
+    )}</button>
+  </div>`;
+
+  const cached = state.catalogSheets?.[state.catalogFocus];
+  if (!cached) {
+    rows.innerHTML = `${back}<p class="empty">…</p>`;
+    try {
+      const numeric = state.catalogFocus.split('/').pop();
+      const { product } = await api(`/api/workspace/${supplierId}/catalog/${numeric}`);
+      (state.catalogSheets ??= {})[state.catalogFocus] = product;
+    } catch (error) {
+      rows.innerHTML = `${back}<p class="empty">${esc(error.message)}</p>`;
+      return;
+    }
+    // L'utilisateur a pu quitter la fiche pendant le chargement.
+    if (state.catalogFocus) renderProductSheet();
+    return;
+  }
+
+  const product = cached;
+  rows.innerHTML = `${back}
+    <div class="sheet">
+      <div class="sheet-head">
+        ${
+          product.image
+            ? `<img class="sheet-photo" src="${esc(product.image)}" alt="" />`
+            : '<span class="sheet-photo catc-photo-none" aria-hidden="true"></span>'
+        }
+        <div>
+          <h2>${esc(product.title)}</h2>
+          <small>${esc(product.vendor ?? '')}</small>
+        </div>
+      </div>
+      <div class="sheet-vars">
+        ${product.variants
+          .map(
+            (variant) => `<div class="varr${variant.availableForSale ? '' : ' out'}">
+              ${
+                variant.image
+                  ? `<img class="varr-photo" src="${esc(variant.image)}" alt="" loading="lazy" />`
+                  : ''
+              }
+              <b class="varr-title">${esc(variant.title ?? '—')}</b>
+              <span class="varr-sku mono">${esc(variant.sku ?? '')}</span>
+              ${
+                variant.availableForSale
+                  ? variant.inventoryQuantity != null && variant.inventoryQuantity > 0
+                    ? `<span class="varr-stock">${esc(
+                        t('catalog.stock', { n: variant.inventoryQuantity }),
+                      )}</span>`
+                    : ''
+                  : `<span class="varr-out">${esc(t('catalog.out'))}</span>`
+              }
+            </div>`,
+          )
+          .join('')}
+      </div>
+    </div>`;
+}
+
+$('catalog-rows').addEventListener('click', (event) => {
+  const open = event.target.closest('[data-product]');
+  if (open) {
+    state.catalogFocus = open.dataset.product;
+    renderCatalog();
+    return;
+  }
+  if (event.target.closest('[data-cat-back]')) {
+    state.catalogFocus = null;
+    renderCatalog();
+  }
+});
+
+$('catalog-q')?.addEventListener('input', () => renderCatalog());
 
 /* ------------------------------------------------------- changements ----- */
 

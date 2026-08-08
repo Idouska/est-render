@@ -389,3 +389,91 @@ export async function listVariants(
     }))
     .sort((a, b) => (b.inventoryQuantity ?? 0) - (a.inventoryQuantity ?? 0));
 }
+
+/**
+ * Les déclinaisons d'un produit, pour la fiche du catalogue fournisseur.
+ *
+ * La question de l'atelier n'est jamais « ce modèle existe-t-il » mais « la
+ * 44.5 existe-t-elle, et sous quelle référence » : c'est la déclinaison qui
+ * s'emballe, pas le produit. On rend donc le produit avec toutes ses
+ * variantes, leurs SKU et leur stock, dans l'ordre du marchand — les tailles
+ * telles qu'il les a rangées, pas triées par un stock qui les mélangerait.
+ */
+export async function productWithVariants(
+  client: ShopifyClient,
+  productId: string,
+): Promise<{
+  id: string;
+  title: string;
+  vendor: string | null;
+  image: string | null;
+  variants: Array<{
+    id: string;
+    title: string | null;
+    sku: string | null;
+    image: string | null;
+    price: string | null;
+    inventoryQuantity: number | null;
+    availableForSale: boolean;
+  }>;
+} | null> {
+  const data = await client.request<{
+    product: {
+      id: string;
+      title: string;
+      vendor: string | null;
+      featuredMedia: { preview: { image: { url: string } | null } | null } | null;
+      variants: { nodes: RawVariant[] };
+    } | null;
+  }>(
+    /* GraphQL */ `
+      query ProductVariants($id: ID!) {
+        product(id: $id) {
+          id
+          title
+          vendor
+          featuredMedia {
+            preview {
+              image {
+                url
+              }
+            }
+          }
+          variants(first: 100) {
+            nodes {
+              id
+              title
+              sku
+              price
+              inventoryQuantity
+              availableForSale
+              image {
+                url
+              }
+            }
+          }
+        }
+      }
+    `,
+    { id: productId },
+  );
+
+  if (!data.product) return null;
+
+  const image = data.product.featuredMedia?.preview?.image?.url ?? null;
+  return {
+    id: data.product.id,
+    title: data.product.title,
+    vendor: data.product.vendor,
+    image,
+    variants: data.product.variants.nodes.map((variant) => ({
+      id: variant.id,
+      title: variant.title,
+      sku: variant.sku,
+      image: variant.image?.url ?? null,
+      price: variant.price,
+      inventoryQuantity: variant.inventoryQuantity,
+      availableForSale: variant.availableForSale,
+    })),
+  };
+}

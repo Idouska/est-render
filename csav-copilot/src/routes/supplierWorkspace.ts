@@ -8,7 +8,7 @@ import { ordersToCsv } from '../services/export/ordersCsv.ts';
 import { ordersToXlsx } from '../services/export/ordersXlsx.ts';
 import { getShopifyClient } from '../services/shopify/client.ts';
 import { listOrders } from '../services/shopify/orders.ts';
-import { listProducts } from '../services/shopify/catalog.ts';
+import { listProducts, productWithVariants } from '../services/shopify/catalog.ts';
 import { fulfillOrder } from '../services/shopify/fulfill.ts';
 import { draftChangeReply } from '../services/ai/changeReply.ts';
 import { createReplyDraft } from '../services/gmail/drafts.ts';
@@ -1001,6 +1001,49 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
       } catch (error) {
         request.log.warn({ err: error }, 'Catalogue fournisseur indisponible');
         return reply.send({ items: [], error: 'Catalogue indisponible pour le moment.' });
+      }
+    },
+  );
+
+  /**
+   * La fiche d'un produit : ses déclinaisons, leurs SKU, leur stock.
+   *
+   * C'est la déclinaison qui s'emballe, pas le produit — « Blackened Blue en
+   * 44.5 » doit se vérifier ici, référence à l'appui, plutôt que par un mail
+   * au marchand. La fiche n'est servie que si le produit relève des règles du
+   * fournisseur : un identifiant deviné ne doit pas ouvrir l'assortiment des
+   * autres ateliers.
+   */
+  app.get<{ Params: { id: string; productId: string }; Querystring: { token?: string } }>(
+    '/api/workspace/:id/catalog/:productId',
+    async (request, reply) => {
+      const workspace = await authorize(request, reply);
+      if (!workspace) return;
+
+      if (workspace.ordersAccess === 'NONE') {
+        return reply.code(404).send({ error: 'Produit introuvable' });
+      }
+
+      try {
+        const client = await getShopifyClient(workspace.merchantId);
+        const product = await productWithVariants(
+          client,
+          `gid://shopify/Product/${request.params.productId.replace(/\D/g, '')}`,
+        );
+
+        const allowed =
+          product &&
+          (workspace.vendors.includes(product.vendor ?? '') ||
+            product.variants.some((variant) =>
+              workspace.skuPrefixes.some((prefix) => variant.sku?.startsWith(prefix)),
+            ));
+
+        if (!allowed) return reply.code(404).send({ error: 'Produit introuvable' });
+
+        return reply.send({ product });
+      } catch (error) {
+        request.log.warn({ err: error }, 'Fiche produit indisponible');
+        return reply.code(502).send({ error: 'Fiche indisponible pour le moment.' });
       }
     },
   );
