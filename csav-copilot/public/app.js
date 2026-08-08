@@ -1149,7 +1149,8 @@ async function openCustomerSheet(email, displayName) {
     return;
   }
 
-  const { totals, customer, orders, tickets, refunds, parcels, returns, shopifyError } = data;
+  const { totals, customer, orders, tickets, refunds, parcels, shipments, returns, shopifyError } =
+    data;
   if (customer?.displayName) $('sheet-name').textContent = customer.displayName;
 
   const money = (value) => euro(value, totals.currency ?? 'EUR');
@@ -1174,8 +1175,12 @@ async function openCustomerSheet(email, displayName) {
     orders.map(
       (order) => `<div class="sheet-row">
         <b class="mono">${esc(order.name)}</b>
-        <span class="tag tag-order">${esc(order.displayFulfillmentStatus ?? '—')}</span>
-        <span class="tag tag-order">${esc(order.displayFinancialStatus ?? '—')}</span>
+        ${statusTag(order.displayFulfillmentStatus, FULFILLMENT_LABELS, ['UNFULFILLED', 'ON_HOLD'])}
+        ${statusTag(order.displayFinancialStatus, FINANCIAL_LABELS, [
+          'PENDING',
+          'PARTIALLY_PAID',
+          'EXPIRED',
+        ])}
         <span class="mono">${esc(euro(order.totalPrice, order.currency))}</span>
         <span class="when">${relativeTime(order.createdAt)}</span>
         <p>${esc(
@@ -1188,24 +1193,46 @@ async function openCustomerSheet(email, displayName) {
     'Aucune commande à cette adresse.',
   ));
 
+  /*
+   * Colis de l'atelier et expéditions Shopify, dans la même section.
+   *
+   * Le client se fiche de savoir qui a saisi le numéro : il veut savoir où est
+   * son colis. Séparer les deux sources ferait dire « aucun colis » à côté
+   * d'une commande expédiée — c'est exactement ce qui se passait.
+   */
+  const shipmentRows = (shipments ?? []).map(
+    (shipment) => `<div class="sheet-row">
+      <b>${esc(SHIPMENT_LABELS[shipment.status] ?? shipment.status ?? 'Expédié')}</b>
+      <button class="linklike mono" data-track="${esc(shipment.trackingNumber)}">${esc(
+        shipment.trackingNumber,
+      )}</button>
+      ${shipment.carrier ? `<span class="tag tag-order">${esc(shipment.carrier)}</span>` : ''}
+      <span class="when">${esc(shipment.orderName ?? '')}</span>
+      <span class="when">${relativeTime(shipment.updatedAt)}</span>
+    </div>`,
+  );
+
   sections.push(group(
     'Colis',
-    parcels.map(
-      (parcel) => `<div class="sheet-row">
-        <b>${parcel.index}/${parcel.total}</b>
-        <button class="linklike mono" data-track="${esc(parcel.trackingNumber)}">${esc(parcel.trackingNumber)}</button>
-        ${parcel.carrier ? `<span class="tag tag-order">${esc(parcel.carrier)}</span>` : ''}
-        ${
-          parcel.hasPhoto
-            ? `<a class="btn btn-small" href="/api/parcels/${esc(
-                parcel.id,
-              )}/photo" target="_blank" rel="noopener">Photo</a>`
-            : '<span class="when">sans photo</span>'
-        }
-        <span class="when">${esc(parcel.orderName ?? '')}</span>
-      </div>`,
-    ),
-    'Aucun colis saisi pour ce client.',
+    [
+      ...parcels.map(
+        (parcel) => `<div class="sheet-row">
+          <b>${parcel.index}/${parcel.total}</b>
+          <button class="linklike mono" data-track="${esc(parcel.trackingNumber)}">${esc(parcel.trackingNumber)}</button>
+          ${parcel.carrier ? `<span class="tag tag-order">${esc(parcel.carrier)}</span>` : ''}
+          ${
+            parcel.hasPhoto
+              ? `<a class="btn btn-small" href="/api/parcels/${esc(
+                  parcel.id,
+                )}/photo" target="_blank" rel="noopener">Photo</a>`
+              : '<span class="when">sans photo</span>'
+          }
+          <span class="when">${esc(parcel.orderName ?? '')}</span>
+        </div>`,
+      ),
+      ...shipmentRows,
+    ],
+    'Aucun colis : ni saisi par l’atelier, ni expédié depuis Shopify.',
   ));
 
   sections.push(group(
@@ -3135,10 +3162,33 @@ function renderShipping(order) {
   }
 
   const steps = ['Préparée', 'Expédiée', 'En transit', 'Livrée'];
-  const status = (fulfillment.status ?? '').toUpperCase();
-  const reached = status.includes('DELIVER') ? 3 : status.includes('TRANSIT') ? 2 : 1;
+
+  /*
+   * La frise suit l'état du colis, pas celui de l'expédition.
+   *
+   * Elle lisait `status`, qui vaut « SUCCESS » dès qu'une expédition est
+   * créée : un colis livré depuis huit jours restait affiché « Expédiée »
+   * pendant que Shopify, lui, disait « Livré ». `displayStatus` est l'état que
+   * le transporteur remonte — c'est celui que le client a sous les yeux.
+   */
+  const shipState = (fulfillment.displayStatus ?? fulfillment.status ?? '').toUpperCase();
+  const reached =
+    shipState === 'DELIVERED' || shipState === 'PICKED_UP'
+      ? 3
+      : shipState === 'OUT_FOR_DELIVERY' || shipState === 'IN_TRANSIT'
+        ? 2
+        : shipState.includes('DELIVER')
+          ? 3
+          : shipState.includes('TRANSIT')
+            ? 2
+            : 1;
 
   container.innerHTML =
+    `<div class="c-order-tags">
+      <span class="tag tag-status ${
+        reached === 3 ? 'st-CLOSED' : 'st-NEEDS_REVIEW'
+      }">${esc(SHIPMENT_LABELS[shipState] ?? 'Expédiée')}</span>
+    </div>` +
     '<dl>' +
     row('Transporteur', fulfillment.trackingCompany ?? 'non précisé') +
     (fulfillment.trackingNumber
@@ -6428,6 +6478,31 @@ const FINANCIAL_LABELS = {
   EXPIRED: 'Expirée',
 };
 
+/**
+ * L'état du colis chez le transporteur, tel que Shopify le connaît.
+ *
+ * Il vaut mieux que « SUCCESS », qui dit seulement que l'expédition a été
+ * créée — ce que personne ne demande. « En transit », « Livré », c'est la
+ * réponse à la question du client.
+ */
+const SHIPMENT_LABELS = {
+  IN_TRANSIT: 'En transit',
+  OUT_FOR_DELIVERY: 'En cours de livraison',
+  DELIVERED: 'Livré',
+  ATTEMPTED_DELIVERY: 'Livraison tentée',
+  READY_FOR_PICKUP: 'À retirer',
+  PICKED_UP: 'Retiré',
+  LABEL_PRINTED: 'Étiquette imprimée',
+  LABEL_PURCHASED: 'Étiquette achetée',
+  CONFIRMED: 'Confirmé',
+  FULFILLED: 'Expédié',
+  SUCCESS: 'Expédié',
+  NOT_DELIVERED: 'Non livré',
+  FAILURE: 'Échec',
+  CANCELED: 'Annulé',
+  CANCELLED: 'Annulé',
+};
+
 const FULFILLMENT_LABELS = {
   FULFILLED: 'Expédiée',
   UNFULFILLED: 'Non expédiée',
@@ -6568,15 +6643,27 @@ function orderDetailMarkup(order) {
     )
     .join('');
 
+  /*
+   * Les suivis de la commande.
+   *
+   * Ils se lisaient dans `trackingInfo`, la forme brute de Shopify — que
+   * l'API n'a jamais servie : elle aplatit chaque expédition en
+   * `trackingNumber` / `trackingCompany` / `trackingUrl`. La liste était donc
+   * vide en toutes circonstances, et la fiche annonçait une commande sans
+   * suivi pendant que Shopify en affichait un.
+   */
   const parcels = (order.fulfillments ?? [])
-    .flatMap((fulfillment) => fulfillment.trackingInfo ?? [])
-    .filter((info) => info.number)
+    .filter((fulfillment) => fulfillment.trackingNumber)
     .map(
-      (info) => `<div class="ordv-row">
-        <span>${esc(info.company ?? 'Transporteur')}</span>
-        <button class="linklike mono" data-track="${esc(info.number)}"${
-          info.url ? ` data-track-url="${esc(info.url)}"` : ''
-        }>${esc(info.number)}</button>
+      (fulfillment) => `<div class="ordv-row">
+        <span>${esc(fulfillment.trackingCompany ?? 'Transporteur')}${
+          fulfillment.displayStatus
+            ? ` · ${esc(SHIPMENT_LABELS[fulfillment.displayStatus] ?? fulfillment.displayStatus)}`
+            : ''
+        }</span>
+        <button class="linklike mono" data-track="${esc(fulfillment.trackingNumber)}"${
+          fulfillment.trackingUrl ? ` data-track-url="${esc(fulfillment.trackingUrl)}"` : ''
+        }>${esc(fulfillment.trackingNumber)}</button>
       </div>`,
     )
     .join('');
@@ -6662,12 +6749,18 @@ async function openOrderSheet(id) {
 
   const { order, tickets = [], parcels = [], changes = [] } = data;
 
+  // Une réponse sans commande — droit manquant, commande supprimée — laissait
+  // l'écran à moitié dessiné sur une exception. Même famille que le menu des
+  // boutiques : ce qui vient du réseau se lit avec précaution.
+  if (!order) {
+    $('sheet-body').innerHTML = '<p class="empty">Cette commande n’est plus disponible.</p>';
+    return;
+  }
+
   $('sheet-name').textContent = `Commande ${order.name}`;
   $('sheet-email').textContent = order.customer?.email ?? '';
 
-  const tracking = (order.fulfillments ?? [])
-    .flatMap((fulfillment) => fulfillment.trackingInfo ?? [])
-    .find((info) => info.number);
+  const tracking = (order.fulfillments ?? []).find((fulfillment) => fulfillment.trackingNumber);
 
   const section = (title, body) =>
     `<section class="sheet-group"><span class="rail-title">${title}</span>${body}</section>`;
@@ -6679,8 +6772,8 @@ async function openOrderSheet(id) {
        <button class="btn btn-small btn-primary" id="ordv-change">⚡ Demander un changement</button>
        ${
          tracking
-           ? `<button class="btn btn-small" data-track="${esc(tracking.number)}"${
-               tracking.url ? ` data-track-url="${esc(tracking.url)}"` : ''
+           ? `<button class="btn btn-small" data-track="${esc(tracking.trackingNumber)}"${
+               tracking.trackingUrl ? ` data-track-url="${esc(tracking.trackingUrl)}"` : ''
              }>Suivre le colis</button>`
            : ''
        }

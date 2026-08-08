@@ -590,6 +590,35 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
           })
         : [];
 
+    /*
+     * Les expéditions Shopify, à côté des colis saisis par l'atelier.
+     *
+     * La section ne montrait que `Parcel` — ce que le fournisseur a saisi dans
+     * son atelier. Sur une commande expédiée depuis Shopify, elle annonçait
+     * donc « Aucun colis saisi pour ce client » pendant que la commande
+     * affichait, chez Shopify, un suivi et un « En transit ». Deux vérités sur
+     * le même colis, et c'est celle qu'on regarde qui avait tort.
+     *
+     * Les deux sources sont réunies, dédupliquées par numéro : un colis saisi
+     * par l'atelier puis transmis à Shopify porte le même numéro des deux
+     * côtés, et la version de l'atelier prime — c'est elle qui a la photo de
+     * l'étiquette.
+     */
+    const known = new Set(parcels.map((parcel) => parcel.trackingNumber));
+    const shipments = orders.flatMap((order) =>
+      order.fulfillments
+        .filter((f) => f.trackingNumber && !known.has(f.trackingNumber))
+        .map((f) => ({
+          orderName: order.name,
+          trackingNumber: f.trackingNumber,
+          carrier: f.trackingCompany,
+          trackingUrl: f.trackingUrl,
+          status: f.displayStatus ?? f.status,
+          estimatedDeliveryAt: f.estimatedDeliveryAt,
+          updatedAt: f.updatedAt,
+        })),
+    );
+
     // Les retours du client : la preuve au dossier. Par adresse email, et à
     // défaut par numéro de commande — un dossier ouvert sans email doit
     // quand même apparaître sur la fiche.
@@ -620,6 +649,7 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
         hasPhoto: Boolean(parcel.photoMime),
         photoMime: undefined,
       })),
+      shipments,
       returns: returns.map(({ photoMime, ...item }) => ({
         ...item,
         hasPhoto: Boolean(photoMime),

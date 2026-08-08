@@ -14,6 +14,8 @@ export interface OrderLineItem {
 
 export interface Fulfillment {
   status: string;
+  /** État du colis chez le transporteur : IN_TRANSIT, DELIVERED… */
+  displayStatus: string | null;
   trackingCompany: string | null;
   trackingNumber: string | null;
   trackingUrl: string | null;
@@ -106,6 +108,10 @@ const ORDER_FIELDS = /* GraphQL */ `
     }
     fulfillments(first: 10) {
       status
+      # L'état lisible — « En transit », « Livré » — que l'admin Shopify
+      # affiche. Le champ status ne dit que « SUCCESS » : l'expédition a été
+      # créée, pas où en est le colis.
+      displayStatus
       updatedAt
       estimatedDeliveryAt
       trackingInfo {
@@ -154,6 +160,7 @@ interface RawOrder {
   };
   fulfillments: Array<{
     status: string;
+    displayStatus: string | null;
     updatedAt: string;
     estimatedDeliveryAt: string | null;
     trackingInfo: Array<{ company: string | null; number: string | null; url: string | null }>;
@@ -202,6 +209,7 @@ function toSummary(order: RawOrder): OrderSummary {
     })),
     fulfillments: order.fulfillments.map((f) => ({
       status: f.status,
+      displayStatus: f.displayStatus ?? null,
       updatedAt: f.updatedAt,
       estimatedDeliveryAt: f.estimatedDeliveryAt,
       trackingCompany: f.trackingInfo[0]?.company ?? null,
