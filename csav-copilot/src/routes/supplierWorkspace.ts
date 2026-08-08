@@ -988,12 +988,21 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
         ...workspace.skuPrefixes.map((prefix) => `sku:${prefix.replace(/[^\w.-]/g, '')}*`),
       ];
 
-      if (clauses.length === 0) return reply.send({ items: [] });
+      /*
+       * L'atelier par défaut voit tout le catalogue.
+       *
+       * C'est sa définition : il prépare ce qu'aucune règle ne réclame, donc
+       * potentiellement n'importe quel article — un catalogue vide chez lui
+       * n'est pas de la prudence, c'est une panne. Les autres ateliers, eux,
+       * restent bornés à leurs règles : sans rien de déclaré, rien de servi,
+       * plutôt qu'exposer l'assortiment complet du marchand à un tiers.
+       */
+      if (clauses.length === 0 && !workspace.isDefault) return reply.send({ items: [] });
 
       try {
         const client = await getShopifyClient(workspace.merchantId);
         const page = await listProducts(client, {
-          query: clauses.join(' OR '),
+          query: clauses.length > 0 ? clauses.join(' OR ') : '',
           limit: 100,
         });
 
@@ -1033,7 +1042,10 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
 
         const allowed =
           product &&
-          (workspace.vendors.includes(product.vendor ?? '') ||
+          // Même règle que la grille : l'atelier par défaut prépare tout,
+          // sa fiche s'ouvre sur tout.
+          (workspace.isDefault ||
+            workspace.vendors.includes(product.vendor ?? '') ||
             product.variants.some((variant) =>
               workspace.skuPrefixes.some((prefix) => variant.sku?.startsWith(prefix)),
             ));
