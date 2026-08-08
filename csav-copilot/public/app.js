@@ -4990,6 +4990,13 @@ function renderChangesScreen() {
           }
 
           <div class="chgc-meta">
+            ${
+              // Le brouillon n'existe que sur une demande née d'un mail et
+              // déjà répondue : le dire ici évite d'ouvrir pour vérifier.
+              change.status !== 'PENDING' && change.ticket && !change.handledAt
+                ? '<span class="chgc-draft">✉︎ réponse au client prête</span>'
+                : ''
+            }
             <span>${esc(change.supplier?.name ?? '—')}</span>
             ${
               change.ticket

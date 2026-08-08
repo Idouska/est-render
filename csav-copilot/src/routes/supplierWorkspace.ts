@@ -10,6 +10,7 @@ import { getShopifyClient } from '../services/shopify/client.ts';
 import { listOrders } from '../services/shopify/orders.ts';
 import { listProducts } from '../services/shopify/catalog.ts';
 import { fulfillOrder } from '../services/shopify/fulfill.ts';
+import { draftChangeReply } from '../services/ai/changeReply.ts';
 import { decodePhoto, photoSchema, sendParcelPhoto, toParcelView } from './parcels.ts';
 import { ordersForSupplier, type RoutingRules } from '../services/suppliers/routing.ts';
 
@@ -149,6 +150,93 @@ function toShopifyRange(since: string | undefined, until: string | undefined): s
   ]
     .filter(Boolean)
     .join(' AND ');
+}
+
+
+/**
+ * Prépare la réponse au client après le verdict de l'atelier.
+ *
+ * Rattaché au mail d'origine quand la demande en avait un — c'est là que
+ * l'agent le cherchera. Sans mail rattaché (demande créée depuis une
+ * commande), il n'y a rien à répondre : la demande se lit dans l'écran
+ * Update et le marchand décide.
+ */
+async function draftReplyAfterChange(alertId: string, merchantId: string): Promise<void> {
+  const alert = await prisma.supplierAlert.findFirst({
+    where: { id: alertId, merchantId },
+    select: {
+      kind: true,
+      status: true,
+      beforeValue: true,
+      afterValue: true,
+      message: true,
+      supplierNote: true,
+      orderName: true,
+      ticketId: true,
+      merchant: { select: { name: true, shopDomain: true } },
+      ticket: {
+        select: {
+          id: true,
+          customerName: true,
+          language: true,
+          messages: {
+            where: { direction: 'INBOUND' },
+            orderBy: { receivedAt: 'desc' },
+            take: 1,
+            select: { bodyText: true },
+          },
+        },
+      },
+    },
+  });
+
+  if (!alert?.ticket) return;
+
+  const draft = await draftChangeReply({
+    merchantName: alert.merchant.name ?? alert.merchant.shopDomain,
+    customerName: alert.ticket.customerName,
+    language: alert.ticket.language,
+    kind: alert.kind,
+    beforeValue: alert.beforeValue,
+    afterValue: alert.afterValue,
+    note: alert.message || null,
+    accepted: alert.status === 'ACKNOWLEDGED',
+    supplierNote: alert.supplierNote,
+    orderName: alert.orderName,
+    lastCustomerMessage: alert.ticket.messages[0]?.bodyText ?? null,
+  });
+
+  await prisma.draft.create({
+    data: {
+      merchantId,
+      ticketId: alert.ticket.id,
+      body: draft.body,
+      model: draft.model,
+      confidence: draft.confidence,
+      reasoning: draft.reasoning,
+      // Le résumé dit d'où vient ce brouillon : sans lui, l'agent découvre un
+      // texte qui parle d'un échange dont le fil ne dit rien.
+      summary: [
+        alert.status === 'ACKNOWLEDGED'
+          ? `L'atelier a confirmé : ${alert.beforeValue ?? '?'} → ${alert.afterValue ?? '?'}`
+          : `L'atelier ne peut pas : ${alert.supplierNote ?? 'motif non précisé'}`,
+      ],
+      ask:
+        alert.status === 'ACKNOWLEDGED'
+          ? 'Annoncer au client que le changement est pris en compte'
+          : 'Annoncer au client que le changement est impossible et proposer la suite',
+    },
+  });
+
+  /*
+   * Le mail remonte dans la file : le brouillon ne sert à rien s'il dort au
+   * fond d'une liste triée par date de dernier message. `NEEDS_REVIEW` est
+   * l'état qui dit « quelqu'un doit lire », et c'est exactement le cas.
+   */
+  await prisma.ticket.update({
+    where: { id: alert.ticket.id },
+    data: { status: 'NEEDS_REVIEW', lastMessageAt: new Date() },
+  });
 }
 
 export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<void> {
@@ -641,6 +729,23 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
         targetId: request.params.alertId,
         metadata: { note: parsed.data.note ?? null },
         ipAddress: request.ip,
+      });
+
+      /*
+       * Le brouillon au client se prépare ici, pas au clic du marchand.
+       *
+       * La réponse de l'atelier est une information de deux lignes qui
+       * obligeait pourtant à rouvrir le mail, relire le fil, retrouver ce
+       * qu'on avait demandé, puis écrire. Trente fois par jour, c'est la
+       * moitié du métier. Le brouillon attend donc déjà dans le mail quand
+       * l'agent y arrive.
+       *
+       * Fait après la réponse au fournisseur et sans la bloquer : son écran
+       * ne doit pas attendre un appel de modèle, et une IA en panne ne doit
+       * jamais empêcher un atelier de dire « c'est fait ».
+       */
+      void draftReplyAfterChange(request.params.alertId, workspace.merchantId).catch((error) => {
+        request.log.warn({ err: error, alertId: request.params.alertId }, 'Brouillon de réponse non généré');
       });
 
       return reply.send({ status: parsed.data.status });
