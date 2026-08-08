@@ -10,7 +10,7 @@ import { backfillMailbox, backfillProgress } from "../services/gmail/backfill.ts
 import { createOAuthClient, getGmailClient } from "../services/gmail/client.ts";
 import { loadLabelNames, loadLabelStyles, syncTicketLabels } from "../services/gmail/labels.ts";
 import { importMailboxHistory } from "../services/gmail/importHistory.ts";
-import { stopWatch } from "../services/gmail/watch.ts";
+import { startWatch, stopWatch } from "../services/gmail/watch.ts";
 import { ingestMerchantInbox } from "../services/tickets/ingest.ts";
 import { ShopifyScopeError } from "../services/shopify/client.ts";
 import { fetchShopPolicies, policiesToPlaybook } from "../services/shopify/policies.ts";
@@ -546,6 +546,82 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
       }
     },
   );
+
+  /**
+   * Relève incrémentale de toutes les boîtes, derrière le bouton « Actualiser ».
+   *
+   * « Actualiser » ne relisait que la base : quand la chaîne Pub/Sub tombe —
+   * une veille Gmail expirée, un abonnement en panne, un worker arrêté — rien
+   * n'entre plus, et le bouton répond « à l'instant » sur une file qui n'a pas
+   * bougé depuis la veille. Il fallait descendre dans Réglages et cliquer
+   * « Relever », c'est-à-dire connaître la panne pour la contourner.
+   *
+   * Rien à voir avec la relève manuelle des Réglages : celle-ci suit le
+   * curseur d'historique, un appel par boîte, et ne rattrape pas le passé.
+   * Assez légère pour tourner à chaque actualisation, y compris automatique.
+   *
+   * Aucune permission particulière : lire son courrier est le métier, pas un
+   * réglage. `configure` garde la relève profonde, qui elle réécrit la file.
+   */
+  app.post("/api/mailboxes/sync", async (request, reply) => {
+    const { merchantId } = request.session;
+
+    // Rallumer la veille est un geste délibéré, réservé au clic sur
+    // « Actualiser ». L'actualisation automatique passe toutes les minutes :
+    // sur une veille qui refuse de repartir — sujet Pub/Sub absent, projet
+    // Google mal configuré — elle réessaierait indéfiniment et noierait les
+    // journaux sous le même avertissement.
+    const revive = (request.body as { revive?: unknown } | null)?.revive === true;
+
+    const mailboxes = await prisma.gmailConnection.findMany({
+      where: { merchantId },
+      select: { id: true, emailAddress: true, watchExpiration: true },
+      orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
+    });
+
+    let ingested = 0;
+    let revived = 0;
+    const failed: string[] = [];
+
+    for (const mailbox of mailboxes) {
+      try {
+        /*
+         * Rallumer la veille au passage.
+         *
+         * Le watch Gmail expire au bout de sept jours ; le cron quotidien le
+         * renouvelle, mais s'il n'a pas tourné — machine arrêtée, tâche non
+         * déployée — la boîte devient muette et rien ne le dit. Le marchand
+         * voit alors une file qui ne bouge plus et un bouton qui répond « à
+         * l'instant ».
+         *
+         * Puisqu'on est ici pour aller chercher le courrier, autant remettre
+         * en marche l'arrivée automatique : c'est le geste qu'on descendait
+         * faire dans les Réglages, et il n'a aucune raison d'être manuel.
+         */
+        if (revive && (!mailbox.watchExpiration || mailbox.watchExpiration <= new Date())) {
+          try {
+            await startWatch(merchantId, mailbox.id);
+            revived += 1;
+          } catch (error) {
+            // Une veille qu'on n'arrive pas à rallumer n'empêche pas de
+            // relever : la relève manuelle est justement le filet.
+            request.log.warn({ err: error, mailboxId: mailbox.id }, "Watch non rallumé");
+          }
+        }
+
+        const result = await ingestMerchantInbox(merchantId, mailbox.id);
+        ingested += result.ingested;
+      } catch (error) {
+        // Une boîte en panne ne doit pas emporter les autres : deux adresses
+        // branchées, un jeton expiré sur l'une, et le courrier de la seconde
+        // continue d'entrer. L'échec est rendu, pas avalé.
+        request.log.error({ err: error, mailboxId: mailbox.id }, "Relève auto en échec");
+        failed.push(mailbox.emailAddress);
+      }
+    }
+
+    return reply.send({ ingested, revived, failed, mailboxes: mailboxes.length });
+  });
 
   /**
    * Libellés du marchand avec leurs couleurs Gmail.

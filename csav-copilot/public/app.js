@@ -7372,6 +7372,39 @@ $('set-brand-apply').addEventListener('click', async () => {
  * informée : sans rechargement, un agent qui laisse l'onglet ouvert toute la
  * matinée regarde une file figée à son arrivée.
  */
+/**
+ * Relève Gmail, tolérante à l'échec.
+ *
+ * Elle ne doit jamais empêcher l'actualisation : une boîte débranchée ou un
+ * jeton expiré rendraient la file impossible à recharger, alors que ce qui est
+ * déjà en base reste parfaitement lisible. Renvoie le nombre de messages
+ * entrés, ou `null` si la relève elle-même n'a pas abouti.
+ */
+async function pullMail({ revive = false } = {}) {
+  if (!state.me?.gmail?.connected) return null;
+
+  try {
+    const result = await api('/api/mailboxes/sync', {
+      method: 'POST',
+      body: JSON.stringify({ revive }),
+    });
+
+    // La veille rallumée se dit : c'est elle qui fera entrer le courrier tout
+    // seul ensuite, et le marchand doit savoir qu'il n'aura plus à cliquer.
+    if (result.revived > 0) toast('Arrivée automatique du courrier réactivée.');
+
+    // Une boîte muette parmi d'autres passerait inaperçue derrière un total
+    // qui monte : elle se nomme, une fois, au moment où on la découvre.
+    if (result.failed?.length) {
+      toast(`Relève impossible sur ${result.failed.join(', ')}.`, true);
+    }
+
+    return result.ingested ?? 0;
+  } catch {
+    return null;
+  }
+}
+
 async function refreshCurrent({ silent = false } = {}) {
   if (state.refreshing) return;
   state.refreshing = true;
@@ -7385,6 +7418,24 @@ async function refreshCurrent({ silent = false } = {}) {
   if (store) state[store].loaded = false;
 
   try {
+    /*
+     * Aller chercher le courrier avant de relire la base.
+     *
+     * « Actualiser » ne faisait que relire la base : quand la chaîne Pub/Sub
+     * tombe — veille Gmail expirée, abonnement en panne, worker arrêté — rien
+     * n'entre plus, et le bouton répond « à l'instant » sur une file qui n'a
+     * pas bougé depuis la veille. Il fallait descendre dans Réglages cliquer
+     * « Relever », donc connaître la panne pour la contourner.
+     *
+     * La relève suit le curseur d'historique : un appel par boîte, rien à
+     * rattraper. Assez légère pour tourner à chaque tour, y compris
+     * automatique.
+     */
+    // La veille ne se rallume qu'au clic : l'actualisation automatique passe
+    // toutes les minutes, et réessayer aussi souvent une veille qui refuse de
+    // repartir n'apporterait rien.
+    const fetched = await pullMail({ revive: !silent });
+
     const jobs = [state.view === 'tickets' ? loadQueue() : VIEW_LOADERS[state.view]?.()];
 
     // Les indicateurs et le compteur de la navigation décrivent la file : ils
@@ -7393,6 +7444,17 @@ async function refreshCurrent({ silent = false } = {}) {
 
     await Promise.all(jobs.filter(Boolean));
     state.lastRefresh = Date.now();
+
+    // Le courrier ramené se dit, sinon rien ne distingue une relève qui a
+    // trouvé quelque chose d'une relève qui n'a rien trouvé — et c'est
+    // exactement la question qu'on se pose en cliquant.
+    if (!silent && fetched !== null) {
+      toast(
+        fetched > 0
+          ? `${fetched} nouveau${fetched > 1 ? 'x' : ''} message${fetched > 1 ? 's' : ''}.`
+          : 'Aucun nouveau message.',
+      );
+    }
   } catch (error) {
     if (!silent) toast(error.message ?? 'Actualisation impossible', true);
   } finally {
