@@ -7,6 +7,9 @@ import { prisma } from '../lib/prisma.ts';
 import { requirePermission, requireSession } from '../plugins/auth.ts';
 import { createEscalation, resolveEscalation, sendEscalation } from '../services/suppliers/escalate.ts';
 import { sendPlainEmail } from '../services/gmail/send.ts';
+import { getShopifyClient } from '../services/shopify/client.ts';
+import { listOrders } from '../services/shopify/orders.ts';
+import { ordersForSupplier } from '../services/suppliers/routing.ts';
 
 const supplierBody = z.object({
   name: z.string().min(1).max(200),
@@ -53,10 +56,129 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
         phone: supplier.phone,
         active: supplier.active,
         ordersAccess: supplier.ordersAccess,
+        vendors: supplier.vendors,
+        skuPrefixes: supplier.skuPrefixes,
+        isDefault: supplier.isDefault,
         notes: supplier.notes,
         createdAt: supplier.createdAt,
         openEscalations: supplier._count.escalations,
       })),
+    });
+  });
+
+  /**
+   * Le poste de pilotage des ateliers — tout ce que la table ne disait pas.
+   *
+   * Par fournisseur : ce qu'il a à préparer maintenant (les commandes non
+   * expédiées que ses règles lui affectent), ce qu'il a produit (colis du
+   * jour, des 30 jours, part avec photo), et ce qui attend chez lui
+   * (escalades, demandes de changement, avec l'âge de la plus ancienne).
+   * L'écran doit répondre à la question du matin : « est-ce que mes ateliers
+   * travaillent, et sur quoi ? » — sans ouvrir chaque fiche.
+   */
+  app.get('/api/suppliers/hub', async (request, reply) => {
+    const { merchantId } = request.session;
+
+    const suppliers = await prisma.supplier.findMany({
+      where: { merchantId },
+      orderBy: [{ active: 'desc' }, { name: 'asc' }],
+      select: {
+        id: true,
+        name: true,
+        active: true,
+        vendors: true,
+        skuPrefixes: true,
+        isDefault: true,
+      },
+    });
+    if (suppliers.length === 0) return reply.send({ suppliers: [] });
+
+    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    // Les commandes à préparer, réparties par les mêmes règles que l'atelier :
+    // le chiffre affiché ici et la liste que voit le fournisseur ne peuvent
+    // pas diverger, ils sortent du même calcul.
+    let unfulfilled: Awaited<ReturnType<typeof listOrders>>['orders'] = [];
+    let shopifyError: string | null = null;
+    try {
+      const client = await getShopifyClient(merchantId);
+      ({ orders: unfulfilled } = await listOrders(client, {
+        query: 'fulfillment_status:unfulfilled',
+        limit: 100,
+      }));
+    } catch {
+      shopifyError = 'Commandes Shopify injoignables — les « à préparer » manquent.';
+    }
+
+    const [alerts, escalations, parcels] = await Promise.all([
+      prisma.supplierAlert.findMany({
+        where: { merchantId, status: 'PENDING' },
+        select: { supplierId: true, createdAt: true },
+      }),
+      prisma.supplierEscalation.groupBy({
+        by: ['supplierId'],
+        where: { merchantId, status: { in: ['OPEN', 'ANSWERED'] } },
+        _count: true,
+      }),
+      prisma.parcel.findMany({
+        where: { merchantId, createdAt: { gte: monthAgo } },
+        select: {
+          createdAt: true,
+          photoMime: true,
+          escalation: { select: { supplierId: true } },
+        },
+      }),
+    ]);
+
+    const escalationCounts = new Map(
+      escalations.map((row) => [row.supplierId, row._count]),
+    );
+
+    const defaultId = suppliers.find((supplier) => supplier.isDefault)?.id ?? null;
+
+    return reply.send({
+      shopifyError,
+      suppliers: suppliers.map((supplier) => {
+        const others = suppliers.filter((other) => other.id !== supplier.id && other.active);
+        const toPrepare = supplier.active
+          ? ordersForSupplier(unfulfilled, supplier, others, []).length
+          : 0;
+
+        // Les colis d'un atelier : ceux de ses escalades, et — pour l'atelier
+        // par défaut — ceux saisis depuis un lien atelier sans escalade, qui
+        // sont les siens dans l'immense majorité des boutiques à un atelier.
+        const mine = parcels.filter((parcel) =>
+          parcel.escalation?.supplierId
+            ? parcel.escalation.supplierId === supplier.id
+            : supplier.id === defaultId,
+        );
+
+        const pending = alerts.filter((alert) => alert.supplierId === supplier.id);
+        const oldest = pending.reduce(
+          (worst, alert) => (worst && worst < alert.createdAt ? worst : alert.createdAt),
+          null as Date | null,
+        );
+
+        return {
+          id: supplier.id,
+          toPrepare,
+          parcelsToday: mine.filter((parcel) => parcel.createdAt >= dayAgo).length,
+          parcels30d: mine.length,
+          photoRate: mine.length
+            ? Math.round(
+                (mine.filter((parcel) => parcel.photoMime).length / mine.length) * 100,
+              )
+            : null,
+          lastParcelAt: mine.reduce(
+            (last, parcel) => (last && last > parcel.createdAt ? last : parcel.createdAt),
+            null as Date | null,
+          ),
+          pendingChanges: pending.length,
+          oldestPendingAt: oldest,
+          openEscalations: escalationCounts.get(supplier.id) ?? 0,
+        };
+      }),
     });
   });
 

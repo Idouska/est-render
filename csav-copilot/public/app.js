@@ -3190,33 +3190,90 @@ $('supplier-edit-toggle').addEventListener('click', () => setView('suppliers'));
 
 /* --------------------------------------------------------- fournisseurs -- */
 
+/**
+ * Le poste de pilotage des ateliers.
+ *
+ * Une carte par fournisseur, qui répond à la question du matin sans ouvrir
+ * une seule fiche : qu'a-t-il à préparer, qu'a-t-il produit, qu'est-ce qui
+ * attend chez lui — et son lien atelier à portée de clic. La table qui vivait
+ * ici ne montrait que l'email et le téléphone : un carnet d'adresses sur
+ * l'écran d'où l'on pilote la production.
+ */
 function renderSuppliers() {
   const rows = state.suppliers;
+  const hub = state.supplierHub ?? {};
 
   $('suppliers-rows').innerHTML =
     rows
-      .map(
-        (supplier) => `<tr class="grid-row${supplier.active ? '' : ' muted'}" data-supplier="${esc(supplier.id)}">
-          <td><b>${esc(supplier.name)}</b>${
-            supplier.contactName ? `<br><span class="sub">${esc(supplier.contactName)}</span>` : ''
-          }</td>
-          <td class="mono">${esc(supplier.contactEmail)}</td>
-          <td class="mono">${esc(supplier.phone ?? '—')}</td>
-          <td class="num mono">${
-            supplier.openEscalations > 0
-              ? `<span class="tag tone-wait">${supplier.openEscalations}</span>`
-              : '<span class="sub">0</span>'
-          }</td>
-          <td>${
-            supplier.active
-              ? '<span class="tag tone-ok">Actif</span>'
-              : '<span class="tag tone-mute">Désactivé</span>'
-          }</td>
-          <td><button class="btn btn-small">Modifier</button></td>
-        </tr>`,
-      )
+      .map((supplier) => {
+        const stats = hub[supplier.id] ?? {};
+        const rules = [
+          ...(supplier.vendors ?? []).map((vendor) => `<span class="tag tag-order">${esc(vendor)}</span>`),
+          ...(supplier.skuPrefixes ?? []).map((prefix) => `<span class="tag tag-order mono">${esc(prefix)}*</span>`),
+          ...(supplier.isDefault ? ['<span class="tag tone-ok">Atelier par défaut</span>'] : []),
+        ];
+
+        const waiting = (stats.pendingChanges ?? 0) + (stats.openEscalations ?? 0);
+        const oldestDays = stats.oldestPendingAt
+          ? Math.floor((Date.now() - new Date(stats.oldestPendingAt).getTime()) / 86400000)
+          : 0;
+
+        return `<article class="supc${supplier.active ? '' : ' muted'}" data-supplier="${esc(supplier.id)}">
+          <div class="supc-head">
+            <b>${esc(supplier.name)}</b>
+            ${
+              supplier.active
+                ? '<span class="tag tone-ok">Actif</span>'
+                : '<span class="tag tone-mute">Désactivé</span>'
+            }
+            <button class="btn btn-small" data-sup-edit="${esc(supplier.id)}"
+              style="margin-left:auto">Modifier</button>
+          </div>
+
+          <p class="supc-contact">${esc(supplier.contactEmail)}${
+            supplier.phone ? ` · ${esc(supplier.phone)}` : ''
+          }</p>
+
+          <div class="supc-rules">${
+            rules.length
+              ? rules.join('')
+              : '<span class="tag tone-wait">Aucune règle — cet atelier ne reçoit rien automatiquement</span>'
+          }</div>
+
+          <div class="supc-stats">
+            <div class="supc-stat"><b>${stats.toPrepare ?? '—'}</b><span>à préparer</span></div>
+            <div class="supc-stat"><b>${stats.parcelsToday ?? 0}</b><span>colis aujourd'hui</span></div>
+            <div class="supc-stat${waiting > 0 ? ' hot' : ''}">
+              <b>${waiting}</b><span>en attente${
+                waiting > 0 && oldestDays >= 2 ? ` · ${oldestDays} j` : ''
+              }</span>
+            </div>
+            <div class="supc-stat"><b>${stats.parcels30d ?? 0}</b><span>colis / 30 j${
+              stats.photoRate != null ? ` · ${stats.photoRate}% photo` : ''
+            }</span></div>
+          </div>
+
+          <p class="supc-last">${
+            stats.lastParcelAt
+              ? `Dernier colis ${esc(relativeTime(stats.lastParcelAt))}`
+              : 'Aucun colis saisi encore'
+          }</p>
+
+          <div class="supc-acts">
+            <button class="btn btn-small btn-primary" data-sup-link="${esc(supplier.id)}">
+              Copier le lien atelier
+            </button>
+            <button class="btn btn-small" data-sup-open="${esc(supplier.id)}">Ouvrir l'atelier</button>
+            ${
+              waiting > 0
+                ? `<button class="btn btn-small" data-sup-updates="1">Voir ce qui attend</button>`
+                : ''
+            }
+          </div>
+        </article>`;
+      })
       .join('') ||
-    '<tr><td colspan="7" class="empty">Aucun contact. Ajoutez le fournisseur, le transporteur ou l’atelier que vous sollicitez le plus.</td></tr>';
+    '<p class="empty" style="padding:20px">Aucun contact. Ajoutez le fournisseur, le transporteur ou l’atelier que vous sollicitez le plus.</p>';
 
   const active = activeSuppliers().length;
   $('suppliers-count').textContent = rows.length
@@ -3224,8 +3281,48 @@ function renderSuppliers() {
     : '';
 
   $('suppliers-rows')
-    .querySelectorAll('.grid-row')
-    .forEach((row) => row.addEventListener('click', () => openSupplierForm(row.dataset.supplier)));
+    .querySelectorAll('[data-sup-edit]')
+    .forEach((button) =>
+      button.addEventListener('click', () => openSupplierForm(button.dataset.supEdit)),
+    );
+
+  // Le lien atelier, copié ou ouvert : émis à la demande, jamais stocké.
+  $('suppliers-rows')
+    .querySelectorAll('[data-sup-link], [data-sup-open]')
+    .forEach((button) =>
+      button.addEventListener('click', async () => {
+        const id = button.dataset.supLink ?? button.dataset.supOpen;
+        try {
+          const { url } = await api(`/api/suppliers/${id}/portal-link`, { method: 'POST' });
+          if (button.dataset.supOpen) {
+            window.open(url, '_blank', 'noopener');
+          } else {
+            await navigator.clipboard.writeText(url);
+            toast('Lien atelier copié — transmettez-le au fournisseur.');
+          }
+        } catch (error) {
+          toast(error.message, true);
+        }
+      }),
+    );
+
+  $('suppliers-rows')
+    .querySelectorAll('[data-sup-updates]')
+    .forEach((button) => button.addEventListener('click', () => setView('changes')));
+}
+
+/** Chiffres du hub, chargés après la liste : l'écran paraît, puis se remplit. */
+async function loadSupplierHub() {
+  try {
+    const data = await api('/api/suppliers/hub');
+    state.supplierHub = Object.fromEntries(
+      (data.suppliers ?? []).map((row) => [row.id, row]),
+    );
+    if (data.shopifyError) toast(data.shopifyError, true);
+  } catch {
+    return;
+  }
+  if (state.view === 'suppliers') renderSuppliers();
 }
 
 /** « Nike, Adidas ,, » → ['Nike', 'Adidas']. Les vides sont écartés. */
@@ -6057,6 +6154,7 @@ const VIEW_LOADERS = {
   suppliers: () => {
     renderSuppliers();
     void renderSupplierActivity();
+    void loadSupplierHub();
   },
   changes: () => loadChanges(),
   returns: () => loadReturns(),
