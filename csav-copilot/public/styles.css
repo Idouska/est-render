@@ -5641,3 +5641,14 @@ textarea:focus-visible {
 }
 
 #ret-body input[type='checkbox'] { accent-color: var(--accent); width: 15px; height: 15px; }
+
+/* État vide qui explique le circuit au lieu de constater le néant. */
+.empty-block {
+  padding: 26px 22px;
+  max-width: 560px;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.empty-block b { display: block; margin-bottom: 6px; color: var(--ink); font-size: 15px; }
+.empty-block p { margin: 0 0 8px; }

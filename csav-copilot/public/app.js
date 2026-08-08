@@ -1966,7 +1966,7 @@ function prefetchTicket(id) {
   setTimeout(() => prefetched.delete(id), 30_000);
 }
 
-async function selectTicket(id) {
+async function selectTicket(id, { silent = false } = {}) {
   state.currentId = id;
 
   // Retour visuel immédiat, avant toute requête : la ligne cliquée s'allume
@@ -1982,7 +1982,9 @@ async function selectTicket(id) {
   // réponse sans ticket : mieux vaut un message que l'écran blanc laissé par
   // une exception au milieu du rendu.
   if (!detail?.ticket) {
-    toast('Ce message n’existe plus.', true);
+    // À l'ouverture automatique du premier message, l'erreur ne se dit pas :
+    // personne n'a rien demandé, un toast rouge au démarrage accuse à vide.
+    if (!silent) toast('Ce message n’existe plus.', true);
     await loadQueue();
     return;
   }
@@ -4710,7 +4712,10 @@ function renderRefundRows() {
             <td class="num mono">${euro(refund.amount, refund.currency ?? 'EUR')}</td>
           </tr>`,
         )
-        .join('') || '<tr><td colspan="7" class="empty">Aucun remboursement.</td></tr>';
+        .join('') ||
+      `<tr><td colspan="7" class="empty">Aucun remboursement pour l'instant.
+        Ils se créent depuis un mail client (bouton « Rembourser ») et
+        s'exécutent sur Shopify après validation — chacun laissera sa ligne ici.</td></tr>`;
 
     // La ligne mène à la commande : c'est la question qui suit toujours un
     // montant remboursé — sur quoi, et pourquoi.
@@ -5258,8 +5263,15 @@ function renderReturnCases(box) {
   const silentSince = Date.now() - 3 * 24 * 60 * 60 * 1000;
 
   if (items.length === 0) {
-    box.innerHTML =
-      '<p class="empty" style="padding:20px">Aucun dossier en cours. « Nouveau retour » ouvre le premier.</p>';
+    box.innerHTML = `<div class="empty-block">
+      <b>Aucun dossier de retour en cours.</b>
+      <p>Le circuit : le client renvoie → l'agence du pays réceptionne → la
+      paire contrôlée entre au stock France → la prochaine commande du même
+      article part de ce stock, livrée en trois jours au lieu de quinze.</p>
+      <p>« Nouveau retour » ouvre le premier dossier — tapez le numéro de
+      commande, le reste se remplit tout seul. Pensez d'abord à renseigner
+      vos agences dans l'onglet Agences.</p>
+    </div>`;
     return;
   }
 
@@ -8446,7 +8458,7 @@ async function boot() {
     loadShops(),
   ]);
 
-  if (state.tickets.length > 0) await selectTicket(state.tickets[0].id);
+  if (state.tickets.length > 0) await selectTicket(state.tickets[0].id, { silent: true });
 }
 
 boot();
