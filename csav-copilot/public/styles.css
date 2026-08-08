@@ -6164,3 +6164,10 @@ textarea:focus-visible {
 
 /* Les vignettes du catalogue à l'échelle de la ligne. */
 .grid .thumb { width: 24px; height: 24px; border-radius: 4px; }
+
+/* Le bandeau « Simulation » en petite largeur : côte à côte, l'étiquette
+   comprimait le texte en colonne de quatre mots qui avalait tout l'écran.
+   Empilé, il redevient trois lignes. */
+@media (max-width: 700px) {
+  .notice { flex-direction: column; gap: 6px; }
+}

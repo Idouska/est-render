@@ -4527,7 +4527,10 @@ async function loadCatalog({ reset = false } = {}) {
   try {
     const path = store.kind === 'products' ? 'products' : 'collections';
     const page = await api(`/api/${path}?${params}`);
-    store.items = store.items.concat(page[path]);
+    // `concat(undefined)` insère littéralement `undefined` dans la liste, et
+    // le rendu tombe sur `product.image` — l'écran affichait l'erreur au lieu
+    // du catalogue dès que la réponse n'avait pas la forme attendue.
+    store.items = store.items.concat(page[path] ?? []);
     store.cursor = page.cursor;
     store.hasNext = page.hasNextPage;
     store.loaded = true;
@@ -4648,7 +4651,8 @@ async function loadTracking() {
   body.innerHTML = '<tr><td colspan="6" class="empty">Chargement…</td></tr>';
 
   try {
-    const { shipments } = await api('/api/tracking?limit=50');
+    const data = await api('/api/tracking?limit=50');
+    const shipments = data.shipments ?? [];
 
     body.innerHTML =
       shipments
@@ -4756,7 +4760,10 @@ async function loadRefunds() {
 
   try {
     const data = await api(`/api/refunds?days=${refundDays}`);
-    const { refunds, totals } = data;
+    // Une réponse sans totaux ne doit pas remplacer l'écran par une erreur de
+    // lecture : des zéros disent la même chose, lisiblement.
+    const refunds = data.refunds ?? [];
+    const totals = data.totals ?? {};
 
     $('refunds-range')
       .querySelectorAll('button')
@@ -4772,10 +4779,10 @@ async function loadRefunds() {
     $('refunds-kpis').innerHTML = [
       [
         'Part du CA remboursée',
-        data.refundRate === null
+        data.refundRate == null
           ? '—'
           : `${(data.refundRate * 100).toFixed(1).replace('.', ',')} %`,
-        data.revenue === null
+        data.revenue == null
           ? 'chiffre d’affaires indisponible'
           : `${euro(data.refundedTotal, 'EUR')} sur ${euro(data.revenue, 'EUR')}`,
       ],
@@ -6725,10 +6732,16 @@ function orderDetailMarkup(order) {
 
   const items = (order.lineItems ?? [])
     .map(
-      (item) => `<div class="ordv-item">
+      (item) => {
+        // L'API sert `image` en chaîne plate (voir services/shopify/orders.ts) ;
+        // Shopify brut l'enveloppe dans `{ url }`. Lire les deux formes — ne
+        // lire que l'objet laissait une vignette grise sur chaque article,
+        // exactement comme trackingInfo en son temps.
+        const imageUrl = typeof item.image === 'string' ? item.image : item.image?.url;
+        return `<div class="ordv-item">
         ${
-          item.image?.url
-            ? `<img src="${esc(item.image.url)}" alt="" loading="lazy" />`
+          imageUrl
+            ? `<img src="${esc(imageUrl)}" alt="" loading="lazy" />`
             : '<span class="ordv-noimg"></span>'
         }
         <div>
@@ -6739,7 +6752,8 @@ function orderDetailMarkup(order) {
             .join(' · ')}</span>
         </div>
         <span class="ordv-qty mono">× ${item.quantity}</span>
-      </div>`,
+      </div>`;
+      },
     )
     .join('');
 
