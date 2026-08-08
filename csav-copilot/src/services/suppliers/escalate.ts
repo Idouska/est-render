@@ -4,6 +4,7 @@ import { signSupplierToken } from '../../lib/supplierToken.ts';
 import { prisma } from '../../lib/prisma.ts';
 import { generateSupplierDraft } from '../ai/supplierDraft.ts';
 import { sendPlainEmail } from '../gmail/send.ts';
+import { escalationHtml, escalationSubject, escalationText } from './notifyEmail.ts';
 import { getShopifyClient } from '../shopify/client.ts';
 import { formatAddress, getOrderById } from '../shopify/orders.ts';
 
@@ -142,19 +143,29 @@ export async function sendEscalation(params: {
   });
   const portalUrl = `${env.APP_URL}/supplier/${escalation.id}?token=${token}`;
 
+  const merchant = await prisma.merchant.findUniqueOrThrow({
+    where: { id: params.merchantId },
+    select: { name: true, brandName: true, shopDomain: true },
+  });
+
+  const context = {
+    merchantName: merchant.brandName || merchant.name || merchant.shopDomain,
+    supplierName: escalation.supplier.name,
+    // Le numéro de commande, jamais l'identifiant interne : « commande
+    // cmsj3nfsu000liz01f92sk2c7 » en objet ne disait rien au destinataire et
+    // envoyait le message droit en indésirables.
+    orderName: escalation.ticket.orderName,
+    reason: escalation.reason,
+    portalUrl,
+  };
+
   await sendPlainEmail({
     merchantId: params.merchantId,
     to: escalation.supplier.contactEmail,
-    subject: `Nouvelle demande — commande ${escalation.ticket.orderName ?? escalation.ticketId}`,
-    body: [
-      `Bonjour,`,
-      ``,
-      `Une nouvelle demande concernant une commande nécessite votre attention.`,
-      `Consultez le détail et répondez directement ici :`,
-      portalUrl,
-      ``,
-      `Ce lien est personnel, ne le transférez pas.`,
-    ].join('\n'),
+    fromName: context.merchantName,
+    subject: escalationSubject(context),
+    body: escalationText(context),
+    html: escalationHtml(context),
   });
 
   await prisma.$transaction([

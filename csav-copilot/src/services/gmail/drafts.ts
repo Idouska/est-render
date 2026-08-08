@@ -13,28 +13,67 @@ function encodeHeaderValue(value: string): string {
 export function buildRawEmail(params: {
   to: string;
   from: string;
+  /** Nom affiché à côté de l'adresse : « Running Upscale » plutôt que l'adresse nue. */
+  fromName?: string | null;
   subject: string;
   body: string;
+  /**
+   * Version HTML, envoyée en alternative au texte.
+   *
+   * Un mail tout en texte brut contenant une URL de trois cents caractères
+   * ressemble à un hameçonnage — c'est ainsi que la notification d'escalade
+   * finissait en indésirables. Avec une part HTML, le lien devient un bouton
+   * et le pavé de jeton disparaît de la vue.
+   */
+  html?: string | null;
   inReplyToMessageId?: string | null;
   references?: string | null;
 }): string {
-  const headers = [
-    `From: ${params.from}`,
-    `To: ${params.to}`,
-    `Subject: ${encodeHeaderValue(params.subject)}`,
-    'MIME-Version: 1.0',
-    'Content-Type: text/plain; charset="UTF-8"',
-    'Content-Transfer-Encoding: base64',
-  ];
+  const from = params.fromName
+    ? `${encodeHeaderValue(params.fromName)} <${params.from}>`
+    : params.from;
+
+  const headers = [`From: ${from}`, `To: ${params.to}`, `Subject: ${encodeHeaderValue(params.subject)}`, 'MIME-Version: 1.0'];
 
   if (params.inReplyToMessageId) {
     headers.push(`In-Reply-To: ${params.inReplyToMessageId}`);
     headers.push(`References: ${params.references ?? params.inReplyToMessageId}`);
   }
 
-  const mime = `${headers.join('\r\n')}\r\n\r\n${Buffer.from(params.body, 'utf8').toString(
-    'base64',
-  )}`;
+  const encode = (content: string) => Buffer.from(content, 'utf8').toString('base64');
+
+  let mime: string;
+
+  if (params.html) {
+    /*
+     * `multipart/alternative` : le même message en deux habits.
+     *
+     * Le client de messagerie choisit ce qu'il sait afficher. Les deux parts
+     * doivent dire la même chose — un texte de remplacement qui diffère du
+     * HTML est un signal de courrier indésirable, pas une commodité.
+     */
+    const boundary = `csav-${Date.now().toString(36)}`;
+    headers.push(`Content-Type: multipart/alternative; boundary="${boundary}"`);
+
+    mime = [
+      headers.join('\r\n'),
+      '',
+      `--${boundary}`,
+      'Content-Type: text/plain; charset="UTF-8"',
+      'Content-Transfer-Encoding: base64',
+      '',
+      encode(params.body),
+      `--${boundary}`,
+      'Content-Type: text/html; charset="UTF-8"',
+      'Content-Transfer-Encoding: base64',
+      '',
+      encode(params.html),
+      `--${boundary}--`,
+    ].join('\r\n');
+  } else {
+    headers.push('Content-Type: text/plain; charset="UTF-8"', 'Content-Transfer-Encoding: base64');
+    mime = `${headers.join('\r\n')}\r\n\r\n${encode(params.body)}`;
+  }
 
   return Buffer.from(mime, 'utf8')
     .toString('base64')

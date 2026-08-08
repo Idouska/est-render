@@ -21,6 +21,10 @@ export async function sendPlainEmail(params: {
   to: string;
   subject: string;
   body: string;
+  /** Nom affiché de l'expéditeur — la boutique, pas l'adresse technique. */
+  fromName?: string | null;
+  /** Version HTML, pour les messages qui portent un lien ou une mise en forme. */
+  html?: string | null;
 }): Promise<{ gmailMessageId: string | null; fromEmail: string }> {
   if (env.GMAIL_MOCK) {
     logger.info({ to: params.to, subject: params.subject }, 'Gmail simulé : envoi direct non effectué');
@@ -35,8 +39,10 @@ export async function sendPlainEmail(params: {
       raw: buildRawEmail({
         to: params.to,
         from: emailAddress,
+        fromName: params.fromName,
         subject: params.subject,
         body: params.body,
+        html: params.html,
       }),
     },
   });
