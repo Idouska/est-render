@@ -2,11 +2,13 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { env } from '../config/env.ts';
 import { recordAudit } from '../lib/audit.ts';
+import { logger } from '../lib/logger.ts';
 import { prisma } from '../lib/prisma.ts';
 import { PERMISSIONS, PREVIEW_COOKIE, requirePermission, requireSession } from '../plugins/auth.ts';
 import { enqueueTicket } from '../queue/index.ts';
 import { accessibleMerchantIds, listShopsFor } from './shops.ts';
 import { sendDraft, updateDraftBody } from '../services/gmail/drafts.ts';
+import { syncTicketThread } from '../services/gmail/thread.ts';
 import { sendPlainEmail } from '../services/gmail/send.ts';
 import { getShopifyClient, ShopifyError } from '../services/shopify/client.ts';
 import { listVariants } from '../services/shopify/catalog.ts';
@@ -161,6 +163,50 @@ async function listMerchantLabels(merchantIds: string[]): Promise<string[]> {
   `;
 
   return rows.map((row) => row.label);
+}
+
+/**
+ * Consigne une réponse partie dans le fil du ticket.
+ *
+ * Les messages sortants n'étaient enregistrés nulle part : l'ingestion ne
+ * ramasse que la boîte de réception, et l'envoi ne laissait qu'une ligne de
+ * journal. Le « fil complet » montrait donc une conversation où le client
+ * parle seul, l'agent suivant croyait le message oublié et répondait deux
+ * fois — et le corpus d'apprentissage de l'IA, qui cherche des paires
+ * question/réponse, ne trouvait jamais une seule réponse.
+ *
+ * Tolérante à l'échec : le mail est déjà parti quand on arrive ici. Rater la
+ * trace est regrettable, refuser l'envoi pour autant serait pire.
+ */
+async function recordOutbound(params: {
+  merchantId: string;
+  ticketId: string;
+  gmailMessageId: string | null;
+  fromEmail: string;
+  toEmail: string | null;
+  subject: string | null;
+  body: string;
+}): Promise<void> {
+  try {
+    await prisma.message.create({
+      data: {
+        merchantId: params.merchantId,
+        ticketId: params.ticketId,
+        // Sans identifiant Gmail (simulation), une clé locale suffit : elle
+        // ne sert qu'à garantir l'unicité.
+        gmailMessageId: params.gmailMessageId ?? `local-${params.ticketId}-${Date.now()}`,
+        direction: 'OUTBOUND',
+        fromEmail: params.fromEmail,
+        toEmail: params.toEmail,
+        subject: params.subject,
+        bodyText: params.body,
+        snippet: params.body.slice(0, 200),
+        receivedAt: new Date(),
+      },
+    });
+  } catch (error) {
+    logger.warn({ err: error, ticketId: params.ticketId }, 'Réponse non consignée dans le fil');
+  }
 }
 
 export async function ticketRoutes(app: FastifyInstance): Promise<void> {
@@ -1133,6 +1179,18 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
     // La lecture s'élargit, l'action non — c'est signalé par `readOnly`.
     const readable = await accessibleMerchantIds({ merchantId, email });
 
+    /*
+     * Relecture du fil, une fois par ticket.
+     *
+     * Les réponses de l'équipe n'ont jamais été enregistrées : ni celles
+     * envoyées depuis l'outil avant ce correctif, ni celles tapées
+     * directement dans Gmail. Le fil montrait donc un client qui parle seul.
+     * On les rapatrie à la première ouverture — bloquant, parce qu'un fil
+     * complété après coup n'aiderait personne, et une seule fois, parce que
+     * le marqueur `threadSyncedAt` le dit.
+     */
+    await syncTicketThread(merchantId, request.params.id).catch(() => 0);
+
     const ticket = await prisma.ticket.findFirst({
       where: { id: request.params.id, merchantId: { in: readable } },
       include: {
@@ -1406,15 +1464,28 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(409).send({ error: 'Aucun brouillon Gmail associé' });
     }
 
-    await sendDraft(merchantId, draft.gmailDraftId, draft.ticket.mailboxId);
+    const sent = await sendDraft(merchantId, draft.gmailDraftId, draft.ticket.mailboxId);
 
     await prisma.$transaction([
       prisma.draft.update({
         where: { id: draft.id },
         data: { status: 'SENT', sentAt: new Date() },
       }),
-      prisma.ticket.update({ where: { id: draft.ticketId }, data: { status: 'CLOSED' } }),
+      prisma.ticket.update({
+        where: { id: draft.ticketId },
+        data: { status: 'CLOSED', lastMessageAt: new Date() },
+      }),
     ]);
+
+    await recordOutbound({
+      merchantId,
+      ticketId: draft.ticketId,
+      gmailMessageId: sent.gmailMessageId,
+      fromEmail: sent.fromEmail,
+      toEmail: draft.ticket.customerEmail,
+      subject: draft.ticket.subject,
+      body: draft.body,
+    });
 
     await recordAudit({
       merchantId,
@@ -1446,6 +1517,14 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
           to: z.string().email(),
           subject: z.string().min(1).max(200),
           body: z.string().min(1).max(20000),
+          /**
+           * Ticket auquel rattacher la réponse, quand elle en poursuit un.
+           *
+           * L'écran « Écrire au client » part d'un mail ouvert : la réponse
+           * appartient à ce fil, et doit s'y lire. Sans ce rattachement, elle
+           * partait sans laisser de trace nulle part.
+           */
+          ticketId: z.string().max(40).optional(),
         })
         .safeParse(request.body);
 
@@ -1454,9 +1533,20 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
       }
 
       const { merchantId, userId } = request.session;
+      const { ticketId, ...email } = parsed.data;
 
+      // La boîte d'envoi est celle qui a reçu le message : répondre depuis une
+      // autre adresse que celle à laquelle le client a écrit le désoriente.
+      const ticket = ticketId
+        ? await prisma.ticket.findFirst({
+            where: { id: ticketId, merchantId },
+            select: { id: true, mailboxId: true, subject: true },
+          })
+        : null;
+
+      let sent: { gmailMessageId: string | null; fromEmail: string };
       try {
-        await sendPlainEmail({ merchantId, ...parsed.data });
+        sent = await sendPlainEmail({ merchantId, mailboxId: ticket?.mailboxId, ...email });
       } catch (error) {
         request.log.error({ err: error }, 'Envoi de message libre en échec');
         return reply.code(502).send({
@@ -1465,12 +1555,31 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
         });
       }
 
+      if (ticket) {
+        await recordOutbound({
+          merchantId,
+          ticketId: ticket.id,
+          gmailMessageId: sent.gmailMessageId,
+          fromEmail: sent.fromEmail,
+          toEmail: email.to,
+          subject: email.subject,
+          body: email.body,
+        });
+
+        // Le fil vient de bouger : l'ancienneté du ticket repart de cette
+        // réponse, pas du dernier mot du client.
+        await prisma.ticket.update({
+          where: { id: ticket.id },
+          data: { lastMessageAt: new Date() },
+        });
+      }
+
       await recordAudit({
         merchantId,
         actorType: 'USER',
         actorId: userId,
         action: 'email.sent',
-        metadata: { to: parsed.data.to, subject: parsed.data.subject },
+        metadata: { to: email.to, subject: email.subject, ticketId: ticket?.id ?? null },
         ipAddress: request.ip,
       });
 

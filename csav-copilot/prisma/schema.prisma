@@ -248,6 +248,14 @@ model Ticket {
   isHistorical Boolean @default(false)
 
   lastMessageAt DateTime
+  /// Date à laquelle le fil Gmail complet a été relu pour ce ticket.
+  ///
+  /// L'ingestion ne ramasse que la boîte de réception : les réponses de
+  /// l'équipe n'entraient jamais en base, et le fil affichait un client qui
+  /// parle seul. La relecture du fil les rapatrie, une fois par ticket — ce
+  /// champ dit que c'est fait, sans quoi chaque ouverture rappellerait Gmail.
+  threadSyncedAt DateTime?
+
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

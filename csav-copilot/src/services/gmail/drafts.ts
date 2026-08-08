@@ -127,14 +127,19 @@ export async function sendDraft(
   merchantId: string,
   draftId: string,
   mailboxId?: string | null,
-): Promise<void> {
+): Promise<{ gmailMessageId: string | null; fromEmail: string }> {
   if (env.GMAIL_MOCK) {
     logger.info({ draftId }, 'Gmail simulé : aucun mail envoyé');
-    return;
+    return { gmailMessageId: null, fromEmail: 'simulation@local' };
   }
 
   // Le brouillon appartient à une boîte précise : le poster depuis une autre
   // échouerait, l'identifiant y étant inconnu.
-  const { gmail } = await getGmailClient(merchantId, mailboxId);
-  await gmail.users.drafts.send({ userId: 'me', requestBody: { id: draftId } });
+  const { gmail, emailAddress } = await getGmailClient(merchantId, mailboxId);
+  const sent = await gmail.users.drafts.send({ userId: 'me', requestBody: { id: draftId } });
+
+  // L'identifiant du message parti : c'est lui qui permet de consigner la
+  // réponse dans le fil. Sans elle, l'agent relit une conversation où le
+  // client parle seul — et l'IA apprend d'un corpus sans aucune réponse.
+  return { gmailMessageId: sent.data.id ?? null, fromEmail: emailAddress };
 }

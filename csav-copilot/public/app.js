@@ -1590,9 +1590,12 @@ $('compose-send')?.addEventListener('click', async () => {
           to: ticket.customerEmail,
           subject: `Re: ${ticket.subject ?? 'votre commande'}`,
           body: text,
+          // Rattaché au fil : la réponse s'écrit dans la conversation, elle
+          // ne part pas dans le vide.
+          ticketId: ticket.id,
         }),
       });
-      toast('Message envoyé au client.');
+      toast('Message envoyé au client — visible dans le fil.');
     } else {
       const { escalation } = await api(`/api/tickets/${ticket.id}/escalations`, {
         method: 'POST',
@@ -2136,11 +2139,19 @@ function renderDetail() {
 
   $('actbar').hidden = $('actbar').hidden || otherShop;
 
+  // Le fil se lit d'un coup d'œil : ce qui vient de nous porte notre nom et
+  // sa couleur. « sav@… » répété douze fois n'apprenait rien à personne.
+  const brand = state.me?.merchant?.brandName || state.me?.merchant?.name || 'Nous';
+
   $('d-messages').innerHTML = ticket.messages
     .map(
       (message) => `<div class="msg${message.direction === 'OUTBOUND' ? ' out' : ''}">
         <div class="msg-head">
-          <b>${esc(message.fromEmail)}</b>
+          <b>${
+            message.direction === 'OUTBOUND'
+              ? `${esc(brand)} <span class="msg-tag">réponse envoyée</span>`
+              : esc(message.fromEmail)
+          }</b>
           <span>${shortTime(message.receivedAt)}</span>
         </div>
         <div class="msg-body" data-msg="${esc(message.id)}">${esc(message.bodyText)}</div>
