@@ -25,6 +25,22 @@ import { decodePhoto, photoSchema } from "./parcels.ts";
 const importsRunning = new Set<string>();
 
 /**
+ * Dernier rattrapage par date, par boîte.
+ *
+ * La relève par curseur peut rester aveugle sur quelques messages — le curseur
+ * les a dépassés, ils ne reviendront dans aucun historique. Seule une
+ * recherche par date les voit. On ne peut pas la lancer à chaque tour
+ * d'actualisation automatique, qui passe toutes les minutes ; on la lance au
+ * plus une fois par quart d'heure, pour qu'un onglet laissé ouvert finisse
+ * toujours par les recevoir sans que personne n'ait à cliquer.
+ *
+ * En mémoire du processus : au pire un redémarrage relance un rattrapage, ce
+ * qui est exactement ce qu'on veut de toute façon.
+ */
+const lastBackfillAt = new Map<string, number>();
+const BACKFILL_EVERY_MS = 15 * 60 * 1000;
+
+/**
  * Réglages du marchand.
  *
  * Rien ici ne demande de coller une clé d'API : les accès Shopify et Gmail
@@ -677,7 +693,19 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
          * minutes et se contente de l'incrémental — désormais fiable, le
          * curseur ne sautant plus.
          */
-        if (result.ingested === 0 && revive) {
+        /*
+         * Le rattrapage par date : au clic, ou périodiquement.
+         *
+         * Au clic, toujours : c'est là qu'on attend une réponse franche.
+         * En automatique, au plus une fois par quart d'heure — assez rare pour
+         * ne rien coûter, assez fréquent pour qu'un onglet ouvert toute la
+         * journée ne rate rien.
+         */
+        const dueForBackfill =
+          Date.now() - (lastBackfillAt.get(mailbox.id) ?? 0) > BACKFILL_EVERY_MS;
+
+        if (result.ingested === 0 && (revive || dueForBackfill)) {
+          lastBackfillAt.set(mailbox.id, Date.now());
           const caught = await ingestMerchantInbox(merchantId, mailbox.id, { backfillDays: 2 });
           ingested += caught.ingested;
           detail.backfill = caught.ingested;
