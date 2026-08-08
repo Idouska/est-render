@@ -7925,12 +7925,19 @@ function renderDiagnosis(report) {
         'relève incrémentale restera muette sur eux. Le rattrapage par date, ' +
         'déclenché au clic sur « Actualiser », est le chemin qui fonctionne.',
     );
-  } else if (report.historyAhead > 0) {
+  } else if (report.historyAhead > 0 && report.missing > 0) {
     lines.push(
-      `${report.historyAhead} message${report.historyAhead > 1 ? 's' : ''} ` +
-        `en attente dans l’historique Gmail — « Actualiser » ${
-          report.historyAhead > 1 ? 'les' : 'le'
-        } fera entrer.`,
+      `${report.historyAhead} mouvement${report.historyAhead > 1 ? 's' : ''} ` +
+        'dans l’historique Gmail — « Actualiser » fera entrer ce qui manque.',
+    );
+  } else if (report.historyAhead > 0) {
+    // Le curseur bouge et rien ne manque : c'est l'état sain. L'annoncer comme
+    // « en attente » laissait croire à cent messages bloqués alors qu'ils sont
+    // tous déjà en base — une alarme là où il fallait un feu vert.
+    lines.push(
+      `Relève par curseur opérationnelle : ${report.historyAhead} mouvement${
+        report.historyAhead > 1 ? 's' : ''
+      } lu${report.historyAhead > 1 ? 's' : ''} dans l’historique, tous déjà en base.`,
     );
   }
 
