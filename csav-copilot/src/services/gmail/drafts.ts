@@ -195,7 +195,69 @@ export async function updateDraftBody(params: {
   });
 }
 
-/** Envoie un brouillon existant. Déclenché uniquement par une action humaine. */
+/** Préfixe « Re: » une seule fois, quelle que soit la casse d'origine. */
+function replySubject(subject: string): string {
+  return subject.toLowerCase().startsWith('re:') ? subject : `Re: ${subject}`;
+}
+
+/**
+ * Envoie la réponse directement dans le fil du client, sans passer par un
+ * brouillon Gmail.
+ *
+ * `discardPendingDrafts` a réglé les brouillons orphelins, mais pas leur
+ * cause : un brouillon était toujours écrit à chaque traitement. Deux raisons
+ * de ne plus en créer du tout.
+ *
+ * La première est le volume : un brouillon par message reçu, dans une boîte
+ * partagée qui sert aussi aux vrais brouillons de l'équipe.
+ *
+ * La seconde est plus sérieuse. Un brouillon posé dans Gmail est envoyable
+ * depuis n'importe quel client, y compris un téléphone — donc en dehors du
+ * produit, sans contrôle de rôle, sans plafond de remboursement, et sans
+ * trace dans le journal d'audit. Toute la gouvernance construite dans le
+ * dashboard se contourne d'un geste. La proposition reste donc en base, et
+ * Gmail n'est sollicité qu'ici, sur action d'une personne autorisée.
+ */
+export async function sendReplyInThread(params: {
+  merchantId: string;
+  /** Boîte d'envoi. Nulle, on prend celle par défaut de la boutique. */
+  mailboxId?: string | null;
+  threadId: string;
+  to: string;
+  subject: string;
+  body: string;
+  inReplyToMessageId?: string | null;
+}): Promise<{ gmailMessageId: string | null; fromEmail: string }> {
+  if (env.GMAIL_MOCK) {
+    logger.info({ threadId: params.threadId }, 'Gmail simulé : aucun mail envoyé');
+    return { gmailMessageId: null, fromEmail: 'simulation@local' };
+  }
+
+  const { gmail, emailAddress } = await getGmailClient(params.merchantId, params.mailboxId);
+
+  const sent = await gmail.users.messages.send({
+    userId: 'me',
+    requestBody: {
+      threadId: params.threadId,
+      raw: buildRawEmail({
+        to: params.to,
+        from: emailAddress,
+        subject: replySubject(params.subject),
+        body: params.body,
+        inReplyToMessageId: params.inReplyToMessageId,
+      }),
+    },
+  });
+
+  return { gmailMessageId: sent.data.id ?? null, fromEmail: emailAddress };
+}
+
+/**
+ * Envoie un brouillon Gmail existant.
+ *
+ * Conservé pour les tickets antérieurs à `sendReplyInThread`, dont le
+ * brouillon existe encore dans la boîte. Rien n'en crée de nouveau.
+ */
 export async function sendDraft(
   merchantId: string,
   draftId: string,

@@ -7,7 +7,7 @@ import { prisma } from '../lib/prisma.ts';
 import { PERMISSIONS, PREVIEW_COOKIE, requirePermission, requireSession } from '../plugins/auth.ts';
 import { enqueueTicket } from '../queue/index.ts';
 import { accessibleMerchantIds, listShopsFor } from './shops.ts';
-import { sendDraft, updateDraftBody } from '../services/gmail/drafts.ts';
+import { sendDraft, sendReplyInThread, updateDraftBody } from '../services/gmail/drafts.ts';
 import { syncTicketThread } from '../services/gmail/thread.ts';
 import { sendPlainEmail } from '../services/gmail/send.ts';
 import { getShopifyClient, ShopifyError } from '../services/shopify/client.ts';
@@ -1478,11 +1478,31 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
 
     if (!draft) return reply.code(404).send({ error: 'Brouillon introuvable' });
     if (draft.status === 'SENT') return reply.code(409).send({ error: 'Déjà envoyé' });
-    if (!draft.gmailDraftId) {
-      return reply.code(409).send({ error: 'Aucun brouillon Gmail associé' });
-    }
 
-    const sent = await sendDraft(merchantId, draft.gmailDraftId, draft.ticket.mailboxId);
+    // Deux chemins, le temps que les anciens tickets s'écoulent : un brouillon
+    // Gmail hérité s'envoie tel quel — sinon il resterait dans la boîte après
+    // l'envoi. Les propositions créées depuis partent directement dans le fil.
+    let sent: { gmailMessageId: string | null; fromEmail: string };
+
+    if (draft.gmailDraftId) {
+      sent = await sendDraft(merchantId, draft.gmailDraftId, draft.ticket.mailboxId);
+    } else {
+      const lastInbound = await prisma.message.findFirst({
+        where: { ticketId: draft.ticketId, merchantId, direction: 'INBOUND' },
+        orderBy: { receivedAt: 'desc' },
+        select: { gmailMessageId: true },
+      });
+
+      sent = await sendReplyInThread({
+        merchantId,
+        mailboxId: draft.ticket.mailboxId,
+        threadId: draft.ticket.gmailThreadId,
+        to: draft.ticket.customerEmail,
+        subject: draft.ticket.subject ?? 'Votre demande',
+        body: draft.body,
+        inReplyToMessageId: lastInbound?.gmailMessageId,
+      });
+    }
 
     await prisma.$transaction([
       prisma.draft.update({

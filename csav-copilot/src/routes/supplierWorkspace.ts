@@ -11,7 +11,6 @@ import { listOrders } from '../services/shopify/orders.ts';
 import { listProducts, productWithVariants } from '../services/shopify/catalog.ts';
 import { fulfillOrder } from '../services/shopify/fulfill.ts';
 import { draftChangeReply } from '../services/ai/changeReply.ts';
-import { createReplyDraft } from '../services/gmail/drafts.ts';
 import { decodePhoto, photoSchema, sendParcelPhoto, toParcelView } from './parcels.ts';
 import { ordersForSupplier, type RoutingRules } from '../services/suppliers/routing.ts';
 
@@ -212,30 +211,19 @@ async function draftReplyAfterChange(alertId: string, merchantId: string): Promi
   });
 
   /*
-   * Le brouillon existe d'abord dans Gmail, ensuite chez nous.
+   * La proposition n'existe que chez nous.
    *
-   * L'envoi passe par `drafts.send` et exige donc un identifiant Gmail : une
-   * ligne créée sans lui s'affiche parfaitement à l'écran, et le bouton
-   * « Envoyer la réponse » répond « Aucun brouillon Gmail associé ». Le pire
-   * moment pour l'apprendre est celui où l'on veut répondre à un client déjà
-   * mécontent.
+   * Elle passait par un brouillon Gmail parce que l'envoi exigeait un
+   * identifiant Gmail — une ligne créée sans lui s'affichait à l'écran mais
+   * refusait de partir. `sendReplyInThread` a levé cette contrainte : l'envoi
+   * poste directement dans le fil. Écrire un brouillon ici rouvrirait la fuite
+   * que ce changement ferme.
    */
-  const { draftId } = await createReplyDraft({
-    merchantId,
-    // La boîte qui a reçu le message : c'est l'adresse que le client connaît.
-    mailboxId: alert.ticket.mailboxId,
-    threadId: alert.ticket.gmailThreadId,
-    to: alert.ticket.customerEmail,
-    subject: alert.ticket.subject ?? 'Votre demande',
-    body: draft.body,
-    inReplyToMessageId: alert.ticket.messages[0]?.gmailMessageId ?? null,
-  });
-
   await prisma.draft.create({
     data: {
       merchantId,
       ticketId: alert.ticket.id,
-      gmailDraftId: draftId,
+      gmailDraftId: null,
       body: draft.body,
       model: draft.model,
       confidence: draft.confidence,

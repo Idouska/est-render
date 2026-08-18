@@ -6,7 +6,6 @@ import { describeActiveModel } from '../ai/factory.ts';
 import { generateReply, type GenerationContext } from '../ai/generate.ts';
 import { findSimilarExchanges } from '../ai/examples.ts';
 import { detectLanguage } from '../ai/language.ts';
-import { createReplyDraft } from '../gmail/drafts.ts';
 import { discardPendingDrafts } from './discardDrafts.ts';
 import { matchOrder } from '../matching/orderMatcher.ts';
 import { getShopifyClient } from '../shopify/client.ts';
@@ -213,28 +212,20 @@ export async function processTicket(merchantId: string, ticketId: string): Promi
 
     const generated = await generateReply(context);
 
-    // 4. Brouillon Gmail — après avoir écarté ceux d'un passage précédent :
-    // sans ce geste, chaque retraitement ajoutait un brouillon de plus dans
-    // la boîte Gmail, sans jamais retirer l'ancien.
+    // 4. La proposition reste en base. Aucun brouillon n'est écrit dans Gmail :
+    // un brouillon posé dans la boîte partagée est envoyable depuis n'importe
+    // quel client, ce qui contourne rôles, plafonds et journal d'audit. Voir
+    // `sendReplyInThread`, qui envoie au moment du clic.
+    //
+    // L'écart des propositions d'un passage précédent reste nécessaire : il
+    // nettoie aussi les brouillons Gmail hérités d'avant ce changement.
     await discardPendingDrafts(merchantId, ticket.id);
-
-    const { draftId } = await createReplyDraft({
-      merchantId,
-      // Le brouillon se crée dans la boîte qui a reçu le message : c'est
-      // l'adresse que le client connaît.
-      mailboxId: ticket.mailboxId,
-      threadId: ticket.gmailThreadId,
-      to: ticket.customerEmail,
-      subject: ticket.subject ?? 'Votre demande',
-      body: generated.body,
-      inReplyToMessageId: lastInbound.gmailMessageId,
-    });
 
     await prisma.draft.create({
       data: {
         merchantId,
         ticketId: ticket.id,
-        gmailDraftId: draftId,
+        gmailDraftId: null,
         body: generated.body,
         // Modèle réellement interrogé, pas une constante : indispensable pour
         // comparer deux fournisseurs sur le même trafic.
