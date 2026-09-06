@@ -4875,7 +4875,7 @@ function renderRefundRows() {
               // L'origine se dit une fois, discrètement : un remboursement
               // passé dans Shopify ne porte ni auteur ni ticket, et l'agent
               // doit savoir pourquoi la ligne est plus pauvre.
-              refund.external ? '<span class="src">Shopify</span>' : ''
+              refund.external ? '<span class="origin">Shopify</span>' : ''
             }</td>
             <td>${esc(refund.customerName ?? refund.customerEmail ?? '—')}</td>
             <td>${fullDate(refund.createdAt)}</td>

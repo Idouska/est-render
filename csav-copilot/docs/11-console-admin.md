@@ -50,6 +50,53 @@ Sur Render : `ADMIN_PASSWORD` en `sync: false` sur le service `csav-api`
 uniquement. Le worker et le cron n'exposent pas d'interface HTTP, ils n'en ont
 pas besoin.
 
+## Supervision
+
+En tête de console, trois groupes de voyants relèvent l'état de la plomberie.
+Ils sont ici et non dans le dashboard : ils regardent l'exploitation de la
+plateforme, pas le travail du marchand, qui n'a ni les moyens ni la charge d'y
+remédier.
+
+| Groupe | Ce qu'il surveille | Rouge quand |
+|---|---|---|
+| Tâches planifiées | Dernier passage réussi du cron | Deux passages manquent (> 50 h) |
+| Écoute Gmail | `watchExpiration` de chaque boîte active | L'écoute est expirée ou absente |
+| Files de traitement | Compteurs BullMQ des deux files | Des tâches attendent et rien ne les consomme |
+
+Les trois pannes couvertes ont ceci de commun qu'elles **ne lèvent aucune
+erreur**. Un service cron supprimé ne râle pas, une écoute Gmail expirée ne
+râle pas, un worker arrêté ne râle pas. Chacune se présente comme du silence,
+et le silence est indiscernable du bon fonctionnement.
+
+D'où la mécanique : le cron écrit une ligne `CronRun` à chaque passage, et
+c'est **l'API** qui constate le manque. Un cron ne peut pas surveiller sa
+propre mort — le surveillant doit vivre dans un autre processus que le
+surveillé, ici le service web, toujours en ligne.
+
+Le code de sortie 1 du cron reste utile et n'est pas remplacé : il signale une
+exécution qui s'est mal passée, et l'hébergeur le relaie. Ce que ces voyants
+ajoutent, c'est la détection d'une exécution **qui n'a pas eu lieu**.
+
+### Sur les seuils
+
+Un voyant rouge doit correspondre à quelque chose de réellement cassé. Un
+rapport a déjà annoncé « 100 messages en attente » sur un système sain : une
+alerte qui se trompe finit ignorée, et ne vaut alors pas mieux que pas
+d'alerte. Deux règles en découlent, tenues dans `services/supervision` :
+
+- **croiser deux chiffres plutôt qu'en seuiller un.** Des milliers de messages
+  en attente sont normaux pendant un rattrapage d'archives. Ce qui distingue
+  l'embouteillage sain du worker mort, c'est le mouvement : en attente, mais
+  rien en cours et rien de terminé sur les 24 h que BullMQ conserve ;
+- **faire dire à chaque voyant pourquoi il est vert**, pas seulement qu'il
+  l'est. « Dernier passage réussi il y a 8 h » se vérifie ; « OK » se croit.
+
+Le seuil de 24 h sur l'écoute Gmail n'est pas choisi : c'est celui de
+`renewExpiringWatches`. En dessous, le renouvellement aurait dû avoir lieu.
+
+Il n'y a **pas d'alerte poussée** : ces voyants ne se voient qu'en ouvrant la
+console. Personne n'est prévenu la nuit ni le week-end.
+
 ## Ce que la console ne fait jamais
 
 **Réafficher un secret.** Une clé s'écrit, se teste et s'efface, mais ne se

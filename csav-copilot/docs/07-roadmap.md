@@ -28,8 +28,12 @@ Livré dans ce dépôt :
 
 Reste à faire avant de brancher un vrai marchand :
 
-- [ ] Supervision : alerte si un watch expire, si le cron échoue, ou si une
-      file s'accumule. Le cron corrige, mais rien ne prévient quand il tombe.
+- [x] Supervision : voyants cron / écoute Gmail / files dans la console
+      d'administration ([11-console-admin.md](11-console-admin.md)). Le cron
+      trace ses passages, l'API constate leur absence — un cron ne peut pas
+      surveiller sa propre mort.
+- [ ] Alerte poussée : les voyants ci-dessus ne se voient qu'en ouvrant la
+      console. Personne n'est prévenu la nuit ni le week-end.
 - [ ] Lancer la vérification OAuth Google (6 à 10 semaines de délai)
 
 ## Phase 2 — Dashboard et remboursement

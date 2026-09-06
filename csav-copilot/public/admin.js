@@ -204,6 +204,64 @@ async function load() {
   const { settings } = await api('/api/admin/settings');
   state.settings = settings;
   render();
+  void loadSupervision();
+}
+
+/* ------------------------------------------------------------ supervision */
+
+/*
+ * Trois pannes qui ne lèvent aucune erreur : le cron supprimé, l'écoute Gmail
+ * expirée, le worker arrêté. Chacune se présente comme du silence, et rien ne
+ * ressemble davantage au bon fonctionnement — d'où cet écran, qui donne au
+ * silence une couleur.
+ *
+ * Le relevé est chargé après les identifiants et sans bloquer : il interroge
+ * Redis et la base, et une console qui refuserait de s'ouvrir parce que la
+ * file est injoignable empêcherait précisément de corriger la panne.
+ */
+const LEVELS = {
+  ok: { label: 'OK', className: 'src-ok' },
+  warn: { label: 'À surveiller', className: 'src-warn' },
+  down: { label: 'En panne', className: 'src-off' },
+};
+
+async function loadSupervision() {
+  const body = $('supervision-body');
+
+  try {
+    const report = await api('/api/admin/health');
+    const groups = report?.groups ?? [];
+
+    body.innerHTML = `${groups
+      .map(
+        (group) => `<div class="admin-field">
+          <label>${esc(group.title)}</label>
+          <div class="sup-rows">${(group.indicators ?? []).map(renderIndicator).join('')}</div>
+        </div>`,
+      )
+      .join('')}
+      <p class="admin-print">Relevé du ${esc(dateTime(report?.checkedAt))}.</p>`;
+  } catch (error) {
+    body.innerHTML = `<p class="empty">Relevé impossible : ${esc(error.message)}</p>`;
+  }
+}
+
+function renderIndicator(indicator) {
+  const level = LEVELS[indicator.level] ?? LEVELS.warn;
+
+  return `<div class="sup-row">
+    <span class="src ${level.className}">${level.label}</span>
+    <div>
+      <b>${esc(indicator.headline)}</b>
+      <p class="admin-print">${esc(indicator.detail)}</p>
+    </div>
+  </div>`;
+}
+
+function dateTime(iso) {
+  if (!iso) return '—';
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString('fr-FR');
 }
 
 async function save(groupId) {
@@ -317,6 +375,8 @@ async function login() {
     toast(error.message, true);
   }
 }
+
+$('supervision-refresh').addEventListener('click', () => void loadSupervision());
 
 $('login-go').addEventListener('click', login);
 
