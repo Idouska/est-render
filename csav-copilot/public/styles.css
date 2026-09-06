@@ -2535,31 +2535,13 @@ textarea:focus-visible {
    cesse d'occuper la hauteur d'écran que mérite désormais la réponse. */
 .thread-fold { margin: 0 15px 4px; }
 
-.thread-fold > summary {
-  cursor: pointer;
-  list-style: none;
+.thread-head {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 10px;
   padding: 7px 2px;
-  color: var(--ink-mute);
-  font-size: 12.5px;
 }
 
-.thread-fold > summary::-webkit-details-marker { display: none; }
-
-.thread-fold > summary::before {
-  content: '';
-  width: 6px;
-  height: 6px;
-  border-right: 1.6px solid currentColor;
-  border-bottom: 1.6px solid currentColor;
-  transform: rotate(-45deg);
-  transition: transform 0.16s var(--ease);
-}
-
-.thread-fold[open] > summary::before { transform: rotate(45deg); }
-.thread-fold > summary:hover { color: var(--ink); }
 .thread-fold .messages { padding-left: 0; padding-right: 0; }
 
 /* -------------------------------------------------------------- rail --- */
@@ -4413,7 +4395,11 @@ textarea:focus-visible {
   align-items: center;
   margin-top: 8px;
 }
-.thread-labels #d-delete { margin-left: auto; }
+/* Les gestes du message se tiennent ensemble, poussés à droite, séparés des
+   étiquettes qui classent. Seul « Supprimer » reste rouge : « Rembourser »
+   pèse autant, mais deux boutons rouges voisins invitent au faux clic, et le
+   remboursement passe de toute façon par une confirmation chiffrée. */
+.thread-acts { display: flex; gap: 6px; align-items: center; margin-left: auto; }
 
 /* ---------------------------------------------- indicateurs en bandeau ---
    Sur l'écran SAV, les quatre indicateurs tiennent sur une ligne basse : la
@@ -4488,15 +4474,10 @@ textarea:focus-visible {
   font-size: 13.5px;
 }
 
-/* L'en-tête du fil porte maintenant le bouton de traduction : il se pose à
-   droite du libellé plutôt que sous lui. */
-.thread-fold > summary {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-.thread-fold > summary #d-translate { margin-left: auto; }
+/* L'en-tête du fil porte le bouton de traduction : il se pose à droite du
+   libellé plutôt que sous lui. */
+.thread-head { flex-wrap: wrap; }
+.thread-head #d-translate { margin-left: auto; }
 
 /* Actions au pied de la fiche commande : les trois gestes qui suivent une
    lecture, alignés et de même poids. */

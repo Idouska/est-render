@@ -1422,13 +1422,13 @@ async function renderParcels(ticket) {
  * restent accessibles. L'ordre compte plus que la liste.
  */
 const ACTIONS_BY_INTENT = {
-  WISMO: ['tracking', 'client', 'change', 'supplier'],
-  RETURN: ['change', 'client', 'supplier', 'refund'],
-  DISPUTE: ['refund', 'client', 'supplier'],
-  REFUND: ['refund', 'client'],
-  PRODUCT_QUESTION: ['change', 'substitute', 'client', 'supplier'],
-  POSITIVE: ['client'],
-  OTHER: ['client', 'change', 'supplier', 'refund'],
+  WISMO: ['tracking', 'change', 'supplier'],
+  RETURN: ['change', 'supplier', 'refund'],
+  DISPUTE: ['refund', 'supplier'],
+  REFUND: ['refund'],
+  PRODUCT_QUESTION: ['change', 'substitute', 'supplier'],
+  POSITIVE: [],
+  OTHER: ['change', 'supplier', 'refund'],
 };
 
 const ACTION_META = {
@@ -1447,8 +1447,13 @@ function renderActionBar() {
   const { ticket } = state.detail;
   const keys = ACTIONS_BY_INTENT[ticket.intent] ?? ACTIONS_BY_INTENT.OTHER;
 
-  $('actbar').hidden = false;
+  // Un remerciement n'appelle aucune action de cette barre : depuis que
+  // « Écrire au client » a rejoint l'en-tête, il ne reste rien à y montrer, et
+  // un cadre vide titré ACTION se lit comme une panne.
+  $('actbar').hidden = keys.length === 0;
   $('subs').hidden = true;
+
+  if (keys.length === 0) return;
 
   $('actbar-row').innerHTML = keys
     .map((key, index) => {
@@ -1645,6 +1650,19 @@ function actionBlockedReason(key, ticket) {
   }
   if (key === 'client' && !canI('reply')) return 'Vous êtes en lecture seule.';
   return null;
+}
+
+/**
+ * Bouton d'action pour la barre de libellés, soumis aux mêmes droits que la
+ * barre d'actions : un agent ne peut pas rembourser, et doit le lire plutôt
+ * que de le découvrir sur un refus du serveur.
+ */
+function actionButton(key, label, ticket) {
+  const blocked = actionBlockedReason(key, ticket);
+
+  return `<button class="btn btn-small" data-quick="${key}"${
+    blocked ? ` disabled title="${esc(blocked)}"` : ''
+  }>${esc(label)}</button>`;
 }
 
 $('actbar-row').addEventListener('click', async (event) => {
@@ -2063,16 +2081,6 @@ function renderDetail() {
 
   $('d-subject').textContent = ticket.subject ?? '(sans objet)';
 
-  const canAssign = canI('reply');
-  const assignOptions = state.agents
-    .map(
-      (user) =>
-        `<option value="${esc(user.id)}"${
-          user.id === ticket.assignedToId ? ' selected' : ''
-        }>${esc(user.name ?? user.email)}</option>`,
-    )
-    .join('');
-
   $('d-meta').innerHTML =
     `<button class="linkish" id="d-who">${esc(
       ticket.customerName ?? ticket.customerEmail,
@@ -2084,38 +2092,13 @@ function renderDetail() {
             : ''
         }`
       : '') +
-    ` · ouvert depuis <b>${ageInDays(ticket.createdAt)} j</b>` +
-    `<span class="d-assign">Assigné à
-       <select id="d-assignee"${canAssign ? '' : ' disabled'}>
-         <option value="">Personne</option>${assignOptions}
-       </select>
-     </span>`;
+    ` · ouvert depuis <b>${ageInDays(ticket.createdAt)} j</b>`;
 
   renderTicketLabels(ticket);
 
   $('d-who')?.addEventListener('click', () =>
     void openCustomerSheet(ticket.customerEmail, ticket.customerName ?? ''),
   );
-
-  $('d-assignee')?.addEventListener('change', async (event) => {
-    const userId = event.target.value || null;
-
-    try {
-      await api(`/api/tickets/${ticket.id}/assign`, {
-        method: 'PATCH',
-        body: JSON.stringify({ userId }),
-      });
-
-      ticket.assignedToId = userId;
-      toast(userId ? 'Message assigné.' : 'Message remis au pot commun.');
-      await loadQueue();
-    } catch (error) {
-      // On remet la valeur d'avant : laisser le sélecteur sur un choix qui n'a
-      // pas pris ferait croire que l'assignation a eu lieu.
-      event.target.value = ticket.assignedToId ?? '';
-      toast(error.message, true);
-    }
-  });
 
   renderActionBar();
   renderCannedChips();
@@ -2132,9 +2115,17 @@ function renderDetail() {
     $('read-only-switch').dataset.shop = ticket.merchantId;
   }
 
-  for (const id of ['btn-send', 'btn-save', 'btn-refund', 'd-assignee']) {
+  for (const id of ['btn-send', 'btn-save', 'btn-refund']) {
     const el = $(id);
     if (el) el.disabled = otherShop || el.disabled;
+  }
+
+  // Les actions rapides de l'en-tête suivent le même verrou : un message d'une
+  // autre boutique se lit, il ne s'y répond pas.
+  if (otherShop) {
+    document
+      .querySelectorAll('#d-labels [data-quick]')
+      .forEach((button) => (button.disabled = true));
   }
 
   $('actbar').hidden = $('actbar').hidden || otherShop;
@@ -2813,7 +2804,32 @@ function renderTicketLabels(ticket) {
            <div class="lmore-box">${rest.map((name) => chip(name, false)).join('')}</div>
          </details>`
       : '') +
-    `<button class="btn btn-small btn-danger" id="d-delete">Supprimer</button>`;
+    /*
+     * Les deux actions qu'on cherche le plus souvent, à portée constante.
+     *
+     * Elles existent aussi plus bas, mais la barre d'actions se réordonne
+     * selon l'intention devinée : « Rembourser » n'y figure même pas sur un
+     * WISMO. Or un client qui demande où est son colis finit régulièrement par
+     * demander son argent, et l'agent ne devrait pas avoir à faire dépendre le
+     * geste d'un classement automatique.
+     *
+     * Une action interdite reste affichée et désactivée, sa raison en
+     * infobulle : la faire disparaître laisserait croire qu'elle n'existe pas.
+     * Et « Rembourser » n'est pas peint en rouge malgré son poids — collé à
+     * « Supprimer », deux boutons rouges voisins invitent au faux clic.
+     */
+    `<span class="thread-acts">` +
+    actionButton('refund', 'Rembourser…', ticket) +
+    actionButton('client', 'Écrire au client', ticket) +
+    `<button class="btn btn-small btn-danger" id="d-delete">Supprimer</button>` +
+    `</span>`;
+
+  bar.querySelector('[data-quick="refund"]')?.addEventListener('click', () =>
+    $('btn-refund').click(),
+  );
+  bar.querySelector('[data-quick="client"]')?.addEventListener('click', () =>
+    openCompose('client', ticket),
+  );
 
   bar.querySelectorAll('[data-tlabel]').forEach((chip) =>
     chip.addEventListener('click', async () => {
@@ -2861,23 +2877,20 @@ function renderTicketLabels(ticket) {
 
 function renderBrief(draft) {
   const brief = $('d-brief');
-  // Le repli n'a de sens qu'avec un fil dedans : affiché d'emblée, il proposait
-  // de déplier le néant.
+  // Pas de fil, pas de section : le cadre vide ferait croire à une panne.
   $('d-fold').hidden = !state.detail?.ticket;
   const points = draft?.summary ?? [];
   const ask = draft?.ask ?? '';
 
   // Rien à montrer : on masque au lieu d'afficher un cadre vide, qui ferait
-  // croire à une panne plutôt qu'à une absence.
+  // croire à une panne plutôt qu'à une absence. Le fil, lui, reste affiché —
+  // il ne dépend plus du résumé, qui ne le remplaçait pas.
   if (points.length === 0 && !ask) {
     brief.hidden = true;
-    $('d-fold').open = true;
     return;
   }
 
   brief.hidden = false;
-  // Le fil se replie dès qu'un résumé le remplace : c'est tout l'intérêt.
-  $('d-fold').open = false;
 
   $('d-ask').textContent = ask;
   $('d-ask').hidden = !ask;
@@ -3059,6 +3072,10 @@ function renderOrder(ticket, order, orderError) {
         ${statusTag(order.displayFulfillmentStatus, FULFILLMENT_LABELS, ['UNFULFILLED', 'ON_HOLD'])}
       </div>` +
       '<dl>' +
+      // Le nom figure déjà dans le bloc CLIENT, dix pixels plus haut. Répété
+      // ici pour que le bloc COMMANDE se lise seul : on parle d'une commande
+      // au téléphone ou au fournisseur sans avoir à lever les yeux.
+      row('Client', order.customer?.displayName || ticket.customerName || ticket.customerEmail) +
       row('Numéro', order.name, true) +
       row('Passée le', dateTime(order.createdAt)) +
       row('Montant', euro(order.totalPrice, order.currency), true) +
@@ -9193,11 +9210,6 @@ document.addEventListener('keydown', (event) => {
         event.preventDefault();
         $('d-body').focus();
       }
-      break;
-    case 'e':
-      // Déplier ou replier le fil, quand le résumé ne suffit pas.
-      event.preventDefault();
-      $('d-fold').open = !$('d-fold').open;
       break;
     case '?':
       event.preventDefault();
