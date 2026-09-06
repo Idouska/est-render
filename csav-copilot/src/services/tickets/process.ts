@@ -7,9 +7,9 @@ import { generateReply, type GenerationContext } from '../ai/generate.ts';
 import { findSimilarExchanges } from '../ai/examples.ts';
 import { detectLanguage } from '../ai/language.ts';
 import { discardPendingDrafts } from './discardDrafts.ts';
-import { matchOrder } from '../matching/orderMatcher.ts';
+import { manuallyAttachedOrderId, matchColumns, matchOrder } from '../matching/orderMatcher.ts';
 import { getShopifyClient } from '../shopify/client.ts';
-import type { OrderSummary } from '../shopify/orders.ts';
+import { getOrderById, type OrderSummary } from '../shopify/orders.ts';
 
 /**
  * Traite un ticket de bout en bout : classification, rattachement commande,
@@ -72,21 +72,43 @@ export async function processTicket(merchantId: string, ticketId: string): Promi
       return;
     }
 
-    // 2. Rattachement commande
+    /*
+     * 2. Rattachement commande
+     *
+     * Un rattachement manuel ne se rejoue pas. C'est un renseignement que
+     * l'agent est allé chercher là où le matcher s'était abstenu — dans une
+     * pièce jointe, un échange antérieur, un appel au client. Relancer le
+     * matcher ici le remplacerait par son propre échec, celui-là même qui a
+     * rendu le rattachement manuel nécessaire : l'agent verrait la commande
+     * qu'il a rattachée disparaître à la première réanalyse, sans un mot.
+     *
+     * On repart donc de la commande choisie, et on ne redonne la main au
+     * matcher que si elle n'existe plus dans la boutique. Si Shopify est
+     * injoignable, `getOrderById` lève : le ticket tombe en échec et le
+     * rattachement survit. C'est voulu — rabattre une panne réseau sur le
+     * matcher effacerait le travail de l'agent pour une coupure de trente
+     * secondes.
+     */
     const shopify = await getShopifyClient(merchantId);
-    const match = await matchOrder(shopify, {
-      customerEmail: ticket.customerEmail,
-      customerName: ticket.customerName,
-      bodyText: lastInbound.bodyText,
-      receivedAt: lastInbound.receivedAt,
-    });
 
-    let order: OrderSummary | null = null;
+    const attachedId = manuallyAttachedOrderId(ticket);
+    const attached = attachedId ? await getOrderById(shopify, attachedId) : null;
+
+    const match = attached
+      ? null
+      : await matchOrder(shopify, {
+          customerEmail: ticket.customerEmail,
+          customerName: ticket.customerName,
+          bodyText: lastInbound.bodyText,
+          receivedAt: lastInbound.receivedAt,
+        });
+
+    let order: OrderSummary | null = attached;
     let ambiguousOrders: OrderSummary[] | undefined;
 
-    if (match.status === 'MATCHED') {
+    if (match?.status === 'MATCHED') {
       order = match.order;
-    } else if (match.status === 'AMBIGUOUS') {
+    } else if (match?.status === 'AMBIGUOUS') {
       ambiguousOrders = match.candidates;
     }
 
@@ -95,13 +117,14 @@ export async function processTicket(merchantId: string, ticketId: string): Promi
       data: {
         intent: classification.intent,
         intentConfidence: classification.confidence,
-        shopifyOrderId: order?.id ?? null,
-        orderName: order?.name ?? null,
         // Recopié pour pouvoir filtrer et trier sans interroger Shopify à
-        // chaque affichage de la file.
+        // chaque affichage de la file. Rafraîchi dans les deux cas : le total
+        // d'une commande bouge (remboursement partiel, ajout de frais), et
+        // c'est lui qu'affiche la file.
         orderTotal: order?.totalPrice ?? null,
-        orderMatchMethod: match.status === 'NOT_FOUND' ? null : match.method,
-        orderMatchScore: match.status === 'MATCHED' ? match.score : null,
+        // Le rattachement lui-même n'est réécrit que si le matcher a tourné.
+        // Quand il ne l'a pas fait, c'est qu'un agent a déjà tranché.
+        ...matchColumns(match, order),
       },
     });
 
@@ -259,7 +282,7 @@ export async function processTicket(merchantId: string, ticketId: string): Promi
         intent: classification.intent,
         intentConfidence: classification.confidence,
         draftConfidence: generated.confidence,
-        orderMatch: match.status,
+        orderMatch: match?.status ?? 'MANUAL',
         orderName: order?.name ?? null,
       },
     });

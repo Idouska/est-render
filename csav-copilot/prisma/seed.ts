@@ -268,8 +268,15 @@ async function main(): Promise<void> {
   // Fournisseur unique + une escalade déjà en cours, sur le ticket Marc
   // Delaunay (#10391) — c'est la commande dont l'adresse mock est
   // volontairement incomplète (voir services/shopify/mock.ts).
+  // Clé composée depuis le passage au multi-fournisseurs : un marchand peut
+  // avoir plusieurs ateliers, c'est le contact qui les distingue.
   const supplier = await prisma.supplier.upsert({
-    where: { merchantId: merchant.id },
+    where: {
+      merchantId_contactEmail: {
+        merchantId: merchant.id,
+        contactEmail: 'contact@atelier-nord.example',
+      },
+    },
     create: {
       merchantId: merchant.id,
       name: 'Atelier Nord',

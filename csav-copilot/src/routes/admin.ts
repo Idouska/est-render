@@ -17,6 +17,7 @@ import {
   type CredentialKey,
 } from '../services/platform/credentials.ts';
 import { CHECKS, type CheckName } from '../services/platform/healthchecks.ts';
+import { collectHealth } from '../services/supervision/collect.ts';
 
 /**
  * Console d'administration de la plateforme.
@@ -189,6 +190,17 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     logger.info({ keys: Object.keys(entries), ip: request.ip }, 'Réglages de plateforme modifiés');
 
     return reply.send({ ok: true, updated: Object.keys(entries) });
+  });
+
+  /**
+   * État de la plomberie, relevé à la demande.
+   *
+   * Ici plutôt que dans le dashboard : ces voyants regardent l'exploitation de
+   * la plateforme — cron, écoutes Gmail, files — et non le travail du
+   * marchand, qui n'a ni les moyens ni la charge d'y remédier.
+   */
+  app.get('/api/admin/health', { preHandler: requireAdmin }, async (request, reply) => {
+    return reply.send(await collectHealth());
   });
 
   app.post<{ Params: { name: string } }>(

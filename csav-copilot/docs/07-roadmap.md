@@ -28,8 +28,12 @@ Livré dans ce dépôt :
 
 Reste à faire avant de brancher un vrai marchand :
 
-- [ ] Supervision : alerte si un watch expire, si le cron échoue, ou si une
-      file s'accumule. Le cron corrige, mais rien ne prévient quand il tombe.
+- [x] Supervision : voyants cron / écoute Gmail / files dans la console
+      d'administration ([11-console-admin.md](11-console-admin.md)). Le cron
+      trace ses passages, l'API constate leur absence — un cron ne peut pas
+      surveiller sa propre mort.
+- [ ] Alerte poussée : les voyants ci-dessus ne se voient qu'en ouvrant la
+      console. Personne n'est prévenu la nuit ni le week-end.
 - [ ] Lancer la vérification OAuth Google (6 à 10 semaines de délai)
 
 ## Phase 2 — Dashboard et remboursement
@@ -45,8 +49,9 @@ Reste à faire avant de brancher un vrai marchand :
 - [x] Escalade fournisseur : portail par lien signé, brouillon IA relu avant
       envoi, cycle de vie complet et audité
       ([10-escalade-fournisseur.md](10-escalade-fournisseur.md))
-- [ ] Régénérer un brouillon après rattachement manuel d'une commande — sans
-      ça, la réponse continue de demander une précision déjà obtenue
+- [x] Régénérer la réponse après rattachement manuel d'une commande, et faire
+      respecter ce rattachement par la réanalyse — qui le remplaçait jusqu'ici
+      par son propre échec, celui-là même qui l'avait rendu nécessaire
 - [ ] Remboursement ligne par ligne, restockage
 - [ ] Plafonds de remboursement par utilisateur et par jour
 - [ ] Pagination de la file au-delà de 25 tickets (le curseur existe côté API,

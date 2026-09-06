@@ -1502,6 +1502,26 @@ body {
   color: var(--ink-soft);
 }
 
+/* Voyants de supervision : la pastille d'état, puis ce qui la justifie.
+   En ligne, pour qu'un coup d'œil sur la colonne de gauche suffise à voir
+   qu'aucune n'est rouge, sans lire une seule phrase. */
+.sup-rows { display: flex; flex-direction: column; gap: 6px; }
+
+.sup-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 9px 11px;
+  border-radius: var(--r-md);
+  background: var(--inset);
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.sup-row .src { flex: none; margin-top: 1px; }
+.sup-row b { color: var(--ink); font-weight: 600; }
+.sup-row .admin-print { margin: 2px 0 0; }
+
 .check-result.ok { background: var(--ok-soft); }
 .check-result.ok b { color: var(--ok); }
 .check-result.ko { background: var(--crit-soft); }
@@ -2515,31 +2535,13 @@ textarea:focus-visible {
    cesse d'occuper la hauteur d'écran que mérite désormais la réponse. */
 .thread-fold { margin: 0 15px 4px; }
 
-.thread-fold > summary {
-  cursor: pointer;
-  list-style: none;
+.thread-head {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 10px;
   padding: 7px 2px;
-  color: var(--ink-mute);
-  font-size: 12.5px;
 }
 
-.thread-fold > summary::-webkit-details-marker { display: none; }
-
-.thread-fold > summary::before {
-  content: '';
-  width: 6px;
-  height: 6px;
-  border-right: 1.6px solid currentColor;
-  border-bottom: 1.6px solid currentColor;
-  transform: rotate(-45deg);
-  transition: transform 0.16s var(--ease);
-}
-
-.thread-fold[open] > summary::before { transform: rotate(45deg); }
-.thread-fold > summary:hover { color: var(--ink); }
 .thread-fold .messages { padding-left: 0; padding-right: 0; }
 
 /* -------------------------------------------------------------- rail --- */
@@ -4205,8 +4207,14 @@ textarea:focus-visible {
 }
 
 /* Origine d'une ligne venue d'ailleurs. Discrète : elle explique pourquoi la
-   ligne porte moins d'informations, elle ne la disqualifie pas. */
-.src {
+   ligne porte moins d'informations, elle ne la disqualifie pas.
+ 
+   Nommée `.origin` et non `.src` : ce nom-là était déjà pris par les pastilles
+   de la console d'administration (`.src-ok`, `.src-warn`, `.src-off`), plus
+   haut dans ce fichier. Même spécificité, définie plus bas, cette règle
+   gagnait — et couchait en gris les trois états que ces pastilles servent
+   précisément à distinguer. */
+.origin {
   display: inline-block;
   margin-left: 7px;
   padding: 1px 6px;
@@ -4387,7 +4395,11 @@ textarea:focus-visible {
   align-items: center;
   margin-top: 8px;
 }
-.thread-labels #d-delete { margin-left: auto; }
+/* Les gestes du message se tiennent ensemble, poussés à droite, séparés des
+   étiquettes qui classent. Seul « Supprimer » reste rouge : « Rembourser »
+   pèse autant, mais deux boutons rouges voisins invitent au faux clic, et le
+   remboursement passe de toute façon par une confirmation chiffrée. */
+.thread-acts { display: flex; gap: 6px; align-items: center; margin-left: auto; }
 
 /* ---------------------------------------------- indicateurs en bandeau ---
    Sur l'écran SAV, les quatre indicateurs tiennent sur une ligne basse : la
@@ -4462,15 +4474,10 @@ textarea:focus-visible {
   font-size: 13.5px;
 }
 
-/* L'en-tête du fil porte maintenant le bouton de traduction : il se pose à
-   droite du libellé plutôt que sous lui. */
-.thread-fold > summary {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-.thread-fold > summary #d-translate { margin-left: auto; }
+/* L'en-tête du fil porte le bouton de traduction : il se pose à droite du
+   libellé plutôt que sous lui. */
+.thread-head { flex-wrap: wrap; }
+.thread-head #d-translate { margin-left: auto; }
 
 /* Actions au pied de la fiche commande : les trois gestes qui suivent une
    lecture, alignés et de même poids. */

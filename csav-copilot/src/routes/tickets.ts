@@ -1358,7 +1358,7 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
 
       const ticket = await prisma.ticket.findFirst({
         where: { id: request.params.id, merchantId },
-        select: { id: true },
+        select: { id: true, status: true },
       });
 
       if (!ticket) return reply.code(404).send({ error: 'Ticket introuvable' });
@@ -1389,7 +1389,46 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
         ipAddress: request.ip,
       });
 
-      return reply.send({ ticket: updated, order });
+      /*
+       * La proposition d'avant réclamait le plus souvent le numéro de commande
+       * que l'agent vient tout juste de fournir : la laisser en place, c'est
+       * redemander au client ce qu'on sait déjà. On rejoue donc le traitement
+       * complet, comme le fait « Analyser » — même classification, même
+       * génération, et `processTicket` repart maintenant de la commande
+       * rattachée au lieu de la remplacer.
+       *
+       * Le rattachement est déjà écrit et journalisé avant cet appel : s'il
+       * échoue ici, il reste acquis. On renvoie alors le ticket sans nouvelle
+       * proposition plutôt qu'une erreur, qui ferait croire à l'agent que son
+       * rattachement n'a pas pris.
+       *
+       * Un ticket clos ou déjà répondu ne repasse pas par le modèle : y
+       * rattacher une commande corrige la fiche et les statistiques, ça ne
+       * rouvre pas la conversation. Le dashboard s'interdit déjà de relancer
+       * l'IA sur une archive, et cette route ne doit pas y faire exception.
+       */
+      const archived = ticket.status === 'CLOSED' || ticket.status === 'AUTO_SENT';
+
+      const draft = archived
+        ? null
+        : await processTicket(merchantId, ticket.id).then(
+            () =>
+              prisma.draft.findFirst({
+                where: { ticketId: ticket.id },
+                orderBy: { createdAt: 'desc' },
+              }),
+            (error: unknown) => {
+              request.log.error(
+                { err: error, ticketId: ticket.id },
+                'Commande rattachée, régénération de la proposition en échec',
+              );
+              return null;
+            },
+          );
+
+      const fresh = await prisma.ticket.findUnique({ where: { id: ticket.id } });
+
+      return reply.send({ ticket: fresh ?? updated, order, draft });
     },
   );
 

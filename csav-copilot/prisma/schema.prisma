@@ -946,3 +946,26 @@ model ReturnAgency {
 
   @@index([merchantId, country])
 }
+
+/// Trace d'un passage du cron, une ligne par tâche et par exécution.
+///
+/// Elle n'existe que pour rendre détectable une panne qui, sans elle, ne
+/// produit aucun signal : un service cron suspendu, supprimé, ou dont l'image
+/// ne démarre plus n'échoue pas — il se tait. Or zéro erreur ressemble
+/// exactement à « tout va bien », et c'est ainsi que l'écoute Gmail expire au
+/// bout de sept jours sans que personne ne l'ait vue venir.
+///
+/// Le passage n'est écrit qu'une fois terminé : un processus tué en cours de
+/// route ne laisse rien, ce qui est la bonne lecture — il n'a pas fait son
+/// travail.
+model CronRun {
+  id    String   @id @default(cuid())
+  /// `watch`, `remind` ou `purge`.
+  task  String
+  ranAt DateTime @default(now())
+  ok    Boolean
+  /// Compteurs du passage, ou message d'erreur s'il a échoué.
+  detail Json?
+
+  @@index([task, ranAt])
+}

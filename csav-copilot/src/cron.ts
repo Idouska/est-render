@@ -11,6 +11,7 @@
  * en silence et personne ne le voit.
  */
 
+import type { Prisma } from '@prisma/client';
 import { logger } from './lib/logger.ts';
 import { sendPlainEmail } from './services/gmail/send.ts';
 import { disconnectPrisma, prisma } from './lib/prisma.ts';
@@ -154,43 +155,89 @@ async function remindSilentSuppliers(): Promise<number> {
   return sent;
 }
 
+/**
+ * Exécute une tâche et laisse une trace de son passage.
+ *
+ * Le code de sortie suffit à signaler qu'une exécution s'est mal passée :
+ * l'hébergeur le relaie. Il ne dit rien, en revanche, d'une exécution qui
+ * n'a pas eu lieu — service suspendu, supprimé, image qui ne démarre plus.
+ * Là, il n'y a ni erreur ni code de sortie, seulement une absence, et rien ne
+ * ressemble plus au bon fonctionnement.
+ *
+ * D'où cette ligne en base à chaque passage : elle transforme le silence en
+ * information. C'est l'API qui la relit et constate le manque — un cron ne
+ * peut pas surveiller sa propre mort.
+ *
+ * L'écriture de la trace ne doit jamais faire échouer la tâche qu'elle
+ * observe : une purge RGPD réussie reste réussie même si on n'a pas su le
+ * noter.
+ */
+async function run<T>(
+  task: string,
+  work: () => Promise<T>,
+  describe: (result: T) => Prisma.InputJsonValue & Record<string, unknown>,
+): Promise<boolean> {
+  try {
+    const result = await work();
+    logger.info(describe(result), `Tâche ${task} effectuée`);
+    await trace(task, true, describe(result));
+    return true;
+  } catch (error) {
+    logger.error({ err: error }, `Tâche ${task} en échec`);
+    await trace(task, false, {
+      erreur: error instanceof Error ? error.message : String(error),
+    });
+    return false;
+  }
+}
+
+async function trace(task: string, ok: boolean, detail: Prisma.InputJsonValue): Promise<void> {
+  try {
+    await prisma.cronRun.create({ data: { task, ok, detail } });
+  } catch (error) {
+    logger.warn({ err: error, task }, 'Passage du cron non tracé');
+  }
+}
+
+/**
+ * Les traces de plus de trente jours ne servent plus.
+ *
+ * La surveillance ne lit que le dernier passage réussi ; le reste est de
+ * l'historique de confort, utile pour constater « il a sauté trois nuits la
+ * semaine dernière ». Un mois suffit largement, et le cron nettoie derrière
+ * lui plutôt que de laisser grossir une table que personne ne regarde.
+ */
+async function purgeOldCronRuns(): Promise<{ traces: number }> {
+  const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const deleted = await prisma.cronRun.deleteMany({ where: { ranAt: { lt: cutoff } } });
+  return { traces: deleted.count };
+}
+
 async function main(): Promise<void> {
   const task = process.argv[2] ?? 'all';
-  let failed = false;
+  const results: boolean[] = [];
 
   if (task === 'all' || task === 'watch') {
-    try {
-      const renewed = await renewExpiringWatches();
-      logger.info({ renewed }, 'Watch Gmail renouvelés');
-    } catch (error) {
-      failed = true;
-      logger.error({ err: error }, 'Renouvellement des watch Gmail en échec');
-    }
+    results.push(await run('watch', renewExpiringWatches, (renewed) => ({ renewed })));
   }
 
   if (task === 'all' || task === 'remind') {
-    try {
-      const reminded = await remindSilentSuppliers();
-      logger.info({ reminded }, 'Rappels de demandes de changement envoyés');
-    } catch (error) {
-      failed = true;
-      logger.error({ err: error }, 'Rappels fournisseurs en échec');
-    }
+    results.push(await run('remind', remindSilentSuppliers, (reminded) => ({ reminded })));
   }
 
   if (task === 'all' || task === 'purge') {
-    try {
-      const purged = await purgeExpiredData();
-      logger.info(purged, 'Purge RGPD effectuée');
-    } catch (error) {
-      failed = true;
-      logger.error({ err: error }, 'Purge RGPD en échec');
-    }
+    results.push(
+      await run(
+        'purge',
+        async () => ({ ...(await purgeExpiredData()), ...(await purgeOldCronRuns()) }),
+        (purged) => purged,
+      ),
+    );
   }
 
-  // Les deux tâches sont indépendantes : on tente les deux, mais un échec doit
+  // Les tâches sont indépendantes : on les tente toutes, mais un échec doit
   // ressortir en code de sortie pour que l'hébergeur alerte.
-  if (failed) process.exitCode = 1;
+  if (results.some((ok) => !ok)) process.exitCode = 1;
 }
 
 await main();

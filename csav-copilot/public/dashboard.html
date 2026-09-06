@@ -143,7 +143,6 @@
         <ul>
           <li><kbd>J</kbd> <kbd>K</kbd> parcourir la file</li>
           <li><kbd>R</kbd> écrire la réponse</li>
-          <li><kbd>E</kbd> déplier le fil</li>
           <li><kbd>⌘</kbd><kbd>↵</kbd> envoyer</li>
           <li><kbd>⌘</kbd><kbd>K</kbd> rechercher</li>
           <li><kbd>?</kbd> cette aide</li>
@@ -376,18 +375,23 @@
             <ul class="brief-points" id="d-summary"></ul>
           </section>
 
-          <details class="thread-fold" id="d-fold" hidden>
-            <summary>
-              <span class="thread-fold-label">Fil complet</span>
+          <!-- Le fil, toujours ouvert. Il a longtemps été replié derrière un
+               « Fil complet » : le résumé de l'IA était censé suffire et le
+               clic n'être qu'un recours. Dans les faits on le dépliait chaque
+               fois — un résumé oriente, il ne remplace pas les mots du client,
+               et lire une réponse sans avoir lu la demande n'a pas de sens. -->
+          <section class="thread-fold" id="d-fold" hidden>
+            <div class="thread-head">
+              <span class="panel-title">Échanges</span>
               <!-- Traduction à la demande : la clientèle écrit en anglais et
                    en espagnol, et se tromper sur « exchange » plutôt que
                    « refund » coûte un colis. -->
               <button class="btn btn-small" id="d-translate" type="button">
                 Traduire en français
               </button>
-            </summary>
+            </div>
             <div class="messages" id="d-messages"></div>
-          </details>
+          </section>
 
           <!-- Les autres fils du même client. Deux mails d'une même personne
                ouvrent deux fils Gmail : répondre à l'un sans voir l'autre,
