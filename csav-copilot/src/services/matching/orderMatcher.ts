@@ -1,5 +1,5 @@
 import type { OrderMatchMethod } from '@prisma/client';
-import { getOrderById, quoteSearchValue, searchOrders, type OrderSummary } from '../shopify/orders.ts';
+import { quoteSearchValue, searchOrders, type OrderSummary } from '../shopify/orders.ts';
 import type { ShopifyClient } from '../shopify/client.ts';
 
 export type OrderMatch =
@@ -136,14 +136,6 @@ export async function matchOrder(
   }
 
   return { status: 'NOT_FOUND' };
-}
-
-/** Rattachement manuel depuis le dashboard (l'agent a tranché lui-même). */
-export async function attachOrderManually(
-  client: ShopifyClient,
-  orderId: string,
-): Promise<OrderSummary | null> {
-  return getOrderById(client, orderId);
 }
 
 /**
