@@ -45,8 +45,9 @@ Reste à faire avant de brancher un vrai marchand :
 - [x] Escalade fournisseur : portail par lien signé, brouillon IA relu avant
       envoi, cycle de vie complet et audité
       ([10-escalade-fournisseur.md](10-escalade-fournisseur.md))
-- [ ] Régénérer un brouillon après rattachement manuel d'une commande — sans
-      ça, la réponse continue de demander une précision déjà obtenue
+- [x] Régénérer la réponse après rattachement manuel d'une commande, et faire
+      respecter ce rattachement par la réanalyse — qui le remplaçait jusqu'ici
+      par son propre échec, celui-là même qui l'avait rendu nécessaire
 - [ ] Remboursement ligne par ligne, restockage
 - [ ] Plafonds de remboursement par utilisateur et par jour
 - [ ] Pagination de la file au-delà de 25 tickets (le curseur existe côté API,

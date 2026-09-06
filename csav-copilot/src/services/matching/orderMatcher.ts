@@ -145,3 +145,50 @@ export async function attachOrderManually(
 ): Promise<OrderSummary | null> {
   return getOrderById(client, orderId);
 }
+
+/**
+ * Commande à relire avant de relancer le matcher, s'il y en a une.
+ *
+ * Le matcher est rejouable, le jugement d'un agent ne l'est pas : quand
+ * quelqu'un a rattaché une commande à la main, c'est qu'il est allé chercher
+ * ce que le matcher n'avait pas su trouver. Le relancer par-dessus
+ * remplacerait ce renseignement par l'échec qui l'avait rendu nécessaire.
+ *
+ * Renvoyer l'identifiant plutôt qu'un booléen laisse l'appelant vérifier que
+ * la commande existe encore : une commande supprimée chez Shopify rend
+ * légitimement la main au matcher.
+ */
+export function manuallyAttachedOrderId(ticket: {
+  orderMatchMethod: OrderMatchMethod | null;
+  shopifyOrderId: string | null;
+}): string | null {
+  return ticket.orderMatchMethod === 'MANUAL' ? ticket.shopifyOrderId : null;
+}
+
+/**
+ * Colonnes de rattachement à écrire au terme d'un passage.
+ *
+ * `match` vaut `null` quand le matcher n'a pas tourné, faute d'avoir eu son
+ * mot à dire : on n'écrit alors aucune de ces colonnes, pour ne pas écraser
+ * d'un `null` calculé le choix d'un agent. Écrire « rien » et écrire
+ * « aucune commande » sont deux choses différentes, et les confondre est
+ * exactement ce qui effaçait les rattachements manuels.
+ */
+export function matchColumns(
+  match: OrderMatch | null,
+  order: OrderSummary | null,
+): {
+  shopifyOrderId?: string | null;
+  orderName?: string | null;
+  orderMatchMethod?: OrderMatchMethod | null;
+  orderMatchScore?: number | null;
+} {
+  if (!match) return {};
+
+  return {
+    shopifyOrderId: order?.id ?? null,
+    orderName: order?.name ?? null,
+    orderMatchMethod: match.status === 'NOT_FOUND' ? null : match.method,
+    orderMatchScore: match.status === 'MATCHED' ? match.score : null,
+  };
+}

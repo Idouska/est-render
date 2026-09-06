@@ -3134,23 +3134,63 @@ async function searchCandidates(ticketId) {
       .join('');
 
     list.querySelectorAll('.candidate').forEach((button) => {
-      button.addEventListener('click', () => attachOrder(ticketId, button.dataset.order));
+      button.addEventListener('click', () => void attachOrder(ticketId, button.dataset.order, button));
     });
   } catch (error) {
     list.innerHTML = `<li class="empty">${esc(error.message)}</li>`;
   }
 }
 
-async function attachOrder(ticketId, orderId) {
+/*
+ * Le rattachement fait relire le message par l'IA côté serveur : la réponse
+ * proposée réclamait le plus souvent le numéro de commande qu'on vient de
+ * fournir, et la garder telle quelle reviendrait à redemander au client ce
+ * qu'on sait déjà. L'appel dure donc le temps d'une génération, d'où l'état
+ * d'attente sur le bouton plutôt qu'une liste qui semble ne rien faire.
+ */
+async function attachOrder(ticketId, orderId, button) {
+  const candidateLabel = button?.innerHTML;
+
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'Rattachement, l’IA reprend la réponse…';
+  }
+
+  prefetched.delete(ticketId);
+
   try {
-    await api(`/api/tickets/${ticketId}/order`, {
-      method: 'POST',
-      body: JSON.stringify({ orderId }),
-    });
-    toast('Commande rattachée.');
+    // `api` peut rendre `null` (204, corps illisible) : sans ce repli, le
+    // rattachement réussi finirait en « Cannot read properties of null ».
+    const { draft } =
+      (await api(`/api/tickets/${ticketId}/order`, {
+        method: 'POST',
+        body: JSON.stringify({ orderId }),
+      })) ?? {};
+
+    /*
+     * Le serveur ne reprend pas toujours la réponse : il s'en abstient sur un
+     * ticket clos, et il peut échouer sans faire échouer le rattachement. La
+     * présence d'une proposition est donc le seul signal fiable — elle dit à
+     * la fois quoi annoncer à l'agent, et s'il faut empêcher l'ouverture du
+     * ticket de relancer une analyse qui vient d'avoir lieu.
+     */
+    if (draft) analysed.add(ticketId);
+
+    toast(draft ? 'Commande rattachée, réponse reprise.' : 'Commande rattachée.');
     await selectTicket(ticketId);
+    await loadQueue();
     await loadAudit();
   } catch (error) {
+    // Le rattachement a pu aboutir malgré l'échec : c'est la reprise de la
+    // réponse qui est incertaine, pas lui. On rouvre le ticket pour montrer
+    // l'état réel plutôt que de laisser l'agent deviner.
+    if (button) {
+      button.disabled = false;
+      // On rend son nom de commande au bouton : « Réessayer » seul ne dirait
+      // plus laquelle des quatre propositions on relance.
+      button.innerHTML = candidateLabel;
+    }
+    await selectTicket(ticketId);
     toast(error.message, true);
   }
 }
