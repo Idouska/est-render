@@ -693,6 +693,24 @@ function ageChip(iso) {
   return `<span class="age age-${level}" title="${esc(dateTime(iso))}">${label}</span>`;
 }
 
+/**
+ * Teinte d'avatar, déduite du nom.
+ *
+ * Déterministe : la même personne garde sa couleur d'une session à l'autre et
+ * d'un écran à l'autre, ce qui fait de l'avatar un repère et non une
+ * décoration. Tirée au hasard, elle changerait à chaque rendu et coûterait
+ * plus d'attention qu'elle n'en économise.
+ *
+ * Teintes pastel et texte foncé : ces pastilles apparaissent cinquante fois
+ * par écran, elles doivent se laisser survoler sans retenir l'œil.
+ */
+function avatarTint(value) {
+  const text = String(value ?? '');
+  let hash = 0;
+  for (let i = 0; i < text.length; i += 1) hash = (hash * 31 + text.charCodeAt(i)) % 360;
+  return `hsl(${hash} 52% 88%)`;
+}
+
 function initials(value) {
   return String(value ?? '')
     .split(/[\s.@_-]+/)
@@ -950,39 +968,57 @@ async function loadQueue({ append = false } = {}) {
           ticket.gmailUnread === false ? ' q-done' : ''
         }" data-id="${ticket.id}"
           aria-current="${ticket.id === state.currentId}">
-          <span class="queue-top">
-            ${
-              state.allShops && shopById.has(ticket.merchantId)
-                ? `<span class="shop-pip" style="background:${esc(
-                    shopById.get(ticket.merchantId).color,
-                  )}" title="${esc(shopById.get(ticket.merchantId).label)}"></span>`
-                : ''
-            }
-            <span class="queue-who">${esc(ticket.customerName ?? ticket.customerEmail)}</span>
-            ${ageChip(ticket.lastMessageAt)}
-          </span>
           <!--
-            Deux étages, plus trois. La ligne disait tout de front — motif,
-            statut, commande, boîte, assigné — et n'en montrait que huit à
-            l'écran. Ce qui départage un survol tient en deux informations :
-            le statut (point coloré, pas pilule) et la commande. Le motif
-            reste dit par le filet gauche coloré ; le reste vit dans le
-            détail, à un clic.
+            Trois étages : qui écrit, ce qu'il demande, ce qu'il dit.
+
+            L'objet du mail occupait la deuxième ligne et n'apprenait rien —
+            « Re: », « Order #13616 Confirmed 7 Sep », « Nouveau message de
+            client ». Écrits par Shopify ou tronqués par un client pressé, ils
+            obligeaient à ouvrir chaque message pour savoir de quoi il parle,
+            ce qu'une file est justement censée éviter. Le titre porte donc
+            l'intention devinée, et les mots du client passent en troisième
+            ligne : c'est le couple qui permet de trancher sans ouvrir.
           -->
-          <div class="queue-line2">
-            <span class="qdot st-${ticket.status}" title="${label}"></span>
-            <span class="queue-subject">${esc(ticket.subject ?? '(sans objet)')}</span>
-            <span class="queue-ord">${
-              ticket.orderName ? esc(ticket.orderName) : ''
-            }</span>
+          <span class="qav" aria-hidden="true"
+            style="background:${avatarTint(ticket.customerName ?? ticket.customerEmail)}"
+            >${esc(initials(ticket.customerName ?? ticket.customerEmail))}</span>
+          <span class="qbody">
+            <span class="queue-top">
+              ${
+                state.allShops && shopById.has(ticket.merchantId)
+                  ? `<span class="shop-pip" style="background:${esc(
+                      shopById.get(ticket.merchantId).color,
+                    )}" title="${esc(shopById.get(ticket.merchantId).label)}"></span>`
+                  : ''
+              }
+              <span class="queue-who">${esc(ticket.customerName ?? ticket.customerEmail)}</span>
+              ${ageChip(ticket.lastMessageAt)}
+            </span>
+
+            <span class="queue-line2">
+              <span class="qdot st-${ticket.status}" title="${label}"></span>
+              <span class="queue-subject">${esc(ticketTitle(ticket))}</span>
+              <span class="queue-ord">${
+                ticket.orderName ? esc(ticket.orderName) : ''
+              }</span>
+              ${
+                who
+                  ? `<span class="who-dot" title="${esc(who.name ?? who.email)}">${initials(
+                      who.name ?? who.email,
+                    )}</span>`
+                  : ''
+              }
+            </span>
+
             ${
-              who
-                ? `<span class="who-dot" title="${esc(who.name ?? who.email)}">${initials(
-                    who.name ?? who.email,
-                  )}</span>`
+              // Les premiers mots du dernier message reçu. Absent sur les fils
+              // importés de l'historique, qui n'ont pas d'extrait : la ligne
+              // disparaît alors plutôt que de laisser un blanc.
+              ticket.messages?.[0]?.snippet
+                ? `<span class="queue-prev">${esc(ticket.messages[0].snippet)}</span>`
                 : ''
             }
-          </div>
+          </span>
         </button>
       </li>`;
     })

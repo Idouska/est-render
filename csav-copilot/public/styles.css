@@ -6525,3 +6525,100 @@ textarea:focus-visible {
 
 .bf b { font-weight: 600; color: var(--ink); }
 .bf-warn b { color: var(--warn); }
+
+/* ========================================== file : lignes à trois étages ===
+
+   Qui écrit, ce qu'il demande, ce qu'il dit. La troisième ligne coûte de la
+   hauteur et la rend aussitôt : sans elle, il fallait ouvrir un message pour
+   savoir de quoi il parlait, et une file de cinq mille messages qu'on doit
+   ouvrir un par un n'est pas une file. */
+
+.queue-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 9px;
+  padding: 7px 9px;
+}
+
+.qav {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+  margin-top: 1px;
+}
+
+.qbody {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+/* L'extrait : gris, une ligne, coupé net. Il oriente, il ne se lit pas — deux
+   lignes de citation reprendraient la place que la troisième ligne fait
+   gagner. */
+.queue-prev {
+  font-size: 11.5px;
+  color: var(--ink-mute);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* L'heure cesse d'être une pastille verte.
+
+   Elle en portait une sur chaque ligne : une file où tout arrive aujourd'hui
+   affichait donc cinquante badges verts identiques. Une couleur présente
+   partout ne signale rien, et le vert disait « tout va bien » là où il ne
+   disait que « récent ». La couleur est désormais réservée à ce qui traîne —
+   c'est la seule chose qu'on ait besoin de voir sans lire. */
+.queue-item .age {
+  background: none;
+  padding: 0;
+  font-weight: 500;
+  color: var(--ink-mute);
+}
+
+.queue-item .age-warm { color: var(--warn); font-weight: 600; }
+.queue-item .age-late { color: var(--crit); font-weight: 600; }
+
+/* Un message lu s'efface en entier, extrait compris : le laisser en gris franc
+   sous un titre pâli donnerait plus de poids à ce qu'on a déjà traité qu'à ce
+   qui reste. */
+.queue-item.q-done .qav { opacity: 0.62; }
+.queue-item.q-done .queue-prev { opacity: 0.7; }
+
+/* Les dossiers sur une seule rangée : quatre entrées qui débordaient sur deux
+   lignes prenaient la hauteur de deux messages.
+
+   Resserrés plutôt que mis en défilement horizontal : une barre qu'on ne voit
+   pas est un dossier qu'on ne trouvera jamais. Quatre entrées doivent tenir
+   dans 350 px, sinon c'est le nombre d'entrées qu'il faut revoir, pas la
+   façon de les cacher. */
+.folders {
+  /* `wrap` et non `nowrap` : resserrés, les quatre dossiers tiennent sur une
+     ligne, mais avec zéro marge — un compteur qui passe à quatre chiffres
+     déborderait. Mieux vaut alors une seconde ligne qu'une entrée coupée. */
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px 8px 0;
+}
+
+.folder {
+  white-space: nowrap;
+  padding: 3px 8px;
+  font-size: 11.5px;
+  gap: 5px;
+  min-width: 0;
+}
+
+.folder-n { font-size: 10.5px; }
