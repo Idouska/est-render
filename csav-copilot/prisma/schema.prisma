@@ -244,6 +244,19 @@ model Ticket {
   /// le montant affiché vient toujours de la commande elle-même.
   orderTotal Decimal? @db.Decimal(12, 2)
 
+  /// Le fil a-t-il quitté la boîte de réception Gmail ?
+  ///
+  /// C'est le geste par lequel une équipe dit « j'en ai fini » — bien plus sûr
+  /// que « lu », qu'un simple survol suffit à déclencher. La file s'en sert
+  /// pour deux choses : n'appuyer en gras que ce qui reste à traiter, et
+  /// ranger le reste dans le dossier Archivés au lieu de le laisser encombrer
+  /// la réception.
+  ///
+  /// Faux par défaut : un fil dont on ne sait rien est réputé à traiter. Se
+  /// tromper dans ce sens fait voir un message de trop ; l'inverse le ferait
+  /// disparaître.
+  gmailArchived Boolean @default(false)
+
   /// Libellés Gmail portés par le fil, tels que le marchand les a créés.
   /// Les siens uniquement : les catégories automatiques de Google décrivent
   /// son classement à lui, pas l'organisation du SAV.

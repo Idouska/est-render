@@ -66,12 +66,20 @@ export async function ingestMerchantInbox(
         // reçu le message, pas d'une autre.
         mailboxId: mailboxId ?? null,
         labels: resolveLabels(message.labelIds, labelNames),
+        // Un message qui arrive hors boîte de réception a déjà été rangé —
+        // règle Gmail, ou archivage manuel entre son arrivée et notre relève.
+        gmailArchived: !message.labelIds.includes('INBOX'),
         lastMessageAt: message.receivedAt,
       },
       update: {
         // Un nouveau message sur un fil déjà traité rouvre le ticket.
         status: 'NEW',
         labels: resolveLabels(message.labelIds, labelNames),
+        // Et le fait ressortir des archives : Gmail remet le fil en réception
+        // quand une réponse arrive, la file doit suivre. Sans cette ligne, un
+        // fil archivé une fois resterait rangé malgré la relance du client —
+        // c'est-à-dire invisible au moment où il compte le plus.
+        gmailArchived: !message.labelIds.includes('INBOX'),
         lastMessageAt: message.receivedAt,
       },
     });

@@ -333,6 +333,14 @@
           <!-- Barre d'actions groupées. Elle n'apparaît qu'une fois quelque
                chose de coché : une barre d'actions permanente sur une file
                vide est un bruit permanent. -->
+          <!-- Dossiers Gmail. « Brouillons » et « Envoyés » ne viennent pas
+               de Gmail et ne le peuvent pas : le produit a cessé d'y écrire
+               ses brouillons, un brouillon posé dans une boîte partagée
+               s'envoyant depuis n'importe quel téléphone, hors de l'outil et
+               de ses contrôles. Ils lisent donc ce que le produit détient en
+               propre — ses propositions en attente, et les fils où une
+               réponse est partie. -->
+          <nav class="folders" id="folders" aria-label="Dossiers"></nav>
           <div class="bulk" id="bulk" hidden></div>
           <div class="qtable-wrap" id="queue-table" hidden></div>
           <ul class="queue-list" id="queue">
@@ -412,6 +420,16 @@
                  modale masque le ticket au moment précis où l'on a besoin de
                  le relire pour répondre. -->
             <div class="compose" id="compose" hidden>
+              <!-- L'objet part dans le mail : il se relit et se corrige comme
+                   le corps. Il était calculé en silence (« Re: » + l'objet du
+                   fil), ce qui convient neuf fois sur dix — et interdisait la
+                   dixième, quand la conversation a changé de sujet et que le
+                   client reçoit une réponse titrée d'après sa question
+                   d'avant. -->
+              <label class="compose-subject">
+                <span>Objet</span>
+                <input type="text" id="compose-subject" autocomplete="off" />
+              </label>
               <textarea id="compose-body" rows="5"></textarea>
               <div class="compose-foot">
                 <button class="btn btn-small" id="compose-relay" hidden></button>

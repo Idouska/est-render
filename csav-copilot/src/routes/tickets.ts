@@ -57,12 +57,55 @@ const listQuery = z.object({
   label: z.string().max(600).optional(),
   /** Montant plancher de la commande rattachée. */
   minAmount: z.coerce.number().min(0).max(100000).optional(),
+  /**
+   * Dossier, à la manière de Gmail.
+   *
+   * `inbox` est ce que la file montre par défaut : ce qui reste à traiter.
+   * `archived` recueille les fils sortis de la boîte de réception — le geste
+   * par lequel une équipe dit « j'en ai fini ».
+   *
+   * `drafts` et `sent` ne viennent pas de Gmail et ne le peuvent pas : le
+   * produit a cessé d'écrire des brouillons dans la boîte partagée, parce
+   * qu'un brouillon posé là s'envoie depuis n'importe quel téléphone, hors de
+   * l'outil, sans contrôle de rôle ni plafond ni journal. Ces deux dossiers
+   * lisent donc ce que le produit détient en propre : ses propositions en
+   * attente de relecture, et les fils où une réponse est réellement partie.
+   *
+   * `all` conserve le comportement d'avant ces dossiers, et reste le défaut
+   * pour ne rien casser chez un appelant qui ne les connaît pas.
+   */
+  folder: z.enum(['inbox', 'archived', 'drafts', 'sent', 'all']).default('all'),
   /** `all` élargit la file à toutes les boutiques du groupe. */
   scope: z.enum(['shop', 'all']).default('shop'),
   sort: z.enum(['oldest', 'newest', 'confidence', 'amount', 'due']).default('newest'),
   cursor: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(25),
 });
+
+/**
+ * Clause du dossier courant.
+ *
+ * Chacune tient sur une clé de premier niveau, jamais sur `AND` ni `OR` : ces
+ * deux-là sont déjà pris — par la veille et par la recherche libre — et deux
+ * clés identiques dans le même objet s'écrasent en silence. Le filtre
+ * disparaîtrait sans la moindre erreur, ce qui est déjà arrivé ici.
+ */
+function folderWhere(folder: 'inbox' | 'archived' | 'drafts' | 'sent' | 'all') {
+  switch (folder) {
+    case 'inbox':
+      return { gmailArchived: false };
+    case 'archived':
+      return { gmailArchived: true };
+    case 'drafts':
+      // Une proposition qui attend une relecture, pas un brouillon Gmail.
+      return { drafts: { some: { status: 'PENDING_REVIEW' as const } } };
+    case 'sent':
+      // Un fil où quelque chose est parti de notre côté.
+      return { messages: { some: { direction: 'OUTBOUND' as const } } };
+    default:
+      return {};
+  }
+}
 
 /**
  * Traduit les filtres de la file en clause Prisma.
@@ -74,7 +117,7 @@ const listQuery = z.object({
 function buildTicketWhere(
   merchantIds: string[],
   filters: z.infer<typeof listQuery>,
-  options: { withStatus: boolean },
+  options: { withStatus: boolean; withFolder?: boolean },
 ) {
   const term = filters.q?.trim();
 
@@ -124,6 +167,7 @@ function buildTicketWhere(
             { OR: [{ snoozedUntil: null }, { snoozedUntil: { lte: new Date() } }] },
           ],
         }),
+    ...(options.withFolder === false ? {} : folderWhere(filters.folder)),
     ...(filters.mailbox ? { mailboxId: filters.mailbox } : {}),
     ...(labelNames.length > 0 ? { labels: { hasSome: labelNames } } : {}),
     ...(filters.minAmount !== undefined ? { orderTotal: { gte: filters.minAmount } } : {}),
@@ -393,12 +437,31 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
     });
 
 
+    /*
+     * Compteurs des dossiers, calculés hors dossier courant.
+     *
+     * Même raison que les compteurs de statut : un rail où chaque dossier
+     * n'afficherait son nombre qu'une fois ouvert ne servirait à rien — c'est
+     * précisément avant d'y aller qu'on veut savoir s'il y a quelque chose.
+     */
+    const folderBase = buildTicketWhere(merchantIds, query.data, {
+      withStatus: false,
+      withFolder: false,
+    });
+
+    const [inbox, archived, drafts, sent] = await Promise.all(
+      (['inbox', 'archived', 'drafts', 'sent'] as const).map((name) =>
+        prisma.ticket.count({ where: { ...folderBase, ...folderWhere(name) } }),
+      ),
+    );
+
     return reply.send({
       tickets: tickets.map((ticket) => ({
         ...ticket,
         /** Nombre d'échanges avec ce client, celui-ci compris. */
         threads: threadsByEmail[ticket.customerEmail] ?? 1,
       })),
+      folders: { inbox, archived, drafts, sent },
       counts: { ...counts, ALL: byStatus.reduce((sum, row) => sum + row._count, 0) },
       // Tous les libellés du marchand, pas seulement ceux de la page affichée.
       // Les déduire des cinquante tickets à l'écran donnait une liste qui

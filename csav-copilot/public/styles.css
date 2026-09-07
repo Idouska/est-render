@@ -6070,6 +6070,70 @@ textarea:focus-visible {
   white-space: nowrap;
 }
 
+/* Traité dans Gmail : la ligne se retire.
+   Le gras d'une file ne veut rien dire s'il est partout — il ne sert qu'à
+   distinguer, et un écran entier en gras ne distingue rien. Ici il ne marque
+   plus que ce qui reste à faire, l'archivage dans Gmail valant « j'en ai
+   fini ». Le reste s'efface sans disparaître : plus léger, plus pâle, mais
+   toujours lisible et toujours cliquable. */
+/* L'écart doit se voir sans comparer deux lignes côte à côte : 680 contre
+   420, comme Gmail creuse entre lu et non lu. Un écart de cent points se
+   mesure mais ne se remarque pas, et un gras qu'il faut chercher ne trie
+   rien. */
+.queue-item:not(.q-done) .queue-subject {
+  font-weight: 680;
+  color: var(--ink);
+}
+
+.queue-item.q-done .queue-subject {
+  font-weight: 420;
+  color: var(--ink-soft);
+}
+
+.queue-item.q-done .queue-who { color: var(--ink-mute); }
+
+/* Dossiers, à la manière de Gmail. En bandeau plutôt qu'en rail vertical :
+   la colonne fait 350 px, une colonne de dossiers en mangerait le tiers pour
+   quatre entrées qu'on change trois fois par jour. */
+.folders {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 9px 9px 0;
+}
+
+.folder {
+  appearance: none;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-soft);
+}
+
+.folder:hover { background: var(--inset); color: var(--ink); }
+
+.folder[aria-pressed="true"] {
+  background: var(--accent-soft);
+  border-color: transparent;
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+.folder-n {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-mute);
+}
+
+.folder[aria-pressed="true"] .folder-n { color: inherit; }
+
 .queue-ord {
   flex: none;
   font: 11px var(--font-mono);
@@ -6177,6 +6241,37 @@ textarea:focus-visible {
    Empilé, il redevient trois lignes. */
 @media (max-width: 700px) {
   .notice { flex-direction: column; gap: 6px; }
+}
+
+/* L'objet, au-dessus du corps : intitulé court à gauche, champ qui prend le
+   reste. Aligné sur la ligne du dessous plutôt que présenté en bloc de
+   formulaire — c'est un mail qu'on écrit, pas un dossier qu'on remplit. */
+.compose-subject {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 7px;
+}
+
+.compose-subject > span {
+  flex: none;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+.compose-subject input {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
 }
 
 /* ============================================== défilement par colonne === */
