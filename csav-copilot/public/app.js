@@ -24,6 +24,10 @@ const state = {
   refreshing: false,
   lastRefresh: null,
   queue: emptyQueueFilters(),
+  /* Onglet ouvert dans la colonne centrale. Mémorisé le temps de la session :
+     un agent qui suit une escalade veut rester sur Fournisseur en passant d'un
+     ticket à l'autre, pas y revenir à chaque fois. */
+  detailTab: 'thread',
   queueCounts: {},
   queueFolders: {},
   /* Messages cochés dans la file. Un Set et non un tableau : on teste
@@ -2271,6 +2275,193 @@ async function selectTicket(id, { silent = false } = {}) {
   await Promise.all([loadQueue(), loadEscalations(id)]);
 }
 
+/**
+ * Titre du ticket : ce que le client demande, pas ce que Shopify a intitulé.
+ *
+ * L'objet d'un mail de boutique est écrit par la plateforme — « Order #13616
+ * Confirmed 7 Sep » — et ne dit rien du problème. L'intention devinée et le
+ * numéro de commande le disent en trois mots.
+ *
+ * Le libellé vient d'`INTENT_LABELS`, partagée avec la file et les filtres :
+ * une seconde table pour ce seul écran ferait diverger deux vocabulaires. Il
+ * n'y a donc pas de titre plus fin que les sept intentions du modèle — pas de
+ * « Annulation et remboursement » tant que le modèle ne classe pas ainsi.
+ *
+ * Trois cas se replient : pas encore d'intention (l'analyse tourne, et elle se
+ * déclenche à l'ouverture), pas de commande rattachée, et un ticket sans objet.
+ */
+function ticketTitle(ticket) {
+  const intent = ticket.intent ? (INTENT_LABELS[ticket.intent] ?? ticket.intent) : null;
+  const order = ticket.orderName ? ` · ${ticket.orderName}` : '';
+
+  if (intent) return `${intent}${order}`;
+  // Sans intention, l'objet reste le seul repère — et dire « analyse en
+  // cours » vaut mieux qu'un titre vide pendant la seconde que ça prend.
+  return ticket.subject?.trim() || 'Analyse en cours…';
+}
+
+/**
+ * Identité du client et faits du dossier, sur deux lignes.
+ *
+ * La première nomme la personne et qualifie la demande. La seconde porte ce
+ * qui se lit d'un coup d'œil et ne se travaille pas : combien de commandes,
+ * combien dépensé, depuis quand le message attend, et l'objet d'origine — le
+ * seul texte qui permette de retrouver le fil dans Gmail.
+ *
+ * Le nombre de commandes et le total dépensé viennent de la commande
+ * rattachée, pas du ticket, et n'existent donc pas toujours. Une ligne courte
+ * vaut mieux que deux zéros qui affirment que ce client n'a rien acheté.
+ */
+function renderTicketMeta(ticket, order) {
+  const customer = order?.customer;
+  const confidence =
+    ticket.intentConfidence != null
+      ? `<span class="tp tp-conf">${Math.round(ticket.intentConfidence * 100)} %</span>`
+      : '';
+
+  const facts = [];
+  if (customer?.numberOfOrders != null) {
+    facts.push(`${customer.numberOfOrders} commande${customer.numberOfOrders > 1 ? 's' : ''}`);
+  }
+  if (customer?.amountSpent != null && order?.currency) {
+    facts.push(`${euro(customer.amountSpent, order.currency)} dépensés`);
+  }
+  facts.push(`ouvert depuis ${ageInDays(ticket.createdAt)} j`);
+
+  $('d-meta').innerHTML =
+    `<span class="tm-who">
+       <button class="linkish" id="d-who">${esc(
+         ticket.customerName ?? ticket.customerEmail,
+       )}</button>
+       <code>${esc(ticket.customerEmail)}</code>
+       ${
+         ticket.intent
+           ? `<span class="tp tp-intent">${esc(
+               INTENT_LABELS[ticket.intent] ?? ticket.intent,
+             )}</span>`
+           : ''
+       }
+       ${confidence}
+     </span>
+     <span class="tm-facts">${facts.map((f) => esc(f)).join(' · ')}${
+       // L'objet d'origine : illisible comme titre, indispensable pour
+       // retrouver le fil dans Gmail.
+       ticket.subject ? ` · <span class="tm-subj">${esc(ticket.subject)}</span>` : ''
+     }</span>`;
+}
+
+/*
+ * Onglets de la colonne centrale.
+ *
+ * Ils ne créent aucune fonctionnalité : ils rangent trois sections qui
+ * existaient déjà et s'empilaient l'une sous l'autre. Le fil se consulte à
+ * chaque ticket, les demandes au fournisseur et les autres fils du même client
+ * une fois sur dix — et pourtant ces deux-là repoussaient la réponse hors de
+ * l'écran à chaque ouverture.
+ *
+ * Un onglet vide ne s'affiche pas : proposer « Fournisseur » sur un ticket
+ * sans demande, c'est inviter à un clic qui ne montre rien.
+ */
+const TABS = [
+  {
+    key: 'thread',
+    label: 'Conversation',
+    pane: 'd-fold',
+    count: () => state.detail?.ticket?.messages?.length ?? 0,
+  },
+  {
+    key: 'supplier',
+    label: 'Fournisseur',
+    pane: 'd-changes',
+    count: () => state.detail?.changes?.length ?? 0,
+  },
+  {
+    key: 'history',
+    label: 'Historique',
+    pane: 'd-sibs',
+    count: () => state.detail?.siblings?.length ?? 0,
+  },
+];
+
+function renderTabs() {
+  const bar = $('d-tabs');
+  if (!bar) return;
+
+  /*
+   * Un onglet existe si sa section a du contenu.
+   *
+   * `hidden` est posé par les fonctions de rendu de chaque section, qui ont
+   * déjà décidé s'il y avait quelque chose à montrer. Le relire évite de
+   * dupliquer leur logique — et de la voir diverger.
+   */
+  const available = TABS.filter((tab) => {
+    const pane = $(tab.pane);
+    return pane && !pane.dataset.empty;
+  });
+
+  if (available.length <= 1) {
+    // Un seul onglet n'est pas une navigation, c'est une étiquette.
+    bar.hidden = true;
+    for (const tab of TABS) {
+      const pane = $(tab.pane);
+      if (pane) pane.hidden = pane.dataset.empty === '1';
+    }
+    return;
+  }
+
+  /*
+   * L'onglet ouvert est mémorisé, mais un repli ne l'écrase pas.
+   *
+   * Un agent qui suit une escalade reste sur « Fournisseur » d'un ticket à
+   * l'autre. Croiser un ticket sans demande fournisseur affiche la
+   * conversation — sans effacer sa préférence, sinon il la perdrait pour de
+   * bon au premier ticket dépourvu de cet onglet.
+   */
+  const current = available.some((tab) => tab.key === state.detailTab)
+    ? state.detailTab
+    : available[0].key;
+
+  bar.hidden = false;
+  bar.innerHTML = available
+    .map(
+      (tab) =>
+        `<button class="tab" type="button" role="tab" data-tab="${tab.key}"
+          aria-selected="${tab.key === current}">${esc(tab.label)}${
+            // Un compte de 1 sur la conversation n'apprend rien ; deux
+            // demandes fournisseur, si.
+            tab.count() > 1 ? `<span class="tab-n">${tab.count()}</span>` : ''
+          }</button>`,
+    )
+    .join('');
+
+  for (const tab of TABS) {
+    const pane = $(tab.pane);
+    if (pane) pane.hidden = pane.dataset.empty === '1' || tab.key !== current;
+  }
+
+  bar.querySelectorAll('[data-tab]').forEach((button) =>
+    button.addEventListener('click', () => {
+      state.detailTab = button.dataset.tab;
+      renderTabs();
+    }),
+  );
+}
+
+/**
+ * Marque une section comme vide ou non, pour les onglets.
+ *
+ * Les fonctions de rendu posaient `hidden` directement. Ce n'est plus
+ * suffisant : une section peut être masquée parce qu'elle est vide, ou parce
+ * qu'un autre onglet est ouvert. Confondre les deux ferait disparaître un
+ * onglet dès qu'on le quitte.
+ */
+function markPane(id, empty) {
+  const pane = $(id);
+  if (!pane) return;
+  pane.dataset.empty = empty ? '1' : '';
+  if (empty) pane.hidden = true;
+}
+
 function renderDetail() {
   const { ticket, order, orderError } = state.detail;
 
@@ -2281,21 +2472,9 @@ function renderDetail() {
   const escalate = $('new-escalation');
   if (escalate) escalate.hidden = !ticket || !canI('escalate');
 
-  $('d-subject').textContent = ticket.subject ?? '(sans objet)';
+  $('d-subject').textContent = ticketTitle(ticket);
 
-  $('d-meta').innerHTML =
-    `<button class="linkish" id="d-who">${esc(
-      ticket.customerName ?? ticket.customerEmail,
-    )}</button> · <code>${esc(ticket.customerEmail)}</code>` +
-    (ticket.intent
-      ? ` · intention <b>${INTENT_LABELS[ticket.intent] ?? ticket.intent}</b>${
-          ticket.intentConfidence != null
-            ? ` (${ticket.intentConfidence.toFixed(2).replace('.', ',')})`
-            : ''
-        }`
-      : '') +
-    ` · ouvert depuis <b>${ageInDays(ticket.createdAt)} j</b>`;
-
+  renderTicketMeta(ticket, order);
   renderTicketLabels(ticket);
 
   $('d-who')?.addEventListener('click', () =>
@@ -2398,9 +2577,104 @@ function renderDetail() {
 
   const draft = ticket.drafts?.[0] ?? null;
   renderDraft(draft, ticket);
+
+  // Après les trois sections : les onglets lisent ce qu'elles ont décidé
+  // d'afficher, ils ne le recalculent pas.
+  renderTabs();
+  renderRecommended(ticket, order);
+
   renderCustomer(order);
   renderOrder(ticket, order, orderError);
   renderShipping(order);
+}
+
+/*
+ * Action recommandée.
+ *
+ * Ce que l'agent doit faire, en une phrase, avec le geste à portée. Elle se
+ * déduit de l'intention devinée ET de l'état réel de la commande : recommander
+ * un remboursement sur une commande impayée, ou une réexpédition sur un colis
+ * déjà livré, coûterait plus cher que ne rien recommander.
+ *
+ * Le bouton ne fait rien par lui-même. Il délègue aux gestes existants, qui
+ * portent les droits, les plafonds et le journal d'audit — un second chemin
+ * vers le remboursement serait un second chemin à sécuriser.
+ *
+ * Ce produit ne sait pas annuler une commande Shopify : les seules écritures
+ * sont le remboursement et l'expédition. La recommandation ne promet donc
+ * jamais une annulation, même quand le client la demande — elle propose le
+ * remboursement, qui est ce que l'outil sait faire.
+ */
+function recommendation(ticket, order) {
+  const paid = order?.displayFinancialStatus;
+  const shipped = order?.displayFulfillmentStatus;
+  const unshipped = shipped === 'UNFULFILLED' || shipped === 'ON_HOLD';
+  const refundable = Boolean(order && paid === 'PAID' && canI('refund'));
+  const amount = order ? euro(order.totalPrice, order.currency) : null;
+
+  if ((ticket.intent === 'REFUND' || ticket.intent === 'DISPUTE') && refundable) {
+    return {
+      title: `Rembourser ${amount}`,
+      why: unshipped
+        ? 'La commande est payée et pas encore expédiée.'
+        : 'La commande est payée. Vérifiez l’état du colis avant de rembourser.',
+      cta: `Rembourser ${amount}`,
+      run: () => $('btn-refund').click(),
+    };
+  }
+
+  if (ticket.intent === 'WISMO' && ticket.shopifyOrderId) {
+    return {
+      title: 'Vérifier le suivi du colis',
+      why: 'La position du colis d’après le transporteur répond à la question posée.',
+      cta: 'Voir le suivi',
+      run: () => setView('tracking'),
+    };
+  }
+
+  if (ticket.intent === 'RETURN' && ticket.shopifyOrderId) {
+    return {
+      title: 'Ouvrir un dossier de retour',
+      why: 'L’article revient en agence, puis au stock France pour une réexpédition.',
+      cta: 'Reshipment',
+      run: () => void openReshipment(ticket),
+    };
+  }
+
+  if (!ticket.shopifyOrderId) {
+    return {
+      title: 'Rattacher une commande',
+      why: 'Sans commande, ni le suivi ni le remboursement ne sont possibles.',
+      cta: null,
+      run: null,
+    };
+  }
+
+  return null;
+}
+
+function renderRecommended(ticket, order) {
+  const box = $('d-reco');
+  if (!box) return;
+
+  const reco = recommendation(ticket, order);
+
+  // Rien de sûr à recommander : on se tait. Une recommandation générique se
+  // fait ignorer, et entraîne à ignorer les autres.
+  box.hidden = !reco;
+  if (!reco) return;
+
+  box.innerHTML =
+    `<div class="reco-body">
+       <span class="panel-title">Action recommandée</span>
+       <b class="reco-title">${esc(reco.title)}</b>
+       <p class="reco-why">${esc(reco.why)}</p>
+     </div>` +
+    (reco.cta
+      ? `<button class="btn btn-primary reco-go" type="button">${esc(reco.cta)}</button>`
+      : '');
+
+  box.querySelector('.reco-go')?.addEventListener('click', reco.run);
 }
 
 
@@ -2433,7 +2707,10 @@ function renderChanges(changes) {
   const box = $('d-changes');
   if (!box) return;
 
-  box.hidden = changes.length === 0;
+  // `markPane` plutôt que `hidden` : une section peut être masquée parce
+  // qu'elle est vide, ou parce qu'un autre onglet est ouvert. Confondre les
+  // deux ferait disparaître l'onglet dès qu'on le quitte.
+  markPane('d-changes', changes.length === 0);
   if (changes.length === 0) return;
 
   box.innerHTML =
@@ -2473,7 +2750,7 @@ function renderSiblings(siblings, ticket) {
   const box = $('d-sibs');
   if (!box) return;
 
-  box.hidden = siblings.length === 0;
+  markPane('d-sibs', siblings.length === 0);
   if (siblings.length === 0) return;
 
   const who = ticket.customerName ?? ticket.customerEmail;
@@ -3126,7 +3403,7 @@ function renderTicketLabels(ticket) {
 function renderBrief(draft) {
   const brief = $('d-brief');
   // Pas de fil, pas de section : le cadre vide ferait croire à une panne.
-  $('d-fold').hidden = !state.detail?.ticket;
+  markPane('d-fold', !state.detail?.ticket);
   const points = draft?.summary ?? [];
   const ask = draft?.ask ?? '';
 
@@ -3143,6 +3420,63 @@ function renderBrief(draft) {
   $('d-ask').textContent = ask;
   $('d-ask').hidden = !ask;
   $('d-summary').innerHTML = points.map((line) => `<li>${esc(line)}</li>`).join('');
+
+  renderBriefFacts();
+}
+
+/**
+ * Les faits du dossier, en puces sous le résumé.
+ *
+ * Ils ne sont pas extraits du texte généré mais lus sur la commande Shopify :
+ * un montant recopié depuis une phrase de modèle n'engage personne, et c'est
+ * sur celui-là qu'un agent rembourse.
+ *
+ * Chaque puce n'apparaît que si sa donnée existe. Sans commande rattachée —
+ * cas courant du produit — il ne reste que l'intention, et c'est honnête.
+ */
+function renderBriefFacts() {
+  const box = $('d-facts');
+  if (!box) return;
+
+  const ticket = state.detail?.ticket;
+  const order = state.detail?.order;
+  if (!ticket) {
+    box.hidden = true;
+    return;
+  }
+
+  const facts = [];
+
+  if (ticket.intent) {
+    facts.push(['Intention', INTENT_LABELS[ticket.intent] ?? ticket.intent, false]);
+  }
+  if (order?.name ?? ticket.orderName) {
+    facts.push(['Commande', order?.name ?? ticket.orderName, false]);
+  }
+  if (order) {
+    facts.push(['Montant', euro(order.totalPrice, order.currency), false]);
+
+    // Les états bruts de Shopify se lisent en anglais administratif ; les
+    // tables de traduction existent déjà pour la fiche commande.
+    const paid = FINANCIAL_LABELS[order.displayFinancialStatus];
+    const ship = FULFILLMENT_LABELS[order.displayFulfillmentStatus];
+    const etat = [paid, ship].filter(Boolean).join(' · ');
+    // Orange quand quelque chose cloche du côté de l'argent ou du colis :
+    // c'est ce qui décide de l'action, pas la couleur d'une pastille.
+    const alerte =
+      order.displayFinancialStatus !== 'PAID' ||
+      order.displayFulfillmentStatus === 'UNFULFILLED' ||
+      order.displayFulfillmentStatus === 'ON_HOLD';
+    if (etat) facts.push(['Statut', etat, alerte]);
+  }
+
+  box.hidden = facts.length === 0;
+  box.innerHTML = facts
+    .map(
+      ([label, value, alerte]) =>
+        `<span class="bf${alerte ? ' bf-warn' : ''}">${esc(label)} <b>${esc(value)}</b></span>`,
+    )
+    .join('');
 }
 
 

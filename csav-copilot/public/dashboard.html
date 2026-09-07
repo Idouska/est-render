@@ -357,7 +357,15 @@
         </section>
 
         <section class="panel" aria-label="Détail du message">
-          <div class="thread-head">
+          <!-- En-tête du ticket.
+
+               L'objet du mail n'y domine plus : il est écrit par Shopify
+               (« Order #13616 Confirmed 7 Sep »), jamais par le client, et ne
+               décrit donc pas le problème. Le titre porte l'intention devinée
+               et le numéro de commande — les deux choses qu'un agent cherche
+               en ouvrant. L'objet d'origine reste lisible juste en dessous,
+               car c'est lui qui figure dans la boîte Gmail. -->
+          <div class="ticket-head">
             <h1 class="thread-subject" id="d-subject">Sélectionnez un message</h1>
             <div class="thread-meta" id="d-meta"></div>
             <!-- Libellés du message, modifiables sur place, et suppression.
@@ -365,6 +373,15 @@
                  pas : le classement se perd, et la file cesse d'être triable. -->
             <div class="thread-labels" id="d-labels" hidden></div>
           </div>
+
+          <!-- Onglets.
+
+               Ils n'ajoutent rien : ils rangent trois sections qui
+               s'empilaient verticalement — le fil, les demandes envoyées au
+               fournisseur, les autres fils du même client. Empilées, les deux
+               dernières repoussaient la réponse hors de l'écran alors qu'on
+               les consulte une fois sur dix. -->
+          <nav class="tabs" id="d-tabs" hidden aria-label="Sections du message"></nav>
           <div class="notice" id="read-only" hidden>
             <span class="notice-mark">Lecture</span>
             <div>
@@ -386,6 +403,11 @@
             </div>
             <p class="brief-ask" id="d-ask"></p>
             <ul class="brief-points" id="d-summary"></ul>
+            <!-- Les faits du dossier, structurés : intention, commande,
+                 montant, état de paiement et d'expédition. Ils viennent de la
+                 commande Shopify, pas du texte du résumé — un chiffre lu dans
+                 une phrase générée n'engage personne. -->
+            <div class="brief-facts" id="d-facts" hidden></div>
           </section>
 
           <!-- Le fil, toujours ouvert. Il a longtemps été replié derrière un
@@ -415,6 +437,19 @@
           <section class="chg" id="d-changes" hidden></section>
 
           <section class="sibs" id="d-sibs" hidden></section>
+
+          <!-- Action recommandée.
+
+               Ce que l'agent doit faire, dit en une phrase, avec le geste à
+               portée. Elle se déduit de l'intention devinée et de l'état réel
+               de la commande — payée, expédiée, déjà remboursée — et non d'un
+               texte écrit à l'avance : proposer un remboursement sur une
+               commande impayée, ou une réexpédition sur un colis livré, ferait
+               plus de mal que pas de recommandation du tout.
+
+               Son bouton ne fait rien par lui-même : il délègue aux gestes
+               existants, qui portent les droits, les plafonds et le journal. -->
+          <section class="reco" id="d-reco" hidden></section>
 
           <div class="actbar" id="actbar" hidden>
             <span class="panel-title">Action</span>
