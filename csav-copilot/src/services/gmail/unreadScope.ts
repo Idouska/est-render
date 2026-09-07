@@ -4,7 +4,7 @@
  * Deux endroits en dépendent et doivent dire la même chose : le compteur de la
  * barre de navigation (`GET /api/metrics`), et la reprise qui va corriger
  * l'état de lecture des fils entrés avant l'existence du champ
- * (`scripts/reprise-gmail.ts`). Écrits deux fois, ils divergeraient au premier
+ * (`src/scripts/repriseGmail.ts`). Écrits deux fois, ils divergeraient au premier
  * ajustement — et la reprise réparerait consciencieusement des lignes que le
  * compteur ne regarde pas, sans que rien ne le signale.
  *

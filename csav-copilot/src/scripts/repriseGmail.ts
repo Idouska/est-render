@@ -5,6 +5,12 @@
  *   npm run gmail:reprise -- --limite 20       # essai sur vingt fils
  *   npm run gmail:reprise                      # la totalité
  *
+ * Il vit sous `src/` et non dans `scripts/` parce qu'il doit tourner en
+ * production, où sont la base et les accès Gmail. L'image Docker ne copie que
+ * `dist/` : un fichier laissé dans `scripts/` serait absent du serveur, et la
+ * commande échouerait sur un fichier introuvable. Ici, `npm run build` le
+ * compile avec les trois autres points d'entrée.
+ *
  * POURQUOI
  *
  * `gmailUnread` et `gmailArchived` sont nés le 7 septembre, avec
@@ -40,16 +46,19 @@
  * son marqueur qu'en cas de succès, ce dont ce script se sert pour compter.
  */
 
-import { prisma } from '../src/lib/prisma.ts';
-import { syncTicketThread } from '../src/services/gmail/thread.ts';
-import { PORTEE_NON_LU } from '../src/services/gmail/unreadScope.ts';
+import { prisma } from '../lib/prisma.ts';
+import { syncTicketThread } from '../services/gmail/thread.ts';
+import { PORTEE_NON_LU } from '../services/gmail/unreadScope.ts';
 
 /*
- * Exactement la population que le compteur compte — la portée est partagée,
- * pas recopiée — plus la seule condition propre à la reprise : un fil sans
- * identifiant Gmail ne peut pas être relu.
+ * Exactement la population que le compteur compte, partagée et non recopiée.
+ *
+ * Pas de garde sur `gmailThreadId` : le champ est obligatoire au schéma, tout
+ * ticket en porte un. La condition écrite ici au départ n'excluait rien et ne
+ * compilait même pas — elle est passée inaperçue tant que ce fichier vivait
+ * hors de `src/`, donc hors du périmètre de `tsc`.
  */
-const CIBLE = { ...PORTEE_NON_LU, gmailThreadId: { not: null } };
+const CIBLE = PORTEE_NON_LU;
 
 const TAILLE_LOT = 50;
 

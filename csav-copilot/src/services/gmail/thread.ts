@@ -18,7 +18,7 @@ import { parseMessage } from './messages.ts';
  * l'appel indéfiniment.
  *
  * `relireLibelles` lève ce garde-fou, et sert un seul appelant : la reprise
- * de `scripts/reprise-gmail.ts`. Le marqueur date du 8 août ; `gmailUnread` et
+ * de `src/scripts/repriseGmail.ts`. Le marqueur date du 8 août ; `gmailUnread` et
  * `gmailArchived` du 7 septembre. Entre les deux, des milliers de fils ont été
  * marqués « relus » alors que ces deux champs n'existaient pas encore et
  * n'ont donc jamais été renseignés. Ils sont invisibles au filtre habituel :

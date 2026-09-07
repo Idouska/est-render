@@ -22,7 +22,7 @@
     "db:reset": "prisma migrate reset --force && npm run db:seed",
     "build:demo": "node scripts/build-demo.mjs",
     "check:ai": "NODE_USE_ENV_PROXY=1 node --experimental-strip-types --env-file-if-exists=.env scripts/check-ai.ts",
-    "gmail:reprise": "NODE_USE_ENV_PROXY=1 node --experimental-strip-types --env-file-if-exists=.env scripts/reprise-gmail.ts"
+    "gmail:reprise": "NODE_USE_ENV_PROXY=1 node --env-file-if-exists=.env dist/scripts/repriseGmail.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
