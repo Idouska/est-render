@@ -6954,3 +6954,106 @@ textarea:focus-visible {
      reste, le champ s'efface. */
   .head-search { display: none; }
 }
+
+/* ============================================ derniers ajustements maquette ===
+
+/* --- le compte, en barre haute ------------------------------------------- */
+
+/* Il vivait au pied de la navigation, c'est-à-dire au pied d'une colonne
+   qu'on replie. Remonté à droite de la barre haute, là où on le cherche. */
+.head-acts .me {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  margin-left: 4px;
+}
+
+.head-acts .me .avatar { width: 28px; height: 28px; font-size: 11px; }
+.head-acts .me-txt { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
+.head-acts .me-txt b { font-size: 12.5px; font-weight: 650; }
+.head-acts .me-txt span { font-size: 11px; color: var(--ink-mute); }
+
+/* Sous 1 300 px, l'identité s'efface et l'avatar reste : on sait qui on est,
+   on n'a pas besoin de le relire toute la journée. */
+@media (max-width: 1300px) {
+  .head-acts .me-txt { display: none; }
+}
+
+/* --- icônes de l'en-tête de file ----------------------------------------- */
+
+.qh-ico { width: 24px; height: 24px; }
+.qh-ico:first-of-type { margin-left: auto; }
+.qh-ico svg { width: 14px; height: 14px; }
+
+/* --- dossiers en onglets soulignés --------------------------------------- */
+
+/* Quatre entrées, c'est une navigation : le soulignement le dit mieux que la
+   pilule, qui se lit comme un filtre qu'on cumule. Les pastilles de statut,
+   juste en dessous, restent des pilules — elles se cumulent vraiment. */
+.folders {
+  gap: 0;
+  padding: 6px 6px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.folder {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  margin-bottom: -1px;
+  /* Quatre onglets dans 336 px de largeur utile — la colonne fait 350 px,
+     moins les bordures du panneau et le padding de la barre. Mesuré : 325 px
+     nécessaires, 11 px de marge. Le repli sur deux lignes reste possible, un
+     compteur qui grossit doit provoquer une seconde ligne et non une entrée
+     coupée. */
+  padding: 6px 5px 7px;
+  background: none;
+}
+
+.folder:hover { background: none; color: var(--ink); }
+
+.folder[aria-pressed="true"] {
+  background: none;
+  color: var(--accent-ink);
+  border-bottom-color: var(--accent);
+}
+
+/* --- faits de l'en-tête du ticket ---------------------------------------- */
+
+.tm-facts { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+.tm-fact { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+.tm-fact svg { width: 12px; height: 12px; flex: none; opacity: 0.85; }
+
+/* --- copier un message ---------------------------------------------------- */
+
+/* Discret jusqu'au survol : un bouton visible sur chaque message d'un fil de
+   dix ajouterait dix éléments à regarder pour un geste qu'on fait rarement. */
+.msg { position: relative; }
+
+.msg-copy {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--ink-mute);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s var(--ease);
+}
+
+.msg:hover .msg-copy,
+.msg-copy:focus-visible { opacity: 1; }
+.msg-copy:hover { background: var(--inset); color: var(--ink); }

@@ -1870,6 +1870,70 @@ function actionBlockedReason(key, ticket) {
    deux réponses différentes le jour où l'un des deux évoluerait. */
 $('head-search')?.addEventListener('click', () => openPalette());
 
+/* Les deux icônes de l'en-tête de file ne font rien de neuf : elles mènent au
+   champ et au menu qui existent dans la barre de filtres. Un second champ de
+   recherche donnerait deux états à tenir synchronisés. */
+$('queue-search')?.addEventListener('click', () => {
+  $('q-search')?.focus();
+  $('q-search')?.select();
+});
+
+$('queue-filter')?.addEventListener('click', () => $('q-filters-btn')?.click());
+
+/*
+ * Tri de la file, depuis l'en-tête.
+ *
+ * Les libellés sont lus dans le `select` du bas plutôt que recopiés : deux
+ * listes des mêmes tris finiraient par diverger, et c'est celle qu'on regarde
+ * le moins qui garderait l'ancien intitulé.
+ *
+ * Le choix écrit dans `state.queue.sort` et remet le `select` à jour — les
+ * deux commandes désignent le même réglage, elles ne peuvent pas se
+ * contredire.
+ */
+function renderSortMenu() {
+  const menu = $('queue-sort-menu');
+  const select = $('q-sort');
+  if (!menu || !select) return;
+
+  menu.innerHTML = [...select.options]
+    .map(
+      (option) =>
+        `<button class="more-item" type="button" data-sort="${esc(option.value)}"
+          aria-pressed="${option.value === state.queue.sort}">${
+            option.value === state.queue.sort ? '✓ ' : ''
+          }${esc(option.textContent)}</button>`,
+    )
+    .join('');
+
+  menu.querySelectorAll('[data-sort]').forEach((button) =>
+    button.addEventListener('click', () => {
+      state.queue.sort = button.dataset.sort;
+      select.value = button.dataset.sort;
+      closeSortMenu();
+      void loadQueue();
+    }),
+  );
+}
+
+function closeSortMenu() {
+  const menu = $('queue-sort-menu');
+  if (!menu || menu.hidden) return;
+  menu.hidden = true;
+  $('queue-sort')?.setAttribute('aria-expanded', 'false');
+}
+
+$('queue-sort')?.addEventListener('click', (event) => {
+  event.stopPropagation();
+  const menu = $('queue-sort-menu');
+  if (!menu) return;
+
+  const open = menu.hidden;
+  if (open) renderSortMenu();
+  menu.hidden = !open;
+  $('queue-sort').setAttribute('aria-expanded', String(open));
+});
+
 $('d-prev')?.addEventListener('click', () => moveQueue(-1));
 $('d-next')?.addEventListener('click', () => moveQueue(1));
 
@@ -1894,11 +1958,17 @@ $('d-more')?.addEventListener('click', (event) => {
    un menu qui reste ouvert après qu'on a regardé autre chose finit par
    masquer ce qu'on voulait lire. */
 document.addEventListener('click', (event) => {
-  if (!event.target.closest('.more-wrap')) closeMoreMenu();
+  if (!event.target.closest('.more-wrap')) {
+    closeMoreMenu();
+    closeSortMenu();
+  }
 });
 
 document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') closeMoreMenu();
+  if (event.key === 'Escape') {
+    closeMoreMenu();
+    closeSortMenu();
+  }
 });
 
 /**
@@ -2417,14 +2487,20 @@ function renderTicketMeta(ticket, order) {
       ? `<span class="tp tp-conf">${Math.round(ticket.intentConfidence * 100)} %</span>`
       : '';
 
+  /* Une icône par fait plutôt qu'un point de séparation : à cette taille, un
+     pictogramme se reconnaît plus vite qu'il ne se lit, et la ligne cesse
+     d'être une phrase à parcourir. */
   const facts = [];
   if (customer?.numberOfOrders != null) {
-    facts.push(`${customer.numberOfOrders} commande${customer.numberOfOrders > 1 ? 's' : ''}`);
+    facts.push([
+      'bag',
+      `${customer.numberOfOrders} commande${customer.numberOfOrders > 1 ? 's' : ''}`,
+    ]);
   }
   if (customer?.amountSpent != null && order?.currency) {
-    facts.push(`${euro(customer.amountSpent, order.currency)} dépensés`);
+    facts.push(['euro', `${euro(customer.amountSpent, order.currency)} dépensés`]);
   }
-  facts.push(`ouvert depuis ${ageInDays(ticket.createdAt)} j`);
+  facts.push(['clock', `ouvert depuis ${ageInDays(ticket.createdAt)} j`]);
 
   $('d-meta').innerHTML =
     `<span class="tm-who">
@@ -2441,10 +2517,12 @@ function renderTicketMeta(ticket, order) {
        }
        ${confidence}
      </span>
-     <span class="tm-facts">${facts.map((f) => esc(f)).join(' · ')}${
+     <span class="tm-facts">${facts
+       .map(([icon, text]) => `<span class="tm-fact">${ico(icon)}${esc(text)}</span>`)
+       .join('')}${
        // L'objet d'origine : illisible comme titre, indispensable pour
        // retrouver le fil dans Gmail.
-       ticket.subject ? ` · <span class="tm-subj">${esc(ticket.subject)}</span>` : ''
+       ticket.subject ? `<span class="tm-fact tm-subj">${esc(ticket.subject)}</span>` : ''
      }</span>`;
 }
 
@@ -2678,6 +2756,8 @@ function renderDetail() {
           }</b>
           <span>${shortTime(message.receivedAt)}</span>
         </div>
+        <button class="msg-copy" type="button" data-copy="${esc(message.id)}"
+          title="Copier le texte" aria-label="Copier le texte du message">···</button>
         <div class="msg-body" data-msg="${esc(message.id)}">${esc(message.bodyText)}</div>
         <div class="msg-fr" data-fr="${esc(message.id)}" hidden></div>
         ${renderAttachments(message.attachments)}
@@ -2685,6 +2765,33 @@ function renderDetail() {
       },
     )
     .join('');
+
+  /*
+   * Copier le texte d'un message.
+   *
+   * Le geste existe pour de vrai : on colle un extrait dans une demande au
+   * fournisseur, dans une note, dans une recherche. Le faire à la souris sur
+   * un bloc à `white-space: pre-wrap` attrape les lignes vides du mail.
+   *
+   * Délégué sur le conteneur, qui est statique : les boutons naissent d'un
+   * `innerHTML` réécrit à chaque ticket, un écouteur par bouton s'empilerait.
+   */
+  $('d-messages').onclick = async (event) => {
+    const button = event.target.closest('[data-copy]');
+    if (!button) return;
+
+    const body = document.querySelector(`.msg-body[data-msg="${CSS.escape(button.dataset.copy)}"]`);
+    if (!body) return;
+
+    try {
+      await navigator.clipboard.writeText(body.textContent ?? '');
+      toast('Texte copié.');
+    } catch {
+      // Presse-papiers refusé — page non sécurisée, permission absente. Le
+      // dire plutôt que de laisser croire que la copie a eu lieu.
+      toast('Copie impossible depuis ce navigateur.', true);
+    }
+  };
 
   bindTranslate(ticket);
   renderSiblings(state.detail?.siblings ?? [], ticket);
@@ -3472,6 +3579,21 @@ function renderTicketLabels(ticket) {
   if (menu) {
     menu.innerHTML =
       actionButton('reshipment', 'Ouvrir un dossier de retour', ticket, 'more-item') +
+      /*
+       * Le fil d'origine, dans Gmail.
+       *
+       * Tout ne se fait pas ici : transférer à un collègue, retrouver une
+       * pièce jointe que l'ingestion n'a pas gardée, vérifier un en-tête.
+       * L'identifiant de fil est celui de Gmail — l'URL n'invente rien, elle
+       * l'ouvre. Sans identifiant, pas d'entrée : un lien mort vaut moins que
+       * pas de lien.
+       */
+      (ticket.gmailThreadId
+        ? `<a class="more-item" target="_blank" rel="noopener noreferrer"
+            href="https://mail.google.com/mail/u/0/#all/${esc(
+              ticket.gmailThreadId,
+            )}">Ouvrir le fil dans Gmail</a>`
+        : '') +
       `<button class="more-item more-danger" type="button" id="d-delete">Supprimer le message</button>`;
   }
 
@@ -6125,6 +6247,7 @@ setInterval(renderClocks, 30000);
 /* Icônes en ligne : une police d'icônes ou un CDN ne passerait pas la
    politique de sécurité, et douze glyphes ne justifient pas un build. */
 const ICONS = {
+  clock: '<circle cx="8" cy="8" r="5.6"/><path d="M8 4.8V8l2.2 1.4"/>',
   bolt: '<path d="M9 1.5 3.5 9h3.6L7 14.5 12.5 7H8.9z"/>',
   grid: '<path d="M2.5 2.5h4.5v4.5H2.5zM9 2.5h4.5v4.5H9zM2.5 9h4.5v4.5H2.5zM9 9h4.5v4.5H9z"/>',
   inbox: '<path d="M2 9.5h3l1 2h4l1-2h3"/><path d="M2.5 9.5 4 3h8l1.5 6.5v4h-11z"/>',
