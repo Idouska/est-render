@@ -1870,6 +1870,9 @@ async function openReshipment(ticket) {
     product: line?.title ?? '',
     variant: line?.variantTitle ?? '',
     sku: line?.sku ?? '',
+    // Toute la commande, pas seulement son premier article : sur trois paires
+    // renvoyées, celle que le client rend n'est pas forcément la première.
+    items: order?.lineItems ?? [],
     country: order?.shippingAddress?.country ?? 'FR',
     email: ticket.customerEmail ?? order?.customer?.email ?? null,
     orderId: ticket.shopifyOrderId ?? order?.id ?? null,
@@ -6139,7 +6142,7 @@ function openReturnModal(prefill = {}) {
   const country = prefill.country ?? 'FR';
   $('ret-f-country').value = Object.hasOwn(RETURN_COUNTRIES, country) ? country : 'FR';
 
-  $('ret-f-items').innerHTML = '';
+  renderReturnItemChips(prefill.items ?? []);
   retLookupEmail = prefill.email ?? null;
   retLookupOrderId = prefill.orderId ?? null;
 
@@ -6219,25 +6222,39 @@ $('ret-f-order').addEventListener('input', () => {
       $('ret-f-sku').value = items[0].sku ?? '';
     }
 
-    // Plusieurs articles : des puces sous le champ, l'article se choisit au
-    // doigt au lieu de se recopier.
-    $('ret-f-items').innerHTML =
-      items.length > 1
-        ? items
-            .map(
-              (item, index) =>
-                `<button type="button" class="qchip" data-ret-item="${index}"
-                  aria-pressed="${index === 0}">${esc(item.title)}${
-                    item.variantTitle ? ` · ${esc(item.variantTitle)}` : ''
-                  }</button>`,
-            )
-            .join('')
-        : '';
-    $('ret-f-items').dataset.items = JSON.stringify(items);
+    renderReturnItemChips(items);
 
     toast(`Commande ${order.orderName} : champs remplis.`);
   }, 450);
 });
+
+/**
+ * Les articles de la commande, en puces sous le champ produit.
+ *
+ * Une seule puce n'apprend rien : sous deux articles, on n'affiche rien et le
+ * premier reste choisi. Au-delà, l'article se désigne au doigt plutôt qu'en le
+ * recopiant — et sans elles, un dossier ouvert sur une commande de trois
+ * paires part silencieusement sur la première, qui n'est pas forcément celle
+ * que le client renvoie.
+ *
+ * Partagé par les deux chemins : la recherche par numéro, et l'ouverture
+ * depuis un message client.
+ */
+function renderReturnItemChips(items) {
+  $('ret-f-items').innerHTML =
+    items.length > 1
+      ? items
+          .map(
+            (item, index) =>
+              `<button type="button" class="qchip" data-ret-item="${index}"
+                aria-pressed="${index === 0}">${esc(item.title)}${
+                  item.variantTitle ? ` · ${esc(item.variantTitle)}` : ''
+                }</button>`,
+          )
+          .join('')
+      : '';
+  $('ret-f-items').dataset.items = JSON.stringify(items);
+}
 
 $('ret-f-items').addEventListener('click', (event) => {
   const chip = event.target.closest('[data-ret-item]');
@@ -6284,8 +6301,18 @@ $('ret-f-save').addEventListener('click', async () => {
     });
     $('return-modal').classList.remove('open');
     toast('Dossier de retour créé.');
-    state.returns.tab = 'cases';
-    await loadReturns();
+    /*
+     * Recharger seulement l'écran qu'on regarde.
+     *
+     * Le dossier se crée aussi depuis un message client, et `loadReturns`
+     * lançait alors trois requêtes pour un écran invisible, remettait l'onglet
+     * de l'agent sur « Dossiers », et faisait passer une panne réseau pour un
+     * échec de la création — qui, elle, avait réussi.
+     */
+    if (state.view === 'returns') {
+      state.returns.tab = 'cases';
+      await loadReturns();
+    }
   } catch (error) {
     toast(error.message, true);
   }

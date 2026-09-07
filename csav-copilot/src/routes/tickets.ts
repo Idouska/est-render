@@ -449,11 +449,23 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
     /*
      * Compteur de la pastille « Non lu ».
      *
-     * Calculé sur les filtres courants, `unread` compris — donc sur ce que la
-     * liste montrerait si on cliquait. C'est ce que le compteur WISMO ne fait
-     * pas : il redéclare son propre `where` et ignore le dossier, la recherche
-     * et les libellés, si bien qu'il annonce un nombre que la liste ne rend
-     * pas. Ne pas reproduire ce patron ici.
+     * Il honore le dossier, la recherche, les libellés, la boîte, l'assigné,
+     * le montant et l'ancienneté — tout ce que le compteur WISMO ignore en
+     * redéclarant son propre `where`, ce qui lui fait annoncer des nombres que
+     * la liste ne rend pas.
+     *
+     * Il ignore en revanche le statut coché, délibérément et comme toutes les
+     * pastilles de cette barre. Le nombre répond donc à « combien de non lus
+     * dans ce que je regarde », et non à « combien de lignes après un clic ».
+     *
+     * Une revue a proposé l'inverse : compter statut compris, pour que le
+     * nombre prédise exactement la liste. C'est défendable, mais « Non lu »
+     * deviendrait la seule pastille de la barre à appliquer le statut — sa
+     * voisine immédiate WISMO, qui croise elle aussi, ne le fait pas. Deux
+     * pastilles croisées côte à côte comptant sur des bases différentes se
+     * comparent mal, et se comparer est ce à quoi sert un rail de filtres.
+     * Corriger la prédiction supposerait de changer la convention entière, pas
+     * cette ligne.
      */
     counts.UNREAD = await prisma.ticket.count({
       where: {
