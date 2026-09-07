@@ -49,6 +49,7 @@ export async function syncTicketThread(merchantId: string, ticketId: string): Pr
    * d'un appel qui a échoué.
    */
   let inInbox: boolean | null = null;
+  let anyUnread: boolean | null = null;
 
   try {
     const { gmail, emailAddress } = await getGmailClient(merchantId, ticket.mailboxId);
@@ -62,6 +63,12 @@ export async function syncTicketThread(merchantId: string, ticketId: string): Pr
     // range le fil entier, et c'est le fil que la file affiche.
     inInbox = (thread.messages ?? []).some((message) =>
       (message.labelIds ?? []).includes('INBOX'),
+    );
+
+    // Même règle pour le non-lu : un seul message non ouvert suffit à ce que
+    // le fil compte comme non lu, exactement ce qu'affiche Gmail.
+    anyUnread = (thread.messages ?? []).some((message) =>
+      (message.labelIds ?? []).includes('UNREAD'),
     );
 
     const known = new Set(ticket.messages.map((message) => message.gmailMessageId));
@@ -112,6 +119,7 @@ export async function syncTicketThread(merchantId: string, ticketId: string): Pr
     data: {
       threadSyncedAt: new Date(),
       ...(inInbox === null ? {} : { gmailArchived: !inInbox }),
+      ...(anyUnread === null ? {} : { gmailUnread: anyUnread }),
     },
   });
 

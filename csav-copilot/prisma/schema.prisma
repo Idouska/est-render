@@ -257,6 +257,17 @@ model Ticket {
   /// disparaître.
   gmailArchived Boolean @default(false)
 
+  /// Le fil porte-t-il encore le libellé `UNREAD` de Gmail ?
+  ///
+  /// C'est ce qui décide du gras dans la file : un message qu'on n'a pas
+  /// encore ouvert s'appuie, les autres s'effacent. Distinct de l'archivage —
+  /// lire n'est pas ranger, et les deux états coexistent.
+  ///
+  /// Vrai par défaut : un fil dont on ne sait rien est réputé non lu. Se
+  /// tromper dans ce sens fait voir un message de trop ; l'inverse l'éteindrait
+  /// avant que quiconque l'ait ouvert.
+  gmailUnread Boolean @default(true)
+
   /// Libellés Gmail portés par le fil, tels que le marchand les a créés.
   /// Les siens uniquement : les catégories automatiques de Google décrivent
   /// son classement à lui, pas l'organisation du SAV.
