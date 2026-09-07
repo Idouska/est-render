@@ -49,6 +49,15 @@ const listQuery = z.object({
   /** Consulter les échanges importés de l'historique, invisibles autrement. */
   historical: z.coerce.boolean().optional(),
   /**
+   * Ce que personne n'a encore ouvert dans Gmail.
+   *
+   * Croise les autres filtres au lieu de les remplacer : « non lu à valider »
+   * et « non lu portant le libellé Litige » sont des questions qu'on se pose.
+   * Le front ne pose ce paramètre que lorsqu'il est actif — `z.coerce.boolean`
+   * ne fait qu'un `Boolean(valeur)`, et la chaîne « false » vaudrait vrai.
+   */
+  unread: z.coerce.boolean().optional(),
+  /**
    * Libellés Gmail, tels que le marchand les a créés dans sa boîte. Plusieurs
    * séparés par des virgules, entendus comme « au moins l'un d'eux » : deux
    * catégories voisines — « Refund » et « Litige » — se regardent ensemble, et
@@ -168,6 +177,10 @@ function buildTicketWhere(
             { OR: [{ snoozedUntil: null }, { snoozedUntil: { lte: new Date() } }] },
           ],
         }),
+    // Clé de premier niveau, comme tout le reste ici : ni `AND` ni `OR`, tous
+    // deux déjà pris — par la veille et par la recherche libre — et deux clés
+    // identiques dans le même objet s'écrasent sans la moindre erreur.
+    ...(filters.unread ? { gmailUnread: true } : {}),
     ...(options.withFolder === false ? {} : folderWhere(filters.folder)),
     ...(filters.mailbox ? { mailboxId: filters.mailbox } : {}),
     ...(labelNames.length > 0 ? { labels: { hasSome: labelNames } } : {}),
@@ -432,6 +445,22 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
         prisma.ticket.count({ where: { ...folderBase, ...folderWhere(name) } }),
       ),
     );
+
+    /*
+     * Compteur de la pastille « Non lu ».
+     *
+     * Calculé sur les filtres courants, `unread` compris — donc sur ce que la
+     * liste montrerait si on cliquait. C'est ce que le compteur WISMO ne fait
+     * pas : il redéclare son propre `where` et ignore le dossier, la recherche
+     * et les libellés, si bien qu'il annonce un nombre que la liste ne rend
+     * pas. Ne pas reproduire ce patron ici.
+     */
+    counts.UNREAD = await prisma.ticket.count({
+      where: {
+        ...buildTicketWhere(merchantIds, query.data, { withStatus: false }),
+        gmailUnread: true,
+      },
+    });
 
     return reply.send({
       tickets: tickets.map((ticket) => ({
