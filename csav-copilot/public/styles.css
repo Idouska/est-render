@@ -6777,3 +6777,21 @@ textarea:focus-visible {
 /* La pastille « Nouveau client » précède la fiche : c'est ce qui change le ton
    d'une réponse, donc ce qui se lit en premier. */
 .rail-flag { margin: 0 0 7px; }
+
+/* ---------------------------------------------- icônes des indicateurs --- */
+
+/* Une icône par tuile, pour que la bande se lise en balayage plutôt qu'en
+   lecture. Discrète : elle nomme la famille du chiffre, elle ne le commente
+   pas — cinq icônes colorées se disputeraient l'œil avec les nombres, qui
+   sont l'information. */
+.kpi-ico {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  display: grid;
+  place-items: center;
+  color: var(--ink-mute);
+  order: -2;
+}
+
+.kpi-ico svg { width: 15px; height: 15px; }

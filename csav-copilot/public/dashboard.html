@@ -189,16 +189,28 @@
 
       <section class="kpis" id="kpis" aria-label="Indicateurs des 30 derniers jours">
         <div class="kpi">
+          <span class="kpi-ico" data-ico="inbox" aria-hidden="true"></span>
+          <span class="kpi-label">En attente de vous</span>
+          <span class="kpi-value" id="kpi-pending">—</span>
+          <span class="kpi-note" id="kpi-pending-note">brouillons à relire</span>
+        </div>
+        <!-- L'avancement du jour, à côté de la tendance du mois : à midi, on
+             regarde ce qu'on a fait depuis ce matin, pas depuis trois
+             semaines. -->
+        <div class="kpi">
+          <span class="kpi-ico" data-ico="bolt" aria-hidden="true"></span>
+          <span class="kpi-label">Traités aujourd'hui</span>
+          <span class="kpi-value" id="kpi-today">—</span>
+          <span class="kpi-note">clos ou répondus depuis minuit</span>
+        </div>
+        <div class="kpi">
+          <span class="kpi-ico" data-ico="chart" aria-hidden="true"></span>
           <span class="kpi-label">Traités · 30 jours</span>
           <span class="kpi-value" id="kpi-done">—</span>
           <span class="kpi-note" id="kpi-done-note">clos ou répondus</span>
         </div>
         <div class="kpi">
-          <span class="kpi-label">En attente de vous</span>
-          <span class="kpi-value" id="kpi-pending">—</span>
-          <span class="kpi-note" id="kpi-pending-note">brouillons à relire</span>
-        </div>
-        <div class="kpi">
+          <span class="kpi-ico" data-ico="bolt" aria-hidden="true"></span>
           <span class="kpi-label">Taux d'automatisation</span>
           <span class="kpi-value" id="kpi-rate">—</span>
           <span class="kpi-note">brouillons effectivement envoyés</span>
@@ -207,6 +219,7 @@
              cette place pour répéter un réglage immuable pendant que des
              milliers d'échecs n'apparaissaient nulle part. -->
         <div class="kpi">
+          <span class="kpi-ico" data-ico="shield" aria-hidden="true"></span>
           <span class="kpi-label">Non traités par l'IA</span>
           <span class="kpi-value" id="kpi-failed">—</span>
           <span class="kpi-note" id="kpi-failed-note"></span>

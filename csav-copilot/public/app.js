@@ -577,6 +577,14 @@ async function loadMetrics() {
   const metrics = await api('/api/metrics');
   const counts = metrics.tickets ?? {};
 
+  /* Les icônes sont posées ici plutôt qu'écrites dans le HTML : le jeu de
+     glyphes vit dans `ICONS`, et deux définitions du même dessin finiraient
+     par diverger. `data-ico` nomme l'icône, `ico()` la produit, une seule
+     fois — ce rendu est rappelé à chaque relève. */
+  document.querySelectorAll('.kpi-ico[data-ico]').forEach((box) => {
+    if (!box.firstChild) box.innerHTML = ico(box.dataset.ico);
+  });
+
   // Traités sur la fenêtre, d'après la date de traitement — et non celle du
   // dernier message du client, qui faisait afficher zéro à qui venait d'en
   // clore cinquante.
@@ -588,6 +596,7 @@ async function loadMetrics() {
         }`
       : 'clos ou répondus';
 
+  $('kpi-today').textContent = String(metrics.today ?? 0);
   $('kpi-pending').textContent = String(metrics.pending ?? 0);
   state.pendingCount = metrics.pending ?? 0;
   renderNav();
