@@ -17,10 +17,21 @@ import { parseMessage } from './messages.ts';
  * fils où l'on n'a effectivement jamais répondu, qui sinon rejoueraient
  * l'appel indéfiniment.
  *
+ * `relireLibelles` lève ce garde-fou, et sert un seul appelant : la reprise
+ * de `src/scripts/repriseGmail.ts`. Le marqueur date du 8 août ; `gmailUnread` et
+ * `gmailArchived` du 7 septembre. Entre les deux, des milliers de fils ont été
+ * marqués « relus » alors que ces deux champs n'existaient pas encore et
+ * n'ont donc jamais été renseignés. Ils sont invisibles au filtre habituel :
+ * sans cette porte, ils garderaient à jamais l'état par défaut.
+ *
  * Tolérante : une relecture ratée ne doit pas empêcher d'ouvrir le message.
  * Rend le nombre de messages ajoutés.
  */
-export async function syncTicketThread(merchantId: string, ticketId: string): Promise<number> {
+export async function syncTicketThread(
+  merchantId: string,
+  ticketId: string,
+  { relireLibelles = false }: { relireLibelles?: boolean } = {},
+): Promise<number> {
   const ticket = await prisma.ticket.findFirst({
     where: { id: ticketId, merchantId },
     select: {
@@ -32,7 +43,8 @@ export async function syncTicketThread(merchantId: string, ticketId: string): Pr
     },
   });
 
-  if (!ticket?.gmailThreadId || ticket.threadSyncedAt) return 0;
+  if (!ticket?.gmailThreadId) return 0;
+  if (ticket.threadSyncedAt && !relireLibelles) return 0;
 
   let added = 0;
 
