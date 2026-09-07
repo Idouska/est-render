@@ -1865,6 +1865,11 @@ function actionBlockedReason(key, ticket) {
  * ressemblent. Elles ne sont pas soumises au verrou d'une autre boutique —
  * parcourir la file d'un groupe est permis, c'est y répondre qui ne l'est pas.
  */
+/* Le champ de la barre haute n'est pas une seconde recherche : il ouvre la
+   palette, qui est la recherche. Deux moteurs pour une question donneraient
+   deux réponses différentes le jour où l'un des deux évoluerait. */
+$('head-search')?.addEventListener('click', () => openPalette());
+
 $('d-prev')?.addEventListener('click', () => moveQueue(-1));
 $('d-next')?.addEventListener('click', () => moveQueue(1));
 
@@ -3734,47 +3739,76 @@ function row(label, value, mono = false) {
   }>${esc(value)}</dd></div>`;
 }
 
+/*
+ * « Voir le profil » vit dans l'en-tête de la carte, pas dans son corps.
+ *
+ * Le nœud est statique et le corps se réécrit à chaque ticket : lier ici, une
+ * seule fois, et lire l'état au moment du clic. Un `addEventListener` posé
+ * dans la fonction de rendu empilerait un écouteur par ticket ouvert, et
+ * ouvrirait N fiches au premier clic.
+ */
+$('c-sheet')?.addEventListener('click', () => {
+  const customer = state.detail?.order?.customer;
+  const email = customer?.email ?? state.detail?.ticket?.customerEmail;
+  if (email) void openCustomerSheet(email, customer?.displayName ?? '');
+});
+
 function renderCustomer(order) {
   const customer = order?.customer;
 
   // Sans commande rattachée, l'email du ticket suffit à ouvrir la fiche : elle
   // contient justement de quoi retrouver la commande manquante.
   const ticketEmail = state.detail?.ticket?.customerEmail ?? null;
+  const name = customer?.displayName ?? state.detail?.ticket?.customerName ?? ticketEmail;
+
+  // Le lien d'en-tête n'a de sens qu'avec une adresse à ouvrir.
+  const sheet = $('c-sheet');
+  if (sheet) sheet.hidden = !(customer?.email ?? ticketEmail);
 
   if (!customer) {
     $('c-customer').innerHTML = ticketEmail
-      ? `<p class="empty">Aucune commande rattachée.</p>
-         <button class="btn btn-small" id="c-sheet">Ouvrir la fiche client</button>`
+      ? '<p class="empty">Aucune commande rattachée.</p>'
       : '<p class="empty">Fiche client indisponible sans commande rattachée.</p>';
-
-    $('c-sheet')?.addEventListener('click', () => void openCustomerSheet(ticketEmail));
     return;
   }
 
   $('c-customer').innerHTML =
     /*
+     * L'identité en tête, comme sur une fiche : le visage avant les chiffres.
+     * L'avatar porte la teinte de la file et du fil — la même personne garde
+     * sa couleur d'un bout à l'autre du produit.
+     */
+    `<div class="rail-id">
+       <span class="rail-av" aria-hidden="true" style="background:${avatarTint(name ?? '')}"
+         >${esc(initials(name ?? ''))}</span>
+       <span class="rail-id-txt">
+         <b>${esc(name ?? '—')}</b>
+         ${customer.email ? `<code>${esc(customer.email)}</code>` : ''}
+       </span>
+     </div>` +
+    /*
      * Un premier achat ne se traite pas comme un huitième : on est plus
      * conciliant, et on explique davantage. C'est la seule information de
-     * cette carte qui change le ton d'une réponse, d'où la pastille plutôt
-     * qu'une ligne de plus dans la liste.
+     * cette carte qui change le ton d'une réponse, d'où la pastille.
      */
     (customer.numberOfOrders === 1
       ? '<p class="rail-flag"><span class="tp tp-intent">Nouveau client</span></p>'
       : '') +
     '<dl>' +
-    row('Nom', customer.displayName ?? '—') +
-    // « Client depuis » ne décidait rien : la fiche complète le garde pour qui
-    // le cherche, le rail ne montre que ce qui change une réponse.
     row('Commandes', String(customer.numberOfOrders ?? 0), true) +
     (customer.amountSpent
       ? row('Total dépensé', euro(customer.amountSpent, order.currency), true)
       : '') +
-    '</dl>' +
-    '<button class="btn btn-small" id="c-sheet" style="margin-top:8px">Fiche complète</button>';
-
-  $('c-sheet')?.addEventListener('click', () =>
-    void openCustomerSheet(customer.email ?? ticketEmail, customer.displayName ?? ''),
-  );
+    /*
+     * « Client depuis » avait été retiré du rail, au motif qu'il « ne décidait
+     * rien ». Il est remis à la demande explicite du marchand : l'ancienneté
+     * pèse sur le ton d'une réponse autant que le nombre de commandes, et un
+     * client de la première heure ne s'adresse pas comme un inscrit d'hier.
+     * Consigné ici pour que ce retour soit lu comme un choix, et non comme un
+     * oubli de la décision précédente.
+     */
+    (customer.createdAt ? row('Client depuis', fullDate(customer.createdAt)) : '') +
+    '</dl>';
 }
 
 /**
@@ -3788,18 +3822,38 @@ function renderCustomer(order) {
  * n'attend que la partie numérique. Sans domaine de boutique ou sans
  * identifiant, on n'affiche rien : un lien mort vaut moins que pas de lien.
  */
-function shopifyOrderLink(order) {
+function shopifyOrderLink(order, label = null) {
   const shop = state.me?.merchant?.shopDomain;
   const id = String(order?.id ?? '').split('/').pop();
 
   if (!shop || !id || !/^\d+$/.test(id)) return '';
 
-  return `<a class="btn btn-small rail-link" target="_blank" rel="noopener noreferrer"
-    href="https://${esc(shop)}/admin/orders/${esc(id)}">Voir dans Shopify</a>`;
+  const href = `https://${esc(shop)}/admin/orders/${esc(id)}`;
+
+  // Deux emplois du même lien : discret dans l'en-tête de la carte, où il
+  // porte le numéro ; en bouton sous les articles, où il porte l'action.
+  return label
+    ? `<a class="linkish rail-more" target="_blank" rel="noopener noreferrer"
+        href="${href}">${esc(label)} <span aria-hidden="true">↗</span></a>`
+    : `<a class="btn btn-small rail-link" target="_blank" rel="noopener noreferrer"
+        href="${href}">Voir dans Shopify →</a>`;
 }
 
 function renderOrder(ticket, order, orderError) {
   const container = $('c-order');
+
+  /*
+   * Le numéro de commande monte dans l'en-tête de la carte, en lien.
+   *
+   * C'est l'identité du dossier : il se lit en premier et se clique pour aller
+   * voir chez Shopify ce que le SAV ne fait pas. Le laisser en première ligne
+   * du tableau le noyait parmi la date et le montant.
+   */
+  const head = $('c-order-link');
+  if (head) {
+    const link = shopifyOrderLink(order, order?.name ?? ticket.orderName ?? '');
+    head.innerHTML = link || (order?.name ? `<code>${esc(order.name)}</code>` : '');
+  }
 
   if (order) {
     // Les états Shopify bruts — PAID, FULFILLED — se lisent en anglais
@@ -3810,13 +3864,11 @@ function renderOrder(ticket, order, orderError) {
         ${statusTag(order.displayFulfillmentStatus, FULFILLMENT_LABELS, ['UNFULFILLED', 'ON_HOLD'])}
       </div>` +
       '<dl>' +
-      // Le nom figure déjà dans le bloc CLIENT, dix pixels plus haut. Répété
-      // ici pour que le bloc COMMANDE se lise seul : on parle d'une commande
-      // au téléphone ou au fournisseur sans avoir à lever les yeux.
-      row('Client', order.customer?.displayName || ticket.customerName || ticket.customerEmail) +
-      row('Numéro', order.name, true) +
-      row('Passée le', dateTime(order.createdAt)) +
+      row('Date', dateTime(order.createdAt)) +
       row('Montant', euro(order.totalPrice, order.currency), true) +
+      // Le nombre d'articles : sur un retour, savoir qu'il y en a trois change
+      // la question avant même de les lire.
+      row('Articles', String(order.lineItems?.length ?? 0), true) +
       '</dl>' +
       '<ul class="items">' +
       order.lineItems
@@ -3833,9 +3885,20 @@ function renderOrder(ticket, order, orderError) {
             src
               ? `<img class="item-img" src="${esc(src)}" alt="" loading="lazy" />`
               : '<span class="item-img item-blank"></span>'
-          }<span class="item-qty">${item.quantity} ×</span><span class="item-name">${esc(
-            item.title,
-          )}${item.variantTitle ? ` — ${esc(item.variantTitle)}` : ''}</span></li>`;
+          }<span class="item-name"><b>${esc(item.title)}</b>${
+            item.variantTitle ? `<br>${esc(item.variantTitle)}` : ''
+          }</span><span class="item-price">${
+            /*
+             * La quantité, pas le prix de la ligne.
+             *
+             * Le prix par article n'est pas dans la requête Shopify — ni dans
+             * `OrderLineItem`. L'ajouter demande un champ de plus dans le
+             * GraphQL, et un nom erroné y fait rejeter la requête entière :
+             * les commandes cesseraient de se charger partout, pas seulement
+             * ici. À faire contre une vraie boutique, pas à l'aveugle.
+             */
+            `${item.quantity} ×`
+          }</span></li>`;
         })
         .join('') +
       '</ul>' +

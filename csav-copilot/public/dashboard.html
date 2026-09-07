@@ -102,6 +102,23 @@
               <div class="crumb" id="crumb"></div>
               <h1 id="view-title">SAV client</h1>
             </div>
+            <!-- La recherche avait une fonction et pas de porte.
+                 La palette ⌘K cherche déjà clients, commandes et messages,
+                 mais rien à l'écran ne le disait : une commande qu'on ne voit
+                 pas est une commande qui n'existe pas pour la plupart des
+                 gens. Ce champ n'en est pas un second — il ouvre la même
+                 palette, et affiche le raccourci pour qu'on cesse d'en avoir
+                 besoin. -->
+            <button class="head-search" id="head-search" type="button">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"
+                stroke-linecap="round" aria-hidden="true">
+                <circle cx="7.2" cy="7.2" r="4.2" />
+                <path d="M10.4 10.4 13.5 13.5" />
+              </svg>
+              <span>Rechercher un client, une commande, un mot-clé…</span>
+              <kbd>⌘K</kbd>
+            </button>
+
             <div class="head-acts">
               <div class="head-tools">
                 <button class="btn btn-small" id="refresh" type="button" title="Actualiser (R)">
@@ -570,39 +587,56 @@
              affichaient « — » : c'est six fois le même cadre, six ombres et
              six titres pour un contenu qui tient dans une colonne. Le dossier
              d'un client est une chose, pas six. -->
+        <!-- Le rail en cartes séparées plutôt qu'en un panneau sectionné.
+             Client, commande, livraison et fournisseur sont quatre dossiers
+             distincts qu'on consulte séparément : un filet entre deux sections
+             les disait voisines, un intervalle les dit indépendantes. -->
         <aside class="context">
-          <div class="panel rail">
-            <div class="rail-sec">
+          <section class="panel rail-card">
+            <div class="rail-head">
               <span class="rail-title">Client</span>
-              <div id="c-customer"><p class="empty">—</p></div>
+              <button class="linkish rail-more" id="c-sheet" type="button">
+                Voir le profil →
+              </button>
             </div>
-            <div class="rail-sec">
+            <div class="card-body" id="c-customer"><p class="empty">—</p></div>
+          </section>
+
+          <section class="panel rail-card">
+            <div class="rail-head">
               <span class="rail-title">Commande</span>
-              <div id="c-order"><p class="empty">—</p></div>
+              <span id="c-order-link"></span>
             </div>
-            <div class="rail-sec">
-              <span class="rail-title">Livraison</span>
-              <div id="c-ship"><p class="empty">—</p></div>
+            <div class="card-body" id="c-order"><p class="empty">—</p></div>
+          </section>
+
+          <section class="panel rail-card">
+            <div class="rail-head"><span class="rail-title">Livraison</span></div>
+            <div class="card-body" id="c-ship"><p class="empty">—</p></div>
+          </section>
+
+          <section class="panel rail-card" id="parcels-panel" hidden>
+            <div class="rail-head"><span class="rail-title">Colis</span></div>
+            <div class="card-body" id="c-parcels"></div>
+          </section>
+
+          <section class="panel rail-card">
+            <div class="rail-head">
+              <span class="rail-title">Fournisseur</span>
+              <button class="btn btn-small" id="supplier-edit-toggle">Gérer</button>
             </div>
-            <div class="rail-sec" id="parcels-panel" hidden>
-              <span class="rail-title">Colis</span>
-              <div id="c-parcels"></div>
-            </div>
-            <div class="rail-sec">
-              <span class="rail-title">
-                Fournisseur
-                <button class="btn btn-small" id="supplier-edit-toggle">Gérer</button>
-              </span>
+            <div class="card-body">
               <div id="supplier-summary">
                 <p class="empty">Aucun fournisseur configuré.</p>
               </div>
               <div id="escalations"></div>
             </div>
-            <details class="rail-sec rail-fold">
-              <summary><span class="rail-title">Journal d'audit</span></summary>
-              <ul class="journal" id="c-audit"></ul>
-            </details>
-          </div>
+          </section>
+
+          <details class="panel rail-card rail-fold">
+            <summary class="rail-head"><span class="rail-title">Journal d'audit</span></summary>
+            <ul class="journal card-body" id="c-audit"></ul>
+          </details>
         </aside>
       </main>
 

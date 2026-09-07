@@ -5897,6 +5897,16 @@ textarea:focus-visible {
    dit ce qu'il corrige.
    ========================================================================= */
 
+/* ATTENTION — ce bloc s'applique AUSSI en thème sombre.
+   `:root` et `[data-theme="dark"]` ont la même spécificité (0-1-0) : celui qui
+   vient en dernier gagne, et celui-ci est 5 800 lignes plus bas. Toute valeur
+   propre au thème clair posée ici écrase donc son équivalent sombre en
+   silence — c'est ce qui est arrivé à `--ground`, `--accent-soft`,
+   `--accent-ink`, `--grad-surface` et `--grad-raised`, laissant un fond clair
+   sous des surfaces sombres.
+   Ce qui est neutre — rayons, typographie, aplatissement des reliefs — a sa
+   place ici. Ce qui est une couleur de thème doit avoir sa contrepartie dans
+   `:root[data-theme="dark"]`, en fin de feuille. */
 :root {
   /* L'accent par défaut quitte le violet. Le bleu encre se lit comme un outil
      — GitHub, Notion, Linear — là où l'indigo se lit comme une démo. Les
@@ -6795,3 +6805,152 @@ textarea:focus-visible {
 }
 
 .kpi-ico svg { width: 15px; height: 15px; }
+
+/* ============================================ thème sombre : rattrapage ===
+
+   Le bloc `[data-theme="dark"]` du haut de feuille est écrasé par le `:root`
+   de la couche densité, qui vient bien plus bas à spécificité égale. Mesuré au
+   navigateur : en sombre, `--ground` valait #f2f3f7 — un fond clair — pendant
+   que `--surface` restait #191c23.
+
+   Ce bloc reprend la main avec `:root[data-theme="dark"]`, de spécificité
+   0-2-0 : il gagne quelle que soit sa position, donc l'ordre des feuilles
+   cessera d'être le sujet.
+
+   Il ne réassère QUE les valeurs de couleur. L'aplatissement voulu par la
+   couche densité — `--edge`, `--e1`, `--e2`, `--shadow` à `none` — vaut pour
+   les deux thèmes : « un outil n'a pas de relief, il a des bords », et cette
+   décision-là est la plus récente. Les élévations réelles (`--e3`, `--e4`,
+   `--shadow-pop`) gardent leurs valeurs sombres : ce qui flotte vraiment doit
+   se détacher, en sombre plus encore qu'en clair. */
+:root[data-theme="dark"] {
+  --ground: #0e1014;
+
+  /* Aplatis comme en clair, mais sur les couleurs du thème : un dégradé
+     rendrait le relief que la couche densité a retiré, un blanc rendrait la
+     page lumineuse. */
+  --grad-surface: #191c23;
+  --grad-raised: #21252e;
+
+  /* Recomposés sur l'accent courant et sur la surface sombre. Les valeurs
+     littérales de la couche densité (#e8f0fe, #1d4ed8) sont calées pour un
+     fond blanc : posées ici, elles donnaient un aplat clair et un texte
+     presque illisible. */
+  --accent-soft: color-mix(in srgb, var(--accent) 22%, #191c23);
+  --accent-ink: color-mix(in srgb, var(--accent) 55%, #ffffff);
+}
+
+/* ============================================ rail en cartes séparées =====
+
+   Client, commande, livraison et fournisseur sont quatre dossiers qu'on
+   consulte séparément. Un filet entre deux sections les disait voisines ; un
+   intervalle les dit indépendantes. */
+
+.rail-card { padding: 0; }
+
+.rail-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 14px 0;
+}
+
+.rail-head .rail-title { margin: 0; }
+.rail-head .btn,
+.rail-head .rail-more { margin-left: auto; }
+
+.rail-card .card-body { padding: 9px 14px 13px; }
+
+/* Le lien discret d'en-tête : il porte le numéro de commande ou l'accès au
+   profil. Rang de lien, pas de bouton — la carte a déjà son action. */
+.rail-more {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-ink);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.rail-more:hover { text-decoration: underline; }
+
+/* L'identité en tête de la carte client : le visage avant les chiffres. */
+.rail-id {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 9px;
+}
+
+.rail-av {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--ink);
+}
+
+.rail-id-txt { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.rail-id-txt b { font-size: 13.5px; font-weight: 650; }
+.rail-id-txt code { font-size: 11.5px; color: var(--ink-mute); }
+
+/* Le lien Shopify prend toute la largeur : c'est la sortie de la carte, et une
+   sortie se voit. */
+.rail-link { display: flex; justify-content: center; width: 100%; margin-top: 10px; }
+
+/* Les articles : vignette, désignation sur deux lignes, quantité à droite. */
+.items li { align-items: flex-start; gap: 9px; }
+.item-img { width: 44px; height: 44px; }
+.item-name { flex: 1; min-width: 0; font-size: 12px; line-height: 1.4; }
+.item-name b { font-weight: 600; color: var(--ink); }
+.item-price { flex: none; font-size: 12px; color: var(--ink-mute); font-variant-numeric: tabular-nums; }
+
+/* ------------------------------------------- recherche de la barre haute --- */
+
+/* La palette existait, sa porte manquait : une fonction qu'on ne voit pas
+   n'existe pas pour la plupart des gens. Ce champ n'en est pas un second — il
+   ouvre la même palette. */
+.head-search {
+  appearance: none;
+  flex: 1;
+  min-width: 0;
+  max-width: 420px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink-mute);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.head-search:hover { border-color: var(--accent); color: var(--ink-soft); }
+.head-search svg { width: 14px; height: 14px; flex: none; }
+.head-search span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.head-search kbd {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  padding: 1px 5px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  color: var(--ink-mute);
+}
+
+@media (max-width: 1100px) {
+  /* Sous cette largeur la barre haute se dispute déjà la place : le raccourci
+     reste, le champ s'efface. */
+  .head-search { display: none; }
+}
