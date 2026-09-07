@@ -92,6 +92,13 @@ const listQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(25),
 });
 
+/** Minuit, heure du serveur. Isolé pour se lire, et pour se corriger d'un
+    seul endroit le jour où le fuseau du marchand sera connu. */
+function startOfToday(): Date {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
 /**
  * Clause du dossier courant.
  *
@@ -1234,7 +1241,7 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
      * compteur affichait « 0 traités » à quelqu'un qui venait d'en traiter
      * cinquante. Un chiffre faux en tête d'écran décrédibilise les vrais.
      */
-    const [byStatus, handled, sentDrafts, totalDrafts, unread] = await Promise.all([
+    const [byStatus, handled, today, sentDrafts, totalDrafts, unread] = await Promise.all([
       prisma.ticket.groupBy({
         by: ['status'],
         where: { merchantId, isHistorical: false },
@@ -1246,6 +1253,24 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
           isHistorical: false,
           status: { in: ['CLOSED', 'AUTO_SENT'] },
           updatedAt: { gte: since },
+        },
+      }),
+      /*
+       * Ce qui a été traité depuis ce matin.
+       *
+       * Trente jours disent la tendance, la journée dit l'avancement — et
+       * c'est l'avancement qu'on regarde à midi pour savoir s'il faut
+       * accélérer. Le seuil est minuit dans le fuseau du serveur, ce qui suffit
+       * tant qu'une boutique et son équipe partagent le même : le jour
+       * calendaire du marchand demanderait de stocker son fuseau, que rien ne
+       * connaît aujourd'hui.
+       */
+      prisma.ticket.count({
+        where: {
+          merchantId,
+          isHistorical: false,
+          status: { in: ['CLOSED', 'AUTO_SENT'] },
+          updatedAt: { gte: startOfToday() },
         },
       }),
       prisma.draft.count({ where: { merchantId, status: 'SENT', sentAt: { gte: since } } }),
@@ -1279,6 +1304,8 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
       tickets: counts,
       /** Traités sur la fenêtre, d'après la date de traitement. */
       handled,
+      /** Traités depuis minuit : l'avancement du jour, pas la tendance. */
+      today,
       /** Réponses réellement parties, sous-ensemble du précédent. */
       sent: sentDrafts,
       failed: counts.FAILED ?? 0,

@@ -577,6 +577,14 @@ async function loadMetrics() {
   const metrics = await api('/api/metrics');
   const counts = metrics.tickets ?? {};
 
+  /* Les icônes sont posées ici plutôt qu'écrites dans le HTML : le jeu de
+     glyphes vit dans `ICONS`, et deux définitions du même dessin finiraient
+     par diverger. `data-ico` nomme l'icône, `ico()` la produit, une seule
+     fois — ce rendu est rappelé à chaque relève. */
+  document.querySelectorAll('.kpi-ico[data-ico]').forEach((box) => {
+    if (!box.firstChild) box.innerHTML = ico(box.dataset.ico);
+  });
+
   // Traités sur la fenêtre, d'après la date de traitement — et non celle du
   // dernier message du client, qui faisait afficher zéro à qui venait d'en
   // clore cinquante.
@@ -588,6 +596,7 @@ async function loadMetrics() {
         }`
       : 'clos ou répondus';
 
+  $('kpi-today').textContent = String(metrics.today ?? 0);
   $('kpi-pending').textContent = String(metrics.pending ?? 0);
   state.pendingCount = metrics.pending ?? 0;
   renderNav();
@@ -1848,15 +1857,54 @@ function actionBlockedReason(key, ticket) {
   return null;
 }
 
+/*
+ * Navigation et menu de débordement de l'en-tête.
+ *
+ * Les flèches appellent `moveQueue`, la même fonction que `j` et `k` : deux
+ * chemins vers un seul comportement, et non deux comportements qui se
+ * ressemblent. Elles ne sont pas soumises au verrou d'une autre boutique —
+ * parcourir la file d'un groupe est permis, c'est y répondre qui ne l'est pas.
+ */
+$('d-prev')?.addEventListener('click', () => moveQueue(-1));
+$('d-next')?.addEventListener('click', () => moveQueue(1));
+
+function closeMoreMenu() {
+  const menu = $('d-more-menu');
+  if (!menu || menu.hidden) return;
+  menu.hidden = true;
+  $('d-more')?.setAttribute('aria-expanded', 'false');
+}
+
+$('d-more')?.addEventListener('click', (event) => {
+  event.stopPropagation();
+  const menu = $('d-more-menu');
+  if (!menu) return;
+
+  const open = menu.hidden;
+  menu.hidden = !open;
+  $('d-more').setAttribute('aria-expanded', String(open));
+});
+
+/* Un clic ailleurs referme, comme le menu de mise en veille juste à côté :
+   un menu qui reste ouvert après qu'on a regardé autre chose finit par
+   masquer ce qu'on voulait lire. */
+document.addEventListener('click', (event) => {
+  if (!event.target.closest('.more-wrap')) closeMoreMenu();
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') closeMoreMenu();
+});
+
 /**
  * Bouton d'action pour la barre de libellés, soumis aux mêmes droits que la
  * barre d'actions : un agent ne peut pas rembourser, et doit le lire plutôt
  * que de le découvrir sur un refus du serveur.
  */
-function actionButton(key, label, ticket) {
+function actionButton(key, label, ticket, className = 'btn btn-small') {
   const blocked = actionBlockedReason(key, ticket);
 
-  return `<button class="btn btn-small" data-quick="${key}"${
+  return `<button class="${className}" type="button" data-quick="${key}"${
     blocked ? ` disabled title="${esc(blocked)}"` : ''
   }>${esc(label)}</button>`;
 }
@@ -2080,6 +2128,15 @@ function renderQueueBar() {
 
   // Même traitement pour « Non lu », et pour la même raison : elle croise les
   // statuts au lieu d'en être un.
+  /* Le total de l'en-tête suit le dossier ouvert, jamais le total absolu :
+     annoncer « 5 384 » au-dessus d'une liste filtrée à douze ferait douter du
+     filtre plutôt que du chiffre. */
+  const totalBox = $('queue-total');
+  if (totalBox) {
+    const n = state.queueFolders?.[state.queue.folder] ?? counts.ALL ?? 0;
+    totalBox.textContent = n > 0 ? n.toLocaleString('fr-FR') : '';
+  }
+
   const unread = $('chip-unread');
   if (unread) {
     unread.setAttribute('aria-pressed', String(Boolean(state.queue.unread)));
@@ -2563,7 +2620,7 @@ function renderDetail() {
   // autre boutique se lit, il ne s'y répond pas.
   if (otherShop) {
     document
-      .querySelectorAll('#d-labels [data-quick]')
+      .querySelectorAll('#d-labels [data-quick], #d-more-menu [data-quick]')
       .forEach((button) => (button.disabled = true));
   }
 
@@ -2591,10 +2648,26 @@ function renderDetail() {
 
   $('d-messages').innerHTML = ticket.messages
     .map(
-      (message) => `<div class="msg${message.direction === 'OUTBOUND' ? ' out' : ''}">
+      (message) => {
+        /*
+         * L'expéditeur porte son avatar, comme dans la file.
+         *
+         * Sur un fil de dix messages qui alternent, la couleur dit qui parle
+         * avant qu'on ait lu le nom — et c'est la même teinte que dans la
+         * liste, donc le même repère d'un écran à l'autre.
+         *
+         * Ce qui vient de nous prend le nom de la boutique, jamais l'adresse
+         * de la boîte : « sav@… » répété douze fois n'apprend rien à personne.
+         */
+        const outbound = message.direction === 'OUTBOUND';
+        const who = outbound ? brand : (ticket.customerName ?? message.fromEmail);
+
+        return `<div class="msg${outbound ? ' out' : ''}">
         <div class="msg-head">
+          <span class="msg-av" aria-hidden="true"
+            style="background:${avatarTint(who)}">${esc(initials(who))}</span>
           <b>${
-            message.direction === 'OUTBOUND'
+            outbound
               ? `${esc(brand)} <span class="msg-tag">réponse envoyée</span>`
               : esc(message.fromEmail)
           }</b>
@@ -2603,7 +2676,8 @@ function renderDetail() {
         <div class="msg-body" data-msg="${esc(message.id)}">${esc(message.bodyText)}</div>
         <div class="msg-fr" data-fr="${esc(message.id)}" hidden></div>
         ${renderAttachments(message.attachments)}
-      </div>`,
+      </div>`;
+      },
     )
     .join('');
 
@@ -3376,9 +3450,25 @@ function renderTicketLabels(ticket) {
     actionButton('supplier', 'Écrire au fournisseur', ticket) +
     actionButton('refund', 'Rembourser…', ticket) +
     actionButton('change', 'Modifier la commande', ticket) +
-    actionButton('reshipment', 'Reshipment', ticket) +
-    `<button class="btn btn-small btn-danger" id="d-delete">Supprimer</button>` +
     `</span>`;
+
+  /*
+   * Les gestes rares passent sous « ··· ».
+   *
+   * Six boutons de même poids obligent à lire les six pour en choisir un.
+   * Reshipment et Supprimer se font une fois sur vingt : ils gardent leur
+   * place, pas leur rang.
+   *
+   * Rendus ici, dans la même fonction que la rangée principale, pour que
+   * leurs écouteurs se posent au même endroit et au même moment. Les répartir
+   * entre deux fonctions ferait dépendre le câblage de l'ordre d'appel.
+   */
+  const menu = $('d-more-menu');
+  if (menu) {
+    menu.innerHTML =
+      actionButton('reshipment', 'Ouvrir un dossier de retour', ticket, 'more-item') +
+      `<button class="more-item more-danger" type="button" id="d-delete">Supprimer le message</button>`;
+  }
 
   const quick = {
     client: () => openCompose('client', ticket),
@@ -3389,7 +3479,15 @@ function renderTicketLabels(ticket) {
   };
 
   for (const [key, run] of Object.entries(quick)) {
-    bar.querySelector(`[data-quick="${key}"]`)?.addEventListener('click', run);
+    // Les gestes vivent maintenant dans deux conteneurs : la rangée et le
+    // menu. Chercher dans le seul `bar` laisserait Reshipment sans écouteur,
+    // et le `?.` avalerait l'oubli sans un mot.
+    document
+      .querySelector(`#d-labels [data-quick="${key}"], #d-more-menu [data-quick="${key}"]`)
+      ?.addEventListener('click', () => {
+        closeMoreMenu();
+        run();
+      });
   }
 
   bar.querySelectorAll('[data-tlabel]').forEach((chip) =>
@@ -3654,6 +3752,15 @@ function renderCustomer(order) {
   }
 
   $('c-customer').innerHTML =
+    /*
+     * Un premier achat ne se traite pas comme un huitième : on est plus
+     * conciliant, et on explique davantage. C'est la seule information de
+     * cette carte qui change le ton d'une réponse, d'où la pastille plutôt
+     * qu'une ligne de plus dans la liste.
+     */
+    (customer.numberOfOrders === 1
+      ? '<p class="rail-flag"><span class="tp tp-intent">Nouveau client</span></p>'
+      : '') +
     '<dl>' +
     row('Nom', customer.displayName ?? '—') +
     // « Client depuis » ne décidait rien : la fiche complète le garde pour qui
@@ -3668,6 +3775,27 @@ function renderCustomer(order) {
   $('c-sheet')?.addEventListener('click', () =>
     void openCustomerSheet(customer.email ?? ticketEmail, customer.displayName ?? ''),
   );
+}
+
+/**
+ * Lien vers la commande dans l'admin Shopify.
+ *
+ * L'agent y va pour ce que le SAV ne fait pas : modifier une adresse, éditer
+ * une ligne, consulter le paiement. Reconstruire l'URL de tête à chaque fois
+ * coûte trente secondes et une erreur de numéro sur deux.
+ *
+ * L'identifiant Shopify est un GID — `gid://shopify/Order/123` — dont l'admin
+ * n'attend que la partie numérique. Sans domaine de boutique ou sans
+ * identifiant, on n'affiche rien : un lien mort vaut moins que pas de lien.
+ */
+function shopifyOrderLink(order) {
+  const shop = state.me?.merchant?.shopDomain;
+  const id = String(order?.id ?? '').split('/').pop();
+
+  if (!shop || !id || !/^\d+$/.test(id)) return '';
+
+  return `<a class="btn btn-small rail-link" target="_blank" rel="noopener noreferrer"
+    href="https://${esc(shop)}/admin/orders/${esc(id)}">Voir dans Shopify</a>`;
 }
 
 function renderOrder(ticket, order, orderError) {
@@ -3692,14 +3820,26 @@ function renderOrder(ticket, order, orderError) {
       '</dl>' +
       '<ul class="items">' +
       order.lineItems
-        .map(
-          (item) =>
-            `<li><span>${item.quantity} ×</span><span>${esc(item.title)}${
-              item.variantTitle ? ` — ${esc(item.variantTitle)}` : ''
-            }</span></li>`,
-        )
+        .map((item) => {
+          /*
+           * L'API a servi `image` sous deux formes : une chaîne plate, et un
+           * objet `{ url }`. Les deux ont existé, et un correctif d'août
+           * documente la vignette restée grise parce que le front n'en lisait
+           * qu'une. On lit les deux plutôt que de parier.
+           */
+          const src = typeof item.image === 'string' ? item.image : (item.image?.url ?? null);
+
+          return `<li>${
+            src
+              ? `<img class="item-img" src="${esc(src)}" alt="" loading="lazy" />`
+              : '<span class="item-img item-blank"></span>'
+          }<span class="item-qty">${item.quantity} ×</span><span class="item-name">${esc(
+            item.title,
+          )}${item.variantTitle ? ` — ${esc(item.variantTitle)}` : ''}</span></li>`;
+        })
         .join('') +
-      '</ul>';
+      '</ul>' +
+      shopifyOrderLink(order);
     return;
   }
 

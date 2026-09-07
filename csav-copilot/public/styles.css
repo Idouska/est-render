@@ -6622,3 +6622,176 @@ textarea:focus-visible {
 }
 
 .folder-n { font-size: 10.5px; }
+
+/* ================================ en-tête du ticket : navigation et menu ===
+
+   Le titre à gauche, les gestes de déplacement à droite. Deux zones qui ne se
+   disputent rien : l'une se lit, l'autre se clique. */
+
+.th-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.th-top .thread-subject { flex: 1; min-width: 0; }
+
+.th-nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+  margin-top: 1px;
+}
+
+/* Boutons d'icône : la cible reste à 26 px même si le glyphe est petit — un
+   chevron de huit pixels se rate une fois sur trois. */
+.ico-btn {
+  appearance: none;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--ink-mute);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.ico-btn:hover { background: var(--inset); color: var(--ink); }
+.ico-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.more-wrap { position: relative; display: inline-flex; }
+
+/* Le menu s'ouvre vers le bas et la droite : il part du coin haut droit de la
+   colonne, où il n'y a rien à recouvrir. Celui de la mise en veille s'ouvre
+   vers le haut pour la raison inverse — il vit en pied de zone. */
+.more-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 30;
+  min-width: 210px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: 0 8px 24px rgb(16 18 40 / 14%), 0 1px 3px rgb(16 18 40 / 10%);
+}
+
+.more-item {
+  appearance: none;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  padding: 6px 9px;
+  border-radius: var(--r-sm);
+  color: var(--ink-soft);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.more-item:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent-ink); }
+.more-item:disabled { color: var(--ink-mute); cursor: default; }
+.more-danger { color: var(--crit); }
+.more-danger:hover:not(:disabled) { background: var(--crit-soft); color: var(--crit); }
+
+/* ------------------------------------------- avatars dans le fil --------- */
+
+/* Même teinte que dans la file : la couleur d'une personne ne change pas d'un
+   écran à l'autre, sinon elle cesse d'être un repère. */
+.msg-av {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 9px;
+  font-weight: 650;
+  color: var(--ink);
+}
+
+/* ------------------------------------------------ en-tête de la file ----- */
+
+.queue-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 11px 12px 0;
+}
+
+.queue-title {
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.queue-count {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-mute);
+}
+
+/* ------------------------------------------------- rail : la commande --- */
+
+/* Les articles avec leur vignette. Une paire de chaussures se reconnaît à
+   l'image bien avant qu'on ait lu « Adizero Adios Pro 4 Lucid Red Core
+   Black » — et c'est cette référence-là que le client renvoie ou réclame. */
+.items li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.item-img {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--r-sm);
+  object-fit: cover;
+  background: var(--inset);
+  border: 1px solid var(--line-soft);
+}
+
+/* Sans image, un carré neutre plutôt que rien : les lignes gardent le même
+   alignement, et l'absence se lit comme une absence et non comme un défaut de
+   chargement. */
+.item-blank { display: block; }
+
+.item-qty { flex: none; font-variant-numeric: tabular-nums; color: var(--ink-mute); }
+.item-name { min-width: 0; }
+
+.rail-link { display: inline-flex; margin-top: 9px; }
+
+/* La pastille « Nouveau client » précède la fiche : c'est ce qui change le ton
+   d'une réponse, donc ce qui se lit en premier. */
+.rail-flag { margin: 0 0 7px; }
+
+/* ---------------------------------------------- icônes des indicateurs --- */
+
+/* Une icône par tuile, pour que la bande se lise en balayage plutôt qu'en
+   lecture. Discrète : elle nomme la famille du chiffre, elle ne le commente
+   pas — cinq icônes colorées se disputeraient l'œil avec les nombres, qui
+   sont l'information. */
+.kpi-ico {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  display: grid;
+  place-items: center;
+  color: var(--ink-mute);
+  order: -2;
+}
+
+.kpi-ico svg { width: 15px; height: 15px; }
