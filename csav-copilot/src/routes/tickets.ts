@@ -9,6 +9,7 @@ import { enqueueTicket } from '../queue/index.ts';
 import { accessibleMerchantIds, listShopsFor } from './shops.ts';
 import { sendDraft, sendReplyInThread, updateDraftBody } from '../services/gmail/drafts.ts';
 import { syncTicketThread } from '../services/gmail/thread.ts';
+import { PORTEE_NON_LU } from '../services/gmail/unreadScope.ts';
 import { sendPlainEmail } from '../services/gmail/send.ts';
 import { getShopifyClient, ShopifyError } from '../services/shopify/client.ts';
 import { listVariants } from '../services/shopify/catalog.ts';
@@ -1288,12 +1289,7 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
        * marquée lue la ferait remonter dans le compte pour rien.
        */
       prisma.ticket.count({
-        where: {
-          merchantId,
-          isHistorical: false,
-          gmailUnread: true,
-          status: { notIn: ['CLOSED', 'AUTO_SENT'] },
-        },
+        where: { merchantId, gmailUnread: true, ...PORTEE_NON_LU },
       }),
     ]);
 
