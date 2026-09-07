@@ -323,6 +323,11 @@
                  intention. À part visuellement, parce qu'elle croise l'autre
                  rangée au lieu de s'y substituer. -->
             <button class="chip chip-wismo" id="chip-wismo" aria-pressed="false">WISMO</button>
+            <!-- Sans `data-filter` : c'est ce qui la distingue d'une pastille
+                 de statut. « Non lu » croise les autres filtres au lieu de les
+                 remplacer — « non lu à valider » a du sens, un statut de plus
+                 n'en aurait pas. -->
+            <button class="chip chip-unread" id="chip-unread" aria-pressed="false">Non lu</button>
           </div>
           <span class="qbar-count" id="q-count"></span>
         </div>
@@ -415,11 +420,19 @@
             <span class="panel-title">Action</span>
             <div class="actbar-row" id="actbar-row"></div>
             <p class="actbar-note" id="actbar-note"></p>
+          </div>
 
-            <!-- Rédaction sur place. Écrire au client depuis une fenêtre
-                 modale masque le ticket au moment précis où l'on a besoin de
-                 le relire pour répondre. -->
-            <div class="compose" id="compose" hidden>
+          <!-- Rédaction sur place. Écrire au client depuis une fenêtre modale
+               masque le ticket au moment précis où l'on a besoin de le relire
+               pour répondre.
+
+               Sortie de `#actbar`, et ce n'est pas cosmétique : la barre
+               d'actions se masque quand elle n'a rien à proposer, et les
+               gestes ont migré vers l'en-tête du ticket. Restée dedans, la
+               zone de rédaction aurait disparu avec elle — cliquer « Écrire au
+               client » aurait ouvert un formulaire dans un conteneur masqué,
+               sans la moindre erreur pour le dire. -->
+          <div class="compose" id="compose" hidden>
               <!-- L'objet part dans le mail : il se relit et se corrige comme
                    le corps. Il était calculé en silence (« Re: » + l'objet du
                    fil), ce qui convient neuf fois sur dix — et interdisait la
@@ -438,10 +451,9 @@
                 <button class="btn" id="compose-resolve">Marquer résolu</button>
                 <button class="btn btn-primary" id="compose-send">Valider et envoyer</button>
               </div>
-            </div>
-
-            <div class="subs" id="subs" hidden></div>
           </div>
+
+          <div class="subs" id="subs" hidden></div>
 
           <div class="draft" id="draft-zone" hidden>
             <div class="draft-bar">

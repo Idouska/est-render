@@ -49,6 +49,15 @@ const listQuery = z.object({
   /** Consulter les échanges importés de l'historique, invisibles autrement. */
   historical: z.coerce.boolean().optional(),
   /**
+   * Ce que personne n'a encore ouvert dans Gmail.
+   *
+   * Croise les autres filtres au lieu de les remplacer : « non lu à valider »
+   * et « non lu portant le libellé Litige » sont des questions qu'on se pose.
+   * Le front ne pose ce paramètre que lorsqu'il est actif — `z.coerce.boolean`
+   * ne fait qu'un `Boolean(valeur)`, et la chaîne « false » vaudrait vrai.
+   */
+  unread: z.coerce.boolean().optional(),
+  /**
    * Libellés Gmail, tels que le marchand les a créés dans sa boîte. Plusieurs
    * séparés par des virgules, entendus comme « au moins l'un d'eux » : deux
    * catégories voisines — « Refund » et « Litige » — se regardent ensemble, et
@@ -168,6 +177,10 @@ function buildTicketWhere(
             { OR: [{ snoozedUntil: null }, { snoozedUntil: { lte: new Date() } }] },
           ],
         }),
+    // Clé de premier niveau, comme tout le reste ici : ni `AND` ni `OR`, tous
+    // deux déjà pris — par la veille et par la recherche libre — et deux clés
+    // identiques dans le même objet s'écrasent sans la moindre erreur.
+    ...(filters.unread ? { gmailUnread: true } : {}),
     ...(options.withFolder === false ? {} : folderWhere(filters.folder)),
     ...(filters.mailbox ? { mailboxId: filters.mailbox } : {}),
     ...(labelNames.length > 0 ? { labels: { hasSome: labelNames } } : {}),
@@ -432,6 +445,34 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
         prisma.ticket.count({ where: { ...folderBase, ...folderWhere(name) } }),
       ),
     );
+
+    /*
+     * Compteur de la pastille « Non lu ».
+     *
+     * Il honore le dossier, la recherche, les libellés, la boîte, l'assigné,
+     * le montant et l'ancienneté — tout ce que le compteur WISMO ignore en
+     * redéclarant son propre `where`, ce qui lui fait annoncer des nombres que
+     * la liste ne rend pas.
+     *
+     * Il ignore en revanche le statut coché, délibérément et comme toutes les
+     * pastilles de cette barre. Le nombre répond donc à « combien de non lus
+     * dans ce que je regarde », et non à « combien de lignes après un clic ».
+     *
+     * Une revue a proposé l'inverse : compter statut compris, pour que le
+     * nombre prédise exactement la liste. C'est défendable, mais « Non lu »
+     * deviendrait la seule pastille de la barre à appliquer le statut — sa
+     * voisine immédiate WISMO, qui croise elle aussi, ne le fait pas. Deux
+     * pastilles croisées côte à côte comptant sur des bases différentes se
+     * comparent mal, et se comparer est ce à quoi sert un rail de filtres.
+     * Corriger la prédiction supposerait de changer la convention entière, pas
+     * cette ligne.
+     */
+    counts.UNREAD = await prisma.ticket.count({
+      where: {
+        ...buildTicketWhere(merchantIds, query.data, { withStatus: false }),
+        gmailUnread: true,
+      },
+    });
 
     return reply.send({
       tickets: tickets.map((ticket) => ({

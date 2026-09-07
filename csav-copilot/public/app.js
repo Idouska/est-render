@@ -23,14 +23,7 @@ const state = {
   navQuery: '',
   refreshing: false,
   lastRefresh: null,
-  queue: {
-    q: '', intent: '', assignee: '', mailbox: '', labels: [], sort: 'newest',
-    urgent: false, unassigned: false, unlinked: false, historical: false,
-    dueSoon: false, bigAmount: false, timer: null,
-    /* Dossier courant, à la manière de Gmail. La réception par défaut : ce
-       qu'on ouvre le matin, c'est ce qui reste à faire, pas l'archive. */
-    folder: 'inbox',
-  },
+  queue: emptyQueueFilters(),
   queueCounts: {},
   queueFolders: {},
   /* Messages cochés dans la file. Un Set et non un tableau : on teste
@@ -762,6 +755,42 @@ function renderFolders() {
   );
 }
 
+/**
+ * Filtres de la file à l'état neuf.
+ *
+ * Une fabrique et non deux littéraux : l'état initial et « Tout réinitialiser »
+ * décrivaient la même chose à deux endroits, et le second a pris du retard dès
+ * la première clé ajoutée. `folder` manquait au réinitialisation, si bien que
+ * la requête suivante partait avec `folder=undefined` — chaîne que le serveur
+ * refuse, sans que rien à l'écran n'explique pourquoi la file s'était vidée.
+ *
+ * Retourne un objet neuf à chaque appel : `labels` est un tableau, et une
+ * constante partagée finirait modifiée en place par un filtre.
+ */
+function emptyQueueFilters() {
+  return {
+    q: '',
+    intent: '',
+    assignee: '',
+    mailbox: '',
+    labels: [],
+    sort: 'newest',
+    urgent: false,
+    unassigned: false,
+    unlinked: false,
+    historical: false,
+    dueSoon: false,
+    bigAmount: false,
+    timer: null,
+    /* Dossier courant, à la manière de Gmail. La réception par défaut : ce
+       qu'on ouvre le matin, c'est ce qui reste à faire, pas l'archive. */
+    folder: 'inbox',
+    /* Croise les autres filtres au lieu de les remplacer : « non lu » se
+       demande aussi bien dans la réception que dans un libellé. */
+    unread: false,
+  };
+}
+
 /** Paramètres d'appel dérivés de l'état des filtres. */
 function queueParams() {
   const params = new URLSearchParams();
@@ -793,6 +822,10 @@ function queueParams() {
   // laisser le paramètre de côté rendrait la réception silencieusement égale
   // à tout le reste.
   params.set('folder', f.folder);
+  /* Posé seulement quand il est actif : `z.coerce.boolean()` ne fait qu'un
+     `Boolean(valeur)`, et la chaîne « false » vaut donc vrai. Envoyer le
+     paramètre en permanence rendrait le filtre impossible à désactiver. */
+  if (f.unread) params.set('unread', 'true');
 
   return params;
 }
@@ -801,7 +834,8 @@ function queueIsFiltered() {
   const f = state.queue;
   return Boolean(
     state.filter || f.q.trim() || f.intent || f.assignee || f.mailbox || f.labels.length ||
-      f.urgent || f.unassigned || f.unlinked || f.historical || f.dueSoon || f.bigAmount,
+      f.urgent || f.unassigned || f.unlinked || f.historical || f.dueSoon ||
+      f.bigAmount || f.unread,
   );
 }
 
@@ -1494,13 +1528,13 @@ async function renderParcels(ticket) {
  * restent accessibles. L'ordre compte plus que la liste.
  */
 const ACTIONS_BY_INTENT = {
-  WISMO: ['tracking', 'change', 'supplier'],
-  RETURN: ['change', 'supplier', 'refund'],
-  DISPUTE: ['refund', 'supplier'],
-  REFUND: ['refund'],
-  PRODUCT_QUESTION: ['change', 'substitute', 'supplier'],
+  WISMO: ['tracking'],
+  RETURN: [],
+  DISPUTE: [],
+  REFUND: [],
+  PRODUCT_QUESTION: ['substitute'],
   POSITIVE: [],
-  OTHER: ['change', 'supplier', 'refund'],
+  OTHER: [],
 };
 
 const ACTION_META = {
@@ -1538,8 +1572,16 @@ function renderActionBar() {
     })
     .join('');
 
+  /*
+   * La note explique l'action mise en avant. Quand toutes sont bloquées, il
+   * n'y en a aucune à expliquer — et un paragraphe vide sous le titre ACTION
+   * se lit comme un rendu qui a échoué. On dit alors pourquoi c'est bloqué,
+   * qui est l'information utile à ce moment-là.
+   */
   const first = keys.find((key) => !actionBlockedReason(key, ticket));
-  $('actbar-note').textContent = first ? ACTION_META[first].note : '';
+  $('actbar-note').textContent = first
+    ? ACTION_META[first].note
+    : (actionBlockedReason(keys[0], ticket) ?? '');
 }
 
 /**
@@ -1667,7 +1709,9 @@ $('compose-resolve')?.addEventListener('click', async () => {
 $('new-escalation')?.addEventListener('click', () => {
   const ticket = state.detail?.ticket;
   if (!ticket) return;
-  $('actbar').hidden = false;
+  // Plus besoin de rouvrir `#actbar` : la rédaction n'y est plus. La forcer
+  // visible afficherait un cadre « Action » vide au-dessus du formulaire, sur
+  // les intentions qui n'offrent plus aucune action.
   openCompose('supplier', ticket);
   $('compose-body').scrollIntoView({ block: 'center', behavior: 'smooth' });
 });
@@ -1753,6 +1797,14 @@ function actionBlockedReason(key, ticket) {
     if (activeSuppliers().length === 0) return 'Aucun fournisseur actif à qui adresser la demande.';
   }
   if (key === 'client' && !canI('reply')) return 'Vous êtes en lecture seule.';
+  /*
+   * Le serveur n'exige aucun droit sur `/api/returns` : un rôle en lecture
+   * seule peut y créer, modifier et supprimer un dossier. Le contrôle posé ici
+   * ne referme pas ce trou — il est côté écran, donc contournable — mais il
+   * évite d'offrir le geste à qui ne devrait pas l'avoir. Le verrou serveur
+   * reste à poser.
+   */
+  if (key === 'reshipment' && !canI('reply')) return 'Vous êtes en lecture seule.';
   return null;
 }
 
@@ -1789,6 +1841,43 @@ $('actbar-row').addEventListener('click', async (event) => {
   if (key === 'substitute') return loadSubstitutions(ticket.id);
   if (key === 'change') return openChangeRequest(ticket);
 });
+
+/**
+ * Dossier de retour ouvert depuis le mail du client.
+ *
+ * C'est le chemin naturel : le client écrit « la 44 est trop petite », et le
+ * dossier part de là — commande, nom, téléphone, article et pays déjà remplis
+ * depuis la commande rattachée. Retaper tout cela dans l'écran Reshipment,
+ * c'est la garantie qu'on ne le fera pas.
+ *
+ * Le dossier ne portera aucun lien vers ce ticket : `ReturnCase` n'a pas de
+ * `ticketId`. Le seul pont est l'email du client et le numéro de commande, que
+ * la fiche client exploite déjà pour rapprocher les deux. D'où l'attention
+ * portée à les renseigner, même quand Shopify n'a rien rendu.
+ */
+async function openReshipment(ticket) {
+  const order = state.detail?.order;
+  const line = order?.lineItems?.[0];
+
+  // Les agences avant l'ouverture : le champ se remplit une fois, pas après
+  // que l'agent a commencé à taper.
+  await ensureReturnAgencies();
+
+  openReturnModal({
+    order: order?.name ?? ticket.orderName ?? '',
+    name: order?.shippingAddress?.name ?? ticket.customerName ?? '',
+    phone: order?.shippingAddress?.phone ?? '',
+    product: line?.title ?? '',
+    variant: line?.variantTitle ?? '',
+    sku: line?.sku ?? '',
+    // Toute la commande, pas seulement son premier article : sur trois paires
+    // renvoyées, celle que le client rend n'est pas forcément la première.
+    items: order?.lineItems ?? [],
+    country: order?.shippingAddress?.country ?? 'FR',
+    email: ticket.customerEmail ?? order?.customer?.email ?? null,
+    orderId: ticket.shopifyOrderId ?? order?.id ?? null,
+  });
+}
 
 /**
  * Demande de changement adressée au fournisseur, depuis le mail du client.
@@ -1913,6 +2002,11 @@ function renderQueueBar() {
   $('filters')
     .querySelectorAll('.chip')
     .forEach((chip) => {
+      // Les pastilles croisées — WISMO, Non lu — n'ont pas de `data-filter` et
+      // se rendent plus bas. Sans ce garde, la boucle générique leur écrirait
+      // le total de la file et les éteindrait à chaque rafraîchissement.
+      if (chip.dataset.filter === undefined) return;
+
       const status = chip.dataset.filter;
       const count = status ? (counts[status] ?? 0) : (counts.ALL ?? 0);
       chip.setAttribute('aria-pressed', String(status === state.filter));
@@ -1942,6 +2036,14 @@ function renderQueueBar() {
   if (wismo) {
     wismo.setAttribute('aria-pressed', String(state.queue.intent === 'WISMO'));
     wismo.innerHTML = `WISMO<span class="count">${counts.WISMO ?? 0}</span>`;
+  }
+
+  // Même traitement pour « Non lu », et pour la même raison : elle croise les
+  // statuts au lieu d'en être un.
+  const unread = $('chip-unread');
+  if (unread) {
+    unread.setAttribute('aria-pressed', String(Boolean(state.queue.unread)));
+    unread.innerHTML = `Non lu<span class="count">${counts.UNREAD ?? 0}</span>`;
   }
 
   renderLabelChips();
@@ -2015,11 +2117,7 @@ async function loadAgents() {
 
 function resetQueueFilters() {
   state.filter = '';
-  state.queue = {
-    q: '', intent: '', assignee: '', mailbox: '', labels: [], sort: 'newest',
-    urgent: false, unassigned: false, unlinked: false, historical: false,
-    dueSoon: false, bigAmount: false, timer: null,
-  };
+  state.queue = emptyQueueFilters();
 
   $('q-labels-q').value = '';
   $('q-search').value = '';
@@ -2219,10 +2317,32 @@ function renderDetail() {
     $('read-only-switch').dataset.shop = ticket.merchantId;
   }
 
-  for (const id of ['btn-send', 'btn-save', 'btn-refund']) {
+  for (const id of ['btn-send', 'btn-save']) {
     const el = $(id);
     if (el) el.disabled = otherShop || el.disabled;
   }
+
+  /*
+   * Le bouton « Rembourser » ne dépend que du ticket, jamais du brouillon.
+   *
+   * Son état se réglait dans `renderDraft`, qui sort avant d'y arriver quand
+   * il n'y a pas de proposition à afficher. Le bouton gardait alors l'état du
+   * ticket précédent — désactivé sur un message sans commande, il le restait
+   * sur le suivant qui en avait une, et le geste de l'en-tête, qui délègue son
+   * clic ici, ne faisait rien du tout. Silencieusement.
+   *
+   * Réglé ici, il l'est à chaque ticket affiché, et le verrou d'une autre
+   * boutique s'applique dans le même mouvement au lieu d'être écrasé par le
+   * rendu du brouillon.
+   */
+  $('btn-refund').disabled = otherShop || !ticket.shopifyOrderId || !canI('refund');
+  $('btn-refund').title = otherShop
+    ? 'Ce message appartient à une autre boutique.'
+    : !canI('refund')
+      ? 'Seuls le propriétaire et les superviseurs peuvent rembourser.'
+      : ticket.shopifyOrderId
+        ? 'Ouvre un aperçu chiffré avant toute écriture chez Shopify.'
+        : 'Aucune commande rattachée à ce message.';
 
   // Les actions rapides de l'en-tête suivent le même verrou : un message d'une
   // autre boutique se lit, il ne s'y répond pas.
@@ -2233,6 +2353,22 @@ function renderDetail() {
   }
 
   $('actbar').hidden = $('actbar').hidden || otherShop;
+
+  /*
+   * La rédaction se referme à chaque ticket affiché.
+   *
+   * Elle vivait dans `#actbar`, que ce rendu masque : elle disparaissait donc
+   * par effet de bord, sans que personne n'ait eu à l'écrire. Sortie de là
+   * pour ne plus être masquée à tort, elle ne l'était plus du tout — trois
+   * lignes écrites à un client restaient à l'écran en ouvrant le message du
+   * suivant, et « Valider et envoyer » les lui expédiait.
+   *
+   * Le contenu est vidé avec elle : un brouillon abandonné qui réapparaît sur
+   * un autre dossier est pire qu'un champ vide.
+   */
+  $('compose').hidden = true;
+  $('compose-body').value = '';
+  $('subs').hidden = true;
 
   // Le fil se lit d'un coup d'œil : ce qui vient de nous porte notre nom et
   // sa couleur. « sav@… » répété douze fois n'apprenait rien à personne.
@@ -2923,17 +3059,25 @@ function renderTicketLabels(ticket) {
      * « Supprimer », deux boutons rouges voisins invitent au faux clic.
      */
     `<span class="thread-acts">` +
-    actionButton('refund', 'Rembourser…', ticket) +
     actionButton('client', 'Écrire au client', ticket) +
+    actionButton('supplier', 'Écrire au fournisseur', ticket) +
+    actionButton('refund', 'Rembourser…', ticket) +
+    actionButton('change', 'Modifier la commande', ticket) +
+    actionButton('reshipment', 'Reshipment', ticket) +
     `<button class="btn btn-small btn-danger" id="d-delete">Supprimer</button>` +
     `</span>`;
 
-  bar.querySelector('[data-quick="refund"]')?.addEventListener('click', () =>
-    $('btn-refund').click(),
-  );
-  bar.querySelector('[data-quick="client"]')?.addEventListener('click', () =>
-    openCompose('client', ticket),
-  );
+  const quick = {
+    client: () => openCompose('client', ticket),
+    supplier: () => openCompose('supplier', ticket),
+    refund: () => $('btn-refund').click(),
+    change: () => openChangeRequest(ticket),
+    reshipment: () => void openReshipment(ticket),
+  };
+
+  for (const [key, run] of Object.entries(quick)) {
+    bar.querySelector(`[data-quick="${key}"]`)?.addEventListener('click', run);
+  }
 
   bar.querySelectorAll('[data-tlabel]').forEach((chip) =>
     chip.addEventListener('click', async () => {
@@ -3114,14 +3258,6 @@ function renderDraft(draft, ticket) {
     $('btn-send').title = 'Votre rôle est en lecture seule.';
     $('btn-save').title = 'Votre rôle est en lecture seule.';
   }
-
-  $('btn-refund').disabled = !ticket.shopifyOrderId || !canI('refund');
-  if (!canI('refund')) {
-    $('btn-refund').title = 'Seuls le propriétaire et les superviseurs peuvent rembourser.';
-  }
-  if (canI('refund')) $('btn-refund').title = ticket.shopifyOrderId
-    ? ''
-    : 'Rattachez d’abord une commande à ce message.';
 }
 
 function row(label, value, mono = false) {
@@ -5976,16 +6112,40 @@ $('ret-body').addEventListener('change', async (event) => {
   }
 });
 
-$('ret-new').addEventListener('click', () => {
-  for (const id of ['ret-f-order', 'ret-f-name', 'ret-f-phone', 'ret-f-product', 'ret-f-variant', 'ret-f-sku', 'ret-f-note']) {
-    $(id).value = '';
-  }
+/**
+ * Ouvre le formulaire de dossier retour, vierge ou pré-rempli.
+ *
+ * Deux entrées mènent ici : « Nouveau retour » depuis l'écran Reshipment, et
+ * « Reshipment » depuis un message client. Un seul chemin pour les deux — deux
+ * ouvertures recopiées divergeraient au premier champ ajouté, et c'est
+ * toujours celle qu'on regarde le moins qui oublie une remise à zéro.
+ *
+ * Remettre à zéro *tous* les champs à chaque ouverture, y compris ceux qu'on
+ * ne pré-remplit pas : le formulaire n'est pas démonté entre deux usages, et
+ * un champ laissé de côté garderait la valeur du dossier précédent.
+ */
+function openReturnModal(prefill = {}) {
+  $('ret-f-order').value = prefill.order ?? '';
+  $('ret-f-name').value = prefill.name ?? '';
+  $('ret-f-phone').value = prefill.phone ?? '';
+  $('ret-f-product').value = prefill.product ?? '';
+  $('ret-f-variant').value = prefill.variant ?? '';
+  $('ret-f-sku').value = prefill.sku ?? '';
+  $('ret-f-note').value = prefill.note ?? '';
   $('ret-f-reason').value = 'SIZE';
   $('ret-f-resolution').value = 'EXCHANGE';
-  $('ret-f-country').value = 'FR';
-  $('ret-f-items').innerHTML = '';
-  retLookupEmail = null;
-  retLookupOrderId = null;
+
+  /* Le pays est un enum fermé — les quatre d'`RETURN_COUNTRIES`, et le serveur
+     refuse le reste. Une commande livrée ailleurs laisserait le champ sur une
+     valeur que le formulaire ne sait pas rendre : on retombe sur FR, que
+     l'agent corrigera s'il le faut. */
+  const country = prefill.country ?? 'FR';
+  $('ret-f-country').value = Object.hasOwn(RETURN_COUNTRIES, country) ? country : 'FR';
+
+  renderReturnItemChips(prefill.items ?? []);
+  retLookupEmail = prefill.email ?? null;
+  retLookupOrderId = prefill.orderId ?? null;
+
   $('ret-f-agency').innerHTML =
     '<option value="">—</option>' +
     state.returns.agencies
@@ -5994,8 +6154,33 @@ $('ret-new').addEventListener('click', () => {
           `<option value="${esc(agency.id)}">${esc(agency.name)} (${esc(agency.country)})</option>`,
       )
       .join('');
+
   $('return-modal').classList.add('open');
-});
+  // Le curseur dans le premier champ : c'est là qu'on tape, et tant qu'il y
+  // est les raccourcis de la file se taisent d'eux-mêmes.
+  $('ret-f-order').focus();
+}
+
+/**
+ * Les agences ne sont chargées que par l'écran Reshipment.
+ *
+ * Ouvert depuis un message, le formulaire trouverait donc la liste vide et
+ * proposerait « — » comme seul choix. On la charge à la demande, une fois.
+ * Un échec n'empêche pas de créer le dossier : l'agence est facultative, et
+ * refuser l'ouverture pour ça coûterait plus que le champ ne rapporte.
+ */
+async function ensureReturnAgencies() {
+  if (state.returns.agencies.length > 0) return;
+
+  try {
+    const data = await api('/api/return-agencies');
+    state.returns.agencies = data?.agencies ?? [];
+  } catch {
+    // Le champ agence restera sur « — », le reste du formulaire fonctionne.
+  }
+}
+
+$('ret-new').addEventListener('click', () => openReturnModal());
 
 /*
  * Le numéro de commande remplit le formulaire tout seul.
@@ -6037,25 +6222,39 @@ $('ret-f-order').addEventListener('input', () => {
       $('ret-f-sku').value = items[0].sku ?? '';
     }
 
-    // Plusieurs articles : des puces sous le champ, l'article se choisit au
-    // doigt au lieu de se recopier.
-    $('ret-f-items').innerHTML =
-      items.length > 1
-        ? items
-            .map(
-              (item, index) =>
-                `<button type="button" class="qchip" data-ret-item="${index}"
-                  aria-pressed="${index === 0}">${esc(item.title)}${
-                    item.variantTitle ? ` · ${esc(item.variantTitle)}` : ''
-                  }</button>`,
-            )
-            .join('')
-        : '';
-    $('ret-f-items').dataset.items = JSON.stringify(items);
+    renderReturnItemChips(items);
 
     toast(`Commande ${order.orderName} : champs remplis.`);
   }, 450);
 });
+
+/**
+ * Les articles de la commande, en puces sous le champ produit.
+ *
+ * Une seule puce n'apprend rien : sous deux articles, on n'affiche rien et le
+ * premier reste choisi. Au-delà, l'article se désigne au doigt plutôt qu'en le
+ * recopiant — et sans elles, un dossier ouvert sur une commande de trois
+ * paires part silencieusement sur la première, qui n'est pas forcément celle
+ * que le client renvoie.
+ *
+ * Partagé par les deux chemins : la recherche par numéro, et l'ouverture
+ * depuis un message client.
+ */
+function renderReturnItemChips(items) {
+  $('ret-f-items').innerHTML =
+    items.length > 1
+      ? items
+          .map(
+            (item, index) =>
+              `<button type="button" class="qchip" data-ret-item="${index}"
+                aria-pressed="${index === 0}">${esc(item.title)}${
+                  item.variantTitle ? ` · ${esc(item.variantTitle)}` : ''
+                }</button>`,
+          )
+          .join('')
+      : '';
+  $('ret-f-items').dataset.items = JSON.stringify(items);
+}
 
 $('ret-f-items').addEventListener('click', (event) => {
   const chip = event.target.closest('[data-ret-item]');
@@ -6102,8 +6301,18 @@ $('ret-f-save').addEventListener('click', async () => {
     });
     $('return-modal').classList.remove('open');
     toast('Dossier de retour créé.');
-    state.returns.tab = 'cases';
-    await loadReturns();
+    /*
+     * Recharger seulement l'écran qu'on regarde.
+     *
+     * Le dossier se crée aussi depuis un message client, et `loadReturns`
+     * lançait alors trois requêtes pour un écran invisible, remettait l'onglet
+     * de l'agent sur « Dossiers », et faisait passer une panne réseau pour un
+     * échec de la création — qui, elle, avait réussi.
+     */
+    if (state.view === 'returns') {
+      state.returns.tab = 'cases';
+      await loadReturns();
+    }
   } catch (error) {
     toast(error.message, true);
   }
@@ -8027,6 +8236,12 @@ $('filters').addEventListener('click', async (event) => {
     return;
   }
 
+  if (chip.id === 'chip-unread') {
+    state.queue.unread = !state.queue.unread;
+    await loadQueue();
+    return;
+  }
+
   state.filter = chip.dataset.filter;
   await loadQueue();
 });
@@ -9310,6 +9525,18 @@ document.addEventListener('keydown', (event) => {
 
   if (typingSomewhere() || event.altKey || event.metaKey || event.ctrlKey) return;
   if (state.view !== 'tickets') return;
+  /*
+   * Une fenêtre ouverte prend la main sur les raccourcis de la file.
+   *
+   * Le seul garde était l'écran courant : les fenêtres s'ouvraient depuis
+   * ailleurs, donc la question ne se posait pas. Depuis qu'un dossier de
+   * retour se crée depuis un message, elle s'ouvre par-dessus la file — et
+   * « e » y clôturait le ticket qu'on avait derrière, sans rien pour le dire.
+   */
+  // `.open` et rien d'autre : une fenêtre fermée reste dans le DOM sans
+  // attribut `hidden` — c'est `display: none` qui la cache — et un sélecteur
+  // fondé sur `hidden` aurait éteint les raccourcis en permanence.
+  if (document.querySelector('.backdrop.open')) return;
 
   switch (event.key) {
     case 'j':

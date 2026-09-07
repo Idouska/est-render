@@ -3895,6 +3895,12 @@ textarea:focus-visible {
 
 /* La rédaction s'ouvre sous les actions, jamais dans une fenêtre : celle-ci
    masquerait le fil qu'on relit précisément pour répondre. */
+/* La rédaction et les remplacements vivaient dans la barre d'actions et lui
+   empruntaient son cadre. Sortis de là pour ne plus disparaître avec elle, ils
+   portent désormais le leur. */
+.compose,
+.subs { padding: 12px 15px; border-top: 1px solid var(--line-soft); }
+
 .compose { display: grid; gap: 9px; }
 
 .compose textarea {
@@ -4399,7 +4405,18 @@ textarea:focus-visible {
    étiquettes qui classent. Seul « Supprimer » reste rouge : « Rembourser »
    pèse autant, mais deux boutons rouges voisins invitent au faux clic, et le
    remboursement passe de toute façon par une confirmation chiffrée. */
-.thread-acts { display: flex; gap: 6px; align-items: center; margin-left: auto; }
+.thread-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-left: auto;
+}
+
+/* Un libellé ne se casse pas en son milieu. Sur une colonne étroite, « Écrire
+   au client » s'empilait sur trois lignes dans un bouton haut comme un
+   paragraphe ; les boutons passent désormais à la ligne entiers. */
+.thread-acts .btn { white-space: nowrap; }
 
 /* ---------------------------------------------- indicateurs en bandeau ---
    Sur l'écran SAV, les quatre indicateurs tiennent sur une ligne basse : la
