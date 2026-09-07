@@ -82,6 +82,41 @@ export async function fetchRecentMessages(
   return parsed;
 }
 
+/**
+ * Reporte sur les tickets les archivages faits dans Gmail.
+ *
+ * Écrit directement plutôt que de remonter à l'appelant : c'est un effet de
+ * bord de la relève, sans rapport avec les messages qu'elle rapporte, et le
+ * faire transiter par sa valeur de retour obligerait chaque appelant à s'en
+ * occuper pour un état qui ne le regarde pas.
+ *
+ * Un échec ici ne doit pas faire tomber la relève : perdre un archivage coûte
+ * un message affiché en trop, perdre la relève coûte tout le courrier.
+ */
+async function applyArchiveChanges(
+  merchantId: string,
+  archived: Set<string>,
+  restored: Set<string>,
+): Promise<void> {
+  try {
+    if (archived.size > 0) {
+      await prisma.ticket.updateMany({
+        where: { merchantId, gmailThreadId: { in: [...archived] } },
+        data: { gmailArchived: true },
+      });
+    }
+
+    if (restored.size > 0) {
+      await prisma.ticket.updateMany({
+        where: { merchantId, gmailThreadId: { in: [...restored] } },
+        data: { gmailArchived: false },
+      });
+    }
+  } catch (error) {
+    logger.warn({ merchantId, err: error }, 'Archivages Gmail non reportés');
+  }
+}
+
 export async function fetchNewMessages(
   merchantId: string,
   mailboxId?: string | null,
@@ -102,13 +137,25 @@ export async function fetchNewMessages(
   if (connection.lastHistoryId) {
     try {
       const ids = new Set<string>();
+      /*
+       * Archiver ne crée aucun message.
+       *
+       * La relève ne demandait que `messageAdded` : un fil sorti de la boîte
+       * de réception dans Gmail ne produisait donc aucun événement, et la file
+       * continuait de l'afficher en gras indéfiniment. On écoute désormais
+       * aussi les mouvements du libellé `INBOX`, dans les deux sens — Gmail
+       * remet un fil en réception dès qu'une réponse arrive, et la file doit
+       * suivre ce retour autant que le départ.
+       */
+      const archived = new Set<string>();
+      const restored = new Set<string>();
       let pageToken: string | undefined;
 
       do {
         const response = await gmail.users.history.list({
           userId: 'me',
           startHistoryId: connection.lastHistoryId,
-          historyTypes: ['messageAdded'],
+          historyTypes: ['messageAdded', 'labelRemoved', 'labelAdded'],
           labelId: 'INBOX',
           pageToken,
         });
@@ -117,11 +164,32 @@ export async function fetchNewMessages(
           for (const added of entry.messagesAdded ?? []) {
             if (added.message?.id) ids.add(added.message.id);
           }
+
+          for (const change of entry.labelsRemoved ?? []) {
+            const thread = change.message?.threadId;
+            if (thread && change.labelIds?.includes('INBOX')) {
+              archived.add(thread);
+              restored.delete(thread);
+            }
+          }
+
+          for (const change of entry.labelsAdded ?? []) {
+            const thread = change.message?.threadId;
+            if (thread && change.labelIds?.includes('INBOX')) {
+              restored.add(thread);
+              archived.delete(thread);
+            }
+          }
         }
 
         newHistoryId = response.data.historyId ?? newHistoryId;
         pageToken = response.data.nextPageToken ?? undefined;
       } while (pageToken);
+
+      // L'historique est lu dans l'ordre : le dernier mouvement d'un fil est
+      // celui qui compte, d'où les `delete` croisés ci-dessus plutôt qu'une
+      // simple accumulation.
+      await applyArchiveChanges(merchantId, archived, restored);
 
       messageIds = [...ids];
     } catch (error) {

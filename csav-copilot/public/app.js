@@ -27,8 +27,12 @@ const state = {
     q: '', intent: '', assignee: '', mailbox: '', labels: [], sort: 'newest',
     urgent: false, unassigned: false, unlinked: false, historical: false,
     dueSoon: false, bigAmount: false, timer: null,
+    /* Dossier courant, à la manière de Gmail. La réception par défaut : ce
+       qu'on ouvre le matin, c'est ce qui reste à faire, pas l'archive. */
+    folder: 'inbox',
   },
   queueCounts: {},
+  queueFolders: {},
   /* Messages cochés dans la file. Un Set et non un tableau : on teste
      l'appartenance à chaque ligne rendue, cinquante fois par rafraîchissement. */
   picked: new Set(),
@@ -702,6 +706,62 @@ function initials(value) {
     .toUpperCase();
 }
 
+/*
+ * Dossiers, à la manière de Gmail.
+ *
+ * Quatre entrées et pas une de plus : ouvrir la file, c'est vouloir savoir ce
+ * qui reste à faire. La réception le dit, les trois autres servent à vérifier
+ * ou à retrouver.
+ *
+ * « Brouillons » et « Envoyés » ne sont pas les dossiers Gmail du même nom.
+ * Le produit a cessé d'écrire ses brouillons dans la boîte partagée — un
+ * brouillon posé là s'envoie depuis n'importe quel téléphone, hors de l'outil,
+ * sans contrôle de rôle, sans plafond de remboursement et sans journal. Ces
+ * deux dossiers lisent donc ce que le produit détient en propre : ses
+ * propositions en attente de relecture, et les fils où une réponse est
+ * réellement partie.
+ */
+const FOLDERS = [
+  { key: 'inbox', label: 'Réception' },
+  { key: 'drafts', label: 'Brouillons' },
+  { key: 'sent', label: 'Envoyés' },
+  { key: 'archived', label: 'Archivés' },
+];
+
+function renderFolders() {
+  const bar = $('folders');
+  if (!bar) return;
+
+  const counts = state.queueFolders ?? {};
+  const current = state.queue.folder;
+
+  bar.innerHTML = FOLDERS.map((folder) => {
+    const n = counts[folder.key];
+    return `<button class="folder" data-folder="${folder.key}" aria-pressed="${
+      folder.key === current
+    }">${esc(folder.label)}${
+      // Un dossier vide n'affiche pas « 0 » : le nombre sert à décider d'y
+      // aller, et « 0 » dit déjà tout en ne disant rien.
+      n ? `<span class="folder-n">${n > 9999 ? '9999+' : n}</span>` : ''
+    }</button>`;
+  }).join('');
+
+  bar.querySelectorAll('[data-folder]').forEach((button) =>
+    button.addEventListener('click', () => {
+      const next = button.dataset.folder;
+      if (next === state.queue.folder) return;
+
+      state.queue.folder = next;
+      // La sélection appartenait à l'ancien dossier : cocher trente messages
+      // en réception puis basculer sur Archivés laisserait agir sur des lignes
+      // qu'on ne voit plus.
+      state.picked.clear();
+      state.queueCursor = null;
+      void loadQueue();
+    }),
+  );
+}
+
 /** Paramètres d'appel dérivés de l'état des filtres. */
 function queueParams() {
   const params = new URLSearchParams();
@@ -729,6 +789,10 @@ function queueParams() {
     params.set('minAgeDays', '2');
   }
   if (f.bigAmount) params.set('minAmount', '100');
+  // Toujours transmis, y compris `all` : le serveur a `all` pour défaut, et
+  // laisser le paramètre de côté rendrait la réception silencieusement égale
+  // à tout le reste.
+  params.set('folder', f.folder);
 
   return params;
 }
@@ -773,7 +837,9 @@ async function loadQueue({ append = false } = {}) {
   state.queueCursor = data.nextCursor ?? null;
   state.tickets = append ? [...state.tickets, ...data.tickets] : data.tickets;
   state.queueCounts = data.counts ?? {};
+  state.queueFolders = data.folders ?? {};
   state.queueLabels = data.labels ?? state.queueLabels ?? [];
+  renderFolders();
 
   // Compteurs de la navigation, dérivés des mêmes chiffres que la file : deux
   // sources donneraient deux vérités, et c'est celle qu'on ne regarde pas qui
@@ -838,7 +904,9 @@ async function loadQueue({ append = false } = {}) {
             state.picked.has(ticket.id) ? ' checked' : ''
           } />
         </label>
-        <button class="queue-item li-${ticket.intent ?? 'OTHER'}" data-id="${ticket.id}"
+        <button class="queue-item li-${ticket.intent ?? 'OTHER'}${
+          ticket.gmailArchived ? ' q-done' : ''
+        }" data-id="${ticket.id}"
           aria-current="${ticket.id === state.currentId}">
           <span class="queue-top">
             ${
@@ -1476,6 +1544,22 @@ function renderActionBar() {
  * Une fenêtre modale masque exactement ce qu'on doit relire pour répondre. Ici
  * le message se compose au-dessous du fil, qui reste visible.
  */
+/**
+ * Objet d'une réponse : celui du fil, préfixé une seule fois.
+ *
+ * Gmail n'empile pas les « Re: » et nous non plus — « Re: Re: Re: Commande »
+ * signale un outil, pas une personne. Le préfixe est reconnu quelle que soit
+ * sa casse et quelle que soit sa langue d'origine, puisque la clientèle écrit
+ * aussi en anglais et en espagnol.
+ */
+function replySubject(ticket) {
+  const raw = (ticket.subject ?? '').trim();
+  if (!raw) return 'Votre commande';
+
+  const bare = raw.replace(/^((re|rép|rep|ref|rv|aw|antw|res)\s*(\[\d+\])?\s*:\s*)+/i, '');
+  return `Re: ${bare || 'votre commande'}`;
+}
+
 function openCompose(target, ticket) {
   const zone = $('compose');
   zone.hidden = false;
@@ -1485,6 +1569,19 @@ function openCompose(target, ticket) {
   body.placeholder =
     target === 'client' ? 'Votre message au client…' : 'Votre message au fournisseur…';
   body.value = '';
+
+  /*
+   * L'objet n'existe que pour le client : une escalade fournisseur compose le
+   * sien à partir de la boutique, de la commande et du motif, et le laisser
+   * modifier ici casserait le fil que le fournisseur suit dans son espace.
+   */
+  const subject = $('compose-subject');
+  const subjectRow = subject.closest('.compose-subject');
+  subjectRow.hidden = target !== 'client';
+  if (target === 'client') {
+    subject.value = replySubject(ticket);
+  }
+
   body.focus();
 
   const relay = $('compose-relay');
@@ -1592,7 +1689,10 @@ $('compose-send')?.addEventListener('click', async () => {
         method: 'POST',
         body: JSON.stringify({
           to: ticket.customerEmail,
-          subject: `Re: ${ticket.subject ?? 'votre commande'}`,
+          // Ce que l'agent lit dans le champ, pas ce qu'on aurait recalculé :
+          // un objet corrigé puis ignoré à l'envoi serait pire que pas de
+          // champ du tout.
+          subject: $('compose-subject').value.trim() || replySubject(ticket),
           body: text,
           // Rattaché au fil : la réponse s'écrit dans la conversation, elle
           // ne part pas dans le vide.
@@ -6115,13 +6215,22 @@ function renderNav() {
            * passe en rouge plein : une demande sans réponse est une promesse
            * faite à un client.
            */
-          const dim = ['orders', 'customers', 'catalog', 'tracking'].includes(view);
+          /*
+           * Trois écrans ne portent plus de compte : Commandes, Clients,
+           * Catalogue. Leur volume ne réclame aucun geste — savoir qu'il y a
+           * 4388 commandes n'apprend rien qu'on puisse faire. Une pastille
+           * qui n'appelle pas d'action apprend surtout à ignorer les
+           * pastilles, y compris celles qui en appellent une.
+           */
+          const mute = ['orders', 'customers', 'catalog'].includes(view);
+          const dim = view === 'tracking';
           const hot = ['changes', 'suppliers', 'returns'].includes(view) && tally > 0;
           const shown = tally > 9999 ? '9999+' : tally;
+          const badge = tally && !mute;
           return `<button class="nav-item" data-view="${view}" aria-current="${
             view === state.view
           }">${ico(meta.icon)}<span class="nav-label">${esc(meta.label)}</span>${
-            tally
+            badge
               ? `<span class="tally${hot ? ' tally-hot' : dim ? ' tally-dim' : ''}">${shown}</span>`
               : ''
           }</button>`;

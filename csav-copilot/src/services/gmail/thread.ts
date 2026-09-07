@@ -36,6 +36,20 @@ export async function syncTicketThread(merchantId: string, ticketId: string): Pr
 
   let added = 0;
 
+  /*
+   * État d'archivage relevé au passage.
+   *
+   * La relève incrémentale apprend les archivages *à venir*, par les
+   * événements de libellé. Elle ne dit rien de ceux d'avant : à la mise en
+   * service, des milliers de fils déjà rangés dans Gmail se présenteraient
+   * comme à traiter. Ce relevé les corrige au fil des ouvertures — la
+   * réconciliation se fait toute seule, sans balayage de toute la boîte.
+   *
+   * `null` tant qu'on n'a rien pu lire : on ne réécrit pas un état sur la foi
+   * d'un appel qui a échoué.
+   */
+  let inInbox: boolean | null = null;
+
   try {
     const { gmail, emailAddress } = await getGmailClient(merchantId, ticket.mailboxId);
     const { data: thread } = await gmail.users.threads.get({
@@ -43,6 +57,12 @@ export async function syncTicketThread(merchantId: string, ticketId: string): Pr
       id: ticket.gmailThreadId,
       format: 'full',
     });
+
+    // Un fil est en réception dès qu'un seul de ses messages y est : Gmail
+    // range le fil entier, et c'est le fil que la file affiche.
+    inInbox = (thread.messages ?? []).some((message) =>
+      (message.labelIds ?? []).includes('INBOX'),
+    );
 
     const known = new Set(ticket.messages.map((message) => message.gmailMessageId));
 
@@ -89,7 +109,10 @@ export async function syncTicketThread(merchantId: string, ticketId: string): Pr
 
   await prisma.ticket.update({
     where: { id: ticket.id },
-    data: { threadSyncedAt: new Date() },
+    data: {
+      threadSyncedAt: new Date(),
+      ...(inInbox === null ? {} : { gmailArchived: !inInbox }),
+    },
   });
 
   return added;
