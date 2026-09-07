@@ -78,15 +78,6 @@
 
           <nav id="nav" aria-label="Sections"></nav>
 
-          <div class="me">
-            <span class="avatar" id="me-avatar">?</span>
-            <div>
-              <b id="me-name" title="">—</b>
-              <span id="me-role"></span>
-            </div>
-            <button class="btn btn-small" id="logout" title="Se déconnecter"
-              aria-label="Se déconnecter"></button>
-          </div>
         </aside>
 
         <div class="main">
@@ -140,6 +131,18 @@
               <div class="clocks" id="clocks" role="button" tabindex="0"
                 title="Heures locales — cliquer pour le détail"></div>
               <div class="conn" id="conn"></div>
+              <!-- Le compte remonte du pied de la navigation vers la barre
+                   haute. C'est là qu'on le cherche — et le pied d'une colonne
+                   qu'on replie n'est pas un endroit pour savoir qui on est. -->
+              <div class="me">
+                <span class="avatar" id="me-avatar">?</span>
+                <div class="me-txt">
+                  <b id="me-name" title="">—</b>
+                  <span id="me-role"></span>
+                </div>
+                <button class="btn btn-small" id="logout" title="Se déconnecter"
+                  aria-label="Se déconnecter"></button>
+              </div>
             </div>
           </header>
 
@@ -370,6 +373,24 @@
           <div class="queue-head">
             <span class="queue-title">Conversations</span>
             <span class="queue-count" id="queue-total"></span>
+            <!-- Deux raccourcis vers des commandes déjà là : le champ de
+                 recherche et le menu de filtres vivent dans la barre en
+                 dessous, que l'on replie. Ces icônes y mènent sans la
+                 rouvrir. -->
+            <button class="ico-btn qh-ico" id="queue-search" type="button"
+              aria-label="Rechercher dans la file" title="Rechercher (/)">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"
+                stroke-linecap="round" aria-hidden="true">
+                <circle cx="7.2" cy="7.2" r="4.2" /><path d="M10.4 10.4 13.5 13.5" />
+              </svg>
+            </button>
+            <button class="ico-btn qh-ico" id="queue-filter" type="button"
+              aria-label="Filtres" title="Filtres">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"
+                stroke-linecap="round" aria-hidden="true">
+                <path d="M2.5 4h11M4.5 8h7M6.5 12h3" />
+              </svg>
+            </button>
           </div>
           <!-- Barre d'actions groupées. Elle n'apparaît qu'une fois quelque
                chose de coché : une barre d'actions permanente sur une file
