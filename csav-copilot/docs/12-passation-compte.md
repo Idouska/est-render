@@ -21,7 +21,7 @@ précédent, qui ne se transfère pas d'un compte à l'autre.
 annonce deux fichiers en échec. Ces échecs ne disent rien du code : les tests
 concernés importent `zod` via `src/config/env.ts`, qui n'est pas là. Cherchée
 comme une régression, la piste coûte une demi-heure. Une fois installé, la
-référence est **86 tests, 86 passent**, typecheck propre.
+référence est **89 tests, 89 passent** (86 à l'écriture de cette note), typecheck propre.
 
 `npm run db:seed` demande en plus un PostgreSQL — `docker compose up -d` le
 fournit, ainsi que le Redis de la file.
@@ -67,3 +67,73 @@ trompe coûte plus cher qu'une note absente. Absente, on va voir ; fausse, on
 la croit et on cherche la panne ailleurs. Le réflexe à garder pour la suite
 de ce document — vérifier avant de recopier une affirmation d'accès ou de
 configuration, `git push` et `gh auth status` suffisent.
+
+## Reprise de l'état Gmail — passée le 2026-09-08, ne pas la refaire
+
+`src/scripts/repriseGmail.ts`, lancé via `npm run gmail:reprise`, est un
+script de maintenance **ponctuel**. Il a été exécuté en production le
+8 septembre 2026. Résultat : le compteur « SAV client » est passé de **5 260
+à 17**, et douze tickets ont rejoint le dossier « Archivés ».
+
+Il n'y a rien à relancer. Ce qu'il corrigeait ne peut pas se reproduire.
+
+### Ce qu'il réparait
+
+`Ticket.gmailUnread` et `Ticket.gmailArchived` sont nés le 7 septembre, avec
+des valeurs par défaut. Les fils entrés avant n'avaient jamais été
+interrogés : la base ne disait pas « ce fil est non lu », elle disait « je
+n'ai jamais regardé ». Le compteur additionnait les deux, d'où un badge qui
+affichait le total de la boîte.
+
+La relève incrémentale (`services/gmail/sync.ts`) corrige tout ce qui bouge
+*depuis*, en écoutant les événements de libellé. Elle ne dit rien du passé,
+par construction : un flux d'événements donne le présent, jamais l'état de
+tout. C'est la raison d'être de ce script, et la raison pour laquelle il ne
+sert qu'une fois. Toute donnée branchée sur un flux d'événements demande une
+reprise pour établir son point de départ — sinon le flux entretient
+fidèlement un état initial qui était faux.
+
+Le relancer est sans danger : il est idempotent, il réécrira les mêmes
+valeurs.
+
+### Le piège, pour que personne ne le refasse
+
+La première version lisait les fils un par un pour découvrir leur état. Elle
+a épuisé le quota Gmail au bout d'une trentaine d'appels, en production.
+
+Le quota qui compte est `totalQueryCostPerMinutePerUser` : six mille unités
+par minute et par boîte. Un `threads.get` en coûte dix. Lire cinq mille fils
+coûte cinquante mille unités — près de dix minutes de quota *total*, sans
+rien laisser à l'application, qui interroge Gmail en même temps. **Ralentir
+la boucle ne change pas ce total.** Un quota qu'on n'arrive pas à respecter
+en ralentissant est le signe qu'on interroge mal, pas trop vite.
+
+La version retenue demande à Gmail *lesquels* sont non lus — `threads.list`
+avec `q: is:unread` rend cinq cents identifiants par page pour cinq unités —
+et déduit le reste. Quinze appels au lieu de cinq mille, quelques secondes au
+lieu d'une heure.
+
+Deux erreurs de conception accompagnaient la première version, à connaître
+parce qu'elles se reproduisent facilement ailleurs :
+
+- **Le disjoncteur confondait « attends » et « abandonne ».** Dix erreurs de
+  quota d'affilée lui ont fait déclarer la boîte morte et sauter les 5 360
+  fils restants. Une limitation de débit est passagère ; un jeton révoqué ne
+  l'est pas. Les traiter pareil coûte cher.
+- **Le rapport comptait les fils sautés comme des échecs.** « 5 360 en
+  échec » là où il y en avait dix. Trois catégories — traités, en échec,
+  jamais tentés — confondues en une.
+
+### Le garde-fou à ne pas retirer
+
+La méthode repose sur une déduction : ce que Gmail ne nomme pas est lu et
+archivé. Elle est juste tant que la réponse est complète. Une recherche qui
+rendrait zéro **sans lever d'erreur** — périmètre d'accès insuffisant,
+pagination interrompue — se lirait « tout est lu et archivé », et viderait la
+file en silence. Deux listes vides valent donc refus d'écrire.
+
+Cette prudence existait dans `services/gmail/thread.ts` (« on ne réécrit pas
+un état sur la foi d'un appel qui a échoué ») et avait été perdue à la
+réécriture. Elle a été remise. Ne pas la retirer au motif qu'elle n'a jamais
+servi : c'est précisément son état normal.
+
