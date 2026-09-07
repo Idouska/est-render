@@ -4011,15 +4011,21 @@ function renderOrder(ticket, order, orderError) {
             item.variantTitle ? `<br>${esc(item.variantTitle)}` : ''
           }</span><span class="item-price">${
             /*
-             * La quantité, pas le prix de la ligne.
+             * Le prix de la ligne, remises comprises : c'est lui qu'on
+             * rembourse sur un retour partiel. Le total de la commande ne le
+             * dit plus dès qu'elle porte deux articles.
              *
-             * Le prix par article n'est pas dans la requête Shopify — ni dans
-             * `OrderLineItem`. L'ajouter demande un champ de plus dans le
-             * GraphQL, et un nom erroné y fait rejeter la requête entière :
-             * les commandes cesseraient de se charger partout, pas seulement
-             * ici. À faire contre une vraie boutique, pas à l'aveugle.
+             * La quantité prend le relais quand le montant manque — commande
+             * ancienne, réponse tronquée. Une case vide laisserait croire à un
+             * article gratuit.
              */
-            `${item.quantity} ×`
+            item.price
+              ? esc(euro(item.price, order.currency))
+              : `${item.quantity} ×`
+          }${
+            // La quantité reste dite quand elle dépasse un, à côté du prix :
+            // « 240,00 € » sur deux paires se lit autrement que sur une.
+            item.price && item.quantity > 1 ? `<small>×${item.quantity}</small>` : ''
           }</span></li>`;
         })
         .join('') +

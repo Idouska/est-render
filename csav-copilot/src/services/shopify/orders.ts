@@ -8,6 +8,9 @@ export interface OrderLineItem {
   /// vite qu'à sa référence, et c'est ce qui rend l'export exploitable.
   image: string | null;
   sku: string | null;
+  /// Montant de la ligne, remises comprises. Chaîne, comme tous les montants
+  /// venus de Shopify : passer par `euro()`, jamais d'arithmétique directe.
+  price: string | null;
   /// Marque Shopify de l'article : c'est elle qui désigne l'atelier.
   vendor?: string | null;
 }
@@ -101,6 +104,23 @@ const ORDER_FIELDS = /* GraphQL */ `
         variantTitle
         sku
         vendor
+        # Le montant de la ligne, remises comprises. Sur un remboursement
+        # partiel, c'est lui qu'on rembourse — le total de la commande ne le
+        # dit plus dès qu'elle porte deux articles.
+        #
+        # Même forme que totalPriceSet plus haut : un MoneyBag dont on ne lit
+        # que shopMoney. La devise de présentation appartient au client, pas
+        # au marchand qui rembourse.
+        #
+        # (Sans accents graves : cette requête est un littéral de gabarit, et
+        # un accent grave dans un commentaire GraphQL le termine en plein
+        # milieu.)
+        discountedTotalSet {
+          shopMoney {
+            amount
+            currencyCode
+          }
+        }
         image {
           url
         }
@@ -154,6 +174,7 @@ interface RawOrder {
       quantity: number;
       variantTitle: string | null;
       sku: string | null;
+      discountedTotalSet: { shopMoney: { amount: string; currencyCode: string } } | null;
       vendor: string | null;
       image: { url: string } | null;
     }>;
@@ -205,6 +226,10 @@ function toSummary(order: RawOrder): OrderSummary {
       variantTitle: item.variantTitle,
       sku: item.sku,
       vendor: item.vendor ?? null,
+      // `?.` sur toute la chaîne : le champ est déclaré non nul par le schéma,
+      // mais une réponse tronquée ou un article supprimé ne doit pas faire
+      // tomber la conversion de la commande entière pour un montant d'appoint.
+      price: item.discountedTotalSet?.shopMoney?.amount ?? null,
       image: item.image?.url ?? null,
     })),
     fulfillments: order.fulfillments.map((f) => ({
