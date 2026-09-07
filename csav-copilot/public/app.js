@@ -1880,6 +1880,60 @@ $('queue-search')?.addEventListener('click', () => {
 
 $('queue-filter')?.addEventListener('click', () => $('q-filters-btn')?.click());
 
+/*
+ * Tri de la file, depuis l'en-tête.
+ *
+ * Les libellés sont lus dans le `select` du bas plutôt que recopiés : deux
+ * listes des mêmes tris finiraient par diverger, et c'est celle qu'on regarde
+ * le moins qui garderait l'ancien intitulé.
+ *
+ * Le choix écrit dans `state.queue.sort` et remet le `select` à jour — les
+ * deux commandes désignent le même réglage, elles ne peuvent pas se
+ * contredire.
+ */
+function renderSortMenu() {
+  const menu = $('queue-sort-menu');
+  const select = $('q-sort');
+  if (!menu || !select) return;
+
+  menu.innerHTML = [...select.options]
+    .map(
+      (option) =>
+        `<button class="more-item" type="button" data-sort="${esc(option.value)}"
+          aria-pressed="${option.value === state.queue.sort}">${
+            option.value === state.queue.sort ? '✓ ' : ''
+          }${esc(option.textContent)}</button>`,
+    )
+    .join('');
+
+  menu.querySelectorAll('[data-sort]').forEach((button) =>
+    button.addEventListener('click', () => {
+      state.queue.sort = button.dataset.sort;
+      select.value = button.dataset.sort;
+      closeSortMenu();
+      void loadQueue();
+    }),
+  );
+}
+
+function closeSortMenu() {
+  const menu = $('queue-sort-menu');
+  if (!menu || menu.hidden) return;
+  menu.hidden = true;
+  $('queue-sort')?.setAttribute('aria-expanded', 'false');
+}
+
+$('queue-sort')?.addEventListener('click', (event) => {
+  event.stopPropagation();
+  const menu = $('queue-sort-menu');
+  if (!menu) return;
+
+  const open = menu.hidden;
+  if (open) renderSortMenu();
+  menu.hidden = !open;
+  $('queue-sort').setAttribute('aria-expanded', String(open));
+});
+
 $('d-prev')?.addEventListener('click', () => moveQueue(-1));
 $('d-next')?.addEventListener('click', () => moveQueue(1));
 
@@ -1904,11 +1958,17 @@ $('d-more')?.addEventListener('click', (event) => {
    un menu qui reste ouvert après qu'on a regardé autre chose finit par
    masquer ce qu'on voulait lire. */
 document.addEventListener('click', (event) => {
-  if (!event.target.closest('.more-wrap')) closeMoreMenu();
+  if (!event.target.closest('.more-wrap')) {
+    closeMoreMenu();
+    closeSortMenu();
+  }
 });
 
 document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') closeMoreMenu();
+  if (event.key === 'Escape') {
+    closeMoreMenu();
+    closeSortMenu();
+  }
 });
 
 /**
