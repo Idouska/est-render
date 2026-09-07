@@ -1008,7 +1008,16 @@ body {
 
 /* -------------------------------------------------------------- fiche --- */
 
-.thread-head { padding: 15px 17px; border-bottom: 1px solid var(--line-soft); }
+/* En-tête du ticket.
+   Porté sur `.ticket-head` : `.thread-head` servait aussi l'en-tête du fil,
+   quinze cents lignes plus bas, et les deux règles se cumulaient — ajuster
+   l'un déplaçait l'autre sans qu'on le voie. Le padding de 15/17 était de
+   toute façon écrasé par cette seconde règle ; il est reposé ici à une valeur
+   choisie, et non héritée d'un écrasement. */
+.ticket-head {
+  padding: 11px 15px 9px;
+  border-bottom: 1px solid var(--line-soft);
+}
 .thread-subject { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.02em; }
 .thread-meta {
   font-size: 12.5px;
@@ -6341,3 +6350,178 @@ textarea:focus-visible {
     overflow-y: visible;
   }
 }
+
+/* ====================================== zone Conversation, refonte 2026 ===
+
+   Trois principes, tirés de ce que la feuille fait déjà ailleurs :
+
+   - l'échelle réelle du dépôt, pas les tokens `--t-*` qui sont morts (deux
+     usages en 6300 lignes). Les corps employés ici : 13.5 / 13 / 12.5 / 11.5
+     / 11 px, les graisses 600 et 650, comme partout ;
+   - aucun sélecteur d'ID : la feuille en compte déjà une trentaine, dont deux
+     nids qui redéfinissent des composants entiers, et c'est ce qui rend une
+     règle impossible à surcharger sans en écrire une plus spécifique encore ;
+   - aucun nom de classe déjà pris. `.src` a déjà coûté trois états de couleur
+     couchés en gris par une seconde définition homonyme. */
+
+/* ------------------------------------------------------------- onglets --- */
+
+/* Soulignement et non pilule : nous sommes dans un outil de bureau, et une
+   rangée de gros boutons arrondis y sonne comme une application mobile. */
+.tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 15px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.tab {
+  appearance: none;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  padding: 8px 10px 7px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--ink-mute);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tab:hover { color: var(--ink); }
+
+.tab[aria-selected="true"] {
+  color: var(--accent-ink);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+.tab-n {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-mute);
+}
+
+/* -------------------------------------------------- en-tête du ticket ---- */
+
+/* Deux lignes : qui parle et de quoi, puis les faits qu'on ne travaille pas.
+   La seconde est volontairement discrète — elle se consulte, elle ne se lit
+   pas. */
+.thread-meta {
+  display: flex;
+  flex-direction: column;
+  /* `align-items: center` vient de la règle de base, où la ligne était
+     horizontale. Passée en colonne, il centrerait les deux lignes au lieu de
+     les aligner à gauche — il faut le reprendre explicitement. */
+  align-items: flex-start;
+  gap: 3px;
+}
+
+.tm-who {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+
+.tm-who .linkish { font-weight: 650; color: var(--ink); }
+.tm-who code { font-size: 12px; color: var(--ink-mute); }
+
+.tm-facts {
+  font-size: 11.5px;
+  color: var(--ink-mute);
+  display: block;
+  min-width: 0;
+}
+
+/* L'objet d'origine : gardé pour retrouver le fil dans Gmail, jamais assez
+   important pour prendre deux lignes. */
+.tm-subj {
+  display: inline-block;
+  max-width: 42ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+/* Pastilles de l'en-tête. Nommées `tp-` et non `chip`/`tag`/`src`, tous trois
+   déjà pris et porteurs de comportements ailleurs. */
+.tp {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  color: var(--ink-soft);
+  background: var(--surface);
+  white-space: nowrap;
+}
+
+.tp-intent { color: var(--accent-ink); background: var(--accent-soft); border-color: transparent; }
+.tp-conf { font-variant-numeric: tabular-nums; }
+
+/* ------------------------------------------------ action recommandée ----- */
+
+/* Teinte verte très légère, empruntée au token de succès existant : elle dit
+   « voici le geste » sans crier. Le bouton porte l'accent du produit, pas un
+   second vert saturé — deux verts voisins se disputent l'œil. */
+.reco {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin: 0 15px 11px;
+  padding: 11px 13px;
+  border: 1px solid color-mix(in srgb, var(--ok) 28%, transparent);
+  border-radius: var(--r-lg);
+  background: var(--ok-soft);
+}
+
+.reco-body { min-width: 0; flex: 1; }
+.reco-body .panel-title { display: block; margin-bottom: 3px; }
+
+.reco-title {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 650;
+  color: var(--ink);
+}
+
+.reco-why {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.reco-go { flex: none; }
+
+/* ------------------------------------------------- chips du résumé ------- */
+
+/* Les faits structurés du dossier, sous le résumé : intention, commande,
+   montant, état. Compactes et bordées, pas des badges marketing. */
+.brief-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 0;
+}
+
+.bf {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 3px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  font-size: 11.5px;
+  color: var(--ink-mute);
+}
+
+.bf b { font-weight: 600; color: var(--ink); }
+.bf-warn b { color: var(--warn); }
