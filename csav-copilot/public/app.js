@@ -22,6 +22,7 @@ const state = {
   allShops: false,
   navQuery: '',
   refreshing: false,
+  refreshSilent: false,
   lastRefresh: null,
   queue: emptyQueueFilters(),
   /* Onglet ouvert dans la colonne centrale. Mémorisé le temps de la session :
@@ -643,6 +644,34 @@ async function addShop() {
 
 /* ------------------------------------------------------------ indicateurs */
 
+/**
+ * Un délai en secondes, dit comme on le dirait à voix haute.
+ *
+ * « 5 400 s » ne se compare à rien ; « 1 h 30 » se compare à hier. L'unité
+ * suit l'ordre de grandeur, parce qu'un délai de trois minutes et un délai de
+ * deux jours ne se lisent pas dans la même échelle.
+ *
+ * `null` — aucune réponse partie sur la fenêtre — s'affiche « — » et non
+ * « 0 » : zéro se lirait comme instantané, l'inverse de « rien mesuré ».
+ */
+function formatDelay(seconds) {
+  if (seconds == null) return '—';
+  if (seconds < 60) return `${Math.round(seconds)} s`;
+
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes} min`;
+
+  const hours = seconds / 3600;
+  if (hours < 24) {
+    const whole = Math.floor(hours);
+    const rest = Math.round((hours - whole) * 60);
+    return rest === 0 ? `${whole} h` : `${whole} h ${rest}`;
+  }
+
+  const days = seconds / 86400;
+  return days < 10 ? `${days.toFixed(1).replace('.', ',')} j` : `${Math.round(days)} j`;
+}
+
 async function loadMetrics() {
   const metrics = await api('/api/metrics');
   const counts = metrics.tickets ?? {};
@@ -655,18 +684,15 @@ async function loadMetrics() {
     if (!box.firstChild) box.innerHTML = ico(box.dataset.ico);
   });
 
-  // Traités sur la fenêtre, d'après la date de traitement — et non celle du
-  // dernier message du client, qui faisait afficher zéro à qui venait d'en
-  // clore cinquante.
-  $('kpi-done').textContent = String(metrics.handled ?? 0);
-  $('kpi-done-note').textContent =
-    metrics.sent > 0
-      ? `dont ${metrics.sent} réponse${metrics.sent > 1 ? 's' : ''} envoyée${
-          metrics.sent > 1 ? 's' : ''
-        }`
-      : 'clos ou répondus';
-
-  $('kpi-today').textContent = String(metrics.today ?? 0);
+  /*
+   * « Traités · 30 jours » et « Traités aujourd'hui » quittent cette bande.
+   *
+   * Ils comptent le travail accompli ; la bande doit dire ce qui reste à
+   * faire et à quelle vitesse on répond. Le premier reste servi par la route
+   * — l'écran Statistiques s'en sert — il n'est simplement plus affiché ici.
+   */
+  $('kpi-drafts').textContent = String(counts.DRAFT_READY ?? 0);
+  $('kpi-delay').textContent = formatDelay(metrics.firstReplySeconds);
   $('kpi-pending').textContent = String(metrics.pending ?? 0);
   state.pendingCount = metrics.pending ?? 0;
   renderNav();
@@ -1825,15 +1851,15 @@ $('compose-resolve')?.addEventListener('click', async () => {
 
 /* « Nouvelle escalade » : ouvre la rédaction fournisseur sur le ticket courant.
    Le bouton ne paraît que là où il a un objet — un ticket ouvert. */
-$('new-escalation')?.addEventListener('click', () => {
-  const ticket = state.detail?.ticket;
-  if (!ticket) return;
-  // Plus besoin de rouvrir `#actbar` : la rédaction n'y est plus. La forcer
-  // visible afficherait un cadre « Action » vide au-dessus du formulaire, sur
-  // les intentions qui n'offrent plus aucune action.
-  openCompose('supplier', ticket);
-  $('compose-body').scrollIntoView({ block: 'center', behavior: 'smooth' });
-});
+/*
+ * Le bouton « Nouvelle escalade » de la barre haute est retiré.
+ *
+ * Le geste reste : « Écrire au fournisseur », dans l'en-tête du ticket, appelle
+ * le même `openCompose('supplier')`. Le CTA de la barre haute promettait une
+ * action hors contexte — il exigeait un ticket ouvert pour faire quoi que ce
+ * soit, et se contentait de faire défiler jusqu'à la zone de rédaction du
+ * ticket qu'on regardait déjà.
+ */
 
 $('compose-relay')?.addEventListener('click', () => {
   const text = $('compose-body').value.trim();
@@ -2510,8 +2536,28 @@ async function selectTicket(id, { silent = false } = {}) {
   }
 
   state.detail = detail;
+
+  /*
+   * Le compteur de non lus suit l'ouverture d'un ticket.
+   *
+   * `GET /api/tickets/:id` relit le fil chez Gmail au passage et corrige son
+   * état de lecture en base. Le badge de la navigation, lui, ne bougeait qu'au
+   * rafraîchissement suivant — jusqu'à soixante secondes plus tard. On ouvrait
+   * un message manifestement lu et le nombre ne bronchait pas, ce qui se lit
+   * comme un compteur cassé.
+   *
+   * Le serveur reste la source unique : on redemande la valeur, on ne la
+   * décrémente pas ici. Un compteur tenu à deux endroits finit toujours par
+   * dire deux choses.
+   */
+  const wasUnread = detail.ticket.gmailUnread;
+
   renderDetail();
   await Promise.all([loadQueue(), loadEscalations(id)]);
+
+  // Seulement si l'état a pu changer : recompter à chaque ouverture ajouterait
+  // une requête par clic pour un nombre identique neuf fois sur dix.
+  if (wasUnread) void loadMetrics();
 }
 
 /**
@@ -2715,8 +2761,17 @@ function renderDetail() {
   // Le détail de commande appartient à la consultation hors ticket : le
   // laisser affiché sous un vrai fil ferait lire deux dossiers à la fois.
 
-  // L'escalade n'a d'objet qu'avec un ticket ouvert et le droit d'escalader.
-  const escalate = $('new-escalation');
+  /*
+   * Le formulaire d'escalade n'a d'objet qu'avec un ticket ouvert et le droit
+   * d'escalader.
+   *
+   * Il portait l'identifiant `new-escalation`, partagé avec le bouton de la
+   * barre haute — deux éléments, un seul nom. `getElementById` rendait le
+   * premier du document, donc le bouton ; retirer celui-ci aurait fait glisser
+   * ces gardes sur le formulaire par accident, pas par décision. Le formulaire
+   * a désormais son nom.
+   */
+  const escalate = $('escalation-form');
   if (escalate) escalate.hidden = !ticket || !canI('escalate');
 
   $('d-subject').textContent = ticketTitle(ticket);
@@ -7611,7 +7666,7 @@ function setView(view) {
   // « Nouvelle escalade » n'a d'objet que sur un ticket : affiché ailleurs — sur
   // les Réglages, par exemple — il promet une action que l'écran ne peut pas
   // rendre.
-  const escalate = document.getElementById('new-escalation');
+  const escalate = document.getElementById('escalation-form');
   if (escalate && view !== 'tickets') escalate.hidden = true;
 
   // L'alerte de traitement appartient à la file : ailleurs, elle décrirait un
@@ -8826,7 +8881,7 @@ async function loadEscalations(ticketId) {
   const contacts = activeSuppliers();
 
   const newForm = contacts.length
-    ? `<div class="escalation" id="new-escalation">
+    ? `<div class="escalation" id="escalation-form">
         <div class="field">
           <label for="esc-supplier">Destinataire</label>
           <select id="esc-supplier">
@@ -9781,9 +9836,17 @@ async function pullMail({ revive = false } = {}) {
 async function refreshCurrent({ silent = false } = {}) {
   if (state.refreshing) return;
   state.refreshing = true;
+  /* L'actualisation automatique passe toutes les soixante secondes : lui
+     laisser afficher « Rafraîchissement… » ferait clignoter le bouton en
+     permanence pour un travail que personne n'a demandé. Seul un clic
+     délibéré montre l'état d'attente. */
+  state.refreshSilent = silent;
 
   const button = $('refresh');
-  if (!silent) button.classList.add('busy');
+  if (!silent) {
+    button.classList.add('busy');
+    renderRefreshLabel();
+  }
 
   // Les chargeurs d'écran sautent le travail quand les données sont déjà là :
   // c'est ce qu'on veut en navigant, l'inverse de ce qu'on veut en actualisant.
@@ -9844,17 +9907,42 @@ async function refreshCurrent({ silent = false } = {}) {
   }
 }
 
+/**
+ * Le bouton dit ce qu'il fait, pas depuis quand il ne l'a pas fait.
+ *
+ * Il affichait « à l'instant », puis « il y a 3 min ». Un bouton se lit comme
+ * une action : « il y a 3 min » se lisait comme un état, et on ne savait plus
+ * si cliquer allait rafraîchir ou ouvrir un journal. L'ancienneté est une
+ * information de contexte, pas un intitulé de commande — elle passe en
+ * infobulle, où on la cherche quand on doute de la fraîcheur des chiffres.
+ *
+ * Trois états, tous portés par le même bouton et le même gestionnaire : au
+ * repos « Rafraîchir », pendant l'appel « Rafraîchissement… », puis retour au
+ * repos. Rien d'autre ne bouge — un bouton qui change de largeur pendant qu'on
+ * clique déplace ce qui est à côté.
+ */
 function renderRefreshLabel() {
-  if (!state.lastRefresh) return;
+  const label = $('refresh-label');
+  const button = $('refresh');
+  if (!label || !button) return;
+
+  if (state.refreshing && !state.refreshSilent) {
+    label.textContent = 'Rafraîchissement…';
+    return;
+  }
+
+  label.textContent = 'Rafraîchir';
+
+  if (!state.lastRefresh) {
+    button.title = 'Rafraîchir (R)';
+    return;
+  }
 
   const seconds = Math.round((Date.now() - state.lastRefresh) / 1000);
-  const label =
-    seconds < 60
-      ? 'à l’instant'
-      : `il y a ${Math.floor(seconds / 60)} min`;
+  const depuis =
+    seconds < 60 ? 'à l’instant' : `il y a ${Math.floor(seconds / 60)} min`;
 
-  $('refresh-label').textContent = label;
-  $('refresh').title = 'Actualiser (R)';
+  button.title = `Rafraîchir (R) — mis à jour ${depuis}`;
 }
 
 setInterval(renderRefreshLabel, 15000);
