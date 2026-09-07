@@ -111,26 +111,6 @@
             </button>
 
             <div class="head-acts">
-              <div class="head-tools">
-                <button class="btn btn-small" id="refresh" type="button" title="Actualiser (R)">
-                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"
-                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M13.5 8a5.5 5.5 0 1 1-1.7-4" />
-                    <path d="M13.5 2.5V6H10" />
-                  </svg>
-                  <span id="refresh-label">Actualiser</span>
-                </button>
-                <label class="auto-toggle" title="Recharge l’écran toutes les 60 secondes">
-                  <input type="checkbox" id="auto-refresh" checked />
-                  <span>auto</span>
-                </label>
-              </div>
-              <button class="btn btn-primary btn-small" id="new-escalation" hidden>
-                ＋ Nouvelle escalade
-              </button>
-              <div class="clocks" id="clocks" role="button" tabindex="0"
-                title="Heures locales — cliquer pour le détail"></div>
-              <div class="conn" id="conn"></div>
               <!-- Le compte remonte du pied de la navigation vers la barre
                    haute. C'est là qu'on le cherche — et le pied d'une colonne
                    qu'on replie n'est pas un endroit pour savoir qui on est. -->
@@ -207,6 +187,13 @@
         <button class="btn btn-small" id="fail-alarm-retry">Relancer</button>
       </div>
 
+      <!-- La rangée sous la barre haute.
+
+           Les indicateurs à gauche, les outils permanents à droite. Ils ne
+           peuvent pas vivre DANS `#kpis` : cette section est masquée sur les
+           seize autres écrans, et Actualiser comme l'état des connexions y
+           disparaîtraient avec elle. -->
+      <div class="subhead">
       <section class="kpis" id="kpis" aria-label="Indicateurs des 30 derniers jours">
         <div class="kpi">
           <span class="kpi-ico" data-ico="inbox" aria-hidden="true"></span>
@@ -245,6 +232,30 @@
           <span class="kpi-note" id="kpi-failed-note"></span>
         </div>
       </section>
+
+        <div class="subhead-acts">
+          <button class="btn btn-primary btn-small" id="new-escalation" hidden>
+            ＋ Nouvelle escalade
+          </button>
+          <div class="clocks" id="clocks" role="button" tabindex="0"
+            title="Heures locales — cliquer pour le détail"></div>
+          <div class="conn" id="conn"></div>
+          <div class="head-tools">
+            <button class="btn btn-small" id="refresh" type="button" title="Actualiser (R)">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M13.5 8a5.5 5.5 0 1 1-1.7-4" />
+                <path d="M13.5 2.5V6H10" />
+              </svg>
+              <span id="refresh-label">Actualiser</span>
+            </button>
+            <label class="auto-toggle" title="Recharge l’écran toutes les 60 secondes">
+              <input type="checkbox" id="auto-refresh" checked />
+              <span>auto</span>
+            </label>
+          </div>
+        </div>
+      </div>
 
       <section class="qbar" id="queue-bar" aria-label="Filtres de la file">
         <!--
@@ -303,6 +314,25 @@
               aria-haspopup="true"
             >Filtres<span class="qbtn-n" id="q-filters-n" hidden></span><span class="qbtn-car" aria-hidden="true"></span></button>
             <div class="qpop qpop-wide" id="q-filters-pop" hidden>
+              <!-- Les statuts descendent ici. Ils décrivent l'avancement
+                   dans l'outil ; les libellés, eux, décrivent le classement du
+                   marchand — et c'est celui-là qu'on regarde en premier. Un
+                   seul des deux pouvait rester dehors. -->
+              <div class="qpop-head">Statut</div>
+              <div class="qbar-quick" id="filters">
+                <button class="chip" data-filter="" aria-pressed="true">Tous</button>
+                <button class="chip" data-filter="DRAFT_READY" aria-pressed="false">Brouillon prêt</button>
+                <button class="chip" data-filter="NEEDS_REVIEW" aria-pressed="false">À valider</button>
+                <button class="chip" data-filter="NEW" aria-pressed="false">Nouveaux</button>
+                <button class="chip" data-filter="AWAITING_SUPPLIER" aria-pressed="false">Fournisseur</button>
+                <button class="chip" data-filter="CLOSED" aria-pressed="false">Clos</button>
+                <!-- WISMO est un motif, pas un statut ; « Non lu » croise les
+                     autres filtres au lieu de les remplacer. Les deux gardent
+                     leur place ici, à part des statuts qui s'excluent. -->
+                <button class="chip chip-wismo" id="chip-wismo" aria-pressed="false">WISMO</button>
+                <button class="chip chip-unread" id="chip-unread" aria-pressed="false">Non lu</button>
+              </div>
+
               <div class="qpop-head">Raccourcis</div>
               <div class="qbar-quick">
                 <button class="qchip" data-quick="urgent" aria-pressed="false">Urgents 3 j+</button>
@@ -344,24 +374,19 @@
           </div>
         </div>
 
+        <!-- Les libellés du marchand, dehors et lisibles.
+
+             Ils étaient enfermés dans un menu parce que la barre portait
+             vingt-cinq contrôles et n'avait plus la place. Elle en porte trois
+             aujourd'hui, et elle fait toute la largeur de l'écran : onze
+             libellés colorés y tiennent sur une ligne.
+
+             Ce sont les catégories que le marchand a créées lui-même, avec les
+             couleurs qu'il leur a données dans Gmail. Les reconnaître de loin
+             est tout leur intérêt — enfermées dans une liste, elles se lisent
+             une par une. -->
         <div class="qbar-row qbar-status">
-          <div class="filters" id="filters">
-            <button class="chip" data-filter="" aria-pressed="true">Tous</button>
-            <button class="chip" data-filter="DRAFT_READY" aria-pressed="false">Brouillon prêt</button>
-            <button class="chip" data-filter="NEEDS_REVIEW" aria-pressed="false">À valider</button>
-            <button class="chip" data-filter="NEW" aria-pressed="false">Nouveaux</button>
-            <button class="chip" data-filter="AWAITING_SUPPLIER" aria-pressed="false">Fournisseur</button>
-            <button class="chip" data-filter="CLOSED" aria-pressed="false">Clos</button>
-            <!-- WISMO est un motif, pas un statut : la pastille filtre par
-                 intention. À part visuellement, parce qu'elle croise l'autre
-                 rangée au lieu de s'y substituer. -->
-            <button class="chip chip-wismo" id="chip-wismo" aria-pressed="false">WISMO</button>
-            <!-- Sans `data-filter` : c'est ce qui la distingue d'une pastille
-                 de statut. « Non lu » croise les autres filtres au lieu de les
-                 remplacer — « non lu à valider » a du sens, un statut de plus
-                 n'en aurait pas. -->
-            <button class="chip chip-unread" id="chip-unread" aria-pressed="false">Non lu</button>
-          </div>
+          <div class="qlabels" id="q-label-chips"></div>
           <span class="qbar-count" id="q-count"></span>
         </div>
       </section>

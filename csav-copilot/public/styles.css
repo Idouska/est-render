@@ -7066,3 +7066,55 @@ textarea:focus-visible {
 .msg:hover .msg-copy,
 .msg-copy:focus-visible { opacity: 1; }
 .msg-copy:hover { background: var(--inset); color: var(--ink); }
+
+/* ========================================== barre haute en deux étages ====
+
+   L'identité de l'écran, la recherche et le compte en haut ; les indicateurs
+   et les outils permanents en dessous. Tout tenait sur une ligne, où le titre
+   se disputait la place avec sept contrôles. */
+
+.subhead {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.subhead > .kpis { flex: 1; min-width: 0; }
+
+.subhead-acts {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* Sous 1 200 px, la rangée se replie : les indicateurs gardent la largeur,
+   les outils passent dessous plutôt que de comprimer les chiffres. */
+@media (max-width: 1200px) {
+  .subhead { flex-direction: column; }
+  .subhead-acts { justify-content: flex-start; }
+}
+
+/* --------------------------------------------- libellés dans la barre ---- */
+
+.qlabels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+
+/* Un point de couleur au repos, la couleur entière quand le libellé filtre.
+   Onze pastilles peintes en permanence font un arc-en-ciel où plus rien ne
+   ressort — et c'est le libellé retenu qui doit se voir. */
+.ql-chip { display: inline-flex; align-items: center; gap: 6px; }
+
+.ql-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}

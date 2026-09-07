@@ -233,6 +233,7 @@ async function loadLabelStyles() {
     const data = await api('/api/labels');
     labelStyles = data.labels ?? {};
     renderLabelChips();
+    renderQueueLabels();
   } catch {
     // Sans couleurs, les étiquettes restent grises : lisibles, simplement
     // moins reconnaissables.
@@ -274,6 +275,75 @@ function labelChip(name) {
  * raison de s'afficher dans un outil de SAV. Gmail ne fournit plus que la
  * couleur ; c'est la file qui décide de la liste.
  */
+/**
+ * Les libellés du marchand, dehors et colorés.
+ *
+ * Ce sont les catégories qu'il a créées lui-même dans Gmail, avec les couleurs
+ * qu'il leur a données. Les reconnaître de loin est tout leur intérêt : rangés
+ * dans une liste déroulante, ils se lisaient un par un — exactement ce qu'un
+ * code couleur sert à éviter.
+ *
+ * Plusieurs à la fois, comme le menu le permettait déjà : le serveur les
+ * entend en « au moins l'un d'eux ». Deux catégories voisines — « Refund » et
+ * « Litige » — se regardent ensemble ou ne se regardent pas.
+ *
+ * Le menu reste : il porte la recherche, utile au-delà d'une quinzaine de
+ * libellés. Les deux écrivent dans le même `state.queue.labels`, ils ne
+ * peuvent donc pas se contredire.
+ */
+function renderQueueLabels() {
+  const bar = $('q-label-chips');
+  if (!bar) return;
+
+  const used = new Set(state.queueLabels ?? []);
+  // Un libellé coché reste affiché même si le filtre en cours vide la file :
+  // sinon la pastille qu'on vient de cocher disparaîtrait sous le doigt.
+  for (const name of state.queue.labels) used.add(name);
+
+  const names = [...used].sort((a, b) => a.localeCompare(b, 'fr'));
+  bar.hidden = names.length === 0;
+
+  bar.innerHTML = names
+    .map((name) => {
+      const style = labelStyles[name];
+      const active = state.queue.labels.includes(name);
+      // Gmail range ses libellés en arborescence : « SAV/Litige » s'affiche
+      // « Litige », le chemin complet reste en infobulle.
+      const leaf = name.includes('/') ? name.slice(name.lastIndexOf('/') + 1) : name;
+
+      /* Peint seulement quand il est actif. Onze pastilles colorées en
+         permanence font un arc-en-ciel où plus rien ne ressort ; c'est le
+         libellé retenu qui doit se voir. Au repos, un point porte la couleur —
+         assez pour reconnaître, pas assez pour crier. */
+      const paint =
+        active && style?.background
+          ? ` style="background:${esc(style.background)};color:${esc(
+              style.text ?? '#000',
+            )};border-color:transparent"`
+          : '';
+
+      const dot = style?.background
+        ? `<span class="ql-dot" style="background:${esc(style.background)}"></span>`
+        : '';
+
+      return `<button class="chip ql-chip" data-qlabel="${esc(name)}"
+        aria-pressed="${active}" title="${esc(name)}"${paint}>${
+          active ? '' : dot
+        }${esc(leaf)}</button>`;
+    })
+    .join('');
+
+  bar.querySelectorAll('[data-qlabel]').forEach((chip) =>
+    chip.addEventListener('click', () => {
+      const name = chip.dataset.qlabel;
+      state.queue.labels = state.queue.labels.includes(name)
+        ? state.queue.labels.filter((other) => other !== name)
+        : [...state.queue.labels, name];
+      void loadQueue();
+    }),
+  );
+}
+
 function renderLabelChips() {
   const list = $('q-labels-list');
   if (!list) return;
@@ -2219,6 +2289,7 @@ function renderQueueBar() {
   }
 
   renderLabelChips();
+  renderQueueLabels();
 
   /*
    * Le compteur du bouton « Filtres ».
