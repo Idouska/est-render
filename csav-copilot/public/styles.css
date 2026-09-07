@@ -6909,7 +6909,16 @@ textarea:focus-visible {
 .item-img { width: 44px; height: 44px; }
 .item-name { flex: 1; min-width: 0; font-size: 12px; line-height: 1.4; }
 .item-name b { font-weight: 600; color: var(--ink); }
-.item-price { flex: none; font-size: 12px; color: var(--ink-mute); font-variant-numeric: tabular-nums; }
+.item-price {
+  flex: none;
+  font-size: 12px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.item-price small { display: block; font-size: 10.5px; color: var(--ink-mute); }
 
 /* ------------------------------------------- recherche de la barre haute --- */
 
