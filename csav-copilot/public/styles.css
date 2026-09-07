@@ -6070,12 +6070,12 @@ textarea:focus-visible {
   white-space: nowrap;
 }
 
-/* Traité dans Gmail : la ligne se retire.
+/* Lu dans Gmail : la ligne se retire.
    Le gras d'une file ne veut rien dire s'il est partout — il ne sert qu'à
    distinguer, et un écran entier en gras ne distingue rien. Ici il ne marque
-   plus que ce qui reste à faire, l'archivage dans Gmail valant « j'en ai
-   fini ». Le reste s'efface sans disparaître : plus léger, plus pâle, mais
-   toujours lisible et toujours cliquable. */
+   plus que ce que personne n'a encore ouvert. Le reste s'efface sans
+   disparaître : plus léger, plus pâle, mais toujours lisible et toujours
+   cliquable. */
 /* L'écart doit se voir sans comparer deux lignes côte à côte : 680 contre
    420, comme Gmail creuse entre lu et non lu. Un écart de cent points se
    mesure mais ne se remarque pas, et un gras qu'il faut chercher ne trie

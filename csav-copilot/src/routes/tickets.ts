@@ -13,6 +13,7 @@ import { sendPlainEmail } from '../services/gmail/send.ts';
 import { getShopifyClient, ShopifyError } from '../services/shopify/client.ts';
 import { listVariants } from '../services/shopify/catalog.ts';
 import { getOrderById, quoteSearchValue, searchOrders } from '../services/shopify/orders.ts';
+import { QUEUE_SELECT } from './queueFields.ts';
 import { processTicket } from '../services/tickets/process.ts';
 import { discardPendingDrafts } from '../services/tickets/discardDrafts.ts';
 import { translateToFrench } from '../services/ai/translate.ts';
@@ -359,30 +360,7 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
         orderBy,
         take: limit + 1,
         ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-        select: {
-          id: true,
-          subject: true,
-          customerEmail: true,
-          customerName: true,
-          intent: true,
-          intentConfidence: true,
-          status: true,
-          orderName: true,
-          shopifyOrderId: true,
-          lastMessageAt: true,
-          createdAt: true,
-          // Montant et échéance : déjà en base, jamais affichés. Un message à
-          // 19 € et un message à 3 200 € ne se traitent pas dans le même
-          // ordre, et l'agent ne pouvait pas le savoir sans ouvrir.
-          orderTotal: true,
-          dueAt: true,
-          labels: true,
-          failureReason: true,
-          assignedToId: true,
-          assignedTo: { select: { id: true, name: true, email: true } },
-          mailbox: { select: { id: true, emailAddress: true, label: true } },
-          merchantId: true,
-        },
+        select: QUEUE_SELECT,
       }),
       // Compteurs calculés sur les mêmes filtres, statut exclu : sinon chaque
       // onglet afficherait son propre nombre et jamais celui des autres.
@@ -1215,7 +1193,7 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
      * compteur affichait « 0 traités » à quelqu'un qui venait d'en traiter
      * cinquante. Un chiffre faux en tête d'écran décrédibilise les vrais.
      */
-    const [byStatus, handled, sentDrafts, totalDrafts] = await Promise.all([
+    const [byStatus, handled, sentDrafts, totalDrafts, unread] = await Promise.all([
       prisma.ticket.groupBy({
         by: ['status'],
         where: { merchantId, isHistorical: false },
@@ -1231,6 +1209,26 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
       }),
       prisma.draft.count({ where: { merchantId, status: 'SENT', sentAt: { gte: since } } }),
       prisma.draft.count({ where: { merchantId, createdAt: { gte: since } } }),
+      /*
+       * Ce qui n'a pas encore été ouvert dans Gmail.
+       *
+       * Le compte se lisait auparavant des statuts de l'outil — à relire, ou
+       * proposition prête. Il ne bougeait donc jamais quand l'équipe traitait
+       * son courrier dans Gmail, ce qu'elle fait aussi : la pastille restait à
+       * son chiffre pendant qu'on vidait la boîte, et un compteur qui ne
+       * descend jamais n'est plus un compteur, c'est un décor.
+       *
+       * Les fils clos sont exclus : rouvrir une archive qui n'a jamais été
+       * marquée lue la ferait remonter dans le compte pour rien.
+       */
+      prisma.ticket.count({
+        where: {
+          merchantId,
+          isHistorical: false,
+          gmailUnread: true,
+          status: { notIn: ['CLOSED', 'AUTO_SENT'] },
+        },
+      }),
     ]);
 
     const counts = Object.fromEntries(byStatus.map((row) => [row.status, row._count]));
@@ -1243,7 +1241,10 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
       /** Réponses réellement parties, sous-ensemble du précédent. */
       sent: sentDrafts,
       failed: counts.FAILED ?? 0,
-      pending: (counts.NEEDS_REVIEW ?? 0) + (counts.DRAFT_READY ?? 0),
+      /** Non lus dans Gmail : ce qui reste à ouvrir, pastille et bandeau. */
+      pending: unread,
+      /** L'ancien sens, conservé pour qui voudrait les deux. */
+      awaitingReview: (counts.NEEDS_REVIEW ?? 0) + (counts.DRAFT_READY ?? 0),
       // Taux d'automatisation = part des brouillons IA effectivement envoyés.
       // `null` et non zéro quand il n'y a aucun brouillon : « 0 % » se lit
       // comme un échec, alors qu'il n'y a simplement rien à mesurer.

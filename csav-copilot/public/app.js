@@ -905,7 +905,11 @@ async function loadQueue({ append = false } = {}) {
           } />
         </label>
         <button class="queue-item li-${ticket.intent ?? 'OTHER'}${
-          ticket.gmailArchived ? ' q-done' : ''
+          // Le gras suit la lecture dans Gmail, pas l'archivage : ouvrir un
+          // mail suffit à l'éteindre, exactement comme dans Gmail. L'archivage
+          // garde son rôle ailleurs — c'est lui qui remplit le dossier
+          // Archivés.
+          ticket.gmailUnread === false ? ' q-done' : ''
         }" data-id="${ticket.id}"
           aria-current="${ticket.id === state.currentId}">
           <span class="queue-top">

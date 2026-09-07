@@ -69,6 +69,7 @@ export async function ingestMerchantInbox(
         // Un message qui arrive hors boîte de réception a déjà été rangé —
         // règle Gmail, ou archivage manuel entre son arrivée et notre relève.
         gmailArchived: !message.labelIds.includes('INBOX'),
+        gmailUnread: message.labelIds.includes('UNREAD'),
         lastMessageAt: message.receivedAt,
       },
       update: {
@@ -80,6 +81,9 @@ export async function ingestMerchantInbox(
         // fil archivé une fois resterait rangé malgré la relance du client —
         // c'est-à-dire invisible au moment où il compte le plus.
         gmailArchived: !message.labelIds.includes('INBOX'),
+        // Un message qui arrive rend le fil non lu, comme dans Gmail : la
+        // relance d'un client ne doit pas hériter du « lu » de la veille.
+        gmailUnread: message.labelIds.includes('UNREAD'),
         lastMessageAt: message.receivedAt,
       },
     });

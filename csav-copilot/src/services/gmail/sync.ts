@@ -83,7 +83,7 @@ export async function fetchRecentMessages(
 }
 
 /**
- * Reporte sur les tickets les archivages faits dans Gmail.
+ * Reporte sur les tickets ce qui a bougé dans Gmail : lectures et archivages.
  *
  * Écrit directement plutôt que de remonter à l'appelant : c'est un effet de
  * bord de la relève, sans rapport avec les messages qu'elle rapporte, et le
@@ -93,27 +93,33 @@ export async function fetchRecentMessages(
  * Un échec ici ne doit pas faire tomber la relève : perdre un archivage coûte
  * un message affiché en trop, perdre la relève coûte tout le courrier.
  */
-async function applyArchiveChanges(
+async function applyLabelChanges(
   merchantId: string,
-  archived: Set<string>,
-  restored: Set<string>,
+  moves: {
+    archived: Set<string>;
+    restored: Set<string>;
+    read: Set<string>;
+    unread: Set<string>;
+  },
 ): Promise<void> {
-  try {
-    if (archived.size > 0) {
-      await prisma.ticket.updateMany({
-        where: { merchantId, gmailThreadId: { in: [...archived] } },
-        data: { gmailArchived: true },
-      });
-    }
+  const writes: [Set<string>, { gmailArchived?: boolean; gmailUnread?: boolean }][] = [
+    [moves.archived, { gmailArchived: true }],
+    [moves.restored, { gmailArchived: false }],
+    [moves.read, { gmailUnread: false }],
+    [moves.unread, { gmailUnread: true }],
+  ];
 
-    if (restored.size > 0) {
+  try {
+    for (const [threads, data] of writes) {
+      if (threads.size === 0) continue;
+
       await prisma.ticket.updateMany({
-        where: { merchantId, gmailThreadId: { in: [...restored] } },
-        data: { gmailArchived: false },
+        where: { merchantId, gmailThreadId: { in: [...threads] } },
+        data,
       });
     }
   } catch (error) {
-    logger.warn({ merchantId, err: error }, 'Archivages Gmail non reportés');
+    logger.warn({ merchantId, err: error }, 'Mouvements de libellés Gmail non reportés');
   }
 }
 
@@ -149,6 +155,10 @@ export async function fetchNewMessages(
        */
       const archived = new Set<string>();
       const restored = new Set<string>();
+      /* Lire un mail dans Gmail retire `UNREAD` : c'est ce mouvement-là qui
+         éteint le gras dans la file. */
+      const read = new Set<string>();
+      const unread = new Set<string>();
       let pageToken: string | undefined;
 
       do {
@@ -167,17 +177,31 @@ export async function fetchNewMessages(
 
           for (const change of entry.labelsRemoved ?? []) {
             const thread = change.message?.threadId;
-            if (thread && change.labelIds?.includes('INBOX')) {
+            if (!thread) continue;
+
+            if (change.labelIds?.includes('INBOX')) {
               archived.add(thread);
               restored.delete(thread);
+            }
+
+            if (change.labelIds?.includes('UNREAD')) {
+              read.add(thread);
+              unread.delete(thread);
             }
           }
 
           for (const change of entry.labelsAdded ?? []) {
             const thread = change.message?.threadId;
-            if (thread && change.labelIds?.includes('INBOX')) {
+            if (!thread) continue;
+
+            if (change.labelIds?.includes('INBOX')) {
               restored.add(thread);
               archived.delete(thread);
+            }
+
+            if (change.labelIds?.includes('UNREAD')) {
+              unread.add(thread);
+              read.delete(thread);
             }
           }
         }
@@ -189,7 +213,7 @@ export async function fetchNewMessages(
       // L'historique est lu dans l'ordre : le dernier mouvement d'un fil est
       // celui qui compte, d'où les `delete` croisés ci-dessus plutôt qu'une
       // simple accumulation.
-      await applyArchiveChanges(merchantId, archived, restored);
+      await applyLabelChanges(merchantId, { archived, restored, read, unread });
 
       messageIds = [...ids];
     } catch (error) {
