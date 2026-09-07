@@ -72,6 +72,19 @@ function dormir(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function compterParFils(
+  portee: Record<string, unknown>,
+  fils: string[],
+): Promise<number> {
+  let total = 0;
+  for (const lot of morceaux(fils, PAR_LOT_SQL)) {
+    total += await prisma.ticket.count({
+      where: { ...portee, gmailThreadId: { in: lot } },
+    });
+  }
+  return total;
+}
+
 function morceaux<T>(liste: T[], taille: number): T[][] {
   const sortie: T[][] = [];
   for (let i = 0; i < liste.length; i += taille) sortie.push(liste.slice(i, i + taille));
@@ -182,18 +195,56 @@ async function main(): Promise<void> {
 
     console.log(`    Gmail : ${nonLus.size} non lu(s), ${enReception.size} en réception`);
 
+    /*
+     * Deux listes vides : on n'écrit rien.
+     *
+     * Toute la méthode repose sur une déduction — ce qui n'est pas nommé par
+     * Gmail est lu et archivé. La déduction est juste tant que la réponse de
+     * Gmail est complète. Si une recherche rend zéro sans lever d'erreur —
+     * périmètre d'accès insuffisant, pagination interrompue, requête qui ne
+     * veut pas dire ce qu'on croit — alors « rien n'est nommé » se lit
+     * « tout est lu et archivé », et le script vide la file en silence.
+     *
+     * Une boîte réellement vide des deux côtés existe, et se verra refuser la
+     * reprise. C'est le bon sens de l'échange : elle est signalée, on regarde,
+     * on décide. L'ancien code portait cette prudence — « on ne réécrit pas un
+     * état sur la foi d'un appel qui a échoué » — et la réécriture l'avait
+     * perdue en route.
+     */
+    if (nonLus.size === 0 && enReception.size === 0) {
+      console.error('    ✗ Gmail ne nomme aucun fil, ni non lu ni en réception.');
+      console.error('      Refus d’écrire : la déduction marquerait toute la boîte lue et archivée.');
+      injoignables.push(`${nom} (réponse Gmail vide)`);
+      continue;
+    }
+
     const portee = {
       ...PORTEE_NON_LU,
       merchantId: boite.merchantId,
       mailboxId: boite.mailboxId,
     };
 
-    const devraientEtreNonLus = await prisma.ticket.count({
-      where: { ...portee, gmailThreadId: { in: [...nonLus] } },
-    });
+    const devraientEtreNonLus = await compterParFils(portee, [...nonLus]);
     const sontNonLus = await prisma.ticket.count({ where: { ...portee, gmailUnread: true } });
 
-    console.log(`    En base : ${sontNonLus} non lu(s) → ${devraientEtreNonLus} après reprise`);
+    /*
+     * L'archivage mérite son propre chiffre. Le dossier « Réception » filtre
+     * sur `gmailArchived: false`, et la valeur par défaut du champ est `false` :
+     * aujourd'hui tout y est. Après la reprise, ce qui est archivé chez Gmail
+     * quitte la vue par défaut. C'est voulu, mais un millier de tickets qui
+     * disparaissent d'un écran sans avoir été annoncés ressemble à une panne.
+     */
+    const resterontEnReception = await compterParFils(portee, [...enReception]);
+    const serontArchives = boite.fils - resterontEnReception;
+    const sontArchives = await prisma.ticket.count({ where: { ...portee, gmailArchived: true } });
+
+    console.log(`    Non lus   : ${sontNonLus} → ${devraientEtreNonLus}`);
+    console.log(`    Archivés  : ${sontArchives} → ${serontArchives}`);
+    if (serontArchives > sontArchives) {
+      console.log(
+        `                ${serontArchives - sontArchives} ticket(s) quitteraient le dossier « Réception » pour « Archivés ».`,
+      );
+    }
     corriges += Math.abs(sontNonLus - devraientEtreNonLus);
 
     if (simulation) continue;
