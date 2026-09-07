@@ -7014,11 +7014,17 @@ textarea:focus-visible {
   border-radius: 0;
   margin-bottom: -1px;
   /* Quatre onglets dans 336 px de largeur utile — la colonne fait 350 px,
-     moins les bordures du panneau et le padding de la barre. Mesuré : 325 px
-     nécessaires, 11 px de marge. Le repli sur deux lignes reste possible, un
-     compteur qui grossit doit provoquer une seconde ligne et non une entrée
-     coupée. */
-  padding: 6px 5px 7px;
+     moins les bordures du panneau et le padding de la barre.
+
+     Mesuré ici à 326 px, dix de marge — et débordant quand même sur un Mac,
+     où SF Pro Display rend plus large que la police de repli d'un navigateur
+     d'essai. La marge passe donc à une vingtaine de pixels : on ne peut pas
+     mesurer la police de l'utilisateur, on peut lui laisser de la place.
+
+     Le repli sur deux lignes reste le filet : un compteur à cinq chiffres doit
+     provoquer une seconde ligne, jamais une entrée coupée. */
+  padding: 6px 4px 7px;
+  gap: 4px;
   background: none;
 }
 
@@ -7076,16 +7082,41 @@ textarea:focus-visible {
 .subhead {
   display: flex;
   align-items: stretch;
+  flex-wrap: wrap;
   gap: 12px;
 }
 
-.subhead > .kpis { flex: 1; min-width: 0; }
+/* Les chiffres passent avant l'ambiance.
+
+   Les outils de droite — cinq fuseaux, trois pastilles de connexion, un
+   bouton, une case — mesurent onze cents pixels à eux seuls. En largeur fixe,
+   ils étranglaient la bande d'indicateurs à cinq cent cinquante et la
+   repliaient sur trois lignes, pendant que la moitié de la rangée restait
+   vide. Ils se compriment donc, et se replient à l'intérieur d'eux-mêmes.
+
+   La base de 800 px n'est pas choisie à vue : chaque tuile déclare
+   `flex: 1 1 160px`, donc cinq en réclament huit cents pour tenir sur une
+   ligne. Mesurée à 620, la bande se repliait encore. En dessous de cette
+   base, elle se repliera — et ce sera le signal qu'il n'y a plus la place,
+   pas un accident. */
+.subhead > .kpis { flex: 1 1 800px; min-width: 0; }
 
 .subhead-acts {
   display: flex;
   align-items: center;
   gap: 10px;
-  flex: none;
+  /*
+   * Ces outils ne descendent pas sous mille pixels : cinq fuseaux, trois
+   * pastilles de connexion, un bouton et une case. Huit cents pour les
+   * chiffres plus mille pour eux dépassent la largeur d'un écran de 1 700 px
+   * — les deux blocs ne peuvent pas coexister sur une ligne.
+   *
+   * Ils prennent donc la rangée suivante quand la place manque, plutôt que
+   * d'étrangler les indicateurs. C'est le sens de `flex-wrap` sur le parent :
+   * ce qui cède est l'ambiance, jamais les chiffres.
+   */
+  flex: 1 1 auto;
+  min-width: 0;
   flex-wrap: wrap;
   justify-content: flex-end;
 }
