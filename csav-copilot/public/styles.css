@@ -5897,6 +5897,16 @@ textarea:focus-visible {
    dit ce qu'il corrige.
    ========================================================================= */
 
+/* ATTENTION — ce bloc s'applique AUSSI en thème sombre.
+   `:root` et `[data-theme="dark"]` ont la même spécificité (0-1-0) : celui qui
+   vient en dernier gagne, et celui-ci est 5 800 lignes plus bas. Toute valeur
+   propre au thème clair posée ici écrase donc son équivalent sombre en
+   silence — c'est ce qui est arrivé à `--ground`, `--accent-soft`,
+   `--accent-ink`, `--grad-surface` et `--grad-raised`, laissant un fond clair
+   sous des surfaces sombres.
+   Ce qui est neutre — rayons, typographie, aplatissement des reliefs — a sa
+   place ici. Ce qui est une couleur de thème doit avoir sa contrepartie dans
+   `:root[data-theme="dark"]`, en fin de feuille. */
 :root {
   /* L'accent par défaut quitte le violet. Le bleu encre se lit comme un outil
      — GitHub, Notion, Linear — là où l'indigo se lit comme une démo. Les
@@ -6795,3 +6805,37 @@ textarea:focus-visible {
 }
 
 .kpi-ico svg { width: 15px; height: 15px; }
+
+/* ============================================ thème sombre : rattrapage ===
+
+   Le bloc `[data-theme="dark"]` du haut de feuille est écrasé par le `:root`
+   de la couche densité, qui vient bien plus bas à spécificité égale. Mesuré au
+   navigateur : en sombre, `--ground` valait #f2f3f7 — un fond clair — pendant
+   que `--surface` restait #191c23.
+
+   Ce bloc reprend la main avec `:root[data-theme="dark"]`, de spécificité
+   0-2-0 : il gagne quelle que soit sa position, donc l'ordre des feuilles
+   cessera d'être le sujet.
+
+   Il ne réassère QUE les valeurs de couleur. L'aplatissement voulu par la
+   couche densité — `--edge`, `--e1`, `--e2`, `--shadow` à `none` — vaut pour
+   les deux thèmes : « un outil n'a pas de relief, il a des bords », et cette
+   décision-là est la plus récente. Les élévations réelles (`--e3`, `--e4`,
+   `--shadow-pop`) gardent leurs valeurs sombres : ce qui flotte vraiment doit
+   se détacher, en sombre plus encore qu'en clair. */
+:root[data-theme="dark"] {
+  --ground: #0e1014;
+
+  /* Aplatis comme en clair, mais sur les couleurs du thème : un dégradé
+     rendrait le relief que la couche densité a retiré, un blanc rendrait la
+     page lumineuse. */
+  --grad-surface: #191c23;
+  --grad-raised: #21252e;
+
+  /* Recomposés sur l'accent courant et sur la surface sombre. Les valeurs
+     littérales de la couche densité (#e8f0fe, #1d4ed8) sont calées pour un
+     fond blanc : posées ici, elles donnaient un aplat clair et un texte
+     presque illisible. */
+  --accent-soft: color-mix(in srgb, var(--accent) 22%, #191c23);
+  --accent-ink: color-mix(in srgb, var(--accent) 55%, #ffffff);
+}
