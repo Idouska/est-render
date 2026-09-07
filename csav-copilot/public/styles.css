@@ -6742,3 +6742,38 @@ textarea:focus-visible {
   font-variant-numeric: tabular-nums;
   color: var(--ink-mute);
 }
+
+/* ------------------------------------------------- rail : la commande --- */
+
+/* Les articles avec leur vignette. Une paire de chaussures se reconnaît à
+   l'image bien avant qu'on ait lu « Adizero Adios Pro 4 Lucid Red Core
+   Black » — et c'est cette référence-là que le client renvoie ou réclame. */
+.items li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.item-img {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--r-sm);
+  object-fit: cover;
+  background: var(--inset);
+  border: 1px solid var(--line-soft);
+}
+
+/* Sans image, un carré neutre plutôt que rien : les lignes gardent le même
+   alignement, et l'absence se lit comme une absence et non comme un défaut de
+   chargement. */
+.item-blank { display: block; }
+
+.item-qty { flex: none; font-variant-numeric: tabular-nums; color: var(--ink-mute); }
+.item-name { min-width: 0; }
+
+.rail-link { display: inline-flex; margin-top: 9px; }
+
+/* La pastille « Nouveau client » précède la fiche : c'est ce qui change le ton
+   d'une réponse, donc ce qui se lit en premier. */
+.rail-flag { margin: 0 0 7px; }

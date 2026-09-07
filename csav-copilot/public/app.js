@@ -3743,6 +3743,15 @@ function renderCustomer(order) {
   }
 
   $('c-customer').innerHTML =
+    /*
+     * Un premier achat ne se traite pas comme un huitième : on est plus
+     * conciliant, et on explique davantage. C'est la seule information de
+     * cette carte qui change le ton d'une réponse, d'où la pastille plutôt
+     * qu'une ligne de plus dans la liste.
+     */
+    (customer.numberOfOrders === 1
+      ? '<p class="rail-flag"><span class="tp tp-intent">Nouveau client</span></p>'
+      : '') +
     '<dl>' +
     row('Nom', customer.displayName ?? '—') +
     // « Client depuis » ne décidait rien : la fiche complète le garde pour qui
@@ -3757,6 +3766,27 @@ function renderCustomer(order) {
   $('c-sheet')?.addEventListener('click', () =>
     void openCustomerSheet(customer.email ?? ticketEmail, customer.displayName ?? ''),
   );
+}
+
+/**
+ * Lien vers la commande dans l'admin Shopify.
+ *
+ * L'agent y va pour ce que le SAV ne fait pas : modifier une adresse, éditer
+ * une ligne, consulter le paiement. Reconstruire l'URL de tête à chaque fois
+ * coûte trente secondes et une erreur de numéro sur deux.
+ *
+ * L'identifiant Shopify est un GID — `gid://shopify/Order/123` — dont l'admin
+ * n'attend que la partie numérique. Sans domaine de boutique ou sans
+ * identifiant, on n'affiche rien : un lien mort vaut moins que pas de lien.
+ */
+function shopifyOrderLink(order) {
+  const shop = state.me?.merchant?.shopDomain;
+  const id = String(order?.id ?? '').split('/').pop();
+
+  if (!shop || !id || !/^\d+$/.test(id)) return '';
+
+  return `<a class="btn btn-small rail-link" target="_blank" rel="noopener noreferrer"
+    href="https://${esc(shop)}/admin/orders/${esc(id)}">Voir dans Shopify</a>`;
 }
 
 function renderOrder(ticket, order, orderError) {
@@ -3781,14 +3811,26 @@ function renderOrder(ticket, order, orderError) {
       '</dl>' +
       '<ul class="items">' +
       order.lineItems
-        .map(
-          (item) =>
-            `<li><span>${item.quantity} ×</span><span>${esc(item.title)}${
-              item.variantTitle ? ` — ${esc(item.variantTitle)}` : ''
-            }</span></li>`,
-        )
+        .map((item) => {
+          /*
+           * L'API a servi `image` sous deux formes : une chaîne plate, et un
+           * objet `{ url }`. Les deux ont existé, et un correctif d'août
+           * documente la vignette restée grise parce que le front n'en lisait
+           * qu'une. On lit les deux plutôt que de parier.
+           */
+          const src = typeof item.image === 'string' ? item.image : (item.image?.url ?? null);
+
+          return `<li>${
+            src
+              ? `<img class="item-img" src="${esc(src)}" alt="" loading="lazy" />`
+              : '<span class="item-img item-blank"></span>'
+          }<span class="item-qty">${item.quantity} ×</span><span class="item-name">${esc(
+            item.title,
+          )}${item.variantTitle ? ` — ${esc(item.variantTitle)}` : ''}</span></li>`;
+        })
         .join('') +
-      '</ul>';
+      '</ul>' +
+      shopifyOrderLink(order);
     return;
   }
 
