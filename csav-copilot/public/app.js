@@ -6180,7 +6180,21 @@ async function ensureReturnAgencies() {
   }
 }
 
-$('ret-new').addEventListener('click', () => openReturnModal());
+/*
+ * Le bouton suit le droit du serveur.
+ *
+ * `/api/returns` exige `reply` en écriture : sans ce garde, un rôle en lecture
+ * seule verrait le formulaire s'ouvrir, remplirait dix champs, et découvrirait
+ * le refus au moment d'enregistrer. Ce n'est pas le verrou — celui-là est
+ * serveur — c'est la politesse de ne pas proposer ce qui sera refusé.
+ */
+$('ret-new').addEventListener('click', () => {
+  if (!canI('reply')) {
+    toast('Votre rôle est en lecture seule.', true);
+    return;
+  }
+  openReturnModal();
+});
 
 /*
  * Le numéro de commande remplit le formulaire tout seul.

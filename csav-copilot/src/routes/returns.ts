@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.ts';
 import { recordAudit } from '../lib/audit.ts';
-import { requireSession } from '../plugins/auth.ts';
+import { requirePermission, requireSession } from '../plugins/auth.ts';
 import { decodePhoto, photoSchema } from './parcels.ts';
 import { getShopifyClient } from '../services/shopify/client.ts';
 import { listOrders, quoteSearchValue } from '../services/shopify/orders.ts';
@@ -102,7 +102,7 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  app.post('/api/returns', async (request, reply) => {
+  app.post('/api/returns', { preHandler: requirePermission('reply') }, async (request, reply) => {
     const { merchantId, userId } = request.session;
     const parsed = caseBody.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Champs invalides' });
@@ -124,79 +124,89 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ case: created });
   });
 
-  app.patch<{ Params: { id: string } }>('/api/returns/:id', async (request, reply) => {
-    const { merchantId, userId } = request.session;
-    const parsed = casePatch.safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send({ error: 'Champs invalides' });
+  app.patch<{ Params: { id: string } }>(
+    '/api/returns/:id',
+    { preHandler: requirePermission('reply') },
+    async (request, reply) => {
+      const { merchantId, userId } = request.session;
+      const parsed = casePatch.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Champs invalides' });
 
-    const existing = await prisma.returnCase.findFirst({
-      where: { id: request.params.id, merchantId },
-      select: { id: true },
-    });
-    if (!existing) return reply.code(404).send({ error: 'Dossier introuvable' });
+      const existing = await prisma.returnCase.findFirst({
+        where: { id: request.params.id, merchantId },
+        select: { id: true },
+      });
+      if (!existing) return reply.code(404).send({ error: 'Dossier introuvable' });
 
-    const { touch, reusedOrderName, photo, ...fields } = parsed.data;
+      const { touch, reusedOrderName, photo, ...fields } = parsed.data;
 
-    // `photo: null` retire la photo ; absente, elle ne bouge pas.
-    const photoFields =
-      photo === undefined
-        ? {}
-        : photo === null
-          ? { photoData: null, photoMime: null }
-          : (() => {
-              const decoded = decodePhoto(photo);
-              return { photoData: decoded.data, photoMime: decoded.mime };
-            })();
+      // `photo: null` retire la photo ; absente, elle ne bouge pas.
+      const photoFields =
+        photo === undefined
+          ? {}
+          : photo === null
+            ? { photoData: null, photoMime: null }
+            : (() => {
+                const decoded = decodePhoto(photo);
+                return { photoData: decoded.data, photoMime: decoded.mime };
+              })();
 
-    const updated = await prisma.returnCase.update({
-      where: { id: existing.id },
-      data: {
-        ...fields,
-        ...photoFields,
-        // Fournir le bon fait avancer le statut tout seul : deux gestes pour
-        // dire la même chose finiraient par se contredire.
-        ...(fields.labelSent === true ? { status: fields.status ?? 'LABEL_SENT' } : {}),
-        ...(touch ? { lastContactAt: new Date() } : {}),
-        ...(reusedOrderName !== undefined
-          ? reusedOrderName
-            ? { reusedOrderName, reusedAt: new Date(), status: 'CLOSED' }
-            : { reusedOrderName: null, reusedAt: null }
-          : {}),
-      },
-    });
+      const updated = await prisma.returnCase.update({
+        where: { id: existing.id },
+        data: {
+          ...fields,
+          ...photoFields,
+          // Fournir le bon fait avancer le statut tout seul : deux gestes pour
+          // dire la même chose finiraient par se contredire.
+          ...(fields.labelSent === true ? { status: fields.status ?? 'LABEL_SENT' } : {}),
+          ...(touch ? { lastContactAt: new Date() } : {}),
+          ...(reusedOrderName !== undefined
+            ? reusedOrderName
+              ? { reusedOrderName, reusedAt: new Date(), status: 'CLOSED' }
+              : { reusedOrderName: null, reusedAt: null }
+            : {}),
+        },
+      });
 
-    await recordAudit({
-      merchantId,
-      actorType: 'USER',
-      actorId: userId,
-      action: 'return.updated',
-      targetType: 'return',
-      targetId: updated.id,
-      metadata: { ...fields, photo: photo === undefined ? undefined : Boolean(photo) },
-    });
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId: userId,
+        action: 'return.updated',
+        targetType: 'return',
+        targetId: updated.id,
+        metadata: { ...fields, photo: photo === undefined ? undefined : Boolean(photo) },
+      });
 
-    return reply.send({ case: updated });
-  });
+      return reply.send({ case: updated });
+    },
+  );
 
-  app.delete<{ Params: { id: string } }>('/api/returns/:id', async (request, reply) => {
-    const { merchantId, userId } = request.session;
+  app.delete<{ Params: { id: string } }>(
+    '/api/returns/:id',
+    // Comme la suppression d'un ticket : effacer un enregistrement n'est pas
+    // du travail courant.
+    { preHandler: requirePermission('configure') },
+    async (request, reply) => {
+      const { merchantId, userId } = request.session;
 
-    const deleted = await prisma.returnCase.deleteMany({
-      where: { id: request.params.id, merchantId },
-    });
-    if (deleted.count === 0) return reply.code(404).send({ error: 'Dossier introuvable' });
+      const deleted = await prisma.returnCase.deleteMany({
+        where: { id: request.params.id, merchantId },
+      });
+      if (deleted.count === 0) return reply.code(404).send({ error: 'Dossier introuvable' });
 
-    await recordAudit({
-      merchantId,
-      actorType: 'USER',
-      actorId: userId,
-      action: 'return.deleted',
-      targetType: 'return',
-      targetId: request.params.id,
-    });
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId: userId,
+        action: 'return.deleted',
+        targetType: 'return',
+        targetId: request.params.id,
+      });
 
-    return reply.send({ deleted: true });
-  });
+      return reply.send({ deleted: true });
+    },
+  );
 
   /** La photo de l'article retourné — la preuve, en pleine taille. */
   app.get<{ Params: { id: string } }>('/api/returns/:id/photo', async (request, reply) => {
@@ -275,39 +285,52 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ agencies });
   });
 
-  app.post('/api/return-agencies', async (request, reply) => {
-    const { merchantId } = request.session;
-    const parsed = agencyBody.safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send({ error: 'Champs invalides' });
+  app.post(
+    '/api/return-agencies',
+    // Les agences sont des partenaires du marchand, comme les fournisseurs.
+    { preHandler: requirePermission('configure') },
+    async (request, reply) => {
+      const { merchantId } = request.session;
+      const parsed = agencyBody.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Champs invalides' });
 
-    const agency = await prisma.returnAgency.create({
-      data: { merchantId, ...parsed.data },
-    });
-    return reply.send({ agency });
-  });
+      const agency = await prisma.returnAgency.create({
+        data: { merchantId, ...parsed.data },
+      });
+      return reply.send({ agency });
+    },
+  );
 
-  app.patch<{ Params: { id: string } }>('/api/return-agencies/:id', async (request, reply) => {
-    const { merchantId } = request.session;
-    const parsed = agencyBody.partial().safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send({ error: 'Champs invalides' });
+  app.patch<{ Params: { id: string } }>(
+    '/api/return-agencies/:id',
+    { preHandler: requirePermission('configure') },
+    async (request, reply) => {
+      const { merchantId } = request.session;
+      const parsed = agencyBody.partial().safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Champs invalides' });
 
-    const updated = await prisma.returnAgency.updateMany({
-      where: { id: request.params.id, merchantId },
-      data: parsed.data,
-    });
-    if (updated.count === 0) return reply.code(404).send({ error: 'Agence introuvable' });
+      const updated = await prisma.returnAgency.updateMany({
+        where: { id: request.params.id, merchantId },
+        data: parsed.data,
+      });
+      if (updated.count === 0) return reply.code(404).send({ error: 'Agence introuvable' });
 
-    return reply.send({ updated: true });
-  });
+      return reply.send({ updated: true });
+    },
+  );
 
-  app.delete<{ Params: { id: string } }>('/api/return-agencies/:id', async (request, reply) => {
-    const { merchantId } = request.session;
-    const deleted = await prisma.returnAgency.deleteMany({
-      where: { id: request.params.id, merchantId },
-    });
-    if (deleted.count === 0) return reply.code(404).send({ error: 'Agence introuvable' });
-    return reply.send({ deleted: true });
-  });
+  app.delete<{ Params: { id: string } }>(
+    '/api/return-agencies/:id',
+    { preHandler: requirePermission('configure') },
+    async (request, reply) => {
+      const { merchantId } = request.session;
+      const deleted = await prisma.returnAgency.deleteMany({
+        where: { id: request.params.id, merchantId },
+      });
+      if (deleted.count === 0) return reply.code(404).send({ error: 'Agence introuvable' });
+      return reply.send({ deleted: true });
+    },
+  );
 
   /* -------------------------------------------------------------- match -- */
 
