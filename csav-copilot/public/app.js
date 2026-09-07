@@ -6535,6 +6535,11 @@ function setView(view) {
   // sous la ligne de flottaison, alors que ces chiffres se consultent d'un
   // coup d'œil et ne se travaillent pas.
   $('kpis').classList.toggle('kpis-slim', view === 'tickets');
+
+  // Défilement par colonne : la file, le détail et le rail bougent chacun de
+  // leur côté, et la page ne défile plus. Réservé à cet écran — les autres se
+  // lisent comme des documents, d'un seul tenant. Voir `.app-locked`.
+  $('app-grid')?.classList.toggle('app-locked', view === 'tickets');
   $('queue-bar').hidden = view !== 'tickets';
 
   renderNav();

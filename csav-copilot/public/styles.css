@@ -6178,3 +6178,54 @@ textarea:focus-visible {
 @media (max-width: 700px) {
   .notice { flex-direction: column; gap: 6px; }
 }
+
+/* ============================================== défilement par colonne === */
+
+/*
+ * Sur l'écran SAV, chaque colonne défile pour son compte : la molette agit sur
+ * celle que survole la souris, et la page elle-même ne bouge plus. Lire le fil
+ * d'un client ne doit pas emporter la file et la fiche commande hors de
+ * l'écran — ce sont trois lectures parallèles, pas un document unique.
+ *
+ * `min-height: 0` sur chaque maillon n'est pas décoratif. Un enfant de grille
+ * ou de flex vaut `min-height: auto` et refuse d'être plus court que son
+ * contenu : sans cette remise à zéro, `overflow-y: auto` ne produit aucun
+ * défilement — la colonne grandit à la place et repousse son parent. La
+ * contrainte de hauteur doit descendre sans rupture depuis `.app` ; il suffit
+ * d'un maillon oublié pour que rien ne défile, alors que chaque règle prise
+ * séparément a l'air juste. C'est une panne muette, à ne pas rechercher
+ * ailleurs.
+ *
+ * Réservé à la disposition en trois colonnes, au-delà de 1400 px. En dessous,
+ * le rail passe en pleine largeur sous les deux autres, et le défilement de
+ * page reste le bon comportement — trois zones empilées dans une hauteur
+ * d'écran fixe seraient inutilisables.
+ *
+ * Réservé aussi à la seule vue Tickets, d'où la classe posée par `setView` :
+ * les seize autres écrans se lisent comme des documents et gardent leur
+ * défilement de page.
+ */
+@media (min-width: 1401px) {
+  .app-locked { height: 100dvh; overflow: hidden; }
+  .app-locked .main { min-height: 0; }
+
+  .app-locked .workspace {
+    flex: 1;
+    min-height: 0;
+    align-items: stretch;
+  }
+
+  .app-locked .workspace > * {
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  /* La file portait son propre plafond, hérité du temps où la page défilait
+     derrière elle. C'est la colonne qui décide de la hauteur désormais, et
+     deux contraintes concurrentes en donneraient une troisième, plus courte
+     que les deux. */
+  .app-locked .queue-list {
+    max-height: none;
+    overflow-y: visible;
+  }
+}
