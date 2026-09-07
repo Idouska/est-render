@@ -1848,15 +1848,54 @@ function actionBlockedReason(key, ticket) {
   return null;
 }
 
+/*
+ * Navigation et menu de débordement de l'en-tête.
+ *
+ * Les flèches appellent `moveQueue`, la même fonction que `j` et `k` : deux
+ * chemins vers un seul comportement, et non deux comportements qui se
+ * ressemblent. Elles ne sont pas soumises au verrou d'une autre boutique —
+ * parcourir la file d'un groupe est permis, c'est y répondre qui ne l'est pas.
+ */
+$('d-prev')?.addEventListener('click', () => moveQueue(-1));
+$('d-next')?.addEventListener('click', () => moveQueue(1));
+
+function closeMoreMenu() {
+  const menu = $('d-more-menu');
+  if (!menu || menu.hidden) return;
+  menu.hidden = true;
+  $('d-more')?.setAttribute('aria-expanded', 'false');
+}
+
+$('d-more')?.addEventListener('click', (event) => {
+  event.stopPropagation();
+  const menu = $('d-more-menu');
+  if (!menu) return;
+
+  const open = menu.hidden;
+  menu.hidden = !open;
+  $('d-more').setAttribute('aria-expanded', String(open));
+});
+
+/* Un clic ailleurs referme, comme le menu de mise en veille juste à côté :
+   un menu qui reste ouvert après qu'on a regardé autre chose finit par
+   masquer ce qu'on voulait lire. */
+document.addEventListener('click', (event) => {
+  if (!event.target.closest('.more-wrap')) closeMoreMenu();
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') closeMoreMenu();
+});
+
 /**
  * Bouton d'action pour la barre de libellés, soumis aux mêmes droits que la
  * barre d'actions : un agent ne peut pas rembourser, et doit le lire plutôt
  * que de le découvrir sur un refus du serveur.
  */
-function actionButton(key, label, ticket) {
+function actionButton(key, label, ticket, className = 'btn btn-small') {
   const blocked = actionBlockedReason(key, ticket);
 
-  return `<button class="btn btn-small" data-quick="${key}"${
+  return `<button class="${className}" type="button" data-quick="${key}"${
     blocked ? ` disabled title="${esc(blocked)}"` : ''
   }>${esc(label)}</button>`;
 }
@@ -2080,6 +2119,15 @@ function renderQueueBar() {
 
   // Même traitement pour « Non lu », et pour la même raison : elle croise les
   // statuts au lieu d'en être un.
+  /* Le total de l'en-tête suit le dossier ouvert, jamais le total absolu :
+     annoncer « 5 384 » au-dessus d'une liste filtrée à douze ferait douter du
+     filtre plutôt que du chiffre. */
+  const totalBox = $('queue-total');
+  if (totalBox) {
+    const n = state.queueFolders?.[state.queue.folder] ?? counts.ALL ?? 0;
+    totalBox.textContent = n > 0 ? n.toLocaleString('fr-FR') : '';
+  }
+
   const unread = $('chip-unread');
   if (unread) {
     unread.setAttribute('aria-pressed', String(Boolean(state.queue.unread)));
@@ -2563,7 +2611,7 @@ function renderDetail() {
   // autre boutique se lit, il ne s'y répond pas.
   if (otherShop) {
     document
-      .querySelectorAll('#d-labels [data-quick]')
+      .querySelectorAll('#d-labels [data-quick], #d-more-menu [data-quick]')
       .forEach((button) => (button.disabled = true));
   }
 
@@ -2591,10 +2639,26 @@ function renderDetail() {
 
   $('d-messages').innerHTML = ticket.messages
     .map(
-      (message) => `<div class="msg${message.direction === 'OUTBOUND' ? ' out' : ''}">
+      (message) => {
+        /*
+         * L'expéditeur porte son avatar, comme dans la file.
+         *
+         * Sur un fil de dix messages qui alternent, la couleur dit qui parle
+         * avant qu'on ait lu le nom — et c'est la même teinte que dans la
+         * liste, donc le même repère d'un écran à l'autre.
+         *
+         * Ce qui vient de nous prend le nom de la boutique, jamais l'adresse
+         * de la boîte : « sav@… » répété douze fois n'apprend rien à personne.
+         */
+        const outbound = message.direction === 'OUTBOUND';
+        const who = outbound ? brand : (ticket.customerName ?? message.fromEmail);
+
+        return `<div class="msg${outbound ? ' out' : ''}">
         <div class="msg-head">
+          <span class="msg-av" aria-hidden="true"
+            style="background:${avatarTint(who)}">${esc(initials(who))}</span>
           <b>${
-            message.direction === 'OUTBOUND'
+            outbound
               ? `${esc(brand)} <span class="msg-tag">réponse envoyée</span>`
               : esc(message.fromEmail)
           }</b>
@@ -2603,7 +2667,8 @@ function renderDetail() {
         <div class="msg-body" data-msg="${esc(message.id)}">${esc(message.bodyText)}</div>
         <div class="msg-fr" data-fr="${esc(message.id)}" hidden></div>
         ${renderAttachments(message.attachments)}
-      </div>`,
+      </div>`;
+      },
     )
     .join('');
 
@@ -3376,9 +3441,25 @@ function renderTicketLabels(ticket) {
     actionButton('supplier', 'Écrire au fournisseur', ticket) +
     actionButton('refund', 'Rembourser…', ticket) +
     actionButton('change', 'Modifier la commande', ticket) +
-    actionButton('reshipment', 'Reshipment', ticket) +
-    `<button class="btn btn-small btn-danger" id="d-delete">Supprimer</button>` +
     `</span>`;
+
+  /*
+   * Les gestes rares passent sous « ··· ».
+   *
+   * Six boutons de même poids obligent à lire les six pour en choisir un.
+   * Reshipment et Supprimer se font une fois sur vingt : ils gardent leur
+   * place, pas leur rang.
+   *
+   * Rendus ici, dans la même fonction que la rangée principale, pour que
+   * leurs écouteurs se posent au même endroit et au même moment. Les répartir
+   * entre deux fonctions ferait dépendre le câblage de l'ordre d'appel.
+   */
+  const menu = $('d-more-menu');
+  if (menu) {
+    menu.innerHTML =
+      actionButton('reshipment', 'Ouvrir un dossier de retour', ticket, 'more-item') +
+      `<button class="more-item more-danger" type="button" id="d-delete">Supprimer le message</button>`;
+  }
 
   const quick = {
     client: () => openCompose('client', ticket),
@@ -3389,7 +3470,15 @@ function renderTicketLabels(ticket) {
   };
 
   for (const [key, run] of Object.entries(quick)) {
-    bar.querySelector(`[data-quick="${key}"]`)?.addEventListener('click', run);
+    // Les gestes vivent maintenant dans deux conteneurs : la rangée et le
+    // menu. Chercher dans le seul `bar` laisserait Reshipment sans écouteur,
+    // et le `?.` avalerait l'oubli sans un mot.
+    document
+      .querySelector(`#d-labels [data-quick="${key}"], #d-more-menu [data-quick="${key}"]`)
+      ?.addEventListener('click', () => {
+        closeMoreMenu();
+        run();
+      });
   }
 
   bar.querySelectorAll('[data-tlabel]').forEach((chip) =>

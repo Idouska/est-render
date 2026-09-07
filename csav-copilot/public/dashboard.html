@@ -335,6 +335,12 @@
 
       <main class="workspace" id="view-tickets">
         <section class="panel" aria-label="Messages clients">
+          <!-- L'en-tête de la file. Le nombre est celui du dossier courant,
+               pas un total figé : c'est ce qui reste dans ce qu'on regarde. -->
+          <div class="queue-head">
+            <span class="queue-title">Conversations</span>
+            <span class="queue-count" id="queue-total"></span>
+          </div>
           <!-- Barre d'actions groupées. Elle n'apparaît qu'une fois quelque
                chose de coché : une barre d'actions permanente sur une file
                vide est un bruit permanent. -->
@@ -366,7 +372,26 @@
                en ouvrant. L'objet d'origine reste lisible juste en dessous,
                car c'est lui qui figure dans la boîte Gmail. -->
           <div class="ticket-head">
-            <h1 class="thread-subject" id="d-subject">Sélectionnez un message</h1>
+            <div class="th-top">
+              <h1 class="thread-subject" id="d-subject">Sélectionnez un message</h1>
+              <!-- Naviguer sans revenir à la file : c'est le geste d'un agent
+                   qui descend cent messages. Les mêmes que `j` et `k`, pour
+                   qui n'a pas encore les raccourcis dans les doigts. -->
+              <div class="th-nav">
+                <button class="ico-btn" id="d-prev" type="button"
+                  aria-label="Message précédent" title="Précédent (k)">‹</button>
+                <button class="ico-btn" id="d-next" type="button"
+                  aria-label="Message suivant" title="Suivant (j)">›</button>
+                <!-- Les gestes rares sortent de la rangée principale : six
+                     boutons de même poids obligent à lire les six pour en
+                     choisir un. -->
+                <span class="more-wrap">
+                  <button class="ico-btn" id="d-more" type="button"
+                    aria-label="Autres actions" aria-expanded="false">···</button>
+                  <div class="more-menu" id="d-more-menu" hidden></div>
+                </span>
+              </div>
+            </div>
             <div class="thread-meta" id="d-meta"></div>
             <!-- Libellés du message, modifiables sur place, et suppression.
                  Reclasser en rouvrant Gmail est un aller-retour qu'on ne fait
@@ -492,7 +517,11 @@
 
           <div class="draft" id="draft-zone" hidden>
             <div class="draft-bar">
-              <span class="panel-title">Brouillon proposé</span>
+              <!-- Nommée « proposée par l'IA » et non « brouillon » : un
+                   brouillon est quelque chose qu'on a écrit et laissé en
+                   plan ; ceci est une proposition qu'on relit. La nuance
+                   change ce qu'on en attend. -->
+              <span class="panel-title">Réponse proposée par l'IA</span>
               <span class="conf">
                 confiance
                 <span class="conf-track"><span class="conf-fill" id="d-conf-fill"></span></span>
