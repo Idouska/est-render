@@ -33,6 +33,23 @@ export const QUEUE_SELECT = {
   // L'état Gmail du fil : le gras et le dossier courant en dépendent.
   gmailUnread: true,
   gmailArchived: true,
+  /*
+   * Les premiers mots du dernier message reçu.
+   *
+   * C'est ce qui permet de trancher sans ouvrir. L'objet ne suffit pas : il
+   * est écrit par Shopify (« Order #13616 Confirmed 7 Sep ») ou tronqué par un
+   * client pressé (« Re: »), et ne décrit pas la demande.
+   *
+   * Un seul message, le plus récent, et seulement l'extrait déjà calculé à
+   * l'ingestion : charger les corps complets de cinquante fils coûterait la
+   * page entière pour trois lignes de texte gris.
+   */
+  messages: {
+    where: { direction: 'INBOUND' as const },
+    orderBy: { receivedAt: 'desc' as const },
+    take: 1,
+    select: { snippet: true },
+  },
   failureReason: true,
   assignedToId: true,
   assignedTo: { select: { id: true, name: true, email: true } },
@@ -59,6 +76,7 @@ export const QUEUE_FIELDS_USED_BY_DASHBOARD = [
   'labels',
   'gmailUnread',
   'gmailArchived',
+  'messages',
   'assignedToId',
   'merchantId',
 ] as const;
