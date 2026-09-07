@@ -201,20 +201,19 @@
           <span class="kpi-value" id="kpi-pending">—</span>
           <span class="kpi-note" id="kpi-pending-note">brouillons à relire</span>
         </div>
-        <!-- L'avancement du jour, à côté de la tendance du mois : à midi, on
-             regarde ce qu'on a fait depuis ce matin, pas depuis trois
-             semaines. -->
         <div class="kpi">
-          <span class="kpi-ico" data-ico="bolt" aria-hidden="true"></span>
-          <span class="kpi-label">Traités aujourd'hui</span>
-          <span class="kpi-value" id="kpi-today">—</span>
-          <span class="kpi-note">clos ou répondus depuis minuit</span>
+          <span class="kpi-ico" data-ico="inbox" aria-hidden="true"></span>
+          <span class="kpi-label">Brouillons prêts</span>
+          <span class="kpi-value" id="kpi-drafts">—</span>
+          <span class="kpi-note">propositions à relire</span>
         </div>
-        <div class="kpi">
-          <span class="kpi-ico" data-ico="chart" aria-hidden="true"></span>
-          <span class="kpi-label">Traités · 30 jours</span>
-          <span class="kpi-value" id="kpi-done">—</span>
-          <span class="kpi-note" id="kpi-done-note">clos ou répondus</span>
+        <!-- Le délai que le client ressent : il ne sait pas combien de tickets
+             on traite, il sait combien de temps il a attendu. -->
+        <div class="kpi" title="Délai moyen de première réponse, sur 30 jours">
+          <span class="kpi-ico" data-ico="clock" aria-hidden="true"></span>
+          <span class="kpi-label">Délai 1re réponse</span>
+          <span class="kpi-value" id="kpi-delay">—</span>
+          <span class="kpi-note">sur 30 jours</span>
         </div>
         <div class="kpi">
           <span class="kpi-ico" data-ico="bolt" aria-hidden="true"></span>
@@ -227,27 +226,24 @@
              milliers d'échecs n'apparaissaient nulle part. -->
         <div class="kpi">
           <span class="kpi-ico" data-ico="shield" aria-hidden="true"></span>
-          <span class="kpi-label">Non traités par l'IA</span>
+          <span class="kpi-label">Non compris par l'IA</span>
           <span class="kpi-value" id="kpi-failed">—</span>
           <span class="kpi-note" id="kpi-failed-note"></span>
         </div>
       </section>
 
         <div class="subhead-acts">
-          <button class="btn btn-primary btn-small" id="new-escalation" hidden>
-            ＋ Nouvelle escalade
-          </button>
           <div class="clocks" id="clocks" role="button" tabindex="0"
             title="Heures locales — cliquer pour le détail"></div>
           <div class="conn" id="conn"></div>
           <div class="head-tools">
-            <button class="btn btn-small" id="refresh" type="button" title="Actualiser (R)">
+            <button class="btn btn-small" id="refresh" type="button" title="Rafraîchir (R)">
               <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"
                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M13.5 8a5.5 5.5 0 1 1-1.7-4" />
                 <path d="M13.5 2.5V6H10" />
               </svg>
-              <span id="refresh-label">Actualiser</span>
+              <span id="refresh-label">Rafraîchir</span>
             </button>
             <label class="auto-toggle" title="Recharge l’écran toutes les 60 secondes">
               <input type="checkbox" id="auto-refresh" checked />

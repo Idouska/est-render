@@ -1299,8 +1299,65 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
 
     const counts = Object.fromEntries(byStatus.map((row) => [row.status, row._count]));
 
+    /*
+     * Délai moyen de première réponse.
+     *
+     * Le temps entre le premier message du client et la première réponse
+     * partie. C'est l'indicateur que le client ressent : il ne sait pas
+     * combien de tickets on traite, il sait combien de temps il a attendu.
+     *
+     * Calculé en deux regroupements plutôt qu'en SQL brut : Prisma valide les
+     * noms de champs au typecheck, là où une requête brute ne les vérifie
+     * qu'à l'exécution — et cette route sert toute la bande d'indicateurs.
+     * Une erreur de nom la ferait tomber entière.
+     *
+     * Borné à la fenêtre de trente jours : la moyenne de toute l'histoire du
+     * marchand décrirait l'année dernière, et pèserait le double en base.
+     */
+    const scope = { merchantId, ticket: { isHistorical: false, createdAt: { gte: since } } };
+
+    const [firstIn, firstOut] = await Promise.all([
+      prisma.message.groupBy({
+        by: ['ticketId'],
+        where: { ...scope, direction: 'INBOUND' },
+        _min: { receivedAt: true },
+      }),
+      prisma.message.groupBy({
+        by: ['ticketId'],
+        where: { ...scope, direction: 'OUTBOUND' },
+        _min: { receivedAt: true },
+      }),
+    ]);
+
+    const askedAt = new Map(firstIn.map((row) => [row.ticketId, row._min.receivedAt]));
+
+    const delays = firstOut
+      .map((row) => {
+        const asked = askedAt.get(row.ticketId);
+        const answered = row._min.receivedAt;
+        if (!asked || !answered) return null;
+
+        const seconds = (answered.getTime() - asked.getTime()) / 1000;
+        // Une réponse antérieure à la demande n'existe pas : c'est un fil
+        // importé dont l'ordre s'est perdu, ou une horloge de travers. La
+        // compter tirerait la moyenne vers le bas sans que rien ne le dise.
+        return seconds > 0 ? seconds : null;
+      })
+      .filter((seconds): seconds is number => seconds !== null);
+
+    const firstReplySeconds =
+      delays.length === 0
+        ? null
+        : Math.round(delays.reduce((sum, one) => sum + one, 0) / delays.length);
+
     return reply.send({
       window: '30j',
+      /**
+       * Délai moyen de première réponse, en secondes. `null` quand aucune
+       * réponse n'est partie sur la fenêtre : zéro se lirait comme
+       * « instantané », ce qui est l'inverse de « rien mesuré ».
+       */
+      firstReplySeconds,
       tickets: counts,
       /** Traités sur la fenêtre, d'après la date de traitement. */
       handled,
