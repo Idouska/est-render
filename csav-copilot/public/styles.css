@@ -3902,17 +3902,13 @@ textarea:focus-visible {
     inset 0 1px 0 rgb(255 255 255 / 22%);
 }
 
-/* La rédaction s'ouvre sous les actions, jamais dans une fenêtre : celle-ci
-   masquerait le fil qu'on relit précisément pour répondre. */
-/* La rédaction et les remplacements vivaient dans la barre d'actions et lui
-   empruntaient son cadre. Sortis de là pour ne plus disparaître avec elle, ils
-   portent désormais le leur. */
-.compose,
+/* Les remplacements vivaient dans la barre d'actions et lui empruntaient son
+   cadre. Sortis de là pour ne plus disparaître avec elle, ils portent le leur.
+   La rédaction, elle, est passée en fenêtre : voir « rédaction en fenêtre »
+   en fin de feuille. */
 .subs { padding: 12px 15px; border-top: 1px solid var(--line-soft); }
 
-.compose { display: grid; gap: 9px; }
-
-.compose textarea {
+.compose-modal textarea {
   width: 100%;
   min-height: 130px;
   padding: 11px 13px;
@@ -7140,3 +7136,121 @@ textarea:focus-visible {
   border-radius: 50%;
   flex: none;
 }
+
+/* ================================================ rédaction en fenêtre === */
+
+/* Écrire au client dans une fenêtre, à la demande du marchand.
+
+   Elle vivait sur place, sous les actions, pour ne pas masquer le fil qu'on
+   relit en répondant. La fenêtre garde cet acquis autrement : le voile est
+   plus léger que celui des autres modales, le ticket reste lisible derrière.
+   « Agrandir » n'est qu'une classe posée sur la même fenêtre — rien n'est
+   recréé, le brouillon ne bouge pas. */
+.compose-backdrop { background: rgba(8, 10, 20, 0.35); padding: 16px; }
+
+.compose-modal {
+  display: flex;
+  flex-direction: column;
+  width: min(920px, calc(100vw - 48px));
+  height: min(78vh, 760px);
+  max-height: calc(100vh - 32px);
+  overflow: hidden;
+}
+
+.compose-modal.expanded {
+  width: calc(100vw - 32px);
+  height: calc(100vh - 32px);
+}
+
+.compose-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 18px 10px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.compose-head h2 { margin: 0; font-size: 16px; font-weight: 620; letter-spacing: -0.01em; }
+
+.compose-sig { margin-left: auto; font-size: 12.5px; color: var(--ink-mute); white-space: nowrap; }
+.compose-sig b { color: var(--ok); font-weight: 700; margin-right: 2px; }
+.compose-sig .linkish {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.compose-head .ico-btn svg { width: 15px; height: 15px; }
+.compose-head .ico-btn[aria-pressed="true"] { color: var(--ink); background: var(--inset); }
+
+.compose-fields { display: grid; gap: 6px; padding: 10px 18px 0; }
+.compose-fields .compose-subject { margin-bottom: 0; }
+.compose-to output {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 0;
+  font-size: 13px;
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compose-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 18px 0; }
+.compose-tools-label {
+  flex: none;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+.compose-canned { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* Le corps prend toute la hauteur qui reste ; ses marges remplacent le
+   `width: 100%` de la règle héritée, qui déborderait de la fenêtre. */
+.compose-modal textarea { flex: 1 1 auto; width: auto; min-height: 140px; margin: 10px 18px 0; resize: none; }
+.compose-modal .compose-foot { padding: 12px 18px 14px; border-top: 1px solid var(--line-soft); margin-top: 10px; }
+
+/* Petit écran : la fenêtre prend presque tout, sans attendre « Agrandir ». */
+@media (max-width: 1024px) {
+  .compose-modal { width: calc(100vw - 24px); height: calc(100vh - 24px); max-height: calc(100vh - 24px); }
+  .compose-backdrop { padding: 12px; }
+}
+
+/* ================================================= téléphone et WhatsApp = */
+
+/* Le numéro est un lien, mais pas un lien bleu de navigateur : même encre que
+   le reste de la fiche, un filet discret, et le chevron qui dit « ça sort ».
+   Le survol et le focus le confirment sans compter sur la seule couleur. */
+.rail-phone {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ink);
+  text-decoration: none;
+  border-bottom: 1px dashed var(--line);
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.rail-phone:hover { color: var(--accent); border-bottom-color: var(--accent); }
+.rail-phone:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+.rail-phone span { font-size: 11px; color: var(--ink-mute); }
+.rail-phone:hover span { color: var(--accent); }
+
+/* Un numéro qu'on ne sait pas composer reste lisible, sans lien : le point
+   d'interrogation du curseur et l'infobulle disent pourquoi. */
+.rail-phone-off {
+  color: var(--ink-mute);
+  border-bottom: 1px dotted var(--line);
+  cursor: help;
+  font-variant-numeric: tabular-nums;
+}
+
+.rail-cta { margin-top: 10px; }
+.wa-btn { gap: 6px; }
+.wa-btn svg { width: 14px; height: 14px; color: var(--ok); }

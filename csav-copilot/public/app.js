@@ -1753,27 +1753,60 @@ function replySubject(ticket) {
 
 function openCompose(target, ticket) {
   const zone = $('compose');
-  zone.hidden = false;
   zone.dataset.target = target;
+  setComposeOpen(true);
+
+  $('compose-title').textContent =
+    target === 'client' ? 'Écrire au client' : 'Écrire au fournisseur';
+
+  // Les icônes se posent ici et non au chargement : `ICONS` est un `const`
+  // déclaré plus bas, hors de portée quand ce fichier s'exécute.
+  const modal = zone.querySelector('.compose-modal');
+  const expanded = modal.classList.contains('expanded');
+  $('compose-expand').innerHTML = ico(expanded ? 'collapse' : 'expand');
+  $('compose-close').innerHTML = ico('close');
 
   const body = $('compose-body');
   body.placeholder =
     target === 'client' ? 'Votre message au client…' : 'Votre message au fournisseur…';
-  body.value = '';
 
   /*
-   * L'objet n'existe que pour le client : une escalade fournisseur compose le
-   * sien à partir de la boutique, de la commande et du motif, et le laisser
-   * modifier ici casserait le fil que le fournisseur suit dans son espace.
+   * La signature entre avec le message, pour le client seulement.
+   *
+   * Elle se règle dans Réglages › Signature, dont le texte d'aide promet
+   * depuis toujours « vers vos fournisseurs comme vers vos clients ». Côté
+   * fournisseur, le serveur l'ajoute à l'envoi ; la poser ici aussi la ferait
+   * partir deux fois. Côté client, rien ne l'ajoutait : la promesse était
+   * fausse. Elle vit dans le corps, donc se corrige comme le reste — le
+   * curseur reste au-dessus.
+   */
+  const signature = target === 'client' ? currentSignature() : '';
+  body.value = signature ? `\n\n${signature}` : '';
+  zone.dataset.initialBody = body.value;
+
+  /*
+   * L'objet et le destinataire n'existent que pour le client : une escalade
+   * fournisseur compose le sien à partir de la boutique, de la commande et du
+   * motif, et le laisser modifier ici casserait le fil que le fournisseur
+   * suit dans son espace.
    */
   const subject = $('compose-subject');
-  const subjectRow = subject.closest('.compose-subject');
-  subjectRow.hidden = target !== 'client';
+  subject.closest('.compose-subject').hidden = target !== 'client';
+  $('compose-to-row').hidden = target !== 'client';
+  $('compose-tools').hidden = target !== 'client';
   if (target === 'client') {
     subject.value = replySubject(ticket);
+    $('compose-to').textContent = ticket.customerEmail ?? '';
+    renderComposeCanned(ticket);
+  } else {
+    subject.value = '';
   }
+  zone.dataset.initialSubject = subject.value;
+
+  renderComposeSignatureBadge(target, signature);
 
   body.focus();
+  body.setSelectionRange(0, 0);
 
   const relay = $('compose-relay');
   const hint = $('compose-hint');
@@ -1792,9 +1825,169 @@ function openCompose(target, ticket) {
       : '';
   } else {
     relay.hidden = true;
-    hint.textContent = `Part vers ${ticket.customerEmail}.`;
+    // Le destinataire est dans le champ « À » : le répéter ici doublonnait.
+    hint.textContent = '';
   }
 }
+
+/*
+ * Ouvrir et fermer se font en un seul endroit.
+ *
+ * La fenêtre est un `.backdrop` : c'est `.open` qui l'affiche, et c'est
+ * `.backdrop.open` que la garde des raccourcis clavier cherche. `hidden` reste
+ * posé en parallèle pour le code qui lit `$('compose').hidden`.
+ */
+function setComposeOpen(open) {
+  const zone = $('compose');
+  zone.hidden = !open;
+  zone.classList.toggle('open', open);
+}
+
+/** La signature du marchand, telle qu'elle est réglée — vide si aucune. */
+function currentSignature() {
+  return (state.me?.merchant?.emailSignature ?? '').trim();
+}
+
+function renderComposeSignatureBadge(target, signature) {
+  const badge = $('compose-sig');
+  badge.hidden = false;
+
+  if (target === 'supplier') {
+    badge.textContent = 'Signature ajoutée à l’envoi';
+    return;
+  }
+
+  badge.innerHTML = signature
+    ? '<b aria-hidden="true">✓</b> Signature automatique activée'
+    : 'Aucune signature — <button type="button" class="linkish" id="compose-sig-set">la configurer</button>';
+
+  $('compose-sig-set')?.addEventListener('click', () => {
+    if (!closeCompose()) return;
+    setView('settings');
+  });
+}
+
+/** Le message a-t-il bougé depuis l'ouverture — signature comprise ? */
+function composeDirty() {
+  const zone = $('compose');
+  return (
+    $('compose-body').value !== (zone.dataset.initialBody ?? '') ||
+    $('compose-subject').value !== (zone.dataset.initialSubject ?? '')
+  );
+}
+
+/*
+ * Fermer sans perdre en silence.
+ *
+ * Il n'existe ni brouillon automatique ni protection pour cette zone : ce qui
+ * s'y tape ne vit qu'à l'écran. Refermer sur un texte modifié demande donc
+ * confirmation. `force` sert aux fermetures qui suivent une action aboutie —
+ * envoi, clôture, changement de ticket — où la question n'aurait pas de sens.
+ * Rend `false` si l'utilisateur a préféré garder sa fenêtre.
+ */
+function closeCompose({ force = false } = {}) {
+  const zone = $('compose');
+  if (zone.hidden) return true;
+
+  if (!force && composeDirty()) {
+    if (!confirm('Abandonner ce message ? Le texte saisi sera perdu.')) return false;
+  }
+
+  setComposeOpen(false);
+  $('compose-body').value = '';
+  return true;
+}
+
+/** Les réponses types, classées pour ce ticket : motif d'abord, puis usage. */
+function cannedForTicket(ticket) {
+  return [...state.canned].sort((a, b) => {
+    const matchA = a.intent === ticket.intent ? 1 : 0;
+    const matchB = b.intent === ticket.intent ? 1 : 0;
+    return matchB - matchA || b.useCount - a.useCount;
+  });
+}
+
+/** Variables résolues à l'insertion : un « {{prenom}} » envoyé tel quel est pire que pas de modèle. */
+function fillCanned(item, ticket, order) {
+  return item.body
+    .replaceAll('{{prenom}}', (ticket.customerName ?? '').split(' ')[0] ?? '')
+    .replaceAll('{{commande}}', ticket.orderName ?? '')
+    .replaceAll('{{suivi}}', order?.fulfillments?.[0]?.trackingNumber ?? '')
+    .replaceAll('{{boutique}}', state.me?.merchant?.brandName ?? state.me?.merchant?.name ?? '');
+}
+
+function renderComposeCanned(ticket) {
+  const tools = $('compose-tools');
+  if (!state.canned?.length) {
+    tools.hidden = true;
+    return;
+  }
+
+  tools.hidden = false;
+  $('compose-canned').innerHTML = cannedForTicket(ticket)
+    .slice(0, 6)
+    .map(
+      (item) => `<button type="button" class="qchip" data-compose-insert="${esc(item.id)}"${
+        item.intent === ticket.intent ? ' aria-pressed="true"' : ''
+      }>${esc(item.title)}</button>`,
+    )
+    .join('');
+}
+
+$('compose-canned')?.addEventListener('click', async (event) => {
+  const button = event.target.closest('[data-compose-insert]');
+  if (!button) return;
+
+  const item = state.canned.find((candidate) => candidate.id === button.dataset.composeInsert);
+  const ticket = state.detail?.ticket;
+  if (!item || !ticket) return;
+
+  const filled = fillCanned(item, ticket, state.detail?.order);
+  const body = $('compose-body');
+
+  // À l'endroit du curseur, pas en fin de texte : la signature est en bas, et
+  // le message s'écrit au-dessus d'elle.
+  const at = body.selectionStart ?? 0;
+  const before = body.value.slice(0, at);
+  const after = body.value.slice(at);
+  const glue = before.trim() && !before.endsWith('\n\n') ? '\n\n' : '';
+  body.value = `${before}${glue}${filled}${after}`;
+  const cursor = (before + glue + filled).length;
+  body.setSelectionRange(cursor, cursor);
+  body.focus();
+
+  await api(`/api/canned-replies/${item.id}/used`, { method: 'POST' }).catch(() => {});
+  toast('Réponse insérée — à relire avant envoi.');
+});
+
+$('compose-close')?.addEventListener('click', () => closeCompose());
+
+/*
+ * Agrandir / Restaurer : une classe sur la fenêtre, rien d'autre.
+ *
+ * Le composant n'est ni recréé ni re-rendu — le brouillon, l'objet, la
+ * signature et le curseur restent exactement où ils sont. Le choix survit à
+ * la fermeture : celui qui a agrandi une fois retrouve sa fenêtre grande.
+ */
+$('compose-expand')?.addEventListener('click', () => {
+  const modal = $('compose').querySelector('.compose-modal');
+  const expanded = modal.classList.toggle('expanded');
+  const button = $('compose-expand');
+  button.setAttribute('aria-pressed', String(expanded));
+  button.title = expanded ? 'Restaurer' : 'Agrandir';
+  button.setAttribute('aria-label', button.title);
+  button.innerHTML = ico(expanded ? 'collapse' : 'expand');
+  $('compose-body').focus();
+});
+
+// Échap ferme la fenêtre — avec la même confirmation qu'un clic sur « × » si
+// le texte a bougé. Écouté à part : le gestionnaire général des raccourcis
+// se tait dès que le curseur est dans un champ, ce qui est justement le cas.
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape' || $('compose').hidden) return;
+  event.preventDefault();
+  closeCompose();
+});
 
 /** Heure de l'atelier, et si l'on peut espérer une réponse tout de suite. */
 function supplierLocalTime() {
@@ -1810,9 +2003,7 @@ function supplierLocalTime() {
   return { time, open: hour >= 9 && hour < 18 };
 }
 
-$('compose-cancel')?.addEventListener('click', () => {
-  $('compose').hidden = true;
-});
+$('compose-cancel')?.addEventListener('click', () => closeCompose());
 
 /*
  * Clore sans répondre.
@@ -1831,7 +2022,7 @@ $('compose-resolve')?.addEventListener('click', async () => {
       body: '{}',
     });
 
-    $('compose').hidden = true;
+    closeCompose({ force: true });
     await loadQueue();
 
     // Annulable : refermer par erreur un ticket qui attendait un fournisseur
@@ -1919,7 +2110,7 @@ $('compose-send')?.addEventListener('click', async () => {
       await api(`/api/escalations/${escalation.id}/send`, { method: 'POST', body: '{}' });
       toast('Escalade envoyée au fournisseur — le ticket passe « Chez le fournisseur ».');
     }
-    zone.hidden = true;
+    closeCompose({ force: true });
     await selectTicket(ticket.id);
   } catch (error) {
     toast(error.message, true);
@@ -2847,8 +3038,7 @@ function renderDetail() {
    * Le contenu est vidé avec elle : un brouillon abandonné qui réapparaît sur
    * un autre dossier est pire qu'un champ vide.
    */
-  $('compose').hidden = true;
-  $('compose-body').value = '';
+  closeCompose({ force: true });
   $('subs').hidden = true;
 
   // Le fil se lit d'un coup d'œil : ce qui vient de nous porte notre nom et
@@ -3705,6 +3895,13 @@ function renderTicketLabels(ticket) {
   if (menu) {
     menu.innerHTML =
       actionButton('reshipment', 'Ouvrir un dossier de retour', ticket, 'more-item') +
+      // WhatsApp, en second accès : le premier reste la fiche client du rail.
+      // Un lien, comme celui de Gmail plus bas — pas de bouton à câbler.
+      (customerPhone(state.detail?.order)?.link
+        ? `<a class="more-item" target="_blank" rel="noopener noreferrer"
+            href="${esc(customerPhone(state.detail?.order).link)}"
+            aria-label="Ouvrir WhatsApp avec ${esc(ticket.customerName ?? 'le client')}">WhatsApp</a>`
+        : '') +
       /*
        * Le fil d'origine, dans Gmail.
        *
@@ -4056,7 +4253,52 @@ function renderCustomer(order) {
      * oubli de la décision précédente.
      */
     (customer.createdAt ? row('Client depuis', fullDate(customer.createdAt)) : '') +
-    '</dl>';
+    phoneRow(order) +
+    '</dl>' +
+    whatsappCta(order, name);
+}
+
+/*
+ * Le téléphone du client, tel que le ticket le transporte.
+ *
+ * Le seul numéro qui arrive avec un ticket est celui de l'adresse de
+ * livraison — Shopify ne livre pas celui du compte dans cette requête. Le
+ * pays vient de la même adresse, en ISO 3166-1 alpha-2 : c'est lui, et lui
+ * seul, qui permet de composer un numéro national. Sans pays connu, un
+ * « 06 12 34 56 78 » reste un numéro qu'on affiche mais qu'on ne compose pas.
+ */
+function customerPhone(order) {
+  const address = order?.shippingAddress;
+  const raw = (address?.phone ?? '').trim();
+  if (!raw) return null;
+
+  const number = whatsappNumber(raw, address?.country);
+  return { raw, number, link: whatsappLink(number) };
+}
+
+function phoneRow(order) {
+  const phone = customerPhone(order);
+  if (!phone) return '';
+
+  const inner = phone.link
+    ? `<a class="rail-phone" href="${esc(phone.link)}" target="_blank" rel="noopener noreferrer"
+         title="Ouvrir dans WhatsApp">${esc(phone.raw)} <span aria-hidden="true">↗</span></a>`
+    : `<span class="rail-phone-off" title="Numéro non valide pour WhatsApp">${esc(phone.raw)}</span>`;
+
+  return `<div class="row"><dt>Téléphone</dt><dd>${inner}</dd></div>`;
+}
+
+/* Un bouton secondaire, neutre, l'icône seule en vert : on est dans un outil
+   de travail, pas sur une page de contact. Absent sans numéro composable —
+   un bouton qui ouvrirait une URL vide vaut moins que pas de bouton. */
+function whatsappCta(order, name) {
+  const phone = customerPhone(order);
+  if (!phone?.link) return '';
+
+  return `<div class="rail-cta"><a class="btn btn-small wa-btn" href="${esc(phone.link)}"
+     target="_blank" rel="noopener noreferrer"
+     aria-label="Ouvrir WhatsApp avec ${esc(name ?? 'le client')}"
+     title="Ouvrir la conversation dans WhatsApp Web">${ico('whatsapp')} WhatsApp</a></div>`;
 }
 
 /**
@@ -4085,6 +4327,75 @@ function shopifyOrderLink(order, label = null) {
         href="${href}">${esc(label)} <span aria-hidden="true">↗</span></a>`
     : `<a class="btn btn-small rail-link" target="_blank" rel="noopener noreferrer"
         href="${href}">Voir dans Shopify →</a>`;
+}
+
+/*
+ * Indicatifs des pays servis. Des faits, pas des réglages : un indicatif ne se
+ * configure pas. `trunk` est le préfixe national qui tombe en international —
+ * « 0 » en France ou en Belgique, rien en Italie où il fait partie du numéro.
+ * Un pays absent d'ici n'est pas deviné : le numéro s'affiche, sans lien.
+ */
+const DIAL_CODES = {
+  FR: { dial: '33', trunk: '0' },
+  BE: { dial: '32', trunk: '0' },
+  ES: { dial: '34', trunk: '' },
+  IT: { dial: '39', trunk: '' },
+  DE: { dial: '49', trunk: '0' },
+  NL: { dial: '31', trunk: '0' },
+  LU: { dial: '352', trunk: '' },
+  CH: { dial: '41', trunk: '0' },
+  AT: { dial: '43', trunk: '0' },
+  PT: { dial: '351', trunk: '' },
+  GB: { dial: '44', trunk: '0' },
+  IE: { dial: '353', trunk: '0' },
+  MC: { dial: '377', trunk: '' },
+  MA: { dial: '212', trunk: '0' },
+};
+
+/**
+ * Le numéro tel que WhatsApp l'attend : indicatif puis numéro, chiffres seuls.
+ *
+ * Déjà international (« + » ou « 00 ») : on garde les chiffres. National : on
+ * compose avec l'indicatif du pays de l'adresse — jamais avec un pays
+ * supposé. Rend `null` dès que le résultat n'a pas la forme d'un numéro
+ * (E.164 : huit à quinze chiffres, pas de zéro de tête) : mieux vaut pas de
+ * lien qu'un lien qui ouvre WhatsApp sur rien.
+ */
+function whatsappNumber(raw, countryCode) {
+  const text = String(raw ?? '').trim();
+  if (!text) return null;
+
+  const digits = text.replace(/\D/g, '');
+  const country = DIAL_CODES[String(countryCode ?? '').toUpperCase()] ?? null;
+  let number;
+
+  if (text.startsWith('+') || text.startsWith('00')) {
+    number = text.startsWith('00') ? digits.slice(2) : digits;
+    // « +33 (0)6 … » : le zéro entre parenthèses est le préfixe national,
+    // écrit par habitude. On ne le retire que si le pays le confirme.
+    if (country?.trunk && number.startsWith(country.dial + country.trunk)) {
+      number = country.dial + number.slice(country.dial.length + country.trunk.length);
+    }
+  } else {
+    if (!country) return null;
+    const national =
+      country.trunk && digits.startsWith(country.trunk) ? digits.slice(country.trunk.length) : digits;
+    number = country.dial + national;
+  }
+
+  return /^[1-9]\d{7,14}$/.test(number) ? number : null;
+}
+
+/**
+ * L'URL WhatsApp Web. `text` est prévu et non branché : un message prérempli
+ * viendra sans rien reconstruire, mais pour l'instant on ouvre la conversation,
+ * sans rien y écrire à la place de l'agent.
+ */
+function whatsappLink(number, { text = null } = {}) {
+  if (!number) return null;
+  const params = new URLSearchParams({ phone: number });
+  if (text) params.set('text', text);
+  return `https://web.whatsapp.com/send?${params.toString()}`;
 }
 
 function renderOrder(ticket, order, orderError) {
@@ -6395,6 +6706,14 @@ const ICONS = {
   shield: '<path d="M8 2l5 2v4.2c0 3-2.2 4.8-5 5.6-2.8-.8-5-2.6-5-5.6V4z"/>',
   swatch: '<circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="5.6" r="1"/><circle cx="10.2" cy="9" r="1"/><circle cx="5.8" cy="9" r="1"/>',
   gear: '<circle cx="8" cy="8" r="2.2"/><path d="M8 1.8v1.6M8 12.6v1.6M14.2 8h-1.6M3.4 8H1.8M12.4 3.6l-1.1 1.1M4.7 11.3l-1.1 1.1M12.4 12.4l-1.1-1.1M4.7 4.7 3.6 3.6"/>',
+  // La fenêtre de rédaction : agrandir, restaurer, fermer.
+  expand: '<path d="M9.5 2.5h4v4M6.5 13.5h-4v-4M13.5 2.5 9 7M2.5 13.5 7 9"/>',
+  collapse: '<path d="M13.5 6.5h-4v-4M2.5 9.5h4v4M13.5 2.5 9.5 6.5M2.5 13.5 6.5 9.5"/>',
+  close: '<path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/>',
+  // Bulle et combiné, au trait comme les autres : pas de logo, pas de vert
+  // plein — c'est une icône du produit, pas une bannière de WhatsApp.
+  whatsapp:
+    '<path d="M2.5 13.5l1-3.2A5.6 5.6 0 1 1 5.7 12.6z"/><path d="M6.2 6.3c0 2 1.5 3.5 3.5 3.5l.9-.9-1.2-.8-.7.5c-.6-.3-1.1-.8-1.4-1.4l.5-.7-.8-1.2z"/>',
 };
 
 function ico(name) {
@@ -9610,11 +9929,7 @@ function renderCannedChips() {
     return;
   }
 
-  const sorted = [...state.canned].sort((a, b) => {
-    const matchA = a.intent === ticket.intent ? 1 : 0;
-    const matchB = b.intent === ticket.intent ? 1 : 0;
-    return matchB - matchA || b.useCount - a.useCount;
-  });
+  const sorted = cannedForTicket(ticket);
 
   bar.hidden = false;
   $('canned-chips').innerHTML = sorted
@@ -9639,11 +9954,7 @@ $('canned-chips').addEventListener('click', async (event) => {
 
   // Variables résolues à l'insertion : un modèle qui laisse « {{prenom}} »
   // dans le texte envoyé est pire que pas de modèle du tout.
-  const filled = item.body
-    .replaceAll('{{prenom}}', (ticket.customerName ?? '').split(' ')[0] ?? '')
-    .replaceAll('{{commande}}', ticket.orderName ?? '')
-    .replaceAll('{{suivi}}', order?.fulfillments?.[0]?.trackingNumber ?? '')
-    .replaceAll('{{boutique}}', state.me?.merchant?.brandName ?? state.me?.merchant?.name ?? '');
+  const filled = fillCanned(item, ticket, order);
 
   const body = $('d-body');
   body.value = body.value.trim() ? `${body.value.trim()}\n\n${filled}` : filled;
@@ -10002,6 +10313,11 @@ function renderKeybarState() {
 document.addEventListener('keydown', (event) => {
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName ?? '');
   if (typing || event.metaKey || event.ctrlKey || event.altKey) return;
+
+  // Une fenêtre ouverte prend la main — la même garde que l'autre
+  // gestionnaire, qui la portait seul : le curseur sur un bouton de la
+  // fenêtre, « e » clôturait le ticket qu'on avait derrière.
+  if (document.querySelector('.backdrop.open')) return;
 
   const key = event.key.toLowerCase();
 
