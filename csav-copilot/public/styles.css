@@ -658,15 +658,51 @@ body {
 
 /* ============================================================ workspace == */
 
+/* Cinq pistes : les deux gouttières sont des pistes à part entière, occupées
+   par les poignées de redimensionnement. Les largeurs des colonnes de côté
+   sont des variables, posées par app.js depuis la préférence du poste et
+   bornées là-bas — un rail de 40 px ou une file de 900 px ne servent à rien.
+   Sous 1400 px, les poignées disparaissent et la grille reprend ses deux
+   pistes, puis une seule. */
 .workspace {
+  --ws-col1: 350px;
+  --ws-col3: 320px;
   display: grid;
-  grid-template-columns: 350px minmax(0, 1fr) 320px;
-  gap: 13px;
+  grid-template-columns: var(--ws-col1) 13px minmax(0, 1fr) 13px var(--ws-col3);
+  gap: 13px 0;
   align-items: start;
   min-width: 0;
 }
 
-@media (max-width: 1400px) { .workspace { grid-template-columns: 330px minmax(0, 1fr); } }
+.ws-handle {
+  align-self: stretch;
+  min-height: 100%;
+  cursor: col-resize;
+  touch-action: none;
+  position: relative;
+  border-radius: 3px;
+}
+.ws-handle::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 5px;
+  width: 3px;
+  border-radius: 3px;
+  background: transparent;
+  transition: background 0.12s ease;
+}
+.ws-handle:hover::after,
+.ws-handle:focus-visible::after,
+.ws-handle.dragging::after { background: var(--accent); }
+.ws-handle:focus-visible { outline: none; }
+body.ws-resizing { cursor: col-resize; user-select: none; }
+
+@media (max-width: 1400px) {
+  .workspace { grid-template-columns: 330px minmax(0, 1fr); gap: 13px; }
+  .ws-handle { display: none; }
+}
 @media (max-width: 900px) { .workspace { grid-template-columns: 1fr; } }
 
 .context { display: flex; flex-direction: column; gap: 13px; }
@@ -1864,7 +1900,7 @@ body {
 }
 
 .sheet {
-  width: min(560px, 100%);
+  width: min(640px, 100%);
   background: var(--ground);
   border-left: 1px solid var(--line);
   box-shadow: var(--shadow-pop);
@@ -1890,7 +1926,28 @@ body {
 .sheet-head p { margin: 2px 0 0; font-size: 12.5px; color: var(--ink-mute); font-family: var(--font-mono); }
 .sheet-head .btn { margin-left: auto; }
 
-.sheet-body { padding: 13px; overflow-y: auto; display: flex; flex-direction: column; gap: 11px; }
+.sheet-body { padding: 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+
+/* Les gestes restent sous la main quelle que soit la longueur de la fiche :
+   collés au bas du tiroir, sur fond opaque, ils ne partent pas avec le
+   défilement. */
+.sheet-acts {
+  position: sticky;
+  bottom: -14px;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px;
+  margin: 0 -14px -14px;
+  border-radius: 0;
+  border-left: 0;
+  border-right: 0;
+  border-bottom: 0;
+  background: var(--surface);
+  box-shadow: 0 -8px 16px -12px rgb(16 18 40 / 25%);
+}
+.sheet-acts .btn svg { width: 14px; height: 14px; }
 
 .sheet-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 
@@ -3950,7 +4007,36 @@ textarea:focus-visible {
    DÉTAIL DE COMMANDE
    ========================================================================== */
 
-.ordv { padding: 0 15px 15px; display: grid; gap: 14px; }
+/* Le conteneur du détail. Sa règle existait, mais le balisage ne l'a jamais
+   produit : le contenu touchait le bord du cadre. Il est rendu désormais. */
+.ordv { padding: 12px 15px 15px; display: grid; gap: 14px; }
+
+/* Ce que la liste affiche en colonnes, ici en faits courts : intitulé en
+   petites capitales, valeur dessous. Deux par rangée, une seule sur un tiroir
+   étroit — les valeurs (un mode de livraison, des balises) ont besoin de la
+   largeur. */
+.ordv-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.ordv-fact span {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+.ordv-fact b { display: block; font-size: 13px; font-weight: 500; margin-top: 2px; overflow-wrap: anywhere; }
+.ordv-tags { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+
+/* Le numéro et le bouton WhatsApp sur la même ligne : le geste est à côté de
+   l'information, pas trois lignes plus bas. */
+.ordv-phone { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+.ordv-phone .rail-phone { font-size: 13px; }
 
 .ordv-head {
   display: flex;
@@ -4022,7 +4108,7 @@ textarea:focus-visible {
 }
 
 @media (max-width: 700px) {
-  .ordv { padding: 0 12px 12px; }
+  .ordv { padding: 10px 12px 12px; }
   .ordv-total { font-size: 18px; }
   .ordv-item { grid-template-columns: 38px minmax(0, 1fr) auto; gap: 9px; }
   .ordv-item img, .ordv-noimg { width: 38px; height: 38px; }
@@ -5074,9 +5160,15 @@ textarea:focus-visible {
    ========================================================================== */
 
 /* Le tableau exige la largeur : le rail de droite s'efface, le panneau de la
-   file s'étend. À 350 px, six colonnes ne sont plus un tableau. */
+   file s'étend. À 350 px, six colonnes ne sont plus un tableau.
+
+   `:not(:first-child)` et non `.panel:not(:first-child)` : le rail droit est
+   un `aside.context`, pas un `.panel` — l'ancien sélecteur le laissait
+   affiché en mode tableau, contre l'intention écrite juste au-dessus. Les
+   poignées, qui ne sont pas des panneaux non plus, tombent sous le même
+   sélecteur. */
 .workspace.wide-queue { grid-template-columns: minmax(0, 1fr); }
-.workspace.wide-queue > .panel:not(:first-child) { display: none; }
+.workspace.wide-queue > :not(:first-child) { display: none; }
 
 .seg2 {
   display: inline-flex;
@@ -6337,6 +6429,8 @@ textarea:focus-visible {
     min-height: 0;
     overflow-y: auto;
   }
+  /* Les poignées ne sont pas des colonnes : rien à faire défiler. */
+  .app-locked .workspace > .ws-handle { overflow: visible; }
 
   /* La file portait son propre plafond, hérité du temps où la page défilait
      derrière elle. C'est la colonne qui décide de la hauteur désormais, et
@@ -7263,3 +7357,84 @@ textarea:focus-visible {
 .grid td.clip { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
 
 .grid-tags { display: inline-flex; gap: 4px; flex-wrap: wrap; max-width: 260px; }
+
+/* La première colonne reste en place quand on fait défiler vers la droite :
+   à douze colonnes, le numéro de commande sort de l'écran dès la sixième et
+   la ligne perd son nom. La cellule d'en-tête est figée dans les deux sens.
+   Le fond est posé explicitement — une cellule figée sans fond laisse voir
+   celles qui passent dessous. */
+.grid-pin th:first-child,
+.grid-pin td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--surface);
+  box-shadow: 1px 0 0 var(--line);
+}
+.grid-pin th:first-child { z-index: 3; background: var(--sunk); }
+.grid-pin tbody tr:hover td:first-child { background: var(--inset); }
+
+/* ==========================================================================
+   RÉACTIVITÉ — réassertions de fin de feuille
+   ==========================================================================
+
+   La feuille est écrite en trois couches empilées, et la troisième redéclare
+   au niveau racine — donc APRÈS les blocs @media — des propriétés que ces
+   blocs avaient réglées pour le téléphone : .app, .table-wrap, .grid td,
+   .queue-list, .qbar input, .kpi. Une requête média n'ajoute aucune
+   spécificité ; à égalité, la règle la plus tardive gagne, à toutes les
+   largeurs. Six réglages mobiles étaient morts, dont la grille du shell qui
+   laissait une piste vide de 204 px sous 1080 px.
+
+   Le remède est celui déjà appliqué à .side plus haut : réaffirmer en fin de
+   feuille, après la dernière couche. Ce bloc doit rester le DERNIER de la
+   feuille — toute règle racine ajoutée après lui rouvrirait le même trou. */
+
+/* Le shell : sous 1080 px la navigation est un tiroir fixe, la piste qui lui
+   était réservée doit disparaître avec elle. */
+@media (max-width: 1080px) {
+  .app { grid-template-columns: 1fr; padding: 8px; gap: 10px; }
+}
+
+/* Les tableaux en fiches : le conteneur cesse d'être une boîte à défilement,
+   les cellules retrouvent leur rembourrage et perdent la hauteur fixe. */
+@media (max-width: 760px) {
+  .table-wrap { max-height: none; overflow: visible; }
+  .grid td { padding: 7px 12px; height: auto; font-size: 13px; }
+  .grid td:first-child { padding-top: 10px; }
+  .grid-pin th:first-child,
+  .grid-pin td:first-child { position: static; box-shadow: none; }
+  .sheet-stats { grid-template-columns: repeat(2, 1fr); }
+  .browse-bar { flex-wrap: wrap; }
+  .browse-count { white-space: normal; }
+}
+
+@media (max-width: 700px) {
+  /* 16 px : en dessous, Safari iOS zoome à la mise au point. */
+  .qbar input[type='search'] { font-size: 16px; }
+  /* Sur téléphone, c'est la page qui défile, pas la liste dans la page. */
+  .queue-list { max-height: none; overflow-y: visible; }
+  .kpi { padding: 11px 12px; }
+  .kpi-value { font-size: 21px; }
+  .kgrid { grid-template-columns: repeat(2, 1fr); }
+  .supc-stats { grid-template-columns: repeat(2, 1fr); }
+  /* Les menus déposés se collent aux bords de la RANGÉE, pas du bouton : un
+     élément absolu résout left/right contre son ancêtre positionné, et
+     c'était le bouton — 264 px débordaient toujours d'un écran de 360. */
+  .qmenu { position: static; }
+  .qbar-row, .qbar-main, .qbar-status { position: relative; }
+  .qpop, .qpop-wide { left: 0; right: 0; width: auto; }
+}
+
+/* L'écran Fournisseurs n'avait aucune règle réactive : la grille des cartes
+   portait un plancher dur de 330 px, qui débordait au lieu de céder. */
+.sup-grid { grid-template-columns: repeat(auto-fill, minmax(min(330px, 100%), 1fr)); }
+
+/* Grand écran : rien ne casse, tout s'étire. Le corps d'un message court sur
+   cent cinquante caractères par ligne à 1920 px — la mesure le retient. */
+.msg-body { max-width: 80ch; }
+
+/* Ce qui déborde encore se coupe sur place au lieu de faire défiler toute la
+   page de côté. `clip` et non `hidden` : il ne crée pas de boîte de défilement,
+   les éléments figés et fixes continuent de fonctionner. */
+html, body { overflow-x: clip; }
