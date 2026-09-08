@@ -13,35 +13,55 @@
   --frame: #6d5ae6;
 }
 
-[data-accent="violet"] {
+/* Les huit palettes du sélecteur de Réglages.
+
+   Elles étaient mortes. Écrites en `[data-accent="…"]` — spécificité 0-1-0 —
+   elles se faisaient écraser par le `:root` de la couche densité, cinq mille
+   lignes plus bas et de spécificité identique : à égalité, la dernière gagne.
+   L'attribut posé sur `documentElement` n'avait donc aucun effet, et les huit
+   choix rendaient tous le même bleu. `:root[data-accent="…"]` passe à 0-2-0 :
+   la position dans la feuille cesse d'être le sujet, comme pour
+   `:root[data-theme="dark"]`.
+
+   Trois d'entre elles ne pouvaient pas être rallumées telles quelles. Le
+   blanc de `--on-accent` sur leur `--accent` donnait 3,68:1 en cyan, 3,77 en
+   émeraude et 3,19 en ambre — c'est le libellé du bouton principal, « Écrire
+   au client ». Elles sont assombries jusqu'au seuil, teinte et saturation
+   intactes : seule la clarté baisse. L'encre de l'ambre descend aussi, son
+   4,47:1 sur son propre fond doux passant à 5,70.
+
+   Le `:root` de la couche densité reste : il sert de valeur par défaut aux
+   pages qui ne posent jamais l'attribut — la console d'administration, le
+   portail fournisseur, l'écran de connexion. */
+:root[data-accent="violet"] {
   --accent: #6c5ce7; --accent-strong: #5b4bd6; --accent-soft: #efedfe;
   --accent-ink: #4c3fc4; --on-accent: #ffffff; --frame: #6d5ae6;
 }
-[data-accent="indigo"] {
+:root[data-accent="indigo"] {
   --accent: #4f46e5; --accent-strong: #4338ca; --accent-soft: #eceafd;
   --accent-ink: #3f37bd; --on-accent: #ffffff; --frame: #4f46e5;
 }
-[data-accent="bleu"] {
+:root[data-accent="bleu"] {
   --accent: #2563eb; --accent-strong: #1d4ed8; --accent-soft: #e8f0fe;
   --accent-ink: #1d4ed8; --on-accent: #ffffff; --frame: #2f6fe4;
 }
-[data-accent="cyan"] {
-  --accent: #0891b2; --accent-strong: #0e7490; --accent-soft: #e0f5fa;
+:root[data-accent="cyan"] {
+  --accent: #07819e; --accent-strong: #06748e; --accent-soft: #e0f5fa;
   --accent-ink: #0e7490; --on-accent: #ffffff; --frame: #0e9ec2;
 }
-[data-accent="emeraude"] {
-  --accent: #059669; --accent-strong: #047857; --accent-soft: #e0f5ee;
+:root[data-accent="emeraude"] {
+  --accent: #04865e; --accent-strong: #047854; --accent-soft: #e0f5ee;
   --accent-ink: #047857; --on-accent: #ffffff; --frame: #0aa473;
 }
-[data-accent="ambre"] {
-  --accent: #d97706; --accent-strong: #b45309; --accent-soft: #fdf0dd;
-  --accent-ink: #b45309; --on-accent: #ffffff; --frame: #e08a1e;
+:root[data-accent="ambre"] {
+  --accent: #b36205; --accent-strong: #a15805; --accent-soft: #fdf0dd;
+  --accent-ink: #9a4707; --on-accent: #ffffff; --frame: #e08a1e;
 }
-[data-accent="corail"] {
+:root[data-accent="corail"] {
   --accent: #e11d48; --accent-strong: #be123c; --accent-soft: #fdeaef;
   --accent-ink: #be123c; --on-accent: #ffffff; --frame: #e63b60;
 }
-[data-accent="graphite"] {
+:root[data-accent="graphite"] {
   --accent: #475569; --accent-strong: #334155; --accent-soft: #eef1f5;
   --accent-ink: #334155; --on-accent: #ffffff; --frame: #526175;
 }
