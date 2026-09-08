@@ -7254,3 +7254,12 @@ textarea:focus-visible {
 .rail-cta { margin-top: 10px; }
 .wa-btn { gap: 6px; }
 .wa-btn svg { width: 14px; height: 14px; color: var(--ok); }
+
+/* ====================================================== liste des commandes */
+
+/* Le mode de livraison porte des intitulés longs (« No customs fees or taxes -
+   Delivery… ») : coupé à une largeur fixe, l'intitulé entier reste en
+   infobulle, et la ligne garde sa hauteur. */
+.grid td.clip { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+
+.grid-tags { display: inline-flex; gap: 4px; flex-wrap: wrap; max-width: 260px; }

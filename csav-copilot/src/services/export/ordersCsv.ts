@@ -64,6 +64,12 @@ const HEADERS = [
   'Devise',
   'Paiement',
   'Préparation',
+  // Les colonnes de la liste Shopify que l'écran Commandes affiche depuis
+  // septembre 2026 : ce qu'on voit à l'écran doit se retrouver dans le fichier.
+  'Canal',
+  'Mode de livraison',
+  'Livraison',
+  'Étiquettes',
   'Colis saisis',
   'Numéros de suivi',
   'Photos des colis',
@@ -101,6 +107,10 @@ export function ordersToCsv(rows: OrderExportRow[], baseUrl: string): string {
         order.currency ?? '',
         order.displayFinancialStatus ?? '',
         order.displayFulfillmentStatus ?? '',
+        order.channel ?? '',
+        order.shippingMethod ?? '',
+        order.fulfillments?.[0]?.displayStatus ?? '',
+        (order.tags ?? []).join(' | '),
         parcels.length ? `${parcels.length}/${parcels[0]?.total ?? parcels.length}` : '',
         parcels
           .map((parcel) => `${parcel.index}/${parcel.total} ${parcel.trackingNumber}`)
