@@ -34,6 +34,10 @@ test('exporte une commande avec ses articles et ses colis', () => {
           displayFulfillmentStatus: 'UNFULFILLED',
           totalPrice: '160.00',
           currency: 'EUR',
+          tags: ['VIP', 'relance'],
+          channel: 'Online Store',
+          shippingMethod: 'Livraison sous 10 à 15 jours',
+          itemsQuantity: 2,
           customer: {
             id: 'c1',
             email: 'lea@example.fr',
@@ -76,5 +80,8 @@ test('exporte une commande avec ses articles et ses colis', () => {
   // fait une formule et affiche une erreur à la place du numéro.
   assert.ok(row?.includes("'+33612345678"));
   assert.ok(row?.includes('1/2 LP001 | 2/2 LP002'));
+  // Les colonnes de la liste Shopify : présentes dans l'en-tête, remplies.
+  assert.ok(header?.includes(';Canal;Mode de livraison;Livraison;Étiquettes;'));
+  assert.ok(row?.includes('Online Store;Livraison sous 10 à 15 jours;;VIP | relance'));
   assert.ok(row?.includes('https://csav.example/api/parcels/p1/photo'));
 });

@@ -727,12 +727,24 @@
           <table class="grid">
             <thead>
               <tr>
+                <!-- Les colonnes de la liste Shopify, dans son ordre : le
+                     marchand passe de l'une à l'autre dans la journée, et
+                     un tableau qui range autrement lui fait relire deux
+                     fois la même commande. Pas de case à cocher : rien ici
+                     ne s'applique à plusieurs commandes à la fois, et une
+                     case qui ne commande rien est un bouton mort. -->
                 <th>Commande</th>
-                <th>Client</th>
                 <th>Date</th>
-                <th>Paiement</th>
-                <th>Livraison</th>
-                <th class="num">Montant</th>
+                <th>Client</th>
+                <th>Destination</th>
+                <th>Canal</th>
+                <th class="num">Total</th>
+                <th>Statut du paiement</th>
+                <th>Statut du traitement</th>
+                <th>Articles</th>
+                <th>Statut de la livraison</th>
+                <th>Mode de livraison</th>
+                <th>Balises</th>
               </tr>
             </thead>
             <tbody id="orders-rows"></tbody>

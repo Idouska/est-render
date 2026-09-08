@@ -8221,16 +8221,33 @@ function renderOrders() {
   $('orders-rows').innerHTML =
     store.items
       .map(
-        (order) => `<tr class="grid-row" data-order="${esc(order.id)}">
+        (order) => {
+          const address = order.shippingAddress;
+          const destination = [address?.city, address?.country].filter(Boolean).join(', ');
+          const quantity = order.itemsQuantity ?? (order.lineItems ?? []).reduce((n, i) => n + i.quantity, 0);
+          // L'état du colis n'existe qu'une fois expédié : avant, la case
+          // reste vide, comme chez Shopify — un « — » en pastille se lirait
+          // comme un statut de plus.
+          const shipment = order.fulfillments?.[0]?.displayStatus;
+          const tags = order.tags ?? [];
+
+          return `<tr class="grid-row" data-order="${esc(order.id)}">
           <td class="mono"><b>${esc(order.name)}</b></td>
-          <td>${esc(order.customer?.displayName ?? order.customer?.email ?? 'Client inconnu')}</td>
           <td>${dateTime(order.createdAt)}</td>
+          <td>${esc(order.customer?.displayName ?? order.customer?.email ?? 'Client inconnu')}</td>
+          <td>${esc(destination)}</td>
+          <td>${esc(order.channel ?? '')}</td>
+          <td class="num mono">${euro(order.totalPrice, order.currency)}</td>
           <td>${statusTag(order.displayFinancialStatus, FINANCIAL_LABELS, ['PENDING', 'PARTIALLY_PAID', 'EXPIRED'])}</td>
           <td>${statusTag(order.displayFulfillmentStatus, FULFILLMENT_LABELS, ['UNFULFILLED', 'ON_HOLD'])}</td>
-          <td class="num mono">${euro(order.totalPrice, order.currency)}</td>
-        </tr>`,
+          <td>${quantity} article${quantity > 1 ? 's' : ''}</td>
+          <td>${shipment ? statusTag(shipment, SHIPMENT_LABELS, ['ATTEMPTED_DELIVERY', 'NOT_DELIVERED', 'FAILURE']) : ''}</td>
+          <td class="clip" title="${esc(order.shippingMethod ?? '')}">${esc(order.shippingMethod ?? '')}</td>
+          <td>${tags.length ? `<span class="grid-tags">${tags.map((t) => `<span class="tag tag-order">${esc(t)}</span>`).join('')}</span>` : ''}</td>
+        </tr>`;
+        },
       )
-      .join('') || '<tr><td colspan="6" class="empty">Aucune commande.</td></tr>';
+      .join('') || '<tr><td colspan="12" class="empty">Aucune commande.</td></tr>';
 
   $('orders-count').textContent = store.items.length
     ? `${store.items.length} commande${store.items.length > 1 ? 's' : ''}${store.hasNext ? ' affichées' : ''}`

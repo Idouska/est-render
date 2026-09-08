@@ -45,6 +45,14 @@ export interface OrderSummary {
   displayFulfillmentStatus: string | null;
   totalPrice: string;
   currency: string;
+  /** Étiquettes posées dans l'admin — telles quelles, l'ordre est celui de Shopify. */
+  tags: string[];
+  /** Le canal de vente lisible : « Online Store », « Shop », « Point of Sale ». */
+  channel: string | null;
+  /** L'intitulé du mode de livraison choisi à la commande. */
+  shippingMethod: string | null;
+  /** Nombre d'articles, toutes lignes confondues — pas borné par les 25 lignes lues. */
+  itemsQuantity: number;
   customer: {
     id: string | null;
     email: string | null;
@@ -81,6 +89,21 @@ const ORDER_FIELDS = /* GraphQL */ `
     createdAt
     displayFinancialStatus
     displayFulfillmentStatus
+    # Ce que la liste de l'admin Shopify affiche et que l'ecran Commandes
+    # reprend colonne pour colonne : etiquettes, canal, mode de livraison,
+    # nombre d'articles. (Sans accents : ce commentaire vit dans un gabarit.)
+    tags
+    sourceName
+    subtotalLineItemsQuantity
+    shippingLine {
+      title
+    }
+    # Le canal par l'application qui a cree la commande, non deprecie depuis
+    # 2025-10 : channelInformation l'est sur toute sa chaine, et renvoie null
+    # pour certains canaux a partir de 2026-01. sourceName reste en repli.
+    app {
+      name
+    }
     totalPriceSet {
       shopMoney {
         amount
@@ -160,6 +183,11 @@ interface RawOrder {
   displayFinancialStatus: string | null;
   displayFulfillmentStatus: string | null;
   totalPriceSet: { shopMoney: { amount: string; currencyCode: string } };
+  tags: string[] | null;
+  sourceName: string | null;
+  subtotalLineItemsQuantity: number | null;
+  shippingLine: { title: string | null } | null;
+  app: { name: string | null } | null;
   customer: {
     id: string;
     email: string | null;
@@ -198,6 +226,29 @@ interface RawOrder {
   } | null;
 }
 
+/*
+ * Le canal, quand Shopify ne fournit que sa source technique.
+ *
+ * `app.name` donne le nom lisible — « Online Store », « Point of Sale », le
+ * nom d'une application. Il manque sur des commandes anciennes ou importées,
+ * où seul `sourceName` subsiste : « web », « pos », ou l'identifiant
+ * numérique d'une application. On traduit ce qu'on connaît et on rend le
+ * reste tel quel : mieux vaut « 580111 » qu'une case vide qui ferait croire
+ * à une commande sans origine.
+ */
+const SOURCE_LABELS: Record<string, string> = {
+  web: 'Online Store',
+  pos: 'Point of Sale',
+  shopify_draft_order: 'Draft Orders',
+  iphone: 'Shop',
+  android: 'Shop',
+};
+
+function channelLabel(sourceName: string | null): string | null {
+  if (!sourceName) return null;
+  return SOURCE_LABELS[sourceName] ?? sourceName;
+}
+
 function toSummary(order: RawOrder): OrderSummary {
   return {
     id: order.id,
@@ -207,6 +258,12 @@ function toSummary(order: RawOrder): OrderSummary {
     displayFulfillmentStatus: order.displayFulfillmentStatus,
     totalPrice: order.totalPriceSet.shopMoney.amount,
     currency: order.totalPriceSet.shopMoney.currencyCode,
+    tags: order.tags ?? [],
+    channel: order.app?.name ?? channelLabel(order.sourceName),
+    shippingMethod: order.shippingLine?.title ?? null,
+    itemsQuantity:
+      order.subtotalLineItemsQuantity ??
+      order.lineItems.nodes.reduce((sum, item) => sum + item.quantity, 0),
     customer: order.customer
       ? {
           id: order.customer.id,
