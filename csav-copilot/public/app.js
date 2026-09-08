@@ -787,17 +787,28 @@ function formatDelay(seconds) {
   return days < 10 ? `${days.toFixed(1).replace('.', ',')} j` : `${Math.round(days)} j`;
 }
 
+/*
+ * Les icônes des bandes de chiffres.
+ *
+ * Posées ici plutôt qu'écrites dans le HTML : le jeu de glyphes vit dans
+ * `ICONS`, et deux définitions du même dessin finiraient par diverger.
+ * `data-ico` nomme l'icône, `ico()` la produit, une seule fois — les rendus
+ * sont rappelés à chaque relève, et repeindre coûterait pour rien.
+ *
+ * Prend un hôte parce que deux écrans en ont désormais besoin : la bande du
+ * SAV, servie par `loadMetrics`, et celle du poste de pilotage.
+ */
+function paintKpiIcons(hote) {
+  hote.querySelectorAll('.kpi-ico[data-ico]').forEach((box) => {
+    if (!box.firstChild) box.innerHTML = ico(box.dataset.ico);
+  });
+}
+
 async function loadMetrics() {
   const metrics = await api('/api/metrics');
   const counts = metrics.tickets ?? {};
 
-  /* Les icônes sont posées ici plutôt qu'écrites dans le HTML : le jeu de
-     glyphes vit dans `ICONS`, et deux définitions du même dessin finiraient
-     par diverger. `data-ico` nomme l'icône, `ico()` la produit, une seule
-     fois — ce rendu est rappelé à chaque relève. */
-  document.querySelectorAll('.kpi-ico[data-ico]').forEach((box) => {
-    if (!box.firstChild) box.innerHTML = ico(box.dataset.ico);
-  });
+  paintKpiIcons(document);
 
   /*
    * « Traités · 30 jours » et « Traités aujourd'hui » quittent cette bande.
@@ -6143,70 +6154,390 @@ $('team-f-resend').addEventListener('click', async () => {
 /* Résumé de ce qui appelle une action maintenant. Réutilise les données déjà
    chargées au démarrage plutôt que de rappeler l'API : cet écran doit
    s'afficher instantanément, c'est le premier ouvert de la journée. */
+/*
+ * Le poste de pilotage.
+ *
+ * Deux sources, parties ensemble et rattrapées séparément : `/api/metrics`
+ * donne l'état de la file à l'instant, `/api/stats?days=7` donne la semaine.
+ * Une panne de l'une ne doit pas vider l'écran de l'autre — c'est déjà la
+ * règle de l'écran Statistiques, elle vaut ici pour la même raison.
+ */
 async function loadOverview() {
   void renderShopCards();
 
-  const metrics = await api('/api/metrics');
-  const counts = metrics.tickets ?? {};
+  const [mRes, sRes] = await Promise.allSettled([
+    api('/api/metrics'),
+    api('/api/stats?days=7'),
+  ]);
 
-  const cards = [
-    ['En attente de vous', metrics.pending ?? 0, `${counts.NEEDS_REVIEW ?? 0} à valider`],
-    ['Brouillons prêts', counts.DRAFT_READY ?? 0, 'relecture puis envoi'],
-    ['Chez le fournisseur', counts.AWAITING_SUPPLIER ?? 0, 'en attente de réponse'],
-    ['Traités · 30 jours', (counts.CLOSED ?? 0) + (counts.AUTO_SENT ?? 0), 'réponses envoyées'],
+  const metrics = mRes.status === 'fulfilled' ? mRes.value : null;
+  const stats = sRes.status === 'fulfilled' ? sRes.value : null;
+  const counts = metrics?.tickets ?? {};
+
+  renderOvKpis(metrics, counts);
+  renderOvPriorite();
+  renderOvRisques(metrics, counts);
+  renderOvPerf(metrics, stats);
+  renderOvIa(metrics, stats, counts);
+  renderOvTendance(stats);
+  renderOvIntentions(stats);
+  await renderOvActions();
+}
+
+/*
+ * Les dernières actions, rendues depuis l'API.
+ *
+ * Cet écran recopiait le `innerHTML` du journal du rail de « SAV client ».
+ * C'était deux dépendances silencieuses : l'ordre de chargement — arriver
+ * directement ici laissait le bloc vide — et le gabarit d'un autre écran, qui
+ * ne porte pas l'auteur. Or c'est lui qu'on vient lire : savoir qu'une réponse
+ * est partie n'apprend rien, savoir qu'elle est partie SEULE, si.
+ */
+const ACTEURS = { AI: 'l’IA', SYSTEM: 'le système', SUPPLIER: 'un fournisseur' };
+
+async function renderOvActions() {
+  let entrees = [];
+  try {
+    entrees = (await api('/api/audit')).entries ?? [];
+  } catch {
+    // Le journal est un contexte, pas le sujet de l'écran : son absence ne
+    // doit pas emporter les chiffres qui l'entourent.
+    $('ov-audit').innerHTML = '<li class="empty" style="padding:12px 14px">Journal indisponible.</li>';
+    return;
+  }
+
+  $('ov-audit').innerHTML =
+    entrees
+      .slice(0, 10)
+      .map((entree) => {
+        const meta = entree.metadata ?? {};
+        const detail = [meta.orderName, meta.intent && (INTENT_LABELS[meta.intent] ?? meta.intent)]
+          .filter(Boolean)
+          .join(' · ');
+        // « Par un agent » plutôt qu'un nom : la route ne sert pas l'identité,
+        // et inventer « Par Thomas » serait plus faux qu'imprécis.
+        const acteur = ACTEURS[entree.actorType] ?? 'un agent';
+
+        return `<li>
+          <time>${esc(shortTime(entree.createdAt))}</time>
+          <span class="ov-quoi">
+            <b>${esc(AUDIT_LABELS[entree.action] ?? entree.action)}</b>${
+              detail ? `<span class="sub"> · ${esc(detail)}</span>` : ''
+            }
+          </span>
+          <span class="ov-par sub">Par ${esc(acteur)}</span>
+        </li>`;
+      })
+      .join('') ||
+    '<li class="empty" style="padding:12px 14px">Aucune action enregistrée.</li>';
+}
+
+/** Un nombre, ou un tiret : zéro et « pas mesuré » ne se lisent pas pareil. */
+function ovNombre(valeur) {
+  return typeof valeur === 'number' ? String(valeur) : '—';
+}
+
+/* ---- les cinq chiffres du haut ---- */
+
+function renderOvKpis(metrics, counts) {
+  // Le délai est servi en secondes, `null` quand rien n'a été mesuré : zéro se
+  // lirait « instantané », qui est l'inverse de « aucune réponse partie ».
+  const delai =
+    typeof metrics?.firstReplySeconds === 'number'
+      ? duration(metrics.firstReplySeconds / 60)
+      : '—';
+
+  const cartes = [
+    ['inbox', 'En attente de vous', ovNombre(metrics?.pending), `${counts.NEEDS_REVIEW ?? 0} à valider`],
+    ['inbox', 'Brouillons prêts', ovNombre(counts.DRAFT_READY ?? 0), 'relecture puis envoi'],
+    ['clock', 'Délai 1re réponse', delai, metrics ? 'sur 30 jours' : ''],
+    ['bolt', 'Chez le fournisseur', ovNombre(counts.AWAITING_SUPPLIER ?? 0), 'en attente de réponse'],
+    ['shield', 'Traités aujourd’hui', ovNombre(metrics?.today), 'depuis minuit'],
   ];
 
-  $('ov-kpis').innerHTML = cards
+  $('ov-kpis').innerHTML = cartes
     .map(
-      ([label, value, note]) => `<div class="kpi">
-        <span class="kpi-label">${esc(label)}</span>
-        <span class="kpi-value">${value}</span>
-        <span class="kpi-note">${esc(note)}</span>
+      ([ico, label, valeur, note]) => `<div class="kpi">
+        <span class="kpi-ico" data-ico="${esc(ico)}" aria-hidden="true"></span>
+        <span class="kpi-body">
+          <span class="kpi-label">${esc(label)}</span>
+          <span class="kpi-value">${esc(valeur)}</span>
+          ${note ? `<span class="kpi-note">${esc(note)}</span>` : ''}
+        </span>
       </div>`,
     )
     .join('');
 
-  const urgent = state.tickets
-    .filter((ticket) => ticket.status !== 'CLOSED' && ticket.status !== 'AUTO_SENT')
-    .slice(0, 8);
-
-  $('ov-queue').innerHTML =
-    urgent
-      .map(
-        (ticket) => `<li><button class="queue-item" data-id="${esc(ticket.id)}">
-          <span class="queue-top">
-            ${
-              state.allShops && shopById.has(ticket.merchantId)
-                ? `<span class="shop-pip" style="background:${esc(
-                    shopById.get(ticket.merchantId).color,
-                  )}" title="${esc(shopById.get(ticket.merchantId).label)}"></span>`
-                : ''
-            }
-            <span class="queue-who">${esc(ticket.customerName ?? ticket.customerEmail)}</span>
-            <span class="queue-time">${relativeTime(ticket.lastMessageAt)}</span>
-          </span>
-          <div class="queue-subject">${esc(ticket.subject ?? '(sans objet)')}</div>
-          <span class="queue-tags">
-            <span class="tag tag-status st-${ticket.status}">${esc(
-              STATUS_LABELS[ticket.status] ?? ticket.status,
-            )}</span>
-            <span class="tag tag-order">${esc(ticket.orderName ?? 'commande ?')}</span>
-          </span>
-        </button></li>`,
-      )
-      .join('') || '<li class="empty" style="padding:16px 14px">Rien en attente.</li>';
-
-  $('ov-queue')
-    .querySelectorAll('.queue-item')
-    .forEach((button) =>
-      button.addEventListener('click', async () => {
-        setView('tickets');
-        await selectTicket(button.dataset.id);
-      }),
-    );
-
-  $('ov-audit').innerHTML = $('c-audit').innerHTML;
+  // Les icônes sont peintes par la même fonction que la barre du SAV : deux
+  // jeux de pictogrammes pour un seul produit se remarquent tout de suite.
+  paintKpiIcons($('ov-kpis'));
 }
+
+/* ---- ce qui presse ---- */
+
+/*
+ * L'ordre est celui de l'échéance, pas celui de l'arrivée.
+ *
+ * Le produit a déjà une notion de retard : `merchant.slaHours` fixe le délai
+ * de première réponse, l'ingestion en tire `ticket.dueAt`, et la file l'affiche
+ * en trois paliers. La « priorité » du poste de pilotage n'est donc pas une
+ * échelle inventée pour l'occasion — c'est cette échéance-là, lue autrement.
+ * Un ticket sans échéance passe en dernier : rien ne dit qu'il est urgent.
+ */
+function ovEcheance(ticket) {
+  if (!ticket.dueAt) return { rang: 3, ton: 'none', label: '—' };
+
+  const reste = new Date(ticket.dueAt).getTime() - Date.now();
+  if (reste < 0) return { rang: 0, ton: 'bad', label: `retard ${formatSpan(-reste)}` };
+  if (reste < 4 * 3600000) return { rang: 1, ton: 'warn', label: formatSpan(reste) };
+  return { rang: 2, ton: 'ok', label: formatSpan(reste) };
+}
+
+function renderOvPriorite() {
+  const ouverts = state.tickets.filter(
+    (t) => t.status !== 'CLOSED' && t.status !== 'AUTO_SENT',
+  );
+
+  const lignes = ouverts
+    .map((t) => ({ t, e: ovEcheance(t) }))
+    .sort((a, b) => a.e.rang - b.e.rang || new Date(a.t.lastMessageAt) - new Date(b.t.lastMessageAt))
+    .slice(0, 9);
+
+  const compteur = $('ov-prio-n');
+  compteur.hidden = ouverts.length === 0;
+  compteur.textContent = String(ouverts.length);
+
+  $('ov-prio-rows').innerHTML = lignes.length
+    ? lignes
+        .map(
+          ({ t, e }) => `<tr tabindex="0" role="button" data-ov-id="${esc(t.id)}"
+            aria-label="Ouvrir le message de ${esc(t.customerName ?? t.customerEmail)}">
+            <td class="ov-who">${esc(t.customerName ?? t.customerEmail)}</td>
+            <td class="ov-age sub">${esc(relativeTime(t.lastMessageAt))}</td>
+            <td class="ov-subj">${esc(t.subject ?? '(sans objet)')}</td>
+            <td><span class="tag tag-status st-${esc(t.status)}">${esc(
+              STATUS_LABELS[t.status] ?? t.status,
+            )}</span></td>
+            <td class="mono sub">${esc(t.orderName ?? '—')}</td>
+            <td><span class="ovdue ovdue-${e.ton}">${esc(e.label)}</span></td>
+          </tr>`,
+        )
+        .join('')
+    : `<tr><td colspan="6" class="empty" style="padding:18px 14px">Rien en attente.</td></tr>`;
+
+  // Une ligne s'ouvre au clic et à l'entrée : la table se parcourt au clavier
+  // comme la file.
+  $('ov-prio-rows')
+    .querySelectorAll('[data-ov-id]')
+    .forEach((row) => {
+      const ouvrir = async () => {
+        setView('tickets');
+        await selectTicket(row.dataset.ovId);
+      };
+      row.addEventListener('click', ouvrir);
+      row.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          void ouvrir();
+        }
+      });
+    });
+}
+
+/* ---- ce qu'on surveille ---- */
+
+/**
+ * Une ligne de la colonne droite : un intitulé, un nombre, et un filtre.
+ *
+ * `filtre` est appliqué à la file avant d'y basculer. Un compteur qu'on ne
+ * peut pas ouvrir ne sert qu'à inquiéter — c'est la règle de toute cette
+ * colonne, et la raison pour laquelle une ligne sans destination reste un
+ * simple texte, sans flèche ni curseur de lien.
+ */
+function ovStatLigne({ label, valeur, ton, filtre, note }) {
+  const cliquable = Boolean(filtre);
+  const balise = cliquable ? 'button' : 'div';
+  return `<li><${balise} class="statrow${cliquable ? ' statrow-go' : ''}"${
+    cliquable ? ` type="button" data-ov-filtre="${esc(JSON.stringify(filtre))}"` : ''
+  }>
+    <span class="statrow-l">${esc(label)}</span>
+    ${note ? `<span class="statrow-n sub">${esc(note)}</span>` : ''}
+    <b class="statrow-v${ton ? ` sv-${ton}` : ''}">${esc(valeur)}</b>
+    ${cliquable ? '<span class="statrow-x" aria-hidden="true">›</span>' : ''}
+  </${balise}></li>`;
+}
+
+function ovCablerFiltres(hote) {
+  hote.querySelectorAll('[data-ov-filtre]').forEach((bouton) =>
+    bouton.addEventListener('click', async () => {
+      const patch = JSON.parse(bouton.dataset.ovFiltre);
+      // On repart d'une file vierge : empiler le filtre du poste de pilotage
+      // sur ce qui traînait donnerait un résultat que personne n'a demandé.
+      state.queue = { ...emptyQueueFilters(), ...patch };
+      state.filter = patch.status ?? '';
+      setView('tickets');
+      await loadQueue();
+      renderQueueBar();
+    }),
+  );
+}
+
+function renderOvRisques(metrics, counts) {
+  const ouverts = state.tickets.filter(
+    (t) => t.status !== 'CLOSED' && t.status !== 'AUTO_SENT',
+  );
+  const maintenant = Date.now();
+  const plusVieuxQue = (heures) =>
+    ouverts.filter((t) => maintenant - new Date(t.lastMessageAt).getTime() > heures * 3600000)
+      .length;
+
+  const horsDelai = ouverts.filter(
+    (t) => t.dueAt && new Date(t.dueAt).getTime() < maintenant,
+  ).length;
+  const litiges = ouverts.filter((t) => t.intent === 'DISPUTE').length;
+
+  const lignes = [
+    {
+      label: 'Hors délai de réponse',
+      valeur: String(horsDelai),
+      ton: horsDelai > 0 ? 'bad' : null,
+      filtre: { sort: 'due' },
+      note: 'échéance dépassée',
+    },
+    { label: 'Sans réponse depuis 24 h', valeur: String(plusVieuxQue(24)), filtre: { urgent: true } },
+    {
+      label: 'Sans réponse depuis 48 h',
+      valeur: String(plusVieuxQue(48)),
+      ton: plusVieuxQue(48) > 0 ? 'warn' : null,
+      filtre: { urgent: true },
+    },
+    { label: 'Litiges ouverts', valeur: String(litiges), filtre: { intent: 'DISPUTE' } },
+    {
+      label: 'Chez le fournisseur',
+      valeur: ovNombre(counts.AWAITING_SUPPLIER ?? 0),
+      filtre: { status: 'AWAITING_SUPPLIER' },
+    },
+    {
+      label: 'Non compris par l’IA',
+      valeur: ovNombre(metrics?.failed ?? 0),
+      ton: (metrics?.failed ?? 0) > 0 ? 'bad' : null,
+      filtre: { status: 'FAILED' },
+    },
+  ];
+
+  $('ov-risk').innerHTML = lignes.map(ovStatLigne).join('');
+  ovCablerFiltres($('ov-risk'));
+}
+
+function renderOvPerf(metrics, stats) {
+  const ouverts = state.tickets.filter(
+    (t) => t.status !== 'CLOSED' && t.status !== 'AUTO_SENT',
+  );
+  const avecEcheance = ouverts.filter((t) => t.dueAt);
+  const dansLesTemps = avecEcheance.filter(
+    (t) => new Date(t.dueAt).getTime() >= Date.now(),
+  ).length;
+
+  // Sans échéance mesurée, on n'affiche pas « 100 % » : un taux calculé sur
+  // rien est plus trompeur qu'un tiret.
+  const respect = avecEcheance.length
+    ? `${Math.round((dansLesTemps / avecEcheance.length) * 100)} %`
+    : '—';
+
+  const moyenne = stats?.firstReply?.averageMinutes;
+  const mediane = stats?.firstReply?.medianMinutes;
+
+  $('ov-perf').innerHTML = [
+    {
+      label: '1re réponse, moyenne',
+      valeur: typeof moyenne === 'number' ? duration(moyenne) : '—',
+      note: '7 jours',
+    },
+    {
+      label: '1re réponse, médiane',
+      valeur: typeof mediane === 'number' ? duration(mediane) : '—',
+      note: 'moins sensible aux oubliés',
+    },
+    { label: 'Traités aujourd’hui', valeur: ovNombre(metrics?.today), note: 'depuis minuit' },
+    {
+      label: 'Dans les temps',
+      valeur: respect,
+      ton: avecEcheance.length && dansLesTemps / avecEcheance.length < 0.9 ? 'warn' : null,
+      note: `${avecEcheance.length} avec échéance`,
+    },
+  ]
+    .map(ovStatLigne)
+    .join('');
+}
+
+function renderOvIa(metrics, stats, counts) {
+  const taux = metrics?.automationRate;
+  $('ov-ia-note').textContent = stats ? '7 jours' : '';
+
+  $('ov-ia').innerHTML = [
+    { label: 'Brouillons générés', valeur: ovNombre(stats?.drafts?.total) },
+    { label: 'Réponses envoyées', valeur: ovNombre(stats?.drafts?.sent) },
+    {
+      label: 'Taux d’automatisation',
+      valeur: typeof taux === 'number' ? `${Math.round(taux * 100)} %` : '—',
+      note: '30 jours',
+    },
+    {
+      label: 'À valider par un humain',
+      valeur: ovNombre(counts.NEEDS_REVIEW ?? 0),
+      filtre: { status: 'NEEDS_REVIEW' },
+    },
+    {
+      label: 'Non compris par l’IA',
+      valeur: ovNombre(metrics?.failed ?? 0),
+      ton: (metrics?.failed ?? 0) > 0 ? 'bad' : null,
+      filtre: { status: 'FAILED' },
+    },
+  ]
+    .map(ovStatLigne)
+    .join('');
+  ovCablerFiltres($('ov-ia'));
+}
+
+/* ---- la semaine ---- */
+
+function renderOvTendance(stats) {
+  const jours = stats?.tickets?.daily ?? [];
+  $('ov-trend').innerHTML = jours.length
+    ? svgBarsPaire(jours)
+    : '<p class="empty">Pas encore de données sur sept jours.</p>';
+}
+
+function renderOvIntentions(stats) {
+  $('ov-intents').innerHTML = intentBars(stats?.tickets?.byIntent, { part: true });
+}
+
+/*
+ * Les deux « Voir tout ».
+ *
+ * Câblés une fois, au chargement, et non à chaque rendu : ils vivent dans le
+ * HTML statique, un écouteur par relève en empilerait un de plus à chaque
+ * fois. Aucun des deux n'ouvre une page inventée — la file existe, le journal
+ * complet aussi.
+ */
+$('ov-prio-all')?.addEventListener('click', async () => {
+  // La file entière, sans filtre : « voir tout » doit rendre tout, pas le
+  // même extrait avec un tri différent.
+  state.queue = emptyQueueFilters();
+  state.filter = '';
+  setView('tickets');
+  await loadQueue();
+  renderQueueBar();
+});
+
+$('ov-act-all')?.addEventListener('click', () => {
+  // Le journal complet vit dans le rail de « SAV client », replié dans un
+  // `<details>` : y renvoyer sans l'ouvrir enverrait sur un titre fermé.
+  setView('tickets');
+  const bloc = document.getElementById('c-audit')?.closest('details');
+  if (bloc) bloc.open = true;
+  document.getElementById('c-audit')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+});
 
 /* --------------------------------------------------------- statistiques -- */
 
@@ -6268,9 +6599,70 @@ function svgBars(days, pick, format, options = {}) {
     <div class="chart-scale"><span>${esc(format(peak))}</span><span>0</span></div>`;
 }
 
+/*
+ * Deux séries côte à côte : reçus et traités, jour par jour.
+ *
+ * `svgBars` ne trace qu'une série, et superposer deux appels donnerait deux
+ * échelles indépendantes — le graphe mentirait sur le rapport entre les deux,
+ * qui est précisément ce qu'on vient y lire : la file se vide-t-elle au rythme
+ * où elle se remplit ? Un seul sommet gouverne donc les deux barres.
+ *
+ * Mêmes conventions que `svgBars` — repères au quart, `viewBox` de cent sur
+ * cent, `<title>` pour le survol — pour que les deux graphes du produit se
+ * lisent de la même façon.
+ */
+function svgBarsPaire(jours) {
+  const sommet = Math.max(1, ...jours.map((j) => Math.max(j.received ?? 0, j.handled ?? 0)));
+  const pas = 100 / jours.length;
+
+  const barre = (valeur, x, largeur, classe) => {
+    // Une valeur non nulle garde deux pixels de haut : une barre invisible se
+    // confond avec un jour sans donnée, et ce n'est pas la même chose.
+    const h = Math.max(valeur > 0 ? 2 : 0, ((valeur ?? 0) / sommet) * 92);
+    return `<rect x="${x.toFixed(2)}" y="${(100 - h).toFixed(2)}" width="${largeur.toFixed(2)}"
+      height="${h.toFixed(2)}" rx="1" class="${classe}" />`;
+  };
+
+  const groupes = jours
+    .map((jour, index) => {
+      const base = index * pas;
+      const large = pas * 0.34;
+      const jourLu = new Date(jour.day + 'T00:00:00').toLocaleDateString('fr-FR', {
+        day: 'numeric',
+        month: 'short',
+      });
+      return `<g>
+        <title>${esc(jourLu)} — ${jour.received ?? 0} reçus, ${jour.handled ?? 0} traités</title>
+        ${barre(jour.received, base + pas * 0.14, large, 'bar bar-soft')}
+        ${barre(jour.handled, base + pas * 0.52, large, 'bar')}
+      </g>`;
+    })
+    .join('');
+
+  const repere = [25, 50, 75]
+    .map((y) => `<line x1="0" x2="100" y1="${y}" y2="${y}" class="chart-grid" />`)
+    .join('');
+
+  // Les dates sous le graphe, hors du SVG : à `preserveAspectRatio="none"` le
+  // texte tracé dedans s'étirerait avec lui.
+  const dates = jours
+    .map((jour) => {
+      const d = new Date(jour.day + 'T00:00:00');
+      return `<span>${esc(d.toLocaleDateString('fr-FR', { weekday: 'short' }))}<br><b>${esc(
+        d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
+      )}</b></span>`;
+    })
+    .join('');
+
+  return `<svg class="chart chart-pair" viewBox="0 0 100 100" preserveAspectRatio="none"
+    role="img" aria-label="Messages reçus et traités sur sept jours">${repere}${groupes}</svg>
+    <div class="chart-days">${dates}</div>
+    <div class="chart-scale"><span>${sommet}</span><span>0</span></div>`;
+}
+
 /** Répartition en barres horizontales : à sept catégories, plus lisible qu'un
     camembert — les angles proches se comparent mal, les longueurs bien. */
-function intentBars(byIntent) {
+function intentBars(byIntent, options = {}) {
   // Une réponse d'API sans la ventilation par motif emportait tout l'écran
   // Statistiques sur une exception. Un graphe manquant vaut mieux qu'une page
   // blanche : le reste des chiffres, lui, est là.
@@ -6286,7 +6678,9 @@ function intentBars(byIntent) {
         <span class="ibar-track">
           <i class="ibar-fill in-${esc(intent)}" style="width:${((count / total) * 100).toFixed(1)}%"></i>
         </span>
-        <span class="ibar-count mono">${count}</span>
+        <span class="ibar-count mono">${
+          options.part ? `${Math.round((count / total) * 100)} %` : count
+        }</span>
       </div>`,
     )
     .join('');
