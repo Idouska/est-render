@@ -1608,6 +1608,108 @@ function group(title, rows, empty) {
   </section>`;
 }
 
+/* ---------------------------------------------- colonnes redimensionnables */
+
+/*
+ * Chaque colonne de côté se règle à la souris ou au clavier, et le poste s'en
+ * souvient.
+ *
+ * Les largeurs sont deux variables CSS sur la grille ; les bornes vivent ici
+ * et non dans la feuille, parce qu'une valeur stockée puis relue doit passer
+ * par le même garde-fou qu'une valeur glissée. Persistance au poste, comme
+ * les autres préférences d'affichage (`csav.*`) : une largeur de colonne est
+ * une affaire d'écran, pas de compte.
+ */
+const WS_COLUMNS = {
+  col1: { key: 'csav.queueWidth', min: 280, max: 560, base: 350 },
+  col3: { key: 'csav.railWidth', min: 260, max: 520, base: 320 },
+};
+
+function wsClamp(name, value) {
+  const spec = WS_COLUMNS[name];
+  return Math.min(spec.max, Math.max(spec.min, Math.round(value)));
+}
+
+function wsCurrent(name) {
+  const raw = getComputedStyle($('view-tickets')).getPropertyValue(`--ws-${name}`);
+  const value = parseInt(raw, 10);
+  return Number.isFinite(value) ? value : WS_COLUMNS[name].base;
+}
+
+function wsApply(name, value, { persist = false } = {}) {
+  const width = wsClamp(name, value);
+  $('view-tickets').style.setProperty(`--ws-${name}`, `${width}px`);
+  const handle = document.querySelector(`.ws-handle[data-handle="${name}"]`);
+  handle?.setAttribute('aria-valuenow', String(width));
+  if (persist) {
+    try {
+      localStorage.setItem(WS_COLUMNS[name].key, String(width));
+    } catch {}
+  }
+}
+
+function wsReset(name) {
+  $('view-tickets').style.removeProperty(`--ws-${name}`);
+  try {
+    localStorage.removeItem(WS_COLUMNS[name].key);
+  } catch {}
+  document
+    .querySelector(`.ws-handle[data-handle="${name}"]`)
+    ?.setAttribute('aria-valuenow', String(WS_COLUMNS[name].base));
+}
+
+for (const name of Object.keys(WS_COLUMNS)) {
+  const spec = WS_COLUMNS[name];
+  try {
+    const saved = parseInt(localStorage.getItem(spec.key) ?? '', 10);
+    if (Number.isFinite(saved)) wsApply(name, saved);
+  } catch {}
+
+  const handle = document.querySelector(`.ws-handle[data-handle="${name}"]`);
+  if (!handle) continue;
+  handle.setAttribute('aria-valuemin', String(spec.min));
+  handle.setAttribute('aria-valuemax', String(spec.max));
+  handle.setAttribute('aria-valuenow', String(wsCurrent(name)));
+
+  // Le rail est à droite de sa poignée : tirer vers la droite le rétrécit.
+  const sign = name === 'col3' ? -1 : 1;
+
+  handle.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = wsCurrent(name);
+    handle.setPointerCapture(event.pointerId);
+    handle.classList.add('dragging');
+    document.body.classList.add('ws-resizing');
+
+    const move = (e) => wsApply(name, startWidth + sign * (e.clientX - startX));
+    const stop = () => {
+      handle.removeEventListener('pointermove', move);
+      handle.classList.remove('dragging');
+      document.body.classList.remove('ws-resizing');
+      wsApply(name, wsCurrent(name), { persist: true });
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', stop, { once: true });
+    handle.addEventListener('pointercancel', stop, { once: true });
+  });
+
+  handle.addEventListener('dblclick', () => wsReset(name));
+
+  handle.addEventListener('keydown', (event) => {
+    const step = event.shiftKey ? 48 : 16;
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+      event.preventDefault();
+      const direction = event.key === 'ArrowRight' ? 1 : -1;
+      wsApply(name, wsCurrent(name) + sign * direction * step, { persist: true });
+    } else if (event.key === 'Home') {
+      event.preventDefault();
+      wsReset(name);
+    }
+  });
+}
+
 function closeCustomerSheet() {
   $('sheet-wrap').hidden = true;
 }
@@ -3591,22 +3693,60 @@ function renderQueueTable(multiMailbox, shopById) {
   );
 }
 
+/*
+ * Sous 1100 px, le sélecteur de vue est masqué : le tableau y est illisible.
+ * Mais la préférence, elle, était restaurée du poste — on se retrouvait en
+ * mode tableau sans bouton pour en sortir, sans panneaux de contexte, et
+ * seul un vidage du stockage y remédiait. La préférence reste ce qu'elle est ;
+ * c'est la vue EFFECTIVE qui cède sous la largeur, et qui revient au-dessus.
+ */
+const NARROW_FOR_TABLE = window.matchMedia('(max-width: 1100px)');
+NARROW_FOR_TABLE.addEventListener('change', () => setQueueView(state.queueView));
+
 function setQueueView(view) {
   state.queueView = view;
   localStorage.setItem('csav.queueView', view);
 
-  $('queue-table').hidden = view !== 'table';
-  $('queue').hidden = view === 'table';
+  const effective = NARROW_FOR_TABLE.matches ? 'list' : view;
+
+  $('queue-table').hidden = effective !== 'table';
+  $('queue').hidden = effective === 'table';
   // Le tableau prend toute la largeur : à 350 px, six colonnes ne sont plus un
   // tableau mais une bouillie.
-  $('view-tickets')?.classList.toggle('wide-queue', view === 'table');
+  $('view-tickets')?.classList.toggle('wide-queue', effective === 'table');
 
   document.querySelectorAll('#queue-view [data-qview]').forEach((button) =>
     button.setAttribute('aria-pressed', String(button.dataset.qview === view)),
   );
 
-  if (view === 'table' && state.tickets.length) void loadQueue();
+  if (effective === 'table' && state.tickets.length) void loadQueue();
 }
+
+/*
+ * Les intitulés de colonnes recopiés sur chaque cellule.
+ *
+ * Sous 760 px, chaque ligne de tableau devient une fiche et la feuille de
+ * style écrit l'intitulé devant la valeur avec `attr(data-label)` — un
+ * attribut qu'aucune cellule ne portait : les fiches n'étaient que des piles
+ * de valeurs sans nom. Plutôt que de retoucher les quinze rendus qui
+ * produisent des lignes, un observateur pose l'attribut à chaque fois qu'un
+ * corps de tableau change, d'après l'en-tête du tableau lui-même.
+ */
+function labelGridCells(table) {
+  const heads = [...table.querySelectorAll('thead th')].map((th) => th.textContent.trim());
+  table.querySelectorAll('tbody tr').forEach((tr) => {
+    [...tr.children].forEach((td, i) => {
+      if (i > 0 && heads[i] && td.colSpan === 1) td.dataset.label = heads[i];
+    });
+  });
+}
+
+document.querySelectorAll('table.grid').forEach((table) => {
+  const body = table.tBodies[0];
+  if (!body) return;
+  labelGridCells(table);
+  new MutationObserver(() => labelGridCells(table)).observe(body, { childList: true });
+});
 
 document.querySelectorAll('#queue-view [data-qview]').forEach((button) =>
   button.addEventListener('click', () => setQueueView(button.dataset.qview)),
@@ -8369,7 +8509,55 @@ function orderDetailMarkup(order) {
 
   const address = order.shippingAddress;
 
-  return `
+  /*
+   * Le téléphone de livraison, composable ou non.
+   *
+   * Il s'affichait en texte brut. Même source et mêmes règles que la fiche
+   * client du rail : le pays de l'adresse décide de l'indicatif, jamais une
+   * supposition. Composable, il devient un lien et le bouton WhatsApp se
+   * pose à côté ; sinon il reste lisible, et l'infobulle dit pourquoi il ne
+   * s'ouvre pas.
+   */
+  const phone = customerPhone(order);
+  const phoneMarkup = !phone
+    ? ''
+    : phone.link
+      ? `<div class="ordv-phone">
+           <a class="rail-phone mono" href="${esc(phone.link)}" target="_blank" rel="noopener noreferrer"
+             title="Ouvrir dans WhatsApp">${esc(phone.raw)} <span aria-hidden="true">↗</span></a>
+           <a class="btn btn-small wa-btn" href="${esc(phone.link)}" target="_blank" rel="noopener noreferrer"
+             aria-label="Ouvrir WhatsApp avec ${esc(address?.name ?? order.customer?.displayName ?? 'le client')}"
+             title="Ouvrir la conversation dans WhatsApp Web">${ico('whatsapp')} WhatsApp</a>
+         </div>`
+      : `<div class="ordv-phone"><span class="rail-phone-off mono" title="Numéro non valide pour WhatsApp">${esc(
+          phone.raw,
+        )}</span></div>`;
+
+  // L'état du colis, quand il y en a un : c'est la troisième pastille de la
+  // liste Shopify, et la question que le client pose vraiment.
+  const shipment = order.fulfillments?.[0]?.displayStatus;
+
+  /*
+   * Ce que la liste affiche en colonnes et que la fiche taisait : le canal, le
+   * mode de livraison, le nombre d'articles, les balises. Une fiche qui en
+   * sait moins que la liste qui l'ouvre oblige à refermer pour vérifier.
+   */
+  const tags = order.tags ?? [];
+  const quantity = order.itemsQuantity ?? (order.lineItems ?? []).reduce((n, i) => n + i.quantity, 0);
+  const fact = (label, value) =>
+    value ? `<div class="ordv-fact"><span>${label}</span><b>${value}</b></div>` : '';
+  const facts =
+    fact('Canal', esc(order.channel ?? '')) +
+    fact('Livraison', esc(order.shippingMethod ?? '')) +
+    fact('Articles', `${quantity} article${quantity > 1 ? 's' : ''}`) +
+    fact(
+      'Balises',
+      tags.length
+        ? `<span class="ordv-tags">${tags.map((t) => `<span class="tag tag-order">${esc(t)}</span>`).join('')}</span>`
+        : '',
+    );
+
+  return `<div class="ordv">
     <div class="ordv-head">
       <div class="ordv-badges">
         <span class="tag ${fin === 'PAID' ? 'st-CLOSED' : 'st-NEEDS_REVIEW'}">${esc(
@@ -8378,10 +8566,19 @@ function orderDetailMarkup(order) {
         <span class="tag ${
           ful === 'FULFILLED' || ful === 'DELIVERED' ? 'st-CLOSED' : 'st-NEW'
         }">${esc(FUL_LABELS[ful] ?? ful ?? '—')}</span>
-        <span class="ordv-when">${dateTime(order.createdAt)}</span>
+        ${
+          shipment
+            ? `<span class="tag st-CLOSED">${esc(SHIPMENT_LABELS[shipment] ?? shipment)}</span>`
+            : ''
+        }
+        <span class="ordv-when" title="${esc(dateTime(order.createdAt))}">${dayOrDateTime(
+          order.createdAt,
+        )}</span>
       </div>
       <b class="ordv-total mono">${esc(euro(order.totalPrice, order.currency))}</b>
     </div>
+
+    ${facts ? `<div class="ordv-facts">${facts}</div>` : ''}
 
     <div class="ordv-items">${items || '<p class="empty">Aucun article.</p>'}</div>
 
@@ -8399,8 +8596,7 @@ function orderDetailMarkup(order) {
               ]
                 .filter(Boolean)
                 .map(esc)
-                .join('<br>')}</p>
-               ${address.phone ? `<p class="ordv-addr mono">${esc(address.phone)}</p>` : ''}`
+                .join('<br>')}</p>${phoneMarkup}`
             : '<p class="empty">Aucune adresse.</p>'
         }
       </section>
@@ -8408,7 +8604,8 @@ function orderDetailMarkup(order) {
         <span class="rail-title">Colis</span>
         ${parcels || '<p class="empty">Aucun numéro de suivi.</p>'}
       </section>
-    </div>`;
+    </div>
+  </div>`;
 }
 
 /**
@@ -8458,6 +8655,9 @@ async function openOrderSheet(id) {
 
   $('sheet-name').textContent = `Commande ${order.name}`;
   $('sheet-email').textContent = order.customer?.email ?? '';
+  // Le tiroir est partagé avec la fiche client : son intitulé accessible
+  // était figé sur « Fiche client », quoi qu'il montre.
+  $('sheet').setAttribute('aria-label', `Commande ${order.name}`);
 
   const tracking = (order.fulfillments ?? []).find((fulfillment) => fulfillment.trackingNumber);
 
@@ -8468,7 +8668,7 @@ async function openOrderSheet(id) {
     `<section class="sheet-group">${orderDetailMarkup(order)}</section>` +
     // Les gestes d'abord : c'est pour eux qu'on a ouvert la fiche.
     `<section class="sheet-group sheet-acts">
-       <button class="btn btn-small btn-primary" id="ordv-change">⚡ Demander un changement</button>
+       <button class="btn btn-small btn-primary" id="ordv-change">${ico('bolt')} Demander un changement</button>
        ${
          tracking
            ? `<button class="btn btn-small" data-track="${esc(tracking.trackingNumber)}"${
@@ -8481,10 +8681,11 @@ async function openOrderSheet(id) {
            ? `<button class="btn btn-small" id="ordv-customer">Fiche client</button>`
            : ''
        }
-       <a class="btn btn-small" target="_blank" rel="noopener"
-         href="https://${esc(state.me?.merchant?.shopDomain ?? '')}/admin/orders/${esc(
-           String(order.id ?? '').split('/').pop() ?? '',
-         )}">Ouvrir dans Shopify</a>
+       ${
+         // Par la fonction commune : sans domaine de boutique, elle ne rend rien
+         // — le lien construit à la main restait cliquable vers une URL vide.
+         shopifyOrderLink(order)
+       }
      </section>` +
     // Les demandes de changement : ce qu'on a déjà promis sur cette commande.
     (changes.length

@@ -449,6 +449,13 @@
           </ul>
         </section>
 
+        <!-- Poignée entre la file et le détail. Un séparateur, pas un panneau :
+             le mode tableau masque tout ce qui n'est pas le premier enfant, et
+             la file doit rester ce premier enfant. -->
+        <div class="ws-handle" data-handle="col1" role="separator" aria-orientation="vertical"
+          aria-label="Largeur de la file — flèches pour ajuster, double-clic pour rétablir"
+          tabindex="0" title="Glisser pour redimensionner · double-clic pour rétablir"></div>
+
         <section class="panel" aria-label="Détail du message">
           <!-- En-tête du ticket.
 
@@ -620,6 +627,10 @@
              Client, commande, livraison et fournisseur sont quatre dossiers
              distincts qu'on consulte séparément : un filet entre deux sections
              les disait voisines, un intervalle les dit indépendantes. -->
+        <div class="ws-handle" data-handle="col3" role="separator" aria-orientation="vertical"
+          aria-label="Largeur du rail — flèches pour ajuster, double-clic pour rétablir"
+          tabindex="0" title="Glisser pour redimensionner · double-clic pour rétablir"></div>
+
         <aside class="context">
           <section class="panel rail-card">
             <div class="rail-head">
