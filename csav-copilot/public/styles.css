@@ -99,6 +99,11 @@
      bordures, où le contraste ne se mesure pas de la même façon. */
   --warn-ink: #a35a05;
   --crit-ink: #c02026;
+  /* Le vert manquait à la paire. `--ok` sur `--ok-soft` donne 3,35:1 — il
+     n'avait jamais servi de texte, mais l'échéance « dans les temps » du poste
+     de pilotage le fait. Même traitement que ses deux voisines : cinq points
+     de clarté en moins, teinte et saturation intactes. */
+  --ok-ink: #047d59;
 
   --r-xl: 20px;
   --r-lg: 16px;
@@ -6490,6 +6495,10 @@ textarea:focus-visible {
      au lieu de s'assombrir. */
   --warn-ink: #e8a34a;
   --crit-ink: #f28b8f;
+  /* Le vert aussi : `--ok-soft` vaut #0d2b21 ici (ligne 169), et l'encre
+     assombrie du thème clair y tombait à 2,95:1 — ma première version avait
+     empiré le sombre en corrigeant le clair. */
+  --ok-ink: #06b47f;
 }
 
 /* ============================================ rail en cartes séparées =====
@@ -7177,6 +7186,233 @@ html, body { overflow-x: clip; }
 .ql-more { font-weight: 600; color: var(--ink-mute); }
 .qbar-main .qbar-count { flex: none; margin-left: 0; }
 
+
+
+/* ======================================================= poste de pilotage ==
+
+   La Vue d'ensemble tenait en deux panneaux empilés sur une colonne de mille
+   pixels : la moitié droite de l'écran restait vide, et les cinq questions
+   qu'on se pose en ouvrant l'outil — combien attendent, quoi traiter d'abord,
+   où sont les risques, comment on performe, ce que l'IA fait gagner — n'avaient
+   nulle part où se poser.
+
+   Deux colonnes : à gauche ce qu'on fait, à droite ce qu'on surveille. Le
+   rapport deux tiers / un tiers vient de l'usage — la table centrale porte six
+   colonnes, les cartes de droite une valeur par ligne. */
+
+/* ---- les cinq chiffres ----
+
+   Cartes pleines, et non la bande mince du SAV : là-bas ces chiffres sont un
+   bandeau au-dessus du travail, ici ils sont la première chose qu'on lit. Le
+   pictogramme passe à gauche du texte, dans une pastille teintée — c'est ce
+   qui distingue une carte de pilotage d'une ligne de tableau. */
+.ov-kpis { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+
+.ov-kpis .kpi { display: flex; align-items: flex-start; gap: 12px; padding: 14px 15px; }
+
+.ov-kpis .kpi-ico {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-md);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.ov-kpis .kpi-ico svg { width: 17px; height: 17px; }
+
+.kpi-body { min-width: 0; display: block; }
+.ov-kpis .kpi-label { font-size: 11px; }
+.ov-kpis .kpi-value { font-size: 24px; margin-top: 2px; }
+.ov-kpis .kpi-note { margin-top: 2px; }
+
+.cockpit {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
+  gap: 13px;
+  align-items: start;
+}
+
+.cockpit-main,
+.cockpit-side {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  min-width: 0;
+}
+
+/* Le compteur du titre : un nombre, pas un badge de notification. */
+.pill-count {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--accent-ink);
+  background: var(--accent-soft);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.panel-head .btn-small { margin-left: auto; }
+.panel-head .pill-count + .btn-small { margin-left: auto; }
+
+/* ---- la table centrale ---- */
+
+/* Les lignes s'ouvrent : elles se comportent comme la file, curseur compris.
+   Une table qu'on ne peut pas cliquer alors qu'elle liste des messages à
+   traiter demande de retrouver chaque ligne ailleurs. */
+/* La table du poste de pilotage ne défile pas verticalement : elle ne montre
+   que neuf lignes, et le plafond global de `.table-wrap` — calc(100vh - 250px)
+   — lui donnerait un ascenseur pour rien, au milieu d'une page qui en a déjà
+   un. */
+.ov-wrap {
+  max-height: none;
+  /* La table vit déjà dans un `.panel`, qui porte le cadre, le fond et
+     l'ombre. Les reprendre ici ferait une boîte dans une boîte — le défaut
+     qu'on vient de retirer du reste de l'écran. */
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: none;
+}
+
+.ov-prio tbody tr { cursor: pointer; }
+.ov-prio tbody tr:hover { background: var(--inset); }
+.ov-prio tbody tr:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.ov-prio td { padding: 9px 12px; vertical-align: middle; }
+.ov-prio th { padding: 8px 12px; }
+
+.ov-who { font-weight: 600; white-space: nowrap; }
+.ov-age { white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* Le sujet cède la place aux colonnes fixes : c'est le seul champ dont la
+   longueur est imprévisible, et le tronquer vaut mieux que pousser l'échéance
+   hors de l'écran. */
+.ov-subj {
+  max-width: 1px;
+  width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* L'échéance reprend les trois paliers de la file, sans la barre : dans une
+   table, six barres de progression font un graphique qu'on n'a pas demandé. */
+.ovdue {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  padding: 2px 8px;
+  border-radius: var(--r-sm);
+}
+.ovdue::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+.ovdue-bad { color: var(--crit-ink); background: var(--crit-soft); }
+.ovdue-warn { color: var(--warn-ink); background: var(--warn-soft); }
+.ovdue-ok { color: var(--ok-ink); background: var(--ok-soft); }
+.ovdue-none { color: var(--ink-mute); background: none; padding-left: 0; }
+.ovdue-none::before { display: none; }
+
+/* ---- les cartes de droite ---- */
+
+.statlist { list-style: none; margin: 0; padding: 4px 0; }
+
+/* Bouton ou div selon qu'il y a une destination : une ligne qui ne mène nulle
+   part ne doit pas se présenter comme un lien. */
+.statrow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 14px;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+}
+
+.statrow-go { cursor: pointer; }
+.statrow-go:hover { background: var(--inset); }
+.statrow-go:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.statrow-l { font-size: 13px; flex: none; }
+.statrow-n { font-size: 11.5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.statrow-v {
+  margin-left: auto;
+  font-size: 14.5px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.statrow-v.sv-bad { color: var(--crit-ink); }
+.statrow-v.sv-warn { color: var(--warn-ink); }
+
+.statrow-x { color: var(--ink-mute); font-size: 14px; flex: none; }
+
+/* ---- la tendance ---- */
+
+.ov-legend { display: inline-flex; gap: 12px; margin-left: auto; }
+
+.ov-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--ink-mute);
+}
+.ov-key::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  flex: none;
+}
+.ov-key-recu::before { background: color-mix(in srgb, var(--accent) 34%, var(--surface)); }
+.ov-key-traite::before { background: var(--accent); }
+
+.chart-pair { height: 132px; }
+
+/* Les dates sous le graphe : hors du SVG, qui est étiré et déformerait le
+   texte tracé dedans. */
+.chart-days {
+  display: flex;
+  margin-top: 5px;
+  font-size: 10.5px;
+  color: var(--ink-mute);
+  text-align: center;
+}
+.chart-days span { flex: 1 1 0; min-width: 0; line-height: 1.3; }
+.chart-days b { font-weight: 600; }
+
+/* Le fil des dernières actions ne prend pas toute la hauteur qu'il pourrait :
+   c'est un contexte, pas un journal qu'on lit en entier. */
+.ov-fil { max-height: 210px; }
+
+/* Trois éléments par ligne : l'heure, ce qui s'est passé, qui l'a fait. La
+   ligne du journal est déjà un `flex` — l'auteur y devient un troisième
+   enfant plutôt qu'un texte collé au précédent, où « Litige » et « Par l'IA »
+   se lisaient comme un seul mot. */
+.ov-fil .ov-quoi { flex: 1 1 auto; min-width: 0; }
+.ov-fil .ov-par { flex: none; margin-left: auto; white-space: nowrap; }
 
 /* ==========================================================================
    REQUÊTES MÉDIA — toutes ici, et nulle part ailleurs
@@ -7940,4 +8176,19 @@ html, body { overflow-x: clip; }
    trois cents pixels de contenu. Il reprend la taille de son contenu. */
 @media (max-width: 1080px) {
   .head-acts { width: auto; }
+}
+
+/* Sous 1 200 px, le poste de pilotage passe en une colonne : la table centrale
+   porte six colonnes et les cartes de droite ne descendent pas sous trois
+   cents pixels — les deux ensemble ne tiennent plus. Ce qu'on surveille passe
+   sous ce qu'on fait, dans cet ordre. */
+@media (max-width: 1200px) {
+  .cockpit { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Sur écran étroit, la table défile dans sa carte plutôt que de pousser la
+   page : `.tablewrap` le fait déjà partout ailleurs. */
+@media (max-width: 760px) {
+  .ov-prio { min-width: 620px; }
+  .chart-days { font-size: 9.5px; }
 }

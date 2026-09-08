@@ -73,6 +73,11 @@ export const QUEUE_FIELDS_USED_BY_DASHBOARD = [
   'orderName',
   'orderTotal',
   'lastMessageAt',
+  // Lus par le poste de pilotage : l'échéance ordonne « À traiter en priorité »
+  // et alimente « Hors délai » comme « Dans les temps ». Sans elle dans le
+  // `select`, les deux compteraient zéro sans que rien ne le signale.
+  'dueAt',
+  'createdAt',
   'labels',
   'gmailUnread',
   'gmailArchived',
