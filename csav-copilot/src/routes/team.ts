@@ -10,6 +10,8 @@ import { can, requirePermission, requireSession } from '../plugins/auth.ts';
 import type { Permission } from '../plugins/auth.ts';
 import type { UserRole } from '@prisma/client';
 import { sendPlainEmail } from '../services/gmail/send.ts';
+import { connection } from '../queue/index.ts';
+import { lienAutorise } from '../services/auth/limiteLien.ts';
 
 /**
  * Équipe et connexion nominative.
@@ -190,7 +192,24 @@ export async function teamRoutes(app: FastifyInstance): Promise<void> {
       },
     });
 
-    if (accounts.length > 0) {
+    /*
+     * La borne, pour toute demande — compte existant ou non.
+     *
+     * La tentation était de ne la consulter que si un compte existe, pour
+     * qu'une adresse inconnue ne consomme rien. C'est une erreur : le travail
+     * effectué deviendrait alors différent selon que l'adresse a un compte,
+     * et le TEMPS DE RÉPONSE rouvrirait l'énumération que la réponse uniforme
+     * ferme. La recherche en base et la consultation du limiteur ont donc
+     * lieu dans tous les cas ; seul l'envoi est conditionnel.
+     *
+     * Consommer une clé pour une adresse inconnue ne coûte rien et borne au
+     * passage le trafic de celui qui balaie des adresses au hasard.
+     */
+    const verdict = await lienAutorise(connection, parsed.data.email, (err) =>
+      request.log.warn({ err }, 'Limiteur du lien de connexion indisponible'),
+    );
+
+    if (accounts.length > 0 && verdict.autorise) {
       const links = accounts.map((account) => ({
         label:
           account.merchant.brandName ??
@@ -223,6 +242,16 @@ export async function teamRoutes(app: FastifyInstance): Promise<void> {
                 'Chaque lien est valable une heure et ne sert qu’une fois.',
               ].join('\n'),
       });
+    }
+
+    // Toujours la même réponse, envoi effectué ou non, compte existant ou
+     // non, borne atteinte ou non. Dire « trop de demandes » rouvrirait
+     // l'énumération que cette route ferme depuis le début.
+    if (!verdict.autorise) {
+      request.log.info(
+        { motif: verdict.motif },
+        'Lien de connexion non envoyé : borne atteinte',
+      );
     }
 
     return reply.send({
