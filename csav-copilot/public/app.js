@@ -39,6 +39,8 @@ const state = {
   queueView: localStorage.getItem('csav.queueView') === 'table' ? 'table' : 'list',
   agents: [],
   canned: [],
+  /** Les libellés de la file sont-ils tous dépliés ? Choix d'affichage, pas de filtre. */
+  queueLabelsOuvert: false,
   editingCanned: null,
   catalog: { items: [], cursor: null, hasNext: false, q: '', kind: 'products', loading: false, loaded: false, timer: null },
   editingUser: null,
@@ -327,7 +329,23 @@ function renderQueueLabels() {
   const names = [...used].sort((a, b) => a.localeCompare(b, 'fr'));
   bar.hidden = names.length === 0;
 
-  bar.innerHTML = names
+  /*
+   * Six dehors, le reste derrière un « +N ».
+   *
+   * Onze libellés poussaient la barre sur deux rangées, et une rangée entière
+   * de l'écran servait à des catégories qu'on filtre trois fois par jour. Les
+   * libellés retenus restent toujours visibles — voir une pastille cochée
+   * disparaître sous le doigt serait pire que la rangée de trop.
+   */
+  const VISIBLES = 6;
+  const actifs = names.filter((name) => state.queue.labels.includes(name));
+  const repos = names.filter((name) => !state.queue.labels.includes(name));
+  const montres = state.queueLabelsOuvert
+    ? names
+    : [...actifs, ...repos].slice(0, Math.max(VISIBLES, actifs.length));
+  const caches = names.length - montres.length;
+
+  bar.innerHTML = montres
     .map((name) => {
       const style = labelStyles[name];
       const active = state.queue.labels.includes(name);
@@ -356,6 +374,48 @@ function renderQueueLabels() {
         }${esc(leaf)}</button>`;
     })
     .join('');
+
+  /*
+   * Le « +N » est posé à côté de la bande, pas dedans.
+   *
+   * La bande défile latéralement quand les pastilles dépassent. Un bouton
+   * placé à sa fin partait donc hors du champ dès que six libellés
+   * remplissaient la ligne : plus rien ne disait qu'il en restait cinq.
+   */
+  const plus = $('q-label-more');
+  if (plus) {
+    plus.innerHTML =
+      caches > 0 || state.queueLabelsOuvert
+        ? `<button class="chip ql-more" id="ql-more" type="button"
+             aria-expanded="${Boolean(state.queueLabelsOuvert)}"
+             title="${
+               state.queueLabelsOuvert
+                 ? 'Replier les libellés'
+                 : `Voir les ${caches} libellés restants`
+             }">${state.queueLabelsOuvert ? 'Moins' : `+${caches}`}</button>`
+        : '';
+    plus.hidden = names.length === 0;
+  }
+
+  $('ql-more')?.addEventListener('click', () => {
+    state.queueLabelsOuvert = !state.queueLabelsOuvert;
+    renderQueueLabels();
+  });
+
+  /*
+   * Un dégradé au bord droit, mais seulement quand ça défile.
+   *
+   * Une pastille coupée net au bord de la bande se lit comme un défaut
+   * d'affichage. Le dégradé dit « ça continue ». Posé en permanence, il
+   * effacerait le dernier libellé alors que tout tient : c'est la mesure qui
+   * décide, pas la largeur d'écran.
+   */
+  const marqueDebord = () => bar.classList.toggle('deborde', bar.scrollWidth > bar.clientWidth + 1);
+  marqueDebord();
+  if (typeof ResizeObserver === 'function' && !bar.dataset.observe) {
+    bar.dataset.observe = '1';
+    new ResizeObserver(marqueDebord).observe(bar);
+  }
 
   bar.querySelectorAll('[data-qlabel]').forEach((chip) =>
     chip.addEventListener('click', () => {
@@ -534,33 +594,65 @@ function renderMe() {
 
   const pills = [];
 
+  /*
+   * La marque porte l'identité, le point porte l'état.
+   *
+   * Trois pastilles grises se lisaient une par une pour savoir laquelle
+   * parlait de quoi. Le logo se reconnaît sans lire ; il reste au point vert,
+   * orange ou rouge de dire si ça marche.
+   */
+  /*
+   * Le libellé vit dans son propre `span`, et le mot complet dans le `title`.
+   *
+   * Sous 700 px la ligne du titre se repliait en quatre rangées, dont une
+   * pour ces deux pastilles seules : cent quarante-deux pixels d'en-tête sur
+   * un téléphone. Le texte s'y efface, le logo et le point restent — ce sont
+   * eux qui portent l'information. Le `title` garde la phrase entière.
+   */
+  const pastille = (nom, etat, texte) =>
+    `<span class="conn-pill" title="${esc(texte)}">${marque(nom)}<span class="dot${
+      etat ? ` ${etat}` : ''
+    }"></span> <span class="conn-txt">${esc(texte)}</span></span>`;
+
   pills.push(
     me.shopify.connected || me.shopify.simulated
-      ? `<span class="conn-pill"><span class="dot${
-          me.shopify.simulated ? ' warn' : ''
-        }"></span> Shopify ${me.shopify.simulated ? 'simulé' : 'connecté'}</span>`
-      : '<span class="conn-pill"><span class="dot off"></span> Shopify non connecté</span>',
+      ? pastille(
+          'shopify',
+          me.shopify.simulated ? 'warn' : '',
+          `Shopify ${me.shopify.simulated ? 'simulé' : 'connecté'}`,
+        )
+      : pastille('shopify', 'off', 'Shopify non connecté'),
   );
 
   if (me.gmail.connected) {
     // Un watch expiré veut dire que plus aucun mail n'entre : c'est l'alerte
     // la plus importante de l'écran, elle passe avant tout le reste.
     pills.push(
-      `<span class="conn-pill"><span class="dot${me.gmail.watchActive ? '' : ' warn'}"></span> ${esc(
-        me.gmail.emailAddress,
-      )}${me.gmail.watchActive ? '' : ' — écoute inactive'}</span>`,
+      pastille(
+        'gmail',
+        me.gmail.watchActive ? '' : 'warn',
+        `${me.gmail.emailAddress}${me.gmail.watchActive ? '' : ' — écoute inactive'}`,
+      ),
     );
   } else {
-    pills.push('<span class="conn-pill"><span class="dot off"></span> Gmail non connecté</span>');
+    pills.push(pastille('gmail', 'off', 'Gmail non connecté'));
   }
 
-  pills.push(
-    `<span class="conn-pill"><span class="dot${
-      me.merchant.autoSendEnabled ? '' : ' warn'
-    }"></span> Envoi auto ${me.merchant.autoSendEnabled ? 'activé' : 'désactivé'}</span>`,
-  );
-
   $('conn').innerHTML = pills.join('');
+
+  /*
+   * L'envoi automatique descend d'une ligne, avec les chiffres.
+   *
+   * Ce n'est pas un état de connexion mais un réglage : il dit ce que l'outil
+   * fait tout seul, ce qui se lit à côté de ce qu'il a fait — pas à côté de
+   * ce à quoi il est branché.
+   */
+  const auto = $('autosend');
+  if (auto) {
+    auto.innerHTML = `<span class="dot${
+      me.merchant.autoSendEnabled ? '' : ' warn'
+    }"></span> Envoi auto ${me.merchant.autoSendEnabled ? 'activé' : 'désactivé'}`;
+  }
   $('mock-notice').hidden = !me.shopify.simulated;
 }
 
@@ -6764,6 +6856,16 @@ function cityTimes(now) {
  * joignable. Le luxe en grand, l'utile en petit : à 36 px, une aiguille ne
  * fait pas la manufacture, elle fait du bruit.
  */
+/*
+ * Les heures locales portent `role="button"` depuis toujours, sans jamais
+ * répondre au clavier : annoncé comme un bouton, inutilisable comme tel.
+ */
+$('clocks')?.addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter' && event.key !== ' ') return;
+  event.preventDefault();
+  $('clocks').click();
+});
+
 function renderClocks() {
   const now = new Date();
 
@@ -6878,6 +6980,27 @@ const ICONS = {
   whatsapp:
     '<path d="M2.5 13.5l1-3.2A5.6 5.6 0 1 1 5.7 12.6z"/><path d="M6.2 6.3c0 2 1.5 3.5 3.5 3.5l.9-.9-1.2-.8-.7.5c-.6-.3-1.1-.8-1.4-1.4l.5-.7-.8-1.2z"/>',
 };
+
+/*
+ * Shopify et Gmail, reconnaissables d'un coup d'œil.
+ *
+ * Le dépôt ne contient aucun fichier image et n'a pas de bibliothèque
+ * d'icônes : ces deux marques sont donc dessinées ici, simplifiées, à la
+ * taille d'une lettre. Elles portent leur couleur propre — c'est ce qui les
+ * rend identifiables — mais restent sous les treize pixels : on veut une
+ * marque, pas une bannière.
+ */
+const MARQUES = {
+  shopify:
+    '<path fill="#95BF47" d="M11.6 3.1c-.07-.05-.2-.03-.25-.02l-.7.16-.5-.5c-.15-.16-.45-.11-.57-.08l-.27.08c-.16-.47-.45-.9-.96-.9h-.05c-.15-.19-.33-.27-.49-.27-1.22.01-1.8 1.53-1.99 2.3l-.85.26c-.26.08-.27.09-.31.34L4 12.9l4.8.9L11.9 13l-.24-9.7c0-.1-.03-.16-.06-.2Z"/><path fill="#5E8E3E" d="M11.6 3.1c-.07-.05-.2-.03-.25-.02l-.7.16-.5-.5c-.06-.06-.14-.1-.22-.11L8.8 13.8 11.9 13l-.24-9.7c0-.1-.03-.16-.06-.2Z"/><path fill="#fff" d="M9.2 5.8 8.8 7c-.24-.12-.5-.18-.77-.18-.62 0-.65.39-.65.49 0 .53 1.4.74 1.4 2 0 .99-.63 1.63-1.47 1.63-1.01 0-1.53-.63-1.53-.63l.27-.9s.53.46 .98.46c.29 0 .41-.23.41-.4 0-.7-1.15-.73-1.15-1.88 0-.97.7-1.9 2.1-1.9.54 0 .81.15.81.15Z"/>',
+  gmail:
+    '<path fill="#EA4335" d="M2 4.1c0-.6.5-1.1 1.1-1.1h.5L8 6.4 12.4 3h.5c.6 0 1.1.5 1.1 1.1v.6L8 9 2 4.7v-.6Z"/><path fill="#34A853" d="M2 5.6 8 10l6-4.4v6.3c0 .6-.5 1.1-1.1 1.1h-1.6V7.6L8 10.2 4.7 7.6V13H3.1c-.6 0-1.1-.5-1.1-1.1V5.6Z"/>',
+};
+
+/** Une marque, à la taille d'une lettre. Fond propre, jamais l'encre du texte. */
+function marque(name) {
+  return `<svg class="marque" viewBox="0 0 16 16" aria-hidden="true">${MARQUES[name] ?? ''}</svg>`;
+}
 
 function ico(name) {
   return `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"
@@ -10495,6 +10618,11 @@ function renderRefreshLabel() {
     seconds < 60 ? 'à l’instant' : `il y a ${Math.floor(seconds / 60)} min`;
 
   button.title = `Rafraîchir (R) — mis à jour ${depuis}`;
+
+  // L'ancienneté sort de l'infobulle : savoir si les chiffres datent de deux
+  // minutes ou d'une heure ne devrait pas demander de survoler un bouton.
+  const note = $('sync-note');
+  if (note) note.textContent = `Synchronisé ${depuis}`;
 }
 
 setInterval(renderRefreshLabel, 15000);
