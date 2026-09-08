@@ -58,13 +58,27 @@
   --inset: #f2f4f8;
   --ink: #101018;
   --ink-soft: #474a5c;
-  --ink-mute: #7d8296;
+  /* 4,63:1 au pire des cinq fonds de l'application, contre 3,33:1 avant.
+     Ce gris peint 175 endroits, dont soixante-sept sous 12 px : l'heure d'un
+     message, l'extrait, les intitulés du rail. Aucun ne passait le seuil AA
+     pour du texte normal. Même teinte, même saturation, huit points de
+     clarté en moins — la hiérarchie à trois encres tient encore. */
+  --ink-mute: #656b7e;
   --line: #e4e7ef;
   --line-soft: #eef0f5;
 
   --ok: #05966a; --ok-soft: #e2f6ef;
   --warn: #d97706; --warn-soft: #fdf1de;
   --crit: #e5484d; --crit-soft: #fdeaea;
+
+  /* Une couleur d'aplat n'est pas une couleur de texte. L'orange d'alerte
+     donne 3,19:1 sur blanc et 2,89:1 sur le fond de survol : il échoue même
+     au seuil du grand texte, alors qu'il porte l'âge du message — la seule
+     chose que l'agent lit pour choisir quoi ouvrir. Ces deux encres servent
+     au texte ; --warn et --crit restent pour les fonds, les points et les
+     bordures, où le contraste ne se mesure pas de la même façon. */
+  --warn-ink: #a35a05;
+  --crit-ink: #c02026;
 
   --r-xl: 20px;
   --r-lg: 16px;
@@ -120,7 +134,9 @@
   --inset: #21252e;
   --ink: #f0f2f7;
   --ink-soft: #b0b6c4;
-  --ink-mute: #7f8698;
+  /* Le sombre échouait sur --inset (4,21) et sur --accent-soft (4,09), les
+     deux fonds de la ligne survolée et de la ligne courante. */
+  --ink-mute: #8f96a8;
   --line: #292e39;
   --line-soft: #22262f;
 
@@ -1030,8 +1046,18 @@ body.ws-resizing { cursor: col-resize; user-select: none; }
    l'un déplaçait l'autre sans qu'on le voie. Le padding de 15/17 était de
    toute façon écrasé par cette seconde règle ; il est reposé ici à une valeur
    choisie, et non héritée d'un écrasement. */
+/* Trois traits horizontaux se suivaient dans les soixante premiers pixels de
+   la colonne : celui de l'en-tête, celui des onglets, celui du résumé. Le
+   filet de l'en-tête ne sert que si la barre d'onglets est absente — elle se
+   masque seule quand il n'y a qu'une section — et c'est exactement ce que
+   dit ce sélecteur. Un séparateur qui doublonne n'est pas une hiérarchie,
+   c'est du bruit. */
 .ticket-head {
   padding: 11px 15px 9px;
+  border-bottom: 0;
+}
+
+.ticket-head:has(+ .tabs[hidden]) {
   border-bottom: 1px solid var(--line-soft);
 }
 .thread-subject { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.02em; }
@@ -1059,17 +1085,25 @@ body.ws-resizing { cursor: col-resize; user-select: none; }
 .msg-head { display: flex; align-items: baseline; gap: 8px; font-size: 12px; color: var(--ink-mute); }
 .msg-head b { color: var(--ink); font-size: 13px; }
 
+/* Un aplat OU un filet, pas les deux. Le message entrant portait les deux
+   marqueurs pour dire une seule chose — « ceci est un message » — pendant que
+   le message sortant, lui, s'en tirait avec son seul aplat. Le fond suffit à
+   poser la limite du bloc ; le filet ajoutait une boîte dans une boîte.
+
+   Le corps du texte est la surface qu'on lit le plus longtemps de l'écran :
+   l'encre passe en --ink, l'interligne à 1,55. */
 .msg-body {
   background: var(--inset);
-  border: 1px solid var(--line-soft);
+  border: 0;
   border-radius: var(--r-md);
   padding: 11px 13px;
   font-size: 13.5px;
-  color: var(--ink-soft);
+  line-height: 1.55;
+  color: var(--ink);
   white-space: pre-wrap;
 }
 
-.msg.out .msg-body { background: var(--accent-soft); color: var(--accent-ink); border-color: transparent; }
+.msg.out .msg-body { background: var(--accent-soft); color: var(--accent-ink); }
 
 .draft {
   padding: 14px 16px;
@@ -2371,9 +2405,12 @@ textarea:focus-visible {
 
 /* Premier bloc du ticket, avant le fil. Il porte l'accent parce qu'il est le
    seul endroit de l'écran où l'agent doit poser les yeux d'abord. */
+/* Le résumé doit ressortir sans peser. Il pesait deux cent soixante-dix
+   pixels, dont cinquante-sept de pastilles passées à la ligne : la première
+   chose qu'on lit prenait le quart de la colonne avant le premier message. */
 .brief {
-  margin: 0 15px 14px;
-  padding: 13px 15px 14px;
+  margin: 0 15px 11px;
+  padding: 10px 12px 11px;
   border-radius: var(--r-lg);
   background:
     linear-gradient(180deg,
@@ -4124,18 +4161,25 @@ textarea:focus-visible {
    étiquettes qui classent. Seul « Supprimer » reste rouge : « Rembourser »
    pèse autant, mais deux boutons rouges voisins invitent au faux clic, et le
    remboursement passe de toute façon par une confirmation chiffrée. */
-.thread-acts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-  margin-left: auto;
-}
+/* L'action principale se tient contre « Actions », en haut à droite, et non
+   plus au bout de la ligne des libellés. Un libellé ne se casse pas en son
+   milieu : sur une colonne étroite, « Écrire au client » s'empilait sur trois
+   lignes dans un bouton haut comme un paragraphe. */
+.th-primary { display: inline-flex; flex: none; margin-right: 4px; }
+.th-primary .btn,
+.th-nav .btn { white-space: nowrap; }
 
-/* Un libellé ne se casse pas en son milieu. Sur une colonne étroite, « Écrire
-   au client » s'empilait sur trois lignes dans un bouton haut comme un
-   paragraphe ; les boutons passent désormais à la ligne entiers. */
-.thread-acts .btn { white-space: nowrap; }
+/* Le chevron du menu, dessiné plutôt qu'écrit : un caractère « ▾ » ne suit ni
+   la taille ni la couleur du texte selon les polices installées. */
+.th-car {
+  width: 0;
+  height: 0;
+  margin-left: 5px;
+  border-left: 3.5px solid transparent;
+  border-right: 3.5px solid transparent;
+  border-top: 4px solid currentColor;
+  opacity: 0.6;
+}
 
 /* ---------------------------------------------- indicateurs en bandeau ---
    Sur l'écran SAV, les quatre indicateurs tiennent sur une ligne basse : la
@@ -4303,8 +4347,12 @@ textarea:focus-visible {
 .qrow:focus-within .qpick,
 .qrow.picked .qpick { opacity: 1; }
 .qpick input { width: 15px; height: 15px; cursor: pointer; accent-color: var(--accent); }
-.qrow:hover .queue-item,
-.qrow.picked .queue-item { padding-left: 34px; }
+/* La gouttière de la case à cocher est réservée en permanence, plus ouverte
+   au survol. Elle faisait sauter TOUTE la ligne de vingt-cinq pixels vers la
+   droite au passage de la souris — et sans transition, `padding` ne figurant
+   pas dans la liste des propriétés animées. Sur une file qu'on parcourt à la
+   souris, chaque ligne survolée se déplaçait sous le curseur. La case reste
+   invisible au repos ; c'est sa place qui ne bouge plus. */
 .qrow.picked .queue-item { background: color-mix(in srgb, var(--accent) 9%, transparent); }
 
 /* Barre d'actions groupées, collée en tête de la file : elle doit rester
@@ -5760,8 +5808,35 @@ textarea:focus-visible {
 
 .queue-item { padding: 5px 9px; gap: 1px; }
 .queue-item .age { font-size: 10.5px; padding: 1px 6px; }
-.queue-who { font-size: 12px; }
-.queue-line2 .queue-subject { font-size: 12.5px; }
+/* Le nom passe devant. C'est par lui qu'un agent reconnaît un dossier qu'il
+   a déjà ouvert, et il était plus petit que l'objet du message. */
+.queue-who { font-size: 13px; line-height: 1.35; }
+
+/* L'objet gagne un demi-point et surtout de l'interligne : à 1,5 hérité du
+   corps de page il flottait, à 1,35 il tenait trop serré sous le nom. */
+.queue-line2 .queue-subject { font-size: 13px; line-height: 1.4; }
+
+/* L'âge du message décide de ce qu'on ouvre : il ne peut pas être le plus
+   petit texte de l'écran. */
+.queue-item .age { font-size: 12px; }
+
+/* Toutes les lignes au même pas. Sans extrait — un message d'une ligne, une
+   note interne — la ligne tombait à 52 px contre 70 : le regard qui descend
+   la file butait sur un rythme irrégulier, et c'est ce qui fatigue le plus au
+   bout d'une heure. Le plancher vaut la hauteur d'une ligne complète.
+
+   Qualifié par `#queue` : la vue d'ensemble réutilise `.queue-item` avec un
+   tout autre contenu — un titre, des pastilles, ni avatar ni extrait — et un
+   plancher calé sur une ligne de file y ajouterait du vide. */
+#queue .queue-item { min-height: 74px; }
+
+/* Le clavier navigue la file avec J et K, et rien ne montrait où l'on était.
+   Le contour se dessine à l'intérieur du bord pour ne pas mordre sur les
+   lignes voisines. */
+.queue-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
 
 /* ------------------------------------------------------------------ */
 /* DENSITÉ MÉTIER — étape 2 : le tableau.                              */
@@ -5960,9 +6035,13 @@ textarea:focus-visible {
 .tm-who .linkish { font-weight: 650; color: var(--ink); }
 .tm-who code { font-size: 12px; color: var(--ink-mute); }
 
+/* La deuxième ligne de l'en-tête porte le client, son adresse, l'intention et
+   le montant : c'est de l'information de travail, pas une mention légale.
+   Elle était au plus petit corps de l'écran et au gris le plus pâle. */
 .tm-facts {
-  font-size: 11.5px;
-  color: var(--ink-mute);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ink-soft);
   display: block;
   min-width: 0;
 }
@@ -6042,17 +6121,22 @@ textarea:focus-visible {
 .bf {
   display: inline-flex;
   align-items: baseline;
-  gap: 5px;
-  padding: 3px 9px;
+  gap: 4px;
+  padding: 2px 7px;
   border: 1px solid var(--line);
-  border-radius: var(--r-md);
+  border-radius: var(--r-sm);
   background: var(--surface);
   font-size: 11.5px;
   color: var(--ink-mute);
 }
 
 .bf b { font-weight: 600; color: var(--ink); }
-.bf-warn b { color: var(--warn); }
+
+/* L'alerte porte son signe, pas seulement sa couleur : « quelque chose cloche
+   du côté de l'argent ou du colis » doit se voir sans distinguer un orange
+   d'un gris. Le signe est décoratif, le texte de la pastille dit déjà tout. */
+.bf-warn b { color: var(--warn-ink); }
+.bf-warn::before { content: "⚠"; color: var(--warn-ink); font-size: 10.5px; }
 
 /* ========================================== file : lignes à trois étages ===
 
@@ -6087,7 +6171,11 @@ textarea:focus-visible {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  /* Un pixel entre trois étages de texte n'est pas de la densité, c'est un
+     écrasement : les trois lignes se lisent comme un seul bloc et l'œil ne
+     sait plus où commence l'extrait. Trois pixels séparent sans allonger —
+     la ligne gagne quatre pixels au total, pour un gain de scan net. */
+  gap: 3px;
 }
 
 /* L'extrait : gris, une ligne, coupé net. Il oriente, il ne se lit pas — deux
@@ -6116,14 +6204,29 @@ textarea:focus-visible {
   color: var(--ink-mute);
 }
 
-.queue-item .age-warm { color: var(--warn); font-weight: 600; }
-.queue-item .age-late { color: var(--crit); font-weight: 600; }
+.queue-item .age-warm { color: var(--warn-ink); font-weight: 600; }
+.queue-item .age-late { color: var(--crit-ink); font-weight: 600; }
+
+/* Le point garde la couleur vive : c'est un objet graphique, il se mesure au
+   seuil de 3:1, et c'est lui qui se repère sans lire. Sans cette règle il
+   suivrait le texte, puisqu'il est peint en `currentColor`. */
+.queue-item .age-warm::before { background: var(--warn); }
+.queue-item .age-late::before { background: var(--crit); }
+
+/* La puce grise devant chaque heure ne dit rien : elle ne se distingue de ses
+   voisines que sur les lignes qui traînent, et sur toutes les autres elle
+   ajoute six pixels de bruit à gauche d'une information déjà brève. */
+.queue-item .age:not(.age-warm):not(.age-late)::before { display: none; }
 
 /* Un message lu s'efface en entier, extrait compris : le laisser en gris franc
    sous un titre pâli donnerait plus de poids à ce qu'on a déjà traité qu'à ce
    qui reste. */
-.queue-item.q-done .qav { opacity: 0.62; }
-.queue-item.q-done .queue-prev { opacity: 0.7; }
+/* L'opacité s'empilait sur un gris déjà juste : l'extrait d'une ligne lue
+   tombait à 2,37:1, sous le seuil des objets graphiques — et la quasi-totalité
+   des lignes sont lues, puisque le marchand ouvre ses messages dans Gmail.
+   C'était donc l'état par défaut de la file. Le titre pâlit et s'allège déjà
+   (font-weight 420 contre 680) : cela suffit à dire « traité ». */
+.queue-item.q-done .qav { opacity: 0.75; }
 
 /* Les dossiers sur une seule rangée : quatre entrées qui débordaient sur deux
    lignes prenaient la hauteur de deux messages.
@@ -6230,6 +6333,10 @@ textarea:focus-visible {
 
 .more-item:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent-ink); }
 .more-item:disabled { color: var(--ink-mute); cursor: default; }
+
+/* Une action interdite reste visible et dit pourquoi en infobulle : la faire
+   disparaître laisserait croire qu'elle n'existe pas. */
+.more-item:disabled { opacity: 0.65; }
 .more-danger { color: var(--crit); }
 .more-danger:hover:not(:disabled) { background: var(--crit-soft); color: var(--crit); }
 
@@ -6356,6 +6463,13 @@ textarea:focus-visible {
      presque illisible. */
   --accent-soft: color-mix(in srgb, var(--accent) 22%, #191c23);
   --accent-ink: color-mix(in srgb, var(--accent) 55%, #ffffff);
+
+  /* Les encres de texte s'inversent avec le fond. --warn et --crit ne sont
+     déclarés qu'en thème clair et valent donc la même chose ici, sur du
+     sombre : le rouge d'alerte y tombe à 3,80:1. Ces deux-là s'éclaircissent
+     au lieu de s'assombrir. */
+  --warn-ink: #e8a34a;
+  --crit-ink: #f28b8f;
 }
 
 /* ============================================ rail en cartes séparées =====
@@ -6370,14 +6484,28 @@ textarea:focus-visible {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 11px 14px 0;
+  /* Onze pixels au-dessus d'un intitulé de neuf pixels : le titre flottait
+     dans sa carte. Le texte ne change pas de taille, seul l'air se resserre. */
+  padding: 9px 14px 0;
 }
 
 .rail-head .rail-title { margin: 0; }
 .rail-head .btn,
 .rail-head .rail-more { margin-left: auto; }
 
-.rail-card .card-body { padding: 9px 14px 13px; }
+.rail-card .card-body { padding: 7px 14px 10px; }
+
+/* Vingt-huit pixels par carte venaient du navigateur, pas de la feuille.
+   Aucune règle de l'application ne touche `dl`, et sa marge par défaut de
+   1 em en haut et en bas fusionnait avec les écarts que le rail déclare
+   explicitement — `.rail-id { margin-bottom: 9px }` — qui n'avaient donc
+   aucun effet. C'est la plus grande hauteur perdue du rail, et elle n'était
+   écrite nulle part. */
+.rail-card dl { margin: 0; }
+
+/* Huit pixels entre deux lignes d'un même dossier, contre cinq partout
+   ailleurs dans l'outil. Le texte reste à 13 px : seul l'air change. */
+.rail-card .row + .row { margin-top: 5px; }
 
 /* Le lien discret d'en-tête : il porte le numéro de commande ou l'accès au
    profil. Rang de lien, pas de bouton — la carte a déjà son action. */
@@ -6757,7 +6885,41 @@ textarea:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
-.rail-cta { margin-top: 10px; }
+/* Le bouton WhatsApp se tient contre le numéro, dans le même `<dd>`. Le
+   `<dd>` du rail est aligné à droite : il s'ouvre en flex pour porter deux
+   enfants au lieu d'un. */
+.rail-card .row dd.dd-wa {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Une cible de 26 px — au-dessus du minimum de 24 px — sans cadre ni fond au
+   repos : c'est l'icône de marque qui identifie le geste, le cadre n'ajoute
+   rien. Il apparaît au survol et au focus, pour dire que c'est cliquable. */
+.wa-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  color: var(--ok);
+  transition: background-color 0.14s var(--ease), border-color 0.14s var(--ease);
+}
+
+.wa-icon svg { width: 15px; height: 15px; }
+
+.wa-icon:hover,
+.wa-icon:focus-visible {
+  background: var(--ok-soft);
+  border-color: color-mix(in srgb, var(--ok) 30%, transparent);
+}
+
+/* Le bouton du tiroir de commande garde sa forme : là, il est seul dans une
+   rangée d'actions, pas accolé à un numéro. */
 .wa-btn { gap: 6px; }
 .wa-btn svg { width: 14px; height: 14px; color: var(--ok); }
 
