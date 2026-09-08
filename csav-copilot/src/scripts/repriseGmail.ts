@@ -107,7 +107,23 @@ async function filsCorrespondant(
   let pageToken: string | undefined;
   let patience = 0;
 
-  do {
+  /*
+   * On ne sort qu'après une page LUE.
+   *
+   * La version précédente bouclait en `do … while (pageToken)`. Sur un refus
+   * de quota à la toute première page, `pageToken` valait encore `undefined`
+   * après l'attente : la condition tombait, la fonction rendait un ensemble
+   * vide sans lever d'erreur, et cet ensemble vide était ensuite écrit comme
+   * la vérité de Gmail — « 0 non lu », donc tout passé lu ; « 0 en
+   * réception », donc tout archivé, dossier Réception vidé, et « ✓ appliqué »
+   * à l'écran. La reprise ne fonctionnait qu'à partir de la deuxième page.
+   *
+   * Or la première page est la plus exposée : c'est celle qu'on relance juste
+   * après un refus, dans une fenêtre de quota encore pleine. Le retour ne se
+   * fait donc que depuis le succès ; un refus patiente puis rejoue la MÊME
+   * page, `pageToken` n'ayant pas bougé.
+   */
+  for (;;) {
     try {
       const { data } = await gmail.users.threads.list({
         userId: 'me',
@@ -117,8 +133,9 @@ async function filsCorrespondant(
       });
 
       for (const fil of data.threads ?? []) if (fil.id) ids.add(fil.id);
-      pageToken = data.nextPageToken ?? undefined;
       patience = 0;
+      pageToken = data.nextPageToken ?? undefined;
+      if (!pageToken) return ids;
     } catch (error) {
       const limite = /rateLimitExceeded|Quota exceeded|429/i.test(
         error instanceof Error ? error.message : String(error),
@@ -130,9 +147,7 @@ async function filsCorrespondant(
       console.log(`    quota Gmail atteint, reprise dans ${attente / 1000} s…`);
       await dormir(attente);
     }
-  } while (pageToken);
-
-  return ids;
+  }
 }
 
 interface Boite {
@@ -180,6 +195,13 @@ async function main(): Promise<void> {
     const nom = boite.mailboxId ?? `${boite.merchantId} (boîte par défaut)`;
     console.log(`  ${nom} — ${boite.fils} fil(s)`);
 
+    /*
+     * L'instant de la photographie. Les deux recherches décrivent la boîte à
+     * cet instant ; tout ticket créé après n'a pas été regardé et ne doit pas
+     * être touché par la remise à plat — voir la transaction plus bas.
+     */
+    const photographieA = new Date();
+
     let nonLus: Set<string>;
     let enReception: Set<string>;
 
@@ -225,6 +247,30 @@ async function main(): Promise<void> {
     };
 
     const devraientEtreNonLus = await compterParFils(portee, [...nonLus]);
+    const resterontEnReception = await compterParFils(portee, [...enReception]);
+
+    /*
+     * Second garde-fou : Gmail a répondu, mais pour une autre boîte.
+     *
+     * Le premier ne couvre que le silence. Une réponse abondante dont AUCUN
+     * fil ne recoupe nos tickets n'est pas une boîte vide, c'est une boîte
+     * étrangère — jeton d'un autre compte, boîte par défaut mal résolue.
+     * La remise à plat la traiterait pourtant comme une vérité, et éteindrait
+     * toute la portée. Le recouvrement était déjà calculé pour l'affichage ;
+     * il est désormais aussi la condition d'écriture.
+     *
+     * Le test porte sur la réception, pas sur les non lus : « aucun non lu ne
+     * recoupe nos tickets » est un état légitime — tous clos, tous hors
+     * portée — alors qu'une réception fournie sans un seul de nos fils ne
+     * l'est jamais.
+     */
+    if (enReception.size > 0 && resterontEnReception === 0) {
+      console.error(`    ✗ Gmail décrit ${enReception.size} fil(s) en réception, aucun n’est à nous.`);
+      console.error('      Refus d’écrire : cette réponse décrit une autre boîte que celle des tickets.');
+      injoignables.push(`${nom} (réponse Gmail étrangère)`);
+      continue;
+    }
+
     const sontNonLus = await prisma.ticket.count({ where: { ...portee, gmailUnread: true } });
 
     /*
@@ -234,7 +280,6 @@ async function main(): Promise<void> {
      * quitte la vue par défaut. C'est voulu, mais un millier de tickets qui
      * disparaissent d'un écran sans avoir été annoncés ressemble à une panne.
      */
-    const resterontEnReception = await compterParFils(portee, [...enReception]);
     const serontArchives = boite.fils - resterontEnReception;
     const sontArchives = await prisma.ticket.count({ where: { ...portee, gmailArchived: true } });
 
@@ -258,8 +303,20 @@ async function main(): Promise<void> {
      * fil. Hors transaction, le compteur se lirait à zéro entre les deux.
      */
     await prisma.$transaction([
+      /*
+       * Bornée à ce qui existait au moment de la photographie.
+       *
+       * L'ingestion continue pendant la reprise. Un mail arrivé entre les
+       * recherches et cette écriture a créé un ticket que Gmail n'a pas
+       * décrit : sans cette borne, la remise à plat l'éteindrait — lu et
+       * archivé — avant que personne ne l'ait vu. Il garde ses valeurs de
+       * création, qui sont justement celles d'un courrier neuf, et la relève
+       * incrémentale s'en occupe à partir de là. Les deux corrections qui
+       * suivent n'ont pas besoin de la borne : elles ne font que poser vrai
+       * ce que Gmail a nommé, ce qui reste juste pour un fil arrivé entre-temps.
+       */
       prisma.ticket.updateMany({
-        where: portee,
+        where: { ...portee, createdAt: { lt: photographieA } },
         data: { gmailUnread: false, gmailArchived: true },
       }),
       ...morceaux([...nonLus], PAR_LOT_SQL).map((lot) =>
