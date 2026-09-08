@@ -4556,7 +4556,26 @@ function customerPhone(order) {
   if (!raw) return null;
 
   const number = whatsappNumber(raw, address?.country);
-  return { raw, number, link: whatsappLink(number) };
+
+  /*
+   * Quand on ne peut pas composer, dire laquelle des deux raisons.
+   *
+   * L'écran affichait « Numéro non valide pour WhatsApp » dans tous les cas.
+   * C'était faux la plupart du temps : le numéro d'une cliente américaine est
+   * parfaitement valide, c'est l'application qui ignorait l'indicatif de son
+   * pays. Accuser la donnée d'un défaut qui est le nôtre envoie chercher
+   * l'erreur là où elle n'est pas.
+   */
+  const paysConnu = Boolean(DIAL_CODES[String(address?.country ?? '').toUpperCase()]);
+  const raison = number
+    ? null
+    : paysConnu
+      ? 'Ce numéro ne compose pas : il ne correspond pas au format du pays.'
+      : `Indicatif inconnu pour ce pays${
+          address?.country ? ` (${address.country})` : ''
+        } — l'application ne sait pas composer ce numéro. Le numéro, lui, est probablement bon.`;
+
+  return { raw, number, link: whatsappLink(number), raison };
 }
 
 /*
@@ -4575,7 +4594,7 @@ function phoneRow(order, name) {
   const numero = phone.link
     ? `<a class="rail-phone" href="${esc(phone.link)}" target="_blank" rel="noopener noreferrer"
          title="Ouvrir dans WhatsApp">${esc(phone.raw)}</a>`
-    : `<span class="rail-phone-off" title="Numéro non valide pour WhatsApp">${esc(phone.raw)}</span>`;
+    : `<span class="rail-phone-off" title="${esc(phone.raison)}">${esc(phone.raw)}</span>`;
 
   // Sans numéro composable, pas de bouton : une icône qui ouvrirait une URL
   // vide vaut moins que rien du tout.
@@ -4637,6 +4656,21 @@ const DIAL_CODES = {
   IE: { dial: '353', trunk: '0' },
   MC: { dial: '377', trunk: '' },
   MA: { dial: '212', trunk: '0' },
+
+  /*
+   * Le plan de numérotation nord-américain.
+   *
+   * Le « 1 » qu'on compose avant un appel longue distance aux États-Unis
+   * n'est pas un préfixe national au sens de cette table : le numéro national
+   * fait dix chiffres, indicatif régional compris, et se préfixe directement
+   * par l'indicatif pays. D'où `trunk: ''`.
+   *
+   * Les clients écrivent pourtant leur numéro des deux façons — « 478 349
+   * 0262 » et « 1 478 349 0262 » — et la seconde forme doublait l'indicatif.
+   * C'est traité dans `whatsappNumber`, pas ici.
+   */
+  US: { dial: '1', trunk: '' },
+  CA: { dial: '1', trunk: '' },
 };
 
 /**
@@ -4665,6 +4699,19 @@ function whatsappNumber(raw, countryCode) {
     }
   } else {
     if (!country) return null;
+
+    /*
+     * Amérique du Nord : le numéro national fait dix chiffres, mais beaucoup
+     * de clients écrivent les onze, indicatif pays compris. Préfixer sans
+     * regarder donnait « 1 » + « 14783490262 » — un numéro à douze chiffres,
+     * plausible, et qui n'est celui de personne. Onze chiffres commençant par
+     * un « 1 » portent donc déjà leur indicatif.
+     */
+    if (country.dial === '1') {
+      const national = digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits;
+      return national.length === 10 && /^[2-9]/.test(national) ? '1' + national : null;
+    }
+
     const national =
       country.trunk && digits.startsWith(country.trunk) ? digits.slice(country.trunk.length) : digits;
     number = country.dial + national;
@@ -8703,7 +8750,7 @@ function orderDetailMarkup(order) {
              aria-label="Ouvrir WhatsApp avec ${esc(address?.name ?? order.customer?.displayName ?? 'le client')}"
              title="Ouvrir la conversation dans WhatsApp Web">${ico('whatsapp')} WhatsApp</a>
          </div>`
-      : `<div class="ordv-phone"><span class="rail-phone-off mono" title="Numéro non valide pour WhatsApp">${esc(
+      : `<div class="ordv-phone"><span class="rail-phone-off mono" title="${esc(phone.raison)}">${esc(
           phone.raw,
         )}</span></div>`;
 
