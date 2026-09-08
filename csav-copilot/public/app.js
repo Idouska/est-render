@@ -90,6 +90,29 @@ function dateTime(iso) {
   return `${fullDate(iso)} à ${shortTime(iso)}`;
 }
 
+/*
+ * « Aujourd'hui à 11:11 » plutôt que « 8 septembre 2026 à 11:11 ».
+ *
+ * Dans une liste qu'on parcourt le matin, la date du jour n'apporte rien :
+ * on sait quel jour on est. Ce qu'on cherche, c'est ce qui vient d'arriver —
+ * et « aujourd'hui » se repère d'un coup d'œil là où la date pleine se lit.
+ * Hier reçoit le même traitement ; au-delà, la date reprend ses droits, parce
+ * que « il y a 3 jours » oblige à calculer.
+ */
+function dayOrDateTime(iso) {
+  if (!iso) return '';
+  const date = new Date(iso);
+  const today = new Date();
+  const sameDay = (a, b) =>
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+
+  if (sameDay(date, today)) return `Aujourd’hui à ${shortTime(iso)}`;
+  if (sameDay(date, yesterday)) return `Hier à ${shortTime(iso)}`;
+  return dateTime(iso);
+}
+
 /** Échappe le texte avant insertion : les mails viennent de l'extérieur. */
 function esc(value) {
   return String(value ?? '')
@@ -8233,7 +8256,7 @@ function renderOrders() {
 
           return `<tr class="grid-row" data-order="${esc(order.id)}">
           <td class="mono"><b>${esc(order.name)}</b></td>
-          <td>${dateTime(order.createdAt)}</td>
+          <td title="${esc(dateTime(order.createdAt))}">${dayOrDateTime(order.createdAt)}</td>
           <td>${esc(order.customer?.displayName ?? order.customer?.email ?? 'Client inconnu')}</td>
           <td>${esc(destination)}</td>
           <td>${esc(order.channel ?? '')}</td>

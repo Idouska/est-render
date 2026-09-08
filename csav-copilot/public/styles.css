@@ -7263,3 +7263,19 @@ textarea:focus-visible {
 .grid td.clip { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
 
 .grid-tags { display: inline-flex; gap: 4px; flex-wrap: wrap; max-width: 260px; }
+
+/* La première colonne reste en place quand on fait défiler vers la droite :
+   à douze colonnes, le numéro de commande sort de l'écran dès la sixième et
+   la ligne perd son nom. La cellule d'en-tête est figée dans les deux sens.
+   Le fond est posé explicitement — une cellule figée sans fond laisse voir
+   celles qui passent dessous. */
+.grid-pin th:first-child,
+.grid-pin td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--surface);
+  box-shadow: 1px 0 0 var(--line);
+}
+.grid-pin th:first-child { z-index: 3; background: var(--sunk); }
+.grid-pin tbody tr:hover td:first-child { background: var(--inset); }
