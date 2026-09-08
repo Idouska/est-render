@@ -192,7 +192,19 @@ async function main(): Promise<void> {
   let corriges = 0;
 
   for (const boite of liste) {
-    const nom = boite.mailboxId ?? `${boite.merchantId} (boîte par défaut)`;
+    /*
+     * La boîte est nommée par son adresse, pas par son identifiant interne.
+     * Le bilan demande d'aller « reconnecter » les boîtes injoignables : un
+     * cuid n'apparaît nulle part dans l'écran de connexion, l'adresse si.
+     */
+    const connexion = boite.mailboxId
+      ? await prisma.gmailConnection.findUnique({
+          where: { id: boite.mailboxId },
+          select: { emailAddress: true },
+        })
+      : null;
+    const nom =
+      connexion?.emailAddress ?? boite.mailboxId ?? `${boite.merchantId} (boîte par défaut)`;
     console.log(`  ${nom} — ${boite.fils} fil(s)`);
 
     /*
@@ -215,7 +227,12 @@ async function main(): Promise<void> {
       continue;
     }
 
-    console.log(`    Gmail : ${nonLus.size} non lu(s), ${enReception.size} en réception`);
+    // Toute la boîte — lettres d'information, notifications, fils jamais
+    // devenus tickets. La ligne qui suit ne compte que nos tickets : les
+    // deux sont vraies et ne se comparent pas, autant le dire.
+    console.log(
+      `    Gmail, toute la boîte : ${nonLus.size} non lu(s), ${enReception.size} en réception`,
+    );
 
     /*
      * Deux listes vides : on n'écrit rien.
