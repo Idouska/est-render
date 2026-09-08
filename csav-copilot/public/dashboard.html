@@ -569,36 +569,8 @@
             <p class="actbar-note" id="actbar-note"></p>
           </div>
 
-          <!-- Rédaction sur place. Écrire au client depuis une fenêtre modale
-               masque le ticket au moment précis où l'on a besoin de le relire
-               pour répondre.
-
-               Sortie de `#actbar`, et ce n'est pas cosmétique : la barre
-               d'actions se masque quand elle n'a rien à proposer, et les
-               gestes ont migré vers l'en-tête du ticket. Restée dedans, la
-               zone de rédaction aurait disparu avec elle — cliquer « Écrire au
-               client » aurait ouvert un formulaire dans un conteneur masqué,
-               sans la moindre erreur pour le dire. -->
-          <div class="compose" id="compose" hidden>
-              <!-- L'objet part dans le mail : il se relit et se corrige comme
-                   le corps. Il était calculé en silence (« Re: » + l'objet du
-                   fil), ce qui convient neuf fois sur dix — et interdisait la
-                   dixième, quand la conversation a changé de sujet et que le
-                   client reçoit une réponse titrée d'après sa question
-                   d'avant. -->
-              <label class="compose-subject">
-                <span>Objet</span>
-                <input type="text" id="compose-subject" autocomplete="off" />
-              </label>
-              <textarea id="compose-body" rows="5"></textarea>
-              <div class="compose-foot">
-                <button class="btn btn-small" id="compose-relay" hidden></button>
-                <span class="hint" id="compose-hint"></span>
-                <button class="btn" id="compose-cancel">Annuler</button>
-                <button class="btn" id="compose-resolve">Marquer résolu</button>
-                <button class="btn btn-primary" id="compose-send">Valider et envoyer</button>
-              </div>
-          </div>
+          <!-- La rédaction vit désormais dans une fenêtre, en bas de ce
+               document, à côté des autres modales : voir `#compose`. -->
 
           <div class="subs" id="subs" hidden></div>
 
@@ -1458,6 +1430,60 @@ contact@runningupscale.com"></textarea>
           </div>
         </div>
       </section>
+        </div>
+      </div>
+    </div>
+
+    <!-- Écrire au client, dans une fenêtre — à la demande du marchand.
+
+         Elle vivait sur place, sous les actions, pour ne pas masquer le fil
+         qu'on relit en répondant. La fenêtre garde cet acquis autrement : son
+         voile est plus léger, le ticket reste lisible derrière. « Agrandir »
+         n'est qu'une classe posée sur cette même fenêtre — rien n'est recréé,
+         le brouillon ne bouge pas.
+
+         Les icônes des deux boutons d'en-tête sont posées à l'ouverture par
+         app.js : `ICONS` y est un `const` de fin de fichier, hors de portée au
+         chargement. -->
+    <div class="backdrop compose-backdrop" id="compose" hidden>
+      <div class="modal compose-modal" role="dialog" aria-modal="true" aria-labelledby="compose-title">
+        <div class="compose-head">
+          <h2 id="compose-title">Écrire au client</h2>
+          <span class="compose-sig" id="compose-sig" hidden></span>
+          <button class="ico-btn" type="button" id="compose-expand" title="Agrandir"
+            aria-label="Agrandir" aria-pressed="false"></button>
+          <button class="ico-btn" type="button" id="compose-close" title="Fermer"
+            aria-label="Fermer"></button>
+        </div>
+        <div class="compose-fields">
+          <!-- Le destinataire n'est pas un champ : c'est l'adresse du fil,
+               imposée par le ticket. L'afficher dit où part le message ;
+               le rendre modifiable écrirait dans la conversation du client un
+               message parti ailleurs. -->
+          <label class="compose-subject compose-to" id="compose-to-row">
+            <span>À</span>
+            <output id="compose-to"></output>
+          </label>
+          <!-- L'objet part dans le mail : il se relit et se corrige comme le
+               corps. Calculé en silence (« Re: » + l'objet du fil), il convient
+               neuf fois sur dix — et interdit la dixième, quand la conversation
+               a changé de sujet. -->
+          <label class="compose-subject">
+            <span>Objet</span>
+            <input type="text" id="compose-subject" autocomplete="off" />
+          </label>
+        </div>
+        <div class="compose-tools" id="compose-tools" hidden>
+          <span class="compose-tools-label">Réponse type</span>
+          <div class="compose-canned" id="compose-canned"></div>
+        </div>
+        <textarea id="compose-body" rows="5"></textarea>
+        <div class="compose-foot">
+          <button class="btn btn-small" id="compose-relay" hidden></button>
+          <span class="hint" id="compose-hint"></span>
+          <button class="btn" id="compose-cancel">Annuler</button>
+          <button class="btn" id="compose-resolve">Marquer résolu</button>
+          <button class="btn btn-primary" id="compose-send">Valider et envoyer</button>
         </div>
       </div>
     </div>

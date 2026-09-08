@@ -304,6 +304,12 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
         shopDomain: merchant.shopDomain,
         name: merchant.name,
         brandName: merchant.brandName,
+        /*
+         * La signature part avec l'identité : le composeur l'injecte à
+         * l'ouverture, et il s'ouvre sans être passé par les Réglages, seul
+         * écran qui la chargeait jusqu'ici.
+         */
+        emailSignature: merchant.emailSignature,
         logoUrl: merchant.logoUrl,
         hasLogo: Boolean(merchant.logoMime),
         autoSendEnabled: merchant.autoSendEnabled,
