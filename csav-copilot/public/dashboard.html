@@ -110,6 +110,28 @@
               <kbd>⌘K</kbd>
             </button>
 
+            <!-- Les états de connexion et le rafraîchissement remontent
+                 ici, sur la ligne du titre. Ils vivaient dans la rangée
+                 d'en dessous, qu'ils obligeaient à se replier sur deux
+                 lignes dès 1400 px : trois blocs de vingt pixels de haut
+                 pour une information qu'on ne lit qu'en cas de doute. -->
+            <div class="head-conn" id="conn"></div>
+            <span class="head-sync" id="sync-note"></span>
+            <div class="head-tools">
+              <button class="btn btn-small" id="refresh" type="button" title="Rafraîchir (R)">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"
+                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M13.5 8a5.5 5.5 0 1 1-1.7-4" />
+                  <path d="M13.5 2.5V6H10" />
+                </svg>
+                <span id="refresh-label">Rafraîchir</span>
+              </button>
+              <label class="auto-toggle" title="Recharge l’écran toutes les 60 secondes">
+                <input type="checkbox" id="auto-refresh" checked />
+                <span>auto</span>
+              </label>
+            </div>
+
             <div class="head-acts">
               <!-- Le compte remonte du pied de la navigation vers la barre
                    haute. C'est là qu'on le cherche — et le pied d'une colonne
@@ -232,24 +254,13 @@
         </div>
       </section>
 
+        <!-- Ce qui reste sur la ligne des chiffres : les heures locales des
+             ateliers, et le seul réglage qui change ce que l'outil fait tout
+             seul. Le reste est monté d'une ligne. -->
         <div class="subhead-acts">
           <div class="clocks" id="clocks" role="button" tabindex="0"
             title="Heures locales — cliquer pour le détail"></div>
-          <div class="conn" id="conn"></div>
-          <div class="head-tools">
-            <button class="btn btn-small" id="refresh" type="button" title="Rafraîchir (R)">
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"
-                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M13.5 8a5.5 5.5 0 1 1-1.7-4" />
-                <path d="M13.5 2.5V6H10" />
-              </svg>
-              <span id="refresh-label">Rafraîchir</span>
-            </button>
-            <label class="auto-toggle" title="Recharge l’écran toutes les 60 secondes">
-              <input type="checkbox" id="auto-refresh" checked />
-              <span>auto</span>
-            </label>
-          </div>
+          <span class="autosend" id="autosend"></span>
         </div>
       </div>
 
@@ -277,6 +288,21 @@
             placeholder="N° de commande, client, objet…"
             autocomplete="off"
           />
+
+          <!-- Les libellés du marchand, sur la même ligne que la recherche
+               et les menus. Ils occupaient une rangée à eux seuls, qui
+               doublait de hauteur dès qu'il y en avait plus d'une dizaine :
+               ils s'arrêtent maintenant à six, le reste derrière un « +N ».
+
+               Le « +N » vit hors de la bande, parce que la bande défile : à
+               l'intérieur, il sortait du champ dès que les six pastilles
+               remplissaient la place, et rien ne disait plus qu'il restait
+               des libellés à voir. -->
+          <div class="qlabels-wrap">
+            <div class="qlabels" id="q-label-chips"></div>
+            <span class="qlabels-more" id="q-label-more"></span>
+          </div>
+          <span class="qbar-count" id="q-count"></span>
 
           <!-- Les libellés Gmail : les catégories que le marchand a créées
                lui-même. En liste cochable avec leurs couleurs, et plusieurs à
@@ -381,10 +407,7 @@
              couleurs qu'il leur a données dans Gmail. Les reconnaître de loin
              est tout leur intérêt — enfermées dans une liste, elles se lisent
              une par une. -->
-        <div class="qbar-row qbar-status">
-          <div class="qlabels" id="q-label-chips"></div>
-          <span class="qbar-count" id="q-count"></span>
-        </div>
+
       </section>
 
       <main class="workspace" id="view-tickets">

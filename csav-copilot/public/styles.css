@@ -6816,6 +6816,186 @@ textarea:focus-visible {
    se corrige à sa source — le filet ne dispense jamais de le chercher. */
 html, body { overflow-x: clip; }
 
+
+/* ============================================ zone haute, refonte dense ===
+
+   Trois rangées, et rien de plus : le titre et l'état des connexions, les
+   chiffres, puis la recherche et les filtres. Elles occupaient jusqu'à cinq
+   rangées effectives à 1400 px, parce que chaque bloc se repliait pour son
+   compte. Ce qui a bougé : les pastilles de connexion, la note de
+   synchronisation et le bouton de rafraîchissement sont montés sur la ligne
+   du titre ; les libellés du marchand ont rejoint la ligne des filtres.
+
+   Le principe tient en une phrase : des barres, pas des cartes empilées. */
+
+/* ---- ligne 1 : titre, recherche, connexions, synchro, compte ---- */
+
+.head { gap: 10px; padding: 0 2px; align-items: center; }
+.head h1 { font-size: 16px; }
+
+/* Le titre ne cède pas sa largeur au bloc du compte, et ne descend jamais
+   sous cent dix pixels.
+
+   Sans plancher, il tombait à zéro et « SAV client » se cassait une lettre
+   par ligne — l'en-tête passait à trois cent quinze pixels de haut. Le
+   `overflow-wrap: anywhere` posé ailleurs sur ce titre le permet ; c'est la
+   largeur minimale qui l'empêche. */
+.head .head-main { flex: 1 1 auto; min-width: 110px; }
+.head .head-acts { flex: 0 0 auto; }
+
+/* Les connexions : le logo dit de quoi on parle, le point dit si ça marche.
+   Elles ne rivalisent pas avec le titre — encre atténuée, pas de cadre. */
+.head-conn { display: flex; align-items: center; gap: 12px; min-width: 0; margin-left: auto; }
+.head-conn .conn-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  font-size: 12px;
+  color: var(--ink-mute);
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* La coupure porte sur le texte, pas sur la pastille : le logo et le point
+   ne doivent jamais disparaître dans les points de suspension. */
+.head-conn .conn-txt {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Les marques gardent leurs couleurs — c'est ce qui les rend reconnaissables
+   sans être lues — mais tiennent en treize pixels. */
+.marque { width: 13px; height: 13px; flex: none; }
+
+.head-sync { font-size: 11.5px; color: var(--ink-mute); white-space: nowrap; flex: none; }
+
+.head .head-tools { flex: none; gap: 7px; }
+.head .head-tools .btn { height: 28px; padding: 0 10px; font-size: 12px; }
+
+/* ---- ligne 2 : les chiffres, en barre ---- */
+
+/* Une barre, pas cinq cartes. Le cadre, l'ombre et le rayon de chaque tuile
+   coûtaient dix pixels de haut et disaient « cinq objets » là où il n'y a
+   qu'une lecture : cinq nombres qui se comparent. Un filet les sépare. */
+/* Une seule ligne : les cinq nombres se comparent d'un regard, et un
+   indicateur qui passe à la ligne suivante cesse d'être comparable. C'est
+   l'intitulé qui se coupe, jamais le chiffre. */
+.subhead > .kpis.kpis-slim {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow: hidden;
+  gap: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow);
+  padding: 0 4px;
+}
+
+.kpis-slim .kpi {
+  flex: 0 1 auto;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: none;
+  padding: 5px 13px;
+  gap: 7px;
+  min-height: 30px;
+}
+
+.kpis-slim .kpi + .kpi { box-shadow: inset 1px 0 0 var(--line-soft); }
+/* Une tuile ne se replie pas sur elle-même : chiffre et intitulé restent
+   côte à côte, et c'est l'intitulé qui se coupe. Sans cela, cinq tuiles à
+   cent soixante pixels passaient chacune sur deux lignes et la barre
+   doublait de hauteur sans qu'on l'ait demandé. */
+.kpis-slim .kpi { min-width: 0; flex-wrap: nowrap; padding: 5px 13px; }
+.kpis-slim .kpi-value { flex: none; }
+.kpis-slim .kpi-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpis-slim .kpi-value { font-size: 17px; }
+.kpis-slim .kpi-label { font-size: 10px; min-height: 0; }
+.kpis-slim .kpi-ico { width: 14px; height: 14px; color: var(--ink-mute); }
+.kpis-slim .kpi-ico svg { width: 14px; height: 14px; }
+
+/* Neuf pixels entre les trois barres au lieu de treize : sur une zone qu'on
+   veut dense, les gouttières sont le tiers de ce qu'on cherche à gagner. */
+.main { gap: 9px; }
+
+.subhead { gap: 10px; align-items: center; flex-wrap: nowrap; }
+.subhead-acts { gap: 12px; align-items: center; flex: 0 1 auto; min-width: 0; overflow: hidden; }
+
+/* Les chiffres réservaient huit cents pixels de base pour que les outils leur
+   cèdent la place. Ces outils ont déménagé sur la ligne du titre : il ne reste
+   que les heures et un réglage, et la base forçait désormais un repli pour
+   rien. Les chiffres prennent ce qu'ils demandent, le reste suit. */
+.subhead > .kpis { flex: 0 1 auto; min-width: 0; }
+
+/* Les heures des ateliers : une suite de nombres, pas une rangée de boutons. */
+.subhead-acts .clocks { gap: 2px; }
+.subhead-acts .ckp { padding: 2px 6px; height: 24px; }
+
+.autosend {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--ink-mute);
+  white-space: nowrap;
+}
+
+/* ---- ligne 3 : recherche locale, libellés, menus, vue ---- */
+
+.qbar { padding: 7px 9px; gap: 0; }
+/* Une seule ligne, et c'est la bande de libellés qui cède : elle défile,
+   les menus et la bascule de vue ne bougent pas. Sans `nowrap`, la rangée
+   passait à deux lignes dès 1440 px parce que les pastilles poussaient. */
+.qbar-main { gap: 7px; align-items: center; flex-wrap: nowrap; }
+.qbar-main input[type='search'] { flex: 0 1 240px; min-width: 150px; }
+
+/* Les libellés prennent la place qui reste, et se coupent au lieu de pousser
+   les menus hors de la ligne. Le « +N » se tient à côté de la bande, hors du
+   défilement : sinon il sortait du champ juste quand il devenait utile. */
+.qbar-main .qlabels-wrap {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.qbar-main .qlabels {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 5px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 1px 0;
+}
+.qbar-main .qlabels::-webkit-scrollbar { display: none; }
+.qbar-main .qlabels .chip { flex: none; }
+
+/* Le dégradé n'est posé que si la bande déborde vraiment : c'est une classe
+   que le rendu ajoute après mesure, pas une règle de largeur d'écran. */
+.qbar-main .qlabels.deborde {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
+}
+
+.qbar-main .qlabels-more { flex: none; display: inline-flex; }
+.qbar-main .qlabels-more:empty { display: none; }
+
+.ql-more { font-weight: 600; color: var(--ink-mute); }
+.qbar-main .qbar-count { flex: none; margin-left: 0; }
+
+
 /* ==========================================================================
    REQUÊTES MÉDIA — toutes ici, et nulle part ailleurs
    ==========================================================================
@@ -7519,4 +7699,63 @@ html, body { overflow-x: clip; }
    C'est le seul débordement de page qui subsistait à 320 px. */
 @media (max-width: 760px) {
   .grid td { white-space: normal; overflow-wrap: anywhere; }
+}
+
+/* Les trois replis de la zone haute. Ils vivent ici, avec les autres, parce
+   qu'une requête média n'ajoute aucune spécificité : écrite plus haut que la
+   règle racine qu'elle corrige, elle serait morte sans que rien ne le dise.
+   Voir l'avertissement en tête de cette zone. */
+/* Les heures des ateliers cèdent avant les chiffres.
+
+   Elles disparaissaient déjà sous 1280 px. Le seuil monte à 1600 : entre les
+   deux, elles poussaient la bande d'indicateurs sur deux lignes, et cinq
+   fuseaux valent moins que cinq indicateurs comparables d'un regard. Elles
+   restent accessibles au clic sur l'heure de la barre latérale. */
+@media (max-width: 1600px) {
+  .subhead-acts .clocks { display: none; }
+}
+
+/* Sous 1100 px, la ligne du titre garde sa ligne : c'est l'ancienneté de la
+   synchronisation qui s'efface — elle reste en infobulle du bouton — et les
+   pastilles de connexion se coupent. Replier la ligne coûtait quarante
+   pixels de haut pour une information de confort. */
+@media (max-width: 1100px) {
+  .head-sync { display: none; }
+  .head-conn { gap: 8px; }
+  .head-conn .conn-txt { max-width: 130px; }
+}
+
+/* Sous 900 px, la ligne des filtres se replie plutôt que de comprimer la
+   recherche à rien ; les libellés gardent leur défilement. */
+@media (max-width: 900px) {
+  .qbar-main { flex-wrap: wrap; }
+  .qbar-main input[type='search'] { flex: 1 1 100%; }
+  .subhead { flex-wrap: wrap; }
+}
+
+/* Sous 700 px, deux replis de plus.
+
+   L'en-tête passait à quatre rangées — titre, connexions, outils, compte —
+   soit cent quarante-deux pixels avant le premier ticket. Le texte des
+   connexions s'efface ; le logo et le point restent, et la phrase entière
+   vit dans l'infobulle. Les deux pastilles tiennent alors sur la ligne du
+   titre, et les outils partagent la ligne du compte.
+
+   Dans la barre de filtres, la bande de libellés se battait pour la place
+   avec le compte et les deux menus : elle tombait à quarante-huit pixels et
+   coupait « Annulation » au milieu. Elle prend sa propre rangée, où elle
+   défile. */
+@media (max-width: 700px) {
+  .head-conn .conn-txt { display: none; }
+  .head-conn { gap: 10px; margin-left: 8px; }
+
+  .qbar-main .qlabels-wrap { flex: 1 1 100%; }
+}
+
+/* Le bloc du compte prenait la rangée entière sous 1 080 px. C'était juste
+   quand il était seul à droite du titre ; le bouton de rafraîchissement l'y
+   a rejoint, et cette largeur forcée les séparait sur deux rangées pour
+   trois cents pixels de contenu. Il reprend la taille de son contenu. */
+@media (max-width: 1080px) {
+  .head-acts { width: auto; }
 }
