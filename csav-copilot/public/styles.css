@@ -699,15 +699,30 @@ body {
 .ws-handle:focus-visible { outline: none; }
 body.ws-resizing { cursor: col-resize; user-select: none; }
 
-@media (max-width: 1400px) {
+/* Le rail garde sa colonne dès 1200 px, au lieu de 1400.
+
+   Le seuil de 1400 envoyait Client, Commande, Livraison et Fournisseur en
+   bande horizontale tout en bas de la page sur la plupart des portables :
+   il fallait faire défiler l'écran entier pour lire l'adresse du client
+   pendant qu'on rédige. Or trois colonnes tiennent bien plus bas — à
+   1201 px, la conversation garde plus de cinq cents pixels. */
+@media (max-width: 1200px) {
   .workspace { grid-template-columns: 330px minmax(0, 1fr); gap: 13px; }
   .ws-handle { display: none; }
 }
 @media (max-width: 900px) { .workspace { grid-template-columns: 1fr; } }
 
+/* Entre 1201 et 1400, les colonnes de côté se resserrent : à 1280 px, garder
+   350 et 320 ne laissait que 356 px à la conversation — trois colonnes pour
+   ne plus rien pouvoir lire au milieu. Ce sont des valeurs par défaut : une
+   largeur réglée à la poignée est posée en style en ligne et l'emporte. */
+@media (min-width: 1201px) and (max-width: 1400px) {
+  .workspace { --ws-col1: 300px; --ws-col3: 280px; }
+}
+
 .context { display: flex; flex-direction: column; gap: 13px; }
 
-@media (max-width: 1400px) {
+@media (max-width: 1200px) {
   .context {
     grid-column: 1 / -1;
     display: grid;
@@ -6415,7 +6430,7 @@ textarea:focus-visible {
  * les seize autres écrans se lisent comme des documents et gardent leur
  * défilement de page.
  */
-@media (min-width: 1401px) {
+@media (min-width: 1201px) {
   .app-locked { height: 100dvh; overflow: hidden; }
   .app-locked .main { min-height: 0; }
 
@@ -7474,6 +7489,19 @@ textarea:focus-visible {
 @media (max-width: 760px) {
   .grid td { white-space: normal; overflow-wrap: anywhere; }
 }
+
+/* L'icône de recherche mangeait le début du texte.
+
+   La règle qui la pose réserve trente-quatre pixels à gauche du champ ; une
+   règle plus tardive, hors requête média, ramène le rembourrage à dix. La
+   loupe se retrouvait donc par-dessus les premiers caractères — on lisait
+   « (loupe)042, email ou nom du client » au lieu de « #1042 », et
+   « (loupe) de commande » au lieu de « N° de commande ». Même inversion de
+   cascade que les six réglages mobiles plus haut ; même remède.
+
+   La loupe occupe de onze à vingt-six pixels : le texte commence après. */
+.qbar input[type='search'],
+.browse-bar input[type='search'] { padding-left: 32px; }
 
 /* Ce qui déborde encore se coupe sur place au lieu de faire défiler toute la
    page de côté. `clip` et non `hidden` : il ne crée pas de boîte de
