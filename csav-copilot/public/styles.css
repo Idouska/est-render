@@ -6190,7 +6190,12 @@ textarea:focus-visible {
   font-size: 10.5px;
   font-weight: 650;
   letter-spacing: 0.02em;
-  color: var(--ink);
+  /* Encre fixe, pour la même raison que `.ov-av` : `avatarTint` rend toujours
+     un pastel clair — `hsl(H 52% 88%)` —, et un `--ink` qui blanchit en thème
+     sombre faisait tomber ces initiales à 1,28:1, c'est-à-dire invisibles. Le
+     défaut avait été relevé lors de l'audit de la file et laissé en l'état ;
+     il se corrigeait en une ligne. */
+  color: #101018;
   margin-top: 1px;
 }
 
@@ -7272,6 +7277,99 @@ html, body { overflow-x: clip; }
   min-width: 0;
 }
 
+/* ---- les signes du poste de pilotage ----
+
+   Le mockup de référence pose un pictogramme devant chaque titre de carte et
+   devant chaque ligne d'alerte. Ce n'est pas de la décoration : sept cartes
+   au même rang typographique se distinguent d'abord par leur signe, et c'est
+   ce qui permet de revenir à la bonne sans relire les titres. Tous viennent du
+   jeu `ICONS` — aucun dessin nouveau. */
+
+.panel-ico {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-ink);
+  margin-right: 2px;
+}
+.panel-ico svg { width: 15px; height: 15px; }
+
+.statrow-ico {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-mute);
+  align-self: center;
+}
+.statrow-ico svg { width: 13px; height: 13px; }
+
+/* Le sous-titre reste SUR la ligne du titre, pas dessous.
+
+   La référence le place en dessous ; ici la ligne haute est tenue à trois
+   rangées et cent cinquante-cinq pixels, et une quatrième ligne de texte la
+   ferait grandir — ce que la refonte de cette zone avait précisément défait.
+   Posé à la suite, il dit la même chose sans coûter un pixel de haut, et
+   s'efface le premier quand la place manque. */
+.view-sub {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-mute);
+  line-height: 1.3;
+  align-self: center;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- la table ---- */
+
+/* L'avatar reprend la teinte calculée dans la file : la même personne garde sa
+   couleur d'un écran à l'autre, sinon le repère ne sert à rien. */
+/* `flex` et non `inline-flex` : en ligne, la boîte se dimensionne à son
+   contenu et ignore le plafond de la cellule — un nom long débordait alors
+   sur la colonne du temps au lieu de se couper. */
+.ov-cli { display: flex; align-items: center; gap: 8px; min-width: 0; }
+
+.ov-av {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9.5px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  /* Encre fixe, et non `var(--ink)`.
+
+     La teinte de fond est calculée en JS — `hsl(H 52% 88%)` — et reste claire
+     quel que soit le thème. En sombre, `--ink` devient presque blanc : les
+     initiales tombaient à 1,28:1 sur leur pastel, c'est-à-dire invisibles. Le
+     fond ne suit pas le thème, l'encre ne doit pas le suivre non plus. */
+  color: #101018;
+}
+
+/* Le chevron dit que la ligne s'ouvre. Discret au repos, il se révèle au
+   survol — affiché en permanence sur neuf lignes, il ferait une colonne de
+   flèches qui pèse plus que ce qu'elle annonce. */
+.ov-go {
+  width: 18px;
+  text-align: right;
+  color: var(--ink-mute);
+  opacity: 0.4;
+  transition: opacity 0.14s var(--ease);
+}
+.ov-prio tbody tr:hover .ov-go,
+.ov-prio tbody tr:focus-visible .ov-go { opacity: 1; }
+
 /* Le compteur du titre : un nombre, pas un badge de notification. */
 .pill-count {
   font-size: 12px;
@@ -7316,7 +7414,17 @@ html, body { overflow-x: clip; }
 .ov-prio td { padding: 9px 12px; vertical-align: middle; }
 .ov-prio th { padding: 8px 12px; }
 
-.ov-who { font-weight: 600; white-space: nowrap; }
+/* Un nom long ne mange pas le sujet : les deux se coupent, mais le sujet est
+   ce qui dit de quoi il s'agit. Cinq sujets sur neuf étaient tronqués parce
+   que la colonne du client prenait deux cent cinquante pixels. */
+.ov-who {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.ov-prio td:first-child { max-width: 190px; }
 .ov-age { white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 /* Le sujet cède la place aux colonnes fixes : c'est le seul champ dont la
@@ -7324,7 +7432,7 @@ html, body { overflow-x: clip; }
    hors de l'écran. */
 .ov-subj {
   max-width: 1px;
-  width: 40%;
+  width: 46%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

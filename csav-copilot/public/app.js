@@ -6300,6 +6300,11 @@ function renderOvKpis(metrics, counts) {
   // Les icônes sont peintes par la même fonction que la barre du SAV : deux
   // jeux de pictogrammes pour un seul produit se remarquent tout de suite.
   paintKpiIcons($('ov-kpis'));
+  // Les titres de cartes portent aussi un pictogramme : même fonction, même
+  // jeu de glyphes, et ils ne sont peints qu'une fois.
+  document.querySelectorAll('#view-overview .panel-ico[data-ico]').forEach((box) => {
+    if (!box.firstChild) box.innerHTML = ico(box.dataset.ico);
+  });
 }
 
 /* ---- ce qui presse ---- */
@@ -6350,18 +6355,31 @@ function renderOvPriorite() {
         .map(
           ({ t, e }) => `<tr tabindex="0" role="button" data-ov-id="${esc(t.id)}"
             aria-label="Ouvrir le message de ${esc(t.customerName ?? t.customerEmail)}">
-            <td class="ov-who">${esc(t.customerName ?? t.customerEmail)}</td>
+            <td>
+              <span class="ov-cli">
+                <span class="ov-av" aria-hidden="true"
+                  style="background:${esc(avatarTint(t.customerName ?? t.customerEmail))}">${esc(
+                    initials(t.customerName ?? t.customerEmail),
+                  )}</span>
+                <span class="ov-who" title="${esc(t.customerName ?? t.customerEmail)}">${esc(
+                  t.customerName ?? t.customerEmail,
+                )}</span>
+              </span>
+            </td>
             <td class="ov-age sub">${esc(relativeTime(t.lastMessageAt))}</td>
-            <td class="ov-subj">${esc(t.subject ?? '(sans objet)')}</td>
+            <td class="ov-subj" title="${esc(t.subject ?? '(sans objet)')}">${esc(
+              t.subject ?? '(sans objet)',
+            )}</td>
             <td><span class="tag tag-status st-${esc(t.status)}">${esc(
               STATUS_LABELS[t.status] ?? t.status,
             )}</span></td>
             <td class="mono sub">${esc(t.orderName ?? '—')}</td>
             <td><span class="ovdue ovdue-${e.ton}">${esc(e.label)}</span></td>
+            <td class="ov-go" aria-hidden="true">›</td>
           </tr>`,
         )
         .join('')
-    : `<tr><td colspan="6" class="empty" style="padding:18px 14px">Rien en attente.</td></tr>`;
+    : `<tr><td colspan="7" class="empty" style="padding:18px 14px">Rien en attente.</td></tr>`;
 
   // Une ligne s'ouvre au clic et à l'entrée : la table se parcourt au clavier
   // comme la file.
@@ -6408,12 +6426,13 @@ function renderOvPriorite() {
  * destination reste un simple `div`, sans curseur ni flèche — un compteur
  * qu'on ne peut pas ouvrir ne sert qu'à inquiéter.
  */
-function ovStatLigne({ label, valeur, ton, filtre, periode, aide }) {
+function ovStatLigne({ label, valeur, ton, filtre, periode, aide, ico: nomIco }) {
   const cliquable = Boolean(filtre);
   const balise = cliquable ? 'button' : 'div';
   return `<li><${balise} class="statrow${cliquable ? ' statrow-go' : ''}"${
     cliquable ? ` type="button" data-ov-filtre="${esc(JSON.stringify(filtre))}"` : ''
   }>
+    ${nomIco ? `<span class="statrow-ico" aria-hidden="true">${ico(nomIco)}</span>` : ''}
     <span class="statrow-l">${esc(label)}${
       periode ? `<span class="statrow-p"> · ${esc(periode)}</span>` : ''
     }</span>
@@ -6460,6 +6479,7 @@ function renderOvRisques(metrics, counts) {
   const lignes = [
     {
       label: 'SLA dépassé',
+      ico: 'clock',
       valeur: String(horsDelai),
       ton: horsDelai > 0 ? 'bad' : null,
       filtre: { sort: 'due' },
@@ -6467,27 +6487,31 @@ function renderOvRisques(metrics, counts) {
     },
     {
       label: 'Sans réponse > 24 h',
+      ico: 'clock',
       valeur: String(plusVieuxQue(24)),
       ton: plusVieuxQue(24) > 0 ? 'warn' : null,
       filtre: { urgent: true },
     },
     {
       label: 'Sans réponse > 48 h',
+      ico: 'clock',
       valeur: String(plusVieuxQue(48)),
       ton: plusVieuxQue(48) > 0 ? 'bad' : null,
       filtre: { urgent: true },
     },
-    { label: 'Litiges ouverts', valeur: String(litiges), filtre: { intent: 'DISPUTE' } },
+    { label: 'Litiges ouverts', valeur: String(litiges), filtre: { intent: 'DISPUTE' }, ico: 'shield' },
     {
       label: 'Chez le fournisseur',
       valeur: ovNombre(counts.AWAITING_SUPPLIER ?? 0),
       filtre: { status: 'AWAITING_SUPPLIER' },
+      ico: 'truck',
     },
     {
       label: 'Non compris par l’IA',
       valeur: ovNombre(metrics?.failed ?? 0),
       ton: (metrics?.failed ?? 0) > 0 ? 'bad' : null,
       filtre: { status: 'FAILED' },
+      ico: 'bolt',
       aide: 'Messages que la classification n’a pas su traiter : ils attendent une reprise à la main.',
     },
   ];
@@ -8501,7 +8525,15 @@ $('ret-f-save').addEventListener('click', async () => {
 });
 
 const VIEW_META = {
-  overview: { icon: 'grid', label: "Vue d'ensemble", group: 'Pilotage', title: "Vue d'ensemble" },
+  /* `sous` n'existe que là où le titre seul ne dit pas à quoi sert l'écran.
+     Le poste de pilotage en a besoin : « Vue d'ensemble » ne promet rien. */
+  overview: {
+    icon: 'grid',
+    label: "Vue d'ensemble",
+    group: 'Pilotage',
+    title: "Vue d'ensemble",
+    sous: 'Votre activité SAV en un coup d’œil',
+  },
   tickets: { icon: 'inbox', label: 'SAV client', group: 'Pilotage', title: 'SAV client' },
   stats: { icon: 'chart', label: "Statistiques", group: 'Pilotage', title: "Statistiques d'équipe" },
   orders: { icon: 'bag', label: 'Commandes', group: 'Commerce', title: 'Commandes' },
@@ -9029,6 +9061,14 @@ function setView(view) {
   void title.offsetWidth;
   title.style.animation = '';
   title.textContent = meta.title;
+
+  // Le sous-titre n'existe que pour certaines vues : là où il manque, la ligne
+  // se retire au lieu de laisser un vide sous le titre.
+  const sous = $('view-sub');
+  if (sous) {
+    sous.textContent = meta.sous ?? '';
+    sous.hidden = !meta.sous;
+  }
   $('crumb').innerHTML = `${ico(meta.icon)} ${esc(meta.group)}`;
 
   // Les indicateurs et les filtres décrivent la file : les laisser ailleurs

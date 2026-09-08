@@ -92,6 +92,7 @@
             <div class="head-main">
               <div class="crumb" id="crumb"></div>
               <h1 id="view-title">SAV client</h1>
+              <p class="view-sub" id="view-sub" hidden></p>
             </div>
             <!-- La recherche avait une fonction et pas de porte.
                  La palette ⌘K cherche déjà clients, commandes et messages,
@@ -913,7 +914,7 @@
                  l'échéance. -->
             <section class="panel" aria-labelledby="ov-prio-t">
               <div class="panel-head">
-                <span class="panel-title" id="ov-prio-t">À traiter en priorité</span>
+                <span class="panel-ico" data-ico="pin" aria-hidden="true"></span><span class="panel-title" id="ov-prio-t">À traiter en priorité</span>
                 <span class="pill-count" id="ov-prio-n" hidden></span>
                 <button class="btn btn-small" id="ov-prio-all" type="button">Voir tout</button>
               </div>
@@ -927,6 +928,7 @@
                       <th scope="col">Statut</th>
                       <th scope="col">Commande</th>
                       <th scope="col">Échéance</th>
+                      <th scope="col" aria-label="Ouvrir le message"></th>
                     </tr>
                   </thead>
                   <tbody id="ov-prio-rows"></tbody>
@@ -936,7 +938,7 @@
 
             <section class="panel" aria-labelledby="ov-act-t">
               <div class="panel-head">
-                <span class="panel-title" id="ov-act-t">Dernières actions</span>
+                <span class="panel-ico" data-ico="clock" aria-hidden="true"></span><span class="panel-title" id="ov-act-t">Dernières actions</span>
                 <button class="btn btn-small" id="ov-act-all" type="button">Voir tout</button>
               </div>
               <ul class="journal ov-fil" id="ov-audit"></ul>
@@ -944,7 +946,7 @@
 
             <section class="panel" aria-labelledby="ov-trend-t">
               <div class="panel-head">
-                <span class="panel-title" id="ov-trend-t">Tendance 7 jours</span>
+                <span class="panel-ico" data-ico="chart" aria-hidden="true"></span><span class="panel-title" id="ov-trend-t">Tendance 7 jours</span>
                 <span class="ov-legend" aria-hidden="true">
                   <span class="ov-key ov-key-recu">Reçus</span>
                   <span class="ov-key ov-key-traite">Traités</span>
@@ -960,21 +962,21 @@
                  qu'à inquiéter. -->
             <section class="panel" aria-labelledby="ov-risk-t">
               <div class="panel-head">
-                <span class="panel-title" id="ov-risk-t">Attention requise</span>
+                <span class="panel-ico" data-ico="shield" aria-hidden="true"></span><span class="panel-title" id="ov-risk-t">Attention requise</span>
               </div>
               <ul class="statlist" id="ov-risk"></ul>
             </section>
 
             <section class="panel" aria-labelledby="ov-perf-t">
               <div class="panel-head">
-                <span class="panel-title" id="ov-perf-t">Performance SAV</span>
+                <span class="panel-ico" data-ico="bolt" aria-hidden="true"></span><span class="panel-title" id="ov-perf-t">Performance SAV</span>
               </div>
               <ul class="statlist" id="ov-perf"></ul>
             </section>
 
             <section class="panel" aria-labelledby="ov-ia-t">
               <div class="panel-head">
-                <span class="panel-title" id="ov-ia-t">IA &amp; automatisation</span>
+                <span class="panel-ico" data-ico="swatch" aria-hidden="true"></span><span class="panel-title" id="ov-ia-t">IA &amp; automatisation</span>
                 <span class="hint" id="ov-ia-note"></span>
               </div>
               <ul class="statlist" id="ov-ia"></ul>
@@ -982,7 +984,7 @@
 
             <section class="panel" aria-labelledby="ov-int-t">
               <div class="panel-head">
-                <span class="panel-title" id="ov-int-t">Types de demandes</span>
+                <span class="panel-ico" data-ico="grid" aria-hidden="true"></span><span class="panel-title" id="ov-int-t">Types de demandes</span>
               </div>
               <div class="card-body" id="ov-intents"></div>
             </section>
