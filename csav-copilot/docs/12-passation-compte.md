@@ -147,3 +147,34 @@ second garde-fou refuse une réponse Gmail qui ne recoupe aucun de nos fils
 (jeton d'un autre compte), et la remise à plat ne touche que les tickets
 antérieurs à la photographie — l'ingestion continue pendant la reprise.
 
+## La feuille de style : une seule règle à tenir
+
+`public/styles.css` avait grandi en trois couches successives. Chacune
+redéclarait, au niveau racine et donc **après** les blocs `@media` écrits plus
+haut, des propriétés que ces blocs avaient réglées. Une requête média n'ajoute
+aucune spécificité : à égalité, la règle la plus tardive gagne, à toutes les
+largeurs. Vingt déclarations responsive étaient mortes sans qu'aucun outil ne
+le signale — la grille du shell laissait une piste vide de 204 px sous 1080 px,
+la bande d'indicateurs mesurait huit cents pixels de haut, la loupe de la
+recherche recouvrait le texte du champ.
+
+Les soixante requêtes média vivent désormais **toutes en fin de feuille**, dans
+leur ordre d'origine, sous un commentaire qui le dit. Elles gagnent donc par
+construction.
+
+**La règle à tenir : ne rien écrire après ce commentaire qui ne soit dans une
+requête média.** Une seule règle inconditionnelle ajoutée plus bas rouvrirait
+le trou, et rien ne le dirait — ni un test, ni un typecheck, ni la revue.
+
+Sept déclarations média ont été supprimées avant ce déplacement : c'étaient des
+vestiges d'un design antérieur, que la dernière couche avait délibérément
+remplacés, et les déplacer les aurait ressuscités. La distinction s'est faite
+cas par cas, en lisant les commentaires des deux règles concernées — cette
+feuille explique presque toujours pourquoi une valeur a été choisie, et c'est
+ce qui a permis de trancher.
+
+Vérification faite avant de livrer : relevé des styles calculés de 1 597
+éléments sur cinq écrans à six largeurs, avant et après. **Aucune différence à
+1280, 1440 et 1920 px.** Les seuls changements sont sous 1024 px, et chacun
+correspond à un réglage responsive rendu à sa fonction.
+
