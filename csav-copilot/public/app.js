@@ -3237,7 +3237,7 @@ function renderDetail() {
   // autre boutique se lit, il ne s'y répond pas.
   if (otherShop) {
     document
-      .querySelectorAll('#d-labels [data-quick], #d-more-menu [data-quick]')
+      .querySelectorAll('#d-primary [data-quick], #d-more-menu [data-quick]')
       .forEach((button) => (button.disabled = true));
   }
 
@@ -3282,10 +3282,14 @@ function renderDetail() {
         <div class="msg-head">
           <span class="msg-av" aria-hidden="true"
             style="background:${avatarTint(who)}">${esc(initials(who))}</span>
-          <b>${
+          <b${outbound ? '' : ` title="${esc(message.fromEmail)}"`}>${
+            /* Le nom du client est déjà calculé pour l'avatar, deux lignes
+               plus haut, et c'est celui-là qu'on lit dans la file. Afficher
+               l'adresse brute obligeait à la déchiffrer à chaque message d'un
+               fil qui n'a qu'un seul expéditeur. Elle reste en infobulle. */
             outbound
               ? `${esc(brand)} <span class="msg-tag">réponse envoyée</span>`
-              : esc(message.fromEmail)
+              : esc(who)
           }</b>
           <span>${shortTime(message.receivedAt)}</span>
         </div>
@@ -4128,12 +4132,27 @@ function renderTicketLabels(ticket) {
      * Et « Rembourser » n'est pas peint en rouge malgré son poids — collé à
      * « Supprimer », deux boutons rouges voisins invitent au faux clic.
      */
-    `<span class="thread-acts">` +
-    actionButton('client', 'Écrire au client', ticket) +
-    actionButton('supplier', 'Écrire au fournisseur', ticket) +
-    actionButton('refund', 'Rembourser…', ticket) +
-    actionButton('change', 'Modifier la commande', ticket) +
-    `</span>`;
+    '';
+
+  /*
+   * Une seule action mise en avant, en haut à droite, à côté de « Actions ».
+   *
+   * Les quatre boutons vivaient au bas de la ligne des libellés, tous du même
+   * poids : il fallait les lire tous pour en choisir un, et la rangée passait
+   * à la ligne sur une colonne étroite. « Écrire au client » est le geste de
+   * la journée ; les trois autres descendent dans le menu, sans rien perdre —
+   * même clé `data-quick`, même écouteur, même raison de blocage en
+   * infobulle quand ils sont interdits.
+   */
+  const principal = $('d-primary');
+  if (principal) {
+    principal.innerHTML = actionButton(
+      'client',
+      'Écrire au client',
+      ticket,
+      'btn btn-small btn-primary',
+    );
+  }
 
   /*
    * Les gestes rares passent sous « ··· ».
@@ -4149,6 +4168,11 @@ function renderTicketLabels(ticket) {
   const menu = $('d-more-menu');
   if (menu) {
     menu.innerHTML =
+      // Les trois gestes descendus de la rangée principale gardent leur clé,
+      // donc leur écouteur et leur blocage conditionnel.
+      actionButton('supplier', 'Écrire au fournisseur', ticket, 'more-item') +
+      actionButton('change', 'Modifier la commande', ticket, 'more-item') +
+      actionButton('refund', 'Rembourser…', ticket, 'more-item') +
       actionButton('reshipment', 'Ouvrir un dossier de retour', ticket, 'more-item') +
       // WhatsApp, en second accès : le premier reste la fiche client du rail.
       // Un lien, comme celui de Gmail plus bas — pas de bouton à câbler.
@@ -4188,7 +4212,9 @@ function renderTicketLabels(ticket) {
     // menu. Chercher dans le seul `bar` laisserait Reshipment sans écouteur,
     // et le `?.` avalerait l'oubli sans un mot.
     document
-      .querySelector(`#d-labels [data-quick="${key}"], #d-more-menu [data-quick="${key}"]`)
+      .querySelector(
+        `#d-primary [data-quick="${key}"], #d-more-menu [data-quick="${key}"]`,
+      )
       ?.addEventListener('click', () => {
         closeMoreMenu();
         run();
@@ -4286,9 +4312,12 @@ function renderBriefFacts() {
 
   const facts = [];
 
-  if (ticket.intent) {
-    facts.push(['Intention', INTENT_LABELS[ticket.intent] ?? ticket.intent, false]);
-  }
+  /*
+   * L'intention n'est pas reprise ici : l'en-tête du ticket la porte déjà,
+   * quarante pixels plus haut, et avec le pourcentage de confiance que le
+   * résumé n'a pas. La répéter poussait la quatrième pastille sur une
+   * deuxième ligne, qui coûtait vingt-neuf pixels pour redire ce mot.
+   */
   if (order?.name ?? ticket.orderName) {
     facts.push(['Commande', order?.name ?? ticket.orderName, false]);
   }
@@ -4508,9 +4537,8 @@ function renderCustomer(order) {
      * oubli de la décision précédente.
      */
     (customer.createdAt ? row('Client depuis', fullDate(customer.createdAt)) : '') +
-    phoneRow(order) +
-    '</dl>' +
-    whatsappCta(order, name);
+    phoneRow(order, name) +
+    '</dl>';
 }
 
 /*
@@ -4531,29 +4559,33 @@ function customerPhone(order) {
   return { raw, number, link: whatsappLink(number) };
 }
 
-function phoneRow(order) {
+/*
+ * Le numéro et son bouton sur la même ligne.
+ *
+ * Le bouton occupait une rangée entière sous le dossier, à quarante pixels du
+ * numéro qu'il compose — alors que le tiroir de commande, lui, les met déjà
+ * côte à côte. Deux endroits du produit proposaient le même geste de deux
+ * façons différentes. L'icône seule porte la marque : dans un outil de
+ * travail, un bouton vert pleine largeur crie plus qu'il n'aide.
+ */
+function phoneRow(order, name) {
   const phone = customerPhone(order);
   if (!phone) return '';
 
-  const inner = phone.link
+  const numero = phone.link
     ? `<a class="rail-phone" href="${esc(phone.link)}" target="_blank" rel="noopener noreferrer"
-         title="Ouvrir dans WhatsApp">${esc(phone.raw)} <span aria-hidden="true">↗</span></a>`
+         title="Ouvrir dans WhatsApp">${esc(phone.raw)}</a>`
     : `<span class="rail-phone-off" title="Numéro non valide pour WhatsApp">${esc(phone.raw)}</span>`;
 
-  return `<div class="row"><dt>Téléphone</dt><dd>${inner}</dd></div>`;
-}
+  // Sans numéro composable, pas de bouton : une icône qui ouvrirait une URL
+  // vide vaut moins que rien du tout.
+  const bouton = phone.link
+    ? `<a class="wa-icon" href="${esc(phone.link)}" target="_blank" rel="noopener noreferrer"
+         aria-label="Ouvrir WhatsApp avec ${esc(name ?? 'le client')}"
+         title="Ouvrir la conversation dans WhatsApp Web">${ico('whatsapp')}</a>`
+    : '';
 
-/* Un bouton secondaire, neutre, l'icône seule en vert : on est dans un outil
-   de travail, pas sur une page de contact. Absent sans numéro composable —
-   un bouton qui ouvrirait une URL vide vaut moins que pas de bouton. */
-function whatsappCta(order, name) {
-  const phone = customerPhone(order);
-  if (!phone?.link) return '';
-
-  return `<div class="rail-cta"><a class="btn btn-small wa-btn" href="${esc(phone.link)}"
-     target="_blank" rel="noopener noreferrer"
-     aria-label="Ouvrir WhatsApp avec ${esc(name ?? 'le client')}"
-     title="Ouvrir la conversation dans WhatsApp Web">${ico('whatsapp')} WhatsApp</a></div>`;
+  return `<div class="row"><dt>Téléphone</dt><dd class="dd-wa">${numero}${bouton}</dd></div>`;
 }
 
 /**

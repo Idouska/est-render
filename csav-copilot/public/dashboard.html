@@ -499,13 +499,20 @@
                   aria-label="Message précédent" title="Précédent (k)">‹</button>
                 <button class="ico-btn" id="d-next" type="button"
                   aria-label="Message suivant" title="Suivant (j)">›</button>
-                <!-- Les gestes rares sortent de la rangée principale : six
-                     boutons de même poids obligent à lire les six pour en
-                     choisir un. -->
+                <!-- L'action principale et le reste.
+
+                     Quatre boutons de poids identique se disputaient le bas
+                     de l'en-tête, et il fallait les lire tous les quatre pour
+                     en choisir un. Un seul est mis en avant — celui qu'on
+                     fait dix fois par jour ; les autres gardent leur place,
+                     pas leur rang. Aucun n'a disparu. -->
+                <span class="th-primary" id="d-primary"></span>
                 <span class="more-wrap">
-                  <button class="ico-btn" id="d-more" type="button"
-                    aria-label="Autres actions" aria-expanded="false">···</button>
-                  <div class="more-menu" id="d-more-menu" hidden></div>
+                  <button class="btn btn-small" id="d-more" type="button"
+                    aria-haspopup="menu" aria-expanded="false"
+                    title="Autres actions sur ce message">Actions<span
+                      class="th-car" aria-hidden="true"></span></button>
+                  <div class="more-menu" id="d-more-menu" role="menu" hidden></div>
                 </span>
               </div>
             </div>
