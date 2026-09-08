@@ -7434,7 +7434,52 @@ textarea:focus-visible {
    cent cinquante caractères par ligne à 1920 px — la mesure le retient. */
 .msg-body { max-width: 80ch; }
 
+/* La bande d'indicateurs mesurait huit cents pixels de haut sous 1200 px.
+
+   `@media (max-width: 1200px)` retourne `.subhead` en colonne, et
+   `flex: 1 1 800px` — écrit pour réserver huit cents pixels de LARGEUR aux
+   chiffres quand la rangée est horizontale — devient alors une base de
+   HAUTEUR : la grille des indicateurs s'étirait à huit cents pixels et
+   mangeait l'écran entier avant le premier ticket. C'est le défaut qui se
+   voyait le plus, sur tout portable sous 1200 px comme sur téléphone.
+
+   La base ne vaut que dans le sens où elle a été pensée. */
+@media (max-width: 1200px) {
+  .subhead > .kpis { flex: 0 1 auto; }
+}
+
+/* Un contrôle segmenté ne se replie jamais de lui-même : `grid-auto-flow:
+   column` crée autant de colonnes que de boutons, quelle que soit la place.
+   À 360 px, la dernière option des rôles sortait de l'écran de quatre-vingts
+   pixels — et comme un ancêtre la coupait, elle n'était pas seulement hors
+   champ : elle était inatteignable, sans défilement pour aller la chercher.
+   Sous 700 px les boutons passent à la ligne.
+
+   `#view-settings .seg` est repris nommément : la règle d'origine porte cet
+   identifiant, et une classe seule ne l'aurait pas emporté. */
+@media (max-width: 700px) {
+  .seg,
+  #view-settings .seg {
+    display: flex;
+    flex-wrap: wrap;
+    max-width: none !important;
+  }
+  .seg button { flex: 1 1 auto; }
+}
+
+/* En fiche, une valeur qui ne se coupe pas déborde de sa carte : une adresse
+   électronique longue n'a ni espace ni trait d'union où passer à la ligne, et
+   `white-space: nowrap` hérité du tableau le lui interdisait de toute façon.
+   C'est le seul débordement de page qui subsistait à 320 px. */
+@media (max-width: 760px) {
+  .grid td { white-space: normal; overflow-wrap: anywhere; }
+}
+
 /* Ce qui déborde encore se coupe sur place au lieu de faire défiler toute la
-   page de côté. `clip` et non `hidden` : il ne crée pas de boîte de défilement,
-   les éléments figés et fixes continuent de fonctionner. */
+   page de côté. `clip` et non `hidden` : il ne crée pas de boîte de
+   défilement, les éléments figés et fixes continuent de fonctionner.
+
+   C'est un filet, pas une correction : il empêche la page de glisser
+   latéralement, il ne rend pas visible ce qui dépasse. Un débordement mesuré
+   se corrige à sa source — le filet ne dispense jamais de le chercher. */
 html, body { overflow-x: clip; }
