@@ -166,10 +166,6 @@ body {
 
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-@media (prefers-reduced-motion: reduce) {
-  *, body { transition: none !important; animation: none !important; }
-}
-
 .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 
 /* ============================================================== shell ==== */
@@ -699,37 +695,7 @@ body {
 .ws-handle:focus-visible { outline: none; }
 body.ws-resizing { cursor: col-resize; user-select: none; }
 
-/* Le rail garde sa colonne dès 1200 px, au lieu de 1400.
-
-   Le seuil de 1400 envoyait Client, Commande, Livraison et Fournisseur en
-   bande horizontale tout en bas de la page sur la plupart des portables :
-   il fallait faire défiler l'écran entier pour lire l'adresse du client
-   pendant qu'on rédige. Or trois colonnes tiennent bien plus bas — à
-   1201 px, la conversation garde plus de cinq cents pixels. */
-@media (max-width: 1200px) {
-  .workspace { grid-template-columns: 330px minmax(0, 1fr); gap: 13px; }
-  .ws-handle { display: none; }
-}
-@media (max-width: 900px) { .workspace { grid-template-columns: 1fr; } }
-
-/* Entre 1201 et 1400, les colonnes de côté se resserrent : à 1280 px, garder
-   350 et 320 ne laissait que 356 px à la conversation — trois colonnes pour
-   ne plus rien pouvoir lire au milieu. Ce sont des valeurs par défaut : une
-   largeur réglée à la poignée est posée en style en ligne et l'emporte. */
-@media (min-width: 1201px) and (max-width: 1400px) {
-  .workspace { --ws-col1: 300px; --ws-col3: 280px; }
-}
-
 .context { display: flex; flex-direction: column; gap: 13px; }
-
-@media (max-width: 1200px) {
-  .context {
-    grid-column: 1 / -1;
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    align-items: start;
-  }
-}
 
 /* ------------------------------------------------ barre de filtres file --- */
 
@@ -980,7 +946,6 @@ body.ws-resizing { cursor: col-resize; user-select: none; }
 
 .actbar-row { display: grid; grid-auto-flow: column; gap: 7px; grid-auto-columns: 1fr; }
 
-@media (max-width: 700px) { .actbar-row { grid-auto-flow: row; } }
 
 .actbtn {
   appearance: none;
@@ -1483,8 +1448,6 @@ body.ws-resizing { cursor: col-resize; user-select: none; }
 .gate p { color: var(--ink-soft); margin: 0 0 16px; }
 .gate code { font-family: var(--font-mono); font-size: 13px; background: var(--inset); padding: 2px 6px; border-radius: 4px; }
 
-@media (min-width: 552px) { .gate { margin: clamp(24px, 8vh, 80px) auto; } }
-
 .gate .btn { width: 100%; justify-content: center; }
 
 #gate-form { display: flex; flex-direction: column; gap: 8px; }
@@ -1689,13 +1652,6 @@ body.ws-resizing { cursor: col-resize; user-select: none; }
 .clock-my { --ck-flag: linear-gradient(180deg, #cc0001 40%, #010066 40% 70%, #ffcc00 70%); }
 .clock-us { --ck-flag: linear-gradient(180deg, #b31942 45%, #f5f5f7 45% 72%, #0a3161 72%); }
 
-@media (max-width: 1400px) {
-  /* Sur un écran étroit, l'en-tête doit rendre la place au titre : on garde
-     les heures, on abandonne les libellés de ville. */
-  .clock b { display: none; }
-  .clock { padding: 5px 8px; }
-}
-
 .brand-logo {
   width: 38px;
   height: 38px;
@@ -1713,99 +1669,6 @@ body.ws-resizing { cursor: col-resize; user-select: none; }
 
 .scrim { display: none; }
 .navtoggle { display: none; }
-
-@media (max-width: 1080px) {
-  .app { grid-template-columns: 1fr; padding: 8px; gap: 10px; }
-
-  .side {
-    position: fixed;
-    top: 0;
-    left: 0;
-    bottom: 0;
-    width: min(280px, 84vw);
-    z-index: 60;
-    border-radius: 0;
-    border-left: 0;
-    border-top: 0;
-    border-bottom: 0;
-    max-height: none;
-    transform: translateX(-101%);
-    transition: transform 0.2s ease;
-  }
-
-  .app.nav-open .side { transform: none; box-shadow: var(--shadow-pop); }
-
-  .scrim {
-    display: block;
-    position: fixed;
-    inset: 0;
-    z-index: 55;
-    background: rgb(10 10 20 / 45%);
-  }
-
-  .navtoggle {
-    display: inline-grid;
-    place-items: center;
-    width: 38px;
-    height: 38px;
-    flex: none;
-    border: 1px solid var(--line);
-    border-radius: var(--r-md);
-    background: var(--surface);
-    color: var(--ink);
-    cursor: pointer;
-  }
-
-  .navtoggle svg { width: 18px; height: 18px; }
-
-  .head { align-items: center; gap: 10px; }
-  /* Sans cette largeur, le titre se retrouve poussé à droite par le bouton de
-     navigation et la ligne se lit à l'envers. */
-  .head-main { flex: 1 1 auto; align-items: flex-start; }
-  .head h1 { font-size: 21px; }
-  .head-acts { width: 100%; align-items: stretch; }
-
-  /* Les horloges défilent latéralement plutôt que de repousser le titre : sur
-     un téléphone, cinq fuseaux ne tiennent pas et n'ont pas à disparaître. */
-  .clocks { overflow-x: auto; scrollbar-width: none; }
-  .clocks::-webkit-scrollbar { display: none; }
-  .conn { justify-content: flex-start; }
-}
-
-@media (max-width: 700px) {
-  .app { padding: 6px; }
-  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-  .kpi { padding: 11px 12px; }
-  .kpi-value { font-size: 21px; }
-  .qbar { padding: 9px 10px; }
-  .qbar-selects { gap: 8px; }
-  .qbar-selects label { flex: 1 1 46%; }
-  .qbar-selects select { flex: 1; min-width: 0; }
-  .qbar-count { margin-left: 0; width: 100%; }
-  .queue-list { max-height: none; }
-  .card-body, .panel-head { padding-left: 12px; padding-right: 12px; }
-  .head h1 { font-size: 19px; }
-
-  /* Une modale plein écran : centrée, elle laissait le clavier virtuel
-     recouvrir le champ en cours de saisie. */
-  /* La barre d'enregistrement passe en colonne : sur une seule ligne, le
-     libellé se coupait en deux et le bouton débordait de la carte. */
-  .set-bar { flex-direction: column; align-items: stretch; gap: 8px; }
-  .set-bar .btn { margin-left: 0; width: 100%; justify-content: center; }
-
-  /* Le message flottant se posait par-dessus cette barre collante, masquant
-     précisément le bouton qu'il commente. */
-  .toast { bottom: 96px; }
-
-  /* Modale plein écran : centrée, elle laissait le clavier virtuel recouvrir
-     le champ en cours de saisie. */
-  .modal { width: 100%; max-width: none; max-height: 100dvh; border-radius: 0; border: 0; }
-  .modal-wide { width: 100%; }
-  .modal-foot { position: sticky; bottom: 0; }
-
-  /* 16 px : en dessous, Safari iOS zoome à la mise au point. */
-  .modal input, .modal textarea, .modal select, .qbar input[type="search"] { font-size: 16px; }
-}
 
 /* ---------------------------------------------------------------- colis --- */
 
@@ -1996,11 +1859,6 @@ body.ws-resizing { cursor: col-resize; user-select: none; }
 .sheet-row.clickable { cursor: pointer; }
 .sheet-row.clickable:hover { background: var(--inset); }
 .sheet-row p { margin: 0; width: 100%; font-size: 12.5px; color: var(--ink-mute); }
-
-@media (max-width: 700px) {
-  .sheet { width: 100%; border-left: 0; }
-  .sheet-stats { grid-template-columns: repeat(2, 1fr); }
-}
 
 /* Nom cliquable dans un texte courant : souligné au survol seulement, sinon
    la ligne se transforme en liste de liens. */
@@ -2214,27 +2072,6 @@ body.ws-resizing { cursor: col-resize; user-select: none; }
 /* L'adresse d'image reste possible mais repliée : le téléversement est le
    chemin normal, l'URL le cas particulier de qui héberge déjà son logo. */
 .brand-url summary { font-size: 12.5px; color: var(--ink-mute); cursor: pointer; }
-
-@media (max-width: 700px) {
-  /* Nom d'usage sur sa propre ligne : coincé entre deux boutons, le champ
-     devenait trop étroit pour lire ce qu'on y tape. */
-  .mbx-acts input { flex: 1 1 100%; }
-  .mbx-acts .btn { flex: 1; justify-content: center; }
-
-  /* Les actions d'un litige s'empilent plutôt que de se serrer. */
-  .dsp-acts .btn { flex: 1; justify-content: center; min-width: 140px; }
-
-  .brand-edit-acts .btn { flex: 1; justify-content: center; }
-
-  /* La vignette du logo rétrécit : à 64 px elle mangeait la largeur du champ
-     de nom juste à côté. */
-  .brand-preview { width: 52px; height: 52px; font-size: 17px; }
-
-  /* Les repères de la fiche client passent sur deux colonnes, déjà réglé, mais
-     les lignes doivent pouvoir revenir à la ligne. */
-  .sheet-row { align-items: flex-start; }
-  .sheet-row .when { margin-left: 0; width: 100%; }
-}
 
 /* Puces de réponse type au-dessus du brouillon : à portée du curseur, pas
    dans un menu à ouvrir. */
@@ -2526,28 +2363,6 @@ textarea:focus-visible {
   box-shadow: inset 0 1px 2px rgb(0 0 0 / 30%);
 }
 
-/* ----------------------------------------------------------- retenue --- */
-
-/* Sur un écran tactile, le survol n'existe pas et le décollement reste collé
-   après le doigt. Et l'atmosphère de fond coûte deux dégradés à repeindre à
-   chaque défilement, pour un gain nul sur un écran de téléphone. */
-@media (hover: none) {
-  .btn:hover:not(:disabled) { transform: none; }
-}
-
-@media (max-width: 700px) {
-  body::before { display: none; }
-}
-
-@media (max-width: 700px) {
-  /* Sur deux colonnes étroites, un intitulé qui passe à la ligne décale son
-     chiffre : les quatre nombres ne s'alignent plus et la rangée se lit une
-     carte après l'autre au lieu d'un seul coup d'œil. On réserve la hauteur de
-     deux lignes pour que la ligne de base des chiffres soit commune. */
-  .kpi-label { min-height: 2.3em; }
-  .kpi-value { font-size: 27px; }
-}
-
 /* ==========================================================================
    RÉSUMÉ ET RAIL
    ========================================================================== */
@@ -2668,11 +2483,6 @@ textarea:focus-visible {
 .rail-fold[open] > summary .rail-title::after { transform: rotate(45deg); }
 .rail-fold[open] .journal { margin-top: 10px; }
 
-@media (max-width: 700px) {
-  .brief, .thread-fold { margin-left: 12px; margin-right: 12px; }
-  .brief-ask { font-size: 15px; }
-}
-
 /* -------------------------------------------------- zone de brouillon --- */
 
 /* La réponse est ce que l'agent vient écrire : elle mérite la hauteur que le
@@ -2771,15 +2581,6 @@ textarea:focus-visible {
    elle masquait la fin du dernier réglage. */
 #view-settings { padding-bottom: 76px; }
 
-@media (max-width: 900px) {
-  #view-settings .panel { grid-template-columns: minmax(0, 1fr); }
-  #view-settings .panel-head {
-    border-right: 0;
-    border-bottom: 1px solid var(--line-soft);
-    padding-bottom: 13px;
-  }
-}
-
 /* ------------------------------------------------- vue simulée (rôle) --- */
 
 /* Bandeau pleine largeur, ambré, en tête de page. Une simulation de rôle qu'on
@@ -2810,10 +2611,6 @@ textarea:focus-visible {
 }
 
 .asbar .btn { margin-left: auto; }
-
-@media (max-width: 700px) {
-  .asbar .btn { margin-left: 0; width: 100%; justify-content: center; }
-}
 
 /* Le sélecteur de rôle garde sa largeur naturelle. En grille pleine largeur,
    quatre boutons s'étalaient sur 550 px avec 80 px de vide entre chaque mot :
@@ -2914,10 +2711,6 @@ textarea:focus-visible {
 /* Le déplacement au clavier va vite : sans transition, la surbrillance
    clignote d'une ligne à l'autre et l'œil perd le fil de sa propre position. */
 .queue-item { scroll-margin: 12px; }
-
-@media (prefers-reduced-motion: no-preference) {
-  .queue-item[aria-current='true'] { transition: box-shadow 0.18s var(--ease); }
-}
 
 /* ------------------------------------------------------ pièces jointes --- */
 
@@ -3355,17 +3148,6 @@ textarea:focus-visible {
 
 .wface.shut b { color: rgb(255 255 255 / 28%); }
 
-@media (prefers-reduced-motion: reduce) {
-  .clock:not(.shut) b::after { animation: none; }
-  .dial-s { animation: none; }
-  .head h1, .crumb { animation: none; }
-}
-
-@media (max-width: 1400px) {
-  .clock { padding: 4px 8px 4px 5px; }
-  .wface { min-width: 0; padding: 4px 9px 5px; }
-}
-
 /* ==========================================================================
    STATISTIQUES
    ========================================================================== */
@@ -3439,11 +3221,6 @@ textarea:focus-visible {
 }
 
 .ibar-count { text-align: right; font-size: 12px; }
-
-@media (max-width: 700px) {
-  .ibar { grid-template-columns: 92px minmax(0, 1fr) 34px; }
-  .chart { height: 150px; }
-}
 
 /* Les pastilles de motif sont pastel ; une jauge pastel sur fond gris ne se
    voit pas. Les jauges reprennent les couleurs franches des liserés de file. */
@@ -3544,22 +3321,6 @@ textarea:focus-visible {
   color: var(--ink-mute);
 }
 
-/* ==========================================================================
-   BARRE LATÉRALE REPLIABLE
-   ========================================================================== */
-
-/* 248 px de navigation permanente, c'est une colonne de tickets en moins sur
-   un portable. Repliée, elle garde ses icônes — la position reste lisible —
-   et rend la largeur au travail. */
-/* Bornée au grand écran. Sans cette borne, la règle — écrite après le bloc
-   responsive — rétablissait une colonne de 224 px sur mobile, où la barre est
-   pourtant un tiroir : la page débordait de la largeur de la navigation, et le
-   défaut se voyait sur tous les écrans à la fois. */
-@media (min-width: 1081px) {
-  .app { grid-template-columns: 224px 1fr; transition: grid-template-columns 0.22s var(--ease); }
-  .app.folded { grid-template-columns: 62px 1fr; }
-}
-
 .side { padding: 12px 10px; position: relative; }
 
 .side-fold {
@@ -3615,11 +3376,6 @@ textarea:focus-visible {
   margin: 0;
   padding: 0 4px;
   font-size: 9.5px;
-}
-
-@media (max-width: 1080px) {
-  /* En tiroir mobile, le repli n'a pas de sens : la barre est déjà masquée. */
-  .side-fold { display: none; }
 }
 
 /* ==========================================================================
@@ -3680,11 +3436,6 @@ textarea:focus-visible {
 /* La note disparaît : à cette densité, elle explique un chiffre qu'on ne
    regarde plus assez longtemps pour avoir besoin d'explication. */
 #kpis .kpi-note { display: none; }
-
-@media (max-width: 700px) {
-  #kpis .kpi { flex: 1 1 45%; }
-  #kpis .kpi + .kpi { box-shadow: none; }
-}
 
 /* ==========================================================================
    EN-TÊTE COMPACT
@@ -3769,18 +3520,6 @@ textarea:focus-visible {
   font-size: 8.5px;
   font-weight: 700;
   letter-spacing: 0.12em;
-}
-
-/* Sous 1200 px, les horloges cèdent la place : l'heure de Los Angeles passe
-   après le titre de l'écran qu'on est en train de lire. */
-@media (max-width: 1200px) {
-  .head .clocks { display: none; }
-}
-
-@media (max-width: 700px) {
-  .head { flex-wrap: wrap; }
-  .head h1 { font-size: 19px; }
-  .head-acts { width: 100%; justify-content: flex-start; }
 }
 
 /* Le rail replié ne doit rien laisser déborder. L'intitulé était un texte nu
@@ -3933,10 +3672,6 @@ textarea:focus-visible {
    il ne se clique pas. */
 #q-count { margin-left: auto; font-size: 11.5px; color: var(--ink-mute); }
 
-@media (max-width: 700px) {
-  .qbar input[type='search'] { min-width: 100%; }
-}
-
 /* Un libellé peint par Gmail garde ses couleurs telles quelles ; seul le
    contour intérieur cède, sinon il ternit une teinte choisie exprès. */
 .tag-label[style] { font-weight: 600; }
@@ -4000,11 +3735,6 @@ textarea:focus-visible {
 /* Le rappel de l'heure locale du fournisseur porte le chiffre en chasse fixe :
    c'est lui qu'on lit, pas la phrase. */
 .compose-foot .hint { font-size: 12.5px; }
-
-@media (max-width: 700px) {
-  .compose-foot .btn { flex: 1; justify-content: center; }
-  .compose-foot .hint { flex: 1 1 100%; margin-right: 0; }
-}
 
 /* Quatre actions sur une colonne de cinq cents pixels, c'est « Écrire au
    client » cassé sur trois lignes. Elles passent en deux rangées de deux dès
@@ -4122,13 +3852,6 @@ textarea:focus-visible {
   padding: 4px 0;
 }
 
-@media (max-width: 700px) {
-  .ordv { padding: 10px 12px 12px; }
-  .ordv-total { font-size: 18px; }
-  .ordv-item { grid-template-columns: 38px minmax(0, 1fr) auto; gap: 9px; }
-  .ordv-item img, .ordv-noimg { width: 38px; height: 38px; }
-}
-
 /* ==========================================================================
    CARNETS : COMMANDES, CLIENTS, CATALOGUE
    ========================================================================== */
@@ -4153,91 +3876,6 @@ textarea:focus-visible {
 
 .grid td { padding: 10px 13px; }
 .grid th { padding: 9px 13px; font-size: 10.5px; letter-spacing: 0.07em; }
-
-/* ------------------------------------------------------------- au doigt --- */
-
-@media (max-width: 760px) {
-  /* Sept colonnes sur 390 pixels ne se lisent pas : on perd la colonne de
-     gauche au premier défilement latéral et l'on ne sait plus de quelle ligne
-     vient la valeur qu'on regarde. Chaque ligne devient une fiche. */
-  .table-wrap { max-height: none; overflow: visible; border: 0; background: none; box-shadow: none; }
-
-  .grid thead { display: none; }
-  .grid, .grid tbody, .grid tr, .grid td { display: block; width: 100%; }
-
-  .grid tr {
-    margin-bottom: 9px;
-    padding: 4px 2px;
-    border-radius: var(--r-lg);
-    border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
-    background-image: var(--grad-surface);
-    box-shadow: var(--e1), var(--edge);
-  }
-
-  .grid td {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 14px;
-    padding: 7px 12px;
-    text-align: right;
-    border: 0;
-  }
-
-  .grid td + td { border-top: 1px solid var(--line-soft); }
-
-  /* L'intitulé recopié de l'en-tête tient la gauche : sans lui, une fiche
-     n'est qu'une pile de valeurs sans nom. */
-  .grid td::before {
-    content: attr(data-label);
-    flex: none;
-    text-align: left;
-    font-size: 10.5px;
-    font-weight: 600;
-    letter-spacing: 0.07em;
-    text-transform: uppercase;
-    color: var(--ink-mute);
-  }
-
-  /* Une cellule sans intitulé — la colonne d'actions — reprend toute la
-     largeur plutôt que de laisser un vide à gauche. */
-  .grid td:not([data-label])::before { display: none; }
-  .grid td:not([data-label]) { justify-content: flex-end; }
-
-  .grid td.num { text-align: right; }
-
-  /* La première cellule fait le titre de la fiche. */
-  .grid td:first-child {
-    font-size: 14px;
-    font-weight: 600;
-    padding-top: 10px;
-  }
-
-  .grid td:first-child::before { display: none; }
-  .grid td:first-child { justify-content: flex-start; }
-}
-
-@media (max-width: 760px) {
-  /* Les menus des carnets prenaient leur largeur naturelle — celle du plus
-     long intitulé, « Commande la plus récente » — et poussaient la page de
-     cent dix pixels hors de l'écran. Chacun tient sa colonne, deux par ligne. */
-  .browse .qbar-selects {
-    display: grid;
-    /* Deux colonnes fixes, pas `auto-fit` : celui-ci calcule d'après la
-       largeur intrinsèque du contenu, et un menu contenant « Commande la plus
-       récente » réclame alors deux cents pixels que l'écran n'a pas. */
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 8px;
-  }
-
-  .browse .qbar-selects label { display: grid; gap: 4px; min-width: 0; }
-  .browse .qbar-selects select { width: 100%; min-width: 0; }
-
-  /* La barre d'outils de l'en-tête débordait aussi : les boutons passent à la
-     ligne au lieu de pousser. */
-  .head-tools { flex-wrap: wrap; }
-  .head-acts { flex-wrap: wrap; }
-}
 
 /* ==========================================================================
    ÉTATS : QUATRE FAMILLES, PAS DEUX
@@ -4267,14 +3905,6 @@ textarea:focus-visible {
    lire une étiquette. */
 .grid tr:has(.tone-bad) td:first-child { box-shadow: inset 3px 0 0 var(--crit); }
 .grid tr:has(.tone-wait) td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
-
-@media (max-width: 760px) {
-  /* En fiche, le liseré passe sur tout le bord gauche de la carte. */
-  .grid tr:has(.tone-bad) td:first-child,
-  .grid tr:has(.tone-wait) td:first-child { box-shadow: none; }
-  .grid tr:has(.tone-bad) { border-left: 3px solid var(--crit); }
-  .grid tr:has(.tone-wait) { border-left: 3px solid var(--warn); }
-}
 
 /* ---------------------------------------------------------- litiges --- */
 
@@ -4313,10 +3943,6 @@ textarea:focus-visible {
 
 .dsp-id { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; min-width: 0; }
 .dsp-amount { margin-left: auto; font-size: 17px; font-weight: 650; }
-
-@media (max-width: 700px) {
-  .dsp-amount { margin-left: 0; width: 100%; }
-}
 
 /* Origine d'une ligne venue d'ailleurs. Discrète : elle explique pourquoi la
    ligne porte moins d'informations, elle ne la disqualifie pas.
@@ -4468,10 +4094,6 @@ textarea:focus-visible {
 .alarm b { color: var(--crit); }
 .alarm span { color: var(--ink-soft); font-family: var(--font-mono); font-size: 12px; }
 .alarm .btn { margin-left: auto; }
-
-@media (max-width: 700px) {
-  .alarm .btn { margin-left: 0; width: 100%; justify-content: center; }
-}
 
 /* Bandeau des messages orphelins, dans la carte Gmail des Réglages. Teinté
    comme une alerte : c'est du courrier qui n'aurait jamais dû entrer. */
@@ -4658,11 +4280,6 @@ textarea:focus-visible {
 }
 .sib-tags { display: flex; gap: 5px; flex-shrink: 0; }
 
-@media (max-width: 760px) {
-  .sib { flex-wrap: wrap; }
-  .sib b { flex-basis: 100%; white-space: normal; }
-}
-
 /* ------------------------------------------------- sélection multiple ---
    La case se pose par-dessus la ligne, à gauche : hors du bouton pour rester
    cliquable, mais visuellement dedans. Elle ne se montre qu'au survol ou
@@ -4715,11 +4332,6 @@ textarea:focus-visible {
   background: var(--surface);
   color: var(--ink);
   max-width: 170px;
-}
-
-@media (max-width: 760px) {
-  .qpick { opacity: 1; }
-  .qrow .queue-item { padding-left: 34px; }
 }
 
 /* ======================================================= horloges, v2 ====
@@ -4836,11 +4448,6 @@ textarea:focus-visible {
 .wface-big .wface-time { font-size: 24px; }
 .wface-big b { font-size: 10px; }
 
-@media (max-width: 1400px) {
-  .ckp-city { display: none; }
-  .ckp { padding: 4px 8px; }
-}
-
 /* --------------------------------------- demandes au fournisseur, sur le mail
    Placé avant les autres messages du client : ce qu'on a promis engage la
    réponse qu'on s'apprête à écrire. */
@@ -4921,11 +4528,6 @@ textarea:focus-visible {
 .chgc-meta { margin-top: 5px; font-size: 12.5px; color: var(--ink-mute); display: flex; gap: 5px; flex-wrap: wrap; }
 .chgc-note { margin: 6px 0 0; font-size: 13px; color: var(--ink-mute); font-style: italic; }
 
-@media (max-width: 760px) {
-  .chgc-swap { font-size: 17px; }
-  .chgc-when { flex-basis: 100%; margin-left: 0; }
-}
-
 /* Pastilles de volume : elles informent, elles ne réclament pas. */
 .nav-item .tally-dim {
   background: var(--inset);
@@ -4997,11 +4599,6 @@ textarea:focus-visible {
   color: var(--ink);
   font: inherit;
   resize: vertical;
-}
-
-@media (max-width: 560px) {
-  .kgrid { grid-template-columns: repeat(2, 1fr); }
-  .field-duo { flex-direction: column; }
 }
 
 /* Adresse dans le avant → après : une adresse ne se lit pas centrée en gros —
@@ -5302,13 +4899,6 @@ textarea:focus-visible {
 
 .qt-assignee { width: 56px; text-align: center; }
 
-/* Sous 1100 px le tableau devient illisible : la liste reprend la main, et le
-   sélecteur disparaît pour ne pas proposer une vue inutilisable. */
-@media (max-width: 1100px) {
-  #queue-view { display: none; }
-  .workspace.wide-queue { grid-template-columns: minmax(0, 1fr); }
-}
-
 /* ------------------------------------------------ la barre de file, en deux
    lignes.
 
@@ -5430,11 +5020,6 @@ textarea:focus-visible {
 
 .qpop-wide { width: 320px; }
 
-/* Près du bord droit, un menu ancré à gauche sortirait de l'écran. */
-@media (min-width: 701px) {
-  #q-filters-pop { left: auto; right: 0; }
-}
-
 .qpop-search {
   width: 100%;
   height: 32px;
@@ -5536,37 +5121,6 @@ textarea:focus-visible {
 }
 
 .qbar-status { gap: 8px; }
-
-@media (max-width: 700px) {
-  /* Sur téléphone le menu se colle aux deux bords : 264 px fixes débordaient
-     d'un écran de 360. */
-  .qpop,
-  .qpop-wide {
-    width: auto;
-    left: 0;
-    right: 0;
-  }
-
-  .qbar-main input[type='search'] { flex: 1 1 100%; min-width: 100%; }
-
-  .qbar-main .seg2 { margin-left: auto; }
-
-  /* Six statuts sur un écran étroit : ils défilent plutôt que d'empiler trois
-     rangées avant la première ligne de travail. */
-  .qbar-status .filters {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .qbar-status .filters::-webkit-scrollbar { display: none; }
-
-  /* Sans cela, la rangée qui défile comprime les pilules et « Brouillon prêt »
-     se casse sur deux lignes au lieu de sortir de l'écran. */
-  .qbar-status .chip { flex: none; white-space: nowrap; }
-
-  .qbar-count { margin-left: auto; width: auto; }
-}
 
 /* ------------------------------------------------------------ reshipment --
    Les retours clients. Deux champs côte à côte dans le formulaire, la ligne
@@ -5734,24 +5288,6 @@ textarea:focus-visible {
 }
 .chgc-edit:hover { background: var(--accent-soft); }
 
-/* =========================================================================
-   Réassertions de fin de feuille.
-
-   `.side { position: relative }` (posé pour ancrer le bouton de repli)
-   écrasait le tiroir mobile déclaré plus haut : la colonne restait dans le
-   flux, poussait tout le contenu sous l'écran, et le dashboard paraissait
-   blanc sur téléphone. La règle vit en fin de feuille pour gagner la cascade
-   quoi qu'il arrive — même famille de panne que [hidden], même remède.
-   ========================================================================= */
-@media (max-width: 1080px) {
-  .side {
-    position: fixed;
-    top: 0;
-    left: 0;
-    bottom: 0;
-  }
-}
-
 .ret-tags { display: flex; gap: 5px; margin-top: 4px; flex-wrap: wrap; }
 
 /* Les sélecteurs et cases de la table des retours prennent l'habit de
@@ -5835,38 +5371,6 @@ textarea:focus-visible {
    deux étages se lit deux fois plus lentement, et déforme toute la rangée. */
 .head-tools .btn,
 .head-tools label { white-space: nowrap; }
-
-/* Sous 1 600 px, les horloges rendent la main : elles gardent leur place mais
-   défilent au lieu de pousser le titre. */
-@media (max-width: 1600px) {
-  .clocks {
-    max-width: 46vw;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .clocks::-webkit-scrollbar { display: none; }
-}
-
-/* Sous 1 280 px, elles s'effacent. À cette largeur, chaque pixel sert à lire
-   des messages clients — l'heure de Los Angeles se trouve ailleurs. */
-@media (max-width: 1280px) {
-  .clocks { display: none; }
-}
-
-/* Le sélecteur « Voir en tant que » compte cinq rôles : sur un téléphone, ils
-   poussaient la page 72 px hors de l'écran et le dernier — Fournisseur —
-   n'était plus atteignable. Ils défilent maintenant, comme les statuts de la
-   file. */
-@media (max-width: 700px) {
-  #as-role {
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  #as-role::-webkit-scrollbar { display: none; }
-  #as-role button { flex: none; white-space: nowrap; }
-}
 
 /* La table des retours débordait de 44 px sur un écran de 1 440 : le bouton de
    suppression tombait hors vue, et il fallait défiler latéralement pour
@@ -5959,23 +5463,6 @@ textarea:focus-visible {
    de distinguer « en cours » de « rien ne s'est passé ». */
 @keyframes spin { to { transform: rotate(360deg); } }
 .btn.busy svg { animation: spin 0.9s linear infinite; }
-
-/*
- * Respect du réglage système.
- *
- * Certaines personnes désactivent les animations parce qu'elles leur donnent
- * la nausée — ce n'est pas une préférence esthétique, c'est un trouble
- * vestibulaire. Ignorer ce réglage rend l'outil inutilisable pour elles.
- */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
-}
 
 /* =========================================================================
    DENSITÉ MÉTIER — la couche qui fait passer l'outil de « démo IA » à
@@ -6159,11 +5646,6 @@ textarea:focus-visible {
 }
 
 .keybar .kb-right { margin-left: auto; }
-
-@media (max-width: 900px) {
-  /* Pas de clavier sur un téléphone : la barre n'a rien à y dire. */
-  .keybar { display: none; }
-}
 
 /* La ligne de file en deux étages : client + heure, puis point de statut +
    sujet + commande. Le motif reste dit par le filet gauche coloré. */
@@ -6366,13 +5848,6 @@ textarea:focus-visible {
 /* Les vignettes du catalogue à l'échelle de la ligne. */
 .grid .thumb { width: 24px; height: 24px; border-radius: 4px; }
 
-/* Le bandeau « Simulation » en petite largeur : côte à côte, l'étiquette
-   comprimait le texte en colonne de quatre mots qui avalait tout l'écran.
-   Empilé, il redevient trois lignes. */
-@media (max-width: 700px) {
-  .notice { flex-direction: column; gap: 6px; }
-}
-
 /* L'objet, au-dessus du corps : intitulé court à gauche, champ qui prend le
    reste. Aligné sur la ligne du dessous plutôt que présenté en bloc de
    formulaire — c'est un mail qu'on écrit, pas un dossier qu'on remplit. */
@@ -6402,59 +5877,6 @@ textarea:focus-visible {
   color: var(--ink);
   font: inherit;
   font-size: 13px;
-}
-
-/* ============================================== défilement par colonne === */
-
-/*
- * Sur l'écran SAV, chaque colonne défile pour son compte : la molette agit sur
- * celle que survole la souris, et la page elle-même ne bouge plus. Lire le fil
- * d'un client ne doit pas emporter la file et la fiche commande hors de
- * l'écran — ce sont trois lectures parallèles, pas un document unique.
- *
- * `min-height: 0` sur chaque maillon n'est pas décoratif. Un enfant de grille
- * ou de flex vaut `min-height: auto` et refuse d'être plus court que son
- * contenu : sans cette remise à zéro, `overflow-y: auto` ne produit aucun
- * défilement — la colonne grandit à la place et repousse son parent. La
- * contrainte de hauteur doit descendre sans rupture depuis `.app` ; il suffit
- * d'un maillon oublié pour que rien ne défile, alors que chaque règle prise
- * séparément a l'air juste. C'est une panne muette, à ne pas rechercher
- * ailleurs.
- *
- * Réservé à la disposition en trois colonnes, au-delà de 1400 px. En dessous,
- * le rail passe en pleine largeur sous les deux autres, et le défilement de
- * page reste le bon comportement — trois zones empilées dans une hauteur
- * d'écran fixe seraient inutilisables.
- *
- * Réservé aussi à la seule vue Tickets, d'où la classe posée par `setView` :
- * les seize autres écrans se lisent comme des documents et gardent leur
- * défilement de page.
- */
-@media (min-width: 1201px) {
-  .app-locked { height: 100dvh; overflow: hidden; }
-  .app-locked .main { min-height: 0; }
-
-  .app-locked .workspace {
-    flex: 1;
-    min-height: 0;
-    align-items: stretch;
-  }
-
-  .app-locked .workspace > * {
-    min-height: 0;
-    overflow-y: auto;
-  }
-  /* Les poignées ne sont pas des colonnes : rien à faire défiler. */
-  .app-locked .workspace > .ws-handle { overflow: visible; }
-
-  /* La file portait son propre plafond, hérité du temps où la page défilait
-     derrière elle. C'est la colonne qui décide de la hauteur désormais, et
-     deux contraintes concurrentes en donneraient une troisième, plus courte
-     que les deux. */
-  .app-locked .queue-list {
-    max-height: none;
-    overflow-y: visible;
-  }
 }
 
 /* ====================================== zone Conversation, refonte 2026 ===
@@ -7054,12 +6476,6 @@ textarea:focus-visible {
   color: var(--ink-mute);
 }
 
-@media (max-width: 1100px) {
-  /* Sous cette largeur la barre haute se dispute déjà la place : le raccourci
-     reste, le champ s'efface. */
-  .head-search { display: none; }
-}
-
 /* ============================================ derniers ajustements maquette ===
 
 /* --- le compte, en barre haute ------------------------------------------- */
@@ -7080,12 +6496,6 @@ textarea:focus-visible {
 .head-acts .me-txt { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
 .head-acts .me-txt b { font-size: 12.5px; font-weight: 650; }
 .head-acts .me-txt span { font-size: 11px; color: var(--ink-mute); }
-
-/* Sous 1 300 px, l'identité s'efface et l'avatar reste : on sait qui on est,
-   on n'a pas besoin de le relire toute la journée. */
-@media (max-width: 1300px) {
-  .head-acts .me-txt { display: none; }
-}
 
 /* --- icônes de l'en-tête de file ----------------------------------------- */
 
@@ -7217,13 +6627,6 @@ textarea:focus-visible {
   justify-content: flex-end;
 }
 
-/* Sous 1 200 px, la rangée se replie : les indicateurs gardent la largeur,
-   les outils passent dessous plutôt que de comprimer les chiffres. */
-@media (max-width: 1200px) {
-  .subhead { flex-direction: column; }
-  .subhead-acts { justify-content: flex-start; }
-}
-
 /* --------------------------------------------- libellés dans la barre ---- */
 
 .qlabels {
@@ -7325,12 +6728,6 @@ textarea:focus-visible {
 .compose-modal textarea { flex: 1 1 auto; width: auto; min-height: 140px; margin: 10px 18px 0; resize: none; }
 .compose-modal .compose-foot { padding: 12px 18px 14px; border-top: 1px solid var(--line-soft); margin-top: 10px; }
 
-/* Petit écran : la fenêtre prend presque tout, sans attendre « Agrandir ». */
-@media (max-width: 1024px) {
-  .compose-modal { width: calc(100vw - 24px); height: calc(100vh - 24px); max-height: calc(100vh - 24px); }
-  .compose-backdrop { padding: 12px; }
-}
-
 /* ================================================= téléphone et WhatsApp = */
 
 /* Le numéro est un lien, mais pas un lien bleu de navigateur : même encre que
@@ -7389,32 +6786,678 @@ textarea:focus-visible {
 .grid-pin th:first-child { z-index: 3; background: var(--sunk); }
 .grid-pin tbody tr:hover td:first-child { background: var(--inset); }
 
+/* L'écran Fournisseurs n'avait aucune règle réactive : la grille des cartes
+   portait un plancher dur de 330 px, qui débordait au lieu de céder. */
+.sup-grid { grid-template-columns: repeat(auto-fill, minmax(min(330px, 100%), 1fr)); }
+
+/* Grand écran : rien ne casse, tout s'étire. Le corps d'un message court sur
+   cent cinquante caractères par ligne à 1920 px — la mesure le retient. */
+.msg-body { max-width: 80ch; }
+
+/* L'icône de recherche mangeait le début du texte.
+
+   La règle qui la pose réserve trente-quatre pixels à gauche du champ ; une
+   règle plus tardive, hors requête média, ramène le rembourrage à dix. La
+   loupe se retrouvait donc par-dessus les premiers caractères — on lisait
+   « (loupe)042, email ou nom du client » au lieu de « #1042 », et
+   « (loupe) de commande » au lieu de « N° de commande ». Même inversion de
+   cascade que les six réglages mobiles plus haut ; même remède.
+
+   La loupe occupe de onze à vingt-six pixels : le texte commence après. */
+.qbar input[type='search'],
+.browse-bar input[type='search'] { padding-left: 32px; }
+
+/* Ce qui déborde encore se coupe sur place au lieu de faire défiler toute la
+   page de côté. `clip` et non `hidden` : il ne crée pas de boîte de
+   défilement, les éléments figés et fixes continuent de fonctionner.
+
+   C'est un filet, pas une correction : il empêche la page de glisser
+   latéralement, il ne rend pas visible ce qui dépasse. Un débordement mesuré
+   se corrige à sa source — le filet ne dispense jamais de le chercher. */
+html, body { overflow-x: clip; }
+
 /* ==========================================================================
-   RÉACTIVITÉ — réassertions de fin de feuille
+   REQUÊTES MÉDIA — toutes ici, et nulle part ailleurs
    ==========================================================================
 
-   La feuille est écrite en trois couches empilées, et la troisième redéclare
-   au niveau racine — donc APRÈS les blocs @media — des propriétés que ces
-   blocs avaient réglées pour le téléphone : .app, .table-wrap, .grid td,
-   .queue-list, .qbar input, .kpi. Une requête média n'ajoute aucune
-   spécificité ; à égalité, la règle la plus tardive gagne, à toutes les
-   largeurs. Six réglages mobiles étaient morts, dont la grille du shell qui
-   laissait une piste vide de 204 px sous 1080 px.
+   Une requête média n'ajoute aucune spécificité. Une règle inconditionnelle
+   écrite plus bas dans la feuille l'emporte donc sur elle, à toutes les
+   largeurs, sans qu'aucun outil ne le signale.
 
-   Le remède est celui déjà appliqué à .side plus haut : réaffirmer en fin de
-   feuille, après la dernière couche. Ce bloc doit rester le DERNIER de la
-   feuille — toute règle racine ajoutée après lui rouvrirait le même trou. */
+   Cette feuille avait grandi en trois couches, chacune redéclarant au niveau
+   racine des propriétés que des blocs @media plus haut avaient réglées.
+   Vingt déclarations responsive étaient mortes : la grille du shell laissait
+   une piste vide de 204 px sous 1080 px, la bande d'indicateurs mesurait
+   huit cents pixels de haut, la loupe de la recherche recouvrait le texte du
+   champ, le tiroir de navigation gardait ses angles arrondis. Trois pannes
+   visibles, un seul mécanisme.
 
-/* Le shell : sous 1080 px la navigation est un tiroir fixe, la piste qui lui
-   était réservée doit disparaître avec elle. */
+   Les requêtes média vivent désormais toutes ici, en fin de feuille, dans
+   leur ordre d'origine. Elles gagnent donc toujours. Sept déclarations qui
+   n'étaient plus que des vestiges d'un design antérieur ont été retirées
+   avant ce déplacement, pour qu'il ne les ressuscite pas.
+
+   RÈGLE À TENIR : ne rien écrire après ce commentaire qui ne soit dans une
+   requête média. Une seule règle inconditionnelle ajoutée plus bas rouvrirait
+   le trou, et rien ne le dirait.
+   ========================================================================== */
+
+
+@media (prefers-reduced-motion: reduce) {
+  *, body { transition: none !important; animation: none !important; }
+}
+
+/* Le rail garde sa colonne dès 1200 px, au lieu de 1400.
+
+   Le seuil de 1400 envoyait Client, Commande, Livraison et Fournisseur en
+   bande horizontale tout en bas de la page sur la plupart des portables :
+   il fallait faire défiler l'écran entier pour lire l'adresse du client
+   pendant qu'on rédige. Or trois colonnes tiennent bien plus bas — à
+   1201 px, la conversation garde plus de cinq cents pixels. */
+@media (max-width: 1200px) {
+  .workspace { grid-template-columns: 330px minmax(0, 1fr); gap: 13px; }
+  .ws-handle { display: none; }
+}
+@media (max-width: 900px) { .workspace { grid-template-columns: 1fr; } }
+
+/* Entre 1201 et 1400, les colonnes de côté se resserrent : à 1280 px, garder
+   350 et 320 ne laissait que 356 px à la conversation — trois colonnes pour
+   ne plus rien pouvoir lire au milieu. Ce sont des valeurs par défaut : une
+   largeur réglée à la poignée est posée en style en ligne et l'emporte. */
+@media (min-width: 1201px) and (max-width: 1400px) {
+  .workspace { --ws-col1: 300px; --ws-col3: 280px; }
+}
+
+@media (max-width: 1200px) {
+  .context {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    align-items: start;
+  }
+}
+
+@media (min-width: 552px) { .gate { margin: clamp(24px, 8vh, 80px) auto; } }
+
+@media (max-width: 1400px) {
+  /* Sur un écran étroit, l'en-tête doit rendre la place au titre : on garde
+     les heures, on abandonne les libellés de ville. */
+  .clock b { display: none; }
+}
+
 @media (max-width: 1080px) {
   .app { grid-template-columns: 1fr; padding: 8px; gap: 10px; }
+
+  .side {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(280px, 84vw);
+    z-index: 60;
+    border-radius: 0;
+    border-left: 0;
+    border-top: 0;
+    border-bottom: 0;
+    max-height: none;
+    transform: translateX(-101%);
+    transition: transform 0.2s ease;
+  }
+
+  .app.nav-open .side { transform: none; box-shadow: var(--shadow-pop); }
+
+  .scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 55;
+    background: rgb(10 10 20 / 45%);
+  }
+
+  .navtoggle {
+    display: inline-grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    flex: none;
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    background: var(--surface);
+    color: var(--ink);
+    cursor: pointer;
+  }
+
+  .navtoggle svg { width: 18px; height: 18px; }
+
+  .head { align-items: center; gap: 10px; }
+  /* Sans cette largeur, le titre se retrouve poussé à droite par le bouton de
+     navigation et la ligne se lit à l'envers. */
+  .head-main { flex: 1 1 auto; }
+  .head h1 { font-size: 21px; }
+  .head-acts { width: 100%; }
+
+  /* Les horloges défilent latéralement plutôt que de repousser le titre : sur
+     un téléphone, cinq fuseaux ne tiennent pas et n'ont pas à disparaître. */
+  .clocks { overflow-x: auto; scrollbar-width: none; }
+  .clocks::-webkit-scrollbar { display: none; }
+  .conn { justify-content: flex-start; }
 }
+
+@media (max-width: 700px) {
+  .app { padding: 6px; }
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .kpi { padding: 11px 12px; }
+  .kpi-value { font-size: 21px; }
+  .qbar-selects label { flex: 1 1 46%; }
+  .qbar-selects select { flex: 1; min-width: 0; }
+  .qbar-count { margin-left: 0; width: 100%; }
+  .queue-list { max-height: none; }
+  .card-body, .panel-head { padding-left: 12px; padding-right: 12px; }
+  .head h1 { font-size: 19px; }
+
+  /* Une modale plein écran : centrée, elle laissait le clavier virtuel
+     recouvrir le champ en cours de saisie. */
+  /* La barre d'enregistrement passe en colonne : sur une seule ligne, le
+     libellé se coupait en deux et le bouton débordait de la carte. */
+  .set-bar { flex-direction: column; align-items: stretch; gap: 8px; }
+  .set-bar .btn { margin-left: 0; width: 100%; justify-content: center; }
+
+  /* Le message flottant se posait par-dessus cette barre collante, masquant
+     précisément le bouton qu'il commente. */
+  .toast { bottom: 96px; }
+
+  /* Modale plein écran : centrée, elle laissait le clavier virtuel recouvrir
+     le champ en cours de saisie. */
+  .modal { width: 100%; max-width: none; max-height: 100dvh; border-radius: 0; border: 0; }
+  .modal-wide { width: 100%; }
+  .modal-foot { position: sticky; bottom: 0; }
+
+  /* 16 px : en dessous, Safari iOS zoome à la mise au point. */
+  .modal input, .modal textarea, .modal select, .qbar input[type="search"] { font-size: 16px; }
+}
+
+@media (max-width: 700px) {
+  .sheet { width: 100%; border-left: 0; }
+  .sheet-stats { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 700px) {
+  /* Nom d'usage sur sa propre ligne : coincé entre deux boutons, le champ
+     devenait trop étroit pour lire ce qu'on y tape. */
+  .mbx-acts input { flex: 1 1 100%; }
+  .mbx-acts .btn { flex: 1; justify-content: center; }
+
+  /* Les actions d'un litige s'empilent plutôt que de se serrer. */
+  .dsp-acts .btn { flex: 1; justify-content: center; min-width: 140px; }
+
+  .brand-edit-acts .btn { flex: 1; justify-content: center; }
+
+  /* La vignette du logo rétrécit : à 64 px elle mangeait la largeur du champ
+     de nom juste à côté. */
+  .brand-preview { width: 52px; height: 52px; font-size: 17px; }
+
+  /* Les repères de la fiche client passent sur deux colonnes, déjà réglé, mais
+     les lignes doivent pouvoir revenir à la ligne. */
+  .sheet-row { align-items: flex-start; }
+  .sheet-row .when { margin-left: 0; width: 100%; }
+}
+
+/* ----------------------------------------------------------- retenue --- */
+
+/* Sur un écran tactile, le survol n'existe pas et le décollement reste collé
+   après le doigt. Et l'atmosphère de fond coûte deux dégradés à repeindre à
+   chaque défilement, pour un gain nul sur un écran de téléphone. */
+@media (hover: none) {
+  .btn:hover:not(:disabled) { transform: none; }
+}
+
+@media (max-width: 700px) {
+  body::before { display: none; }
+}
+
+@media (max-width: 700px) {
+  /* Sur deux colonnes étroites, un intitulé qui passe à la ligne décale son
+     chiffre : les quatre nombres ne s'alignent plus et la rangée se lit une
+     carte après l'autre au lieu d'un seul coup d'œil. On réserve la hauteur de
+     deux lignes pour que la ligne de base des chiffres soit commune. */
+  .kpi-label { min-height: 2.3em; }
+  .kpi-value { font-size: 27px; }
+}
+
+@media (max-width: 700px) {
+  .brief, .thread-fold { margin-left: 12px; margin-right: 12px; }
+  .brief-ask { font-size: 15px; }
+}
+
+@media (max-width: 900px) {
+  #view-settings .panel { grid-template-columns: minmax(0, 1fr); }
+  #view-settings .panel-head {
+    border-right: 0;
+    border-bottom: 1px solid var(--line-soft);
+    padding-bottom: 13px;
+  }
+}
+
+@media (max-width: 700px) {
+  .asbar .btn { margin-left: 0; width: 100%; justify-content: center; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .queue-item[aria-current='true'] { transition: box-shadow 0.18s var(--ease); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .clock:not(.shut) b::after { animation: none; }
+  .dial-s { animation: none; }
+  .head h1, .crumb { animation: none; }
+}
+
+@media (max-width: 1400px) {
+  .clock { padding: 4px 8px 4px 5px; }
+  .wface { min-width: 0; padding: 4px 9px 5px; }
+}
+
+@media (max-width: 700px) {
+  .ibar { grid-template-columns: 92px minmax(0, 1fr) 34px; }
+  .chart { height: 150px; }
+}
+
+/* ==========================================================================
+   BARRE LATÉRALE REPLIABLE
+   ========================================================================== */
+
+/* 248 px de navigation permanente, c'est une colonne de tickets en moins sur
+   un portable. Repliée, elle garde ses icônes — la position reste lisible —
+   et rend la largeur au travail. */
+/* Bornée au grand écran. Sans cette borne, la règle — écrite après le bloc
+   responsive — rétablissait une colonne de 224 px sur mobile, où la barre est
+   pourtant un tiroir : la page débordait de la largeur de la navigation, et le
+   défaut se voyait sur tous les écrans à la fois. */
+@media (min-width: 1081px) {
+  .app { transition: grid-template-columns 0.22s var(--ease); }
+  .app.folded { grid-template-columns: 62px 1fr; }
+}
+
+@media (max-width: 1080px) {
+  /* En tiroir mobile, le repli n'a pas de sens : la barre est déjà masquée. */
+  .side-fold { display: none; }
+}
+
+@media (max-width: 700px) {
+  #kpis .kpi { flex: 1 1 45%; }
+  #kpis .kpi + .kpi { box-shadow: none; }
+}
+
+/* Sous 1200 px, les horloges cèdent la place : l'heure de Los Angeles passe
+   après le titre de l'écran qu'on est en train de lire. */
+@media (max-width: 1200px) {
+  .head .clocks { display: none; }
+}
+
+@media (max-width: 700px) {
+  .head { flex-wrap: wrap; }
+  .head h1 { font-size: 19px; }
+  .head-acts { width: 100%; justify-content: flex-start; }
+}
+
+@media (max-width: 700px) {
+  .qbar input[type='search'] { min-width: 100%; }
+}
+
+@media (max-width: 700px) {
+  .compose-foot .btn { flex: 1; justify-content: center; }
+  .compose-foot .hint { flex: 1 1 100%; margin-right: 0; }
+}
+
+@media (max-width: 700px) {
+  .ordv { padding: 10px 12px 12px; }
+  .ordv-total { font-size: 18px; }
+  .ordv-item { grid-template-columns: 38px minmax(0, 1fr) auto; gap: 9px; }
+  .ordv-item img, .ordv-noimg { width: 38px; height: 38px; }
+}
+
+/* ------------------------------------------------------------- au doigt --- */
+
+@media (max-width: 760px) {
+  /* Sept colonnes sur 390 pixels ne se lisent pas : on perd la colonne de
+     gauche au premier défilement latéral et l'on ne sait plus de quelle ligne
+     vient la valeur qu'on regarde. Chaque ligne devient une fiche. */
+  .table-wrap { max-height: none; overflow: visible; border: 0; background: none; box-shadow: none; }
+
+  .grid thead { display: none; }
+  .grid, .grid tbody, .grid tr, .grid td { display: block; width: 100%; }
+
+  .grid tr {
+    margin-bottom: 9px;
+    padding: 4px 2px;
+    border-radius: var(--r-lg);
+    border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+    background-image: var(--grad-surface);
+    box-shadow: var(--e1), var(--edge);
+  }
+
+  .grid td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 7px 12px;
+    text-align: right;
+    border: 0;
+  }
+
+  .grid td + td { border-top: 1px solid var(--line-soft); }
+
+  /* L'intitulé recopié de l'en-tête tient la gauche : sans lui, une fiche
+     n'est qu'une pile de valeurs sans nom. */
+  .grid td::before {
+    content: attr(data-label);
+    flex: none;
+    text-align: left;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+  }
+
+  /* Une cellule sans intitulé — la colonne d'actions — reprend toute la
+     largeur plutôt que de laisser un vide à gauche. */
+  .grid td:not([data-label])::before { display: none; }
+  .grid td:not([data-label]) { justify-content: flex-end; }
+
+  .grid td.num { text-align: right; }
+
+  /* La première cellule fait le titre de la fiche. */
+  .grid td:first-child {
+    font-size: 14px;
+    font-weight: 600;
+    padding-top: 10px;
+  }
+
+  .grid td:first-child::before { display: none; }
+  .grid td:first-child { justify-content: flex-start; }
+}
+
+@media (max-width: 760px) {
+  /* Les menus des carnets prenaient leur largeur naturelle — celle du plus
+     long intitulé, « Commande la plus récente » — et poussaient la page de
+     cent dix pixels hors de l'écran. Chacun tient sa colonne, deux par ligne. */
+  .browse .qbar-selects {
+    display: grid;
+    /* Deux colonnes fixes, pas `auto-fit` : celui-ci calcule d'après la
+       largeur intrinsèque du contenu, et un menu contenant « Commande la plus
+       récente » réclame alors deux cents pixels que l'écran n'a pas. */
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .browse .qbar-selects label { display: grid; gap: 4px; min-width: 0; }
+  .browse .qbar-selects select { width: 100%; min-width: 0; }
+
+  /* La barre d'outils de l'en-tête débordait aussi : les boutons passent à la
+     ligne au lieu de pousser. */
+  .head-tools { flex-wrap: wrap; }
+  .head-acts { flex-wrap: wrap; }
+}
+
+@media (max-width: 760px) {
+  /* En fiche, le liseré passe sur tout le bord gauche de la carte. */
+  .grid tr:has(.tone-bad) td:first-child,
+  .grid tr:has(.tone-wait) td:first-child { box-shadow: none; }
+  .grid tr:has(.tone-bad) { border-left: 3px solid var(--crit); }
+  .grid tr:has(.tone-wait) { border-left: 3px solid var(--warn); }
+}
+
+@media (max-width: 700px) {
+  .dsp-amount { margin-left: 0; width: 100%; }
+}
+
+@media (max-width: 700px) {
+  .alarm .btn { margin-left: 0; width: 100%; justify-content: center; }
+}
+
+@media (max-width: 760px) {
+  .sib { flex-wrap: wrap; }
+  .sib b { flex-basis: 100%; white-space: normal; }
+}
+
+@media (max-width: 760px) {
+  .qpick { opacity: 1; }
+  .qrow .queue-item { padding-left: 34px; }
+}
+
+@media (max-width: 1400px) {
+  .ckp-city { display: none; }
+  .ckp { padding: 4px 8px; }
+}
+
+@media (max-width: 760px) {
+  .chgc-swap { font-size: 17px; }
+  .chgc-when { flex-basis: 100%; margin-left: 0; }
+}
+
+@media (max-width: 560px) {
+  .kgrid { grid-template-columns: repeat(2, 1fr); }
+  .field-duo { flex-direction: column; }
+}
+
+/* Sous 1100 px le tableau devient illisible : la liste reprend la main, et le
+   sélecteur disparaît pour ne pas proposer une vue inutilisable. */
+@media (max-width: 1100px) {
+  #queue-view { display: none; }
+  .workspace.wide-queue { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Près du bord droit, un menu ancré à gauche sortirait de l'écran. */
+@media (min-width: 701px) {
+  #q-filters-pop { left: auto; right: 0; }
+}
+
+@media (max-width: 700px) {
+  /* Sur téléphone le menu se colle aux deux bords : 264 px fixes débordaient
+     d'un écran de 360. */
+  .qpop,
+  .qpop-wide {
+    width: auto;
+    left: 0;
+    right: 0;
+  }
+
+  .qbar-main input[type='search'] { flex: 1 1 100%; min-width: 100%; }
+
+  .qbar-main .seg2 { margin-left: auto; }
+
+  /* Six statuts sur un écran étroit : ils défilent plutôt que d'empiler trois
+     rangées avant la première ligne de travail. */
+  .qbar-status .filters {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .qbar-status .filters::-webkit-scrollbar { display: none; }
+
+  /* Sans cela, la rangée qui défile comprime les pilules et « Brouillon prêt »
+     se casse sur deux lignes au lieu de sortir de l'écran. */
+  .qbar-status .chip { flex: none; white-space: nowrap; }
+
+  .qbar-count { margin-left: auto; width: auto; }
+}
+
+/* =========================================================================
+   Réassertions de fin de feuille.
+
+   `.side { position: relative }` (posé pour ancrer le bouton de repli)
+   écrasait le tiroir mobile déclaré plus haut : la colonne restait dans le
+   flux, poussait tout le contenu sous l'écran, et le dashboard paraissait
+   blanc sur téléphone. La règle vit en fin de feuille pour gagner la cascade
+   quoi qu'il arrive — même famille de panne que [hidden], même remède.
+   ========================================================================= */
+@media (max-width: 1080px) {
+  .side {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+  }
+}
+
+/* Sous 1 600 px, les horloges rendent la main : elles gardent leur place mais
+   défilent au lieu de pousser le titre. */
+@media (max-width: 1600px) {
+  .clocks {
+    max-width: 46vw;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .clocks::-webkit-scrollbar { display: none; }
+}
+
+/* Sous 1 280 px, elles s'effacent. À cette largeur, chaque pixel sert à lire
+   des messages clients — l'heure de Los Angeles se trouve ailleurs. */
+@media (max-width: 1280px) {
+  .clocks { display: none; }
+}
+
+/* Le sélecteur « Voir en tant que » compte cinq rôles : sur un téléphone, ils
+   poussaient la page 72 px hors de l'écran et le dernier — Fournisseur —
+   n'était plus atteignable. Ils défilent maintenant, comme les statuts de la
+   file. */
+@media (max-width: 700px) {
+  #as-role {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  #as-role::-webkit-scrollbar { display: none; }
+  #as-role button { flex: none; white-space: nowrap; }
+}
+
+/*
+ * Respect du réglage système.
+ *
+ * Certaines personnes désactivent les animations parce qu'elles leur donnent
+ * la nausée — ce n'est pas une préférence esthétique, c'est un trouble
+ * vestibulaire. Ignorer ce réglage rend l'outil inutilisable pour elles.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media (max-width: 900px) {
+  /* Pas de clavier sur un téléphone : la barre n'a rien à y dire. */
+  .keybar { display: none; }
+}
+
+/* Le bandeau « Simulation » en petite largeur : côte à côte, l'étiquette
+   comprimait le texte en colonne de quatre mots qui avalait tout l'écran.
+   Empilé, il redevient trois lignes. */
+@media (max-width: 700px) {
+  .notice { flex-direction: column; gap: 6px; }
+}
+
+/* ============================================== défilement par colonne === */
+
+/*
+ * Sur l'écran SAV, chaque colonne défile pour son compte : la molette agit sur
+ * celle que survole la souris, et la page elle-même ne bouge plus. Lire le fil
+ * d'un client ne doit pas emporter la file et la fiche commande hors de
+ * l'écran — ce sont trois lectures parallèles, pas un document unique.
+ *
+ * `min-height: 0` sur chaque maillon n'est pas décoratif. Un enfant de grille
+ * ou de flex vaut `min-height: auto` et refuse d'être plus court que son
+ * contenu : sans cette remise à zéro, `overflow-y: auto` ne produit aucun
+ * défilement — la colonne grandit à la place et repousse son parent. La
+ * contrainte de hauteur doit descendre sans rupture depuis `.app` ; il suffit
+ * d'un maillon oublié pour que rien ne défile, alors que chaque règle prise
+ * séparément a l'air juste. C'est une panne muette, à ne pas rechercher
+ * ailleurs.
+ *
+ * Réservé à la disposition en trois colonnes, au-delà de 1400 px. En dessous,
+ * le rail passe en pleine largeur sous les deux autres, et le défilement de
+ * page reste le bon comportement — trois zones empilées dans une hauteur
+ * d'écran fixe seraient inutilisables.
+ *
+ * Réservé aussi à la seule vue Tickets, d'où la classe posée par `setView` :
+ * les seize autres écrans se lisent comme des documents et gardent leur
+ * défilement de page.
+ */
+@media (min-width: 1201px) {
+  .app-locked { height: 100dvh; overflow: hidden; }
+  .app-locked .main { min-height: 0; }
+
+  .app-locked .workspace {
+    flex: 1;
+    min-height: 0;
+    align-items: stretch;
+  }
+
+  .app-locked .workspace > * {
+    min-height: 0;
+    overflow-y: auto;
+  }
+  /* Les poignées ne sont pas des colonnes : rien à faire défiler. */
+  .app-locked .workspace > .ws-handle { overflow: visible; }
+
+  /* La file portait son propre plafond, hérité du temps où la page défilait
+     derrière elle. C'est la colonne qui décide de la hauteur désormais, et
+     deux contraintes concurrentes en donneraient une troisième, plus courte
+     que les deux. */
+  .app-locked .queue-list {
+    max-height: none;
+    overflow-y: visible;
+  }
+}
+
+@media (max-width: 1100px) {
+  /* Sous cette largeur la barre haute se dispute déjà la place : le raccourci
+     reste, le champ s'efface. */
+  .head-search { display: none; }
+}
+
+/* Sous 1 300 px, l'identité s'efface et l'avatar reste : on sait qui on est,
+   on n'a pas besoin de le relire toute la journée. */
+@media (max-width: 1300px) {
+  .head-acts .me-txt { display: none; }
+}
+
+/* Sous 1 200 px, la rangée se replie : les indicateurs gardent la largeur,
+   les outils passent dessous plutôt que de comprimer les chiffres. */
+@media (max-width: 1200px) {
+  .subhead { flex-direction: column; }
+  .subhead-acts { justify-content: flex-start; }
+}
+
+/* Petit écran : la fenêtre prend presque tout, sans attendre « Agrandir ». */
+@media (max-width: 1024px) {
+  .compose-modal { width: calc(100vw - 24px); height: calc(100vh - 24px); max-height: calc(100vh - 24px); }
+  .compose-backdrop { padding: 12px; }
+}
+
+/* ==========================================================================
+   CORRECTIFS DE RÉACTIVITÉ
+   ==========================================================================
+
+   Ce qui suit corrige des défauts mesurés, chacun documenté à sa règle.
+
+   Ce ne sont plus des réassertions défensives. Toutes les requêtes média
+   vivant désormais en fin de feuille, une règle média l'emporte par
+   construction sur les règles inconditionnelles : elle n'a plus besoin d'être
+   répétée. Les cinq lignes qui ne faisaient que redire une règle écrite plus
+   haut ont donc été retirées ; celles qui restent disent quelque chose que
+   nulle autre règle ne dit. */
 
 /* Les tableaux en fiches : le conteneur cesse d'être une boîte à défilement,
    les cellules retrouvent leur rembourrage et perdent la hauteur fixe. */
 @media (max-width: 760px) {
-  .table-wrap { max-height: none; overflow: visible; }
   .grid td { padding: 7px 12px; height: auto; font-size: 13px; }
   .grid td:first-child { padding-top: 10px; }
   .grid-pin th:first-child,
@@ -7425,12 +7468,8 @@ textarea:focus-visible {
 }
 
 @media (max-width: 700px) {
-  /* 16 px : en dessous, Safari iOS zoome à la mise au point. */
-  .qbar input[type='search'] { font-size: 16px; }
   /* Sur téléphone, c'est la page qui défile, pas la liste dans la page. */
   .queue-list { max-height: none; overflow-y: visible; }
-  .kpi { padding: 11px 12px; }
-  .kpi-value { font-size: 21px; }
   .kgrid { grid-template-columns: repeat(2, 1fr); }
   .supc-stats { grid-template-columns: repeat(2, 1fr); }
   /* Les menus déposés se collent aux bords de la RANGÉE, pas du bouton : un
@@ -7440,14 +7479,6 @@ textarea:focus-visible {
   .qbar-row, .qbar-main, .qbar-status { position: relative; }
   .qpop, .qpop-wide { left: 0; right: 0; width: auto; }
 }
-
-/* L'écran Fournisseurs n'avait aucune règle réactive : la grille des cartes
-   portait un plancher dur de 330 px, qui débordait au lieu de céder. */
-.sup-grid { grid-template-columns: repeat(auto-fill, minmax(min(330px, 100%), 1fr)); }
-
-/* Grand écran : rien ne casse, tout s'étire. Le corps d'un message court sur
-   cent cinquante caractères par ligne à 1920 px — la mesure le retient. */
-.msg-body { max-width: 80ch; }
 
 /* La bande d'indicateurs mesurait huit cents pixels de haut sous 1200 px.
 
@@ -7489,25 +7520,3 @@ textarea:focus-visible {
 @media (max-width: 760px) {
   .grid td { white-space: normal; overflow-wrap: anywhere; }
 }
-
-/* L'icône de recherche mangeait le début du texte.
-
-   La règle qui la pose réserve trente-quatre pixels à gauche du champ ; une
-   règle plus tardive, hors requête média, ramène le rembourrage à dix. La
-   loupe se retrouvait donc par-dessus les premiers caractères — on lisait
-   « (loupe)042, email ou nom du client » au lieu de « #1042 », et
-   « (loupe) de commande » au lieu de « N° de commande ». Même inversion de
-   cascade que les six réglages mobiles plus haut ; même remède.
-
-   La loupe occupe de onze à vingt-six pixels : le texte commence après. */
-.qbar input[type='search'],
-.browse-bar input[type='search'] { padding-left: 32px; }
-
-/* Ce qui déborde encore se coupe sur place au lieu de faire défiler toute la
-   page de côté. `clip` et non `hidden` : il ne crée pas de boîte de
-   défilement, les éléments figés et fixes continuent de fonctionner.
-
-   C'est un filet, pas une correction : il empêche la page de glisser
-   latéralement, il ne rend pas visible ce qui dépasse. Un débordement mesuré
-   se corrige à sa source — le filet ne dispense jamais de le chercher. */
-html, body { overflow-x: clip; }
