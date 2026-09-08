@@ -4636,41 +4636,219 @@ function shopifyOrderLink(order, label = null) {
 }
 
 /*
- * Indicatifs des pays servis. Des faits, pas des réglages : un indicatif ne se
- * configure pas. `trunk` est le préfixe national qui tombe en international —
- * « 0 » en France ou en Belgique, rien en Italie où il fait partie du numéro.
- * Un pays absent d'ici n'est pas deviné : le numéro s'affiche, sans lien.
+ * Indicatif pays et préfixe national, par code ISO 3166-1 alpha-2.
+ *
+ * Shopify livre le numéro TEL QUE le client l'a saisi — le plus souvent au
+ * format national — et le code pays de l'adresse de livraison. Pour composer
+ * sur WhatsApp il faut du E.164 : retirer le préfixe national s'il est en
+ * tête, puis préfixer par l'indicatif.
+ *
+ * CE QUI EST EN JEU. Un préfixe faux n'échoue pas : il produit un numéro
+ * plausible. Le marchand ouvre alors une conversation avec un inconnu, depuis
+ * son compte, à propos de la commande d'un client. Noté « 0 » pour un pays qui
+ * n'en a pas, il mange le premier chiffre ; noté vide pour un pays qui en a
+ * un, il laisse un zéro parasite.
+ *
+ * D'où la règle de cette table : aucune entrée n'y figure sans un exemple qui
+ * l'éprouve dans tests/whatsappNumber.test.ts, et le test refuse toute ligne
+ * ajoutée sans le sien. Onze pays ont été écartés parce que le couple
+ * (indicatif, préfixe) ne suffit pas à décrire leur plan — l'Argentine et ses
+ * mobiles en 9, la Biélorussie dont le préfixe est « 80 », la Lituanie en
+ * pleine transition, le Vatican dont l'indicatif 379 n'est pas en service. Les
+ * y forcer aurait produit des numéros faux et plausibles ; leur absence
+ * produit un bouton absent, qui se voit.
  */
 const DIAL_CODES = {
-  FR: { dial: '33', trunk: '0' },
-  BE: { dial: '32', trunk: '0' },
-  ES: { dial: '34', trunk: '' },
-  IT: { dial: '39', trunk: '' },
-  DE: { dial: '49', trunk: '0' },
-  NL: { dial: '31', trunk: '0' },
-  LU: { dial: '352', trunk: '' },
-  CH: { dial: '41', trunk: '0' },
-  AT: { dial: '43', trunk: '0' },
-  PT: { dial: '351', trunk: '' },
-  GB: { dial: '44', trunk: '0' },
-  IE: { dial: '353', trunk: '0' },
-  MC: { dial: '377', trunk: '' },
-  MA: { dial: '212', trunk: '0' },
 
   /*
-   * Le plan de numérotation nord-américain.
-   *
-   * Le « 1 » qu'on compose avant un appel longue distance aux États-Unis
-   * n'est pas un préfixe national au sens de cette table : le numéro national
-   * fait dix chiffres, indicatif régional compris, et se préfixe directement
-   * par l'indicatif pays. D'où `trunk: ''`.
-   *
-   * Les clients écrivent pourtant leur numéro des deux façons — « 478 349
-   * 0262 » et « 1 478 349 0262 » — et la seconde forme doublait l'indicatif.
-   * C'est traité dans `whatsappNumber`, pas ici.
+   * Le plan de numérotation nord-américain : vingt-cinq territoires, un seul
+   * indicatif. Le « 1 » composé avant un appel longue distance n'est pas un
+   * préfixe national — le numéro national fait dix chiffres, indicatif
+   * régional compris — d'où le préfixe vide. Le cas du « 1 » saisi en tête
+   * est traité dans `whatsappNumber`, pas ici.
    */
-  US: { dial: '1', trunk: '' },
-  CA: { dial: '1', trunk: '' },
+  AG: { dial: '1', trunk: '' }, // Antigua-et-Barbuda
+  AI: { dial: '1', trunk: '' }, // Anguilla
+  AS: { dial: '1', trunk: '' }, // Samoa américaines
+  BB: { dial: '1', trunk: '' }, // Barbade
+  BM: { dial: '1', trunk: '' }, // Bermudes
+  BS: { dial: '1', trunk: '' }, // Bahamas
+  CA: { dial: '1', trunk: '' }, // Canada
+  DM: { dial: '1', trunk: '' }, // Dominique
+  DO: { dial: '1', trunk: '' }, // République dominicaine
+  GD: { dial: '1', trunk: '' }, // Grenade
+  GU: { dial: '1', trunk: '' }, // Guam
+  JM: { dial: '1', trunk: '' }, // Jamaïque
+  KN: { dial: '1', trunk: '' }, // Saint-Christophe-et-Niévès
+  KY: { dial: '1', trunk: '' }, // Îles Caïmans
+  LC: { dial: '1', trunk: '' }, // Sainte-Lucie
+  MP: { dial: '1', trunk: '' }, // Îles Mariannes du Nord
+  MS: { dial: '1', trunk: '' }, // Montserrat
+  PR: { dial: '1', trunk: '' }, // Porto Rico
+  SX: { dial: '1', trunk: '' }, // Saint-Martin (partie néerlandaise)
+  TC: { dial: '1', trunk: '' }, // Îles Turques-et-Caïques
+  TT: { dial: '1', trunk: '' }, // Trinité-et-Tobago
+  US: { dial: '1', trunk: '' }, // États-Unis
+  VC: { dial: '1', trunk: '' }, // Saint-Vincent-et-les-Grenadines
+  VG: { dial: '1', trunk: '' }, // Îles Vierges britanniques
+  VI: { dial: '1', trunk: '' }, // Îles Vierges des États-Unis
+
+  /* Le reste du monde, par ordre de code ISO. */
+  AD: { dial: '376', trunk: '' }, // Andorre
+  AE: { dial: '971', trunk: '0' }, // Émirats arabes unis
+  AL: { dial: '355', trunk: '0' }, // Albanie
+  AO: { dial: '244', trunk: '' }, // Angola
+  AT: { dial: '43', trunk: '0' }, // Autriche
+  AU: { dial: '61', trunk: '0' }, // Australie
+  AX: { dial: '358', trunk: '0' }, // Îles Åland
+  BA: { dial: '387', trunk: '0' }, // Bosnie-Herzégovine
+  BD: { dial: '880', trunk: '0' }, // Bangladesh
+  BE: { dial: '32', trunk: '0' }, // Belgique
+  BF: { dial: '226', trunk: '' }, // Burkina Faso
+  BG: { dial: '359', trunk: '0' }, // Bulgarie
+  BH: { dial: '973', trunk: '' }, // Bahreïn
+  BI: { dial: '257', trunk: '' }, // Burundi
+  BJ: { dial: '229', trunk: '' }, // Bénin
+  BO: { dial: '591', trunk: '' }, // Bolivie
+  BR: { dial: '55', trunk: '0' }, // Brésil
+  BW: { dial: '267', trunk: '' }, // Botswana
+  BZ: { dial: '501', trunk: '' }, // Belize
+  CD: { dial: '243', trunk: '0' }, // RD Congo
+  CG: { dial: '242', trunk: '' }, // Congo-Brazzaville
+  CH: { dial: '41', trunk: '0' }, // Suisse
+  CI: { dial: '225', trunk: '' }, // Côte d'Ivoire
+  CL: { dial: '56', trunk: '' }, // Chili
+  CM: { dial: '237', trunk: '' }, // Cameroun
+  CN: { dial: '86', trunk: '0' }, // Chine
+  CO: { dial: '57', trunk: '' }, // Colombie
+  CR: { dial: '506', trunk: '' }, // Costa Rica
+  CV: { dial: '238', trunk: '' }, // Cap-Vert
+  CY: { dial: '357', trunk: '' }, // Chypre
+  CZ: { dial: '420', trunk: '' }, // Tchéquie
+  DE: { dial: '49', trunk: '0' }, // Allemagne
+  DJ: { dial: '253', trunk: '' }, // Djibouti
+  DK: { dial: '45', trunk: '' }, // Danemark
+  DZ: { dial: '213', trunk: '0' }, // Algérie
+  EC: { dial: '593', trunk: '0' }, // Équateur
+  EE: { dial: '372', trunk: '' }, // Estonie
+  EG: { dial: '20', trunk: '0' }, // Égypte
+  ER: { dial: '291', trunk: '0' }, // Érythrée
+  ES: { dial: '34', trunk: '' }, // Espagne
+  ET: { dial: '251', trunk: '0' }, // Éthiopie
+  FI: { dial: '358', trunk: '0' }, // Finlande
+  FJ: { dial: '679', trunk: '' }, // Fidji
+  FO: { dial: '298', trunk: '' }, // Îles Féroé
+  FR: { dial: '33', trunk: '0' }, // France
+  GA: { dial: '241', trunk: '0' }, // Gabon
+  GB: { dial: '44', trunk: '0' }, // Royaume-Uni
+  GF: { dial: '594', trunk: '0' }, // Guyane française
+  GG: { dial: '44', trunk: '0' }, // Guernesey
+  GH: { dial: '233', trunk: '0' }, // Ghana
+  GI: { dial: '350', trunk: '' }, // Gibraltar
+  GL: { dial: '299', trunk: '' }, // Groenland
+  GM: { dial: '220', trunk: '' }, // Gambie
+  GN: { dial: '224', trunk: '' }, // Guinée
+  GQ: { dial: '240', trunk: '' }, // Guinée équatoriale
+  GR: { dial: '30', trunk: '' }, // Grèce
+  GT: { dial: '502', trunk: '' }, // Guatemala
+  GY: { dial: '592', trunk: '' }, // Guyana
+  HK: { dial: '852', trunk: '' }, // Hong Kong
+  HN: { dial: '504', trunk: '' }, // Honduras
+  HR: { dial: '385', trunk: '0' }, // Croatie
+  HU: { dial: '36', trunk: '06' }, // Hongrie
+  ID: { dial: '62', trunk: '0' }, // Indonésie
+  IE: { dial: '353', trunk: '0' }, // Irlande
+  IL: { dial: '972', trunk: '0' }, // Israël
+  IM: { dial: '44', trunk: '0' }, // Île de Man
+  IN: { dial: '91', trunk: '0' }, // Inde
+  IQ: { dial: '964', trunk: '0' }, // Irak
+  IR: { dial: '98', trunk: '0' }, // Iran
+  IS: { dial: '354', trunk: '' }, // Islande
+  IT: { dial: '39', trunk: '' }, // Italie
+  JE: { dial: '44', trunk: '0' }, // Jersey
+  JO: { dial: '962', trunk: '0' }, // Jordanie
+  JP: { dial: '81', trunk: '0' }, // Japon
+  KE: { dial: '254', trunk: '0' }, // Kenya
+  KH: { dial: '855', trunk: '0' }, // Cambodge
+  KR: { dial: '82', trunk: '0' }, // Corée du Sud
+  KW: { dial: '965', trunk: '' }, // Koweït
+  KZ: { dial: '7', trunk: '8' }, // Kazakhstan
+  LB: { dial: '961', trunk: '0' }, // Liban
+  LI: { dial: '423', trunk: '' }, // Liechtenstein
+  LK: { dial: '94', trunk: '0' }, // Sri Lanka
+  LR: { dial: '231', trunk: '0' }, // Liberia
+  LS: { dial: '266', trunk: '' }, // Lesotho
+  LU: { dial: '352', trunk: '' }, // Luxembourg
+  LV: { dial: '371', trunk: '' }, // Lettonie
+  LY: { dial: '218', trunk: '0' }, // Libye
+  MA: { dial: '212', trunk: '0' }, // Maroc
+  MC: { dial: '377', trunk: '' }, // Monaco
+  MD: { dial: '373', trunk: '0' }, // Moldavie
+  ME: { dial: '382', trunk: '0' }, // Monténégro
+  MG: { dial: '261', trunk: '0' }, // Madagascar
+  MK: { dial: '389', trunk: '0' }, // Macédoine du Nord
+  ML: { dial: '223', trunk: '' }, // Mali
+  MR: { dial: '222', trunk: '' }, // Mauritanie
+  MT: { dial: '356', trunk: '' }, // Malte
+  MU: { dial: '230', trunk: '' }, // Maurice
+  MW: { dial: '265', trunk: '0' }, // Malawi
+  MX: { dial: '52', trunk: '' }, // Mexique
+  MY: { dial: '60', trunk: '0' }, // Malaisie
+  MZ: { dial: '258', trunk: '' }, // Mozambique
+  NA: { dial: '264', trunk: '0' }, // Namibie
+  NE: { dial: '227', trunk: '' }, // Niger
+  NG: { dial: '234', trunk: '0' }, // Nigeria
+  NI: { dial: '505', trunk: '' }, // Nicaragua
+  NL: { dial: '31', trunk: '0' }, // Pays-Bas
+  NO: { dial: '47', trunk: '' }, // Norvège
+  NZ: { dial: '64', trunk: '0' }, // Nouvelle-Zélande
+  OM: { dial: '968', trunk: '' }, // Oman
+  PA: { dial: '507', trunk: '' }, // Panama
+  PE: { dial: '51', trunk: '0' }, // Pérou
+  PG: { dial: '675', trunk: '' }, // Papouasie-Nouvelle-Guinée
+  PH: { dial: '63', trunk: '0' }, // Philippines
+  PK: { dial: '92', trunk: '0' }, // Pakistan
+  PL: { dial: '48', trunk: '' }, // Pologne
+  PS: { dial: '970', trunk: '0' }, // Palestine
+  PT: { dial: '351', trunk: '' }, // Portugal
+  PY: { dial: '595', trunk: '0' }, // Paraguay
+  QA: { dial: '974', trunk: '' }, // Qatar
+  RO: { dial: '40', trunk: '0' }, // Roumanie
+  RS: { dial: '381', trunk: '0' }, // Serbie
+  RU: { dial: '7', trunk: '8' }, // Russie
+  RW: { dial: '250', trunk: '0' }, // Rwanda
+  SA: { dial: '966', trunk: '0' }, // Arabie saoudite
+  SC: { dial: '248', trunk: '' }, // Seychelles
+  SD: { dial: '249', trunk: '0' }, // Soudan
+  SE: { dial: '46', trunk: '0' }, // Suède
+  SG: { dial: '65', trunk: '' }, // Singapour
+  SI: { dial: '386', trunk: '0' }, // Slovénie
+  SJ: { dial: '47', trunk: '' }, // Svalbard et Jan Mayen
+  SK: { dial: '421', trunk: '0' }, // Slovaquie
+  SL: { dial: '232', trunk: '0' }, // Sierra Leone
+  SM: { dial: '378', trunk: '' }, // Saint-Marin
+  SN: { dial: '221', trunk: '' }, // Sénégal
+  SR: { dial: '597', trunk: '' }, // Suriname
+  SV: { dial: '503', trunk: '' }, // Salvador
+  SY: { dial: '963', trunk: '0' }, // Syrie
+  SZ: { dial: '268', trunk: '' }, // Eswatini
+  TD: { dial: '235', trunk: '' }, // Tchad
+  TG: { dial: '228', trunk: '' }, // Togo
+  TH: { dial: '66', trunk: '0' }, // Thaïlande
+  TN: { dial: '216', trunk: '' }, // Tunisie
+  TR: { dial: '90', trunk: '0' }, // Turquie
+  TW: { dial: '886', trunk: '0' }, // Taïwan
+  TZ: { dial: '255', trunk: '0' }, // Tanzanie
+  UA: { dial: '380', trunk: '0' }, // Ukraine
+  UG: { dial: '256', trunk: '0' }, // Ouganda
+  UY: { dial: '598', trunk: '0' }, // Uruguay
+  UZ: { dial: '998', trunk: '0' }, // Ouzbékistan
+  VE: { dial: '58', trunk: '0' }, // Venezuela
+  VN: { dial: '84', trunk: '0' }, // Viêt Nam
+  XK: { dial: '383', trunk: '0' }, // Kosovo
+  ZA: { dial: '27', trunk: '0' }, // Afrique du Sud
+  ZM: { dial: '260', trunk: '0' }, // Zambie
+  ZW: { dial: '263', trunk: '0' }, // Zimbabwe
 };
 
 /**
