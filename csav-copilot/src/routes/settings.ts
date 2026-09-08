@@ -143,6 +143,9 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
             isDefault: true,
             watchExpiration: true,
             createdAt: true,
+            // Débrancher emporte les conversations de la boîte. L'écran ne
+            // peut pas le dire honnêtement sans savoir combien.
+            _count: { select: { tickets: true } },
           },
         },
       },
@@ -209,6 +212,7 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
             watchActive: Boolean(
               mailbox.watchExpiration && mailbox.watchExpiration > new Date(),
             ),
+            ticketCount: mailbox._count.tickets,
           })),
         },
       },
@@ -216,11 +220,13 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
   });
 
   /**
-   * Réglages d'une boîte : libellé, boîte par défaut, débranchement.
+   * Réglages d'une boîte : libellé et boîte par défaut.
    *
-   * Débrancher n'efface pas les tickets reçus — la relation les laisse
-   * orphelins plutôt que de les emporter. Perdre l'historique du SAV parce
-   * qu'on retire une adresse serait une catastrophe silencieuse.
+   * Ce bloc annonçait aussi le débranchement, et affirmait qu'il « n'efface
+   * pas les tickets reçus ». C'était juste du temps où la relation
+   * `onDelete: SetNull` décidait seule du sort des conversations. Le
+   * débranchement vit dans la route DELETE plus bas, il les supprime
+   * délibérément, et c'est là qu'il s'explique.
    */
   app.patch<{ Params: { id: string } }>(
     "/api/mailboxes/:id",
@@ -1223,6 +1229,20 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
+  /**
+   * Débrancher une boîte : révoquer chez Google, puis retirer ses données.
+   *
+   * ATTENTION — ce geste SUPPRIME les conversations apportées par cette
+   * adresse. Le schéma ne l'impose pas : la relation est `onDelete: SetNull`
+   * et laisserait les tickets orphelins. C'est la transaction plus bas qui
+   * les efface, délibérément, pour la raison qu'elle donne — un ticket sans
+   * provenance rend la file impossible à nettoyer.
+   *
+   * L'écran doit donc annoncer le nombre avant de le faire : le champ
+   * `ticketCount` de GET /api/settings est là pour ça. Toute évolution de
+   * cette route qui change le sort des conversations doit corriger le texte
+   * de confirmation dans public/app.js en même temps.
+   */
   app.delete<{ Params: { id: string } }>(
     "/api/mailboxes/:id",
     { preHandler: requirePermission("configure") },

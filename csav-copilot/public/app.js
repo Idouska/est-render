@@ -9680,11 +9680,32 @@ function renderSettings() {
     .querySelectorAll('[data-mbx-off]')
     .forEach((button) =>
       button.addEventListener('click', async () => {
+        const boite = (state.settings?.connections?.gmail?.mailboxes ?? []).find(
+          (m) => m.id === button.dataset.mbxOff,
+        );
+        const nb = boite?.ticketCount ?? 0;
+
         if (
           !confirm(
-            'Débrancher cette boîte ?\n\n' +
-              'L’autorisation Google est révoquée : l’outil perd tout accès à cette ' +
-              'adresse. Les messages déjà reçus sont conservés.',
+            `Débrancher ${boite?.emailAddress ?? 'cette boîte'} ?\n\n` +
+              'L’autorisation Google est révoquée : l’outil perd tout accès à ' +
+              'cette adresse.\n\n' +
+              /*
+               * Le nombre, parce que le geste est irréversible.
+               *
+               * Cette fenêtre promettait « les messages déjà reçus sont
+               * conservés » alors que la transaction du serveur les supprime.
+               * Le marchand validait donc la perte de son historique en
+               * lisant qu'il le gardait. La suppression est délibérée et
+               * argumentée côté serveur — un ticket sans provenance rend la
+               * file impossible à nettoyer — c'est la phrase qui était fausse.
+               */
+              (nb > 0
+                ? `${nb} conversation${nb > 1 ? 's' : ''} rattachée${
+                    nb > 1 ? 's' : ''
+                  } à cette adresse ${nb > 1 ? 'seront supprimées' : 'sera supprimée'}. ` +
+                  'Le courrier reste dans votre boîte Gmail. Irréversible.'
+                : 'Aucune conversation n’est rattachée à cette adresse.'),
           )
         ) {
           return;
