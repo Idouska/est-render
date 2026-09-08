@@ -8354,22 +8354,41 @@ function setView(view) {
 
 /* ------------------------------------------------------------- apparence */
 
+/*
+ * La pastille de chaque palette montre son `--accent`, exactement.
+ *
+ * Trois valeurs ont changé dans la feuille — cyan, émeraude et ambre étaient
+ * trop claires pour porter du texte blanc — et une pastille qui montrerait
+ * l'ancienne couleur ferait mentir le sélecteur.
+ */
 const PALETTES = [
   ['violet', 'Violet', '#6c5ce7'],
   ['indigo', 'Indigo', '#4f46e5'],
   ['bleu', 'Bleu', '#2563eb'],
-  ['cyan', 'Cyan', '#0891b2'],
-  ['emeraude', 'Émeraude', '#059669'],
-  ['ambre', 'Ambre', '#d97706'],
+  ['cyan', 'Cyan', '#07819e'],
+  ['emeraude', 'Émeraude', '#04865e'],
+  ['ambre', 'Ambre', '#b36205'],
   ['corail', 'Corail', '#e11d48'],
   ['graphite', 'Graphite', '#475569'],
 ];
+
+/*
+ * Le défaut est le bleu, pas le violet.
+ *
+ * Tant que les palettes étaient mortes, ce défaut n'avait aucune conséquence :
+ * quoi qu'il dise, la feuille rendait le bleu de la couche densité. En les
+ * rallumant, « violet » aurait basculé d'un coup tous les postes qui n'ont
+ * jamais choisi — vers la couleur que cette couche avait précisément
+ * abandonnée, « le bleu encre se lit comme un outil là où l'indigo se lit
+ * comme une démo ». Le défaut dit maintenant ce que l'écran montrait déjà.
+ */
+const ACCENT_DEFAUT = 'bleu';
 
 /* Préférence d'affichage, propre à la personne et à son écran : elle vit dans
    le navigateur, pas en base. La stocker côté serveur imposerait le même thème
    au portable et au poste fixe. */
 function applyAppearance() {
-  const accent = localStorage.getItem('csav.accent') ?? 'violet';
+  const accent = localStorage.getItem('csav.accent') ?? ACCENT_DEFAUT;
   const theme = localStorage.getItem('csav.theme') ?? 'auto';
 
   document.documentElement.dataset.accent = accent;
@@ -8383,7 +8402,7 @@ function applyAppearance() {
 }
 
 function renderPalettes() {
-  const accent = localStorage.getItem('csav.accent') ?? 'violet';
+  const accent = localStorage.getItem('csav.accent') ?? ACCENT_DEFAUT;
   const theme = localStorage.getItem('csav.theme') ?? 'auto';
 
   $('palette-swatches').innerHTML = PALETTES.map(
