@@ -9332,6 +9332,46 @@ function renderConnection(el, { label, connected, simulated, detail, actions, st
     <p class="set-conn-detail">${detail}</p>`;
 }
 
+/*
+ * Ce que dit la fenêtre avant de débrancher une boîte.
+ *
+ * Elle promettait « les messages déjà reçus sont conservés » alors que le
+ * serveur les supprime : le marchand validait la perte de son historique en
+ * lisant qu'il le gardait. La suppression est délibérée et argumentée là où
+ * elle se produit — un ticket sans provenance rend la file impossible à
+ * nettoyer — c'était la phrase qui était fausse.
+ *
+ * TROIS CAS, ET PAS DEUX. Un compte absent n'est pas un compte à zéro.
+ * Écrire « aucune conversation n'est rattachée » parce que le nombre n'est
+ * pas arrivé serait remplacer un mensonge par un autre, plus discret : le
+ * marchand débrancherait tranquillement une boîte pleine. Quand on ne sait
+ * pas, on le dit sans chiffre — la phrase reste vraie, elle est seulement
+ * moins précise.
+ */
+function messageDebranchement(boite) {
+  const nb = boite?.ticketCount;
+  const adresse = boite?.emailAddress ?? 'cette boîte';
+
+  const sort =
+    typeof nb !== 'number'
+      ? 'Les conversations rattachées à cette adresse seront supprimées.'
+      : nb === 0
+        ? 'Aucune conversation n’est rattachée à cette adresse.'
+        : `${nb} conversation${nb > 1 ? 's' : ''} rattachée${nb > 1 ? 's' : ''} à cette ` +
+          `adresse ${nb > 1 ? 'seront supprimées' : 'sera supprimée'}.`;
+
+  // Le courrier lui-même ne bouge pas : c'est l'historique du SAV qui part,
+  // et la distinction change la décision.
+  const suite = nb === 0 ? '' : ' Le courrier reste dans votre boîte Gmail. Irréversible.';
+
+  return (
+    `Débrancher ${adresse} ?\n\n` +
+    'L’autorisation Google est révoquée : l’outil perd tout accès à cette adresse.\n\n' +
+    sort +
+    suite
+  );
+}
+
 function renderSettings() {
   const { merchant, connections } = state.settings;
 
@@ -9683,31 +9723,8 @@ function renderSettings() {
         const boite = (state.settings?.connections?.gmail?.mailboxes ?? []).find(
           (m) => m.id === button.dataset.mbxOff,
         );
-        const nb = boite?.ticketCount ?? 0;
 
-        if (
-          !confirm(
-            `Débrancher ${boite?.emailAddress ?? 'cette boîte'} ?\n\n` +
-              'L’autorisation Google est révoquée : l’outil perd tout accès à ' +
-              'cette adresse.\n\n' +
-              /*
-               * Le nombre, parce que le geste est irréversible.
-               *
-               * Cette fenêtre promettait « les messages déjà reçus sont
-               * conservés » alors que la transaction du serveur les supprime.
-               * Le marchand validait donc la perte de son historique en
-               * lisant qu'il le gardait. La suppression est délibérée et
-               * argumentée côté serveur — un ticket sans provenance rend la
-               * file impossible à nettoyer — c'est la phrase qui était fausse.
-               */
-              (nb > 0
-                ? `${nb} conversation${nb > 1 ? 's' : ''} rattachée${
-                    nb > 1 ? 's' : ''
-                  } à cette adresse ${nb > 1 ? 'seront supprimées' : 'sera supprimée'}. ` +
-                  'Le courrier reste dans votre boîte Gmail. Irréversible.'
-                : 'Aucune conversation n’est rattachée à cette adresse.'),
-          )
-        ) {
+        if (!confirm(messageDebranchement(boite))) {
           return;
         }
 
