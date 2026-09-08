@@ -137,3 +137,13 @@ un état sur la foi d'un appel qui a échoué ») et avait été perdue à la
 réécriture. Elle a été remise. Ne pas la retirer au motif qu'elle n'a jamais
 servi : c'est précisément son état normal.
 
+Un audit adversarial passé après l'exécution a trouvé trois défauts dans la
+version qui avait tourné — sans dégât, parce que Gmail avait répondu du
+premier coup. Le pire : la boucle de pagination sortait sur un refus de quota
+à la *première* page et rendait un ensemble vide, que la remise à plat prenait
+pour la vérité. Le garde-fou ci-dessus ne l'attrapait pas quand une seule des
+deux recherches échouait. Depuis : la boucle ne sort qu'après une page lue, un
+second garde-fou refuse une réponse Gmail qui ne recoupe aucun de nos fils
+(jeton d'un autre compte), et la remise à plat ne touche que les tickets
+antérieurs à la photographie — l'ingestion continue pendant la reprise.
+
