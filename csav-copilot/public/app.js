@@ -6195,6 +6195,27 @@ async function loadOverview() {
  */
 const ACTEURS = { AI: 'l’IA', SYSTEM: 'le système', SUPPLIER: 'un fournisseur' };
 
+/*
+ * Une icône par famille d'action, prise dans le jeu existant.
+ *
+ * Vingt-cinq actions, neuf familles : c'est le préfixe qui porte le sens — ce
+ * qui touche à un brouillon, à un remboursement, à un fournisseur. Un
+ * pictogramme par action serait vingt-cinq dessins à inventer et à retenir ;
+ * un par famille se reconnaît sans être appris. Le jeu `ICONS` fournit tout
+ * ce qu'il faut, rien à ajouter.
+ */
+const ACTION_ICONES = {
+  draft: 'bolt',
+  email: 'inbox',
+  ticket: 'inbox',
+  refund: 'euro',
+  supplier: 'truck',
+  shopify: 'bag',
+  gmail: 'inbox',
+  user: 'users',
+  merchant: 'gear',
+};
+
 async function renderOvActions() {
   let entrees = [];
   try {
@@ -6218,8 +6239,11 @@ async function renderOvActions() {
         // et inventer « Par Thomas » serait plus faux qu'imprécis.
         const acteur = ACTEURS[entree.actorType] ?? 'un agent';
 
+        const famille = String(entree.action).split('.')[0];
+
         return `<li>
           <time>${esc(shortTime(entree.createdAt))}</time>
+          <span class="ov-ico" aria-hidden="true">${ico(ACTION_ICONES[famille] ?? 'inbox')}</span>
           <span class="ov-quoi">
             <b>${esc(AUDIT_LABELS[entree.action] ?? entree.action)}</b>${
               detail ? `<span class="sub"> · ${esc(detail)}</span>` : ''
@@ -6248,19 +6272,24 @@ function renderOvKpis(metrics, counts) {
       : '—';
 
   const cartes = [
-    ['inbox', 'En attente de vous', ovNombre(metrics?.pending), `${counts.NEEDS_REVIEW ?? 0} à valider`],
-    ['inbox', 'Brouillons prêts', ovNombre(counts.DRAFT_READY ?? 0), 'relecture puis envoi'],
-    ['clock', 'Délai 1re réponse', delai, metrics ? 'sur 30 jours' : ''],
-    ['bolt', 'Chez le fournisseur', ovNombre(counts.AWAITING_SUPPLIER ?? 0), 'en attente de réponse'],
-    ['shield', 'Traités aujourd’hui', ovNombre(metrics?.today), 'depuis minuit'],
+    ['inbox', 'En attente de vous', '', ovNombre(metrics?.pending), `${counts.NEEDS_REVIEW ?? 0} à valider`],
+    ['inbox', 'Brouillons prêts', '', ovNombre(counts.DRAFT_READY ?? 0), 'relecture puis envoi'],
+    // La fenêtre est dans l'intitulé, pas dans la note : « 2 h 06 » suivi de
+    // « sur 30 jours » se lisait comme un commentaire, alors que c'est ce qui
+    // définit la mesure.
+    ['clock', '1re réponse moyenne', '30 j', delai, 'du message à la réponse'],
+    ['bolt', 'Chez le fournisseur', '', ovNombre(counts.AWAITING_SUPPLIER ?? 0), 'en attente de réponse'],
+    ['shield', 'Traités', 'aujourd’hui', ovNombre(metrics?.today), 'depuis ce matin'],
   ];
 
   $('ov-kpis').innerHTML = cartes
     .map(
-      ([ico, label, valeur, note]) => `<div class="kpi">
+      ([ico, label, periode, valeur, note]) => `<div class="kpi">
         <span class="kpi-ico" data-ico="${esc(ico)}" aria-hidden="true"></span>
         <span class="kpi-body">
-          <span class="kpi-label">${esc(label)}</span>
+          <span class="kpi-label">${esc(label)}${
+            periode ? `<span class="kpi-per"> · ${esc(periode)}</span>` : ''
+          }</span>
           <span class="kpi-value">${esc(valeur)}</span>
           ${note ? `<span class="kpi-note">${esc(note)}</span>` : ''}
         </span>
@@ -6271,6 +6300,11 @@ function renderOvKpis(metrics, counts) {
   // Les icônes sont peintes par la même fonction que la barre du SAV : deux
   // jeux de pictogrammes pour un seul produit se remarquent tout de suite.
   paintKpiIcons($('ov-kpis'));
+  // Les titres de cartes portent aussi un pictogramme : même fonction, même
+  // jeu de glyphes, et ils ne sont peints qu'une fois.
+  document.querySelectorAll('#view-overview .panel-ico[data-ico]').forEach((box) => {
+    if (!box.firstChild) box.innerHTML = ico(box.dataset.ico);
+  });
 }
 
 /* ---- ce qui presse ---- */
@@ -6303,27 +6337,49 @@ function renderOvPriorite() {
     .sort((a, b) => a.e.rang - b.e.rang || new Date(a.t.lastMessageAt) - new Date(b.t.lastMessageAt))
     .slice(0, 9);
 
+  // Le compteur dit combien de messages la table ordonne, pas combien sont
+  // affichés — et surtout pas la même chose que « En attente de vous », qui
+  // compte les non-lus de Gmail. L'infobulle lève la confusion.
   const compteur = $('ov-prio-n');
   compteur.hidden = ouverts.length === 0;
   compteur.textContent = String(ouverts.length);
+  compteur.title = `${ouverts.length} message${ouverts.length > 1 ? 's' : ''} ouvert${
+    ouverts.length > 1 ? 's' : ''
+  }, classé${ouverts.length > 1 ? 's' : ''} par échéance. Les ${Math.min(
+    ouverts.length,
+    9,
+  )} plus pressants sont affichés.`;
 
   $('ov-prio-rows').innerHTML = lignes.length
     ? lignes
         .map(
           ({ t, e }) => `<tr tabindex="0" role="button" data-ov-id="${esc(t.id)}"
             aria-label="Ouvrir le message de ${esc(t.customerName ?? t.customerEmail)}">
-            <td class="ov-who">${esc(t.customerName ?? t.customerEmail)}</td>
+            <td>
+              <span class="ov-cli">
+                <span class="ov-av" aria-hidden="true"
+                  style="background:${esc(avatarTint(t.customerName ?? t.customerEmail))}">${esc(
+                    initials(t.customerName ?? t.customerEmail),
+                  )}</span>
+                <span class="ov-who" title="${esc(t.customerName ?? t.customerEmail)}">${esc(
+                  t.customerName ?? t.customerEmail,
+                )}</span>
+              </span>
+            </td>
             <td class="ov-age sub">${esc(relativeTime(t.lastMessageAt))}</td>
-            <td class="ov-subj">${esc(t.subject ?? '(sans objet)')}</td>
+            <td class="ov-subj" title="${esc(t.subject ?? '(sans objet)')}">${esc(
+              t.subject ?? '(sans objet)',
+            )}</td>
             <td><span class="tag tag-status st-${esc(t.status)}">${esc(
               STATUS_LABELS[t.status] ?? t.status,
             )}</span></td>
             <td class="mono sub">${esc(t.orderName ?? '—')}</td>
             <td><span class="ovdue ovdue-${e.ton}">${esc(e.label)}</span></td>
+            <td class="ov-go" aria-hidden="true">›</td>
           </tr>`,
         )
         .join('')
-    : `<tr><td colspan="6" class="empty" style="padding:18px 14px">Rien en attente.</td></tr>`;
+    : `<tr><td colspan="7" class="empty" style="padding:18px 14px">Rien en attente.</td></tr>`;
 
   // Une ligne s'ouvre au clic et à l'entrée : la table se parcourt au clavier
   // comme la file.
@@ -6354,14 +6410,38 @@ function renderOvPriorite() {
  * colonne, et la raison pour laquelle une ligne sans destination reste un
  * simple texte, sans flèche ni curseur de lien.
  */
-function ovStatLigne({ label, valeur, ton, filtre, note }) {
+/**
+ * Une ligne de la colonne droite.
+ *
+ * `periode` est collée à l'intitulé, jamais laissée implicite : « 1re réponse
+ * moyenne » et « Traités aujourd'hui » dans la même carte, l'une sur trente
+ * jours et l'autre depuis minuit, se lisaient comme deux mesures du même
+ * moment. Le point médian est la seule ponctuation qui ne se confonde pas avec
+ * une unité.
+ *
+ * `aide` devient une infobulle, pas une seconde ligne de texte : ce qui
+ * s'explique une fois ne doit pas peser à chaque lecture.
+ *
+ * `filtre` est appliqué à la file avant d'y basculer. Une ligne sans
+ * destination reste un simple `div`, sans curseur ni flèche — un compteur
+ * qu'on ne peut pas ouvrir ne sert qu'à inquiéter.
+ */
+function ovStatLigne({ label, valeur, ton, filtre, periode, aide, ico: nomIco }) {
   const cliquable = Boolean(filtre);
   const balise = cliquable ? 'button' : 'div';
   return `<li><${balise} class="statrow${cliquable ? ' statrow-go' : ''}"${
     cliquable ? ` type="button" data-ov-filtre="${esc(JSON.stringify(filtre))}"` : ''
   }>
-    <span class="statrow-l">${esc(label)}</span>
-    ${note ? `<span class="statrow-n sub">${esc(note)}</span>` : ''}
+    ${nomIco ? `<span class="statrow-ico" aria-hidden="true">${ico(nomIco)}</span>` : ''}
+    <span class="statrow-l">${esc(label)}${
+      periode ? `<span class="statrow-p"> · ${esc(periode)}</span>` : ''
+    }</span>
+    ${
+      aide
+        ? `<span class="statrow-i" tabindex="0" role="note" aria-label="${esc(aide)}"
+             title="${esc(aide)}">i</span>`
+        : ''
+    }
     <b class="statrow-v${ton ? ` sv-${ton}` : ''}">${esc(valeur)}</b>
     ${cliquable ? '<span class="statrow-x" aria-hidden="true">›</span>' : ''}
   </${balise}></li>`;
@@ -6398,30 +6478,41 @@ function renderOvRisques(metrics, counts) {
 
   const lignes = [
     {
-      label: 'Hors délai de réponse',
+      label: 'SLA dépassé',
+      ico: 'clock',
       valeur: String(horsDelai),
       ton: horsDelai > 0 ? 'bad' : null,
       filtre: { sort: 'due' },
-      note: 'échéance dépassée',
+      aide: `Messages dont l’échéance de première réponse est passée. Le délai est celui réglé pour la boutique.`,
     },
-    { label: 'Sans réponse depuis 24 h', valeur: String(plusVieuxQue(24)), filtre: { urgent: true } },
     {
-      label: 'Sans réponse depuis 48 h',
-      valeur: String(plusVieuxQue(48)),
-      ton: plusVieuxQue(48) > 0 ? 'warn' : null,
+      label: 'Sans réponse > 24 h',
+      ico: 'clock',
+      valeur: String(plusVieuxQue(24)),
+      ton: plusVieuxQue(24) > 0 ? 'warn' : null,
       filtre: { urgent: true },
     },
-    { label: 'Litiges ouverts', valeur: String(litiges), filtre: { intent: 'DISPUTE' } },
+    {
+      label: 'Sans réponse > 48 h',
+      ico: 'clock',
+      valeur: String(plusVieuxQue(48)),
+      ton: plusVieuxQue(48) > 0 ? 'bad' : null,
+      filtre: { urgent: true },
+    },
+    { label: 'Litiges ouverts', valeur: String(litiges), filtre: { intent: 'DISPUTE' }, ico: 'shield' },
     {
       label: 'Chez le fournisseur',
       valeur: ovNombre(counts.AWAITING_SUPPLIER ?? 0),
       filtre: { status: 'AWAITING_SUPPLIER' },
+      ico: 'truck',
     },
     {
       label: 'Non compris par l’IA',
       valeur: ovNombre(metrics?.failed ?? 0),
       ton: (metrics?.failed ?? 0) > 0 ? 'bad' : null,
       filtre: { status: 'FAILED' },
+      ico: 'bolt',
+      aide: 'Messages que la classification n’a pas su traiter : ils attendent une reprise à la main.',
     },
   ];
 
@@ -6449,21 +6540,22 @@ function renderOvPerf(metrics, stats) {
 
   $('ov-perf').innerHTML = [
     {
-      label: '1re réponse, moyenne',
+      label: '1re réponse moyenne',
+      periode: '7 j',
       valeur: typeof moyenne === 'number' ? duration(moyenne) : '—',
-      note: '7 jours',
     },
     {
-      label: '1re réponse, médiane',
+      label: '1re réponse médiane',
+      periode: '7 j',
       valeur: typeof mediane === 'number' ? duration(mediane) : '—',
-      note: 'moins sensible aux oubliés',
+      aide: 'La médiane est moins sensible aux valeurs extrêmes que la moyenne : un seul message oublié pendant une semaine ne la déplace pas.',
     },
-    { label: 'Traités aujourd’hui', valeur: ovNombre(metrics?.today), note: 'depuis minuit' },
+    { label: 'Traités', periode: 'aujourd’hui', valeur: ovNombre(metrics?.today) },
     {
-      label: 'Dans les temps',
+      label: 'SLA respecté',
       valeur: respect,
       ton: avecEcheance.length && dansLesTemps / avecEcheance.length < 0.9 ? 'warn' : null,
-      note: `${avecEcheance.length} avec échéance`,
+      aide: `Part des messages ouverts dont l’échéance n’est pas dépassée, sur les ${avecEcheance.length} qui en portent une.`,
     },
   ]
     .map(ovStatLigne)
@@ -6472,15 +6564,24 @@ function renderOvPerf(metrics, stats) {
 
 function renderOvIa(metrics, stats, counts) {
   const taux = metrics?.automationRate;
-  $('ov-ia-note').textContent = stats ? '7 jours' : '';
+  // La carte mêle deux fenêtres : les brouillons sur sept jours, le taux sur
+  // trente. L'en-tête ne peut donc pas en annoncer une seule — chaque ligne
+  // porte la sienne.
+  $('ov-ia-note').textContent = '';
 
   $('ov-ia').innerHTML = [
-    { label: 'Brouillons générés', valeur: ovNombre(stats?.drafts?.total) },
-    { label: 'Réponses envoyées', valeur: ovNombre(stats?.drafts?.sent) },
+    { label: 'Brouillons générés', periode: '7 j', valeur: ovNombre(stats?.drafts?.total) },
+    {
+      label: 'Réponses envoyées automatiquement',
+      periode: '7 j',
+      valeur: ovNombre(stats?.drafts?.sent),
+      aide: 'Brouillons partis sans relecture. Le reste a été validé à la main avant envoi.',
+    },
     {
       label: 'Taux d’automatisation',
+      periode: '30 j',
       valeur: typeof taux === 'number' ? `${Math.round(taux * 100)} %` : '—',
-      note: '30 jours',
+      aide: 'Part des brouillons rédigés par l’IA qui sont réellement partis. Un brouillon jamais envoyé n’a fait gagner aucune minute.',
     },
     {
       label: 'À valider par un humain',
@@ -6504,12 +6605,14 @@ function renderOvIa(metrics, stats, counts) {
 function renderOvTendance(stats) {
   const jours = stats?.tickets?.daily ?? [];
   $('ov-trend').innerHTML = jours.length
-    ? svgBarsPaire(jours)
+    ? tendanceHtml(jours)
     : '<p class="empty">Pas encore de données sur sept jours.</p>';
 }
 
 function renderOvIntentions(stats) {
-  $('ov-intents').innerHTML = intentBars(stats?.tickets?.byIntent, { part: true });
+  // La part se compare, le volume se vérifie : « 41 % » ne dit pas si c'est
+  // sur mille demandes ou sur douze. Les deux, la part en avant.
+  $('ov-intents').innerHTML = intentBars(stats?.tickets?.byIntent, { part: true, volume: true });
 }
 
 /*
@@ -6602,62 +6705,67 @@ function svgBars(days, pick, format, options = {}) {
 /*
  * Deux séries côte à côte : reçus et traités, jour par jour.
  *
- * `svgBars` ne trace qu'une série, et superposer deux appels donnerait deux
- * échelles indépendantes — le graphe mentirait sur le rapport entre les deux,
- * qui est précisément ce qu'on vient y lire : la file se vide-t-elle au rythme
- * où elle se remplit ? Un seul sommet gouverne donc les deux barres.
+ * En HTML et non en SVG. Les autres graphes du produit sont des `<svg>` en
+ * `preserveAspectRatio="none"` : la boîte s'étire à la largeur disponible, ce
+ * qui va bien pour des rectangles et déforme tout texte tracé dedans. Or c'est
+ * précisément ce qu'il manquait ici — la valeur au-dessus de chaque barre et
+ * l'échelle à gauche. Une grille de sept colonnes rend les mêmes barres, laisse
+ * le texte au navigateur, et n'ajoute aucune dépendance.
  *
- * Mêmes conventions que `svgBars` — repères au quart, `viewBox` de cent sur
- * cent, `<title>` pour le survol — pour que les deux graphes du produit se
- * lisent de la même façon.
+ * Un seul sommet gouverne les deux séries : c'est le rapport entre elles qu'on
+ * vient lire — la file se vide-t-elle au rythme où elle se remplit ?
  */
-function svgBarsPaire(jours) {
-  const sommet = Math.max(1, ...jours.map((j) => Math.max(j.received ?? 0, j.handled ?? 0)));
-  const pas = 100 / jours.length;
 
-  const barre = (valeur, x, largeur, classe) => {
-    // Une valeur non nulle garde deux pixels de haut : une barre invisible se
-    // confond avec un jour sans donnée, et ce n'est pas la même chose.
-    const h = Math.max(valeur > 0 ? 2 : 0, ((valeur ?? 0) / sommet) * 92);
-    return `<rect x="${x.toFixed(2)}" y="${(100 - h).toFixed(2)}" width="${largeur.toFixed(2)}"
-      height="${h.toFixed(2)}" rx="1" class="${classe}" />`;
-  };
+/** Un plafond rond au-dessus du pic : 68 donne 80, 124 donne 150. */
+function echelleRonde(pic) {
+  if (pic <= 0) return 4;
+  const puissance = 10 ** Math.floor(Math.log10(pic));
+  for (const pas of [1, 2, 2.5, 5, 10]) {
+    const cran = pas * puissance;
+    if (Math.ceil(pic / cran) * cran >= pic) return Math.ceil(pic / cran) * cran;
+  }
+  return pic;
+}
 
-  const groupes = jours
-    .map((jour, index) => {
-      const base = index * pas;
-      const large = pas * 0.34;
-      const jourLu = new Date(jour.day + 'T00:00:00').toLocaleDateString('fr-FR', {
-        day: 'numeric',
-        month: 'short',
-      });
-      return `<g>
-        <title>${esc(jourLu)} — ${jour.received ?? 0} reçus, ${jour.handled ?? 0} traités</title>
-        ${barre(jour.received, base + pas * 0.14, large, 'bar bar-soft')}
-        ${barre(jour.handled, base + pas * 0.52, large, 'bar')}
-      </g>`;
-    })
+function tendanceHtml(jours) {
+  const pic = Math.max(0, ...jours.map((j) => Math.max(j.received ?? 0, j.handled ?? 0)));
+  const haut = echelleRonde(pic);
+
+  // Quatre graduations : assez pour situer une hauteur, pas assez pour rayer.
+  const graduations = [haut, haut * 0.75, haut * 0.5, haut * 0.25, 0]
+    .map((v) => `<span>${Math.round(v)}</span>`)
     .join('');
 
-  const repere = [25, 50, 75]
-    .map((y) => `<line x1="0" x2="100" y1="${y}" y2="${y}" class="chart-grid" />`)
-    .join('');
-
-  // Les dates sous le graphe, hors du SVG : à `preserveAspectRatio="none"` le
-  // texte tracé dedans s'étirerait avec lui.
-  const dates = jours
+  const colonnes = jours
     .map((jour) => {
-      const d = new Date(jour.day + 'T00:00:00');
-      return `<span>${esc(d.toLocaleDateString('fr-FR', { weekday: 'short' }))}<br><b>${esc(
-        d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
-      )}</b></span>`;
+      const recus = jour.received ?? 0;
+      const traites = jour.handled ?? 0;
+      const date = new Date(jour.day + 'T00:00:00');
+      const jourCourt = date.toLocaleDateString('fr-FR', { weekday: 'short' });
+      const dateCourte = date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+
+      // Une barre nulle garde deux pour cent de hauteur : invisible, elle se
+      // confondrait avec un jour absent, et ce n'est pas la même chose.
+      const h = (v) => (v > 0 ? Math.max(2, (v / haut) * 100) : 0);
+
+      return `<div class="tr-jour" title="${esc(jourCourt)} ${esc(dateCourte)}
+Reçus : ${recus}
+Traités : ${traites}">
+        <span class="tr-vals"><b>${recus}</b><b>${traites}</b></span>
+        <span class="tr-bars">
+          <i class="tr-recu" style="height:${h(recus).toFixed(1)}%"></i>
+          <i class="tr-traite" style="height:${h(traites).toFixed(1)}%"></i>
+        </span>
+        <span class="tr-lab">${esc(jourCourt)}<b>${esc(dateCourte)}</b></span>
+      </div>`;
     })
     .join('');
 
-  return `<svg class="chart chart-pair" viewBox="0 0 100 100" preserveAspectRatio="none"
-    role="img" aria-label="Messages reçus et traités sur sept jours">${repere}${groupes}</svg>
-    <div class="chart-days">${dates}</div>
-    <div class="chart-scale"><span>${sommet}</span><span>0</span></div>`;
+  return `<div class="tr" role="img"
+    aria-label="Messages reçus et traités sur ${jours.length} jours">
+    <div class="tr-y" aria-hidden="true">${graduations}</div>
+    <div class="tr-plot">${colonnes}</div>
+  </div>`;
 }
 
 /** Répartition en barres horizontales : à sept catégories, plus lisible qu'un
@@ -6680,7 +6788,7 @@ function intentBars(byIntent, options = {}) {
         </span>
         <span class="ibar-count mono">${
           options.part ? `${Math.round((count / total) * 100)} %` : count
-        }</span>
+        }${options.volume ? `<span class="ibar-vol"> (${count})</span>` : ''}</span>
       </div>`,
     )
     .join('');
@@ -8417,7 +8525,15 @@ $('ret-f-save').addEventListener('click', async () => {
 });
 
 const VIEW_META = {
-  overview: { icon: 'grid', label: "Vue d'ensemble", group: 'Pilotage', title: "Vue d'ensemble" },
+  /* `sous` n'existe que là où le titre seul ne dit pas à quoi sert l'écran.
+     Le poste de pilotage en a besoin : « Vue d'ensemble » ne promet rien. */
+  overview: {
+    icon: 'grid',
+    label: "Vue d'ensemble",
+    group: 'Pilotage',
+    title: "Vue d'ensemble",
+    sous: 'Votre activité SAV en un coup d’œil',
+  },
   tickets: { icon: 'inbox', label: 'SAV client', group: 'Pilotage', title: 'SAV client' },
   stats: { icon: 'chart', label: "Statistiques", group: 'Pilotage', title: "Statistiques d'équipe" },
   orders: { icon: 'bag', label: 'Commandes', group: 'Commerce', title: 'Commandes' },
@@ -8945,6 +9061,14 @@ function setView(view) {
   void title.offsetWidth;
   title.style.animation = '';
   title.textContent = meta.title;
+
+  // Le sous-titre n'existe que pour certaines vues : là où il manque, la ligne
+  // se retire au lieu de laisser un vide sous le titre.
+  const sous = $('view-sub');
+  if (sous) {
+    sous.textContent = meta.sous ?? '';
+    sous.hidden = !meta.sous;
+  }
   $('crumb').innerHTML = `${ico(meta.icon)} ${esc(meta.group)}`;
 
   // Les indicateurs et les filtres décrivent la file : les laisser ailleurs

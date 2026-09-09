@@ -3246,6 +3246,8 @@ textarea:focus-visible {
 .chart .bar-soft { fill: color-mix(in srgb, var(--accent) 45%, var(--ink-mute)); }
 .chart g:hover .bar { opacity: 1; }
 
+.ibar-vol { color: var(--ink-mute); font-weight: 400; }
+
 .chart-scale {
   display: flex;
   justify-content: space-between;
@@ -6188,7 +6190,12 @@ textarea:focus-visible {
   font-size: 10.5px;
   font-weight: 650;
   letter-spacing: 0.02em;
-  color: var(--ink);
+  /* Encre fixe, pour la même raison que `.ov-av` : `avatarTint` rend toujours
+     un pastel clair — `hsl(H 52% 88%)` —, et un `--ink` qui blanchit en thème
+     sombre faisait tomber ces initiales à 1,28:1, c'est-à-dire invisibles. Le
+     défaut avait été relevé lors de l'audit de la file et laissé en l'état ;
+     il se corrigeait en une ligne. */
+  color: #101018;
   margin-top: 1px;
 }
 
@@ -7208,11 +7215,15 @@ html, body { overflow-x: clip; }
    qui distingue une carte de pilotage d'une ligne de tableau. */
 .ov-kpis { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
 
-.ov-kpis .kpi { display: flex; align-items: flex-start; gap: 12px; padding: 14px 15px; }
+/* L'intitulé le plus long — « 1re réponse moyenne · 30 j » — demandait quatre
+   pixels de plus que la carte ne lui laissait à 1440 px, et se faisait couper
+   sur sa fenêtre de mesure, c'est-à-dire sur ce qui compte. Repris sur la
+   gouttière et la pastille, qui n'en avaient pas besoin. */
+.ov-kpis .kpi { display: flex; align-items: flex-start; gap: 10px; padding: 14px 14px; }
 
 .ov-kpis .kpi-ico {
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   flex: none;
   display: inline-flex;
   align-items: center;
@@ -7224,9 +7235,32 @@ html, body { overflow-x: clip; }
 .ov-kpis .kpi-ico svg { width: 17px; height: 17px; }
 
 .kpi-body { min-width: 0; display: block; }
-.ov-kpis .kpi-label { font-size: 11px; }
+/* Les intitulés du poste de pilotage sortent des capitales.
+   Ailleurs, `.kpi-label` est en petites capitales espacées : c'est une
+   étiquette de bandeau, lue de loin. Ici l'intitulé porte aussi la fenêtre de
+   mesure — « 1re réponse moyenne · 30 j » —, et en capitales espacées il
+   passait sur deux lignes, ce qui décalait sa valeur et désalignait la rangée
+   entière. En casse normale il tient, et se lit mieux. */
+.ov-kpis .kpi-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kpi-per { color: var(--ink-mute); font-weight: 500; }
 .ov-kpis .kpi-value { font-size: 24px; margin-top: 2px; }
-.ov-kpis .kpi-note { margin-top: 2px; }
+/* La note tient sur une ligne, quoi qu'on y écrive : passée à deux, elle
+   décale la valeur de sa carte et la rangée cesse de s'aligner. */
+.ov-kpis .kpi-note {
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 .cockpit {
   display: grid;
@@ -7242,6 +7276,99 @@ html, body { overflow-x: clip; }
   gap: 13px;
   min-width: 0;
 }
+
+/* ---- les signes du poste de pilotage ----
+
+   Le mockup de référence pose un pictogramme devant chaque titre de carte et
+   devant chaque ligne d'alerte. Ce n'est pas de la décoration : sept cartes
+   au même rang typographique se distinguent d'abord par leur signe, et c'est
+   ce qui permet de revenir à la bonne sans relire les titres. Tous viennent du
+   jeu `ICONS` — aucun dessin nouveau. */
+
+.panel-ico {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-ink);
+  margin-right: 2px;
+}
+.panel-ico svg { width: 15px; height: 15px; }
+
+.statrow-ico {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-mute);
+  align-self: center;
+}
+.statrow-ico svg { width: 13px; height: 13px; }
+
+/* Le sous-titre reste SUR la ligne du titre, pas dessous.
+
+   La référence le place en dessous ; ici la ligne haute est tenue à trois
+   rangées et cent cinquante-cinq pixels, et une quatrième ligne de texte la
+   ferait grandir — ce que la refonte de cette zone avait précisément défait.
+   Posé à la suite, il dit la même chose sans coûter un pixel de haut, et
+   s'efface le premier quand la place manque. */
+.view-sub {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-mute);
+  line-height: 1.3;
+  align-self: center;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- la table ---- */
+
+/* L'avatar reprend la teinte calculée dans la file : la même personne garde sa
+   couleur d'un écran à l'autre, sinon le repère ne sert à rien. */
+/* `flex` et non `inline-flex` : en ligne, la boîte se dimensionne à son
+   contenu et ignore le plafond de la cellule — un nom long débordait alors
+   sur la colonne du temps au lieu de se couper. */
+.ov-cli { display: flex; align-items: center; gap: 8px; min-width: 0; }
+
+.ov-av {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9.5px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  /* Encre fixe, et non `var(--ink)`.
+
+     La teinte de fond est calculée en JS — `hsl(H 52% 88%)` — et reste claire
+     quel que soit le thème. En sombre, `--ink` devient presque blanc : les
+     initiales tombaient à 1,28:1 sur leur pastel, c'est-à-dire invisibles. Le
+     fond ne suit pas le thème, l'encre ne doit pas le suivre non plus. */
+  color: #101018;
+}
+
+/* Le chevron dit que la ligne s'ouvre. Discret au repos, il se révèle au
+   survol — affiché en permanence sur neuf lignes, il ferait une colonne de
+   flèches qui pèse plus que ce qu'elle annonce. */
+.ov-go {
+  width: 18px;
+  text-align: right;
+  color: var(--ink-mute);
+  opacity: 0.4;
+  transition: opacity 0.14s var(--ease);
+}
+.ov-prio tbody tr:hover .ov-go,
+.ov-prio tbody tr:focus-visible .ov-go { opacity: 1; }
 
 /* Le compteur du titre : un nombre, pas un badge de notification. */
 .pill-count {
@@ -7287,7 +7414,17 @@ html, body { overflow-x: clip; }
 .ov-prio td { padding: 9px 12px; vertical-align: middle; }
 .ov-prio th { padding: 8px 12px; }
 
-.ov-who { font-weight: 600; white-space: nowrap; }
+/* Un nom long ne mange pas le sujet : les deux se coupent, mais le sujet est
+   ce qui dit de quoi il s'agit. Cinq sujets sur neuf étaient tronqués parce
+   que la colonne du client prenait deux cent cinquante pixels. */
+.ov-who {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.ov-prio td:first-child { max-width: 190px; }
 .ov-age { white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 /* Le sujet cède la place aux colonnes fixes : c'est le seul champ dont la
@@ -7295,7 +7432,7 @@ html, body { overflow-x: clip; }
    hors de l'écran. */
 .ov-subj {
   max-width: 1px;
-  width: 40%;
+  width: 46%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -7354,7 +7491,34 @@ html, body { overflow-x: clip; }
 }
 
 .statrow-l { font-size: 13px; flex: none; }
-.statrow-n { font-size: 11.5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* La fenêtre de mesure, collée à l'intitulé et non commentée à côté : dans une
+   carte qui mêle « aujourd'hui » et « 30 j », la laisser implicite fait lire
+   deux mesures du même moment. */
+.statrow-p { color: var(--ink-mute); font-weight: 400; }
+
+/* L'explication tient dans une infobulle, pas dans une seconde ligne : ce qui
+   se comprend une fois ne doit pas peser à chaque lecture. Atteignable au
+   clavier, parce qu'une information réservée à la souris n'existe qu'à
+   moitié. */
+.statrow-i {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  color: var(--ink-mute);
+  font-size: 9.5px;
+  font-weight: 700;
+  font-style: italic;
+  cursor: help;
+  align-self: center;
+}
+.statrow-i:hover, .statrow-i:focus-visible { border-color: var(--accent); color: var(--accent-ink); }
+.statrow-i:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 .statrow-v {
   margin-left: auto;
@@ -7389,19 +7553,96 @@ html, body { overflow-x: clip; }
 .ov-key-recu::before { background: color-mix(in srgb, var(--accent) 34%, var(--surface)); }
 .ov-key-traite::before { background: var(--accent); }
 
-.chart-pair { height: 132px; }
+/* ---- la tendance ----
 
-/* Les dates sous le graphe : hors du SVG, qui est étiré et déformerait le
-   texte tracé dedans. */
-.chart-days {
+   Une grille, pas un SVG. Les autres graphes du produit s'étirent à la largeur
+   disponible (`preserveAspectRatio="none"`), ce qui convient à des rectangles
+   et déforme tout texte tracé dedans — or c'est le texte qui manquait : la
+   valeur au-dessus de chaque barre, et l'échelle à gauche. */
+
+.tr { display: flex; gap: 10px; align-items: stretch; }
+
+/* L'échelle : quatre graduations réparties, alignées sur le bas des barres. */
+.tr-y {
   display: flex;
-  margin-top: 5px;
+  flex-direction: column;
+  justify-content: space-between;
+  flex: none;
+  padding-bottom: 30px;
   font-size: 10.5px;
+  color: var(--ink-mute);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  min-width: 22px;
+}
+
+/* Les repères horizontaux sont peints par le fond, pas par des éléments : cinq
+   traits en `<hr>` seraient cinq nœuds de plus pour une ligne d'un pixel. */
+.tr-plot {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.tr-jour {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  align-items: stretch;
+}
+
+/* Les deux valeurs au-dessus des barres, chacune sur sa colonne. */
+.tr-vals {
+  display: flex;
+  gap: 3px;
+  justify-content: center;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+  margin-bottom: 2px;
+}
+.tr-vals b:first-child { color: var(--ink-mute); font-weight: 600; }
+.tr-vals b:last-child { color: var(--ink-soft); font-weight: 650; }
+.tr-vals b { flex: 1 1 0; text-align: center; }
+
+.tr-bars {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 3px;
+  height: 96px;
+  /* Les repères : quatre lignes au quart, tracées par un dégradé répété. */
+  background:
+    repeating-linear-gradient(
+      to top,
+      var(--line-soft) 0 1px,
+      transparent 1px 25%
+    );
+}
+
+.tr-bars i {
+  flex: 1 1 0;
+  min-width: 0;
+  border-radius: 2px 2px 0 0;
+  align-self: flex-end;
+}
+
+/* Reçus en teinte claire, traités en teinte pleine : ce qui entre est le
+   décor, ce qui sort est le sujet. */
+.tr-recu { background: color-mix(in srgb, var(--accent) 32%, var(--surface)); }
+.tr-traite { background: var(--accent); }
+
+.tr-lab {
+  margin-top: 6px;
+  font-size: 10.5px;
+  line-height: 1.35;
   color: var(--ink-mute);
   text-align: center;
 }
-.chart-days span { flex: 1 1 0; min-width: 0; line-height: 1.3; }
-.chart-days b { font-weight: 600; }
+.tr-lab b { display: block; font-weight: 600; }
 
 /* Le fil des dernières actions ne prend pas toute la hauteur qu'il pourrait :
    c'est un contexte, pas un journal qu'on lit en entier. */
@@ -7411,6 +7652,21 @@ html, body { overflow-x: clip; }
    ligne du journal est déjà un `flex` — l'auteur y devient un troisième
    enfant plutôt qu'un texte collé au précédent, où « Litige » et « Par l'IA »
    se lisaient comme un seul mot. */
+/* L'icône dit la famille d'action sans qu'on lise : brouillon, remboursement,
+   fournisseur. Douze pixels — au-delà, cinq lignes d'affilée deviennent une
+   colonne de pictogrammes qui prend le pas sur le texte. */
+.ov-fil .ov-ico {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-mute);
+  align-self: center;
+}
+.ov-fil .ov-ico svg { width: 12px; height: 12px; }
+
 .ov-fil .ov-quoi { flex: 1 1 auto; min-width: 0; }
 .ov-fil .ov-par { flex: none; margin-left: auto; white-space: nowrap; }
 
@@ -8190,5 +8446,8 @@ html, body { overflow-x: clip; }
    page : `.tablewrap` le fait déjà partout ailleurs. */
 @media (max-width: 760px) {
   .ov-prio { min-width: 620px; }
-  .chart-days { font-size: 9.5px; }
+  /* Sept colonnes sur un écran étroit : les dates passent sous la barre des
+     dix pixels si on les laisse en deux lignes. Le jour suffit. */
+  .tr-lab b { display: none; }
+  .tr-vals { font-size: 9.5px; }
 }
