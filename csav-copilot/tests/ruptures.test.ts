@@ -147,14 +147,17 @@ test('les commandes se comptent par SKU, dossiers clos exclus', () => {
 
 /* ---- les compteurs et les KPI ---- */
 
-test('« Tous » compte le travail restant, pas l’historique', () => {
+test('« Tous » garde les dossiers clos ; le travail restant a son compteur', () => {
+  // Retirer les résolus de « Tous » les faisait disparaître au moment où on
+  // les marquait résolus — ce qui se lisait comme une suppression.
   const compteurs = compteursVues([
     dossier({ id: 'a', statut: 'DRAFTING' }),
     dossier({ id: 'b', statut: 'OPEN' }),
     dossier({ id: 'c', statut: 'RESOLVED', resoluLe: ilYa(1) }),
   ]);
 
-  assert.equal(compteurs.tous, 2, 'les résolus ont leur propre onglet');
+  assert.equal(compteurs.tous, 3, 'le dossier clos reste visible');
+  assert.equal(compteurs.ouverts, 2, 'le travail restant, que compte la pastille');
   assert.equal(compteurs.RESOLU, 1);
   assert.equal(compteurs.A_TRAITER, 1);
 });

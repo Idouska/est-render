@@ -278,20 +278,35 @@ export function kpisRuptures(dossiers: readonly DossierRupture[]): KpisRuptures 
  * travail plutôt qu'à le trouver.
  */
 export function compteursVues(dossiers: readonly DossierRupture[]): Record<string, number> {
-  const compteurs: Record<string, number> = { tous: 0 };
+  const compteurs: Record<string, number> = { tous: 0, ouverts: 0 };
 
   for (const etat of Object.keys(ETAT_LIBELLES) as EtatRupture[]) compteurs[etat] = 0;
 
+  /*
+   * « Tous » veut dire tous, dossiers clos compris.
+   *
+   * Il excluait les résolus, avec une bonne raison sur le papier — la vue de
+   * travail, c'est le travail restant. À l'usage, c'était l'inverse d'une
+   * bonne raison : marquer un dossier résolu le faisait DISPARAÎTRE de la
+   * liste qu'on regardait, ce qui se lit comme une suppression. Et la couleur
+   * verte, « classé », n'apparaissait jamais là où l'on regarde. Un dossier
+   * clos reste donc visible, en vert, rangé après ceux qui restent à faire.
+   *
+   * `ouverts` porte ce que `tous` portait avant : le travail restant. C'est
+   * lui que compte la pastille du menu — une pastille qui compterait aussi le
+   * travail fini ne redescendrait jamais.
+   */
   let tous = 0;
+  let ouverts = 0;
   for (const dossier of dossiers) {
     const etat = etatDossier(dossier);
     compteurs[etat] = (compteurs[etat] ?? 0) + 1;
-    // « Tous » exclut les dossiers clos : la vue de travail est celle du
-    // travail restant, et les résolus ont leur propre onglet.
-    if (etat !== 'RESOLU') tous += 1;
+    tous += 1;
+    if (etat !== 'RESOLU') ouverts += 1;
   }
 
   compteurs.tous = tous;
+  compteurs.ouverts = ouverts;
   return compteurs;
 }
 

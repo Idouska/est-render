@@ -38,9 +38,11 @@ const atelier = sansCommentaires(lire('public/workspace.js'));
 
 /* ---- côté marchand ---- */
 
-test('la pastille compte la même population que l’onglet « Tous »', () => {
-  // L'onglet exclut les dossiers résolus et eux seuls. Le comptage doit faire
-  // exactement pareil, sans quoi le menu et la page se contredisent.
+test('la pastille compte les dossiers ouverts, comme le compteur de la page', () => {
+  // « Tous » montre désormais aussi les dossiers clos, en vert. La pastille,
+  // elle, ne compte que le travail restant — une pastille qui compterait le
+  // travail fini ne redescendrait jamais. Le compteur `ouverts` de la page et
+  // la route du menu doivent donc dire la même chose.
   const route = ruptures.slice(ruptures.indexOf("'/api/ruptures/compte'"));
   const clause = route.slice(0, route.indexOf('});'));
 
@@ -62,7 +64,8 @@ test('la pastille compte la même population que l’onglet « Tous »', () => {
     montant: null,
   });
   const vues = compteursVues([d('DRAFTING'), d('OPEN'), d('ANSWERED'), d('RESOLVED')]);
-  assert.equal(vues.tous, 3, 'trois non résolus — exactement ce que compte la route');
+  assert.equal(vues.ouverts, 3, 'trois non résolus — exactement ce que compte la route');
+  assert.equal(vues.tous, 4, '« Tous » montre aussi le dossier clos');
 });
 
 test('le comptage n’appelle pas Shopify', () => {
@@ -91,7 +94,7 @@ test('clôturer un dossier fait baisser la pastille sans attendre la relève', (
   const chargement = app.slice(app.indexOf('async function loadRuptures'));
   const corps = chargement.slice(0, chargement.indexOf('\n}'));
 
-  assert.match(corps, /state\.navCounts = \{ \.\.\.state\.navCounts, ruptures: r\.compteurs\.tous \?\? 0 \}/);
+  assert.match(corps, /state\.navCounts = \{ \.\.\.state\.navCounts, ruptures: r\.compteurs\.ouverts \?\? 0 \}/);
   assert.match(corps, /renderNav\(\)/);
 });
 
