@@ -6501,6 +6501,63 @@ function ovCompte(metrics, counts, cle) {
   return metrics ? String(counts[cle] ?? 0) : '—';
 }
 
+/*
+ * L'écart d'un jour sur l'autre, et surtout : quand ne pas l'afficher.
+ *
+ * Le calcul est trivial, le jugement ne l'est pas. Trois cas où un
+ * pourcentage ment plus qu'il n'informe :
+ *
+ *   1. TÔT LE MATIN. À 7 h 10, la comparaison porte sur soixante-dix minutes
+ *      de chaque journée. Un ticket contre zéro donne « +100 % », deux contre
+ *      un donne « +100 % » aussi, et le lendemain la même situation donnera
+ *      « −50 % ». On se tait avant deux heures écoulées : il n'y a rien à
+ *      décrire, seulement du bruit.
+ *
+ *   2. RÉFÉRENCE À ZÉRO. Passer de 0 à 3 n'est pas « +300 % », c'est « +3 ».
+ *      Le pourcentage divise par zéro — au mieux il affiche l'infini, au pire
+ *      un nombre inventé.
+ *
+ *   3. PETITS NOMBRES. De 2 à 3, « +50 % » suggère une tendance là où il n'y
+ *      a qu'un ticket de plus. Sous cinq de référence, l'écart s'affiche en
+ *      absolu : « +1 » se lit pour ce qu'il est.
+ *
+ * `sens` sépare la direction du jugement. Traiter plus est bon ; RECEVOIR
+ * plus n'est ni bon ni mauvais, c'est de la demande. Peindre en rouge une
+ * hausse d'arrivées reprocherait à l'équipe le succès de la boutique.
+ */
+function ecartJour(actuel, hier, minutesEcoulees) {
+  if (typeof actuel !== 'number' || typeof hier !== 'number') return null;
+  if (typeof minutesEcoulees === 'number' && minutesEcoulees < 120) return null;
+  if (actuel === hier) return { texte: '=', direction: 'egal' };
+
+  const diff = actuel - hier;
+  // La flèche porte déjà le sens : un « +» devant ferait doublon.
+  const fleche = diff > 0 ? '↑' : '↓';
+  const texte =
+    hier >= 5
+      ? `${fleche} ${Math.round(Math.abs(diff / hier) * 100)} %`
+      : `${fleche} ${Math.abs(diff)}`;
+
+  return { texte, direction: diff > 0 ? 'hausse' : 'baisse' };
+}
+
+/** Le libellé complet, pour l'infobulle : un « ↑ 12 % » sans référence ne dit
+    pas de quoi il parle, ni sur quelle tranche il a été mesuré. */
+function ecartAide(nom, actuel, hier, minutesEcoulees) {
+  if (typeof actuel !== 'number' || typeof hier !== 'number') return null;
+
+  const tranche =
+    typeof minutesEcoulees === 'number'
+      ? ` sur la même tranche de journée (${duration(minutesEcoulees)} depuis minuit)`
+      : '';
+
+  if (minutesEcoulees < 120) {
+    return `${nom} : comparaison en attente — trop peu de temps écoulé depuis minuit pour qu’un écart veuille dire quelque chose.`;
+  }
+
+  return `${nom} : ${actuel} aujourd’hui contre ${hier} hier${tranche}.`;
+}
+
 /* ---- les cinq chiffres du haut ---- */
 
 function renderOvKpis(metrics, counts) {
@@ -6511,6 +6568,30 @@ function renderOvKpis(metrics, counts) {
       ? duration(metrics.firstReplySeconds / 60)
       : '—';
 
+  /*
+   * Le « vs hier » ne figure que sur les deux cartes qui portent un FLUX.
+   *
+   * « En attente de vous », « Brouillons prêts » et « Chez le fournisseur »
+   * comptent ce qui attend EN CE MOMENT. Leur valeur d'hier n'existe nulle
+   * part : le produit ne garde pas l'historique des statuts, et rien ne
+   * permet de reconstituer combien de brouillons étaient prêts hier à cette
+   * heure. Y coller une flèche demanderait d'inventer la moitié de la
+   * comparaison — et une flèche inventée se cite en réunion.
+   */
+  const hier = metrics?.hier ?? null;
+  const ecart = (actuel, veille, nom, bon) => {
+    const valeur = ecartJour(actuel, veille, hier?.minutesEcoulees);
+    if (!valeur) return null;
+    return {
+      ...valeur,
+      // `bon` dit ce qu'une hausse signifie. Traiter plus est bon ; recevoir
+      // plus est de la demande, ni bon ni mauvais — le colorer reprocherait à
+      // l'équipe le succès de la boutique.
+      ton: bon === null ? null : (valeur.direction === 'hausse') === bon ? 'ok' : 'bad',
+      aide: ecartAide(nom, actuel, veille, hier?.minutesEcoulees),
+    };
+  };
+
   const cartes = [
     [
       'inbox',
@@ -6518,25 +6599,62 @@ function renderOvKpis(metrics, counts) {
       '',
       ovNombre(metrics?.pending),
       metrics ? `${counts.NEEDS_REVIEW ?? 0} à valider` : 'compteur indisponible',
+      null,
     ],
-    ['inbox', 'Brouillons prêts', '', ovCompte(metrics, counts, 'DRAFT_READY'), 'relecture puis envoi'],
+    [
+      'inbox',
+      'Brouillons prêts',
+      '',
+      ovCompte(metrics, counts, 'DRAFT_READY'),
+      'relecture puis envoi',
+      null,
+    ],
     // La fenêtre est dans l'intitulé, pas dans la note : « 2 h 06 » suivi de
     // « sur 30 jours » se lisait comme un commentaire, alors que c'est ce qui
     // définit la mesure.
-    ['clock', '1re réponse moyenne', '30 j', delai, 'du message à la réponse'],
-    ['bolt', 'Chez le fournisseur', '', ovCompte(metrics, counts, 'AWAITING_SUPPLIER'), 'en attente de réponse'],
-    ['shield', 'Traités', 'aujourd’hui', ovNombre(metrics?.today), 'depuis ce matin'],
+    ['clock', '1re réponse moyenne', '30 j', delai, 'du message à la réponse', null],
+    [
+      'bolt',
+      'Chez le fournisseur',
+      '',
+      ovCompte(metrics, counts, 'AWAITING_SUPPLIER'),
+      'en attente de réponse',
+      null,
+    ],
+    [
+      'inbox',
+      'Reçus',
+      'aujourd’hui',
+      ovNombre(metrics?.recus),
+      'nouveaux messages',
+      // Aucun ton : plus d'arrivées, c'est de l'activité, pas une contre-performance.
+      ecart(metrics?.recus, hier?.recus, 'Messages reçus', null),
+    ],
+    [
+      'shield',
+      'Traités',
+      'aujourd’hui',
+      ovNombre(metrics?.today),
+      'depuis ce matin',
+      ecart(metrics?.today, hier?.traites, 'Messages traités', true),
+    ],
   ];
 
   $('ov-kpis').innerHTML = cartes
     .map(
-      ([ico, label, periode, valeur, note]) => `<div class="kpi">
+      ([ico, label, periode, valeur, note, delta]) => `<div class="kpi">
         <span class="kpi-ico" data-ico="${esc(ico)}" aria-hidden="true"></span>
         <span class="kpi-body">
           <span class="kpi-label">${esc(label)}${
             periode ? `<span class="kpi-per"> · ${esc(periode)}</span>` : ''
           }</span>
-          <span class="kpi-value">${esc(valeur)}</span>
+          <span class="kpi-value">${esc(valeur)}${
+            delta
+              ? `<span class="kpi-delta${delta.ton ? ` kd-${delta.ton}` : ''}"${
+                  delta.aide ? ` title="${esc(delta.aide)}"` : ''
+                }>${esc(delta.texte)} <small>vs hier</small></span>`
+              : ''
+          }</span>
           ${note ? `<span class="kpi-note">${esc(note)}</span>` : ''}
         </span>
       </div>`,
