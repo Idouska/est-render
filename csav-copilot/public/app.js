@@ -8983,7 +8983,7 @@ async function refreshChangesCount() {
   changesCountAt = Date.now();
 
   try {
-    const [{ pending }, { counts }, activity, returns] = await Promise.all([
+    const [{ pending }, { counts }, activity, returns, ruptures] = await Promise.all([
       api('/api/changes'),
       // Commandes, clients, catalogue, colis : les volumes, en gris. Seuls
       // les comptes qui réclament une action sont rouges.
@@ -8994,6 +8994,9 @@ async function refreshChangesCount() {
       // Retours silencieux : trois jours sans nouvelle du client, la pastille
       // rouge le dit avant que la paire ne soit perdue.
       api('/api/returns').catch(() => null),
+      // Les dossiers de rupture encore ouverts. Un comptage en base, sans
+      // Shopify : la relève a lieu chaque minute.
+      api('/api/ruptures/compte').catch(() => null),
     ]);
 
     state.changesPending = pending;
@@ -9012,6 +9015,9 @@ async function refreshChangesCount() {
        */
       suppliers: activity.total,
       returns: returns?.counts?.silent ?? state.navCounts?.returns ?? 0,
+      // En échec, la pastille garde sa valeur : un compteur qui rate un tour
+      // ne doit ni s'éteindre ni retomber à zéro, ce qui dirait « plus rien ».
+      ruptures: ruptures?.ouverts ?? state.navCounts?.ruptures ?? 0,
     };
     renderNav();
   } catch {
@@ -9063,7 +9069,7 @@ function renderNav() {
            */
           const mute = ['orders', 'customers', 'catalog'].includes(view);
           const dim = view === 'tracking';
-          const hot = ['changes', 'suppliers', 'returns'].includes(view) && tally > 0;
+          const hot = ['changes', 'suppliers', 'returns', 'ruptures'].includes(view) && tally > 0;
           const shown = tally > 9999 ? '9999+' : tally;
           const badge = tally && !mute;
           return `<button class="nav-item" data-view="${view}" aria-current="${
@@ -13196,6 +13202,13 @@ async function loadRuptures() {
     r.kpis = data.kpis ?? null;
     r.compteurs = data.compteurs ?? {};
     r.shopifyError = data.shopifyError ?? null;
+
+    /* La pastille suit la page sans attendre la relève. Clôturer un dossier
+       recharge la liste : sans cette ligne, le menu garderait « 12 » pendant
+       une minute sous une page qui en affiche 11, et l'on croirait que la
+       clôture n'a pas pris. */
+    state.navCounts = { ...state.navCounts, ruptures: r.compteurs.tous ?? 0 };
+    renderNav();
 
     // Une sélection qui ne désigne plus rien laisserait un panneau figé sur un
     // dossier disparu, ce qui se lit comme un écran qui ne se rafraîchit pas.

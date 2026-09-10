@@ -966,6 +966,10 @@ if ('Notification' in window && Notification.permission === 'default') {
 // deux fois afficherait brièvement la liste en double.
 applyLang(state.lang);
 setInterval(loadAlerts, 120000);
+// La pastille des ruptures suit le même rythme que les alertes : deux minutes
+// suffisent pour une demande qui se traite dans la journée.
+void rafraichirPastilleRuptures();
+setInterval(rafraichirPastilleRuptures, 120000);
 
 
 /* ==========================================================================
@@ -1519,6 +1523,27 @@ async function loadRuptures() {
         </div>`,
       )
       .join('') || `<p class="empty">${esc(t('rup.mineEmpty'))}</p>`;
+}
+
+/*
+ * La pastille, relevée sans ouvrir l'onglet.
+ *
+ * Elle n'était calculée qu'au rendu de la page — donc jamais pour un
+ * fournisseur qui arrive, comme tous les matins, sur « Commandes ». Une
+ * pastille qui ne s'allume qu'une fois qu'on a cliqué dessus ne signale rien :
+ * on a déjà trouvé ce qu'elle devait montrer.
+ *
+ * En cas d'échec elle s'éteint, pour la même raison que dans la page : on ne
+ * sait plus, donc on n'affirme rien. Un « 1 » resté allumé sur une donnée
+ * qu'on n'a pas pu relire est un chiffre inventé.
+ */
+async function rafraichirPastilleRuptures() {
+  try {
+    const data = await api(`/api/workspace/${supplierId}/ruptures`);
+    setRuptureBadge((data.demandes ?? []).filter((demande) => demande.statut === 'OPEN').length);
+  } catch {
+    setRuptureBadge(0);
+  }
 }
 
 /* La pastille ne compte que ce qui attend une réponse de l'atelier. Y ajouter

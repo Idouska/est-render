@@ -35,6 +35,26 @@ import {
 export async function ruptureRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', requireSession);
 
+  /**
+   * Le chiffre de la pastille, et rien d'autre.
+   *
+   * La navigation le relève toutes les minutes : passer par `/api/ruptures`
+   * appellerait Shopify à chaque relève, pour ne garder qu'un entier. Un
+   * comptage en base suffit, et il compte la même chose que l'onglet
+   * « Tous » — les dossiers non résolus. Si les deux divergeaient, la pastille
+   * annoncerait « 12 » et la page en montrerait 9, et c'est la page qu'on
+   * accuserait.
+   */
+  app.get('/api/ruptures/compte', async (request, reply) => {
+    const { merchantId } = request.session;
+
+    const ouverts = await prisma.supplierEscalation.count({
+      where: { merchantId, reason: 'OUT_OF_STOCK', status: { not: 'RESOLVED' } },
+    });
+
+    return reply.send({ ouverts });
+  });
+
   app.get('/api/ruptures', async (request, reply) => {
     const { merchantId } = request.session;
 
