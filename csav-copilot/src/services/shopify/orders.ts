@@ -66,6 +66,8 @@ export interface OrderSummary {
   // Adresse au moment de la commande — utile pour vérifier une livraison en
   // litige, distincte de l'adresse actuelle du client s'il en a changé depuis.
   shippingAddress: ShippingAddress | null;
+  /** Celle qui a payé. Absente quand Shopify ne la fournit pas. */
+  billingAddress: ShippingAddress | null;
 }
 
 /** Représentation courte, sur une ligne — usage : messages, portail fournisseur. */
@@ -173,8 +175,37 @@ const ORDER_FIELDS = /* GraphQL */ `
       countryCodeV2
       phone
     }
+    # L'adresse de facturation : celle qui a payé, pas celle qui reçoit.
+    #
+    # Un SAV en a besoin pour deux gestes que la livraison ne couvre pas —
+    # rééditer une facture, et repérer un écart entre payeur et destinataire,
+    # qui est le premier signal d'une commande à vérifier. Mêmes champs que la
+    # livraison, pour que l'écran les compare ligne à ligne.
+    billingAddress {
+      name
+      address1
+      address2
+      city
+      zip
+      provinceCode
+      countryCodeV2
+      phone
+    }
   }
 `;
+
+/** Les deux adresses ont la même forme ; la déclarer une fois évite qu'elles
+    divergent au premier champ ajouté. */
+interface RawAddress {
+  name: string | null;
+  address1: string | null;
+  address2: string | null;
+  city: string | null;
+  zip: string | null;
+  provinceCode: string | null;
+  countryCodeV2: string | null;
+  phone: string | null;
+}
 
 interface RawOrder {
   id: string;
@@ -214,16 +245,8 @@ interface RawOrder {
     estimatedDeliveryAt: string | null;
     trackingInfo: Array<{ company: string | null; number: string | null; url: string | null }>;
   }>;
-  shippingAddress: {
-    name: string | null;
-    address1: string | null;
-    address2: string | null;
-    city: string | null;
-    zip: string | null;
-    provinceCode: string | null;
-    countryCodeV2: string | null;
-    phone: string | null;
-  } | null;
+  shippingAddress: RawAddress | null;
+  billingAddress: RawAddress | null;
 }
 
 /*
@@ -298,18 +321,24 @@ function toSummary(order: RawOrder): OrderSummary {
       trackingNumber: f.trackingInfo[0]?.number ?? null,
       trackingUrl: f.trackingInfo[0]?.url ?? null,
     })),
-    shippingAddress: order.shippingAddress
-      ? {
-          name: order.shippingAddress.name,
-          address1: order.shippingAddress.address1,
-          address2: order.shippingAddress.address2,
-          city: order.shippingAddress.city,
-          zip: order.shippingAddress.zip,
-          province: order.shippingAddress.provinceCode,
-          country: order.shippingAddress.countryCodeV2,
-          phone: order.shippingAddress.phone,
-        }
-      : null,
+    shippingAddress: adresse(order.shippingAddress),
+    billingAddress: adresse(order.billingAddress),
+  };
+}
+
+/** Shopify parle en `provinceCode` / `countryCodeV2`, l'application en
+    `province` / `country`. Une seule conversion, pour les deux adresses. */
+function adresse(brute: RawAddress | null): ShippingAddress | null {
+  if (!brute) return null;
+  return {
+    name: brute.name,
+    address1: brute.address1,
+    address2: brute.address2,
+    city: brute.city,
+    zip: brute.zip,
+    province: brute.provinceCode,
+    country: brute.countryCodeV2,
+    phone: brute.phone,
   };
 }
 

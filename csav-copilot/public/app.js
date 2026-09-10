@@ -4586,7 +4586,41 @@ function customerPhone(order) {
           address?.country ? ` (${address.country})` : ''
         } — l'application ne sait pas composer ce numéro. Le numéro, lui, est probablement bon.`;
 
-  return { raw, number, link: whatsappLink(number), raison };
+  return {
+    raw,
+    number,
+    affiche: numeroAffiche(raw, number, address?.country),
+    link: whatsappLink(number),
+    raison,
+  };
+}
+
+/*
+ * Le numéro tel qu'on l'affiche : avec son indicatif.
+ *
+ * Shopify rend le numéro TEL QUE le client l'a saisi, le plus souvent au
+ * format national — « 4783490262 », « 0612345678 ». Sans indicatif, un agent
+ * ne sait pas de quel pays il s'agit, ne peut pas le composer depuis ailleurs,
+ * et ne peut pas le dicter à un transporteur. Or la forme internationale est
+ * DÉJÀ calculée pour WhatsApp : il suffisait de l'afficher.
+ *
+ * L'indicatif vient de la table, jamais d'une découpe du numéro : il fait un,
+ * deux ou trois chiffres selon le pays, et prendre le premier donnait
+ * « +3 36 12 34 56 78 » pour la France.
+ *
+ * Le reste n'est PAS regroupé. Chaque pays a sa convention — la France par
+ * deux, l'Amérique du Nord en 3-3-4, le Royaume-Uni en 4-6 — et appliquer la
+ * mauvaise fait plus désordonné que de n'en appliquer aucune. Un espace après
+ * l'indicatif suffit à dire où il s'arrête.
+ *
+ * Sans indicatif connu, on rend la saisie d'origine : en inventer un serait
+ * pire que de n'en afficher aucun.
+ */
+function numeroAffiche(brut, e164, pays) {
+  if (!e164) return brut;
+  const dial = DIAL_CODES[String(pays ?? '').toUpperCase()]?.dial;
+  if (!dial || !e164.startsWith(dial)) return `+${e164}`;
+  return `+${dial} ${e164.slice(dial.length)}`;
 }
 
 /*
@@ -4604,8 +4638,8 @@ function phoneRow(order, name) {
 
   const numero = phone.link
     ? `<a class="rail-phone" href="${esc(phone.link)}" target="_blank" rel="noopener noreferrer"
-         title="Ouvrir dans WhatsApp">${esc(phone.raw)}</a>`
-    : `<span class="rail-phone-off" title="${esc(phone.raison)}">${esc(phone.raw)}</span>`;
+         title="Ouvrir dans WhatsApp — saisi : ${esc(phone.raw)}">${esc(phone.affiche)}</a>`
+    : `<span class="rail-phone-off" title="${esc(phone.raison)}">${esc(phone.affiche)}</span>`;
 
   // Sans numéro composable, pas de bouton : une icône qui ouvrirait une URL
   // vide vaut moins que rien du tout.
@@ -4990,6 +5024,23 @@ function renderOrder(ticket, order, orderError) {
         })
         .join('') +
       '</ul>' +
+      /*
+       * L'adresse de facturation, dans la carte de la commande.
+       *
+       * Elle appartient au paiement, pas au colis : c'est elle qui figure sur
+       * la facture qu'un client redemande, et c'est l'écart entre elle et
+       * l'adresse de livraison qui signale une commande à vérifier.
+       *
+       * Quand les deux se confondent — le cas ordinaire — on l'écrit en une
+       * ligne plutôt que de recopier six lignes déjà lues juste au-dessus :
+       * c'est la DIFFÉRENCE qui porte l'information, pas la répétition.
+       */
+      (order.billingAddress
+        ? memeAdresse(order.billingAddress, order.shippingAddress)
+          ? '<p class="adr-same">Facturation : identique à la livraison.</p>'
+          : `<p class="adr-title">Facturation<span class="adr-diff">différente</span></p>` +
+            blocAdresse(order.billingAddress)
+        : '') +
       shopifyOrderLink(order);
     return;
   }
@@ -5113,15 +5164,69 @@ async function attachOrder(ticketId, orderId, button) {
   }
 }
 
+
+/*
+ * Une adresse postale, rendue comme on l'écrit sur une enveloppe.
+ *
+ * Pas en lignes de définition : « Ville : Marseille » sur une carte étroite
+ * coupe l'adresse en morceaux qu'il faut recomposer mentalement avant de la
+ * dicter à un transporteur. Une adresse se lit d'un bloc, et se copie d'un
+ * bloc.
+ *
+ * Les champs vides disparaissent au lieu de laisser des lignes creuses : une
+ * commande sans complément d'adresse n'a pas de deuxième ligne.
+ */
+function blocAdresse(adr) {
+  if (!adr) return '';
+  const lignes = [
+    adr.name,
+    adr.address1,
+    adr.address2,
+    [adr.zip, adr.city].filter(Boolean).join(' '),
+    [adr.province, adr.country].filter(Boolean).join(' · '),
+  ].filter((l) => l && String(l).trim() !== '');
+
+  if (!lignes.length) return '';
+  return `<address class="adr">${lignes.map((l) => esc(l)).join('<br>')}</address>`;
+}
+
+/** Deux adresses identiques ne se lisent pas deux fois : c'est l'écart entre
+    elles qui porte l'information, pas leur répétition. */
+function memeAdresse(a, b) {
+  if (!a || !b) return false;
+  const cle = (x) =>
+    [x.name, x.address1, x.address2, x.zip, x.city, x.province, x.country]
+      .map((v) => String(v ?? '').trim().toLowerCase())
+      .join('|');
+  return cle(a) === cle(b);
+}
+
 function renderShipping(order) {
   const container = $('c-ship');
   const fulfillment = order?.fulfillments?.[0];
 
   void renderParcels(state.detail?.ticket);
 
+  /*
+   * L'adresse et le mode d'expédition s'affichent MÊME sans expédition créée.
+   *
+   * C'est le cas le plus fréquent d'un SAV — « où est ma commande » se pose
+   * justement quand rien n'est encore parti — et c'est précisément là qu'on a
+   * besoin de relire l'adresse : pour vérifier qu'elle est complète, la
+   * corriger avant l'envoi, ou la dicter au fournisseur. La rendre
+   * dépendante d'un colis existant la cachait au seul moment où elle sert.
+   */
+  const entete =
+    (order?.shippingMethod
+      ? `<dl>${row('Mode', order.shippingMethod)}</dl>`
+      : '') + blocAdresse(order?.shippingAddress);
+
   if (!fulfillment) {
     container.innerHTML = order
-      ? '<p class="empty">Aucune expédition enregistrée pour cette commande.</p>'
+      ? entete +
+        `<p class="empty">${
+          entete ? 'Aucune expédition enregistrée.' : 'Aucune expédition enregistrée pour cette commande.'
+        }</p>`
       : '<p class="empty">—</p>';
     return;
   }
@@ -5154,6 +5259,7 @@ function renderShipping(order) {
         reached === 3 ? 'st-CLOSED' : 'st-NEEDS_REVIEW'
       }">${esc(SHIPMENT_LABELS[shipState] ?? 'Expédiée')}</span>
     </div>` +
+    entete +
     '<dl>' +
     row('Transporteur', fulfillment.trackingCompany ?? 'non précisé') +
     (fulfillment.trackingNumber
@@ -9441,13 +9547,15 @@ function orderDetailMarkup(order) {
     : phone.link
       ? `<div class="ordv-phone">
            <a class="rail-phone mono" href="${esc(phone.link)}" target="_blank" rel="noopener noreferrer"
-             title="Ouvrir dans WhatsApp">${esc(phone.raw)} <span aria-hidden="true">↗</span></a>
+             title="Ouvrir dans WhatsApp — saisi : ${esc(phone.raw)}">${esc(
+               phone.affiche,
+             )} <span aria-hidden="true">↗</span></a>
            <a class="btn btn-small wa-btn" href="${esc(phone.link)}" target="_blank" rel="noopener noreferrer"
              aria-label="Ouvrir WhatsApp avec ${esc(address?.name ?? order.customer?.displayName ?? 'le client')}"
              title="Ouvrir la conversation dans WhatsApp Web">${ico('whatsapp')} WhatsApp</a>
          </div>`
       : `<div class="ordv-phone"><span class="rail-phone-off mono" title="${esc(phone.raison)}">${esc(
-          phone.raw,
+          phone.affiche,
         )}</span></div>`;
 
   // L'état du colis, quand il y en a un : c'est la troisième pastille de la

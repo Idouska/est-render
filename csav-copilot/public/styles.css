@@ -6543,6 +6543,50 @@ textarea:focus-visible {
    ailleurs dans l'outil. Le texte reste à 13 px : seul l'air change. */
 .rail-card .row + .row { margin-top: 5px; }
 
+/* ---- les adresses postales ----
+
+   Une adresse se lit d'un bloc et se copie d'un bloc : en lignes de
+   définition — « Ville : Marseille » — elle se découpe en morceaux qu'il faut
+   recomposer avant de la dicter à un transporteur. `<address>` est l'élément
+   prévu pour ça, et son italique par défaut ne l'est pas. */
+.adr {
+  font-style: normal;
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink);
+  /* Sélectionnable d'un geste : l'usage premier est de la copier. */
+  user-select: text;
+}
+
+/* Le cas ordinaire — facturation = livraison — tient en une ligne. */
+.adr-same { margin: 9px 0 0; font-size: 12.5px; color: var(--ink-mute); }
+
+/* Le cas qui compte : deux adresses différentes. Le mot est écrit, pas
+   seulement coloré — une couleur seule n'est pas une information. */
+.adr-title {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin: 11px 0 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+.adr-diff {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--warn-ink);
+  background: var(--warn-soft);
+  border-radius: var(--r-sm);
+  padding: 1px 6px;
+}
+
 /* Le lien discret d'en-tête : il porte le numéro de commande ou l'accès au
    profil. Rang de lien, pas de bouton — la carte a déjà son action. */
 .rail-more {
