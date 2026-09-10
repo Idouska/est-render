@@ -40,7 +40,6 @@ const state = {
   agents: [],
   canned: [],
   /** Les libellés de la file sont-ils tous dépliés ? Choix d'affichage, pas de filtre. */
-  queueLabelsOuvert: false,
   editingCanned: null,
   catalog: { items: [], cursor: null, hasNext: false, q: '', kind: 'products', loading: false, loaded: false, timer: null },
   editingUser: null,
@@ -330,20 +329,14 @@ function renderQueueLabels() {
   bar.hidden = names.length === 0;
 
   /*
-   * Six dehors, le reste derrière un « +N ».
+   * Tous, sans exception.
    *
-   * Onze libellés poussaient la barre sur deux rangées, et une rangée entière
-   * de l'écran servait à des catégories qu'on filtre trois fois par jour. Les
-   * libellés retenus restent toujours visibles — voir une pastille cochée
-   * disparaître sous le doigt serait pire que la rangée de trop.
+   * Six étaient affichés et le reste se repliait derrière un « +N », parce
+   * que onze pastilles poussaient la barre sur deux rangées. Le champ de
+   * recherche a quitté cette barre depuis : la place existe, et un libellé
+   * qu'il faut déplier pour voir n'est pas un filtre, c'est un menu.
    */
-  const VISIBLES = 6;
-  const actifs = names.filter((name) => state.queue.labels.includes(name));
-  const repos = names.filter((name) => !state.queue.labels.includes(name));
-  const montres = state.queueLabelsOuvert
-    ? names
-    : [...actifs, ...repos].slice(0, Math.max(VISIBLES, actifs.length));
-  const caches = names.length - montres.length;
+  const montres = names;
 
   bar.innerHTML = montres
     .map((name) => {
@@ -371,51 +364,13 @@ function renderQueueLabels() {
       return `<button class="chip ql-chip" data-qlabel="${esc(name)}"
         aria-pressed="${active}" title="${esc(name)}"${paint}>${
           active ? '' : dot
-        }${esc(leaf)}</button>`;
+        }<span class="ql-nom">${esc(leaf)}</span></button>`;
     })
     .join('');
 
-  /*
-   * Le « +N » est posé à côté de la bande, pas dedans.
-   *
-   * La bande défile latéralement quand les pastilles dépassent. Un bouton
-   * placé à sa fin partait donc hors du champ dès que six libellés
-   * remplissaient la ligne : plus rien ne disait qu'il en restait cinq.
-   */
-  const plus = $('q-label-more');
-  if (plus) {
-    plus.innerHTML =
-      caches > 0 || state.queueLabelsOuvert
-        ? `<button class="chip ql-more" id="ql-more" type="button"
-             aria-expanded="${Boolean(state.queueLabelsOuvert)}"
-             title="${
-               state.queueLabelsOuvert
-                 ? 'Replier les libellés'
-                 : `Voir les ${caches} libellés restants`
-             }">${state.queueLabelsOuvert ? 'Moins' : `+${caches}`}</button>`
-        : '';
-    plus.hidden = names.length === 0;
-  }
-
-  $('ql-more')?.addEventListener('click', () => {
-    state.queueLabelsOuvert = !state.queueLabelsOuvert;
-    renderQueueLabels();
-  });
-
-  /*
-   * Un dégradé au bord droit, mais seulement quand ça défile.
-   *
-   * Une pastille coupée net au bord de la bande se lit comme un défaut
-   * d'affichage. Le dégradé dit « ça continue ». Posé en permanence, il
-   * effacerait le dernier libellé alors que tout tient : c'est la mesure qui
-   * décide, pas la largeur d'écran.
-   */
-  const marqueDebord = () => bar.classList.toggle('deborde', bar.scrollWidth > bar.clientWidth + 1);
-  marqueDebord();
-  if (typeof ResizeObserver === 'function' && !bar.dataset.observe) {
-    bar.dataset.observe = '1';
-    new ResizeObserver(marqueDebord).observe(bar);
-  }
+  /* Ni « +N » ni dégradé de bord : la bande ne défile plus, elle passe à la
+     ligne. Un dégradé annonçait « ça continue à droite » ; sur des rangées, il
+     mentirait — il n'y a rien à droite, tout est déjà là. */
 
   bar.querySelectorAll('[data-qlabel]').forEach((chip) =>
     chip.addEventListener('click', () => {
@@ -2388,10 +2343,10 @@ $('head-search')?.addEventListener('click', () => openPalette());
 /* Les deux icônes de l'en-tête de file ne font rien de neuf : elles mènent au
    champ et au menu qui existent dans la barre de filtres. Un second champ de
    recherche donnerait deux états à tenir synchronisés. */
-$('queue-search')?.addEventListener('click', () => {
-  $('q-search')?.focus();
-  $('q-search')?.select();
-});
+/* La loupe ouvre la palette, qui est devenue la seule recherche. Elle mène au
+   même filtre : sans correspondance de commande ni de client, `routeSearch`
+   retombe sur le texte libre dans cette file. */
+$('queue-search')?.addEventListener('click', () => openPalette());
 
 $('queue-filter')?.addEventListener('click', () => $('q-filters-btn')?.click());
 
@@ -2675,6 +2630,9 @@ const INTENT_LABELS = {
 };
 
 function renderQueueBar() {
+  // La pastille du terme suit chaque rendu de la barre : c'est le seul endroit
+  // d'où l'agent peut voir, et retirer, un filtre texte posé par la palette.
+  renderQueueTerm();
   const counts = state.queueCounts ?? {};
 
   $('filters')
@@ -2808,7 +2766,7 @@ function resetQueueFilters() {
   state.queue = emptyQueueFilters();
 
   $('q-labels-q').value = '';
-  $('q-search').value = '';
+  renderQueueTerm();
   $('q-mailbox').value = '';
   $('q-sort').value = 'newest';
   $('q-assignee').value = '';
@@ -2817,13 +2775,30 @@ function resetQueueFilters() {
   void loadQueue();
 }
 
-$('q-search').addEventListener('input', (event) => {
-  state.queue.q = event.target.value;
-  // Un appel par frappe saturerait l'API sur une file de plusieurs milliers de
-  // tickets ; 250 ms est le délai en dessous duquel la frappe paraît continue.
-  clearTimeout(state.queue.timer);
-  state.queue.timer = setTimeout(() => void loadQueue(), 250);
-});
+/*
+ * Le terme de recherche actif, en pastille.
+ *
+ * Le champ ayant quitté la barre, un filtre texte deviendrait invisible :
+ * l'agent verrait « 12 sur 5483 » sans savoir pourquoi, et « Tout
+ * réinitialiser » emporterait aussi ses libellés. La pastille dit le terme et
+ * ne retire que lui.
+ */
+function renderQueueTerm() {
+  const boite = $('q-term');
+  if (!boite) return;
+
+  const terme = state.queue.q.trim();
+  boite.hidden = terme === '';
+  if (!terme) return (boite.innerHTML = '');
+
+  boite.innerHTML = `<button class="chip qterm-chip" type="button"
+    title="Retirer ce filtre">« ${esc(terme)} » <span aria-hidden="true">×</span></button>`;
+  boite.querySelector('button').addEventListener('click', async () => {
+    state.queue.q = '';
+    renderQueueTerm();
+    await loadQueue();
+  });
+}
 
 $('q-sort').addEventListener('change', (event) => {
   state.queue.sort = event.target.value;
@@ -8880,7 +8855,7 @@ function routeSearch(raw) {
   // Sinon, du texte libre : la file de traitement le cherche dans les objets,
   // les clients et les numéros de commande.
   state.queue.q = term;
-  $('q-search').value = term;
+  renderQueueTerm();
   setView('tickets');
   void loadQueue();
 }
@@ -11908,7 +11883,7 @@ document.addEventListener('keydown', (event) => {
     }
   } else if (key === '/') {
     event.preventDefault();
-    $('q-search')?.focus();
+    openPalette();
   } else if (key === 'w') {
     event.preventDefault();
     state.queue.intent = state.queue.intent === 'WISMO' ? '' : 'WISMO';

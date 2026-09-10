@@ -115,7 +115,13 @@
                 <circle cx="7.2" cy="7.2" r="4.2" />
                 <path d="M10.4 10.4 13.5 13.5" />
               </svg>
-              <span>Rechercher un client, une commande, un mot-clé…</span>
+              <!-- Une seule formulation, choisie pour tenir entière à toutes les
+                   largeurs où ce bouton s'affiche. La précédente — « un client,
+                   une commande, un mot-clé » — ne tenait qu'à 1920 px et se
+                   coupait partout ailleurs en « Recherch… », qui ne dit rien.
+                   Mieux vaut une invite courte et entière qu'une longue
+                   tronquée : la seconde a seulement l'air cassée. -->
+              <span>Rechercher un client…</span>
               <kbd>⌘K</kbd>
             </button>
 
@@ -291,12 +297,18 @@
           actif sans le signaler.
         -->
         <div class="qbar-row qbar-main">
-          <input
-            id="q-search"
-            type="search"
-            placeholder="N° de commande, client, objet…"
-            autocomplete="off"
-          />
+          <!-- Le champ de recherche a quitté cette barre.
+
+               Deux champs pour une question : celui du haut ouvre la palette,
+               qui cherche commandes, clients ET texte libre — et retombe
+               justement sur le filtre de cette file quand rien d'autre ne
+               correspond. Le second faisait double emploi et prenait deux
+               cent cinquante pixels, exactement ce qui manquait aux libellés
+               du marchand pour tenir sans être repliés.
+
+               Un filtre texte actif reste visible : il s'affiche en pastille
+               à côté des libellés, et se retire d'un clic. -->
+          <span class="qterm" id="q-term" hidden></span>
 
           <!-- Les libellés du marchand, sur la même ligne que la recherche
                et les menus. Ils occupaient une rangée à eux seuls, qui
@@ -309,7 +321,6 @@
                des libellés à voir. -->
           <div class="qlabels-wrap">
             <div class="qlabels" id="q-label-chips"></div>
-            <span class="qlabels-more" id="q-label-more"></span>
           </div>
           <span class="qbar-count" id="q-count"></span>
 
