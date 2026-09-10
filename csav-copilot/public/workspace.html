@@ -65,6 +65,19 @@
           <span class="wsnav-badge" id="ws-badge" hidden>0</span>
         </button>
 
+        <!-- Les ruptures ont leur écran parce qu'elles ont leur rythme : un
+             article manquant bloque un colis aujourd'hui, pas la semaine
+             prochaine. La pastille compte ce qui attend une réponse de
+             l'atelier — pas ce qu'il a déjà signalé. -->
+        <button type="button" data-view="ruptures">
+          <svg viewBox="0 0 20 20" aria-hidden="true">
+            <path d="M10 2.6 3 6.3v7.4l7 3.7 7-3.7V6.3z" />
+            <path d="M3 6.3 10 10l7-3.7M10 10v7.4" />
+          </svg>
+          <span data-t="nav.ruptures">Ruptures de stock</span>
+          <span class="wsnav-badge" id="ws-rup-badge" hidden>0</span>
+        </button>
+
         <!-- Réglages rarement touchés, donc rangés en bas : la langue se
              choisit une fois, l'export se prend une fois par jour. -->
         <div class="wsnav-foot">
@@ -175,6 +188,21 @@
               placeholder="Modèle ou marque" />
           </label>
           <div id="catalog-rows"></div>
+        </section>
+
+        <!-- ============================================= RUPTURES ======== -->
+        <section id="view-ruptures" hidden>
+          <header class="wshead">
+            <h1 data-t="rup.title">Ruptures de stock</h1>
+          </header>
+
+          <!-- Ce que le marchand attend de l'atelier passe AVANT ce que
+               l'atelier a déjà dit : l'un demande un geste, l'autre informe. -->
+          <h2 class="ws-sub" data-t="rup.asked">Demandes du marchand</h2>
+          <div id="rup-demandes"></div>
+
+          <h2 class="ws-sub" data-t="rup.mine">Ce que j'ai signalé</h2>
+          <div id="rup-signalements"></div>
         </section>
 
         <!-- =========================================== CHANGEMENTS ======= -->

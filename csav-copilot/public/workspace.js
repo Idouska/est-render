@@ -981,12 +981,13 @@ const VIEWS = {
   tracking: loadParcels,
   catalog: loadCatalog,
   updates: loadUpdates,
+  ruptures: loadRuptures,
 };
 
 function setView(view) {
   state.view = view;
 
-  for (const section of ['orders', 'tracking', 'catalog', 'updates']) {
+  for (const section of ['orders', 'tracking', 'catalog', 'updates', 'ruptures']) {
     $(`view-${section}`).hidden = section !== view;
   }
 
@@ -1426,3 +1427,105 @@ $('ws-more')?.addEventListener('click', () => {
 $('ws-reload').addEventListener('click', load);
 
 load();
+
+
+/* ------------------------------------------------------------ ruptures -- */
+
+/*
+ * L'écran des ruptures, côté atelier.
+ *
+ * Deux listes, et l'ordre compte : ce que le marchand DEMANDE avant ce que
+ * l'atelier a déjà DIT. La première appelle un geste aujourd'hui ; la seconde
+ * informe, et répond à une question que le préparateur se pose sans pouvoir
+ * la poser — « est-ce qu'ils l'ont vu ? ». Jusqu'ici, signaler un article
+ * manquant envoyait l'information dans le vide : rien ne revenait, et il
+ * fallait choisir entre attendre et emballer sans savoir.
+ */
+async function loadRuptures() {
+  const demandes = $('rup-demandes');
+  const signalements = $('rup-signalements');
+
+  let data;
+  try {
+    data = await api(`/api/workspace/${supplierId}/ruptures`);
+  } catch {
+    /* La pastille s'éteint avec la liste. La laisser à sa valeur d'avant la
+       ferait affirmer « une demande vous attend » pendant que l'écran dit
+       qu'il n'a rien pu lire — et c'est le chiffre qu'on croit, pas le
+       message. On ne sait plus : on ne prétend rien. */
+    setRuptureBadge(0);
+    // Le message d'erreur du serveur est en français : ici on parle la langue
+    // de l'atelier, quitte à en dire un peu moins.
+    demandes.innerHTML = `<p class="empty">${esc(t('rup.error'))}
+      <button class="btn btn-small" type="button" id="rup-retry">${esc(t('rup.retry'))}</button></p>`;
+    signalements.innerHTML = '';
+    $('rup-retry')?.addEventListener('click', () => void loadRuptures());
+    return;
+  }
+
+  const attente = (data.demandes ?? []).filter((demande) => demande.statut === 'OPEN');
+  setRuptureBadge(attente.length);
+
+  demandes.innerHTML =
+    (data.demandes ?? [])
+      .map((demande) => {
+        const etat =
+          demande.statut === 'RESOLVED'
+            ? { cls: 'ok', label: t('rup.closed') }
+            : demande.statut === 'ANSWERED'
+              ? { cls: 'ok', label: t('rup.answered') }
+              : { cls: 'wait', label: t('rup.waiting') };
+
+        return `<div class="upd upd-${etat.cls}">
+          <div class="upd-head">
+            <b>${esc(
+              demande.orderName
+                ? t('rup.order').replace('{name}', demande.orderName)
+                : t('rup.noOrder'),
+            )}</b>
+            <span class="pill">${esc(etat.label)}</span>
+            <span class="upd-when">${esc(new Date(demande.envoyeLe).toLocaleDateString(locale))}</span>
+          </div>
+          ${demande.message ? `<p class="upd-msg">${esc(demande.message)}</p>` : ''}
+          ${demande.note ? `<p class="upd-note">${esc(demande.note)}</p>` : ''}
+          ${
+            demande.statut === 'OPEN'
+              ? `<div class="upd-acts"><a class="btn btn-small btn-primary"
+                   href="${esc(demande.lien)}">${esc(t('rup.answer'))}</a></div>`
+              : ''
+          }
+        </div>`;
+      })
+      .join('') || `<p class="empty">${esc(t('rup.askedEmpty'))}</p>`;
+
+  signalements.innerHTML =
+    (data.signalements ?? [])
+      .map(
+        (signalement) => `<div class="upd upd-${signalement.traite ? 'ok' : 'wait'}">
+          <div class="upd-head">
+            <b>${esc(
+              signalement.orderName
+                ? t('rup.order').replace('{name}', signalement.orderName)
+                : t('rup.noOrder'),
+            )}</b>
+            <span class="pill">${esc(signalement.traite ? t('rup.done') : t('rup.todo'))}</span>
+            <span class="upd-when">${esc(new Date(signalement.signaleLe).toLocaleDateString(locale))}</span>
+          </div>
+          ${
+            signalement.detail
+              ? `<p class="upd-msg rup-detail">${esc(signalement.detail)}</p>`
+              : ''
+          }
+        </div>`,
+      )
+      .join('') || `<p class="empty">${esc(t('rup.mineEmpty'))}</p>`;
+}
+
+/* La pastille ne compte que ce qui attend une réponse de l'atelier. Y ajouter
+   ses propres signalements lui reprocherait le travail qu'il a déjà fait. */
+function setRuptureBadge(nombre) {
+  const badge = $('ws-rup-badge');
+  if (!badge) return;
+  badge.hidden = nombre === 0;
+  badge.textContent = String(nombre);
+}
