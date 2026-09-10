@@ -33,6 +33,9 @@ export const QUEUE_SELECT = {
   // L'état Gmail du fil : le gras et le dossier courant en dépendent.
   gmailUnread: true,
   gmailArchived: true,
+  // Et l'ouverture dans l'outil, qui éteint le gras sans que Gmail en sache
+  // rien : `gmail.readonly` ne permet pas de retirer le libellé UNREAD.
+  openedAt: true,
   /*
    * Les premiers mots du dernier message reçu.
    *
@@ -81,6 +84,7 @@ export const QUEUE_FIELDS_USED_BY_DASHBOARD = [
   'labels',
   'gmailUnread',
   'gmailArchived',
+  'openedAt',
   'messages',
   'assignedToId',
   'merchantId',

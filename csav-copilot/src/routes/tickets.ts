@@ -9,7 +9,7 @@ import { enqueueTicket } from '../queue/index.ts';
 import { accessibleMerchantIds, listShopsFor } from './shops.ts';
 import { sendDraft, sendReplyInThread, updateDraftBody } from '../services/gmail/drafts.ts';
 import { syncTicketThread } from '../services/gmail/thread.ts';
-import { PORTEE_NON_LU } from '../services/gmail/unreadScope.ts';
+import { NON_LU, PORTEE_NON_LU } from '../services/gmail/unreadScope.ts';
 import { sendPlainEmail } from '../services/gmail/send.ts';
 import { getShopifyClient, ShopifyError } from '../services/shopify/client.ts';
 import { listVariants } from '../services/shopify/catalog.ts';
@@ -189,7 +189,7 @@ function buildTicketWhere(
     // Clé de premier niveau, comme tout le reste ici : ni `AND` ni `OR`, tous
     // deux déjà pris — par la veille et par la recherche libre — et deux clés
     // identiques dans le même objet s'écrasent sans la moindre erreur.
-    ...(filters.unread ? { gmailUnread: true } : {}),
+    ...(filters.unread ? NON_LU : {}),
     ...(options.withFolder === false ? {} : folderWhere(filters.folder)),
     ...(filters.mailbox ? { mailboxId: filters.mailbox } : {}),
     ...(labelNames.length > 0 ? { labels: { hasSome: labelNames } } : {}),
@@ -485,7 +485,7 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
     counts.UNREAD = await prisma.ticket.count({
       where: {
         ...buildTicketWhere(merchantIds, query.data, { withStatus: false }),
-        gmailUnread: true,
+        ...NON_LU,
       },
     });
 
@@ -1100,6 +1100,50 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
    * se pose devant une rupture, et la seule réponse utile est « quoi d'autre,
    * en stock, tout de suite ».
    */
+  /**
+   * « J'ai ouvert ce message » : ce qui éteint le gras dans la file.
+   *
+   * POST et non un effet de bord du GET, parce que le dashboard préfetche la
+   * fiche AU SURVOL pour rendre l'ouverture instantanée. Écrire depuis le GET
+   * marquerait donc lu tout ce que le curseur effleure en descendant la
+   * liste — le gras s'éteindrait tout seul, sur des messages que personne n'a
+   * lus. C'est le clic qu'on enregistre, pas le passage.
+   *
+   * `reply` et non `configure` : lire un message n'est pas un privilège. Qui
+   * peut traiter la file peut dire qu'il a regardé une ligne.
+   *
+   * Idempotent : la date dit la PREMIÈRE ouverture. Revenir dix fois sur le
+   * même message ne doit pas la repousser, sans quoi elle cesserait de
+   * répondre à la question qu'on lui pose.
+   */
+  app.post<{ Params: { id: string } }>(
+    '/api/tickets/:id/ouvert',
+    { preHandler: requirePermission('reply') },
+    async (request, reply) => {
+      const { merchantId } = request.session;
+
+      // La boutique de la session, pas les boutiques lisibles : consulter le
+      // ticket d'une autre boutique ne dit rien à son équipe, et l'éteindre
+      // chez elle serait prendre une décision à sa place.
+      const ticket = await prisma.ticket.findFirst({
+        where: { id: request.params.id, merchantId },
+        select: { id: true, openedAt: true },
+      });
+      if (!ticket) return reply.code(404).send({ error: 'Ticket introuvable' });
+
+      if (ticket.openedAt !== null) return reply.send({ openedAt: ticket.openedAt });
+
+      const openedAt = new Date();
+      await prisma.ticket.update({ where: { id: ticket.id }, data: { openedAt } });
+
+      // Pas de journal d'audit : ouvrir un message n'est pas une action sur le
+      // dossier, et une ligne par consultation noierait les gestes qui
+      // comptent — remboursement, envoi, escalade — sous des milliers
+      // d'entrées sans objet.
+      return reply.send({ openedAt });
+    },
+  );
+
   app.get<{ Params: { id: string } }>('/api/tickets/:id/substitutions', async (request, reply) => {
     const { merchantId } = request.session;
 
@@ -1314,7 +1358,7 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
        * marquée lue la ferait remonter dans le compte pour rien.
        */
       prisma.ticket.count({
-        where: { merchantId, gmailUnread: true, ...PORTEE_NON_LU },
+        where: { merchantId, ...NON_LU, ...PORTEE_NON_LU },
       }),
       /*
        * Les demandes qu'un fournisseur laisse sans réponse depuis un jour.
