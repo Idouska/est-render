@@ -4608,19 +4608,34 @@ function customerPhone(order) {
  * deux ou trois chiffres selon le pays, et prendre le premier donnait
  * « +3 36 12 34 56 78 » pour la France.
  *
- * Le reste n'est PAS regroupé. Chaque pays a sa convention — la France par
- * deux, l'Amérique du Nord en 3-3-4, le Royaume-Uni en 4-6 — et appliquer la
- * mauvaise fait plus désordonné que de n'en appliquer aucune. Un espace après
- * l'indicatif suffit à dire où il s'arrête.
+ * Le reste n'est regroupé QUE pour l'Amérique du Nord, en 3-3-4 : indicatif
+ * régional, central, ligne. C'est la seule zone où la découpe est la même
+ * pour les vingt-cinq pays du plan et où le numéro national fait toujours dix
+ * chiffres — on ne peut donc pas se tromper.
+ *
+ * Ailleurs, rien. Chaque pays a sa convention — la France par deux, le
+ * Royaume-Uni en 4-6, l'Allemagne selon la longueur de l'indicatif régional —
+ * et appliquer la mauvaise fait plus désordonné que de n'en appliquer aucune.
+ * Un espace après l'indicatif suffit à dire où il s'arrête.
  *
  * Sans indicatif connu, on rend la saisie d'origine : en inventer un serait
  * pire que de n'en afficher aucun.
  */
 function numeroAffiche(brut, e164, pays) {
   if (!e164) return brut;
+
   const dial = DIAL_CODES[String(pays ?? '').toUpperCase()]?.dial;
   if (!dial || !e164.startsWith(dial)) return `+${e164}`;
-  return `+${dial} ${e164.slice(dial.length)}`;
+
+  const national = e164.slice(dial.length);
+
+  // La longueur est vérifiée avant de découper : un numéro nord-américain
+  // hors format — dix chiffres attendus — se rendrait en morceaux faux.
+  if (dial === '1' && national.length === 10) {
+    return `+1 ${national.slice(0, 3)} ${national.slice(3, 6)} ${national.slice(6)}`;
+  }
+
+  return `+${dial} ${national}`;
 }
 
 /*
