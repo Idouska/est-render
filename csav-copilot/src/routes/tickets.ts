@@ -18,6 +18,7 @@ import { QUEUE_SELECT } from './queueFields.ts';
 import { processTicket } from '../services/tickets/process.ts';
 import { discardPendingDrafts } from '../services/tickets/discardDrafts.ts';
 import { translateToFrench } from '../services/ai/translate.ts';
+import { retardFournisseurs } from '../services/suppliers/retard.ts';
 
 const TICKET_STATUSES = [
   'NEW',
@@ -1234,6 +1235,23 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
     /*
+     * Le seuil au-delà duquel une demande au fournisseur est « en retard ».
+     *
+     * Vingt-quatre heures, et non « le rappel est parti » — qui serait
+     * pourtant le marqueur naturel : le cron relance à douze heures et ne
+     * relance qu'une fois, après quoi c'est au marchand de téléphoner. Mais
+     * lire `remindedAt` ferait dépendre le compteur de notre propre
+     * machinerie : cron suspendu, boîte d'envoi en panne, et le chiffre
+     * retombe à zéro alors que les fournisseurs se taisent toujours. Un
+     * compteur d'alerte qui s'éteint quand la surveillance tombe est pire
+     * que pas de compteur du tout.
+     *
+     * Une journée pleine sans réponse est un fait sur le fournisseur, vrai
+     * que le rappel soit parti ou non.
+     */
+    const supplierLateBefore = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    /*
      * Deux fenêtres différentes, et c'est tout le sujet.
      *
      * L'état de la file — combien attendent, combien ont échoué — se compte
@@ -1248,7 +1266,8 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
      * compteur affichait « 0 traités » à quelqu'un qui venait d'en traiter
      * cinquante. Un chiffre faux en tête d'écran décrédibilise les vrais.
      */
-    const [byStatus, handled, today, sentDrafts, totalDrafts, unread] = await Promise.all([
+    const [byStatus, handled, today, sentDrafts, totalDrafts, unread, supplierLate] =
+      await Promise.all([
       prisma.ticket.groupBy({
         by: ['status'],
         where: { merchantId, isHistorical: false },
@@ -1297,9 +1316,26 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
       prisma.ticket.count({
         where: { merchantId, gmailUnread: true, ...PORTEE_NON_LU },
       }),
+      /*
+       * Les demandes qu'un fournisseur laisse sans réponse depuis un jour.
+       *
+       * Regroupées par fournisseur plutôt que comptées : le nombre de
+       * demandes dit la charge, le nombre de fournisseurs dit qui appeler.
+       * Six demandes chez un seul atelier, c'est un coup de fil ; six
+       * demandes chez six ateliers, c'est une matinée. Un compteur unique
+       * confondrait les deux.
+       */
+      prisma.supplierAlert.groupBy({
+        by: ['supplierId'],
+        where: { merchantId, status: 'PENDING', createdAt: { lte: supplierLateBefore } },
+        _count: true,
+        _min: { createdAt: true },
+      }),
     ]);
 
     const counts = Object.fromEntries(byStatus.map((row) => [row.status, row._count]));
+
+    const enRetard = retardFournisseurs(supplierLate);
 
     /*
      * Délai moyen de première réponse.
@@ -1376,6 +1412,15 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
       // `null` et non zéro quand il n'y a aucun brouillon : « 0 % » se lit
       // comme un échec, alors qu'il n'y a simplement rien à mesurer.
       automationRate: totalDrafts === 0 ? null : Number((sentDrafts / totalDrafts).toFixed(3)),
+      /**
+       * Les fournisseurs qui ne répondent plus.
+       *
+       * `requests` compte les demandes, `suppliers` les ateliers concernés,
+       * `oldestAt` date la plus ancienne — `null` quand il n'y en a aucune,
+       * et non une date bidon : l'écran doit pouvoir dire « rien » plutôt
+       * qu'afficher une ancienneté inventée.
+       */
+      suppliersLate: enRetard,
     });
   });
 

@@ -6557,11 +6557,24 @@ function renderOvPriorite() {
  * destination reste un simple `div`, sans curseur ni flèche — un compteur
  * qu'on ne peut pas ouvrir ne sert qu'à inquiéter.
  */
-function ovStatLigne({ label, valeur, ton, filtre, periode, aide, ico: nomIco }) {
-  const cliquable = Boolean(filtre);
+/*
+ * `filtre` mène à la file filtrée, `vue` à un autre écran.
+ *
+ * Toutes les lignes de ce poste de pilotage ne parlent pas de tickets : les
+ * demandes restées sans réponse vivent dans « Update », et y renvoyer par un
+ * filtre de file donnerait une liste vide. Les deux s'excluent — `filtre`
+ * l'emporte s'il est là — pour qu'un clic n'ait jamais deux destinations.
+ */
+function ovStatLigne({ label, valeur, ton, filtre, vue, periode, aide, ico: nomIco }) {
+  const cliquable = Boolean(filtre || vue);
   const balise = cliquable ? 'button' : 'div';
+  const cible = filtre
+    ? ` data-ov-filtre="${esc(JSON.stringify(filtre))}"`
+    : vue
+      ? ` data-ov-vue="${esc(vue)}"`
+      : '';
   return `<li><${balise} class="statrow${cliquable ? ' statrow-go' : ''}"${
-    cliquable ? ` type="button" data-ov-filtre="${esc(JSON.stringify(filtre))}"` : ''
+    cliquable ? ` type="button"${cible}` : ''
   }>
     ${nomIco ? `<span class="statrow-ico" aria-hidden="true">${ico(nomIco)}</span>` : ''}
     <span class="statrow-l">${esc(label)}${
@@ -6591,6 +6604,33 @@ function ovCablerFiltres(hote) {
       renderQueueBar();
     }),
   );
+
+  // Les lignes qui mènent ailleurs qu'à la file : l'écran se charge seul.
+  hote.querySelectorAll('[data-ov-vue]').forEach((bouton) =>
+    bouton.addEventListener('click', () => setView(bouton.dataset.ovVue)),
+  );
+}
+
+/*
+ * L'infobulle dit ce que le chiffre ne peut pas dire.
+ *
+ * « 6 » ne distingue pas six demandes chez un seul atelier — un coup de fil —
+ * de six demandes chez six ateliers, qui est une matinée. Et l'ancienneté de
+ * la plus vieille dit s'il s'agit d'hier ou de la semaine dernière.
+ */
+function aideRetardFournisseurs(retard) {
+  if (!retard) return 'Chiffre indisponible : les indicateurs n’ont pas répondu.';
+  if (retard.requests === 0) {
+    return 'Aucune demande de changement sans réponse depuis plus de 24 h.';
+  }
+
+  const d = retard.requests > 1 ? 's' : '';
+  const f = retard.suppliers > 1 ? 's' : '';
+  return (
+    `${retard.requests} demande${d} de changement sans réponse chez ` +
+    `${retard.suppliers} fournisseur${f}. La plus ancienne : ${relativeTime(retard.oldestAt)}. ` +
+    'L’outil relance une fois par mail au bout de douze heures ; au-delà, il n’insiste plus.'
+  );
 }
 
 function renderOvRisques(metrics, counts) {
@@ -6606,6 +6646,7 @@ function renderOvRisques(metrics, counts) {
     (t) => t.dueAt && new Date(t.dueAt).getTime() < maintenant,
   ).length;
   const litiges = ouverts.filter((t) => t.intent === 'DISPUTE').length;
+  const retard = metrics?.suppliersLate ?? null;
 
   const lignes = [
     {
@@ -6636,6 +6677,25 @@ function renderOvRisques(metrics, counts) {
       valeur: ovNombre(counts.AWAITING_SUPPLIER ?? 0),
       filtre: { status: 'AWAITING_SUPPLIER' },
       ico: 'truck',
+      aide: 'Messages en attente d’un atelier. Ils ne sont pas en retard pour autant : la ligne suivante dit lesquels le sont.',
+    },
+    {
+      /*
+       * La ligne précédente compte des MESSAGES qui attendent un atelier ;
+       * celle-ci compte des DEMANDES qu'un atelier laisse sans réponse. Ce
+       * n'est pas la même chose, et c'est la seconde qui coûte : un message
+       * en attente suit son cours, une demande muette depuis un jour ne
+       * bougera plus sans un coup de fil.
+       */
+      label: 'Fournisseurs sans réponse',
+      periode: '> 24 h',
+      ico: 'truck',
+      // Pas de `?? 0` : quand les indicateurs n'ont pas répondu, on ne sait
+      // pas, et « 0 » se lirait « tout va bien » — le contraire d'un silence.
+      valeur: retard ? String(retard.requests) : '—',
+      ton: retard && retard.requests > 0 ? 'bad' : null,
+      vue: 'changes',
+      aide: aideRetardFournisseurs(retard),
     },
     {
       label: 'Non compris par l’IA',
