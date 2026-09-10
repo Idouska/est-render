@@ -7178,6 +7178,10 @@ html, body { overflow-x: clip; }
 /* Neuf pixels entre les trois barres au lieu de treize : sur une zone qu'on
    veut dense, les gouttières sont le tiers de ce qu'on cherche à gagner. */
 .main { gap: 9px; }
+/* L'enveloppe de la zone haute reprend l'espacement de `.main` : elle s'y
+   substitue comme parent des trois rangées, et un écart différent ferait
+   bouger l'écran au seul fait de l'avoir introduite. */
+.topzone { gap: 9px; }
 
 .subhead { gap: 10px; align-items: center; flex-wrap: nowrap; }
 .subhead-acts { gap: 12px; align-items: center; flex: 0 1 auto; min-width: 0; overflow: hidden; }
@@ -7724,6 +7728,132 @@ html, body { overflow-x: clip; }
 
 .ov-fil .ov-quoi { flex: 1 1 auto; min-width: 0; }
 .ov-fil .ov-par { flex: none; margin-left: auto; white-space: nowrap; }
+
+
+/* ============================================ fond de la zone haute ========
+
+   Les trois rangées vivent dans une enveloppe qui reprend l'espacement de son
+   parent : sans couleur choisie, rien ne change — pas de fond, pas de
+   remplissage, pas un pixel de plus. La teinte n'apparaît que sur l'attribut
+   `data-teinte`, posé par le script quand une couleur est enregistrée. */
+
+.topzone { display: flex; flex-direction: column; gap: 13px; min-width: 0; }
+
+/* L'animation d'entrée que la barre de filtres tenait de `.main > section`,
+   rendue à son nouveau parent. */
+.topzone > section:not([hidden]) { animation: view-in 0.12s var(--ease); }
+
+/* Le bandeau déborde de la colonne pour toucher les bords, comme une bande le
+   ferait : un fond qui s'arrête aux marges se lit comme une carte, pas comme
+   un bandeau. Les marges négatives valent le remplissage, au pixel. */
+.topzone[data-teinte] {
+  background: var(--top-bg);
+  padding: 11px 14px 13px;
+  margin: -11px -14px 0;
+  border-bottom: 1px solid var(--top-line);
+  color: var(--top-ink);
+}
+
+/*
+ * L'encre suit le fond — et ce sont les SURFACES qui la reprennent.
+ *
+ * Deux façons de s'y prendre, et j'ai essayé la mauvaise en premier.
+ *
+ * Nommer chaque texte posé sur la teinte oblige à tous les connaître : j'en
+ * ai oublié, et sur une teinte sombre les oubliés restaient noirs.
+ *
+ * Poser la couleur sur l'enveloppe la fait hériter partout — y compris dans
+ * la bande blanche des chiffres, où « 20 » devenait blanc sur blanc.
+ *
+ * La bonne façon est la seconde, corrigée : la couleur descend, et les rares
+ * éléments qui portent leur PROPRE fond la reprennent. Ils sont cinq, ils se
+ * comptent ; les textes, eux, sont innombrables. Un oubli de surface se voit
+ * immédiatement, un oubli de texte ne se verrait que sur certaines teintes.
+ */
+.topzone[data-teinte] .kpis-slim,
+.topzone[data-teinte] .qbar,
+.topzone[data-teinte] .head-search,
+.topzone[data-teinte] .head-tools .btn {
+  color: var(--ink);
+}
+
+/* Les intitulés gris de ces surfaces suivent leur propre encre atténuée, pas
+   celle du bandeau. */
+.topzone[data-teinte] .kpis-slim .kpi-label,
+.topzone[data-teinte] .kpis-slim .kpi-note,
+.topzone[data-teinte] .kpis-slim .kpi-ico,
+.topzone[data-teinte] .qbar .sub,
+.topzone[data-teinte] .qbar .qbar-count { color: var(--ink-mute); }
+
+/* Sur la teinte elle-même, l'intitulé atténué prend l'encre adaptée. */
+.topzone[data-teinte] .head-conn,
+.topzone[data-teinte] .head-conn .conn-pill,
+.topzone[data-teinte] .head-sync,
+.topzone[data-teinte] .head-acts .me-txt span,
+.topzone[data-teinte] .head-tools .auto-toggle,
+.topzone[data-teinte] .subhead-acts .autosend,
+.topzone[data-teinte] .subhead-acts .ckp { color: var(--top-ink-mute); }
+
+/* ---- le réglage, dans l'écran Palettes ---- */
+
+.teinte-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+/* Le nuancier natif : sa boîte par défaut est un bouton gris épais. On garde
+   le composant du navigateur — c'est lui qui ouvre la pipette du système —
+   et on lui donne la forme des autres contrôles. */
+.teinte-row input[type='color'] {
+  width: 44px;
+  height: 34px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  cursor: pointer;
+}
+.teinte-row input[type='color']::-webkit-color-swatch-wrapper { padding: 0; }
+.teinte-row input[type='color']::-webkit-color-swatch { border: 0; border-radius: 4px; }
+
+.teinte-row input[type='text'] {
+  width: 110px;
+  height: 34px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+/* Le contraste obtenu, affiché en clair : c'est ce qui rend le choix
+   éclairé plutôt qu'aveugle. En dessous du seuil AA, il se signale. */
+.teinte-ratio {
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-mute);
+  cursor: help;
+}
+.teinte-ratio.teinte-faible { color: var(--warn-ink); font-weight: 600; }
+
+.teinte-row .btn { margin-left: auto; }
+
+/* L'aperçu : la teinte se juge sur du texte, pas sur un carré. */
+.teinte-apercu {
+  margin-top: 11px;
+  padding: 11px 13px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  background: var(--ap-bg, #eef2ff);
+  color: var(--ap-ink, #101018);
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+}
+.teinte-apercu b { font-size: 15px; font-weight: 650; }
+.teinte-apercu span { color: var(--ap-mute, #5c6172); }
 
 /* ==========================================================================
    REQUÊTES MÉDIA — toutes ici, et nulle part ailleurs

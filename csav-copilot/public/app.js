@@ -9179,7 +9179,10 @@ const VIEW_LOADERS = {
   disputes: () => loadDisputes(),
   team: () => loadTeam(),
   stats: () => loadStats(),
-  palettes: () => renderPalettes(),
+  palettes: () => {
+    renderPalettes();
+    renderTopBg();
+  },
   canned: () => loadCanned(),
   settings: () => openSettings(),
 };
@@ -9253,6 +9256,111 @@ function setView(view) {
 
 /* ------------------------------------------------------------- apparence */
 
+/* ------------------------------------------------- fond de la zone haute --
+
+   Une couleur choisie par la personne, pour son écran. Même raison que les
+   palettes d'accent : elle vit dans le navigateur, pas en base — la stocker
+   côté serveur imposerait la même teinte au portable et au poste fixe.
+*/
+
+const TOPBG_CLE = 'csav.topbg';
+
+/** #abc et #aabbcc, avec ou sans dièse. Rien d'autre : une saisie approximative
+    vaut mieux refusée qu'appliquée de travers. */
+function hexValide(valeur) {
+  const t = String(valeur ?? '').trim().replace(/^#/, '');
+  if (!/^[0-9a-fA-F]{3}$/.test(t) && !/^[0-9a-fA-F]{6}$/.test(t)) return null;
+  const plein = t.length === 3 ? t.split('').map((c) => c + c).join('') : t;
+  return `#${plein.toLowerCase()}`;
+}
+
+/** Luminance relative, au sens WCAG. Sert à deux choses : décider si l'encre
+    doit être claire ou sombre, et afficher le contraste obtenu. */
+function luminance(hex) {
+  const canal = (i) => {
+    const v = parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16) / 255;
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * canal(0) + 0.7152 * canal(1) + 0.0722 * canal(2);
+}
+
+function contraste(a, b) {
+  const [x, y] = [luminance(a), luminance(b)];
+  return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+}
+
+/** Rapproche une couleur du noir ou du blanc jusqu'à ce qu'elle atteigne le
+    contraste voulu sur `fond`. Renvoie l'extrême si le seuil est hors
+    d'atteinte — mieux vaut le meilleur possible qu'un abandon silencieux. */
+function ajuste(depart, fond, cible) {
+  const versBlanc = luminance(fond) <= 0.42;
+  const but = versBlanc ? 255 : 0;
+  const c = [0, 1, 2].map((i) => parseInt(depart.slice(1 + i * 2, 3 + i * 2), 16));
+
+  for (let pas = 0; pas <= 20; pas += 1) {
+    const t = pas / 20;
+    const m = c.map((v) => Math.round(v + (but - v) * t));
+    const hex = `#${m.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+    if (contraste(hex, fond) >= cible) return hex;
+  }
+  return versBlanc ? '#ffffff' : '#000000';
+}
+
+/*
+ * L'encre suit le fond, elle ne le subit pas.
+ *
+ * C'est ce qui rend un sélecteur de couleur utilisable plutôt que piégeux :
+ * sur un fond sombre choisi librement, un texte pensé pour du clair
+ * deviendrait illisible sans que rien ne prévienne.
+ *
+ * Les encres sont CALCULÉES, pas choisies dans deux jeux figés. Deux jeux
+ * suffisaient pour les teintes courantes mais pas pour toutes : sur un brun
+ * sombre — #7c2d12 — l'encre atténuée tombait à 4,21:1, sous le seuil, alors
+ * que rien ne le signalait. Chaque encre est donc rapprochée du blanc ou du
+ * noir jusqu'à franchir son seuil : 7:1 pour le texte principal, 4,5:1 pour
+ * l'atténué. Une couleur quelconque reste ainsi lisible.
+ */
+function encresPour(fond) {
+  const clair = luminance(fond) > 0.42;
+  const base = clair
+    ? { ink: '#101018', soft: '#3d4152', mute: '#5c6172' }
+    : { ink: '#f4f6fa', soft: '#ccd2de', mute: '#a7aebe' };
+
+  return {
+    ink: ajuste(base.ink, fond, 7),
+    soft: ajuste(base.soft, fond, 4.5),
+    mute: ajuste(base.mute, fond, 4.5),
+    line: clair ? 'rgb(16 18 40 / 11%)' : 'rgb(255 255 255 / 16%)',
+  };
+}
+
+function appliqueTopBg(hex) {
+  const zone = $('topzone');
+  if (!zone) return;
+
+  if (!hex) {
+    zone.removeAttribute('data-teinte');
+    for (const nom of ['--top-bg', '--top-ink', '--top-ink-soft', '--top-ink-mute', '--top-line']) {
+      zone.style.removeProperty(nom);
+    }
+    return;
+  }
+
+  const e = encresPour(hex);
+  zone.setAttribute('data-teinte', '');
+  zone.style.setProperty('--top-bg', hex);
+  zone.style.setProperty('--top-ink', e.ink);
+  zone.style.setProperty('--top-ink-soft', e.soft);
+  zone.style.setProperty('--top-ink-mute', e.mute);
+  zone.style.setProperty('--top-line', e.line);
+}
+
+function topBgCourant() {
+  return hexValide(localStorage.getItem(TOPBG_CLE));
+}
+
+
+
 /*
  * La pastille de chaque palette montre son `--accent`, exactement.
  *
@@ -9291,6 +9399,7 @@ function applyAppearance() {
   const theme = localStorage.getItem('csav.theme') ?? 'auto';
 
   document.documentElement.dataset.accent = accent;
+  appliqueTopBg(topBgCourant());
 
   const dark =
     theme === 'dark' ||
@@ -9298,6 +9407,83 @@ function applyAppearance() {
 
   if (dark) document.documentElement.dataset.theme = 'dark';
   else delete document.documentElement.dataset.theme;
+}
+
+/*
+ * Le nuancier et le champ hexadécimal, tenus en phase.
+ *
+ * Deux entrées pour une seule valeur : celui qui a un code de marque le tape,
+ * celui qui cherche une teinte la promène. Chacune met l'autre à jour, et
+ * aucune n'enregistre une saisie invalide — un champ qui accepte « bleu » et
+ * n'applique rien est pire qu'un champ qui refuse.
+ *
+ * Le champ texte n'écrit qu'à la validation ou à la sortie, pas à chaque
+ * frappe : « #ee » est un préfixe de « #eef2ff », pas une couleur, et
+ * repeindre l'écran à chaque caractère le ferait clignoter.
+ */
+function renderTopBg() {
+  const nuancier = $('topbg-color');
+  const champ = $('topbg-hex');
+  const jauge = $('topbg-ratio');
+  const apercu = $('topbg-apercu');
+  if (!nuancier || !champ) return;
+
+  const DEFAUT = '#eef2ff';
+
+  const montre = (hex) => {
+    const valeur = hex ?? DEFAUT;
+    nuancier.value = valeur;
+    champ.value = hex ?? '';
+    apercu?.style.setProperty('--ap-bg', valeur);
+
+    const e = encresPour(valeur);
+    apercu?.style.setProperty('--ap-ink', e.ink);
+    apercu?.style.setProperty('--ap-mute', e.mute);
+
+    if (jauge) {
+      // Le contraste du texte principal sur le fond choisi. Affiché tel quel :
+      // c'est un chiffre, pas un verdict — mais le seuil AA est nommé.
+      const r = contraste(valeur, e.ink);
+      jauge.textContent = `${r.toFixed(1)}:1`;
+      jauge.title = `Contraste du texte sur ce fond. Le seuil AA est de 4,5:1 ; ici ${r.toFixed(
+        1,
+      )}:1.`;
+      jauge.classList.toggle('teinte-faible', r < 4.5);
+    }
+  };
+
+  const pose = (hex) => {
+    if (hex) localStorage.setItem(TOPBG_CLE, hex);
+    else localStorage.removeItem(TOPBG_CLE);
+    appliqueTopBg(hex);
+    montre(hex);
+  };
+
+  montre(topBgCourant());
+
+  nuancier.addEventListener('input', () => pose(hexValide(nuancier.value)));
+
+  const lireChamp = () => {
+    const t = champ.value.trim();
+    // Vider le champ remet le défaut : c'est le geste attendu, et il évite un
+    // second bouton pour dire la même chose.
+    if (t === '') return pose(null);
+    const hex = hexValide(t);
+    if (hex) return pose(hex);
+    // Saisie invalide : on ne l'applique pas et on rend la valeur en vigueur,
+    // plutôt que de laisser un texte qui ne correspond à rien à l'écran.
+    montre(topBgCourant());
+  };
+
+  champ.addEventListener('change', lireChamp);
+  champ.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      lireChamp();
+    }
+  });
+
+  $('topbg-reset')?.addEventListener('click', () => pose(null));
 }
 
 function renderPalettes() {
@@ -9317,6 +9503,7 @@ function renderPalettes() {
         localStorage.setItem('csav.accent', button.dataset.accent);
         applyAppearance();
         renderPalettes();
+        renderTopBg();
       }),
     );
 

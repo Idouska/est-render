@@ -81,6 +81,14 @@
         </aside>
 
         <div class="main">
+          <!-- La zone haute, enveloppée.
+
+               Les trois rangées — titre, chiffres, filtres — étaient sœurs
+               dans `.main` : un fond posé sur chacune aurait donné trois
+               bandes séparées par la gouttière, pas un bandeau. L'enveloppe
+               reprend l'espacement de son parent pour que rien ne bouge
+               quand aucune couleur n'est choisie. -->
+          <div class="topzone" id="topzone">
           <header class="head">
             <button class="navtoggle" id="navtoggle" type="button" aria-label="Ouvrir la navigation"
               aria-expanded="false">
@@ -410,6 +418,7 @@
              une par une. -->
 
       </section>
+          </div>
 
       <main class="workspace" id="view-tickets">
         <section class="panel" aria-label="Messages clients">
@@ -1539,6 +1548,30 @@ contact@runningupscale.com"></textarea>
                 ticket ou d'un paiement garde ses couleurs quoi que vous choisissiez.
               </p>
               <div class="swatches" id="palette-swatches"></div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head"><span class="panel-title">Fond de la zone haute</span></div>
+            <div class="card-body set-group">
+              <p class="set-help">
+                Le bandeau qui porte le titre, les chiffres et les filtres. Choisissez
+                une teinte au nuancier ou saisissez son code hexadécimal — les deux
+                champs se suivent. Le texte s'adapte tout seul : sur un fond sombre il
+                passe en clair, et le contraste mesuré s'affiche pour que vous sachiez
+                si votre couleur reste lisible.
+              </p>
+              <div class="teinte-row">
+                <input type="color" id="topbg-color" aria-label="Nuancier" />
+                <input type="text" id="topbg-hex" inputmode="text" spellcheck="false"
+                  autocomplete="off" maxlength="7" placeholder="#eef2ff"
+                  aria-label="Code hexadécimal" />
+                <span class="teinte-ratio" id="topbg-ratio" aria-live="polite"></span>
+                <button class="btn btn-small" id="topbg-reset" type="button">Par défaut</button>
+              </div>
+              <div class="teinte-apercu" id="topbg-apercu" aria-hidden="true">
+                <b>SAV client</b><span>20 En attente de vous</span><span>115 Brouillons prêts</span>
+              </div>
             </div>
           </div>
 
