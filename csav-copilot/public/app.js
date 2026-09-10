@@ -6788,6 +6788,48 @@ function renderOvRisques(metrics, counts) {
   ovCablerFiltres($('ov-risk'));
 }
 
+/*
+ * L'infobulle du délai de résolution.
+ *
+ * Elle porte trois choses que le chiffre seul ne peut pas dire : d'où à où
+ * la mesure court, sur combien de dossiers elle repose, et ce qu'elle laisse
+ * dehors. Ce dernier point n'est pas un détail de méthode — un ticket clos
+ * sans réponse envoyée (indésirable, doublon, affaire réglée au téléphone)
+ * ne laisse aucune trace mesurable. Taire l'écart laisserait croire que la
+ * médiane décrit tous les dossiers clos.
+ */
+function aideResolution(resolution) {
+  if (!resolution) return 'Chiffre indisponible : les statistiques n’ont pas répondu.';
+
+  const definition =
+    'Du premier message du client à la dernière réponse partie. Faute d’une date ' +
+    'de clôture fiable, c’est cette dernière réponse qui borne la mesure : c’est ' +
+    'le moment où le client cesse d’attendre.';
+
+  if (resolution.measured === 0) {
+    return resolution.resolved > 0
+      ? `${definition} Aucun des ${resolution.resolved} tickets résolus sur la période ` +
+          'n’a reçu de réponse par mail : il n’y a rien à mesurer.'
+      : `${definition} Aucun ticket résolu sur la période.`;
+  }
+
+  const moyenne =
+    typeof resolution.averageMinutes === 'number'
+      ? ` Moyenne : ${duration(resolution.averageMinutes)}.`
+      : '';
+  const dehors = resolution.resolved - resolution.measured;
+  const angleMort =
+    dehors > 0
+      ? ` ${dehors} autre${dehors > 1 ? 's ont été clos' : ' a été clos'} sans réponse ` +
+        'envoyée, et n’entre' + (dehors > 1 ? 'nt' : '') + ' donc pas dans le calcul.'
+      : '';
+
+  return (
+    `${definition} Mesuré sur ${resolution.measured} des ${resolution.resolved} ` +
+    `tickets résolus.${moyenne}${angleMort}`
+  );
+}
+
 function renderOvPerf(metrics, stats) {
   const ouverts = state.tickets.filter(
     (t) => t.status !== 'CLOSED' && t.status !== 'AUTO_SENT',
@@ -6805,6 +6847,7 @@ function renderOvPerf(metrics, stats) {
 
   const moyenne = stats?.firstReply?.averageMinutes;
   const mediane = stats?.firstReply?.medianMinutes;
+  const resolution = stats?.resolution ?? null;
 
   $('ov-perf').innerHTML = [
     {
@@ -6817,6 +6860,26 @@ function renderOvPerf(metrics, stats) {
       periode: '7 j',
       valeur: typeof mediane === 'number' ? duration(mediane) : '—',
       aide: 'La médiane est moins sensible aux valeurs extrêmes que la moyenne : un seul message oublié pendant une semaine ne la déplace pas.',
+    },
+    {
+      /*
+       * La première réponse dit à quelle vitesse on décroche, celle-ci à
+       * quelle vitesse on raccroche. Une équipe peut accuser réception en
+       * dix minutes et laisser le dossier traîner trois semaines : aucun des
+       * deux chiffres ne remplace l'autre, et c'est le second que le client
+       * retient.
+       *
+       * La médiane et non la moyenne, parce que le délai de résolution est la
+       * mesure la plus dissymétrique de cet écran — deux dossiers oubliés
+       * pendant un mois déplacent une moyenne de plusieurs heures et
+       * décrivent alors ces deux-là, pas le travail de la semaine. La moyenne
+       * reste dans l'infobulle, pour qui veut voir la traîne.
+       */
+      label: 'Résolution médiane',
+      periode: '7 j',
+      valeur:
+        typeof resolution?.medianMinutes === 'number' ? duration(resolution.medianMinutes) : '—',
+      aide: aideResolution(resolution),
     },
     { label: 'Traités', periode: 'aujourd’hui', valeur: ovNombre(metrics?.today) },
     {

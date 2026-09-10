@@ -1,9 +1,11 @@
+import type { TicketStatus } from '@prisma/client';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.ts';
 import { requireSession } from '../plugins/auth.ts';
 import { getShopifyClient, ShopifyError } from '../services/shopify/client.ts';
 import { fetchCommerceStats } from '../services/shopify/commerceStats.ts';
+import { delaisResolution } from '../services/tickets/resolution.ts';
 
 /**
  * Statistiques d'équipe.
@@ -75,7 +77,21 @@ export async function statsRoutes(app: FastifyInstance): Promise<void> {
     const { merchantId } = request.session;
     const since = new Date(Date.now() - parsed.data.days * 24 * 60 * 60 * 1000);
 
-    const [byStatus, byIntent, drafts, tickets, users, audits] = await Promise.all([
+    /* Les tickets clos de la fenêtre : la portée commune aux deux bornes. */
+    const portee = {
+      merchantId,
+      ticket: {
+        isHistorical: false,
+        createdAt: { gte: since },
+        status: { in: ['CLOSED', 'AUTO_SENT'] satisfies TicketStatus[] },
+      },
+    };
+
+    // L'ordre des noms suit celui du tableau, pas l'ordre de lecture : une
+    // déstructuration décalée d'un cran donne des données valides au mauvais
+    // nom, ce qui ne ressemble pas à une erreur.
+    const [byStatus, byIntent, drafts, tickets, premiersEntrants, derniersSortants, users, audits] =
+      await Promise.all([
       prisma.ticket.groupBy({
         by: ['status'],
         where: { merchantId, isHistorical: false, createdAt: { gte: since } },
@@ -103,6 +119,23 @@ export async function statsRoutes(app: FastifyInstance): Promise<void> {
       prisma.ticket.findMany({
         where: { merchantId, isHistorical: false, createdAt: { gte: since } },
         select: { createdAt: true, status: true },
+      }),
+      /*
+       * Les deux bornes du délai de résolution, une ligne par ticket résolu :
+       * le premier message reçu et la dernière réponse partie. Deux
+       * regroupements en base plutôt que la lecture de tous les messages —
+       * un SAV actif en écrit des dizaines de milliers par mois, et on n'a
+       * besoin que de deux dates par fil.
+       */
+      prisma.message.groupBy({
+        by: ['ticketId'],
+        where: { ...portee, direction: 'INBOUND' },
+        _min: { receivedAt: true },
+      }),
+      prisma.message.groupBy({
+        by: ['ticketId'],
+        where: { ...portee, direction: 'OUTBOUND' },
+        _max: { receivedAt: true },
       }),
       prisma.user.findMany({
         where: { merchantId },
@@ -158,6 +191,15 @@ export async function statsRoutes(app: FastifyInstance): Promise<void> {
       ? delays.reduce((total, value) => total + value, 0) / delays.length
       : null;
 
+    /* Le délai de résolution se mesure sur les tickets réellement clos de la
+       fenêtre, d'où cet effectif : c'est lui qui dit ce que la médiane
+       couvre, et ce qu'elle laisse dehors. */
+    const resolution = delaisResolution(
+      premiersEntrants,
+      derniersSortants,
+      tickets.filter((ticket) => ticket.status === 'CLOSED' || ticket.status === 'AUTO_SENT').length,
+    );
+
     const sentDrafts = drafts.filter((draft) => draft.sentAt);
     const confidences = drafts
       .map((draft) => draft.confidence)
@@ -188,6 +230,15 @@ export async function statsRoutes(app: FastifyInstance): Promise<void> {
         daily: [...daily.entries()].map(([day, counts]) => ({ day, ...counts })),
       },
       firstReply: { medianMinutes: median, averageMinutes: average, measured: delays.length },
+      /**
+       * Du premier message du client à la dernière réponse partie.
+       *
+       * `resolution.resolved` dit combien de tickets clos la fenêtre contient,
+       * `measured` combien ont pu être mesurés : l'écart est l'angle mort de
+       * l'indicateur — un ticket clos sans réponse envoyée n'en laisse aucune
+       * trace — et l'écran doit pouvoir l'annoncer plutôt que le taire.
+       */
+      resolution,
       drafts: {
         total: drafts.length,
         sent: sentDrafts.length,
