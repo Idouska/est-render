@@ -13296,6 +13296,15 @@ const RUP_LIBELLES = {
   RESOLU: 'Résolu',
 };
 
+/* Les trois temps, pour l'infobulle de la barre de couleur : une couleur seule
+   ne dit rien à qui ne connaît pas le code, et rien du tout à qui ne
+   distingue pas le rouge du vert. */
+const RUP_PHASES = {
+  cree: 'Créé — le client n’a pas encore eu de réponse',
+  traite: 'Traité — le client a eu une réponse',
+  classe: 'Classé — dossier clos',
+};
+
 /* L'ordre des vues suit celui du travail : ce qui n'a pas commencé, ce qui
    attend quelqu'un d'autre, ce qui attend un geste de nous, puis l'archive. */
 const RUP_VUES = [
@@ -13550,8 +13559,9 @@ function renderRuptureLignes(page, total) {
       const initiales = initials(d.client?.nom ?? d.client?.email ?? '?');
       const age = formatSpan(Date.now() - new Date(d.creeLe).getTime());
 
-      return `<tr data-rup="${esc(d.id)}" tabindex="0"
-        aria-selected="${d.id === r.courant}">
+      return `<tr data-rup="${esc(d.id)}" data-phase="${esc(d.phase ?? 'cree')}" tabindex="0"
+        aria-selected="${d.id === r.courant}"
+        title="${esc(RUP_PHASES[d.phase] ?? '')}">
         <td class="rup-pick"><input type="checkbox" data-rup-pick="${esc(d.id)}"${
           r.cochees.has(d.id) ? ' checked' : ''
         } aria-label="Sélectionner ce dossier" /></td>

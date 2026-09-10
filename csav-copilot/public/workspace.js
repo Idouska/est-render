@@ -1505,21 +1505,23 @@ async function loadRuptures() {
   demandes.innerHTML =
     (data.demandes ?? [])
       .map((demande) => {
-        const etat =
-          demande.statut === 'RESOLVED'
-            ? { cls: 'ok', label: t('rup.closed') }
-            : demande.statut === 'ANSWERED'
-              ? { cls: 'ok', label: t('rup.answered') }
-              : { cls: 'wait', label: t('rup.waiting') };
+        // Trois temps, même code couleur que la page du marchand : rouge tant
+        // qu'il n'a pas répondu, orange quand il l'a fait, vert quand c'est clos.
+        const phase = demande.phase ?? 'cree';
+        const label = {
+          cree: t('rup.waiting'),
+          traite: t('rup.answered'),
+          classe: t('rup.closed'),
+        }[phase];
 
-        return `<div class="upd upd-${etat.cls}">
+        return `<div class="upd rup-p-${esc(phase)}">
           <div class="upd-head">
             <b>${esc(
               demande.orderName
                 ? t('rup.order').replace('{name}', demande.orderName)
                 : t('rup.noOrder'),
             )}</b>
-            <span class="pill">${esc(etat.label)}</span>
+            <span class="pill">${esc(label)}</span>
             <span class="upd-when">${esc(new Date(demande.envoyeLe).toLocaleDateString(locale))}</span>
           </div>
           ${demande.message ? `<p class="upd-msg">${esc(demande.message)}</p>` : ''}
@@ -1537,14 +1539,20 @@ async function loadRuptures() {
   signalements.innerHTML =
     (data.signalements ?? [])
       .map(
-        (signalement) => `<div class="upd upd-${signalement.traite ? 'ok' : 'wait'}">
+        (signalement) => `<div class="upd rup-p-${esc(signalement.phase ?? 'cree')}">
           <div class="upd-head">
             <b>${esc(
               signalement.orderName
                 ? t('rup.order').replace('{name}', signalement.orderName)
                 : t('rup.noOrder'),
             )}</b>
-            <span class="pill">${esc(signalement.traite ? t('rup.done') : t('rup.todo'))}</span>
+            <span class="pill">${esc(
+              {
+                cree: t('rup.todo'),
+                traite: t('rup.done'),
+                classe: t('rup.closed'),
+              }[signalement.phase ?? 'cree'],
+            )}</span>
             <span class="upd-when">${esc(new Date(signalement.signaleLe).toLocaleDateString(locale))}</span>
           </div>
           ${

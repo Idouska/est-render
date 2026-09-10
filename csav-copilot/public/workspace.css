@@ -1185,3 +1185,17 @@ input:focus, select:focus, textarea:focus {
    référence. Les recoller en un paragraphe obligerait à relire pour trouver
    la taille, qui est justement ce qu'on vient vérifier. */
 .rup-detail { white-space: pre-line; }
+
+
+/*
+ * Les trois temps d'une rupture, par la couleur du bord gauche.
+ *
+ * Rouge : créé, personne n'a encore répondu. Orange : traité. Vert : clos.
+ * Le même code que dans la page du marchand — un même dossier doit avoir la
+ * même couleur des deux côtés, sans quoi l'atelier et le marchand, au
+ * téléphone, ne parleraient pas du même état. La carte reste blanche : la
+ * couleur est au bord, là où l'oeil la cherche en descendant la liste.
+ */
+.upd.rup-p-cree { border-left-color: var(--bad); }
+.upd.rup-p-traite { border-left-color: var(--warn); }
+.upd.rup-p-classe { border-left-color: var(--ok); }
