@@ -19,6 +19,7 @@ import { processTicket } from '../services/tickets/process.ts';
 import { discardPendingDrafts } from '../services/tickets/discardDrafts.ts';
 import { translateToFrench } from '../services/ai/translate.ts';
 import { retardFournisseurs } from '../services/suppliers/retard.ts';
+import { fenetresJour } from '../services/tickets/fenetresJour.ts';
 
 const TICKET_STATUSES = [
   'NEW',
@@ -94,12 +95,6 @@ const listQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(25),
 });
 
-/** Minuit, heure du serveur. Isolé pour se lire, et pour se corriger d'un
-    seul endroit le jour où le fuseau du marchand sera connu. */
-function startOfToday(): Date {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-}
 
 /**
  * Clause du dossier courant.
@@ -1295,6 +1290,11 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
      */
     const supplierLateBefore = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
+    /* Aujourd'hui de minuit à maintenant, hier de minuit à la même heure :
+       deux tranches de durée identique. Comparer une journée commencée à une
+       journée finie afficherait « −84 % » tous les matins. */
+    const jour = fenetresJour();
+
     /*
      * Deux fenêtres différentes, et c'est tout le sujet.
      *
@@ -1310,8 +1310,21 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
      * compteur affichait « 0 traités » à quelqu'un qui venait d'en traiter
      * cinquante. Un chiffre faux en tête d'écran décrédibilise les vrais.
      */
-    const [byStatus, handled, today, sentDrafts, totalDrafts, unread, supplierLate] =
-      await Promise.all([
+    // L'ordre des noms suit celui du tableau : une déstructuration décalée
+    // d'un cran donne des données valides au mauvais nom, ce qui ne ressemble
+    // pas à une erreur.
+    const [
+      byStatus,
+      handled,
+      today,
+      traitesHier,
+      recus,
+      recusHier,
+      sentDrafts,
+      totalDrafts,
+      unread,
+      supplierLate,
+    ] = await Promise.all([
       prisma.ticket.groupBy({
         by: ['status'],
         where: { merchantId, isHistorical: false },
@@ -1340,7 +1353,34 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
           merchantId,
           isHistorical: false,
           status: { in: ['CLOSED', 'AUTO_SENT'] },
-          updatedAt: { gte: startOfToday() },
+          updatedAt: { gte: jour.debutAujourdhui },
+        },
+      }),
+      /*
+       * Les trois comptes qui rendent le « vs hier » possible.
+       *
+       * Ce sont des FLUX : chaque ligne porte sa date, donc n'importe quelle
+       * fenêtre passée se recompte. Les stocks de cet écran — ce qui attend,
+       * les brouillons prêts, ce qui est chez le fournisseur — n'ont pas cet
+       * équivalent : personne n'a noté combien il y en avait hier à cette
+       * heure, et le produit ne garde pas l'historique des statuts.
+       */
+      prisma.ticket.count({
+        where: {
+          merchantId,
+          isHistorical: false,
+          status: { in: ['CLOSED', 'AUTO_SENT'] },
+          updatedAt: { gte: jour.debutHier, lt: jour.memeHeureHier },
+        },
+      }),
+      prisma.ticket.count({
+        where: { merchantId, isHistorical: false, createdAt: { gte: jour.debutAujourdhui } },
+      }),
+      prisma.ticket.count({
+        where: {
+          merchantId,
+          isHistorical: false,
+          createdAt: { gte: jour.debutHier, lt: jour.memeHeureHier },
         },
       }),
       prisma.draft.count({ where: { merchantId, status: 'SENT', sentAt: { gte: since } } }),
@@ -1445,6 +1485,16 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
       handled,
       /** Traités depuis minuit : l'avancement du jour, pas la tendance. */
       today,
+      /** Reçus depuis minuit : l'autre moitié de la question. */
+      recus,
+      /**
+       * Hier sur la MÊME tranche de journée, pas la journée entière.
+       *
+       * Seuls des flux figurent ici. Un « vs hier » sur ce qui attend en ce
+       * moment demanderait de connaître l'état d'hier, que rien n'enregistre :
+       * l'afficher reviendrait à inventer la moitié de la comparaison.
+       */
+      hier: { traites: traitesHier, recus: recusHier, minutesEcoulees: jour.minutesEcoulees },
       /** Réponses réellement parties, sous-ensemble du précédent. */
       sent: sentDrafts,
       failed: counts.FAILED ?? 0,

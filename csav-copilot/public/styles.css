@@ -8926,3 +8926,30 @@ html, body { overflow-x: clip; }
   .rup-split { grid-template-columns: minmax(0, 1fr); }
   .rup-panel { position: static; max-height: none; }
 }
+
+
+/* ------------------------------------------------ écart d'un jour sur l'autre --- */
+
+/*
+ * L'écart se pose à côté du chiffre, plus petit que lui.
+ *
+ * Il commente une mesure, il ne la remplace pas : à taille égale, l'oeil lit
+ * « ↑ 12 % » avant « 9 », et la tendance passe devant le fait. Le `baseline`
+ * les aligne sur la même ligne de pied pour que l'un se lise comme l'annotation
+ * de l'autre.
+ */
+.kpi-value:has(.kpi-delta) { display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; }
+
+.kpi-delta {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-mute);
+  white-space: nowrap;
+  cursor: help;
+}
+.kpi-delta small { font-size: 10.5px; font-weight: 500; }
+
+/* La couleur n'est posée que là où la direction porte un jugement. Une hausse
+   d'arrivées n'est ni bonne ni mauvaise : elle reste en encre neutre. */
+.kpi-delta.kd-ok { color: var(--ok-ink); }
+.kpi-delta.kd-bad { color: var(--crit-ink); }
