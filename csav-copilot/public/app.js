@@ -4549,7 +4549,42 @@ function renderCustomer(order) {
      */
     (customer.createdAt ? row('Client depuis', fullDate(customer.createdAt)) : '') +
     phoneRow(order, name) +
-    '</dl>';
+    '</dl>' +
+    adresseClient(order);
+}
+
+/*
+ * L'adresse du client, dans la carte qui parle de lui.
+ *
+ * Deux adresses coexistent et ne disent pas la même chose : celle de la
+ * commande dit où CE colis part, celle du compte dit où le client habite
+ * aujourd'hui. Elles divergent dès qu'il a déménagé ou qu'il a fait livrer
+ * chez quelqu'un d'autre — et c'est précisément ce qu'un agent doit savoir
+ * avant de renvoyer un article.
+ *
+ * On préfère donc l'adresse du compte. Mais la majorité des commandes Shopify
+ * sont passées en invité, sans compte et donc sans adresse : dans ce cas la
+ * carte serait vide alors que l'information existe, à côté. On retombe sur
+ * celle de la commande, en le DISANT — une adresse dont on tait la provenance
+ * se lit comme l'adresse du client, ce qu'elle n'est pas forcément.
+ */
+function adresseClient(order) {
+  const propre = order?.customer?.address;
+  if (propre) {
+    const bloc = blocAdresse(propre);
+    if (!bloc) return '';
+    return (
+      `<p class="adr-title">Adresse${
+        order.shippingAddress && !memeAdresse(propre, order.shippingAddress)
+          ? '<span class="adr-diff">livraison différente</span>'
+          : ''
+      }</p>` + bloc
+    );
+  }
+
+  const livraison = blocAdresse(order?.shippingAddress);
+  if (!livraison) return '';
+  return `<p class="adr-title">Adresse<span class="adr-src">de la commande</span></p>${livraison}`;
 }
 
 /*

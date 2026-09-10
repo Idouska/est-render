@@ -60,6 +60,8 @@ export interface OrderSummary {
     numberOfOrders: number | null;
     amountSpent: string | null;
     createdAt: string | null;
+    /** Là où le client habite aujourd'hui. Absente en commande invité. */
+    address: ShippingAddress | null;
   } | null;
   lineItems: OrderLineItem[];
   fulfillments: Fulfillment[];
@@ -120,6 +122,22 @@ const ORDER_FIELDS = /* GraphQL */ `
       createdAt
       amountSpent {
         amount
+      }
+      # L'adresse ACTUELLE du client, distincte de celle de la commande.
+      #
+      # shippingAddress dit où ce colis-là part ; celle-ci dit où le client
+      # habite aujourd'hui. Elles diffèrent dès qu'il a déménagé, ou qu'il a
+      # fait livrer chez quelqu'un d'autre — et c'est justement ce qu'un agent
+      # a besoin de savoir avant de renvoyer un article.
+      defaultAddress {
+        name
+        address1
+        address2
+        city
+        zip
+        provinceCode
+        countryCodeV2
+        phone
       }
     }
     lineItems(first: 25) {
@@ -226,6 +244,7 @@ interface RawOrder {
     numberOfOrders: string | number | null;
     createdAt: string | null;
     amountSpent: { amount: string } | null;
+    defaultAddress: RawAddress | null;
   } | null;
   lineItems: {
     nodes: Array<{
@@ -298,6 +317,7 @@ function toSummary(order: RawOrder): OrderSummary {
               : Number(order.customer.numberOfOrders),
           amountSpent: order.customer.amountSpent?.amount ?? null,
           createdAt: order.customer.createdAt,
+          address: adresse(order.customer.defaultAddress),
         }
       : null,
     lineItems: order.lineItems.nodes.map((item) => ({
