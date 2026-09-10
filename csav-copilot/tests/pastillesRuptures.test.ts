@@ -97,13 +97,28 @@ test('clôturer un dossier fait baisser la pastille sans attendre la relève', (
 
 /* ---- côté atelier ---- */
 
-test('la pastille de l’atelier s’allume dès l’arrivée, sans ouvrir l’onglet', () => {
-  // Le fournisseur arrive tous les matins sur « Commandes ». Une pastille
-  // calculée seulement au rendu des ruptures ne s'allumerait jamais pour lui.
-  const demarrage = atelier.slice(atelier.indexOf('setInterval(loadAlerts, 120000);'));
+test('les deux pastilles de l’atelier s’allument dès l’arrivée, sans ouvrir l’onglet', () => {
+  // Le fournisseur arrive tous les matins sur « Commandes ». Des pastilles
+  // calculées seulement au rendu de leur écran ne s'allumeraient jamais pour
+  // lui — c'était le cas des deux, « Update » compris.
+  const releve = atelier.slice(atelier.indexOf('function rafraichirPastilles()'));
+  const corps = releve.slice(0, releve.indexOf('\n}'));
 
-  assert.match(demarrage.slice(0, 200), /void rafraichirPastilleRuptures\(\);/);
-  assert.match(demarrage.slice(0, 200), /setInterval\(rafraichirPastilleRuptures, 120000\);/);
+  assert.match(corps, /rafraichirPastilleUpdates\(\)/, 'la pastille « Update » doit être relevée');
+  assert.match(corps, /rafraichirPastilleRuptures\(\)/, 'celle des ruptures aussi');
+
+  // Et la relève doit être appelée au chargement, puis à intervalle.
+  const apres = atelier.slice(atelier.indexOf('setInterval(loadAlerts, 120000);'));
+  assert.match(apres, /\nrafraichirPastilles\(\);/, 'appelée au démarrage');
+  assert.match(apres, /setInterval\(rafraichirPastilles, 120000\);/, 'puis toutes les deux minutes');
+});
+
+test('la pastille « Update » s’éteint quand sa relève échoue', () => {
+  const releve = atelier.slice(atelier.indexOf('async function rafraichirPastilleUpdates'));
+  const corps = releve.slice(0, releve.indexOf('\n}'));
+
+  assert.match(corps, /setBadge\(data\.pending \?\? 0\)/);
+  assert.match(corps, /catch \{\s*setBadge\(0\);/);
 });
 
 test('la pastille de l’atelier ne compte que ce qui attend SA réponse', () => {

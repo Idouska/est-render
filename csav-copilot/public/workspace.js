@@ -966,10 +966,21 @@ if ('Notification' in window && Notification.permission === 'default') {
 // deux fois afficherait brièvement la liste en double.
 applyLang(state.lang);
 setInterval(loadAlerts, 120000);
-// La pastille des ruptures suit le même rythme que les alertes : deux minutes
-// suffisent pour une demande qui se traite dans la journée.
-void rafraichirPastilleRuptures();
-setInterval(rafraichirPastilleRuptures, 120000);
+
+/*
+ * Les pastilles du menu, relevées dès l'arrivée puis au rythme des alertes.
+ *
+ * Toutes deux ne se calculaient qu'en ouvrant leur onglet. Une pastille qui
+ * ne s'allume qu'une fois qu'on a cliqué dessus ne signale rien : on a déjà
+ * trouvé ce qu'elle devait montrer. Deux minutes suffisent pour des demandes
+ * qui se traitent dans la journée.
+ */
+function rafraichirPastilles() {
+  void rafraichirPastilleUpdates();
+  void rafraichirPastilleRuptures();
+}
+rafraichirPastilles();
+setInterval(rafraichirPastilles, 120000);
 
 
 /* ==========================================================================
@@ -1407,6 +1418,27 @@ function setBadge(count) {
   const badge = $('ws-badge');
   badge.hidden = count === 0;
   badge.textContent = String(count);
+}
+
+/*
+ * La pastille « Update », relevée sans ouvrir l'onglet.
+ *
+ * Même défaut que celle des ruptures, et plus ancien : elle n'était posée que
+ * par `loadUpdates`, c'est-à-dire à l'ouverture de l'écran des changements.
+ * Un fournisseur qui arrive sur « Commandes » ne voyait donc jamais qu'une
+ * demande de changement l'attendait — la bannière d'alertes le disait, mais
+ * seulement pour les demandes récentes, et elle se ferme.
+ *
+ * En échec elle s'éteint : elle n'a pas d'autre source que cette liste, et
+ * un chiffre qu'on n'a pas pu relire est un chiffre inventé.
+ */
+async function rafraichirPastilleUpdates() {
+  try {
+    const data = await api(`/api/workspace/${supplierId}/updates`);
+    setBadge(data.pending ?? 0);
+  } catch {
+    setBadge(0);
+  }
 }
 
 async function respond(id, status, note = null) {
