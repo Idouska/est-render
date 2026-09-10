@@ -13334,7 +13334,7 @@ async function loadRuptures() {
        recharge la liste : sans cette ligne, le menu garderait « 12 » pendant
        une minute sous une page qui en affiche 11, et l'on croirait que la
        clôture n'a pas pris. */
-    state.navCounts = { ...state.navCounts, ruptures: r.compteurs.tous ?? 0 };
+    state.navCounts = { ...state.navCounts, ruptures: r.compteurs.ouverts ?? 0 };
     renderNav();
 
     // Une sélection qui ne désigne plus rien laisserait un panneau figé sur un
@@ -13356,10 +13356,10 @@ function rupturesFiltrees() {
   const terme = r.q.trim().toLowerCase();
 
   let liste = r.dossiers.filter((d) => {
-    if (r.vue === 'tous') {
-      // « Tous » est la vue de travail : les dossiers clos ont la leur.
-      if (d.etat === 'RESOLU') return false;
-    } else if (d.etat !== r.vue) return false;
+    // « Tous » garde les dossiers clos : les en retirer faisait disparaître
+    // un dossier au moment où on le marquait résolu, ce qui se lit comme une
+    // suppression. Il reste visible, en vert, sous le travail restant.
+    if (r.vue !== 'tous' && d.etat !== r.vue) return false;
 
     if (r.fournisseur && d.fournisseur?.id !== r.fournisseur) return false;
     if (r.priorite && d.priorite !== r.priorite) return false;
@@ -13390,7 +13390,15 @@ function rupturesFiltrees() {
     );
   else liste = [...liste].sort((a, b) => date(b) - date(a));
 
-  return liste;
+  /*
+   * Les dossiers clos descendent sous les autres, quel que soit le tri.
+   *
+   * Sinon, un dossier résolu à l'instant resterait en tête d'une liste
+   * « plus récent », au-dessus de ceux qu'il faut encore traiter, et l'œil
+   * le relirait à chaque passage. Tri stable : l'ordre choisi est respecté à
+   * l'intérieur de chacun des deux groupes.
+   */
+  return [...liste].sort((a, b) => (a.etat === 'RESOLU') - (b.etat === 'RESOLU'));
 }
 
 function renderRuptures() {
@@ -13562,9 +13570,16 @@ function renderRuptureLignes(page, total) {
       return `<tr data-rup="${esc(d.id)}" data-phase="${esc(d.phase ?? 'cree')}" tabindex="0"
         aria-selected="${d.id === r.courant}"
         title="${esc(RUP_PHASES[d.phase] ?? '')}">
-        <td class="rup-pick"><input type="checkbox" data-rup-pick="${esc(d.id)}"${
-          r.cochees.has(d.id) ? ' checked' : ''
-        } aria-label="Sélectionner ce dossier" /></td>
+        <td class="rup-pick">${
+          // Un dossier clos n'a rien à faire dans l'action groupée, qui ne
+          // sait que clôturer : sa case disparaît plutôt que de le laisser
+          // « re-clôturer » et gonfler le compte du message de confirmation.
+          d.etat === 'RESOLU'
+            ? ''
+            : `<input type="checkbox" data-rup-pick="${esc(d.id)}"${
+                r.cochees.has(d.id) ? ' checked' : ''
+              } aria-label="Sélectionner ce dossier" />`
+        }</td>
         <td><span class="rup-who">
           <span class="qav" aria-hidden="true">${esc(initiales)}</span>
           <span style="min-width:0">
@@ -14178,6 +14193,7 @@ $('rup-all')?.addEventListener('change', (event) => {
   const page = rupturesFiltrees().slice((r.page - 1) * r.taille, r.page * r.taille);
 
   for (const dossier of page) {
+    if (dossier.etat === 'RESOLU') continue;
     if (event.target.checked) r.cochees.add(dossier.id);
     else r.cochees.delete(dossier.id);
   }
