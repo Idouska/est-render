@@ -119,6 +119,12 @@
 
   /* Liseré clair sur l'arête haute : c'est lui qui donne l'épaisseur. Une
      ombre sans lumière ne fait pas du relief, elle fait une tache. */
+  /* ATTENTION — ce jeton vaut `none` depuis la couche densité (voir plus bas).
+     Or `box-shadow: <ombre>, none` est INVALIDE : la déclaration entière est
+     rejetée et la propriété retombe à `none`. Vingt-trois règles étaient dans
+     ce cas ; les sept qui pointaient sur --e3 et --e4 — des surfaces qui
+     flottent vraiment, dont la palette ⌘K — n'avaient donc plus d'ombre du
+     tout. Ne pas réintroduire ce motif : écrire `var(--eN)` seul. */
   --edge: inset 0 1px 0 rgb(255 255 255 / 90%);
 
   /* Échelle d'élévation. Chaque niveau superpose une ombre de contact serrée
@@ -2192,7 +2198,7 @@ body::before {
 .card,
 .kpi,
 .side {
-  background-image: var(--grad-surface);
+  background: var(--grad-surface);
   box-shadow: var(--e2), var(--edge);
   border-color: color-mix(in srgb, var(--line) 80%, transparent);
 }
@@ -2206,8 +2212,8 @@ body::before {
 .sheet,
 .modal,
 .toast {
-  box-shadow: var(--e4), var(--edge);
-  background-image: var(--grad-raised);
+  box-shadow: var(--e4);
+  background: var(--grad-raised);
 }
 
 /* ------------------------------------------------------- typographie --- */
@@ -2255,7 +2261,7 @@ body::before {
    déclaration du bouton principal, et un `background-image` nu y écraserait
    son dégradé coloré — le bouton d'envoi devenait blanc sur blanc. */
 .btn:not(.btn-primary):not(.btn-danger) {
-  background-image: var(--grad-raised);
+  background: var(--grad-raised);
 }
 
 .btn {
@@ -2717,8 +2723,8 @@ textarea:focus-visible {
   z-index: 90;
   padding: 14px 16px;
   border-radius: var(--r-lg);
-  background-image: var(--grad-raised);
-  box-shadow: var(--e4), var(--edge);
+  background: var(--grad-raised);
+  box-shadow: var(--e4);
   border: 1px solid var(--line);
   font-size: 13px;
 }
@@ -2827,8 +2833,8 @@ textarea:focus-visible {
   gap: 2px;
   border-radius: var(--r-md);
   border: 1px solid var(--line);
-  background-image: var(--grad-raised);
-  box-shadow: var(--e4), var(--edge);
+  background: var(--grad-raised);
+  box-shadow: var(--e4);
 }
 
 .snooze-menu button {
@@ -2884,8 +2890,8 @@ textarea:focus-visible {
   width: min(560px, 100%);
   border-radius: var(--r-lg);
   border: 1px solid var(--line);
-  background-image: var(--grad-raised);
-  box-shadow: var(--e4), var(--edge);
+  background: var(--grad-raised);
+  box-shadow: var(--e4);
   overflow: hidden;
 }
 
@@ -3000,7 +3006,7 @@ textarea:focus-visible {
 .clocks {
   padding: 4px;
   border-radius: 999px;
-  background-image: var(--grad-raised);
+  background: var(--grad-raised);
   box-shadow: var(--e2), var(--edge);
 }
 
@@ -3459,7 +3465,7 @@ textarea:focus-visible {
   padding: 0;
   border-radius: var(--r-lg);
   border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
-  background-image: var(--grad-surface);
+  background: var(--grad-surface);
   box-shadow: var(--e1), var(--edge);
   overflow: hidden;
 }
@@ -3688,7 +3694,7 @@ textarea:focus-visible {
    méprise que sur le bouton d'envoi il y a quelques jours. */
 .qchip:not([aria-pressed='true']),
 .filters .chip:not([aria-pressed='true']) {
-  background-image: var(--grad-raised);
+  background: var(--grad-raised);
 }
 
 .qchip[aria-pressed='true'],
@@ -3701,7 +3707,7 @@ textarea:focus-visible {
   font-size: 12.5px;
   border-radius: 999px;
   border: 1px solid var(--line);
-  background-image: var(--grad-raised);
+  background: var(--grad-raised);
   box-shadow: var(--e1), var(--edge);
   color: var(--ink);
   appearance: none;
@@ -3713,10 +3719,14 @@ textarea:focus-visible {
 /* Le chevron est dessiné plutôt qu'hérité : celui du système impose sa propre
    couleur et sa propre taille, et jure avec le reste. */
 .qbar-selects select {
-  background-image: var(--grad-raised),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6' fill='none' stroke='%23838aa0' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M1 1l4 4 4-4'/%3E%3C/svg%3E");
-  background-position: center, right 9px center;
-  background-size: auto, 9px;
+  /* Le jeton est devenu une COULEUR : empilé avec le chevron dans
+     `background-image`, il rendait la déclaration entière invalide — et le
+     chevron disparaissait avec lui. La couleur passe donc à sa propriété. */
+  background-color: var(--grad-raised);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6' fill='none' stroke='%23838aa0' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M1 1l4 4 4-4'/%3E%3C/svg%3E");
+  background-position: right 9px center;
+  background-repeat: no-repeat;
+  background-size: 9px;
 }
 
 /* Les intitulés accompagnent leur menu : minuscules, discrets, sans espacement
@@ -3757,7 +3767,7 @@ textarea:focus-visible {
   font-size: 13.5px;
   font-weight: 550;
   border-radius: var(--r-md);
-  background-image: var(--grad-raised);
+  background: var(--grad-raised);
   box-shadow: var(--e1), var(--edge);
   transition: transform 0.14s var(--ease), box-shadow 0.14s var(--ease);
 }
@@ -4040,7 +4050,7 @@ textarea:focus-visible {
 .rights {
   border-radius: var(--r-lg);
   border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
-  background-image: var(--grad-surface);
+  background: var(--grad-surface);
   box-shadow: var(--e1), var(--edge);
   overflow: hidden;
 }
@@ -4106,7 +4116,7 @@ textarea:focus-visible {
   padding: 0 11px;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background-image: var(--grad-raised);
+  background: var(--grad-raised);
   box-shadow: var(--e1), var(--edge);
   font: inherit;
   font-size: 12px;
@@ -4256,9 +4266,8 @@ textarea:focus-visible {
   padding: 10px;
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
-  background: var(--surface);
-  background-image: var(--grad-raised);
-  box-shadow: var(--e4), var(--edge);
+  background: var(--grad-raised);
+  box-shadow: var(--e4);
 }
 
 /* Bouton de suivi du rail latéral : pleine largeur, il ne se cherche pas. */
@@ -4394,8 +4403,7 @@ textarea:focus-visible {
   flex-wrap: wrap;
   padding: 9px 11px;
   border-bottom: 1px solid var(--line);
-  background: var(--surface);
-  background-image: var(--grad-raised);
+  background: var(--grad-raised);
   box-shadow: var(--e2);
 }
 .bulk b { font-size: 13px; white-space: nowrap; }
@@ -4472,9 +4480,8 @@ textarea:focus-visible {
   padding: 18px 20px;
   border: 1px solid var(--line);
   border-radius: var(--r-xl);
-  background: var(--surface);
-  background-image: var(--grad-raised);
-  box-shadow: var(--e4), var(--edge);
+  background: var(--grad-raised);
+  box-shadow: var(--e4);
 }
 
 .ckcard {
@@ -4572,8 +4579,7 @@ textarea:focus-visible {
   border: 1px solid var(--line);
   border-left-width: 5px;
   border-radius: var(--r-lg);
-  background: var(--surface);
-  background-image: var(--grad-surface);
+  background: var(--grad-surface);
   box-shadow: var(--e1), var(--edge);
   padding: 13px 16px;
   margin-bottom: 10px;
@@ -4720,9 +4726,8 @@ textarea:focus-visible {
   overflow-y: auto;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: var(--surface);
-  background-image: var(--grad-raised);
-  box-shadow: var(--e4), var(--edge);
+  background: var(--grad-raised);
+  box-shadow: var(--e4);
   padding: 5px;
 }
 
@@ -4996,7 +5001,7 @@ textarea:focus-visible {
   padding: 0 12px;
   border: 1px solid var(--line);
   border-radius: var(--r-md);
-  background-image: var(--grad-raised);
+  background: var(--grad-raised);
   box-shadow: var(--e1), var(--edge);
   font: inherit;
   font-size: 12.5px;
@@ -5054,7 +5059,7 @@ textarea:focus-visible {
   padding: 0 11px;
   border: 1px solid var(--line);
   border-radius: var(--r-md);
-  background-image: var(--grad-raised);
+  background: var(--grad-raised);
   box-shadow: var(--e1), var(--edge);
   color: var(--ink-mute);
 }
@@ -5586,7 +5591,14 @@ textarea:focus-visible {
   --ground: #f2f3f7;
 
   /* Les dégradés de surface s'aplatissent : un outil n'a pas de relief, il a
-     des bords. */
+     des bords.
+
+     Conséquence à retenir : depuis cette couche, `--grad-*` porte une COULEUR
+     et non un dégradé. Une couleur n'est pas un <image> : `background-image:
+     var(--grad-raised)` devient invalide, la déclaration entière est jetée, et
+     l'élément garde le fond d'avant — sans la moindre erreur, ni dans la
+     console ni à l'inspecteur, qui affiche la règle barrée. Ces jetons ne
+     s'emploient donc qu'avec `background`. */
   --grad-surface: #ffffff;
   --grad-raised: #ffffff;
   --edge: none;
@@ -6665,12 +6677,21 @@ textarea:focus-visible {
 .head-search {
   appearance: none;
   flex: 1;
-  min-width: 0;
-  max-width: 420px;
+  /* Le PLANCHER, pas le plafond.
+
+     Ce champ est devenu la seule recherche du produit, celui de la barre de
+     filtres ayant disparu. Il s'affichait « Recherch… » : j'ai d'abord relevé
+     son `max-width`, sans effet — la contrainte n'était pas le plafond mais
+     `min-width: 0`, qui le laissait s'écraser à cent cinquante pixels dès que
+     la ligne du titre se remplissait. Deux cent quarante lui suffisent pour
+     porter son invite entière ; ce sont les pastilles de connexion qui
+     cèdent, elles se coupent déjà proprement. */
+  min-width: 240px;
+  max-width: 560px;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 10px;
+  padding: 7px 12px;
   border: 1px solid var(--line);
   border-radius: var(--r-md);
   background: var(--surface);
@@ -6683,6 +6704,9 @@ textarea:focus-visible {
 
 .head-search:hover { border-color: var(--accent); color: var(--ink-soft); }
 .head-search svg { width: 14px; height: 14px; flex: none; }
+/* Le `text-overflow` est un filet de sécurité, pas le fonctionnement normal :
+   l'invite est choisie pour tenir entière partout où le champ s'affiche. S'il
+   se déclenche, c'est que le texte a été rallongé — à corriger, pas à subir. */
 .head-search span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .head-search kbd {
@@ -6859,7 +6883,12 @@ textarea:focus-visible {
 /* Un point de couleur au repos, la couleur entière quand le libellé filtre.
    Onze pastilles peintes en permanence font un arc-en-ciel où plus rien ne
    ressort — et c'est le libellé retenu qui doit se voir. */
-.ql-chip { display: inline-flex; align-items: center; gap: 6px; }
+/* Un libellé Gmail n'a pas de longueur maximale : le marchand en écrit ce
+   qu'il veut. Sans plafond, une seule pastille très longue dépasse la bande et
+   pousse la ligne. Elle s'abrège donc chez elle — l'attribut `title` porte le
+   nom entier. */
+.ql-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 240px; }
+.ql-nom { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .ql-dot {
   width: 7px;
@@ -7211,12 +7240,14 @@ html, body { overflow-x: clip; }
 /* Une seule ligne, et c'est la bande de libellés qui cède : elle défile,
    les menus et la bascule de vue ne bougent pas. Sans `nowrap`, la rangée
    passait à deux lignes dès 1440 px parce que les pastilles poussaient. */
-.qbar-main { gap: 7px; align-items: center; flex-wrap: nowrap; }
+/* La rangée s'aligne en haut dès que les libellés prennent deux lignes :
+   centrés, les menus flotteraient au milieu d'une bande devenue haute. */
+.qbar-main { gap: 7px; align-items: flex-start; flex-wrap: nowrap; }
+.qbar-main > *:not(.qlabels-wrap) { align-self: center; }
 .qbar-main input[type='search'] { flex: 0 1 240px; min-width: 150px; }
 
-/* Les libellés prennent la place qui reste, et se coupent au lieu de pousser
-   les menus hors de la ligne. Le « +N » se tient à côté de la bande, hors du
-   défilement : sinon il sortait du champ juste quand il devenait utile. */
+/* Les libellés prennent la place qui reste sur la ligne, et débordent en
+   rangées plutôt que de pousser les menus dehors. */
 .qbar-main .qlabels-wrap {
   display: flex;
   align-items: center;
@@ -7227,29 +7258,40 @@ html, body { overflow-x: clip; }
 
 .qbar-main .qlabels {
   display: flex;
-  flex-wrap: nowrap;
+  /* Ils passent à la ligne plutôt que de défiler.
+
+     Le défilement latéral supposait un plafond — six dehors, le reste caché.
+     Sans plafond, il cacherait la moitié des libellés derrière un geste que
+     rien n'annonce : une bande qui défile sans barre ne se voit pas. Le
+     retour à la ligne les montre tous, au prix d'une seconde rangée quand la
+     largeur ne suffit pas. C'est ce qui a été demandé, et c'est le bon
+     arbitrage : un filtre qu'on ne voit pas n'existe pas. */
+  flex-wrap: wrap;
   align-items: center;
   gap: 5px;
-  flex: 1 1 auto;
+  flex: 1 1 260px;
   min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
   padding: 1px 0;
 }
-.qbar-main .qlabels::-webkit-scrollbar { display: none; }
 .qbar-main .qlabels .chip { flex: none; }
 
-/* Le dégradé n'est posé que si la bande déborde vraiment : c'est une classe
-   que le rendu ajoute après mesure, pas une règle de largeur d'écran. */
-.qbar-main .qlabels.deborde {
-  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
-  mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
+
+/* Le terme de recherche actif : une pastille qui se retire d'un clic. Elle
+   remplace le champ disparu comme seul témoin d'un filtre texte. */
+.qterm { flex: none; display: inline-flex; }
+.qterm[hidden] { display: none; }
+
+.qterm-chip {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  border-color: transparent;
+  font-weight: 600;
+  white-space: nowrap;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.qbar-main .qlabels-more { flex: none; display: inline-flex; }
-.qbar-main .qlabels-more:empty { display: none; }
-
-.ql-more { font-weight: 600; color: var(--ink-mute); }
 .qbar-main .qbar-count { flex: none; margin-left: 0; }
 
 
@@ -8171,7 +8213,7 @@ html, body { overflow-x: clip; }
     padding: 4px 2px;
     border-radius: var(--r-lg);
     border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
-    background-image: var(--grad-surface);
+    background: var(--grad-surface);
     box-shadow: var(--e1), var(--edge);
   }
 
@@ -8636,3 +8678,4 @@ html, body { overflow-x: clip; }
   .tr-lab b { display: none; }
   .tr-vals { font-size: 9.5px; }
 }
+
