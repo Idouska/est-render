@@ -593,6 +593,12 @@ body {
 
 .notice code { font-family: var(--font-mono); font-size: 12px; }
 
+/* Un `.notice` qui signale un manque plutôt qu'un contexte. L'accent dit
+   « voici une information » ; l'ambre dit « quelque chose n'a pas marché »,
+   ce qui n'est pas la même lecture. Les deux encres tiennent l'AA sur leur
+   fond : 4,68:1 en clair, 7,18:1 en sombre. */
+.notice-warn { background: var(--warn-soft); color: var(--warn-ink); }
+
 /* ========================================================== indicateurs == */
 
 .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(196px, 1fr)); gap: 13px; }

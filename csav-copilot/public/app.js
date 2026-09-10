@@ -47,6 +47,12 @@ const state = {
   refundFilter: '',
   settings: null,
   view: 'tickets',
+  /* La file a-t-elle répondu au moins une fois ?
+     `tickets: []` ne le dit pas : un tableau vide, c'est aussi bien « aucun
+     message » que « on n'a pas encore demandé ». Le poste de pilotage tire
+     quatre de ses alertes de ce tableau ; sans ce drapeau, il annonce
+     « 0 SLA dépassé » avant même d'avoir regardé. */
+  queueLoaded: false,
   orders: {
     items: [], cursor: null, hasNext: false, q: '', loading: false, loaded: false, timer: null,
     sort: 'recent', payment: '', delivery: '',
@@ -1078,6 +1084,7 @@ async function loadQueue({ append = false } = {}) {
 
   state.queueCursor = data.nextCursor ?? null;
   state.tickets = append ? [...state.tickets, ...data.tickets] : data.tickets;
+  state.queueLoaded = true;
   state.queueCounts = data.counts ?? {};
   state.queueFolders = data.folders ?? {};
   state.queueLabels = data.labels ?? state.queueLabels ?? [];
@@ -6305,6 +6312,8 @@ async function loadOverview() {
   const stats = sRes.status === 'fulfilled' ? sRes.value : null;
   const counts = metrics?.tickets ?? {};
 
+  renderOvPanne({ metrics: metrics !== null, stats: stats !== null });
+
   renderOvKpis(metrics, counts);
   renderOvPriorite();
   renderOvRisques(metrics, counts);
@@ -6313,6 +6322,34 @@ async function loadOverview() {
   renderOvTendance(stats);
   renderOvIntentions(stats);
   await renderOvActions();
+}
+
+/*
+ * Le bandeau qui explique les tirets.
+ *
+ * Les deux appels de cet écran sont indépendants et lancés ensemble : l'un
+ * peut manquer sans l'autre. Nommer celui qui manque évite la lecture la plus
+ * coûteuse — « l'outil est cassé » — au profit de la vraie : « ce chiffre-là
+ * n'a pas pu être lu, réessayez ». C'est aussi la seule façon de savoir quels
+ * tirets sont des mesures et lesquels sont des absences.
+ */
+function renderOvPanne({ metrics, stats }) {
+  const boite = $('ov-panne');
+  if (!boite) return;
+
+  const manquants = [
+    metrics ? null : 'les compteurs',
+    stats ? null : 'la tendance sur sept jours',
+  ].filter((nom) => nom !== null);
+
+  boite.hidden = manquants.length === 0;
+  if (manquants.length === 0) return;
+
+  const liste = manquants.join(' et ');
+  $('ov-panne-txt').innerHTML =
+    `<b>Chiffres incomplets.</b> ${esc(liste[0].toUpperCase() + liste.slice(1))} ` +
+    `${manquants.length > 1 ? 'n’ont' : 'n’a'} pas répondu. ` +
+    'Les tirets de cet écran marquent ce qui n’a pas pu être lu — ce ne sont pas des zéros.';
 }
 
 /*
@@ -6392,6 +6429,24 @@ function ovNombre(valeur) {
   return typeof valeur === 'number' ? String(valeur) : '—';
 }
 
+/*
+ * Un compte par statut, qui distingue « zéro » de « on ne sait pas ».
+ *
+ * `counts` vient de `metrics.tickets`, et le serveur n'y met que les statuts
+ * réellement présents : une clé absente signifie donc bien zéro — mais
+ * seulement si les indicateurs ont répondu. Quand ils n'ont pas répondu,
+ * `counts` est un objet vide et TOUTES les clés manquent, ce qui est
+ * indiscernable de « aucun ticket nulle part ».
+ *
+ * D'où le `metrics` en premier argument : c'est lui qui porte la différence.
+ * Écrire `counts.X ?? 0` la perdait et affichait « 0 » — c'est-à-dire « tout
+ * va bien » — sur le seul écran qu'on consulte pour savoir si quelque chose
+ * brûle. Un tiret n'informe pas moins : il informe autre chose.
+ */
+function ovCompte(metrics, counts, cle) {
+  return metrics ? String(counts[cle] ?? 0) : '—';
+}
+
 /* ---- les cinq chiffres du haut ---- */
 
 function renderOvKpis(metrics, counts) {
@@ -6403,13 +6458,19 @@ function renderOvKpis(metrics, counts) {
       : '—';
 
   const cartes = [
-    ['inbox', 'En attente de vous', '', ovNombre(metrics?.pending), `${counts.NEEDS_REVIEW ?? 0} à valider`],
-    ['inbox', 'Brouillons prêts', '', ovNombre(counts.DRAFT_READY ?? 0), 'relecture puis envoi'],
+    [
+      'inbox',
+      'En attente de vous',
+      '',
+      ovNombre(metrics?.pending),
+      metrics ? `${counts.NEEDS_REVIEW ?? 0} à valider` : 'compteur indisponible',
+    ],
+    ['inbox', 'Brouillons prêts', '', ovCompte(metrics, counts, 'DRAFT_READY'), 'relecture puis envoi'],
     // La fenêtre est dans l'intitulé, pas dans la note : « 2 h 06 » suivi de
     // « sur 30 jours » se lisait comme un commentaire, alors que c'est ce qui
     // définit la mesure.
     ['clock', '1re réponse moyenne', '30 j', delai, 'du message à la réponse'],
-    ['bolt', 'Chez le fournisseur', '', ovNombre(counts.AWAITING_SUPPLIER ?? 0), 'en attente de réponse'],
+    ['bolt', 'Chez le fournisseur', '', ovCompte(metrics, counts, 'AWAITING_SUPPLIER'), 'en attente de réponse'],
     ['shield', 'Traités', 'aujourd’hui', ovNombre(metrics?.today), 'depuis ce matin'],
   ];
 
@@ -6510,7 +6571,11 @@ function renderOvPriorite() {
           </tr>`,
         )
         .join('')
-    : `<tr><td colspan="7" class="empty" style="padding:18px 14px">Rien en attente.</td></tr>`;
+    : `<tr><td colspan="7" class="empty" style="padding:18px 14px">${
+        state.queueLoaded
+          ? 'Rien en attente.'
+          : 'File non chargée : ouvrez « SAV client » ou rafraîchissez.'
+      }</td></tr>`;
 
   // Une ligne s'ouvre au clic et à l'entrée : la table se parcourt au clavier
   // comme la file.
@@ -6648,33 +6713,42 @@ function renderOvRisques(metrics, counts) {
   const litiges = ouverts.filter((t) => t.intent === 'DISPUTE').length;
   const retard = metrics?.suppliersLate ?? null;
 
+  /*
+   * Ces quatre lignes se comptent sur la file déjà chargée, pas sur une
+   * requête à elles. Tant qu'elle n'a pas répondu, `state.tickets` est vide —
+   * et un tableau vide donne quatre zéros, c'est-à-dire quatre fois « rien
+   * ne presse », sur le panneau dont c'est précisément le contraire du rôle.
+   */
+  const deLaFile = (nombre) => (state.queueLoaded ? String(nombre) : '—');
+  const tonSiChargee = (nombre, ton) => (state.queueLoaded && nombre > 0 ? ton : null);
+
   const lignes = [
     {
       label: 'SLA dépassé',
       ico: 'clock',
-      valeur: String(horsDelai),
-      ton: horsDelai > 0 ? 'bad' : null,
+      valeur: deLaFile(horsDelai),
+      ton: tonSiChargee(horsDelai, 'bad'),
       filtre: { sort: 'due' },
       aide: `Messages dont l’échéance de première réponse est passée. Le délai est celui réglé pour la boutique.`,
     },
     {
       label: 'Sans réponse > 24 h',
       ico: 'clock',
-      valeur: String(plusVieuxQue(24)),
-      ton: plusVieuxQue(24) > 0 ? 'warn' : null,
+      valeur: deLaFile(plusVieuxQue(24)),
+      ton: tonSiChargee(plusVieuxQue(24), 'warn'),
       filtre: { urgent: true },
     },
     {
       label: 'Sans réponse > 48 h',
       ico: 'clock',
-      valeur: String(plusVieuxQue(48)),
-      ton: plusVieuxQue(48) > 0 ? 'bad' : null,
+      valeur: deLaFile(plusVieuxQue(48)),
+      ton: tonSiChargee(plusVieuxQue(48), 'bad'),
       filtre: { urgent: true },
     },
-    { label: 'Litiges ouverts', valeur: String(litiges), filtre: { intent: 'DISPUTE' }, ico: 'shield' },
+    { label: 'Litiges ouverts', valeur: deLaFile(litiges), filtre: { intent: 'DISPUTE' }, ico: 'shield' },
     {
       label: 'Chez le fournisseur',
-      valeur: ovNombre(counts.AWAITING_SUPPLIER ?? 0),
+      valeur: ovCompte(metrics, counts, 'AWAITING_SUPPLIER'),
       filtre: { status: 'AWAITING_SUPPLIER' },
       ico: 'truck',
       aide: 'Messages en attente d’un atelier. Ils ne sont pas en retard pour autant : la ligne suivante dit lesquels le sont.',
@@ -6699,8 +6773,11 @@ function renderOvRisques(metrics, counts) {
     },
     {
       label: 'Non compris par l’IA',
-      valeur: ovNombre(metrics?.failed ?? 0),
-      ton: (metrics?.failed ?? 0) > 0 ? 'bad' : null,
+      // `metrics.failed` vaut toujours un nombre quand la réponse est là :
+      // `ovNombre` rend donc « — » exactement quand elle manque. Le `?? 0`
+      // d'avant transformait ce manque en « aucun échec ».
+      valeur: ovNombre(metrics?.failed),
+      ton: metrics?.failed > 0 ? 'bad' : null,
       filtre: { status: 'FAILED' },
       ico: 'bolt',
       aide: 'Messages que la classification n’a pas su traiter : ils attendent une reprise à la main.',
@@ -6746,7 +6823,9 @@ function renderOvPerf(metrics, stats) {
       label: 'SLA respecté',
       valeur: respect,
       ton: avecEcheance.length && dansLesTemps / avecEcheance.length < 0.9 ? 'warn' : null,
-      aide: `Part des messages ouverts dont l’échéance n’est pas dépassée, sur les ${avecEcheance.length} qui en portent une.`,
+      aide: state.queueLoaded
+        ? `Part des messages ouverts dont l’échéance n’est pas dépassée, sur les ${avecEcheance.length} qui en portent une.`
+        : 'File non chargée : rien n’a encore été mesuré.',
     },
   ]
     .map(ovStatLigne)
@@ -6776,13 +6855,16 @@ function renderOvIa(metrics, stats, counts) {
     },
     {
       label: 'À valider par un humain',
-      valeur: ovNombre(counts.NEEDS_REVIEW ?? 0),
+      valeur: ovCompte(metrics, counts, 'NEEDS_REVIEW'),
       filtre: { status: 'NEEDS_REVIEW' },
     },
     {
       label: 'Non compris par l’IA',
-      valeur: ovNombre(metrics?.failed ?? 0),
-      ton: (metrics?.failed ?? 0) > 0 ? 'bad' : null,
+      // `metrics.failed` vaut toujours un nombre quand la réponse est là :
+      // `ovNombre` rend donc « — » exactement quand elle manque. Le `?? 0`
+      // d'avant transformait ce manque en « aucun échec ».
+      valeur: ovNombre(metrics?.failed),
+      ton: metrics?.failed > 0 ? 'bad' : null,
       filtre: { status: 'FAILED' },
     },
   ]
@@ -6794,16 +6876,31 @@ function renderOvIa(metrics, stats, counts) {
 /* ---- la semaine ---- */
 
 function renderOvTendance(stats) {
-  const jours = stats?.tickets?.daily ?? [];
+  // « Pas encore de données » est une phrase rassurante : elle dit que
+  // l'outil fonctionne et que l'histoire commence. La servir quand l'appel a
+  // échoué ment sur la cause, et personne ne pense à rafraîchir.
+  if (!stats) {
+    $('ov-trend').innerHTML =
+      '<p class="empty">Tendance indisponible : les statistiques n’ont pas répondu.</p>';
+    return;
+  }
+
+  const jours = stats.tickets?.daily ?? [];
   $('ov-trend').innerHTML = jours.length
     ? tendanceHtml(jours)
     : '<p class="empty">Pas encore de données sur sept jours.</p>';
 }
 
 function renderOvIntentions(stats) {
+  if (!stats) {
+    $('ov-intents').innerHTML =
+      '<p class="empty">Répartition indisponible : les statistiques n’ont pas répondu.</p>';
+    return;
+  }
+
   // La part se compare, le volume se vérifie : « 41 % » ne dit pas si c'est
   // sur mille demandes ou sur douze. Les deux, la part en avant.
-  $('ov-intents').innerHTML = intentBars(stats?.tickets?.byIntent, { part: true, volume: true });
+  $('ov-intents').innerHTML = intentBars(stats.tickets?.byIntent, { part: true, volume: true });
 }
 
 /*
