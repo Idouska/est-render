@@ -8945,6 +8945,13 @@ const VIEW_META = {
   customers: { icon: 'users', label: 'Clients', group: 'Commerce', title: 'Clients' },
   catalog: { icon: 'box', label: 'Catalogue', group: 'Commerce', title: 'Catalogue' },
   suppliers: { icon: 'truck', label: 'Fournisseurs', group: 'Fournisseur', title: 'Contacts fournisseurs' },
+  ruptures: {
+    icon: 'box',
+    label: 'Ruptures de stock',
+    group: 'Fournisseur',
+    title: 'Ruptures de stock',
+    sous: 'Commandes nécessitant une action suite à une indisponibilité produit',
+  },
   returns: { icon: 'box', label: 'Reshipment', group: 'Fournisseur', title: 'Reshipment — retours clients' },
   changes: { icon: 'bolt', label: 'Update', group: 'Fournisseur', title: 'Update — demandes de changement' },
   tracking: { icon: 'pin', label: 'Suivi colis', group: 'Fournisseur', title: 'Suivi des colis' },
@@ -9422,6 +9429,7 @@ const VIEW_LOADERS = {
     void loadSupplierHub();
   },
   changes: () => loadChanges(),
+  ruptures: () => loadRuptures(),
   returns: () => loadReturns(),
   tracking: () => loadTracking(),
   refunds: () => loadRefunds(),
@@ -13116,4 +13124,893 @@ $('fail-alarm-retry')?.addEventListener('click', async () => {
     button.disabled = false;
     button.textContent = 'Relancer';
   }
+});
+
+/* ==================================================== ruptures de stock ==
+ *
+ * La console des ruptures.
+ *
+ * Une rupture n'est pas une intention de mail : c'est une escalade
+ * fournisseur portant `reason: OUT_OF_STOCK`. Cet écran ne crée donc aucun
+ * objet et n'ouvre aucune machine d'état parallèle — il relit ce que
+ * l'escalade, le ticket et la commande disent déjà, et les présente comme un
+ * poste de travail.
+ *
+ * TOUT CE QU'IL MONTRE EXISTE. Pas de stock inventé, pas de fournisseur
+ * deviné, pas d'alternative proposée sur une ressemblance de nom. Ce que la
+ * base ne sait pas, l'écran le dit — et là où le visuel de référence promet
+ * une donnée que le produit ne détient pas, la colonne a été remplacée par
+ * une qui se compte vraiment.
+ */
+
+state.ruptures = {
+  dossiers: [],
+  kpis: null,
+  compteurs: {},
+  shopifyError: null,
+  vue: 'tous',
+  q: '',
+  fournisseur: '',
+  priorite: '',
+  tri: 'recent',
+  page: 1,
+  taille: 10,
+  cochees: new Set(),
+  courant: null,
+  chargement: false,
+  erreur: null,
+  /** Alternatives du dossier ouvert : cherchées à la sélection, jamais par ligne. */
+  alternatives: null,
+};
+
+const RUP_LIBELLES = {
+  A_TRAITER: 'À traiter',
+  CLIENT_A_PREVENIR: 'Client à prévenir',
+  FOURNISSEUR_EN_ATTENTE: 'Fournisseur en attente',
+  FOURNISSEUR_CONTACTE: 'Fournisseur contacté',
+  REMBOURSEMENT: 'Remboursement',
+  RESOLU: 'Résolu',
+};
+
+/* L'ordre des vues suit celui du travail : ce qui n'a pas commencé, ce qui
+   attend quelqu'un d'autre, ce qui attend un geste de nous, puis l'archive. */
+const RUP_VUES = [
+  'tous',
+  'A_TRAITER',
+  'CLIENT_A_PREVENIR',
+  'FOURNISSEUR_EN_ATTENTE',
+  'FOURNISSEUR_CONTACTE',
+  'REMBOURSEMENT',
+  'RESOLU',
+];
+
+async function loadRuptures() {
+  const r = state.ruptures;
+  r.chargement = true;
+  r.erreur = null;
+  renderRuptures();
+
+  try {
+    const data = await api('/api/ruptures');
+    r.dossiers = data.dossiers ?? [];
+    r.kpis = data.kpis ?? null;
+    r.compteurs = data.compteurs ?? {};
+    r.shopifyError = data.shopifyError ?? null;
+
+    // Une sélection qui ne désigne plus rien laisserait un panneau figé sur un
+    // dossier disparu, ce qui se lit comme un écran qui ne se rafraîchit pas.
+    const ids = new Set(r.dossiers.map((d) => d.id));
+    for (const id of [...r.cochees]) if (!ids.has(id)) r.cochees.delete(id);
+    if (r.courant && !ids.has(r.courant)) r.courant = null;
+  } catch (error) {
+    r.erreur = error.message;
+  } finally {
+    r.chargement = false;
+    renderRuptures();
+  }
+}
+
+/** Les dossiers de la vue courante, filtrés et triés — la liste avant pagination. */
+function rupturesFiltrees() {
+  const r = state.ruptures;
+  const terme = r.q.trim().toLowerCase();
+
+  let liste = r.dossiers.filter((d) => {
+    if (r.vue === 'tous') {
+      // « Tous » est la vue de travail : les dossiers clos ont la leur.
+      if (d.etat === 'RESOLU') return false;
+    } else if (d.etat !== r.vue) return false;
+
+    if (r.fournisseur && d.fournisseur?.id !== r.fournisseur) return false;
+    if (r.priorite && d.priorite !== r.priorite) return false;
+
+    if (!terme) return true;
+    return [
+      d.client?.nom,
+      d.client?.email,
+      d.commande?.nom,
+      d.article?.titre,
+      d.article?.sku,
+      d.article?.variante,
+      d.fournisseur?.name,
+    ]
+      .filter(Boolean)
+      .some((champ) => String(champ).toLowerCase().includes(terme));
+  });
+
+  const rang = { haute: 0, moyenne: 1, basse: 2 };
+  const date = (d) => new Date(d.creeLe).getTime();
+
+  if (r.tri === 'ancien') liste = [...liste].sort((a, b) => date(a) - date(b));
+  else if (r.tri === 'impact')
+    liste = [...liste].sort((a, b) => b.commandesImpactees - a.commandesImpactees || date(b) - date(a));
+  else if (r.tri === 'priorite')
+    liste = [...liste].sort(
+      (a, b) => (rang[a.priorite] ?? 3) - (rang[b.priorite] ?? 3) || date(b) - date(a),
+    );
+  else liste = [...liste].sort((a, b) => date(b) - date(a));
+
+  return liste;
+}
+
+function renderRuptures() {
+  const r = state.ruptures;
+  if (!$('rup-rows')) return;
+
+  renderRuptureKpis();
+  renderRuptureTabs();
+  renderRuptureFiltres();
+
+  const boite = $('rup-shopify');
+  boite.hidden = !r.shopifyError;
+  if (r.shopifyError) {
+    $('rup-shopify-txt').innerHTML =
+      `<b>Détail produit incomplet.</b> ${esc(r.shopifyError)} Les dossiers, les ` +
+      'fournisseurs et les états restent justes : ils viennent de votre base.';
+  }
+
+  const liste = rupturesFiltrees();
+  const pages = Math.max(1, Math.ceil(liste.length / r.taille));
+  if (r.page > pages) r.page = pages;
+  const page = liste.slice((r.page - 1) * r.taille, r.page * r.taille);
+
+  renderRuptureLignes(page, liste.length);
+  renderRupturePager(liste.length, pages);
+  renderRupturePanneau();
+
+  $('rup-count').textContent = liste.length
+    ? `${liste.length} dossier${liste.length > 1 ? 's' : ''}`
+    : '';
+
+  const bulk = $('rup-bulk');
+  bulk.hidden = r.cochees.size === 0;
+  bulk.textContent = `Marquer ${r.cochees.size} dossier${
+    r.cochees.size > 1 ? 's' : ''
+  } résolu${r.cochees.size > 1 ? 's' : ''}`;
+}
+
+function renderRuptureKpis() {
+  const k = state.ruptures.kpis;
+  const n = (valeur) => (typeof valeur === 'number' ? String(valeur) : '—');
+
+  /*
+   * Cinq chiffres, et le cinquième porte son effectif.
+   *
+   * Le visuel de référence montre une évolution sous chaque KPI — « ↓ 25 % vs
+   * 30 derniers jours ». Rien en base ne conserve l'état d'hier : l'afficher
+   * demanderait de l'inventer, c'est-à-dire de mettre une flèche verte sur un
+   * chiffre qui n'a été comparé à rien. La sous-ligne dit donc ce que le
+   * chiffre couvre, ce qui est vrai et plus utile qu'une tendance fausse.
+   */
+  const cartes = [
+    ['box', 'Ruptures actives', n(k?.rupturesActives), 'références bloquées'],
+    ['bag', 'Commandes impactées', n(k?.commandesImpactees), 'dossiers ouverts'],
+    ['users', 'Clients à prévenir', n(k?.clientsAPrevenir), 'réponse reçue, non transmise'],
+    ['truck', 'En attente fournisseur', n(k?.enAttenteFournisseur), 'sans réponse'],
+    [
+      'clock',
+      'Délai moyen de résolution',
+      typeof k?.resolutionMinutes === 'number' ? duration(k.resolutionMinutes) : '—',
+      k?.resolutionMesuree
+        ? `sur ${k.resolutionMesuree} dossier${k.resolutionMesuree > 1 ? 's' : ''} clos`
+        : 'aucun dossier clos',
+    ],
+  ];
+
+  $('rup-kpis').innerHTML = cartes
+    .map(
+      ([icone, label, valeur, sous]) => `<div class="kpi">
+        <span class="kpi-ico" data-ico="${esc(icone)}" aria-hidden="true"></span>
+        <span class="kpi-body">
+          <span class="kpi-label">${esc(label)}</span>
+          <span class="kpi-value">${esc(valeur)}</span>
+          <span class="kpi-note rup-kpi-sub">${esc(sous)}</span>
+        </span>
+      </div>`,
+    )
+    .join('');
+
+  paintKpiIcons($('rup-kpis'));
+}
+
+function renderRuptureTabs() {
+  const r = state.ruptures;
+
+  $('rup-tabs').innerHTML = RUP_VUES.map((vue) => {
+    const compte = r.compteurs[vue] ?? 0;
+    const label = vue === 'tous' ? 'Tous' : RUP_LIBELLES[vue];
+    return `<button class="rup-tab" type="button" role="tab" data-rup-vue="${esc(vue)}"
+      aria-selected="${vue === r.vue}">${esc(label)}${
+        compte ? `<span class="rup-tab-n">${compte}</span>` : ''
+      }</button>`;
+  }).join('');
+}
+
+function renderRuptureFiltres() {
+  const r = state.ruptures;
+
+  // La liste des fournisseurs vient des dossiers eux-mêmes : proposer un
+  // fournisseur qui ne filtre rien donne un menu qui ne sert qu'à échouer.
+  const vus = new Map();
+  for (const d of r.dossiers) if (d.fournisseur) vus.set(d.fournisseur.id, d.fournisseur.name);
+
+  const select = $('rup-f-supplier');
+  const attendu =
+    `<option value="">Fournisseur</option>` +
+    [...vus.entries()]
+      .sort((a, b) => a[1].localeCompare(b[1], 'fr'))
+      .map(([id, nom]) => `<option value="${esc(id)}">${esc(nom)}</option>`)
+      .join('');
+
+  // Reconstruire à chaque rendu perdrait la sélection en cours de frappe.
+  if (select.innerHTML !== attendu) {
+    select.innerHTML = attendu;
+    select.value = r.fournisseur;
+  }
+
+  $('rup-reset').hidden = !(r.q || r.fournisseur || r.priorite || r.vue !== 'tous' || r.tri !== 'recent');
+}
+
+function renderRuptureLignes(page, total) {
+  const r = state.ruptures;
+  const corps = $('rup-rows');
+
+  if (r.chargement && r.dossiers.length === 0) {
+    // Des lignes grises de la bonne hauteur : un tourniquet au milieu de la
+    // page fait attendre sans rien dire de ce qui arrive.
+    corps.innerHTML = Array.from({ length: 6 })
+      .map(
+        () => `<tr><td colspan="11"><span class="skel-row">
+          <span class="skel"></span><span class="skel"></span>
+        </span></td></tr>`,
+      )
+      .join('');
+    return;
+  }
+
+  if (r.erreur) {
+    corps.innerHTML = `<tr><td colspan="11" class="empty" style="padding:22px 14px">
+      ${esc(r.erreur)}
+      <button class="linkish" type="button" id="rup-retry">Réessayer</button>
+    </td></tr>`;
+    $('rup-retry')?.addEventListener('click', () => void loadRuptures());
+    return;
+  }
+
+  if (total === 0) {
+    const filtre = r.q || r.fournisseur || r.priorite || r.vue !== 'tous';
+    corps.innerHTML = `<tr><td colspan="11" class="empty" style="padding:26px 14px">
+      <b style="display:block;font-size:13.5px;color:var(--ink)">${
+        filtre ? 'Aucun dossier dans cette vue.' : 'Aucune rupture de stock à traiter.'
+      }</b>
+      ${esc(
+        filtre
+          ? 'Changez de vue ou réinitialisez les filtres.'
+          : 'Les commandes concernées apparaîtront ici dès qu’une rupture sera signalée au fournisseur.',
+      )}
+    </td></tr>`;
+    return;
+  }
+
+  corps.innerHTML = page
+    .map((d) => {
+      const initiales = initials(d.client?.nom ?? d.client?.email ?? '?');
+      const age = formatSpan(Date.now() - new Date(d.creeLe).getTime());
+
+      return `<tr data-rup="${esc(d.id)}" tabindex="0"
+        aria-selected="${d.id === r.courant}">
+        <td class="rup-pick"><input type="checkbox" data-rup-pick="${esc(d.id)}"${
+          r.cochees.has(d.id) ? ' checked' : ''
+        } aria-label="Sélectionner ce dossier" /></td>
+        <td><span class="rup-who">
+          <span class="qav" aria-hidden="true">${esc(initiales)}</span>
+          <span style="min-width:0">
+            <b>${esc(d.client?.nom ?? 'Client inconnu')}</b>
+            <small>${esc(d.client?.email ?? '')}</small>
+          </span>
+        </span></td>
+        <td><b style="font-size:12.5px">${esc(d.commande?.nom ?? '—')}</b></td>
+        <td><span class="rup-prod">
+          ${
+            d.article?.image
+              ? `<img src="${esc(d.article.image)}" alt="" loading="lazy" />`
+              : '<span class="rup-blank"></span>'
+          }
+          <span style="min-width:0">
+            <b>${esc(d.article?.titre ?? 'Article non lu')}</b>
+            <small>${esc(d.article?.sku ?? '—')}</small>
+          </span>
+        </span></td>
+        <td class="rup-c-var">${esc(d.article?.variante ?? '—')}</td>
+        <td class="rup-c-four">${esc(d.fournisseur?.name ?? '—')}</td>
+        <td class="num"><span class="rup-impact${
+          d.commandesImpactees > 1 ? ' rup-impact-fort' : ''
+        }">${d.commandesImpactees}</span></td>
+        <td><span class="rup-etat rup-${esc(d.etat)}">${esc(RUP_LIBELLES[d.etat] ?? d.etat)}</span></td>
+        <td class="rup-age">${esc(age)}</td>
+        <td>${
+          d.priorite
+            ? `<span class="rup-prio rup-prio-${esc(d.priorite)}">${esc(
+                d.priorite[0].toUpperCase() + d.priorite.slice(1),
+              )}</span>`
+            : '<span class="rup-prio rup-prio-basse">—</span>'
+        }</td>
+        <td class="rup-go" aria-hidden="true">›</td>
+      </tr>`;
+    })
+    .join('');
+
+  corps.querySelectorAll('[data-rup-pick]').forEach((case_) =>
+    case_.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const id = case_.dataset.rupPick;
+      if (case_.checked) r.cochees.add(id);
+      else r.cochees.delete(id);
+      renderRuptures();
+    }),
+  );
+
+  corps.querySelectorAll('[data-rup]').forEach((ligne) => {
+    const ouvrir = () => ouvrirRupture(ligne.dataset.rup);
+    ligne.addEventListener('click', ouvrir);
+    // Une ligne cliquable qui ne répond pas au clavier exclut ceux qui n'ont
+    // pas de souris : la table est le seul chemin vers le dossier.
+    ligne.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        ouvrir();
+      }
+    });
+  });
+}
+
+function renderRupturePager(total, pages) {
+  const r = state.ruptures;
+  const boite = $('rup-pager');
+  boite.hidden = total === 0;
+  if (total === 0) return;
+
+  const debut = (r.page - 1) * r.taille + 1;
+  const fin = Math.min(total, r.page * r.taille);
+
+  boite.innerHTML = `
+    <span>${debut}–${fin} sur ${total}</span>
+    <label style="display:flex;align-items:center;gap:6px">
+      Lignes
+      <select id="rup-size" aria-label="Lignes par page">
+        ${[10, 25, 50]
+          .map((n) => `<option value="${n}"${n === r.taille ? ' selected' : ''}>${n}</option>`)
+          .join('')}
+      </select>
+    </label>
+    <span class="rup-pages">
+      <button class="btn btn-small" type="button" id="rup-prev"${
+        r.page === 1 ? ' disabled' : ''
+      } aria-label="Page précédente">‹</button>
+      <span>${r.page} / ${pages}</span>
+      <button class="btn btn-small" type="button" id="rup-next"${
+        r.page >= pages ? ' disabled' : ''
+      } aria-label="Page suivante">›</button>
+    </span>`;
+
+  $('rup-size').addEventListener('change', (event) => {
+    r.taille = Number(event.target.value);
+    r.page = 1;
+    renderRuptures();
+  });
+  $('rup-prev').addEventListener('click', () => {
+    r.page -= 1;
+    renderRuptures();
+  });
+  $('rup-next').addEventListener('click', () => {
+    r.page += 1;
+    renderRuptures();
+  });
+}
+
+
+/* ---- le panneau de droite ---- */
+
+function ouvrirRupture(id) {
+  const r = state.ruptures;
+  const change = r.courant !== id;
+  r.courant = id;
+  // Les alternatives appartiennent au dossier ouvert : les garder d'un dossier
+  // à l'autre proposerait la chaussure d'un autre client.
+  if (change) r.alternatives = null;
+  renderRuptures();
+}
+
+function renderRupturePanneau() {
+  const r = state.ruptures;
+  const panneau = $('rup-panel');
+  const d = r.dossiers.find((dossier) => dossier.id === r.courant);
+
+  panneau.hidden = !d;
+  if (!d) return (panneau.innerHTML = '');
+
+  const argent = (montant) =>
+    typeof montant === 'number' ? money(montant, d.commande?.devise ?? 'EUR') : '—';
+
+  panneau.innerHTML = `
+    <div class="rup-panel-head">
+      <b>${esc(d.commande?.nom ?? 'Dossier')}</b>
+      <span class="rup-etat rup-${esc(d.etat)}">${esc(RUP_LIBELLES[d.etat] ?? d.etat)}</span>
+      <button class="ico-btn" type="button" id="rup-close" aria-label="Fermer le panneau"
+        style="margin-left:auto">${ico('close')}</button>
+    </div>
+
+    <!-- La synthèse d'abord : elle dit le problème, l'impact et le geste qui
+         manque, avant que l'oeil ait à reconstituer tout ça. -->
+    <div class="rup-synthese">${d.synthese.map((phrase) => `<p>${esc(phrase)}</p>`).join('')}</div>
+
+    <div class="rup-sec">
+      <h3>Client</h3>
+      <div class="rup-who">
+        <span class="qav" aria-hidden="true">${esc(initials(d.client?.nom ?? d.client?.email ?? '?'))}</span>
+        <span style="min-width:0">
+          <b>${esc(d.client?.nom ?? 'Client inconnu')}</b>
+          <small>${esc(d.client?.email ?? '')}</small>
+        </span>
+      </div>
+      ${
+        d.client?.telephone
+          ? `<div class="rup-line"><span>Téléphone</span><span>${esc(d.client.telephone)}</span></div>`
+          : ''
+      }
+    </div>
+
+    <div class="rup-sec">
+      <h3>Commande</h3>
+      <div class="rup-line"><span>Numéro</span><span>${esc(d.commande?.nom ?? '—')}</span></div>
+      <div class="rup-line"><span>Montant</span><span>${esc(argent(d.commande?.total))}</span></div>
+      ${
+        d.commande?.shopifyId
+          ? shopifyOrderLink({ id: d.commande.shopifyId }, 'Voir la commande')
+          : ''
+      }
+    </div>
+
+    <div class="rup-sec">
+      <h3>Produit en rupture</h3>
+      ${
+        d.article
+          ? `<div class="rup-prod">
+              ${
+                d.article.image
+                  ? `<img src="${esc(d.article.image)}" alt="" loading="lazy" />`
+                  : '<span class="rup-blank"></span>'
+              }
+              <span style="min-width:0">
+                <b>${esc(d.article.titre)}</b>
+                <small>${esc(d.article.sku ?? 'SKU inconnu')}</small>
+              </span>
+            </div>
+            ${
+              d.article.variante
+                ? `<div class="rup-line"><span>Variante</span><span>${esc(d.article.variante)}</span></div>`
+                : ''
+            }
+            <div class="rup-line"><span>Quantité commandée</span><span>${d.article.quantite}</span></div>`
+          : '<p class="empty">Article non lu : le détail vient de Shopify, qui n’a pas répondu.</p>'
+      }
+      <div class="rup-line"><span>Commandes impactées</span><span>${d.commandesImpactees}</span></div>
+      ${
+        d.commandesImpactees > 1 && d.article?.sku
+          ? `<button class="linkish" type="button" id="rup-meme-sku">Voir les ${
+              d.commandesImpactees
+            } commandes concernées →</button>`
+          : ''
+      }
+    </div>
+
+    <div class="rup-sec">
+      <h3>Fournisseur</h3>
+      ${
+        d.fournisseur
+          ? `<div class="rup-line"><span>Atelier</span><span>${esc(d.fournisseur.name)}</span></div>
+             ${
+               d.notifieLe
+                 ? `<div class="rup-line"><span>Sollicité le</span><span>${esc(
+                     dateCourte(d.notifieLe),
+                   )}</span></div>`
+                 : '<div class="rup-line"><span>Sollicité</span><span>pas encore</span></div>'
+             }
+             ${
+               d.reponseFournisseurLe
+                 ? `<div class="rup-line"><span>A répondu le</span><span>${esc(
+                     dateCourte(d.reponseFournisseurLe),
+                   )}</span></div>`
+                 : ''
+             }`
+          : '<p class="empty">Aucun fournisseur rattaché à ce dossier.</p>'
+      }
+    </div>
+
+    <!-- Les alternatives ne sont pas cherchées au rendu de la liste : ce
+         serait un appel au catalogue par ligne. Elles se demandent pour le
+         dossier ouvert, et pour lui seul. -->
+    <div class="rup-sec">
+      <h3>Alternative</h3>
+      <div id="rup-alts"></div>
+    </div>
+
+    <div class="rup-sec">
+      <h3>Actions</h3>
+      <div class="rup-actions" id="rup-actions"></div>
+    </div>
+
+    <div class="rup-sec">
+      <h3>Historique</h3>
+      <ul class="rup-hist">${histoireRupture(d)}</ul>
+    </div>`;
+
+  $('rup-close').addEventListener('click', () => {
+    r.courant = null;
+    renderRuptures();
+  });
+
+  $('rup-meme-sku')?.addEventListener('click', () => {
+    // Traiter la cause plutôt que huit fois le symptôme : la recherche par SKU
+    // rassemble en une vue toutes les commandes que la même référence bloque.
+    r.q = d.article.sku;
+    r.vue = 'tous';
+    r.page = 1;
+    $('rup-q').value = r.q;
+    renderRuptures();
+  });
+
+  renderRuptureActions(d);
+  renderRuptureAlternatives(d);
+}
+
+function dateCourte(iso) {
+  return new Date(iso).toLocaleDateString('fr-FR', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+/*
+ * L'historique, tiré des dates que le dossier porte déjà.
+ *
+ * Pas d'appel au journal d'audit : il faudrait une requête par dossier ouvert,
+ * et les trois dates qui comptent — ouverture, sollicitation, réponse — sont
+ * déjà là. Le journal complet reste à un clic, dans le dossier.
+ */
+function histoireRupture(d) {
+  const lignes = [
+    d.resoluLe ? [d.resoluLe, 'Dossier clôturé'] : null,
+    d.reponseFournisseurLe ? [d.reponseFournisseurLe, 'Réponse du fournisseur'] : null,
+    d.notifieLe ? [d.notifieLe, 'Demande envoyée au fournisseur'] : null,
+    [d.creeLe, 'Rupture signalée'],
+  ].filter(Boolean);
+
+  return lignes
+    .slice(0, 3)
+    .map(
+      ([date, texte]) =>
+        `<li><time datetime="${esc(date)}">${esc(dateCourte(date))}</time> ${esc(texte)}</li>`,
+    )
+    .join('');
+}
+
+/*
+ * Les actions, dans un ordre qui dépend du dossier.
+ *
+ * Un seul bouton principal, jamais sept du même poids : la page doit répondre
+ * à « que dois-je faire maintenant », et sept boutons équivalents renvoient la
+ * question à l'agent. Le principal est celui qui débloque l'état courant.
+ *
+ * Ne figurent ici que des gestes réellement branchés. « Annuler la commande »
+ * manque parce qu'aucun handler d'annulation n'existe côté serveur : un bouton
+ * qui ne fait rien coûte plus cher que son absence — on l'essaie, on croit que
+ * c'est parti, et on passe au dossier suivant.
+ */
+function renderRuptureActions(d) {
+  const boite = $('rup-actions');
+  const gestes = [];
+
+  const ecrireClient = {
+    cle: 'client',
+    label: 'Écrire au client',
+    faire: () => ecrireAuClientDepuisRupture(d),
+  };
+  const chercherAlt = {
+    cle: 'alt',
+    label: 'Chercher une alternative',
+    faire: () => void chargerAlternatives(d),
+  };
+  const resoudre = {
+    cle: 'resoudre',
+    label: 'Marquer résolu',
+    faire: () => void resoudreRupture(d),
+  };
+  const envoyer = {
+    cle: 'envoyer',
+    label: 'Envoyer au fournisseur',
+    faire: () => void envoyerEscalade(d),
+  };
+  const ouvrirDossier = {
+    cle: 'dossier',
+    label: 'Ouvrir le dossier',
+    faire: () => {
+      setView('tickets');
+      void selectTicket(d.ticketId);
+    },
+  };
+
+  // L'ordre dit la recommandation. « Sauver la vente » d'abord : une rupture
+  // ne mène au remboursement qu'en dernier recours, et l'écran doit rendre le
+  // bon geste plus facile que le mauvais.
+  if (d.etat === 'A_TRAITER') gestes.push(envoyer, chercherAlt, ecrireClient, ouvrirDossier);
+  else if (d.etat === 'FOURNISSEUR_EN_ATTENTE')
+    gestes.push(chercherAlt, ecrireClient, ouvrirDossier);
+  else if (d.etat === 'CLIENT_A_PREVENIR') gestes.push(ecrireClient, chercherAlt, ouvrirDossier);
+  else if (d.etat === 'RESOLU') gestes.push(ouvrirDossier);
+  else gestes.push(resoudre, ecrireClient, ouvrirDossier);
+
+  if (d.etat !== 'RESOLU' && !gestes.some((geste) => geste.cle === 'resoudre')) {
+    gestes.push(resoudre);
+  }
+
+  boite.innerHTML = gestes
+    .map(
+      (geste, rang) =>
+        `<button class="btn btn-small${rang === 0 ? ' btn-primary' : ''}" type="button"
+          data-rup-act="${esc(geste.cle)}">${esc(geste.label)}</button>`,
+    )
+    .join('');
+
+  boite.querySelectorAll('[data-rup-act]').forEach((bouton) => {
+    const geste = gestes.find((candidat) => candidat.cle === bouton.dataset.rupAct);
+    bouton.addEventListener('click', () => geste.faire());
+  });
+}
+
+/*
+ * Écrire au client sans quitter la console.
+ *
+ * La fenêtre de rédaction est globale et lit `state.detail` à l'envoi : on
+ * charge donc la fiche du ticket avant de l'ouvrir. C'est exactement ce que
+ * fait l'écran SAV, moins le changement de vue — la liste reste derrière, et
+ * on enchaîne sur le dossier suivant.
+ */
+async function ecrireAuClientDepuisRupture(d, phrase = null) {
+  try {
+    const detail = await api(`/api/tickets/${d.ticketId}`);
+    if (!detail?.ticket) return toast('Ce dossier n’a plus de message rattaché.', true);
+
+    state.detail = detail;
+    openCompose('client', detail.ticket);
+
+    if (phrase) {
+      const corps = $('compose-body');
+      corps.value = corps.value.trim() ? `${corps.value.trim()}\n\n${phrase}` : phrase;
+      corps.focus();
+    }
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+async function envoyerEscalade(d) {
+  try {
+    await api(`/api/escalations/${d.id}/send`, { method: 'POST', body: '{}' });
+    toast('Demande envoyée au fournisseur.');
+    await loadRuptures();
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+async function resoudreRupture(d) {
+  try {
+    await api(`/api/escalations/${d.id}/resolve`, { method: 'POST', body: '{}' });
+    toast('Dossier clôturé.');
+    await loadRuptures();
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+/*
+ * Les alternatives, cherchées dans le vrai catalogue.
+ *
+ * Même route que l'écran SAV : le croisement commande → catalogue existe déjà,
+ * et un second chemin vers la même question finirait par répondre autrement.
+ * Choisir une référence n'envoie rien — la proposition entre dans un brouillon
+ * que l'agent relit. Un remplacement se propose, il ne s'impose pas.
+ */
+async function chargerAlternatives(d) {
+  const boite = $('rup-alts');
+  if (!boite) return;
+
+  boite.innerHTML = '<p class="empty">Recherche des références en stock…</p>';
+
+  try {
+    const data = await api(`/api/tickets/${d.ticketId}/substitutions`);
+    state.ruptures.alternatives = data.options?.length ? data.options : [];
+    if (!data.options?.length) {
+      boite.innerHTML = `<p class="empty">${esc(
+        data.reason ?? 'Aucune référence équivalente en stock pour le moment.',
+      )}</p>`;
+      return;
+    }
+  } catch (error) {
+    boite.innerHTML = `<p class="empty">${esc(error.message)}</p>`;
+    return;
+  }
+
+  renderRuptureAlternatives(d);
+}
+
+function renderRuptureAlternatives(d) {
+  const boite = $('rup-alts');
+  if (!boite) return;
+
+  const options = state.ruptures.alternatives;
+  if (options === null) {
+    boite.innerHTML =
+      '<p class="empty">Les références de remplacement se cherchent à la demande, ' +
+      'depuis le bouton ci-dessous.</p>';
+    return;
+  }
+
+  boite.innerHTML = options
+    .slice(0, 3)
+    .map(
+      (option) => `<div class="rup-alt">
+        ${
+          option.image
+            ? `<img src="${esc(option.image)}" alt="" loading="lazy" />`
+            : '<span class="rup-blank"></span>'
+        }
+        <span style="min-width:0;flex:1">
+          <b>${esc(option.productTitle)}</b>
+          <small>${esc(option.variantTitle ?? '—')}</small>
+          <small class="rup-alt-stock">${option.inventoryQuantity ?? 0} en stock</small>
+        </span>
+        <button class="btn btn-small btn-primary" type="button"
+          data-rup-alt="${esc(option.id)}">Proposer</button>
+      </div>`,
+    )
+    .join('');
+
+  boite.querySelectorAll('[data-rup-alt]').forEach((bouton) =>
+    bouton.addEventListener('click', () => {
+      const option = options.find((candidat) => candidat.id === bouton.dataset.rupAlt);
+      const nom = `${option.productTitle}${
+        option.variantTitle ? ` — ${option.variantTitle}` : ''
+      }`;
+      void ecrireAuClientDepuisRupture(
+        d,
+        `Nous pouvons vous proposer en remplacement : ${nom}, disponible immédiatement. Confirmez-vous ce choix ?`,
+      );
+    }),
+  );
+}
+
+
+/* ---- câblage de la console des ruptures ---- */
+
+/*
+ * Posés au chargement, pas à chaque rendu : ces éléments vivent dans le HTML
+ * statique, et un écouteur par rafraîchissement en empilerait un de plus à
+ * chaque fois — au bout de dix relèves, un clic déclencherait dix requêtes.
+ */
+$('rup-tabs')?.addEventListener('click', (event) => {
+  const onglet = event.target.closest('[data-rup-vue]');
+  if (!onglet) return;
+  state.ruptures.vue = onglet.dataset.rupVue;
+  state.ruptures.page = 1;
+  renderRuptures();
+});
+
+$('rup-q')?.addEventListener('input', (event) => {
+  state.ruptures.q = event.target.value;
+  state.ruptures.page = 1;
+  renderRuptures();
+});
+
+$('rup-f-supplier')?.addEventListener('change', (event) => {
+  state.ruptures.fournisseur = event.target.value;
+  state.ruptures.page = 1;
+  renderRuptures();
+});
+
+$('rup-f-priority')?.addEventListener('change', (event) => {
+  state.ruptures.priorite = event.target.value;
+  state.ruptures.page = 1;
+  renderRuptures();
+});
+
+$('rup-sort')?.addEventListener('change', (event) => {
+  state.ruptures.tri = event.target.value;
+  renderRuptures();
+});
+
+$('rup-reset')?.addEventListener('click', () => {
+  const r = state.ruptures;
+  Object.assign(r, { vue: 'tous', q: '', fournisseur: '', priorite: '', tri: 'recent', page: 1 });
+  $('rup-q').value = '';
+  $('rup-f-supplier').value = '';
+  $('rup-f-priority').value = '';
+  $('rup-sort').value = 'recent';
+  renderRuptures();
+});
+
+/* La case d'en-tête coche la PAGE affichée, pas les deux cents dossiers du
+   lot : « tout sélectionner » doit désigner ce qu'on voit, sinon un geste
+   groupé porte sur des dossiers qu'on n'a pas regardés. */
+$('rup-all')?.addEventListener('change', (event) => {
+  const r = state.ruptures;
+  const page = rupturesFiltrees().slice((r.page - 1) * r.taille, r.page * r.taille);
+
+  for (const dossier of page) {
+    if (event.target.checked) r.cochees.add(dossier.id);
+    else r.cochees.delete(dossier.id);
+  }
+  renderRuptures();
+});
+
+/*
+ * L'action groupée : clôturer, et rien d'autre.
+ *
+ * Le visuel de référence suggère un menu d'actions de masse. Une seule est
+ * proposée ici, et c'est délibéré : clôturer est réversible et sans effet
+ * externe. Rembourser vingt clients d'un clic ne l'est pas — l'argent part, et
+ * aucun écran de confirmation ne rattrape une case cochée par erreur. Tant
+ * qu'un garde-fou sérieux n'existe pas, ce geste reste dossier par dossier.
+ */
+$('rup-bulk')?.addEventListener('click', async () => {
+  const r = state.ruptures;
+  const ids = [...r.cochees];
+  if (ids.length === 0) return;
+
+  const bouton = $('rup-bulk');
+  bouton.disabled = true;
+
+  // En série, pas en parallèle : vingt requêtes simultanées sur la même base
+  // se gênent, et un échec au milieu doit laisser un état lisible.
+  let faits = 0;
+  for (const id of ids) {
+    try {
+      await api(`/api/escalations/${id}/resolve`, { method: 'POST', body: '{}' });
+      faits += 1;
+    } catch {
+      // On continue : un dossier déjà clos ne doit pas bloquer les autres.
+    }
+  }
+
+  r.cochees.clear();
+  bouton.disabled = false;
+  toast(
+    faits === ids.length
+      ? `${faits} dossier${faits > 1 ? 's' : ''} clôturé${faits > 1 ? 's' : ''}.`
+      : `${faits} sur ${ids.length} clôturés — les autres ont refusé.`,
+    faits !== ids.length,
+  );
+  await loadRuptures();
 });

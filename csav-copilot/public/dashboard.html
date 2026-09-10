@@ -1114,6 +1114,97 @@
         <div id="changes-rows"></div>
       </section>
 
+      <!-- ============================================================
+           RUPTURES DE STOCK — la console.
+
+           Une rupture n'est pas un mail : c'est une escalade fournisseur
+           portant `reason: OUT_OF_STOCK`. Cet écran ne crée donc aucun
+           objet, il relit ce que l'escalade, le ticket et la commande
+           disent déjà — et les présente comme un poste de travail plutôt
+           que comme une liste de tickets.
+
+           Deux colonnes : la liste garde le contexte pendant qu'on
+           travaille un dossier dans le panneau. Changer de page à chaque
+           sélection ferait perdre la file après chaque geste.
+           ============================================================ -->
+      <section class="browse rup" id="view-ruptures" hidden aria-label="Ruptures de stock">
+        <!-- Le détail produit vient de Shopify ; le reste vient de notre base.
+             Quand le catalogue ne répond pas, on nomme ce qui manque au lieu
+             de laisser des cases vides qui passent pour des données. -->
+        <div class="notice notice-warn" id="rup-shopify" hidden>
+          <span class="notice-mark">Partiel</span>
+          <div id="rup-shopify-txt"></div>
+        </div>
+
+        <div class="kpis rup-kpis" id="rup-kpis"></div>
+
+        <!-- Les vues métier. Chacune correspond à un fait vérifiable en base :
+             pas d'onglet dont le contenu se devine à chaque rendu. -->
+        <div class="rup-tabs" id="rup-tabs" role="tablist" aria-label="Vues"></div>
+
+        <div class="browse-bar rup-bar">
+          <label class="rup-search">
+            <span class="rup-search-ico" aria-hidden="true"></span>
+            <input type="search" id="rup-q"
+              placeholder="Rechercher une commande, un client, un produit, un SKU…"
+              aria-label="Rechercher dans les ruptures" />
+          </label>
+          <select id="rup-f-supplier" aria-label="Filtrer par fournisseur"></select>
+          <select id="rup-f-priority" aria-label="Filtrer par priorité">
+            <option value="">Priorité</option>
+            <option value="haute">Haute</option>
+            <option value="moyenne">Moyenne</option>
+            <option value="basse">Basse</option>
+          </select>
+          <select id="rup-sort" aria-label="Trier">
+            <option value="recent">Plus récent</option>
+            <option value="ancien">Plus ancien</option>
+            <option value="priorite">Priorité</option>
+            <option value="impact">Commandes impactées</option>
+          </select>
+          <button class="linkish" id="rup-reset" type="button" hidden>Réinitialiser</button>
+          <span class="browse-count" id="rup-count" style="margin-left: auto"></span>
+          <!-- N'apparaît qu'une fois des lignes cochées : un menu d'actions
+               groupées visible en permanence promet un pouvoir qu'on n'a pas
+               tant que rien n'est sélectionné. -->
+          <button class="btn btn-small" id="rup-bulk" type="button" hidden></button>
+        </div>
+
+        <div class="rup-split">
+          <div class="rup-main">
+            <div class="table-wrap">
+              <table class="grid rup-grid">
+                <thead>
+                  <tr>
+                    <th class="rup-pick"><input type="checkbox" id="rup-all"
+                      aria-label="Tout sélectionner" /></th>
+                    <th scope="col">Client</th>
+                    <th scope="col">Commande</th>
+                    <th scope="col">Produit</th>
+                    <th scope="col" class="rup-c-var">Variante</th>
+                    <th scope="col" class="rup-c-four">Fournisseur</th>
+                    <!-- « Impact » et non « Stock » : le stock de la référence
+                         cassée n'est pas dans les lignes de commande, et
+                         afficher « 0 » partout serait l'inventer. Le nombre de
+                         commandes bloquées, lui, se compte vraiment — et c'est
+                         ce qui décide de l'ordre de traitement. -->
+                    <th scope="col" class="num">Impact</th>
+                    <th scope="col">Statut</th>
+                    <th scope="col">Ancienneté</th>
+                    <th scope="col">Priorité</th>
+                    <th scope="col"><span class="sr-only">Ouvrir</span></th>
+                  </tr>
+                </thead>
+                <tbody id="rup-rows"></tbody>
+              </table>
+            </div>
+            <div class="rup-pager" id="rup-pager" hidden></div>
+          </div>
+
+          <aside class="rup-panel" id="rup-panel" hidden aria-label="Détail du dossier"></aside>
+        </div>
+      </section>
+
       <section class="browse" id="view-tracking" hidden aria-label="Suivi colis">
         <div class="browse-bar">
           <span class="browse-count" id="tracking-count"></span>

@@ -8685,3 +8685,244 @@ html, body { overflow-x: clip; }
   .tr-vals { font-size: 9.5px; }
 }
 
+
+
+/* Un en-tête de colonne qui n'a rien à montrer garde son nom pour qui écoute
+   la page : « colonne 11 » ne dit pas qu'on peut y ouvrir le dossier. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ================================================ ruptures de stock == */
+
+/*
+ * La console des ruptures. Deux colonnes : la liste garde le contexte pendant
+ * qu'on travaille un dossier à droite. Les proportions suivent le visuel de
+ * référence — la table domine, le panneau tient la largeur d'une fiche.
+ *
+ * Aucun jeton nouveau : couleurs, rayons, ombres et encres viennent tous de la
+ * palette. Un second système de design pour un seul écran se remarque au
+ * premier coup d'oeil, et diverge au premier ajustement de l'autre.
+ */
+.rup { display: flex; flex-direction: column; gap: 13px; }
+
+.rup-kpis { grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 11px; }
+.rup-kpi-sub { font-size: 11px; color: var(--ink-mute); }
+
+/* Les vues métier. Une bande de pastilles, pas des onglets à bordure : le
+   reste du produit filtre déjà comme ça, dans la file comme dans Update. */
+.rup-tabs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.rup-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.rup-tab:hover { border-color: var(--accent); color: var(--ink); }
+.rup-tab[aria-selected='true'] {
+  background: var(--accent);
+  border-color: transparent;
+  color: #fff;
+  font-weight: 600;
+}
+.rup-tab-n {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.rup-tab[aria-selected='true'] .rup-tab-n { background: rgb(255 255 255 / 22%); color: #fff; }
+
+.rup-bar { flex-wrap: wrap; gap: 8px; }
+.rup-search { display: flex; align-items: center; gap: 7px; flex: 1 1 300px; min-width: 220px; }
+.rup-search input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
+}
+.rup-bar select { font-size: 12.5px; }
+
+/* Le partage liste / panneau. `minmax(0, ...)` sur la colonne de gauche : sans
+   lui, une cellule large pousse la grille et le panneau sort de l'écran. */
+.rup-split { display: grid; grid-template-columns: minmax(0, 1fr) 336px; gap: 13px; align-items: start; }
+.rup-main { min-width: 0; }
+
+/* La table. Densité visée : une ligne se lit d'un coup d'oeil, et une dizaine
+   de dossiers tiennent sur un écran de portable. */
+.rup-grid td { padding: 9px 10px; vertical-align: middle; }
+.rup-grid tbody tr { cursor: pointer; }
+.rup-grid tbody tr[aria-selected='true'] { background: var(--accent-soft); }
+.rup-grid tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.rup-pick { width: 30px; }
+
+.rup-who { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.rup-who b { font-size: 13px; font-weight: 600; display: block; }
+.rup-who small { font-size: 11.5px; color: var(--ink-mute); display: block; }
+.rup-prod { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.rup-prod img,
+.rup-prod .rup-blank {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: var(--r-sm);
+  object-fit: cover;
+  background: var(--ground);
+  border: 1px solid var(--line);
+}
+.rup-prod b { font-size: 13px; font-weight: 600; display: block; }
+.rup-prod small { font-size: 11px; color: var(--ink-mute); font-family: var(--font-mono); }
+.rup-impact { font-weight: 650; }
+.rup-impact-fort { color: var(--crit-ink); }
+.rup-age { font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
+.rup-go { color: var(--ink-mute); }
+
+/* Les états. Chacun correspond à un fait vérifiable en base ; la couleur dit
+   qui doit bouger, pas l'humeur du dossier. */
+.rup-etat {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.rup-etat::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.rup-A_TRAITER { background: var(--crit-soft); color: var(--crit-ink); }
+.rup-CLIENT_A_PREVENIR { background: var(--warn-soft); color: var(--warn-ink); }
+.rup-FOURNISSEUR_EN_ATTENTE { background: var(--accent-soft); color: var(--accent-ink); }
+.rup-FOURNISSEUR_CONTACTE { background: var(--accent-soft); color: var(--accent-ink); }
+.rup-REMBOURSEMENT { background: var(--crit-soft); color: var(--crit-ink); }
+.rup-RESOLU { background: var(--ok-soft); color: var(--ok-ink); }
+
+.rup-prio { font-size: 11.5px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px; }
+.rup-prio::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.rup-prio-haute { color: var(--crit-ink); }
+.rup-prio-moyenne { color: var(--warn-ink); }
+.rup-prio-basse { color: var(--ink-mute); }
+
+.rup-pager { display: flex; align-items: center; gap: 10px; padding: 9px 2px; font-size: 12px; color: var(--ink-mute); }
+.rup-pager .rup-pages { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+
+/* Le panneau. Il défile seul : la liste doit rester en place pendant qu'on
+   descend un dossier, sinon on perd sa ligne à chaque lecture. */
+.rup-panel {
+  position: sticky;
+  top: 8px;
+  max-height: calc(100vh - 96px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  background: var(--grad-surface);
+}
+.rup-panel h3 {
+  margin: 0;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+.rup-panel-head { display: flex; align-items: center; gap: 8px; }
+.rup-panel-head b { font-size: 15px; font-weight: 650; }
+.rup-sec { display: flex; flex-direction: column; gap: 7px; }
+.rup-sec + .rup-sec { padding-top: 11px; border-top: 1px solid var(--line); }
+.rup-line { display: flex; align-items: baseline; gap: 8px; font-size: 12.5px; }
+.rup-line span:first-child { color: var(--ink-mute); }
+.rup-line span:last-child { margin-left: auto; text-align: right; color: var(--ink); }
+
+/* La synthèse. Pas « Résumé IA » : elle est composée à partir des faits du
+   dossier, pas rédigée par un modèle. Lui prêter une IA serait mentir sur le
+   fonctionnement du produit à quelqu'un qui le revend. */
+.rup-synthese {
+  padding: 10px;
+  border-radius: var(--r-md);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.rup-synthese p { margin: 0; }
+.rup-synthese p + p { margin-top: 4px; }
+
+.rup-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.rup-actions .btn { flex: 1 1 auto; justify-content: center; }
+.rup-hist { display: flex; flex-direction: column; gap: 9px; margin: 0; padding: 0; }
+.rup-hist li { display: flex; gap: 8px; list-style: none; font-size: 12px; }
+.rup-hist time { color: var(--ink-mute); white-space: nowrap; }
+.rup-alt { display: flex; align-items: center; gap: 9px; padding: 8px; border: 1px solid var(--line); border-radius: var(--r-md); }
+.rup-alt img, .rup-alt .rup-blank { width: 38px; height: 38px; flex: none; border-radius: var(--r-sm); object-fit: cover; background: var(--ground); border: 1px solid var(--line); }
+.rup-alt b { display: block; font-size: 12.5px; font-weight: 600; }
+.rup-alt small { display: block; font-size: 11px; color: var(--ink-mute); }
+.rup-alt-stock { color: var(--ok-ink); font-weight: 600; }
+
+/*
+ * Deux colonnes s'escamotent avant que la table ne déborde.
+ *
+ * Onze colonnes réclament 1 108 px ; avec la navigation et le panneau, il
+ * faut 1 760 px de fenêtre pour les servir — à 1 700 px il manquait deux
+ * pixels, ce qui suffit à faire défiler la table. En dessous, la table
+ * défilait latéralement — et « Priorité »,
+ * qui est la colonne qui dit par où commencer, sort de l'écran. Une table
+ * dont on ne voit pas la dernière colonne trie sans le montrer.
+ *
+ * Variante et fournisseur partent les premiers parce qu'ils sont les seuls
+ * que le panneau redonne intégralement pour la ligne sélectionnée. Le reste —
+ * client, commande, produit, impact, statut, ancienneté, priorité — est ce
+ * qui permet de choisir SANS ouvrir, donc ce qui ne peut pas disparaître.
+ */
+@media (max-width: 1759px) {
+  .rup-split .rup-c-var,
+  .rup-split .rup-c-four { display: none; }
+  .rup-grid td, .rup-grid th { padding-left: 8px; padding-right: 8px; }
+}
+
+/* Un nom très long s'abrège plutôt que de pousser la ligne : le client
+   s'appelle comme il veut, la table garde ses proportions. */
+.rup-who b, .rup-who small, .rup-prod b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rup-who > span:last-child { max-width: 168px; }
+.rup-prod > span:last-child { max-width: 158px; }
+
+/*
+ * Sous 1 500 px, le panneau passe SOUS la table plutôt que de l'étrangler.
+ *
+ * Le seuil vient de la mesure, pas d'une valeur ronde. À neuf colonnes la
+ * table réclame 887 px ; avec la navigation (228 px), le panneau (336 px) et
+ * les gouttières, il faut environ 1 500 px de fenêtre pour les lui donner. À
+ * 1 280 px la zone tombait à 686 px : la table débordait de deux cents pixels
+ * et « Priorité » — la colonne qui dit par où commencer — sortait de l'écran.
+ *
+ * Empilé, le panneau garde toute sa fonction : on choisit une ligne, on lit
+ * le dossier dessous. C'est la table étranglée qui ne servait plus à rien.
+ */
+@media (max-width: 1499px) {
+  .rup-split { grid-template-columns: minmax(0, 1fr); }
+  .rup-panel { position: static; max-height: none; }
+}
