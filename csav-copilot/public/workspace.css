@@ -1162,3 +1162,26 @@ input:focus, select:focus, textarea:focus {
   padding: 3px 9px;
   white-space: nowrap;
 }
+
+
+/* ------------------------------------------------------------ ruptures -- */
+
+/*
+ * Deux listes sur un écran, donc deux titres. Sans eux, « demandes du
+ * marchand » et « ce que j'ai signalé » se lisent comme une seule liste où
+ * l'atelier chercherait ce qui l'attend parmi ce qu'il a déjà fait.
+ */
+.ws-sub {
+  margin: 22px 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+.ws-sub:first-of-type { margin-top: 4px; }
+
+/* Le signalement a été saisi en plusieurs lignes — article, couleur, taille,
+   référence. Les recoller en un paragraphe obligerait à relire pour trouver
+   la taille, qui est justement ce qu'on vient vérifier. */
+.rup-detail { white-space: pre-line; }

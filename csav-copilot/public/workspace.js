@@ -967,6 +967,21 @@ if ('Notification' in window && Notification.permission === 'default') {
 applyLang(state.lang);
 setInterval(loadAlerts, 120000);
 
+/*
+ * Les pastilles du menu, relevées dès l'arrivée puis au rythme des alertes.
+ *
+ * Toutes deux ne se calculaient qu'en ouvrant leur onglet. Une pastille qui
+ * ne s'allume qu'une fois qu'on a cliqué dessus ne signale rien : on a déjà
+ * trouvé ce qu'elle devait montrer. Deux minutes suffisent pour des demandes
+ * qui se traitent dans la journée.
+ */
+function rafraichirPastilles() {
+  void rafraichirPastilleUpdates();
+  void rafraichirPastilleRuptures();
+}
+rafraichirPastilles();
+setInterval(rafraichirPastilles, 120000);
+
 
 /* ==========================================================================
    NAVIGATION — quatre écrans
@@ -981,12 +996,13 @@ const VIEWS = {
   tracking: loadParcels,
   catalog: loadCatalog,
   updates: loadUpdates,
+  ruptures: loadRuptures,
 };
 
 function setView(view) {
   state.view = view;
 
-  for (const section of ['orders', 'tracking', 'catalog', 'updates']) {
+  for (const section of ['orders', 'tracking', 'catalog', 'updates', 'ruptures']) {
     $(`view-${section}`).hidden = section !== view;
   }
 
@@ -1404,6 +1420,27 @@ function setBadge(count) {
   badge.textContent = String(count);
 }
 
+/*
+ * La pastille « Update », relevée sans ouvrir l'onglet.
+ *
+ * Même défaut que celle des ruptures, et plus ancien : elle n'était posée que
+ * par `loadUpdates`, c'est-à-dire à l'ouverture de l'écran des changements.
+ * Un fournisseur qui arrive sur « Commandes » ne voyait donc jamais qu'une
+ * demande de changement l'attendait — la bannière d'alertes le disait, mais
+ * seulement pour les demandes récentes, et elle se ferme.
+ *
+ * En échec elle s'éteint : elle n'a pas d'autre source que cette liste, et
+ * un chiffre qu'on n'a pas pu relire est un chiffre inventé.
+ */
+async function rafraichirPastilleUpdates() {
+  try {
+    const data = await api(`/api/workspace/${supplierId}/updates`);
+    setBadge(data.pending ?? 0);
+  } catch {
+    setBadge(0);
+  }
+}
+
 async function respond(id, status, note = null) {
   try {
     await api(`/api/workspace/${supplierId}/updates/${id}/respond`, {
@@ -1426,3 +1463,126 @@ $('ws-more')?.addEventListener('click', () => {
 $('ws-reload').addEventListener('click', load);
 
 load();
+
+
+/* ------------------------------------------------------------ ruptures -- */
+
+/*
+ * L'écran des ruptures, côté atelier.
+ *
+ * Deux listes, et l'ordre compte : ce que le marchand DEMANDE avant ce que
+ * l'atelier a déjà DIT. La première appelle un geste aujourd'hui ; la seconde
+ * informe, et répond à une question que le préparateur se pose sans pouvoir
+ * la poser — « est-ce qu'ils l'ont vu ? ». Jusqu'ici, signaler un article
+ * manquant envoyait l'information dans le vide : rien ne revenait, et il
+ * fallait choisir entre attendre et emballer sans savoir.
+ */
+async function loadRuptures() {
+  const demandes = $('rup-demandes');
+  const signalements = $('rup-signalements');
+
+  let data;
+  try {
+    data = await api(`/api/workspace/${supplierId}/ruptures`);
+  } catch {
+    /* La pastille s'éteint avec la liste. La laisser à sa valeur d'avant la
+       ferait affirmer « une demande vous attend » pendant que l'écran dit
+       qu'il n'a rien pu lire — et c'est le chiffre qu'on croit, pas le
+       message. On ne sait plus : on ne prétend rien. */
+    setRuptureBadge(0);
+    // Le message d'erreur du serveur est en français : ici on parle la langue
+    // de l'atelier, quitte à en dire un peu moins.
+    demandes.innerHTML = `<p class="empty">${esc(t('rup.error'))}
+      <button class="btn btn-small" type="button" id="rup-retry">${esc(t('rup.retry'))}</button></p>`;
+    signalements.innerHTML = '';
+    $('rup-retry')?.addEventListener('click', () => void loadRuptures());
+    return;
+  }
+
+  const attente = (data.demandes ?? []).filter((demande) => demande.statut === 'OPEN');
+  setRuptureBadge(attente.length);
+
+  demandes.innerHTML =
+    (data.demandes ?? [])
+      .map((demande) => {
+        const etat =
+          demande.statut === 'RESOLVED'
+            ? { cls: 'ok', label: t('rup.closed') }
+            : demande.statut === 'ANSWERED'
+              ? { cls: 'ok', label: t('rup.answered') }
+              : { cls: 'wait', label: t('rup.waiting') };
+
+        return `<div class="upd upd-${etat.cls}">
+          <div class="upd-head">
+            <b>${esc(
+              demande.orderName
+                ? t('rup.order').replace('{name}', demande.orderName)
+                : t('rup.noOrder'),
+            )}</b>
+            <span class="pill">${esc(etat.label)}</span>
+            <span class="upd-when">${esc(new Date(demande.envoyeLe).toLocaleDateString(locale))}</span>
+          </div>
+          ${demande.message ? `<p class="upd-msg">${esc(demande.message)}</p>` : ''}
+          ${demande.note ? `<p class="upd-note">${esc(demande.note)}</p>` : ''}
+          ${
+            demande.statut === 'OPEN'
+              ? `<div class="upd-acts"><a class="btn btn-small btn-primary"
+                   href="${esc(demande.lien)}">${esc(t('rup.answer'))}</a></div>`
+              : ''
+          }
+        </div>`;
+      })
+      .join('') || `<p class="empty">${esc(t('rup.askedEmpty'))}</p>`;
+
+  signalements.innerHTML =
+    (data.signalements ?? [])
+      .map(
+        (signalement) => `<div class="upd upd-${signalement.traite ? 'ok' : 'wait'}">
+          <div class="upd-head">
+            <b>${esc(
+              signalement.orderName
+                ? t('rup.order').replace('{name}', signalement.orderName)
+                : t('rup.noOrder'),
+            )}</b>
+            <span class="pill">${esc(signalement.traite ? t('rup.done') : t('rup.todo'))}</span>
+            <span class="upd-when">${esc(new Date(signalement.signaleLe).toLocaleDateString(locale))}</span>
+          </div>
+          ${
+            signalement.detail
+              ? `<p class="upd-msg rup-detail">${esc(signalement.detail)}</p>`
+              : ''
+          }
+        </div>`,
+      )
+      .join('') || `<p class="empty">${esc(t('rup.mineEmpty'))}</p>`;
+}
+
+/*
+ * La pastille, relevée sans ouvrir l'onglet.
+ *
+ * Elle n'était calculée qu'au rendu de la page — donc jamais pour un
+ * fournisseur qui arrive, comme tous les matins, sur « Commandes ». Une
+ * pastille qui ne s'allume qu'une fois qu'on a cliqué dessus ne signale rien :
+ * on a déjà trouvé ce qu'elle devait montrer.
+ *
+ * En cas d'échec elle s'éteint, pour la même raison que dans la page : on ne
+ * sait plus, donc on n'affirme rien. Un « 1 » resté allumé sur une donnée
+ * qu'on n'a pas pu relire est un chiffre inventé.
+ */
+async function rafraichirPastilleRuptures() {
+  try {
+    const data = await api(`/api/workspace/${supplierId}/ruptures`);
+    setRuptureBadge((data.demandes ?? []).filter((demande) => demande.statut === 'OPEN').length);
+  } catch {
+    setRuptureBadge(0);
+  }
+}
+
+/* La pastille ne compte que ce qui attend une réponse de l'atelier. Y ajouter
+   ses propres signalements lui reprocherait le travail qu'il a déjà fait. */
+function setRuptureBadge(nombre) {
+  const badge = $('ws-rup-badge');
+  if (!badge) return;
+  badge.hidden = nombre === 0;
+  badge.textContent = String(nombre);
+}

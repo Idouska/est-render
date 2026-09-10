@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { env } from '../config/env.ts';
 import { recordAudit } from '../lib/audit.ts';
 import { prisma } from '../lib/prisma.ts';
+import { signSupplierToken } from '../lib/supplierToken.ts';
 import { verifySupplierWorkspaceToken } from '../lib/supplierToken.ts';
 import { ordersToCsv } from '../services/export/ordersCsv.ts';
 import { ordersToXlsx } from '../services/export/ordersXlsx.ts';
@@ -1076,6 +1077,119 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
       if (!workspace) return;
 
       return sendParcelPhoto(reply, request.params.parcelId, workspace.merchantId);
+    },
+  );
+
+  /**
+   * Les ruptures, vues depuis l'atelier.
+   *
+   * Deux sens, et l'atelier a besoin des deux — c'est même la seule page où
+   * ils se rejoignent :
+   *
+   *   CE QU'IL A SIGNALÉ. Aujourd'hui, dire « article indisponible » depuis
+   *   une commande envoie l'information dans le vide : rien ne revient. Le
+   *   préparateur ne sait pas si le marchand l'a lue, ni s'il doit continuer
+   *   d'attendre ou emballer le reste. Le statut du ticket répond à ça.
+   *
+   *   CE QUE LE MARCHAND LUI DEMANDE. Les escalades de rupture arrivent par
+   *   mail, avec un lien signé. Un mail se perd, se classe, se lit sur un
+   *   téléphone à sept heures du matin. Les retrouver ici, dans l'écran qu'il
+   *   ouvre chaque jour, évite qu'une demande dorme faute d'avoir été revue.
+   *
+   * Le lien de réponse est reforgé côté serveur plutôt que stocké : c'est le
+   * même jeton que celui du mail, portant la même escalade, et le jeton
+   * d'atelier prouve déjà que le demandeur est bien ce fournisseur. Aucun
+   * accès nouveau n'est ouvert — seulement un second chemin vers une porte
+   * qu'il possède.
+   */
+  app.get<{ Params: { id: string }; Querystring: { token?: string } }>(
+    '/api/workspace/:id/ruptures',
+    async (request, reply) => {
+      const workspace = await authorize(request, reply);
+      if (!workspace) return;
+
+      const [demandes, signalements] = await Promise.all([
+        prisma.supplierEscalation.findMany({
+          where: {
+            merchantId: workspace.merchantId,
+            supplierId: workspace.supplierId,
+            reason: 'OUT_OF_STOCK',
+          },
+          orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+          take: 60,
+          select: {
+            id: true,
+            status: true,
+            note: true,
+            createdAt: true,
+            notifiedAt: true,
+            ticket: { select: { orderName: true } },
+            messages: {
+              orderBy: { createdAt: 'asc' },
+              take: 1,
+              select: { body: true },
+            },
+          },
+        }),
+        /*
+         * Ses propres signalements, reconnus au fil : `supplier:<id>:<cmd>:STOCK`.
+         * C'est la clé que pose la route de signalement, et elle isole à la
+         * fois le fournisseur et le motif — un atelier ne voit jamais les
+         * signalements d'un autre.
+         */
+        prisma.ticket.findMany({
+          where: {
+            merchantId: workspace.merchantId,
+            gmailThreadId: { startsWith: `supplier:${workspace.supplierId}:` },
+            AND: { gmailThreadId: { endsWith: ':STOCK' } },
+          },
+          orderBy: { lastMessageAt: 'desc' },
+          take: 60,
+          select: {
+            id: true,
+            orderName: true,
+            status: true,
+            lastMessageAt: true,
+            createdAt: true,
+            messages: {
+              where: { direction: 'INBOUND' },
+              orderBy: { receivedAt: 'asc' },
+              take: 1,
+              select: { bodyText: true },
+            },
+          },
+        }),
+      ]);
+
+      return reply.send({
+        demandes: demandes
+          // Une escalade encore en brouillon n'a pas été envoyée : la montrer
+          // ferait répondre à une question que le marchand n'a pas posée.
+          .filter((demande) => demande.status !== 'DRAFTING')
+          .map((demande) => ({
+            id: demande.id,
+            statut: demande.status,
+            orderName: demande.ticket.orderName,
+            note: demande.note,
+            message: demande.messages[0]?.body ?? null,
+            envoyeLe: demande.notifiedAt ?? demande.createdAt,
+            lien: `${env.APP_URL}/supplier/${demande.id}?token=${signSupplierToken({
+              escalationId: demande.id,
+              merchantId: workspace.merchantId,
+            })}`,
+          })),
+        signalements: signalements.map((ticket) => ({
+          id: ticket.id,
+          orderName: ticket.orderName,
+          /* Deux états seulement, parce que c'est tout ce que l'atelier peut
+             en faire : le marchand a repris le dossier, ou pas encore. Lui
+             servir les sept statuts internes du SAV ne l'aiderait pas à
+             décider s'il emballe ou s'il attend. */
+          traite: ticket.status === 'CLOSED' || ticket.status === 'AUTO_SENT',
+          detail: ticket.messages[0]?.bodyText ?? null,
+          signaleLe: ticket.createdAt,
+        })),
+      });
     },
   );
 
