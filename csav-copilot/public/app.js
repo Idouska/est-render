@@ -1154,11 +1154,17 @@ async function loadQueue({ append = false } = {}) {
           } />
         </label>
         <button class="queue-item li-${ticket.intent ?? 'OTHER'}${
-          // Le gras suit la lecture dans Gmail, pas l'archivage : ouvrir un
-          // mail suffit à l'éteindre, exactement comme dans Gmail. L'archivage
+          // Le gras suit la lecture, pas l'archivage : ouvrir un message
+          // suffit à l'éteindre, exactement comme dans Gmail. L'archivage
           // garde son rôle ailleurs — c'est lui qui remplit le dossier
           // Archivés.
-          ticket.gmailUnread === false ? ' q-done' : ''
+          //
+          // Deux façons d'avoir été lu, et il faut les deux. `gmailUnread`
+          // vient du fil Gmail : il ne s'éteint que si quelqu'un ouvre le
+          // message DANS Gmail, l'outil n'ayant que `gmail.readonly` et ne
+          // pouvant pas retirer le libellé. `openedAt` dit qu'on l'a ouvert
+          // ici. Sans le second, cliquer sur un message ne l'éteignait jamais.
+          estLu(ticket) ? ' q-done' : ''
         }" data-id="${ticket.id}"
           aria-current="${ticket.id === state.currentId}">
           <!--
@@ -2890,6 +2896,19 @@ const STATUS_LABELS = {
  * dépenser à l'avance rend l'ouverture instantanée sans rien changer au reste :
  * c'est le gain de vitesse ressentie le moins cher qui existe.
  */
+/**
+ * Un message a-t-il été lu ?
+ *
+ * Deux sources, et la lecture est l'une OU l'autre : le fil n'est plus marqué
+ * non lu dans Gmail, ou quelqu'un de l'équipe l'a ouvert ici. Le serveur
+ * applique la même règle pour ses trois compteurs ; l'écrire deux fois
+ * autrement ferait voir un message en gras que la pastille ne compte pas, ce
+ * qui se lit comme un compteur cassé plutôt que comme une règle incohérente.
+ */
+function estLu(ticket) {
+  return ticket.gmailUnread === false || Boolean(ticket.openedAt);
+}
+
 const prefetched = new Map();
 
 function prefetchTicket(id) {
@@ -2941,24 +2960,59 @@ async function selectTicket(id, { silent = false } = {}) {
   /*
    * Le compteur de non lus suit l'ouverture d'un ticket.
    *
-   * `GET /api/tickets/:id` relit le fil chez Gmail au passage et corrige son
-   * état de lecture en base. Le badge de la navigation, lui, ne bougeait qu'au
-   * rafraîchissement suivant — jusqu'à soixante secondes plus tard. On ouvrait
-   * un message manifestement lu et le nombre ne bronchait pas, ce qui se lit
-   * comme un compteur cassé.
+   * Le badge de la navigation ne bougeait qu'au rafraîchissement suivant —
+   * jusqu'à soixante secondes plus tard. On ouvrait un message manifestement
+   * lu et le nombre ne bronchait pas, ce qui se lit comme un compteur cassé.
    *
    * Le serveur reste la source unique : on redemande la valeur, on ne la
    * décrémente pas ici. Un compteur tenu à deux endroits finit toujours par
    * dire deux choses.
    */
-  const wasUnread = detail.ticket.gmailUnread;
+  const etaitNonLu = !estLu(detail.ticket);
+
+  await marqueOuvert(detail, id);
 
   renderDetail();
   await Promise.all([loadQueue(), loadEscalations(id)]);
 
   // Seulement si l'état a pu changer : recompter à chaque ouverture ajouterait
   // une requête par clic pour un nombre identique neuf fois sur dix.
-  if (wasUnread) void loadMetrics();
+  if (etaitNonLu) void loadMetrics();
+}
+
+/*
+ * Dire au serveur que ce message a été ouvert, et l'éteindre tout de suite.
+ *
+ * Un appel dédié, et non un effet de bord de `GET /api/tickets/:id` : cette
+ * fiche est préfetchée AU SURVOL pour rendre l'ouverture instantanée. Écrire
+ * depuis le GET marquerait lu tout ce que le curseur effleure en descendant
+ * la liste. C'est le clic qu'on enregistre, pas le passage.
+ *
+ * Sans attendre la réponse. Le gras est un confort d'affichage : le faire
+ * dépendre d'un aller-retour ferait clignoter la ligne une demi-seconde après
+ * le clic, ce qui se remarque bien plus qu'un gras qui s'éteint tard. En
+ * échec, la ligne reste en gras et le clic suivant réessaiera.
+ *
+ * L'objet local est modifié en même temps : `loadQueue()` va suivre, mais
+ * entre les deux la file rendue porte encore l'ancienne valeur.
+ */
+async function marqueOuvert(detail, id) {
+  if (detail.readOnly || estLu(detail.ticket)) return;
+
+  detail.ticket.openedAt = new Date().toISOString();
+  const ligne = document.querySelector(`.queue-item[data-id="${CSS.escape(id)}"]`);
+  ligne?.classList.add('q-done');
+
+  const enFile = state.tickets.find((ticket) => ticket.id === id);
+  if (enFile) enFile.openedAt = detail.ticket.openedAt;
+
+  try {
+    await api(`/api/tickets/${id}/ouvert`, { method: 'POST', body: '{}' });
+  } catch {
+    // Silencieux à dessein : un message d'erreur pour un gras non éteint
+    // interromprait la lecture pour un détail que l'utilisateur n'a pas
+    // demandé. La file le rallumera au prochain chargement.
+  }
 }
 
 /**

@@ -36,6 +36,15 @@ test('l’état Gmail du fil voyage jusqu’au navigateur', () => {
   assert.equal(QUEUE_SELECT.gmailArchived, true);
 });
 
+test('l’ouverture dans l’outil voyage aussi', () => {
+  // `gmailUnread` ne s'éteint que si quelqu'un ouvre le message DANS Gmail :
+  // l'outil n'a que `gmail.readonly` et ne peut pas retirer le libellé. C'est
+  // donc `openedAt` — et lui seul — qui éteint le gras au clic. Absent du
+  // `select`, il arrive `undefined`, `estLu` rend toujours faux, et cliquer
+  // sur un message ne change rien. Exactement le défaut qui a valu ce fichier.
+  assert.equal(QUEUE_SELECT.openedAt, true);
+});
+
 test('un champ servi sans être demandé reste possible', () => {
   // L'inverse n'est pas une erreur : la route peut servir plus que la file
   // n'affiche — le détail et les exports lisent la même réponse. Le test ne

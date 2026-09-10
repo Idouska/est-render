@@ -31,9 +31,9 @@ model Organization {
 }
 
 model Merchant {
-  id             String  @id @default(cuid())
+  id             String         @id @default(cuid())
   organizationId String?
-  shopDomain     String  @unique // ex. ma-boutique.myshopify.com
+  shopDomain     String         @unique // ex. ma-boutique.myshopify.com
   name           String?
   status         MerchantStatus @default(ACTIVE)
 
@@ -82,7 +82,7 @@ model Merchant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  organization        Organization?      @relation(fields: [organizationId], references: [id])
+  organization        Organization?        @relation(fields: [organizationId], references: [id])
   shopify             ShopifyConnection?
   mailboxes           GmailConnection[]
   users               User[]
@@ -180,7 +180,7 @@ model GmailConnection {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  merchant Merchant  @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
   tickets  Ticket[]
 
   @@unique([merchantId, emailAddress])
@@ -268,6 +268,22 @@ model Ticket {
   /// avant que quiconque l'ait ouvert.
   gmailUnread Boolean @default(true)
 
+  /// Quand quelqu'un de l'équipe a ouvert ce message DANS L'OUTIL.
+  ///
+  /// Il faut une colonne distincte de `gmailUnread`, parce que celle-là
+  /// appartient à Gmail : la synchronisation la réécrit à chaque passage
+  /// d'après les libellés du fil. Un « lu » posé dedans serait effacé au tour
+  /// suivant, et le gras se rallumerait tout seul une minute après avoir été
+  /// éteint.
+  ///
+  /// L'outil n'a que `gmail.readonly` : il ne peut pas retirer le libellé
+  /// UNREAD chez Google. Ouvrir un message ici ne le marque donc pas lu dans
+  /// Gmail — ce champ dit « quelqu'un de l'équipe a vu ce message dans cSAV »,
+  /// ce qui est l'information dont la file a besoin. La lecture est partagée
+  /// parce que la boîte l'est : dans un SAV à plusieurs, savoir qu'un collègue
+  /// a déjà regardé un message est précisément ce qu'on veut voir.
+  openedAt DateTime?
+
   /// Libellés Gmail portés par le fil, tels que le marchand les a créés.
   /// Les siens uniquement : les catégories automatiques de Google décrivent
   /// son classement à lui, pas l'organisation du SAV.
@@ -278,7 +294,7 @@ model Ticket {
   /// statistiques ferait croire à des mois de travail qui n'ont pas eu lieu.
   isHistorical Boolean @default(false)
 
-  lastMessageAt DateTime
+  lastMessageAt  DateTime
   /// Date à laquelle le fil Gmail complet a été relu pour ce ticket.
   ///
   /// L'ingestion ne ramasse que la boîte de réception : les réponses de
@@ -287,20 +303,21 @@ model Ticket {
   /// champ dit que c'est fait, sans quoi chaque ouverture rappellerait Gmail.
   threadSyncedAt DateTime?
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  merchant    Merchant             @relation(fields: [merchantId], references: [id], onDelete: Cascade)
-  assignedTo  User?                @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
-  mailbox     GmailConnection?     @relation(fields: [mailboxId], references: [id], onDelete: SetNull)
-  messages    Message[]
-  drafts      Draft[]
-  refunds     Refund[]
-  escalations SupplierEscalation[]
+  merchant       Merchant             @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  assignedTo     User?                @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
+  mailbox        GmailConnection?     @relation(fields: [mailboxId], references: [id], onDelete: SetNull)
+  messages       Message[]
+  drafts         Draft[]
+  refunds        Refund[]
+  escalations    SupplierEscalation[]
   supplierAlerts SupplierAlert[]
 
   @@unique([merchantId, gmailThreadId])
   @@index([merchantId, status])
+  @@index([merchantId, gmailUnread, openedAt])
   @@index([merchantId, lastMessageAt])
   @@index([merchantId, assignedToId])
   @@index([merchantId, mailboxId])
@@ -423,19 +440,19 @@ model Draft {
   ticketId     String
   gmailDraftId String?
 
-  body       String      @db.Text
+  body       String  @db.Text
   model      String
   confidence Float
-  reasoning  String?     @db.Text
+  reasoning  String? @db.Text
 
   /// Résumé du message du client, en deux à quatre points. L'agent doit
   /// pouvoir décider sans lire le fil : c'est ce qui fait la différence entre
   /// traiter cent tickets par jour et vingt.
-  summary    String[]
+  summary   String[]
   /// Ce que le client demande concrètement, en une ligne.
-  ask        String?
-  status     DraftStatus @default(PENDING_REVIEW)
-  createdBy  DraftAuthor @default(AI)
+  ask       String?
+  status    DraftStatus @default(PENDING_REVIEW)
+  createdBy DraftAuthor @default(AI)
 
   createdAt DateTime  @default(now())
   sentAt    DateTime?
@@ -514,7 +531,7 @@ enum RefundStatus {
 // transporteur qui perd, l'entrepôt qui se trompe de colis. Le rôle sert à
 // router l'escalade vers le bon métier plutôt qu'à décrire l'entreprise.
 model Supplier {
-  id           String       @id @default(cuid())
+  id           String  @id @default(cuid())
   merchantId   String
   name         String
   contactEmail String
@@ -522,8 +539,8 @@ model Supplier {
   phone        String?
   // Un fournisseur désactivé ne reçoit plus d'escalade mais garde son
   // historique : supprimer la ligne effacerait des échanges déjà consignés.
-  active       Boolean      @default(true)
-  notes        String?      @db.Text
+  active       Boolean @default(true)
+  notes        String? @db.Text
 
   /// Étendue des commandes visibles depuis son lien de travail.
   ///
@@ -566,7 +583,6 @@ model Supplier {
   @@unique([merchantId, contactEmail])
   @@index([merchantId, active])
 }
-
 
 model SupplierEscalation {
   id         String @id @default(cuid())
@@ -756,7 +772,7 @@ model SupplierAlert {
   merchantId String
   supplierId String
 
-  kind    SupplierAlertKind
+  kind           SupplierAlertKind
   /// Commande concernée, quand l'alerte en vise une.
   shopifyOrderId String?
   orderName      String?
@@ -805,7 +821,7 @@ model SupplierAlert {
   /// parmi les choses à traiter : le compteur ne redescendrait jamais, et un
   /// compteur qui ne redescend pas cesse d'être regardé. C'est le geste qui
   /// dit « j'ai répondu au client », pas « le fournisseur a répondu ».
-  handledAt      DateTime?
+  handledAt DateTime?
 
   merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
   supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
@@ -842,7 +858,6 @@ enum SupplierAlertStatus {
   ACKNOWLEDGED
   REFUSED
 }
-
 
 /// Retour client — le dossier « Reshipment ».
 ///
@@ -983,11 +998,11 @@ model ReturnAgency {
 /// route ne laisse rien, ce qui est la bonne lecture — il n'a pas fait son
 /// travail.
 model CronRun {
-  id    String   @id @default(cuid())
+  id     String   @id @default(cuid())
   /// `watch`, `remind` ou `purge`.
-  task  String
-  ranAt DateTime @default(now())
-  ok    Boolean
+  task   String
+  ranAt  DateTime @default(now())
+  ok     Boolean
   /// Compteurs du passage, ou message d'erreur s'il a échoué.
   detail Json?
 

@@ -22,3 +22,20 @@ export const PORTEE_NON_LU = {
   isHistorical: false,
   status: { notIn: ['CLOSED', 'AUTO_SENT'] as ('CLOSED' | 'AUTO_SENT')[] },
 };
+
+/**
+ * Ce qui, aujourd'hui, compte comme non lu.
+ *
+ * Deux conditions et non une : le fil porte encore le libellé `UNREAD` de
+ * Gmail, ET personne de l'équipe ne l'a ouvert dans l'outil. La seconde est
+ * nécessaire parce que l'outil n'a que `gmail.readonly` : ouvrir un message
+ * ici ne retire pas le libellé chez Google, donc `gmailUnread` reste vrai
+ * indéfiniment et le gras ne s'éteindrait jamais.
+ *
+ * Trois endroits en dépendent — le gras de la file, la pastille « Non lus »
+ * du rail de filtres, et « En attente de vous » du poste de pilotage. Écrite
+ * trois fois, la condition divergerait au premier ajustement : on verrait un
+ * message en gras que la pastille ne compte pas, ce qui donne l'impression
+ * que le compteur est cassé plutôt que la règle incohérente.
+ */
+export const NON_LU = { gmailUnread: true, openedAt: null } as const;
