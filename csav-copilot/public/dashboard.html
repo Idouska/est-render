@@ -925,6 +925,16 @@
            surveille. -->
       <section class="browse" id="view-overview" hidden aria-label="Vue d'ensemble">
         <div class="shopcards" id="ov-shops"></div>
+
+        <!-- Quand une source ne répond pas, cet écran se remplit de tirets.
+             Un tiret isolé s'explique tout seul ; six tirets sans un mot font
+             douter de l'outil plutôt que du réseau. Ce bandeau dit lequel des
+             deux appels a manqué, une fois, au lieu de le répéter par ligne. -->
+        <div class="notice notice-warn" id="ov-panne" hidden>
+          <span class="notice-mark">Partiel</span>
+          <div id="ov-panne-txt"></div>
+        </div>
+
         <div class="kpis ov-kpis" id="ov-kpis"></div>
 
         <div class="cockpit">
