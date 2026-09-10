@@ -6,10 +6,12 @@ import { getShopifyClient, ShopifyError } from '../services/shopify/client.ts';
 import { listOrders, quoteSearchValue } from '../services/shopify/orders.ts';
 import { fournisseurDuFil, lireArticle } from '../services/suppliers/signalement.ts';
 import {
+  cleProduit,
   commandesParSku,
   compteursVues,
   etatDossier,
   kpisRuptures,
+  phaseDossier,
   prioriteDossier,
   syntheseDossier,
   type DossierRupture,
@@ -315,6 +317,7 @@ export async function ruptureRoutes(app: FastifyInstance): Promise<void> {
         reponseClientLe: reponduLe.get(ticket.id) ?? null,
         rembourse: rembourses.has(ticket.id),
         sku: article?.sku ?? null,
+        produit: article?.titre ?? null,
         montant: montant(ticket.orderTotal),
       })),
       ...escalations.map((escalade) => ({
@@ -329,6 +332,7 @@ export async function ruptureRoutes(app: FastifyInstance): Promise<void> {
         reponseClientLe: reponduLe.get(escalade.ticketId) ?? null,
         rembourse: rembourses.has(escalade.ticketId),
         sku: lignePlusChere(escalade.ticket.orderName)?.sku ?? null,
+        produit: lignePlusChere(escalade.ticket.orderName)?.title ?? null,
         // `orderTotal` est un Decimal Prisma : le comparer à 200 sans conversion
         // compare un objet à un nombre, ce que JavaScript accepte en silence.
         montant: montant(escalade.ticket.orderTotal),
@@ -337,7 +341,10 @@ export async function ruptureRoutes(app: FastifyInstance): Promise<void> {
 
     const parSku = commandesParSku(bruts);
     const maintenant = Date.now();
-    const impact = (brut: DossierRupture) => (brut.sku ? (parSku.get(brut.sku) ?? 1) : 1);
+    const impact = (brut: DossierRupture) => {
+      const cle = cleProduit(brut);
+      return cle ? (parSku.get(cle) ?? 1) : 1;
+    };
 
     const dossiers = [
       ...lusSignalements.map(({ ticket, article, declare }, rang) => {
@@ -355,6 +362,7 @@ export async function ruptureRoutes(app: FastifyInstance): Promise<void> {
           ticketId: ticket.id,
           origine: 'atelier' as const,
           etat: etatDossier(brut),
+          phase: phaseDossier(brut),
           priorite: prioriteDossier(brut, impact(brut), maintenant),
           creeLe: ticket.createdAt,
           notifieLe: null,
@@ -398,6 +406,7 @@ export async function ruptureRoutes(app: FastifyInstance): Promise<void> {
           ticketId: escalade.ticketId,
           origine: 'marchand' as const,
           etat: etatDossier(brut),
+          phase: phaseDossier(brut),
           priorite: prioriteDossier(brut, impact(brut), maintenant),
           creeLe: escalade.createdAt,
           notifieLe: escalade.notifiedAt,

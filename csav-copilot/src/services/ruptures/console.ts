@@ -43,6 +43,8 @@ export interface DossierRupture {
   rembourse: boolean;
   /** SKU de l'article en rupture, quand la commande a pu être lue. */
   sku: string | null;
+  /** Nom du produit : le repli quand l'atelier n'a pas donné de référence. */
+  produit: string | null;
   /** Montant de la commande, pour peser l'urgence. */
   montant: number | null;
 }
@@ -157,7 +159,46 @@ export function prioriteDossier(
 }
 
 /**
- * Combien de dossiers ouverts partagent chaque SKU.
+ * Ce qui identifie un produit, référence ou, à défaut, nom.
+ *
+ * L'atelier ne remplit pas toujours la référence : il écrit « Nike Vomero
+ * Plus » et la taille, et c'est déjà beaucoup au moment d'emballer. Compter
+ * les ruptures sur la seule référence faisait afficher « 0 rupture active »
+ * au-dessus d'une rupture bien réelle. Le nom sert de repli, ramené en
+ * minuscules pour que « Nike Vomero » et « nike vomero » ne fassent qu'un.
+ */
+export function cleProduit(dossier: DossierRupture): string | null {
+  if (dossier.sku) return `sku:${dossier.sku}`;
+  const nom = dossier.produit?.trim().toLowerCase();
+  return nom ? `nom:${nom}` : null;
+}
+
+/**
+ * Les trois temps d'un dossier : créé, traité, classé.
+ *
+ * Une lecture plus grossière que les six états, et c'est son intérêt : la
+ * couleur au bord de la ligne se lit sans rien déchiffrer. Rouge, personne
+ * n'a encore répondu au client ; orange, il a eu une réponse ; vert, c'est
+ * clos.
+ *
+ * « Traité » se juge du côté du CLIENT, pas du fournisseur : dans un SAV, un
+ * dossier est traité quand la personne qui attend a eu des nouvelles. Une
+ * réponse partie avant la rupture ne compte pas — c'était une autre
+ * conversation. Un remboursement engagé vaut réponse : l'issue est décidée.
+ */
+export type PhaseDossier = 'cree' | 'traite' | 'classe';
+
+export function phaseDossier(dossier: DossierRupture): PhaseDossier {
+  if (dossier.statut === 'RESOLVED') return 'classe';
+  if (dossier.rembourse) return 'traite';
+
+  const repondu =
+    dossier.reponseClientLe !== null && dossier.reponseClientLe > dossier.creeLe;
+  return repondu ? 'traite' : 'cree';
+}
+
+/**
+ * Combien de dossiers ouverts partagent chaque produit.
  *
  * C'est ce qui transforme une liste de tickets en console : huit lignes qui
  * disent la même rupture sont un seul problème à traiter à la source. Les
@@ -168,8 +209,9 @@ export function commandesParSku(dossiers: readonly DossierRupture[]): Map<string
   const parSku = new Map<string, number>();
 
   for (const dossier of dossiers) {
-    if (dossier.sku === null || dossier.statut === 'RESOLVED') continue;
-    parSku.set(dossier.sku, (parSku.get(dossier.sku) ?? 0) + 1);
+    const cle = cleProduit(dossier);
+    if (cle === null || dossier.statut === 'RESOLVED') continue;
+    parSku.set(cle, (parSku.get(cle) ?? 0) + 1);
   }
 
   return parSku;
@@ -199,7 +241,7 @@ export function kpisRuptures(dossiers: readonly DossierRupture[]): KpisRuptures 
   const ouverts = dossiers.filter((dossier) => dossier.statut !== 'RESOLVED');
 
   const references = new Set(
-    ouverts.map((dossier) => dossier.sku).filter((sku): sku is string => sku !== null),
+    ouverts.map(cleProduit).filter((cle): cle is string => cle !== null),
   );
 
   const delais = dossiers

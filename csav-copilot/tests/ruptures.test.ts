@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  cleProduit,
   commandesParSku,
   compteursVues,
   etatDossier,
@@ -40,6 +41,7 @@ const dossier = (patch: Partial<DossierRupture> = {}): DossierRupture => ({
   reponseClientLe: null,
   rembourse: false,
   sku: 'NK-AM90',
+  produit: null,
   montant: 129,
   ...patch,
 });
@@ -133,9 +135,14 @@ test('les commandes se comptent par SKU, dossiers clos exclus', () => {
     dossier({ id: 'e', sku: null }),
   ]);
 
-  assert.equal(parSku.get('NK-AM90'), 2, 'le dossier clos ne bloque plus personne');
-  assert.equal(parSku.get('AD-SAMBA'), 1);
-  assert.equal(parSku.has('null'), false);
+  // Lu par la clé officielle plutôt qu'en devinant son format : une clé est
+  // préfixée (`sku:` ou `nom:`) pour qu'une référence ne se confonde jamais
+  // avec un nom de produit, et le test n'a pas à le savoir.
+  const cle = (sku: string) => cleProduit(dossier({ sku }))!;
+
+  assert.equal(parSku.get(cle('NK-AM90')), 2, 'le dossier clos ne bloque plus personne');
+  assert.equal(parSku.get(cle('AD-SAMBA')), 1);
+  assert.equal(parSku.size, 2, 'un dossier sans référence ni nom ne crée pas de clé');
 });
 
 /* ---- les compteurs et les KPI ---- */

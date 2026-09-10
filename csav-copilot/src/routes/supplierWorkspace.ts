@@ -1162,6 +1162,28 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
         }),
       ]);
 
+      /*
+       * La dernière réponse partie vers le client, pour chaque signalement.
+       *
+       * C'est ce qui sépare « créé » de « traité » : un signalement est traité
+       * quand le marchand a répondu au client depuis — la même règle que dans
+       * sa propre page, pour que les deux écrans montrent la même couleur sur
+       * le même dossier. Le fournisseur ne voit que la couleur, jamais le
+       * contenu de la réponse : elle appartient au client.
+       */
+      const reponses = signalements.length
+        ? await prisma.message.groupBy({
+            by: ['ticketId'],
+            where: {
+              merchantId: workspace.merchantId,
+              ticketId: { in: signalements.map((ticket) => ticket.id) },
+              direction: 'OUTBOUND',
+            },
+            _max: { receivedAt: true },
+          })
+        : [];
+      const reponduLe = new Map(reponses.map((ligne) => [ligne.ticketId, ligne._max.receivedAt]));
+
       return reply.send({
         demandes: demandes
           // Une escalade encore en brouillon n'a pas été envoyée : la montrer
@@ -1174,6 +1196,14 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
             note: demande.note,
             message: demande.messages[0]?.body ?? null,
             envoyeLe: demande.notifiedAt ?? demande.createdAt,
+            // Vue depuis l'atelier : créé tant qu'il n'a pas répondu, traité
+            // quand il l'a fait, classé quand le marchand a clos.
+            phase:
+              demande.status === 'RESOLVED'
+                ? 'classe'
+                : demande.status === 'ANSWERED'
+                  ? 'traite'
+                  : 'cree',
             lien: `${env.APP_URL}/supplier/${demande.id}?token=${signSupplierToken({
               escalationId: demande.id,
               merchantId: workspace.merchantId,
@@ -1187,6 +1217,13 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
              servir les sept statuts internes du SAV ne l'aiderait pas à
              décider s'il emballe ou s'il attend. */
           traite: ticket.status === 'CLOSED' || ticket.status === 'AUTO_SENT',
+          phase:
+            ticket.status === 'CLOSED' || ticket.status === 'AUTO_SENT'
+              ? 'classe'
+              : (reponduLe.get(ticket.id) ?? null) !== null &&
+                  reponduLe.get(ticket.id)! > ticket.createdAt
+                ? 'traite'
+                : 'cree',
           detail: ticket.messages[0]?.bodyText ?? null,
           signaleLe: ticket.createdAt,
         })),

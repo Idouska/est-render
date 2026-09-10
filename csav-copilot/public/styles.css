@@ -8975,3 +8975,51 @@ html, body { overflow-x: clip; }
   color: var(--ink-soft);
   white-space: pre-line;
 }
+
+
+/* ------------------------------------------------ ruptures : trois couleurs --- */
+
+/*
+ * Chaque ligne devient une carte, pour que la couleur tourne dans l'angle.
+ *
+ * `.grid` fusionne ses bordures (`border-collapse: collapse`), et une table
+ * fusionnée ne sait pas arrondir un coin. Or c'est l'arrondi qui fait l'effet
+ * voulu : une bordure gauche épaisse sur une carte arrondie s'enroule dans
+ * l'angle et file un peu le long du bas, comme les cartes de l'atelier. D'où
+ * des bordures séparées et un léger écart entre les lignes.
+ */
+.rup-grid { border-collapse: separate; border-spacing: 0 6px; }
+.rup-main .table-wrap { background: transparent; border: 0; box-shadow: none; }
+
+.rup-grid tbody td {
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+/* `.grid` retire la bordure basse de la dernière ligne : ici chaque ligne
+   est une carte fermée, elle garde la sienne. */
+.rup-grid tbody tr:last-child td { border-bottom: 1px solid var(--line); }
+
+.rup-grid tbody td:first-child {
+  border-left: 1px solid var(--line);
+  border-radius: 10px 0 0 10px;
+}
+/* La barre épaisse n'appartient qu'aux dossiers. L'état vide et le squelette
+   de chargement sont aussi des lignes : une barre grise sur eux ne dirait
+   rien, sinon qu'une couleur manque. */
+.rup-grid tbody tr[data-phase] td:first-child { border-left: 5px solid var(--rup-phase); }
+.rup-grid tbody td:last-child {
+  border-right: 1px solid var(--line);
+  border-radius: 0 10px 10px 0;
+}
+
+/* Rouge, orange, vert : les jetons d'état de la palette, qui existent dans
+   les deux thèmes. */
+.rup-grid tbody tr[data-phase='cree'] { --rup-phase: var(--crit); }
+.rup-grid tbody tr[data-phase='traite'] { --rup-phase: var(--warn); }
+.rup-grid tbody tr[data-phase='classe'] { --rup-phase: var(--ok); }
+
+/* La sélection et le survol se peignent sur les cellules : le fond de la
+   ligne est désormais caché sous le leur. */
+.rup-grid tbody tr:hover td { background: var(--inset); }
+.rup-grid tbody tr[aria-selected='true'] td { background: var(--accent-soft); }
