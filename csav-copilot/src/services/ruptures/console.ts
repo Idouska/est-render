@@ -13,10 +13,23 @@
  * ajustement, et personne ne saurait lequel des deux ment.
  */
 
+/**
+ * D'où vient le dossier.
+ *
+ * `atelier` : le fournisseur a signalé l'article manquant depuis son espace.
+ * C'est la source la plus fiable — il tient le carton — et, dans les faits,
+ * la plus fréquente : le marchand n'apprend une rupture que par lui.
+ *
+ * `marchand` : le marchand a escaladé un ticket au fournisseur pour lui
+ * demander si l'article est disponible.
+ */
+export type OrigineRupture = 'atelier' | 'marchand';
+
 /** Ce que la route sait d'un dossier, une fois la base lue. */
 export interface DossierRupture {
   id: string;
   ticketId: string;
+  origine: OrigineRupture;
   /** Statut de l'escalade, tel qu'il est en base. */
   statut: 'DRAFTING' | 'OPEN' | 'ANSWERED' | 'RESOLVED';
   creeLe: Date;
@@ -76,6 +89,14 @@ export const ETAT_LIBELLES: Record<EtatRupture, string> = {
 export function etatDossier(dossier: DossierRupture): EtatRupture {
   if (dossier.statut === 'RESOLVED') return 'RESOLU';
   if (dossier.rembourse) return 'REMBOURSEMENT';
+
+  /*
+   * Un signalement d'atelier n'attend rien du fournisseur : c'est lui qui a
+   * parlé, et il a dit que l'article manquait. La rupture est confirmée, le
+   * client ne le sait pas — c'est exactement « client à prévenir », sans
+   * passer par les étapes d'une escalade qui n'a jamais eu lieu.
+   */
+  if (dossier.origine === 'atelier') return 'CLIENT_A_PREVENIR';
 
   // Le brouillon d'escalade n'est pas parti : rien n'a encore été demandé.
   if (dossier.statut === 'DRAFTING') return 'A_TRAITER';
@@ -255,22 +276,34 @@ export function syntheseDossier(params: {
   const jours = Math.floor((maintenant - dossier.creeLe.getTime()) / 86_400_000);
   const depuis = jours >= 1 ? ` depuis ${jours} jour${jours > 1 ? 's' : ''}` : " aujourd'hui";
 
-  phrases.push(
-    produit
-      ? `${produit} est en rupture${fournisseur ? ` chez ${fournisseur}` : ''}${depuis}.`
-      : `Rupture signalée${fournisseur ? ` chez ${fournisseur}` : ''}${depuis}.`,
-  );
+  if (dossier.origine === 'atelier') {
+    // Dire QUI a signalé : un fait rapporté par l'atelier ne se traite pas
+    // comme un doute que le marchand soumet au fournisseur.
+    phrases.push(
+      `${fournisseur ?? 'L’atelier'} a signalé ${produit ?? 'cet article'} en rupture${depuis}.`,
+    );
+  } else {
+    phrases.push(
+      produit
+        ? `${produit} est en rupture${fournisseur ? ` chez ${fournisseur}` : ''}${depuis}.`
+        : `Rupture signalée${fournisseur ? ` chez ${fournisseur}` : ''}${depuis}.`,
+    );
+  }
 
   if (commandesImpactees > 1) {
     phrases.push(`${commandesImpactees} commandes sont bloquées par cette même référence.`);
   }
 
-  phrases.push(recommandation(etatDossier(dossier)));
+  phrases.push(recommandation(etatDossier(dossier), dossier.origine));
 
   return phrases;
 }
 
-function recommandation(etat: EtatRupture): string {
+function recommandation(etat: EtatRupture, origine: OrigineRupture): string {
+  if (etat === 'CLIENT_A_PREVENIR' && origine === 'atelier') {
+    return 'Le client ne le sait pas encore : prévenez-le, en proposant une alternative si une référence équivalente est en stock.';
+  }
+
   switch (etat) {
     case 'A_TRAITER':
       return 'Le fournisseur n’a pas encore été sollicité : commencez par lui.';

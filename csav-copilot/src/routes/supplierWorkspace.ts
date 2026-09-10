@@ -4,6 +4,7 @@ import { env } from '../config/env.ts';
 import { recordAudit } from '../lib/audit.ts';
 import { prisma } from '../lib/prisma.ts';
 import { signSupplierToken } from '../lib/supplierToken.ts';
+import { lignesArticle } from '../services/suppliers/signalement.ts';
 import { verifySupplierWorkspaceToken } from '../lib/supplierToken.ts';
 import { ordersToCsv } from '../services/export/ordersCsv.ts';
 import { ordersToXlsx } from '../services/export/ordersXlsx.ts';
@@ -1283,15 +1284,15 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
             '',
             // Le détail de l'article avant la note libre : c'est ce qui décide
             // de la réponse au client, la note ne fait que l'expliquer.
-            [
-              parsed.data.product ? `Article : ${parsed.data.product}` : null,
-              parsed.data.color ? `Couleur : ${parsed.data.color}` : null,
-              parsed.data.size ? `Taille : ${parsed.data.size}` : null,
-              parsed.data.sku ? `Référence : ${parsed.data.sku}` : null,
-              parsed.data.quantity ? `Quantité : ${parsed.data.quantity}` : null,
-            ]
-              .filter(Boolean)
-              .join('\n'),
+            // Le format vit dans `signalement.ts`, qui sait aussi le relire :
+            // la page des ruptures en extrait la taille et la référence.
+            lignesArticle({
+              produit: parsed.data.product ?? null,
+              couleur: parsed.data.color ?? null,
+              taille: parsed.data.size ?? null,
+              reference: parsed.data.sku ?? null,
+              quantite: parsed.data.quantity ?? null,
+            }).join('\n'),
             '',
             parsed.data.note,
           ]

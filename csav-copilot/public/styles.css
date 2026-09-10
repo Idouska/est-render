@@ -8953,3 +8953,25 @@ html, body { overflow-x: clip; }
    d'arrivées n'est ni bonne ni mauvaise : elle reste en encre neutre. */
 .kpi-delta.kd-ok { color: var(--ok-ink); }
 .kpi-delta.kd-bad { color: var(--crit-ink); }
+
+
+/* ------------------------------------------- ruptures : signalées par l'atelier --- */
+
+/* Discret, sous le statut : l'information compte, mais elle précise le
+   statut, elle ne le remplace pas. */
+.rup-orig { display: block; margin-top: 3px; font-size: 11px; color: var(--ink-mute); }
+
+/* Le message de l'atelier garde ses retours à la ligne : article, couleur,
+   taille, puis la note. Recollé en un paragraphe, il faudrait relire pour
+   trouver la taille — qui est justement ce qu'on vient vérifier. */
+.rup-message {
+  margin: 0;
+  padding: 9px 10px;
+  border-left: 3px solid var(--line);
+  background: var(--ground);
+  border-radius: var(--r-sm);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  white-space: pre-line;
+}

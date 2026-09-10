@@ -13436,7 +13436,9 @@ function renderRuptureKpis() {
   const cartes = [
     ['box', 'Ruptures actives', n(k?.rupturesActives), 'références bloquées'],
     ['bag', 'Commandes impactées', n(k?.commandesImpactees), 'dossiers ouverts'],
-    ['users', 'Clients à prévenir', n(k?.clientsAPrevenir), 'réponse reçue, non transmise'],
+    // Vaut pour les deux origines : la rupture est connue — signalée par
+    // l'atelier ou confirmée en réponse — et le client ne le sait pas.
+    ['users', 'Clients à prévenir', n(k?.clientsAPrevenir), 'rupture connue, client pas prévenu'],
     ['truck', 'En attente fournisseur', n(k?.enAttenteFournisseur), 'sans réponse'],
     [
       'clock',
@@ -13568,7 +13570,13 @@ function renderRuptureLignes(page, total) {
               : '<span class="rup-blank"></span>'
           }
           <span style="min-width:0">
-            <b>${esc(d.article?.titre ?? 'Article non lu')}</b>
+            <b>${esc(
+              d.article?.titre ??
+                // « Non lu » dit que Shopify n'a pas répondu ; un atelier qui
+                // n'a rien précisé est une autre situation, qui se lit dans
+                // son message.
+                (d.origine === 'atelier' ? 'Article non précisé' : 'Article non lu'),
+            )}</b>
             <small>${esc(d.article?.sku ?? '—')}</small>
           </span>
         </span></td>
@@ -13577,7 +13585,15 @@ function renderRuptureLignes(page, total) {
         <td class="num"><span class="rup-impact${
           d.commandesImpactees > 1 ? ' rup-impact-fort' : ''
         }">${d.commandesImpactees}</span></td>
-        <td><span class="rup-etat rup-${esc(d.etat)}">${esc(RUP_LIBELLES[d.etat] ?? d.etat)}</span></td>
+        <td><span class="rup-etat rup-${esc(d.etat)}">${esc(RUP_LIBELLES[d.etat] ?? d.etat)}</span>${
+          /* Sous le statut et non dans la colonne Fournisseur : celle-ci
+             s'escamote sous 1 760 px, et savoir qui a signalé change la
+             lecture du dossier — un fait rapporté par l'atelier n'est pas une
+             question posée par le marchand. */
+          d.origine === 'atelier'
+            ? '<small class="rup-orig">signalé par l’atelier</small>'
+            : ''
+        }</td>
         <td class="rup-age">${esc(age)}</td>
         <td>${
           d.priorite
@@ -13742,8 +13758,12 @@ function renderRupturePanneau() {
                 ? `<div class="rup-line"><span>Variante</span><span>${esc(d.article.variante)}</span></div>`
                 : ''
             }
-            <div class="rup-line"><span>Quantité commandée</span><span>${d.article.quantite}</span></div>`
-          : '<p class="empty">Article non lu : le détail vient de Shopify, qui n’a pas répondu.</p>'
+            <div class="rup-line"><span>${
+              d.origine === 'atelier' ? 'Quantité manquante' : 'Quantité commandée'
+            }</span><span>${d.article.quantite}</span></div>`
+          : d.origine === 'atelier'
+            ? '<p class="empty">L’atelier n’a pas précisé l’article : lisez son message ci-dessous.</p>'
+            : '<p class="empty">Article non lu : le détail vient de Shopify, qui n’a pas répondu.</p>'
       }
       <div class="rup-line"><span>Commandes impactées</span><span>${d.commandesImpactees}</span></div>
       ${
@@ -13755,10 +13775,27 @@ function renderRupturePanneau() {
       }
     </div>
 
+    ${
+      /* Le message de l'atelier, tel qu'il l'a écrit. Le détail relu plus haut
+         en est tiré, mais la note libre — « il ne reste rien en 38 » — ne se
+         résume pas en champs, et c'est souvent elle qui dit quoi répondre. */
+      d.origine === 'atelier' && d.signalement
+        ? `<div class="rup-sec">
+             <h3>Message de l’atelier</h3>
+             <p class="rup-message">${esc(d.signalement)}</p>
+           </div>`
+        : ''
+    }
+
     <div class="rup-sec">
       <h3>Fournisseur</h3>
       ${
-        d.fournisseur
+        d.origine === 'atelier'
+          ? `<div class="rup-line"><span>A signalé</span><span>${esc(
+              d.fournisseur?.name ?? 'Atelier inconnu',
+            )}</span></div>
+             <div class="rup-line"><span>Le</span><span>${esc(dateCourte(d.creeLe))}</span></div>`
+          : d.fournisseur
           ? `<div class="rup-line"><span>Atelier</span><span>${esc(d.fournisseur.name)}</span></div>
              ${
                d.notifieLe
@@ -13906,6 +13943,14 @@ function renderRuptureActions(d) {
     gestes.push(resoudre);
   }
 
+  // Un signalement sans adresse client connue : proposer d'écrire mènerait à
+  // un refus au clic. Le bouton disparaît, l'alternative passe devant.
+  if (d.origine === 'atelier' && !d.client?.email) {
+    const sans = gestes.filter((geste) => geste.cle !== 'client');
+    gestes.length = 0;
+    gestes.push(...sans);
+  }
+
   boite.innerHTML = gestes
     .map(
       (geste, rang) =>
@@ -13933,6 +13978,14 @@ async function ecrireAuClientDepuisRupture(d, phrase = null) {
     const detail = await api(`/api/tickets/${d.ticketId}`);
     if (!detail?.ticket) return toast('Ce dossier n’a plus de message rattaché.', true);
 
+    /* Un signalement fait sans adresse client connue porte l'adresse de
+       repli de l'atelier, `fournisseur+…@local`. La fenêtre de rédaction
+       l'utiliserait comme destinataire : le mail partirait vers une adresse
+       qui n'existe pas, et l'agent croirait le client prévenu. */
+    if (String(detail.ticket.customerEmail ?? '').startsWith('fournisseur+')) {
+      return toast('Adresse du client inconnue sur ce signalement — ouvrez la commande pour la retrouver.', true);
+    }
+
     state.detail = detail;
     openCompose('client', detail.ticket);
 
@@ -13956,9 +14009,24 @@ async function envoyerEscalade(d) {
   }
 }
 
+/*
+ * Clôturer, selon l'origine du dossier.
+ *
+ * Une escalade se résout sur sa propre route ; un signalement d'atelier est
+ * un ticket, qui se clôt comme tout ticket — et c'est ce qui le fait passer à
+ * « Repris par le marchand » dans l'espace du fournisseur. Appeler la route
+ * des escalades avec l'identifiant d'un ticket répondrait « introuvable », et
+ * le dossier resterait ouvert sans que le bouton ait l'air cassé.
+ */
+function cloreRupture(d) {
+  return d.origine === 'atelier'
+    ? api(`/api/tickets/${d.ticketId}/resolve`, { method: 'POST', body: '{}' })
+    : api(`/api/escalations/${d.id}/resolve`, { method: 'POST', body: '{}' });
+}
+
 async function resoudreRupture(d) {
   try {
-    await api(`/api/escalations/${d.id}/resolve`, { method: 'POST', body: '{}' });
+    await cloreRupture(d);
     toast('Dossier clôturé.');
     await loadRuptures();
   } catch (error) {
@@ -14127,8 +14195,10 @@ $('rup-bulk')?.addEventListener('click', async () => {
   // se gênent, et un échec au milieu doit laisser un état lisible.
   let faits = 0;
   for (const id of ids) {
+    const dossier = r.dossiers.find((candidat) => candidat.id === id);
+    if (!dossier) continue;
     try {
-      await api(`/api/escalations/${id}/resolve`, { method: 'POST', body: '{}' });
+      await cloreRupture(dossier);
       faits += 1;
     } catch {
       // On continue : un dossier déjà clos ne doit pas bloquer les autres.

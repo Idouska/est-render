@@ -31,6 +31,7 @@ const ilYa = (jours: number) => new Date(T - jours * 86_400_000);
 const dossier = (patch: Partial<DossierRupture> = {}): DossierRupture => ({
   id: 'e1',
   ticketId: 't1',
+  origine: 'marchand',
   statut: 'OPEN',
   creeLe: ilYa(1),
   notifieLe: ilYa(1),
