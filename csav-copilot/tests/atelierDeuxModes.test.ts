@@ -66,10 +66,14 @@ test('modifier le collage efface l’aperçu', () => {
 
   const zone = { innerHTML: '<table>aperçu</table>' };
   const state = { lot: { texte: 'ancien', plan: {} } };
-  new Function('state', '$', `(${fleche})();`)(state, () => zone);
+  let note: string | null = '« commandes.xlsx » lu';
+  new Function('state', '$', 'noteLot', `(${fleche})();`)(state, () => zone, (texte: string) => {
+    note = texte;
+  });
 
   assert.equal(state.lot, null, 'l’aperçu périmé doit être oublié');
   assert.equal(zone.innerHTML, '', 'et retiré de l’écran, bouton compris');
+  assert.equal(note, '', 'la note du fichier précédent ne décrit plus le texte affiché');
 });
 
 test('l’enregistrement renvoie le TEXTE, jamais l’aperçu', () => {
@@ -119,6 +123,79 @@ test('la conséquence est annoncée avant le bouton, et dans son libellé', () =
     apercu.indexOf("t('bulk.consequence'") < apercu.indexOf('id="bulk-save"'),
     'la phrase qui annonce les mails doit précéder le bouton',
   );
+});
+
+/* ---- le fichier déposé ---- */
+
+test('un fichier déposé ou choisi suit le même chemin, .xlsx compris', () => {
+  assert.match(html, /id="bulk-file"\s+accept="\.xlsx,/);
+  assert.match(js, /\$\('bulk-file'\)\?\.addEventListener\('change'[\s\S]{0,200}lireFichier\(fichier\)/);
+
+  const depot = js.slice(js.indexOf("document.addEventListener('drop'"));
+  assert.match(depot.slice(0, depot.indexOf('\n});')), /void lireFichier\(fichier\)/);
+});
+
+test('le glisser-déposer n’intercepte rien en mode « Une par une »', () => {
+  // Hors du mode « En masse », la page se comporte comme avant.
+  for (const evenement of ['dragenter', 'dragover', 'dragleave', 'drop']) {
+    const debut = js.indexOf(`document.addEventListener('${evenement}'`);
+    assert.ok(debut >= 0, `écoute ${evenement} introuvable`);
+    assert.match(
+      js.slice(debut, debut + 200),
+      /if \(state\.mode !== 'masse' \|\| !porteDesFichiers\(event\)\) return;/,
+      `${evenement} doit laisser passer hors du mode « En masse »`,
+    );
+  }
+});
+
+test('un .xlsx est lu par le serveur, puis vérifié comme un collage', () => {
+  const lecture = js.slice(js.indexOf('async function lireFichier'), js.indexOf('let profondeurDepot'));
+  assert.match(lecture, /parcels\/lot\/fichier/);
+  assert.match(lecture, /messageServeur\(error, 'bulk\.refus'\)/);
+  assert.ok(
+    lecture.lastIndexOf("$('bulk-texte').value = data.texte;") < lecture.lastIndexOf('return verifierLot();'),
+    'le texte lu s’affiche, puis part à la vérification ordinaire',
+  );
+});
+
+test('chaque refus du serveur a sa traduction', () => {
+  // Les codes rendus par le lecteur de classeurs et par l'import : une clé
+  // manquante afficherait le message français à un atelier qui lit le chinois.
+  const lecteur = lire('src/services/suppliers/lireClasseur.ts');
+  const codesClasseur = [...lecteur.match(/export type CodeRefus =([^;]+);/)![1]!.matchAll(/'(\w+)'/g)].map((m) => m[1]!);
+  const lot = route.slice(route.indexOf("'/api/workspace/:id/parcels/lot'"));
+  const codesLot = [...lot.slice(0, lot.indexOf("'/api/workspace/:id/alerts'")).matchAll(/code: '(\w+)'/g)].map((m) => m[1]!);
+
+  assert.ok(codesClasseur.length >= 5 && codesLot.length >= 4);
+  for (const { code } of LANGS) {
+    const table = (STRINGS as Record<string, Record<string, string>>)[code]!;
+    const manquantes = [
+      ...codesClasseur.map((c) => `bulk.refus.${c}`),
+      ...codesLot.map((c) => `bulk.err.${c}`),
+    ].filter((cle) => typeof table[cle] !== 'string');
+    assert.deepEqual(manquantes, [], code);
+  }
+});
+
+test('un refus codé se traduit, un code inconnu garde le message du serveur', () => {
+  const messageServeur = new Function(
+    't',
+    `${bloc(js, 'function messageServeur')} return messageServeur;`,
+  )((cle: string, v: Record<string, unknown>) =>
+    cle === 'bulk.err.trop' ? `Trop : ${v.lignes}/${v.max}` : cle,
+  ) as (erreur: Error & { code?: string; donnees?: object }, prefixe: string) => string;
+
+  const refus = (code: string | undefined, donnees = {}) =>
+    Object.assign(new Error('message du serveur'), { code, donnees });
+
+  assert.equal(messageServeur(refus('trop', { lignes: 412, max: 300 }), 'bulk.err'), 'Trop : 412/300');
+  assert.equal(messageServeur(refus('FST_ERR_CTP_BODY_TOO_LARGE'), 'bulk.err'), 'message du serveur');
+  assert.equal(messageServeur(refus(undefined), 'bulk.err'), 'message du serveur');
+});
+
+test('un numéro abîmé par Excel est à corriger, avec l’explication', () => {
+  assert.match(js, /abime_excel: 'bad',/);
+  assert.match(bloc(js, 'function renderApercu'), /ligne\.statut === 'abime_excel'[\s\S]{0,120}t\('bulk\.abimeHelp'\)/);
 });
 
 /* ---- le guichet ---- */

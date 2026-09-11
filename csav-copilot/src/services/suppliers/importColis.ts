@@ -30,8 +30,21 @@ export interface LigneCollee {
 /** Au-delà, on demande de couper : un collage de mille lignes est une erreur de sélection. */
 export const LIGNES_MAX = 300;
 
-/** Les séparateurs d'un collage : Excel colle des tabulations, un CSV des `;` ou des `,`. */
-const SEPARATEUR = /\t|;|,/;
+/**
+ * Le séparateur d'un collage, choisi une fois pour tout le texte.
+ *
+ * Excel colle des tabulations ; un CSV français sépare par `;`, un CSV
+ * anglais par `,`. Découper sur les trois à la fois coupait en deux tout
+ * nombre écrit à la française — « 4,20123E+21 » devenait un suivi « 4 » et
+ * un transporteur « 20123E+21 », avant même que la règle qui repère les
+ * numéros abîmés ait pu le voir. La tabulation l'emporte dès qu'elle
+ * apparaît : c'est la marque d'un collage depuis un tableur.
+ */
+function separateurDe(texte: string): string {
+  if (texte.includes('\t')) return '\t';
+  if (texte.includes(';')) return ';';
+  return ',';
+}
 
 /**
  * Ce qui ressemble à un en-tête : des lettres, et pas de numéro.
@@ -61,12 +74,13 @@ export function lireCollage(texte: string): LigneCollee[] {
   const lignes: LigneCollee[] = [];
 
   let premiere = true;
+  const separateur = separateurDe(texte);
 
   texte.split(/\r?\n/).forEach((brute, position) => {
     if (!brute.trim()) return;
 
     const [commande = '', suivi = '', transporteur = ''] = brute
-      .split(SEPARATEUR)
+      .split(separateur)
       .map((cellule) => cellule.trim().replace(/^"(.*)"$/, '$1').trim());
 
     // L'en-tête n'est reconnu qu'en PREMIÈRE ligne non vide. Plus loin, la
@@ -86,6 +100,25 @@ export function lireCollage(texte: string): LigneCollee[] {
   return lignes;
 }
 
+/**
+ * Un numéro de suivi qu'Excel a transformé en nombre, et donc abîmé.
+ *
+ * Tapé dans une cellule au format « Standard », un numéro fait uniquement de
+ * chiffres devient un NOMBRE, et Excel n'en garde que quinze chiffres : un
+ * suivi USPS de vingt-deux chiffres s'affiche « 4,20123E+21 », et les sept
+ * derniers sont perdus pour de bon — dans la cellule comme dans le fichier.
+ * L'envoyer au client serait lui donner un numéro qui n'existe pas, par un
+ * mail que l'on ne peut pas rappeler. Il est donc refusé, et l'aperçu dit
+ * pourquoi : la seule réparation est de le retaper en texte.
+ *
+ * Le motif couvre le collage (« 4,20123E+21 », virgule française comprise)
+ * comme la lecture d'un classeur, qui écrit ces cellules en notation
+ * exponentielle précisément pour qu'elles tombent ici.
+ */
+export function abimeParExcel(suivi: string): boolean {
+  return /^\d+(?:[.,]\d+)?e[+-]?\d+$/i.test(suivi);
+}
+
 /** « 13811 », « #13811 » et « # 13811 » désignent la même commande, écrite comme Shopify la nomme. */
 export function normaliserCommande(saisie: string): string | null {
   const chiffres = saisie.replace(/\s+/g, '').replace(/^#/, '');
@@ -94,6 +127,7 @@ export function normaliserCommande(saisie: string): string | null {
 
 export type StatutLigne =
   | 'pret'
+  | 'abime_excel'
   | 'invalide'
   | 'introuvable'
   | 'doublon'
@@ -176,6 +210,9 @@ export function planifierLot(
       index: null,
       total: null,
     };
+
+    // Avant la longueur : « 4,20123E+21 » a une longueur tout à fait plausible.
+    if (abimeParExcel(ligne.suivi)) return { ...base, statut: 'abime_excel' as const };
 
     if (!nom || ligne.suivi.length < 3 || ligne.suivi.length > 80) {
       return { ...base, statut: 'invalide' as const };

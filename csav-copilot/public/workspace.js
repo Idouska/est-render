@@ -153,8 +153,29 @@ async function api(path, options) {
   });
 
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error ?? t('error.generic', { status: response.status }));
+  if (!response.ok) {
+    const erreur = new Error(data.error ?? t('error.generic', { status: response.status }));
+    // Le code, quand le serveur en donne un, permet de traduire le refus :
+    // voir `messageServeur`.
+    erreur.code = data.code;
+    erreur.donnees = data;
+    throw erreur;
+  }
   return data;
+}
+
+/**
+ * Le message d'un refus du serveur, dans la langue de l'atelier.
+ *
+ * Le serveur ne connaît pas la langue choisie à l'écran : quand il donne un
+ * code, on le traduit sous `prefixe` ; sinon — ou pour un code que la page ne
+ * connaît pas — son message tel quel, plutôt que le nom d'une clé.
+ */
+function messageServeur(error, prefixe) {
+  if (!error.code) return error.message;
+  const cle = `${prefixe}.${error.code}`;
+  const traduit = t(cle, error.donnees ?? {});
+  return traduit === cle ? error.message : traduit;
 }
 
 /* Un cliché brut de téléphone pèse plusieurs mégaoctets : inenvoyable depuis
@@ -1669,6 +1690,7 @@ document.querySelectorAll('#ws-modes [data-mode]').forEach((bouton) =>
    sera écrite ; toutes les autres expliquent pourquoi une ligne ne l'est pas. */
 const STATUTS_LOT = {
   pret: 'ok',
+  abime_excel: 'bad',
   deja_saisi: 'neutre',
   invalide: 'bad',
   introuvable: 'bad',
@@ -1677,13 +1699,124 @@ const STATUTS_LOT = {
   deja_expediee: 'neutre',
 };
 
-/** Un fichier CSV choisi est lu dans la zone de collage : un seul chemin ensuite. */
-$('bulk-file')?.addEventListener('change', async (event) => {
+/** Un fichier choisi suit la même lecture qu'un fichier déposé. */
+$('bulk-file')?.addEventListener('change', (event) => {
   const fichier = event.target.files?.[0];
-  if (!fichier) return;
-  $('bulk-texte').value = await fichier.text();
   event.target.value = '';
-  void verifierLot();
+  if (fichier) void lireFichier(fichier);
+});
+
+/** Le message sous la zone de collage : ce qui a été lu, ou pourquoi rien ne l'a été. */
+function noteLot(texte, ton = '') {
+  const note = $('bulk-note');
+  note.hidden = !texte;
+  note.textContent = texte ?? '';
+  note.className = `bulk-note${ton ? ` bulk-note-${ton}` : ''}`;
+}
+
+/** Un fichier en base 64, par le lecteur du navigateur : pas de pile qui déborde sur 15 Mo. */
+function enBase64(fichier) {
+  return new Promise((resoudre, rejeter) => {
+    const lecteur = new FileReader();
+    lecteur.onload = () => resoudre(String(lecteur.result).split(',')[1] ?? '');
+    lecteur.onerror = () => rejeter(lecteur.error);
+    lecteur.readAsDataURL(fichier);
+  });
+}
+
+/*
+ * Lire un fichier déposé ou choisi, et le poser dans la zone de collage.
+ *
+ * Un CSV se lit ici même, c'est du texte. Un .xlsx est une archive : il part
+ * au serveur, qui le lit avec la bibliothèque qui écrit déjà l'export, et
+ * rend le même texte qu'un collage. Dans les deux cas le texte s'affiche —
+ * l'atelier voit exactement ce qui a été lu — puis la vérification part
+ * d'elle-même : on ne dépose pas un fichier pour s'arrêter en chemin.
+ *
+ * L'ancien format .xls est refusé avec la manière d'en sortir, plutôt que
+ * lu de travers : aucune bibliothèque sûre ne le lit sans surprise.
+ */
+async function lireFichier(fichier) {
+  const nom = fichier.name || 'fichier';
+  const extension = nom.toLowerCase().split('.').pop();
+
+  if (fichier.size > 15 * 1024 * 1024) return noteLot(t('bulk.tooBig'), 'bad');
+  if (extension === 'xls') return noteLot(t('bulk.oldXls'), 'bad');
+
+  state.lot = null;
+  $('bulk-apercu').innerHTML = '';
+
+  if (['csv', 'tsv', 'txt'].includes(extension)) {
+    $('bulk-texte').value = await fichier.text();
+    noteLot(t('bulk.readText', { nom }), 'ok');
+    return verifierLot();
+  }
+
+  if (extension !== 'xlsx') return noteLot(t('bulk.badFormat'), 'bad');
+
+  noteLot(t('bulk.reading', { nom }));
+  let data;
+  try {
+    data = await api(`/api/workspace/${supplierId}/parcels/lot/fichier`, {
+      method: 'POST',
+      body: { fichier: await enBase64(fichier), nom },
+    });
+  } catch (error) {
+    // Le serveur ne parle pas la langue de l'atelier : il rend un code, que
+    // `messageServeur` traduit.
+    return noteLot(messageServeur(error, 'bulk.refus'), 'bad');
+  }
+
+  if (!data.lues) {
+    $('bulk-texte').value = '';
+    return noteLot(t('bulk.noTracking', { nom, ignorees: data.ignorees ?? 0 }), 'warn');
+  }
+
+  $('bulk-texte').value = data.texte;
+  noteLot(t('bulk.readResult', { nom, lues: data.lues, ignorees: data.ignorees ?? 0 }), 'ok');
+  return verifierLot();
+}
+
+/*
+ * Le glisser-déposer, sur toute la page en mode « En masse ».
+ *
+ * Toute la page, et pas seulement la zone : un fichier lâché à côté serait
+ * OUVERT par le navigateur à la place de l'atelier, et le travail en cours
+ * serait perdu. En mode « Une par une », rien n'est intercepté — la page se
+ * comporte comme avant.
+ *
+ * Le compteur de profondeur évite le clignotement du voile : chaque élément
+ * survolé à l'intérieur de la page émet sa propre paire entrée/sortie.
+ */
+let profondeurDepot = 0;
+const porteDesFichiers = (event) => [...(event.dataTransfer?.types ?? [])].includes('Files');
+
+document.addEventListener('dragenter', (event) => {
+  if (state.mode !== 'masse' || !porteDesFichiers(event)) return;
+  event.preventDefault();
+  profondeurDepot += 1;
+  $('ws-bulk').classList.add('bulk-depot');
+});
+
+document.addEventListener('dragover', (event) => {
+  if (state.mode !== 'masse' || !porteDesFichiers(event)) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'copy';
+});
+
+document.addEventListener('dragleave', (event) => {
+  if (state.mode !== 'masse' || !porteDesFichiers(event)) return;
+  profondeurDepot = Math.max(0, profondeurDepot - 1);
+  if (profondeurDepot === 0) $('ws-bulk').classList.remove('bulk-depot');
+});
+
+document.addEventListener('drop', (event) => {
+  if (state.mode !== 'masse' || !porteDesFichiers(event)) return;
+  event.preventDefault();
+  profondeurDepot = 0;
+  $('ws-bulk').classList.remove('bulk-depot');
+  const fichier = event.dataTransfer.files?.[0];
+  if (fichier) void lireFichier(fichier);
 });
 
 $('bulk-check')?.addEventListener('click', () => void verifierLot());
@@ -1691,6 +1824,7 @@ $('bulk-check')?.addEventListener('click', () => void verifierLot());
 /* Modifier le collage invalide l'aperçu : on ne doit jamais pouvoir
    confirmer un aperçu qui ne correspond plus au texte affiché. */
 $('bulk-texte')?.addEventListener('input', () => {
+  noteLot('');
   if (state.lot) {
     state.lot = null;
     $('bulk-apercu').innerHTML = '';
@@ -1718,7 +1852,7 @@ async function verifierLot() {
     renderApercu();
   } catch (error) {
     state.lot = null;
-    zone.innerHTML = `<p class="bulk-msg bulk-msg-bad">${esc(error.message)}</p>`;
+    zone.innerHTML = `<p class="bulk-msg bulk-msg-bad">${esc(messageServeur(error, 'bulk.err'))}</p>`;
   } finally {
     $('bulk-check').disabled = false;
   }
@@ -1774,6 +1908,12 @@ function renderApercu() {
           .join('')}</tbody>
       </table>
     </div>
+
+    ${
+      plan.lignes.some((ligne) => ligne.statut === 'abime_excel')
+        ? `<p class="bulk-msg bulk-msg-warn">${esc(t('bulk.abimeHelp'))}</p>`
+        : ''
+    }
 
     ${
       plan.prets > 0
@@ -1845,6 +1985,7 @@ async function enregistrerLot() {
 
     state.lot = null;
     $('bulk-texte').value = '';
+    noteLot('');
     $('bulk-again')?.addEventListener('click', () => {
       $('bulk-apercu').innerHTML = '';
       $('bulk-texte').focus();
@@ -1856,7 +1997,7 @@ async function enregistrerLot() {
   } catch (error) {
     bouton.disabled = false;
     bouton.textContent = t('bulk.retry');
-    toast(error.message, true);
+    toast(messageServeur(error, 'bulk.err'), true);
   }
 }
 

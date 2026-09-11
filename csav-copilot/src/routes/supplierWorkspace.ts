@@ -6,6 +6,7 @@ import { prisma } from '../lib/prisma.ts';
 import { signSupplierToken } from '../lib/supplierToken.ts';
 import { lignesArticle } from '../services/suppliers/signalement.ts';
 import { LIGNES_MAX, lireCollage, normaliserCommande, planifierLot } from '../services/suppliers/importColis.ts';
+import { CLASSEUR_MAX_OCTETS, ClasseurRefuse, lireClasseur } from '../services/suppliers/lireClasseur.ts';
 import { verifySupplierWorkspaceToken } from '../lib/supplierToken.ts';
 import { ordersToCsv } from '../services/export/ordersCsv.ts';
 import { ordersToXlsx } from '../services/export/ordersXlsx.ts';
@@ -660,6 +661,45 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
   );
 
   /**
+   * Un classeur Excel déposé, rendu en texte.
+   *
+   * Cette route ne décide de RIEN : elle lit le fichier et rend le même texte
+   * qu'un collage. Le navigateur le pose dans la zone de collage — l'atelier
+   * voit ce qui a été lu — puis suit le chemin ordinaire : aperçu, puis
+   * confirmation. Un seul lecteur de lignes, un seul plan, une seule
+   * confirmation, que les numéros arrivent collés ou déposés.
+   *
+   * Le fichier voyage en base 64 dans du JSON : le reste de l'atelier parle
+   * ainsi, et 15 Mo en deviennent 20.
+   */
+  app.post<{ Params: { id: string }; Querystring: { token?: string } }>(
+    '/api/workspace/:id/parcels/lot/fichier',
+    { bodyLimit: Math.ceil((CLASSEUR_MAX_OCTETS * 4) / 3) + 64 * 1024 },
+    async (request, reply) => {
+      const workspace = await authorize(request, reply);
+      if (!workspace) return;
+
+      const parsed = z
+        .object({ fichier: z.string().min(1), nom: z.string().max(200).optional() })
+        .safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({ code: 'illisible', error: 'Fichier absent.' });
+      }
+
+      try {
+        const lu = await lireClasseur(Buffer.from(parsed.data.fichier, 'base64'));
+        return reply.send(lu);
+      } catch (error) {
+        if (error instanceof ClasseurRefuse) {
+          return reply.code(400).send({ code: error.code, error: error.message });
+        }
+        request.log.warn({ err: error, supplierId: workspace.supplierId }, 'Classeur non lu');
+        return reply.code(400).send({ code: 'illisible', error: 'Classeur illisible.' });
+      }
+    },
+  );
+
+  /**
    * L'import en masse : des numéros de suivi collés depuis Excel.
    *
    * Deux temps, et c'est tout le propos. `apercu: true` lit le collage et dit
@@ -684,14 +724,19 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
       const parsed = z
         .object({ texte: z.string().max(200_000), apercu: z.boolean() })
         .safeParse(request.body);
-      if (!parsed.success) return reply.code(400).send({ error: 'Import illisible' });
+      // Chaque refus porte un CODE : l'écran le traduit dans la langue de
+      // l'atelier, le message reste pour le journal.
+      if (!parsed.success) return reply.code(400).send({ code: 'illisible', error: 'Import illisible' });
 
       const lignes = lireCollage(parsed.data.texte);
       if (lignes.length === 0) {
-        return reply.code(400).send({ error: 'Rien à importer : collez au moins une ligne.' });
+        return reply.code(400).send({ code: 'vide', error: 'Rien à importer : collez au moins une ligne.' });
       }
       if (lignes.length > LIGNES_MAX) {
         return reply.code(400).send({
+          code: 'trop',
+          lignes: lignes.length,
+          max: LIGNES_MAX,
           error: `Trop de lignes (${lignes.length}) : importez-les en plusieurs fois, ${LIGNES_MAX} au plus.`,
         });
       }
@@ -728,7 +773,10 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
           request.log.warn({ err: error, supplierId: workspace.supplierId }, 'Import : commandes non lues');
           return reply
             .code(502)
-            .send({ error: 'Shopify n’a pas répondu : réessayez dans un instant. Rien n’a été enregistré.' });
+            .send({
+              code: 'shopify',
+              error: 'Shopify n’a pas répondu : réessayez dans un instant. Rien n’a été enregistré.',
+            });
         }
       }
 

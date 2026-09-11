@@ -133,7 +133,7 @@
               </svg>
               <span class="ws-mode-txt">
                 <b data-t="mode.bulk">En masse</b>
-                <small data-t="mode.bulkHint">Coller les numéros depuis Excel</small>
+                <small data-t="mode.bulkHint">Déposer la feuille Excel remplie</small>
               </span>
             </button>
           </div>
@@ -200,25 +200,34 @@
               </li>
               <li>
                 <b class="bulk-num">2</b>
-                <span data-t="bulk.step2">Ajoutez le numéro de suivi en face de chaque commande</span>
+                <span data-t="bulk.step2">Remplissez la colonne « Tracking » en face de chaque commande expédiée, puis enregistrez</span>
               </li>
               <li>
                 <b class="bulk-num">3</b>
-                <span data-t="bulk.step3">Copiez les trois colonnes — commande, suivi, transporteur — et collez-les ci-dessous</span>
+                <span data-t="bulk.step3">Déposez la feuille ici, telle quelle — ou collez les colonnes commande, suivi, transporteur</span>
               </li>
             </ol>
 
+            <!-- La zone de collage accepte aussi un fichier déposé. Le voile ne
+                 s'affiche que pendant un glisser : il dit où lâcher, sans
+                 encombrer l'écran le reste du temps. -->
             <label class="bulk-paste">
+              <span class="bulk-voile" aria-hidden="true"><span data-t="bulk.drop">Déposez le fichier ici</span></span>
               <span class="sr-only" data-t="bulk.pasteLabel">Numéros de suivi à importer</span>
               <textarea id="bulk-texte" rows="8" spellcheck="false" autocomplete="off"
                 data-tph="bulk.placeholder"
                 placeholder="#13811	1Z999AA10123456784	UPS&#10;#13812	LX123456789CN	China Post"></textarea>
             </label>
 
+            <p class="bulk-note" id="bulk-note" hidden></p>
+
             <div class="bulk-acts">
+              <span class="bulk-drop-hint" data-t="bulk.dropHint">Glissez-déposez la feuille remplie (.xlsx ou .csv) n’importe où sur la page.</span>
               <label class="btn bulk-file">
-                <input type="file" id="bulk-file" accept=".csv,.tsv,.txt,text/csv,text/plain" hidden />
-                <span data-t="bulk.file">Choisir un fichier CSV</span>
+                <input type="file" id="bulk-file"
+                  accept=".xlsx,.csv,.tsv,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/plain"
+                  hidden />
+                <span data-t="bulk.file">Choisir un fichier Excel ou CSV</span>
               </label>
               <button class="btn btn-primary" id="bulk-check" type="button" data-t="bulk.check">Vérifier</button>
             </div>

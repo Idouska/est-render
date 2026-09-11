@@ -1309,6 +1309,32 @@ input:focus, select:focus, textarea:focus {
 .bulk-acts { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
 .bulk-file { cursor: pointer; }
 
+/* Le dépôt d'un fichier : pendant un glisser, la zone de collage se couvre
+   d'un voile qui dit où lâcher. Le reste du temps, rien ne s'affiche. */
+.bulk-paste { position: relative; display: block; }
+.bulk-voile {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--brand);
+  border-radius: var(--r);
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-size: 16px;
+  font-weight: 700;
+  pointer-events: none;
+}
+.bulk-depot .bulk-voile { display: flex; }
+.bulk-drop-hint { margin-right: auto; align-self: center; font-size: 13px; color: var(--ink-soft); }
+
+.bulk-note { margin: 0; font-size: 13.5px; color: var(--ink-soft); }
+.bulk-note-ok { color: var(--ok); }
+.bulk-note-warn { color: var(--warn); }
+.bulk-note-bad { color: var(--bad); }
+
 .bulk-msg { margin: 0; padding: 11px 14px; border-radius: var(--r-sm); background: var(--line-soft); font-size: 14px; color: var(--ink-soft); }
 .bulk-msg-bad { background: var(--bad-soft); color: var(--bad); }
 .bulk-msg-warn { background: var(--warn-soft); color: var(--warn); }
