@@ -55,6 +55,10 @@ export function ecritureSimulee(query: string): unknown {
       };
     case 'CreateRefund':
       return { refundCreate: { refund: { id: `${SIMULE}/Refund/${Date.now()}` }, userErrors: [] } };
+    case 'UpdateFulfillmentTracking':
+      return {
+        fulfillmentTrackingInfoUpdate: { fulfillment: { id: `${SIMULE}/Fulfillment/${Date.now()}` }, userErrors: [] },
+      };
     default:
       throw new ActionBloqueeEnTest(operation[1] || 'sans nom');
   }

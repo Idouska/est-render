@@ -5,7 +5,13 @@ import { recordAudit } from '../lib/audit.ts';
 import { prisma } from '../lib/prisma.ts';
 import { signSupplierToken } from '../lib/supplierToken.ts';
 import { lignesArticle } from '../services/suppliers/signalement.ts';
-import { LIGNES_MAX, lireCollage, normaliserCommande, planifierLot } from '../services/suppliers/importColis.ts';
+import {
+  LIGNES_MAX,
+  abimeParExcel,
+  lireCollage,
+  normaliserCommande,
+  planifierLot,
+} from '../services/suppliers/importColis.ts';
 import { CLASSEUR_MAX_OCTETS, ClasseurRefuse, lireClasseur } from '../services/suppliers/lireClasseur.ts';
 import { verifySupplierWorkspaceToken } from '../lib/supplierToken.ts';
 import { ordersToCsv } from '../services/export/ordersCsv.ts';
@@ -13,7 +19,7 @@ import { ordersToXlsx } from '../services/export/ordersXlsx.ts';
 import { getShopifyClient } from '../services/shopify/client.ts';
 import { listOrders, quoteSearchValue } from '../services/shopify/orders.ts';
 import { listProducts, productWithVariants } from '../services/shopify/catalog.ts';
-import { fulfillOrder } from '../services/shopify/fulfill.ts';
+import { corrigerSuivi, expeditionPortant, fulfillOrder } from '../services/shopify/fulfill.ts';
 import { draftChangeReply } from '../services/ai/changeReply.ts';
 import { decodePhoto, photoSchema, sendParcelPhoto, toParcelView } from './parcels.ts';
 import { ordersForSupplier, type RoutingRules } from '../services/suppliers/routing.ts';
@@ -1039,18 +1045,30 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
           trackingNumber: z.string().min(3).max(80),
           carrier: z.string().max(80).nullish(),
           photo: photoSchema.nullish(),
+          /** Le client a déjà reçu l'ancien numéro : la correction lui enverra le bon. */
+          prevenirClient: z.boolean().optional(),
         })
         .safeParse(request.body);
 
-      if (!parsed.success) return reply.code(400).send({ error: 'Colis invalide' });
+      if (!parsed.success) return reply.code(400).send({ code: 'invalide', error: 'Colis invalide' });
 
       const existing = await prisma.parcel.findFirst({
         where: { id: request.params.parcelId, merchantId: workspace.merchantId },
-        select: { id: true, trackingNumber: true },
+        select: { id: true, trackingNumber: true, shopifyOrderId: true },
       });
-      if (!existing) return reply.code(404).send({ error: 'Colis introuvable' });
+      if (!existing) return reply.code(404).send({ code: 'introuvable', error: 'Colis introuvable' });
 
       const trackingNumber = parsed.data.trackingNumber.trim();
+      const carrier = parsed.data.carrier?.trim() || null;
+
+      // Même règle qu'à l'import : un numéro qu'Excel a abîmé n'est jamais
+      // envoyé — encore moins en correction d'un numéro déjà faux.
+      if (abimeParExcel(trackingNumber)) {
+        return reply.code(400).send({
+          code: 'abime_excel',
+          error: 'Numéro abîmé par Excel : retapez-le en texte.',
+        });
+      }
 
       // Le numéro corrigé ne doit pas percuter un autre colis : deux lignes au
       // même numéro rendraient le suivi inattribuable.
@@ -1063,7 +1081,54 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
         select: { id: true },
       });
       if (clash) {
-        return reply.code(409).send({ error: 'Ce numéro est déjà enregistré sur un autre colis.' });
+        return reply
+          .code(409)
+          .send({ code: 'deja_utilise', error: 'Ce numéro est déjà enregistré sur un autre colis.' });
+      }
+
+      /*
+       * Le client a-t-il déjà reçu l'ancien numéro ?
+       *
+       * Oui si Shopify l'a expédié : le corriger chez nous seulement lui
+       * laisserait le mauvais. La correction part alors AUSSI chez Shopify, qui
+       * lui écrit le bon — mais seulement après une confirmation explicite, car
+       * c'est un nouvel e-mail au client. Shopify d'abord, notre base ensuite :
+       * si Shopify refuse, rien n'est modifié, et les deux restent d'accord.
+       */
+      let clientPrevenu = false;
+      if (trackingNumber !== existing.trackingNumber && existing.shopifyOrderId) {
+        let client: Awaited<ReturnType<typeof getShopifyClient>>;
+        let expedition: Awaited<ReturnType<typeof expeditionPortant>>;
+        try {
+          client = await getShopifyClient(workspace.merchantId);
+          expedition = await expeditionPortant(client, existing.shopifyOrderId, existing.trackingNumber);
+        } catch (error) {
+          request.log.warn({ err: error, parcelId: existing.id }, 'Suivi Shopify illisible avant correction');
+          return reply.code(502).send({
+            code: 'shopify',
+            error: 'Shopify n’a pas répondu : rien n’a été modifié. Réessayez dans un instant.',
+          });
+        }
+
+        if (expedition) {
+          if (!parsed.data.prevenirClient) {
+            return reply.code(409).send({
+              code: 'client_deja_prevenu',
+              ancien: existing.trackingNumber,
+              error: 'Ce numéro a déjà été envoyé au client : confirmez pour lui envoyer le numéro corrigé.',
+            });
+          }
+
+          const correction = await corrigerSuivi(client, expedition, existing.trackingNumber, trackingNumber, carrier);
+          if (!correction.corrige) {
+            return reply.code(502).send({
+              code: 'shopify_refus',
+              raison: correction.raison,
+              error: `Shopify a refusé la correction : ${correction.raison} Rien n’a été modifié.`,
+            });
+          }
+          clientPrevenu = true;
+        }
       }
 
       const photo = parsed.data.photo ? decodePhoto(parsed.data.photo) : null;
@@ -1072,7 +1137,7 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
         where: { id: existing.id },
         data: {
           trackingNumber,
-          carrier: parsed.data.carrier ?? null,
+          carrier,
           ...(photo ? { photoMime: photo.mime, photoData: photo.data, photoTakenAt: new Date() } : {}),
         },
         select: {
@@ -1097,11 +1162,11 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
         targetId: parcel.id,
         // L'ancien numéro est consigné : c'est lui qu'un client a peut-être
         // déjà reçu, et il faut pouvoir comprendre pourquoi il ne répond plus.
-        metadata: { from: existing.trackingNumber, to: parcel.trackingNumber },
+        metadata: { from: existing.trackingNumber, to: parcel.trackingNumber, clientPrevenu },
         ipAddress: request.ip,
       });
 
-      return reply.send({ parcel: toParcelView(parcel) });
+      return reply.send({ parcel: toParcelView(parcel), clientPrevenu });
     },
   );
 

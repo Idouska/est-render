@@ -524,6 +524,12 @@ export function createMockShopifyClient(shopDomain: string): ShopifyClient {
         } as T;
       }
 
+      // La boutique fictive n'a expédié aucun colis de l'atelier : corriger un
+      // numéro n'a rien à répercuter chez elle.
+      if (query.includes('query FulfillmentTracking')) {
+        return { order: { fulfillments: [] } } as T;
+      }
+
       if (query.includes('mutation CreateRefund')) {
         const input = variables?.input as { orderId: string };
         const id = `gid://shopify/Refund/${Date.now()}`;
