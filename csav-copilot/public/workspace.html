@@ -109,6 +109,35 @@
             </div>
           </header>
 
+          <!-- Deux façons de traiter les commandes, et elles doivent se voir.
+               Le guichet existait seul : on y entrait en cliquant une ligne,
+               sans que rien ne dise qu'on pouvait faire autrement — et le
+               traitement en masse n'existait pas du tout. Un atelier qui
+               expédie cinquante colis ne les saisit pas un par un : il colle
+               le fichier que le transporteur lui rend. -->
+          <div class="ws-modes" id="ws-modes" role="tablist" aria-label="Mode de traitement">
+            <button type="button" role="tab" data-mode="manuel" aria-selected="true">
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <rect x="4" y="3" width="12" height="14" rx="2" />
+                <path d="M7 7h6M7 10h6M7 13h3" />
+              </svg>
+              <span class="ws-mode-txt">
+                <b data-t="mode.manual">Une par une</b>
+                <small data-t="mode.manualHint">Saisie commande par commande</small>
+              </span>
+            </button>
+            <button type="button" role="tab" data-mode="masse" aria-selected="false">
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <rect x="3" y="3" width="14" height="14" rx="2" />
+                <path d="M3 8h14M3 12.5h14M8 3v14" />
+              </svg>
+              <span class="ws-mode-txt">
+                <b data-t="mode.bulk">En masse</b>
+                <small data-t="mode.bulkHint">Coller les numéros depuis Excel</small>
+              </span>
+            </button>
+          </div>
+
           <!-- La période en un geste. Les dates précises et les exports vivent
                derrière « … » : ils servent une fois par jour, la période à
                chaque ouverture. -->
@@ -158,6 +187,47 @@
           </div>
 
           <div id="ws-orders"></div>
+
+          <!-- ======================================== EN MASSE ========= -->
+          <div class="ws-bulk" id="ws-bulk" hidden>
+            <ol class="bulk-steps">
+              <li>
+                <b class="bulk-num">1</b>
+                <span>
+                  <span data-t="bulk.step1">Téléchargez la liste des commandes</span>
+                  <a class="bulk-link" id="bulk-xlsx" download data-t="bulk.download">Télécharger .xlsx</a>
+                </span>
+              </li>
+              <li>
+                <b class="bulk-num">2</b>
+                <span data-t="bulk.step2">Ajoutez le numéro de suivi en face de chaque commande</span>
+              </li>
+              <li>
+                <b class="bulk-num">3</b>
+                <span data-t="bulk.step3">Copiez les trois colonnes — commande, suivi, transporteur — et collez-les ci-dessous</span>
+              </li>
+            </ol>
+
+            <label class="bulk-paste">
+              <span class="sr-only" data-t="bulk.pasteLabel">Numéros de suivi à importer</span>
+              <textarea id="bulk-texte" rows="8" spellcheck="false" autocomplete="off"
+                data-tph="bulk.placeholder"
+                placeholder="#13811	1Z999AA10123456784	UPS&#10;#13812	LX123456789CN	China Post"></textarea>
+            </label>
+
+            <div class="bulk-acts">
+              <label class="btn bulk-file">
+                <input type="file" id="bulk-file" accept=".csv,.tsv,.txt,text/csv,text/plain" hidden />
+                <span data-t="bulk.file">Choisir un fichier CSV</span>
+              </label>
+              <button class="btn btn-primary" id="bulk-check" type="button" data-t="bulk.check">Vérifier</button>
+            </div>
+
+            <!-- L'aperçu : ce qui arrivera, ligne par ligne, AVANT d'écrire.
+                 Rien n'est enregistré tant que ce panneau n'a pas été relu et
+                 confirmé — chaque commande complétée envoie un mail au client. -->
+            <div id="bulk-apercu" aria-live="polite"></div>
+          </div>
         </section>
 
         <!-- ============================================= SUIVI =========== -->
@@ -214,6 +284,29 @@
         </section>
       </main>
     </div>
+
+    <!-- Les transporteurs les plus fréquents, proposés au fil de la frappe.
+         Une suggestion, pas une liste fermée : un atelier travaille avec qui
+         il veut, et un transporteur absent d'un menu serait un champ bloqué.
+         Les noms sont écrits comme sur les étiquettes, pour que Shopify les
+         reconnaisse et bâtisse le lien de suivi. -->
+    <datalist id="ws-carriers">
+      <option value="UPS"></option>
+      <option value="DHL Express"></option>
+      <option value="FedEx"></option>
+      <option value="USPS"></option>
+      <option value="Canada Post"></option>
+      <option value="China Post"></option>
+      <option value="4PX"></option>
+      <option value="YunExpress"></option>
+      <option value="Cainiao"></option>
+      <option value="SF Express"></option>
+      <option value="La Poste"></option>
+      <option value="Colissimo"></option>
+      <option value="Chronopost"></option>
+      <option value="DPD"></option>
+      <option value="GLS"></option>
+    </datalist>
 
     <div class="modal-wrap" id="issue-modal">
       <div class="modal">

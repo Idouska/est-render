@@ -29,6 +29,16 @@ const state = {
    * une commande plein écran, et « Enregistrer » passe à la suivante.
    */
   focus: null,
+  /**
+   * « manuel » : la liste et le guichet. « masse » : l'import depuis Excel.
+   *
+   * Pas mémorisé d'une visite à l'autre : un atelier qui arrive le matin
+   * veut sa liste, et retrouver l'écran d'import ouvert sur un collage de la
+   * veille inviterait à le renvoyer.
+   */
+  mode: 'manuel',
+  /** Le dernier aperçu reçu, et le texte exact qui l'a produit. */
+  lot: null,
   /* Ordre de la file : par heure d'arrivée, ou par modèle — emballer quinze
      Pegasus d'affilée épargne quatorze changements de carton. Mémorisé : c'est
      une façon de travailler, pas un réglage du matin. */
@@ -320,8 +330,8 @@ function parcelCard(order, index, total, saved) {
           : ''
       }
     </div>
-    <input type="text" data-field="carrier" placeholder="${esc(t('parcel.carrier'))}"
-      value="${esc(saved?.carrier ?? lastCarrier())}" />
+    <input type="text" data-field="carrier" list="ws-carriers" autocomplete="off"
+      placeholder="${esc(t('parcel.carrier'))}" value="${esc(saved?.carrier ?? lastCarrier())}" />
     ${
       saved?.hasPhoto
         ? `<img class="pk-thumb" src="${photoUrl(saved.id)}" alt="${esc(
@@ -519,26 +529,35 @@ function renderFocus(shown) {
     <article class="ord ord-focus${done === total ? ' ord-done' : ''}">
       <div class="ord-head">
         <b class="ord-no">${esc(order.name)}</b>
-        <span class="pill">${esc(order.displayFulfillmentStatus ?? '—')}</span>
+        <span class="pill pill-${esc(String(order.displayFulfillmentStatus ?? '').toLowerCase())}">${esc(
+          statutCommande(order.displayFulfillmentStatus),
+        )}</span>
         <span class="ord-when">${esc(shortMoment(order.createdAt))}</span>
       </div>
 
       <div class="ord-who">
+        <span class="ord-label">${esc(t('focus.customer'))}</span>
         <b>${esc(order.customer?.displayName ?? address.name ?? t('orders.customer'))}</b>
         <span>${esc([address.address1, address.address2].filter(Boolean).join(' '))}</span>
         <span>${esc(`${address.zip ?? ''} ${address.city ?? ''} ${address.country ?? ''}`.trim())}</span>
         <span class="ord-tel">
-          <a href="tel:${esc(phone)}" class="ord-phone${phoneShort ? ' missing' : ''}">${
-            esc(phone || t('orders.phoneMissing'))
-          }</a>
+          <a href="tel:${esc(phone)}" class="ord-phone${phoneShort ? ' missing' : ''}">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6.5 3.5 8 7 6.5 8.2a8 8 0 0 0 5.3 5.3L13 12l3.5 1.5-.6 2.6A1.5 1.5 0 0 1 14.4 17 11.5 11.5 0 0 1 3 5.6a1.5 1.5 0 0 1 .9-1.5z" /></svg>
+            ${esc(phone || t('orders.phoneMissing'))}
+          </a>
         </span>
       </div>
 
-      ${progressBar(done, total, t('progress.parcels', { done, total }))}
-
-      <label class="field field-inline">
-        <span>${esc(t('orders.parcelCount'))}</span>
-        <select data-total="${esc(order.id)}">
+      <div class="ord-ship">
+        <span class="ord-label">${esc(t('focus.shipping'))}</span>
+        <!-- Le nombre de colis, compact : c'est un réglage rare — une commande
+             part presque toujours en un colis — et il occupait toute la
+             largeur, au-dessus du champ qu'on remplit à chaque commande. -->
+        <!-- Pas d'étiquette visible : chaque option dit déjà « 1 colis »,
+             « 2 colis », et « Colis · 1 colis » se lisait en double. Le nom
+             reste pour les lecteurs d'écran. -->
+        <label class="ord-count">
+          <select data-total="${esc(order.id)}" aria-label="${esc(t('orders.parcelCount'))}">
           ${[1, 2, 3, 4, 5, 6]
             .map(
               (value) =>
@@ -547,8 +566,11 @@ function renderFocus(shown) {
                 )}</option>`,
             )
             .join('')}
-        </select>
-      </label>
+          </select>
+        </label>
+      </div>
+
+      ${progressBar(done, total, t('progress.parcels', { done, total }))}
 
       <div class="pk-list" data-parcels="${esc(order.id)}">
         ${Array.from({ length: total }, (unused, position) =>
@@ -561,10 +583,16 @@ function renderFocus(shown) {
         ).join('')}
       </div>
 
+      <p class="ord-hint">${esc(t('focus.enterHint'))}</p>
+
       <div class="ord-foot">
-        <button class="btn btn-ghost" data-issue="${esc(order.id)}">${esc(
-          t('orders.report'),
-        )}</button>
+        <!-- Un bouton, pas un lien pâle : c'est ici que l'atelier dit qu'un
+             article manque, et une rupture non signalée est une commande qui
+             part incomplète. -->
+        <button class="btn ord-report" data-issue="${esc(order.id)}">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3 2.5 16.5h15z" /><path d="M10 8.5v3.5M10 14.3v.2" /></svg>
+          ${esc(t('orders.report'))}
+        </button>
       </div>
     </article>`;
 
@@ -639,6 +667,8 @@ async function load() {
     // le CSV sert à qui veut retravailler les données.
     $('ws-xlsx').href = apiUrl(`/api/workspace/${supplierId}/orders.xlsx`).toString();
     $('ws-csv').href = apiUrl(`/api/workspace/${supplierId}/orders.csv`).toString();
+    // L'étape 1 de l'import : la même feuille, pour la même période.
+    $('bulk-xlsx').href = $('ws-xlsx').href;
 
     renderOrders();
   } catch (error) {
@@ -1594,3 +1624,276 @@ function setRuptureBadge(nombre) {
   badge.hidden = nombre === 0;
   badge.textContent = String(nombre);
 }
+
+
+/* ------------------------------------------------------------ en masse -- */
+
+/*
+ * Les deux modes de traitement.
+ *
+ * Le guichet — une commande à la fois — reste le mode par défaut : c'est
+ * celui du préparateur, téléphone en main. L'import sert le jour où le
+ * transporteur rend un fichier de cinquante numéros. Basculer ne perd rien :
+ * la liste et le collage gardent chacun leur état.
+ */
+function setMode(mode) {
+  state.mode = mode === 'masse' ? 'masse' : 'manuel';
+  const masse = state.mode === 'masse';
+
+  document.querySelectorAll('#ws-modes [data-mode]').forEach((bouton) => {
+    bouton.setAttribute('aria-selected', String(bouton.dataset.mode === state.mode));
+  });
+
+  // En masse, la progression, les filtres et la liste s'effacent : ils
+  // décrivent la file du guichet, pas l'import.
+  for (const id of ['ws-progress', 'ws-filter', 'ws-orders']) {
+    const bloc = $(id);
+    if (bloc) bloc.classList.toggle('hors-mode', masse);
+  }
+  $('ws-bulk').hidden = !masse;
+
+  if (masse) {
+    state.focus = null;
+    document.body.classList.remove('ws-focus');
+    $('bulk-texte').focus();
+  } else {
+    renderOrders();
+  }
+}
+
+document.querySelectorAll('#ws-modes [data-mode]').forEach((bouton) =>
+  bouton.addEventListener('click', () => setMode(bouton.dataset.mode)),
+);
+
+/* Les couleurs et les mots des statuts de ligne. `pret` est la seule qui
+   sera écrite ; toutes les autres expliquent pourquoi une ligne ne l'est pas. */
+const STATUTS_LOT = {
+  pret: 'ok',
+  deja_saisi: 'neutre',
+  invalide: 'bad',
+  introuvable: 'bad',
+  doublon: 'warn',
+  deja_utilise: 'bad',
+  deja_expediee: 'neutre',
+};
+
+/** Un fichier CSV choisi est lu dans la zone de collage : un seul chemin ensuite. */
+$('bulk-file')?.addEventListener('change', async (event) => {
+  const fichier = event.target.files?.[0];
+  if (!fichier) return;
+  $('bulk-texte').value = await fichier.text();
+  event.target.value = '';
+  void verifierLot();
+});
+
+$('bulk-check')?.addEventListener('click', () => void verifierLot());
+
+/* Modifier le collage invalide l'aperçu : on ne doit jamais pouvoir
+   confirmer un aperçu qui ne correspond plus au texte affiché. */
+$('bulk-texte')?.addEventListener('input', () => {
+  if (state.lot) {
+    state.lot = null;
+    $('bulk-apercu').innerHTML = '';
+  }
+});
+
+async function verifierLot() {
+  const texte = $('bulk-texte').value;
+  const zone = $('bulk-apercu');
+
+  if (!texte.trim()) {
+    zone.innerHTML = `<p class="bulk-msg bulk-msg-bad">${esc(t('bulk.empty'))}</p>`;
+    return;
+  }
+
+  $('bulk-check').disabled = true;
+  zone.innerHTML = `<p class="bulk-msg">${esc(t('bulk.checking'))}</p>`;
+
+  try {
+    const plan = await api(`/api/workspace/${supplierId}/parcels/lot`, {
+      method: 'POST',
+      body: { texte, apercu: true },
+    });
+    state.lot = { texte, plan };
+    renderApercu();
+  } catch (error) {
+    state.lot = null;
+    zone.innerHTML = `<p class="bulk-msg bulk-msg-bad">${esc(error.message)}</p>`;
+  } finally {
+    $('bulk-check').disabled = false;
+  }
+}
+
+/*
+ * L'aperçu : ce qui arrivera, avant que ça arrive.
+ *
+ * La phrase au-dessus du bouton n'est pas une précaution de style. Chaque
+ * commande complétée par l'import passe en « expédiée » sur Shopify, qui
+ * envoie au client un mail avec son suivi — irréversible, et multiplié par
+ * le nombre de lignes. Le bouton le répète dans son libellé : on ne clique
+ * pas « Enregistrer », on clique « Enregistrer et expédier 12 commandes ».
+ */
+function renderApercu() {
+  const { plan } = state.lot;
+  const aCorriger = plan.lignes.filter((ligne) => STATUTS_LOT[ligne.statut] === 'bad').length;
+
+  $('bulk-apercu').innerHTML = `
+    <div class="bulk-bilan">
+      <!-- Étiquette puis nombre : « Prêtes 10 » se lit dans toutes les
+           langues sans accorder un pluriel que le traducteur ne gère pas. -->
+      <span>${esc(t('bulk.lines'))} <b>${plan.lignes.length}</b></span>
+      <span class="bulk-ok">${esc(t('bulk.ready'))} <b>${plan.prets}</b></span>
+      ${aCorriger ? `<span class="bulk-bad">${esc(t('bulk.toFix'))} <b>${aCorriger}</b></span>` : ''}
+    </div>
+
+    <div class="bulk-table-wrap">
+      <table class="bulk-table">
+        <thead><tr>
+          <th>${esc(t('bulk.col.line'))}</th>
+          <th>${esc(t('bulk.col.order'))}</th>
+          <th>${esc(t('bulk.col.customer'))}</th>
+          <th>${esc(t('bulk.col.tracking'))}</th>
+          <th>${esc(t('bulk.col.carrier'))}</th>
+          <th>${esc(t('bulk.col.status'))}</th>
+        </tr></thead>
+        <tbody>${plan.lignes
+          .map(
+            (ligne) => `<tr class="bulk-l-${esc(STATUTS_LOT[ligne.statut] ?? 'neutre')}">
+              <td class="bulk-rang">${ligne.rang}</td>
+              <td><b>${esc(ligne.nom ?? ligne.commande ?? '—')}</b></td>
+              <td>${esc(ligne.client ?? '—')}</td>
+              <td class="bulk-suivi">${esc(ligne.suivi || '—')}</td>
+              <td>${esc(ligne.transporteur ?? '—')}</td>
+              <td><span class="bulk-statut">${esc(t(`bulk.status.${ligne.statut}`))}${
+                ligne.statut === 'pret' && ligne.total > 1
+                  ? ` <small>${esc(t('bulk.parcelOf', { n: ligne.index, total: ligne.total }))}</small>`
+                  : ''
+              }</span></td>
+            </tr>`,
+          )
+          .join('')}</tbody>
+      </table>
+    </div>
+
+    ${
+      plan.prets > 0
+        ? `<div class="bulk-confirm">
+            <p class="bulk-consequence">${esc(
+              plan.expediees > 0
+                ? t('bulk.consequence', { n: plan.prets, orders: plan.expediees })
+                : t('bulk.consequencePartial', { n: plan.prets }),
+            )}</p>
+            <div class="bulk-acts">
+              <button class="btn" type="button" id="bulk-edit">${esc(t('bulk.edit'))}</button>
+              <button class="btn btn-primary" type="button" id="bulk-save">${esc(
+                plan.expediees > 0
+                  ? t('bulk.saveShip', { n: plan.prets, orders: plan.expediees })
+                  : t('bulk.save', { n: plan.prets }),
+              )}</button>
+            </div>
+          </div>`
+        : `<p class="bulk-msg bulk-msg-bad">${esc(t('bulk.nothingReady'))}</p>`
+    }`;
+
+  $('bulk-edit')?.addEventListener('click', () => $('bulk-texte').focus());
+  $('bulk-save')?.addEventListener('click', () => void enregistrerLot());
+}
+
+async function enregistrerLot() {
+  if (!state.lot) return;
+  const bouton = $('bulk-save');
+  bouton.disabled = true;
+  bouton.textContent = t('bulk.saving');
+
+  try {
+    // Le TEXTE repart, pas l'aperçu : le serveur refait le calcul et ne
+    // croit jamais ce que le navigateur lui renvoie.
+    const bilan = await api(`/api/workspace/${supplierId}/parcels/lot`, {
+      method: 'POST',
+      body: { texte: state.lot.texte, apercu: false },
+    });
+
+    const echecs = (bilan.resultats ?? []).filter((resultat) => !resultat.ok);
+    const nonExpediees = (bilan.resultats ?? []).filter(
+      (resultat) => resultat.ok && resultat.raison,
+    );
+
+    $('bulk-apercu').innerHTML = `
+      <div class="bulk-fin">
+        <p class="bulk-fin-titre">✓ ${esc(
+          t('bulk.done', { n: bilan.enregistres, orders: bilan.expedieesReelles }),
+        )}</p>
+        ${
+          echecs.length
+            ? `<p class="bulk-msg bulk-msg-bad">${esc(
+                t('bulk.failed', { n: echecs.length, lines: echecs.map((e) => e.rang).join(', ') }),
+              )}</p>`
+            : ''
+        }
+        ${
+          nonExpediees.length
+            ? `<p class="bulk-msg bulk-msg-warn">${esc(
+                t('bulk.notShipped', { n: nonExpediees.length }),
+              )} ${esc(nonExpediees[0].raison)}</p>`
+            : ''
+        }
+        <div class="bulk-acts">
+          <button class="btn" type="button" id="bulk-again">${esc(t('bulk.again'))}</button>
+          <button class="btn btn-primary" type="button" id="bulk-list">${esc(t('bulk.toList'))}</button>
+        </div>
+      </div>`;
+
+    state.lot = null;
+    $('bulk-texte').value = '';
+    $('bulk-again')?.addEventListener('click', () => {
+      $('bulk-apercu').innerHTML = '';
+      $('bulk-texte').focus();
+    });
+    $('bulk-list')?.addEventListener('click', () => setMode('manuel'));
+
+    // La liste du guichet reflète tout de suite les colis importés.
+    void load();
+  } catch (error) {
+    bouton.disabled = false;
+    bouton.textContent = t('bulk.retry');
+    toast(error.message, true);
+  }
+}
+
+
+/* ---------------------------------------------------------- guichet -- */
+
+/**
+ * Le statut d'expédition Shopify, dans la langue de l'atelier.
+ *
+ * Il s'affichait tel que l'API le renvoie : « UNFULFILLED », en anglais et en
+ * capitales, y compris pour un atelier qui travaille en chinois. Un statut
+ * inconnu retombe sur sa valeur brute plutôt que sur le nom de la clé de
+ * traduction : mieux vaut « SCHEDULED » que « order.status.SCHEDULED ».
+ */
+function statutCommande(brut) {
+  if (!brut) return '—';
+  const cle = `order.status.${brut}`;
+  const traduit = t(cle);
+  return traduit === cle ? brut : traduit;
+}
+
+/*
+ * Entrée enregistre le colis.
+ *
+ * Une douchette de code-barres tape le numéro puis Entrée : avec ce geste
+ * branché, scanner l'étiquette suffit à enregistrer le colis, et le guichet
+ * passe tout seul à la commande suivante. Sans lui, Entrée ne faisait rien
+ * — et le préparateur devait lâcher le carton pour attraper la souris.
+ */
+$('ws-orders').addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter' || event.isComposing) return;
+  const champ = event.target.closest?.('[data-field="tracking"], [data-field="carrier"]');
+  if (!champ) return;
+
+  const bouton = champ.closest('.pk')?.querySelector('[data-save]');
+  if (!bouton || bouton.disabled) return;
+
+  event.preventDefault();
+  bouton.click();
+});

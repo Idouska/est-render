@@ -1,15 +1,16 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest, FastifyBaseLogger } from 'fastify';
 import { z } from 'zod';
 import { env } from '../config/env.ts';
 import { recordAudit } from '../lib/audit.ts';
 import { prisma } from '../lib/prisma.ts';
 import { signSupplierToken } from '../lib/supplierToken.ts';
 import { lignesArticle } from '../services/suppliers/signalement.ts';
+import { LIGNES_MAX, lireCollage, normaliserCommande, planifierLot } from '../services/suppliers/importColis.ts';
 import { verifySupplierWorkspaceToken } from '../lib/supplierToken.ts';
 import { ordersToCsv } from '../services/export/ordersCsv.ts';
 import { ordersToXlsx } from '../services/export/ordersXlsx.ts';
 import { getShopifyClient } from '../services/shopify/client.ts';
-import { listOrders } from '../services/shopify/orders.ts';
+import { listOrders, quoteSearchValue } from '../services/shopify/orders.ts';
 import { listProducts, productWithVariants } from '../services/shopify/catalog.ts';
 import { fulfillOrder } from '../services/shopify/fulfill.ts';
 import { draftChangeReply } from '../services/ai/changeReply.ts';
@@ -253,6 +254,144 @@ async function draftReplyAfterChange(alertId: string, merchantId: string): Promi
     where: { id: alert.ticket.id },
     data: { status: 'NEEDS_REVIEW', lastMessageAt: new Date() },
   });
+}
+
+/** Ce qu'il faut pour enregistrer un colis, quelle que soit la façon de le saisir. */
+interface SaisieColis {
+  shopifyOrderId: string;
+  orderName?: string | null;
+  trackingNumber: string;
+  carrier?: string | null;
+  index: number;
+  total: number;
+  photo?: z.infer<typeof photoSchema> | null;
+}
+
+/**
+ * Enregistre un colis et, si c'était le dernier, expédie la commande.
+ *
+ * Extrait de la route de saisie pour être partagé avec l'import en masse.
+ * C'est ici que la commande part VRAIMENT : au dernier colis, Shopify passe
+ * en « expédiée » et envoie au client son mail avec les suivis. Deux copies
+ * de ce chemin finiraient par diverger — l'une oublierait l'audit, l'autre
+ * le fulfillment — et c'est le seul qu'on ne peut pas se permettre de voir
+ * se comporter de deux façons. Le texte est celui de la route, déplacé tel
+ * quel.
+ */
+async function enregistrerColis(
+  workspace: Workspace,
+  donnees: SaisieColis,
+  ip: string,
+  log: FastifyBaseLogger,
+) {
+  const photo = donnees.photo ? decodePhoto(donnees.photo) : null;
+  const photoFields = photo
+    ? { photoMime: photo.mime, photoData: photo.data, photoTakenAt: new Date() }
+    : {};
+
+  const parcel = await prisma.parcel.upsert({
+    where: {
+      merchantId_trackingNumber: {
+        merchantId: workspace.merchantId,
+        trackingNumber: donnees.trackingNumber.trim(),
+      },
+    },
+    create: {
+      merchantId: workspace.merchantId,
+      shopifyOrderId: donnees.shopifyOrderId,
+      orderName: donnees.orderName ?? null,
+      trackingNumber: donnees.trackingNumber.trim(),
+      carrier: donnees.carrier ?? null,
+      index: donnees.index,
+      total: donnees.total,
+      ...photoFields,
+    },
+    update: {
+      carrier: donnees.carrier ?? null,
+      index: donnees.index,
+      total: donnees.total,
+      ...photoFields,
+    },
+    select: {
+      id: true,
+      trackingNumber: true,
+      carrier: true,
+      index: true,
+      total: true,
+      orderName: true,
+      photoMime: true,
+      photoTakenAt: true,
+      updatedAt: true,
+    },
+  });
+
+  await recordAudit({
+    merchantId: workspace.merchantId,
+    actorType: 'SUPPLIER',
+    actorId: workspace.supplierId,
+    action: 'supplier.parcel_recorded',
+    targetType: 'Parcel',
+    targetId: parcel.id,
+    metadata: { index: parcel.index, total: parcel.total, photo: Boolean(photo) },
+    ipAddress: ip,
+  });
+
+  /*
+   * Dernier colis saisi → la commande part vraiment.
+   *
+   * Un seul fulfillment portant tous les numéros, créé quand tous les
+   * colis annoncés sont enregistrés : Shopify passe la commande en
+   * expédiée et envoie au client son mail avec les suivis. C'est le but
+   * de toute la saisie — sans lui, le client écrit « où est mon colis »
+   * pour un colis déjà en route.
+   *
+   * L'échec n'annule pas la saisie : le colis est enregistré chez nous
+   * quoi qu'il arrive, et le motif remonte au fournisseur pour que le
+   * marchand soit prévenu (autorisation manquante, commande déjà close).
+   */
+  let shopify: { fulfilled: boolean; reason?: string } | null = null;
+
+  const recorded = await prisma.parcel.findMany({
+    where: {
+      merchantId: workspace.merchantId,
+      shopifyOrderId: donnees.shopifyOrderId,
+    },
+    select: { trackingNumber: true, carrier: true, index: true },
+    orderBy: { index: 'asc' },
+  });
+
+  if (new Set(recorded.map((row) => row.index)).size >= donnees.total) {
+    try {
+      const client = await getShopifyClient(workspace.merchantId);
+      shopify = await fulfillOrder(client, donnees.shopifyOrderId, {
+        numbers: recorded.map((row) => row.trackingNumber),
+        company: recorded.find((row) => row.carrier)?.carrier ?? null,
+      });
+
+      await recordAudit({
+        merchantId: workspace.merchantId,
+        actorType: 'SUPPLIER',
+        actorId: workspace.supplierId,
+        action: shopify.fulfilled ? 'supplier.order_fulfilled' : 'supplier.fulfill_failed',
+        targetType: 'Order',
+        targetId: donnees.shopifyOrderId,
+        metadata: {
+          orderName: donnees.orderName,
+          numbers: recorded.map((row) => row.trackingNumber),
+          reason: shopify.reason ?? null,
+        },
+        ipAddress: ip,
+      });
+    } catch (error) {
+      log.error(
+        { err: error, orderId: donnees.shopifyOrderId },
+        'Fulfillment Shopify en échec',
+      );
+      shopify = { fulfilled: false, reason: 'Shopify n’a pas répondu.' };
+    }
+  }
+
+  return { parcel, shopify };
 }
 
 export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<void> {
@@ -509,114 +648,169 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
         return reply.code(400).send({ error: 'Le rang du colis dépasse le nombre annoncé.' });
       }
 
-      const photo = parsed.data.photo ? decodePhoto(parsed.data.photo) : null;
-      const photoFields = photo
-        ? { photoMime: photo.mime, photoData: photo.data, photoTakenAt: new Date() }
-        : {};
+      const { parcel, shopify } = await enregistrerColis(
+        workspace,
+        parsed.data,
+        request.ip,
+        request.log,
+      );
 
-      const parcel = await prisma.parcel.upsert({
-        where: {
-          merchantId_trackingNumber: {
-            merchantId: workspace.merchantId,
-            trackingNumber: parsed.data.trackingNumber.trim(),
-          },
-        },
-        create: {
-          merchantId: workspace.merchantId,
-          shopifyOrderId: parsed.data.shopifyOrderId,
-          orderName: parsed.data.orderName ?? null,
-          trackingNumber: parsed.data.trackingNumber.trim(),
-          carrier: parsed.data.carrier ?? null,
-          index: parsed.data.index,
-          total: parsed.data.total,
-          ...photoFields,
-        },
-        update: {
-          carrier: parsed.data.carrier ?? null,
-          index: parsed.data.index,
-          total: parsed.data.total,
-          ...photoFields,
-        },
-        select: {
-          id: true,
-          trackingNumber: true,
-          carrier: true,
-          index: true,
-          total: true,
-          orderName: true,
-          photoMime: true,
-          photoTakenAt: true,
-          updatedAt: true,
-        },
-      });
+      return reply.send({ parcel: toParcelView(parcel), shopify });
+    },
+  );
 
-      await recordAudit({
-        merchantId: workspace.merchantId,
-        actorType: 'SUPPLIER',
-        actorId: workspace.supplierId,
-        action: 'supplier.parcel_recorded',
-        targetType: 'Parcel',
-        targetId: parcel.id,
-        metadata: { index: parcel.index, total: parcel.total, photo: Boolean(photo) },
-        ipAddress: request.ip,
-      });
+  /**
+   * L'import en masse : des numéros de suivi collés depuis Excel.
+   *
+   * Deux temps, et c'est tout le propos. `apercu: true` lit le collage et dit
+   * ligne par ligne ce qui arrivera, sans rien écrire. `apercu: false` REFAIT
+   * le même calcul — le serveur ne croit jamais l'aperçu que le navigateur
+   * lui renvoie — puis enregistre les lignes prêtes. Entre les deux, l'écran
+   * annonce combien de commandes partiront et combien de clients recevront
+   * leur suivi par mail : c'est ce qui se passe au dernier colis d'une
+   * commande, et cinquante lignes font cinquante mails.
+   *
+   * Aucune commande n'est devinée. Un numéro ne se pose que sur une commande
+   * que l'atelier a le droit de voir — la même règle que sa liste — sans quoi
+   * un client recevrait le suivi du colis d'un autre, et le mail serait parti.
+   */
+  app.post<{ Params: { id: string }; Querystring: { token?: string } }>(
+    '/api/workspace/:id/parcels/lot',
+    { bodyLimit: 512 * 1024 },
+    async (request, reply) => {
+      const workspace = await authorize(request, reply);
+      if (!workspace) return;
+
+      const parsed = z
+        .object({ texte: z.string().max(200_000), apercu: z.boolean() })
+        .safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Import illisible' });
+
+      const lignes = lireCollage(parsed.data.texte);
+      if (lignes.length === 0) {
+        return reply.code(400).send({ error: 'Rien à importer : collez au moins une ligne.' });
+      }
+      if (lignes.length > LIGNES_MAX) {
+        return reply.code(400).send({
+          error: `Trop de lignes (${lignes.length}) : importez-les en plusieurs fois, ${LIGNES_MAX} au plus.`,
+        });
+      }
 
       /*
-       * Dernier colis saisi → la commande part vraiment.
-       *
-       * Un seul fulfillment portant tous les numéros, créé quand tous les
-       * colis annoncés sont enregistrés : Shopify passe la commande en
-       * expédiée et envoie au client son mail avec les suivis. C'est le but
-       * de toute la saisie — sans lui, le client écrit « où est mon colis »
-       * pour un colis déjà en route.
-       *
-       * L'échec n'annule pas la saisie : le colis est enregistré chez nous
-       * quoi qu'il arrive, et le motif remonte au fournisseur pour que le
-       * marchand soit prévenu (autorisation manquante, commande déjà close).
+       * Les commandes nommées, cherchées chez Shopify par lots de cinquante :
+       * au-delà, la requête devient assez longue pour être refusée. Puis la
+       * même règle de visibilité que la liste de l'atelier — ce qu'il n'y voit
+       * pas, il ne peut pas l'expédier.
        */
-      let shopify: { fulfilled: boolean; reason?: string } | null = null;
+      const allowed = await allowedOrderIds(workspace);
+      const noms = [
+        ...new Set(
+          lignes
+            .map((ligne) => normaliserCommande(ligne.commande))
+            .filter((nom): nom is string => nom !== null),
+        ),
+      ];
 
-      const recorded = await prisma.parcel.findMany({
-        where: {
-          merchantId: workspace.merchantId,
-          shopifyOrderId: parsed.data.shopifyOrderId,
-        },
-        select: { trackingNumber: true, carrier: true, index: true },
-        orderBy: { index: 'asc' },
-      });
-
-      if (new Set(recorded.map((row) => row.index)).size >= parsed.data.total) {
+      let trouvees: Awaited<ReturnType<typeof listOrders>>['orders'] = [];
+      if (noms.length > 0 && allowed?.length !== 0) {
         try {
           const client = await getShopifyClient(workspace.merchantId);
-          shopify = await fulfillOrder(client, parsed.data.shopifyOrderId, {
-            numbers: recorded.map((row) => row.trackingNumber),
-            company: recorded.find((row) => row.carrier)?.carrier ?? null,
-          });
-
-          await recordAudit({
-            merchantId: workspace.merchantId,
-            actorType: 'SUPPLIER',
-            actorId: workspace.supplierId,
-            action: shopify.fulfilled ? 'supplier.order_fulfilled' : 'supplier.fulfill_failed',
-            targetType: 'Order',
-            targetId: parsed.data.shopifyOrderId,
-            metadata: {
-              orderName: parsed.data.orderName,
-              numbers: recorded.map((row) => row.trackingNumber),
-              reason: shopify.reason ?? null,
-            },
-            ipAddress: request.ip,
-          });
+          for (let debut = 0; debut < noms.length; debut += 50) {
+            const lot = noms.slice(debut, debut + 50);
+            const page = await listOrders(client, {
+              query: lot.map((nom) => `name:${quoteSearchValue(nom)}`).join(' OR '),
+              limit: lot.length,
+              cursor: null,
+            });
+            trouvees.push(...page.orders);
+          }
         } catch (error) {
-          request.log.error(
-            { err: error, orderId: parsed.data.shopifyOrderId },
-            'Fulfillment Shopify en échec',
-          );
-          shopify = { fulfilled: false, reason: 'Shopify n’a pas répondu.' };
+          request.log.warn({ err: error, supplierId: workspace.supplierId }, 'Import : commandes non lues');
+          return reply
+            .code(502)
+            .send({ error: 'Shopify n’a pas répondu : réessayez dans un instant. Rien n’a été enregistré.' });
         }
       }
 
-      return reply.send({ parcel: toParcelView(parcel), shopify });
+      const visibles = allowed
+        ? ordersForSupplier(
+            trouvees,
+            { id: workspace.supplierId, ...workspace },
+            await otherSupplierRules(workspace),
+            allowed,
+          )
+        : trouvees;
+
+      // Les colis déjà là : ceux des commandes visées, et tout colis qui porte
+      // déjà l'un des numéros collés — c'est ce qui repère un doublon avec une
+      // autre commande.
+      const suivis = lignes.map((ligne) => ligne.suivi).filter(Boolean);
+      const existants = await prisma.parcel.findMany({
+        where: {
+          merchantId: workspace.merchantId,
+          OR: [
+            { shopifyOrderId: { in: visibles.map((commande) => commande.id) } },
+            { trackingNumber: { in: suivis } },
+          ],
+        },
+        select: { shopifyOrderId: true, trackingNumber: true, index: true, total: true },
+      });
+
+      const plan = planifierLot(
+        lignes,
+        visibles.map((commande) => ({
+          id: commande.id,
+          name: commande.name,
+          client: commande.customer?.displayName ?? commande.shippingAddress?.name ?? null,
+        })),
+        existants.filter((colis): colis is typeof colis & { shopifyOrderId: string } =>
+          Boolean(colis.shopifyOrderId),
+        ),
+      );
+
+      if (parsed.data.apercu) return reply.send(plan);
+
+      /*
+       * L'enregistrement, ligne par ligne, par le même chemin que la saisie
+       * une par une. Une ligne qui échoue n'arrête pas les autres : l'atelier
+       * reçoit le détail, et réimporter le même collage ne refait que ce qui
+       * manque — chaque ligne déjà passée ressort « déjà saisie ».
+       */
+      const resultats: { rang: number; ok: boolean; expediee: boolean; raison: string | null }[] = [];
+      for (const ligne of plan.lignes) {
+        if (ligne.statut !== 'pret') continue;
+        try {
+          const { shopify } = await enregistrerColis(
+            workspace,
+            {
+              shopifyOrderId: ligne.shopifyOrderId!,
+              orderName: ligne.nom,
+              trackingNumber: ligne.suivi,
+              carrier: ligne.transporteur,
+              index: ligne.index!,
+              total: ligne.total!,
+            },
+            request.ip,
+            request.log,
+          );
+          resultats.push({
+            rang: ligne.rang,
+            ok: true,
+            expediee: shopify?.fulfilled ?? false,
+            raison: shopify && !shopify.fulfilled ? (shopify.reason ?? null) : null,
+          });
+        } catch (error) {
+          request.log.warn({ err: error, rang: ligne.rang }, 'Import : ligne non enregistrée');
+          resultats.push({ rang: ligne.rang, ok: false, expediee: false, raison: 'Enregistrement impossible.' });
+        }
+      }
+
+      return reply.send({
+        ...plan,
+        resultats,
+        enregistres: resultats.filter((resultat) => resultat.ok).length,
+        expedieesReelles: resultats.filter((resultat) => resultat.expediee).length,
+      });
     },
   );
 
