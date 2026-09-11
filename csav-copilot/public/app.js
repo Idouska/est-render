@@ -1296,6 +1296,32 @@ async function openSupplierLink(supplierId, revoke = false) {
   }
 }
 
+/**
+ * Le lien de travail d'une agence de retours : elle y voit les commandes à
+ * expédier depuis son stock, et y saisit ses numéros de suivi. Même geste que
+ * pour l'atelier — copié, affiché, et révocable.
+ */
+async function openAgencyLink(agencyId, revoke = false) {
+  if (
+    revoke &&
+    !confirm('Renouveler le lien coupe l’accès de cette agence immédiatement, y compris celui qu’elle a déjà enregistré. Continuer ?')
+  ) {
+    return;
+  }
+
+  try {
+    const { url } = await api(`/api/return-agencies/${agencyId}/portal-link`, {
+      method: 'POST',
+      body: JSON.stringify({ revoke }),
+    });
+    await navigator.clipboard?.writeText(url).catch(() => {});
+    toast(revoke ? 'Ancien lien coupé, nouveau lien copié.' : 'Lien de l’agence copié.');
+    prompt('Lien de travail de l’agence — à lui transmettre :', url);
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
 /* ------------------------------------------------- chronologie d'un colis */
 
 /**
@@ -8678,7 +8704,7 @@ function renderReturnStock(box) {
     ? `<section class="ret-pays">
         <h3>Confiées à une commande <span class="count">${parCommande.size}</span></h3>
         <div class="table-wrap"><table class="grid"><thead><tr>
-          <th>Commande</th><th>Paires</th><th>Part de</th><th>Depuis</th><th></th>
+          <th>Commande</th><th>Paires</th><th>Part de</th><th>Envoi de l’agence</th><th></th>
         </tr></thead><tbody>${[...parCommande.entries()]
           .map(([idCommande, items]) => {
             const premiere = items[0];
@@ -8690,9 +8716,20 @@ function renderReturnStock(box) {
               <td>${esc(nomPays(premiere.agency?.country ?? premiere.country))}${
                 premiere.agency?.name ? ` · ${esc(premiere.agency.name)}` : ''
               }</td>
-              <td>${premiere.reusedAt ? `${joursDepuis(premiere.reusedAt)} j` : '—'}</td>
-              <td><button class="btn btn-small" data-ret-liberer="${esc(idCommande)}"
-                data-ret-order="${esc(premiere.reusedOrderName ?? '')}">Libérer</button></td>
+              <td>${
+                premiere.reshippedAt
+                  ? `<span class="ret-tag ok">Expédiée</span> <span class="mono">${esc(premiere.reshipTrackingNumber ?? '')}</span>`
+                  : `<span class="ret-tag warn">À expédier</span> <small>confiée il y a ${
+                      premiere.reusedAt ? joursDepuis(premiere.reusedAt) : 0
+                    } j</small>`
+              }</td>
+              <td>${
+                // Une fois l'agence passée, la paire est partie : plus rien à libérer.
+                premiere.reshippedAt
+                  ? ''
+                  : `<button class="btn btn-small" data-ret-liberer="${esc(idCommande)}"
+                      data-ret-order="${esc(premiere.reusedOrderName ?? '')}">Libérer</button>`
+              }</td>
             </tr>`;
           })
           .join('')}</tbody></table></div>
@@ -8733,6 +8770,10 @@ function renderReturnAgencies(box) {
                 ${agency.phone ? `<small>✆ ${esc(agency.phone)}</small>` : ''}
                 ${agency.address ? `<small>${esc(agency.address)}</small>` : ''}
                 ${agency.notes ? `<small>${esc(agency.notes)}</small>` : ''}
+                <div class="ret-controle">
+                  <button class="btn btn-small btn-primary" data-agency-link="${esc(agency.id)}">Copier le lien de l’agence</button>
+                  <button class="btn btn-small" data-agency-link="${esc(agency.id)}" data-revoke="1">Renouveler le lien</button>
+                </div>
                 <button class="qlink" data-agency-del="${esc(agency.id)}"
                   style="align-self:flex-start;padding:2px 0">Supprimer</button>
               </div>`,
@@ -8838,6 +8879,12 @@ $('ret-body').addEventListener('click', async (event) => {
     } catch (error) {
       toast(error.message, true);
     }
+    return;
+  }
+
+  const lienAgence = event.target.closest('[data-agency-link]');
+  if (lienAgence) {
+    void openAgencyLink(lienAgence.dataset.agencyLink, lienAgence.dataset.revoke === '1');
     return;
   }
 
@@ -10393,8 +10440,14 @@ function orderDetailMarkup(order, atelier = [], reemploi = []) {
       (paire) => `<div class="ordv-row">
         <span>Stock retours · ${esc(RETURN_COUNTRIES[paire.agency?.country] ?? paire.agency?.country ?? '')}${
           paire.agency?.name ? ` · ${esc(paire.agency.name)}` : ''
-        } · <span class="sub">à expédier par l’agence</span></span>
-        <b>${esc(paire.productTitle)}${paire.variantTitle ? ` · ${esc(paire.variantTitle)}` : ''}</b>
+        } · ${esc(paire.productTitle)}${paire.variantTitle ? ` · ${esc(paire.variantTitle)}` : ''}</span>
+        ${
+          paire.reshipTrackingNumber
+            ? `<button class="linklike mono" data-track="${esc(paire.reshipTrackingNumber)}">${esc(
+                paire.reshipTrackingNumber,
+              )}</button>`
+            : '<span class="sub">à expédier par l’agence</span>'
+        }
       </div>`,
     )
     .join('');

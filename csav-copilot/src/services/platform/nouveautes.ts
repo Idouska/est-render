@@ -25,6 +25,21 @@ export interface Nouveaute {
 
 export const NOUVEAUTES: readonly Nouveaute[] = [
   {
+    pr: 60,
+    date: '2026-09-12',
+    pour: 'Les deux',
+    titre: 'L’agence expédie elle-même depuis son stock',
+    resume:
+      'Chaque agence de retours a son lien de travail, comme l’atelier : elle y voit les commandes confiées à son stock, l’adresse du client et les paires à envoyer, saisit son numéro de suivi — et Shopify expédie la commande et prévient le client. En quatre langues : français, anglais, espagnol, italien.',
+    ou: 'Reshipment → Agences : « Copier le lien de l’agence ».',
+    essayer: [
+      'Allumer le mode test.',
+      'Reshipment → Agences : copier le lien d’une agence et l’ouvrir.',
+      'Saisir un numéro de suivi sur une commande à expédier : en mode test, rien ne part.',
+      'Côté marchand, la paire confiée passe à « Expédiée » avec son numéro.',
+    ],
+  },
+  {
     pr: 59,
     date: '2026-09-12',
     pour: 'Les deux',

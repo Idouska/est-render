@@ -1554,3 +1554,98 @@ input:focus, select:focus, textarea:focus {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+
+/* ==========================================================================
+   PORTAIL DES AGENCES DE RETOURS
+
+   Une page, une seule chose à y faire : voir les commandes confiées au stock
+   de l'agence et saisir le numéro de suivi. Elle reprend les composants de
+   l'atelier — mêmes boutons, même bandeau de mode test, même sélecteur de
+   langue — parce que ce sont les mêmes gestes, sur un autre poste.
+   ========================================================================== */
+
+.ag { max-width: 860px; margin: 0 auto; padding: 18px 16px 64px; display: flex; flex-direction: column; gap: 22px; }
+.ag-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.ag-qui b { display: block; font-size: 17px; letter-spacing: -0.01em; }
+.ag-qui small { color: var(--ink-soft); font-size: 12.5px; }
+.ag-actions { display: flex; align-items: center; gap: 8px; }
+.ag h1 { margin: 0 0 10px; font-size: 19px; letter-spacing: -0.02em; }
+.ag h2 { margin: 0 0 10px; font-size: 14px; font-weight: 600; color: var(--ink-soft); }
+
+.ag-note {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: 13.5px;
+}
+
+.ag-cmd {
+  margin-bottom: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--card);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ag-cmd header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 10px; }
+.ag-cmd header b { font-size: 16px; }
+.ag-cmd header small { color: var(--ink-mute); font-size: 12.5px; }
+.ag-faite { opacity: 0.88; }
+
+.ag-bloc { display: flex; flex-direction: column; gap: 6px; }
+.ag-titre { font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-mute); }
+
+/* L'adresse se recopie sur une étiquette : elle garde ses retours à la ligne. */
+.ag-adresse {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  background: var(--paper);
+  color: var(--ink);
+  font: 13.5px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+}
+.ag-bloc .btn { align-self: flex-start; }
+
+.ag-paire { display: flex; align-items: center; gap: 10px; }
+.ag-paire b { display: block; font-size: 14.5px; }
+.ag-paire small { display: block; color: var(--ink-soft); font-size: 12.5px; }
+.ag-sub { color: var(--ink-mute); }
+.ag-photo {
+  flex: none;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--paper);
+  color: var(--ink-soft);
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.ag-envoi { display: flex; flex-wrap: wrap; gap: 8px; }
+.ag-envoi input {
+  flex: 1 1 180px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--card);
+  color: var(--ink);
+  font-size: 15px;
+}
+.ag-envoi input:focus { outline: none; border-color: var(--brand); }
+
+.ag-vide {
+  margin: 0;
+  padding: 16px;
+  border: 1px dashed var(--line);
+  border-radius: var(--r);
+  color: var(--ink-mute);
+  font-size: 14px;
+}
+
+.ag-gate { max-width: 520px; margin: 15vh auto; padding: 22px; text-align: center; color: var(--ink); font-size: 15px; }

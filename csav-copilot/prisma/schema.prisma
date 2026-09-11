@@ -934,6 +934,13 @@ model ReturnCase {
   /// liste. Posé et retiré avec `reusedOrderName`.
   reusedShopifyOrderId String?
 
+  /// L'envoi fait par l'agence pour cette commande : son numéro de suivi, son
+  /// transporteur, et quand. Les paires d'une même commande partent dans le
+  /// même colis et portent le même numéro.
+  reshipTrackingNumber String?
+  reshipCarrier        String?
+  reshippedAt          DateTime?
+
   /// Entrée au stock : les paires les plus anciennes partent en premier.
   restockedAt DateTime?
 
@@ -1006,6 +1013,10 @@ model ReturnAgency {
   phone   String?
   address String? @db.Text
   notes   String? @db.Text
+
+  /// Version du lien de travail de l'agence : l'incrémenter révoque tous les
+  /// liens déjà transmis. Voir `lib/agencyToken.ts`.
+  portalTokenVersion Int @default(1)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Agence — expéditions</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%235b4bd6'/%3E%3Cpath d='M4 6.5h8v5H4z' fill='none' stroke='%23fff' stroke-width='1.2'/%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="/static/workspace.css" />
+  </head>
+  <body>
+    <!-- Lien invalide ou révoqué : une phrase, et rien d'autre à l'écran. -->
+    <div class="ag-gate" id="ag-gate" hidden>
+      <p id="ag-gate-msg">…</p>
+    </div>
+
+    <main class="ag" id="ag-app" hidden>
+      <header class="ag-head">
+        <div class="ag-qui">
+          <b id="ag-nom">…</b>
+          <small id="ag-pays"></small>
+        </div>
+        <div class="ag-actions">
+          <div class="ws-lang" id="ag-langs" role="group" aria-label="Langue"></div>
+          <button class="btn btn-small" id="ag-refresh" data-t="ag.refresh">Rafraîchir</button>
+        </div>
+      </header>
+
+      <!-- Mode test du marchand : les saisies sont gardées, rien ne part. -->
+      <p class="ws-test" id="ag-test" hidden>
+        <b data-t="test.title">Mode test</b>
+        <span data-t="ag.testBanner">Vos saisies sont enregistrées, mais aucune commande n’est expédiée et aucun client n’est prévenu.</span>
+      </p>
+
+      <section>
+        <h1 data-t="ag.toShip">À expédier</h1>
+        <p class="ag-note" id="ag-adresses" hidden data-t="ag.addressDown">
+          Adresses indisponibles pour le moment : rafraîchissez dans un instant.
+        </p>
+        <div id="ag-a-expedier"></div>
+      </section>
+
+      <section>
+        <h2 data-t="ag.shipped">Expédiées — 30 derniers jours</h2>
+        <div id="ag-expediees"></div>
+      </section>
+    </main>
+
+    <!-- Les transporteurs courants, proposés sans être imposés. -->
+    <datalist id="ag-carriers">
+      <option value="UPS"></option>
+      <option value="DHL Express"></option>
+      <option value="FedEx"></option>
+      <option value="La Poste"></option>
+      <option value="Colissimo"></option>
+      <option value="Chronopost"></option>
+      <option value="Mondial Relay"></option>
+      <option value="DPD"></option>
+      <option value="GLS"></option>
+      <option value="Correos"></option>
+      <option value="SEUR"></option>
+      <option value="Poste Italiane"></option>
+      <option value="BRT"></option>
+      <option value="bpost"></option>
+    </datalist>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script type="module" src="/static/agence.js"></script>
+  </body>
+</html>
