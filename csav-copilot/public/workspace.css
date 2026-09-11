@@ -1306,6 +1306,18 @@ input:focus, select:focus, textarea:focus {
 }
 .bulk-paste textarea:focus { outline: none; border-color: var(--brand); }
 
+/* Le bandeau du mode test : impossible à manquer, sur toutes les vues. */
+.ws-test {
+  margin: 0 0 16px;
+  padding: 11px 14px;
+  border: 1.5px solid var(--warn);
+  border-radius: var(--r);
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: 14px;
+}
+.ws-test b { margin-right: 6px; }
+
 .bulk-acts { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
 .bulk-file { cursor: pointer; }
 

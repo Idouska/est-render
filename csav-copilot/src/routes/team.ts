@@ -86,7 +86,8 @@ async function deliverLink(params: {
   body: string;
 }): Promise<boolean> {
   try {
-    await sendPlainEmail(params);
+    // Même en mode test : sans ce mail, personne ne pourrait se connecter.
+    await sendPlainEmail({ ...params, memeEnModeTest: true });
     return true;
   } catch (error) {
     logger.warn({ err: error, to: params.to }, 'Envoi du lien de connexion impossible');

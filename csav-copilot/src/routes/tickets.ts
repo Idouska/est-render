@@ -306,6 +306,8 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
          * écran qui la chargeait jusqu'ici.
          */
         emailSignature: merchant.emailSignature,
+        // Le bandeau « Mode test » s'affiche sur toutes les pages tant qu'il est allumé.
+        testMode: merchant.testMode,
         logoUrl: merchant.logoUrl,
         hasLogo: Boolean(merchant.logoMime),
         autoSendEnabled: merchant.autoSendEnabled,

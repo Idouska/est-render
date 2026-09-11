@@ -684,6 +684,8 @@ async function load() {
 
     $('app').hidden = false;
     $('ws-supplier').textContent = data.supplier?.name ?? '';
+    state.testMode = Boolean(data.testMode);
+    $('ws-test').hidden = !state.testMode;
     // Deux formats : la feuille Excel reprend la mise en page de l'atelier,
     // le CSV sert à qui veut retravailler les données.
     $('ws-xlsx').href = apiUrl(`/api/workspace/${supplierId}/orders.xlsx`).toString();
@@ -849,7 +851,9 @@ $('ws-orders').addEventListener('click', async (event) => {
 
     // Le dernier colis déclenche l'expédition Shopify : le fournisseur doit
     // savoir si le client est prévenu, ou pourquoi il ne l'est pas.
-    if (shopify?.fulfilled) {
+    if (shopify?.fulfilled && state.testMode) {
+      toast(t('test.parcelSaved'));
+    } else if (shopify?.fulfilled) {
       toast(t('parcel.shipped'));
     } else if (shopify?.reason) {
       toast(t('parcel.shipFail', { reason: shopify.reason }), true);
@@ -1919,14 +1923,18 @@ function renderApercu() {
       plan.prets > 0
         ? `<div class="bulk-confirm">
             <p class="bulk-consequence">${esc(
-              plan.expediees > 0
-                ? t('bulk.consequence', { n: plan.prets, orders: plan.expediees })
-                : t('bulk.consequencePartial', { n: plan.prets }),
+              state.testMode
+                ? t('bulk.consequenceTest', { n: plan.prets })
+                : plan.expediees > 0
+                  ? t('bulk.consequence', { n: plan.prets, orders: plan.expediees })
+                  : t('bulk.consequencePartial', { n: plan.prets }),
             )}</p>
             <div class="bulk-acts">
               <button class="btn" type="button" id="bulk-edit">${esc(t('bulk.edit'))}</button>
               <button class="btn btn-primary" type="button" id="bulk-save">${esc(
-                plan.expediees > 0
+                state.testMode
+                  ? t('bulk.saveTest', { n: plan.prets })
+                  : plan.expediees > 0
                   ? t('bulk.saveShip', { n: plan.prets, orders: plan.expediees })
                   : t('bulk.save', { n: plan.prets }),
               )}</button>
@@ -1961,7 +1969,9 @@ async function enregistrerLot() {
     $('bulk-apercu').innerHTML = `
       <div class="bulk-fin">
         <p class="bulk-fin-titre">✓ ${esc(
-          t('bulk.done', { n: bilan.enregistres, orders: bilan.expedieesReelles }),
+          state.testMode
+            ? t('bulk.doneTest', { n: bilan.enregistres })
+            : t('bulk.done', { n: bilan.enregistres, orders: bilan.expedieesReelles }),
         )}</p>
         ${
           echecs.length

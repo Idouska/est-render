@@ -615,6 +615,7 @@ function renderMe() {
     }"></span> Envoi auto ${me.merchant.autoSendEnabled ? 'activé' : 'désactivé'}`;
   }
   $('mock-notice').hidden = !me.shopify.simulated;
+  $('test-notice').hidden = !me.merchant.testMode;
 }
 
 /* ------------------------------------------------------- sélecteur boutique */
@@ -11000,6 +11001,7 @@ function renderSettings() {
   $('set-logo').value = merchant.logoUrl ?? '';
   $('set-tracking').value = merchant.trackingUrlTemplate ?? '';
   $('set-autosend').checked = merchant.autoSendEnabled;
+  $('set-testmode').checked = Boolean(merchant.testMode);
   $('set-threshold').value = merchant.autoSendThreshold;
   $('set-threshold-echo').textContent = `${Math.round(merchant.autoSendThreshold * 100)} %`;
   $('set-retention').value = String(merchant.retentionDays);
@@ -11025,6 +11027,35 @@ const SETTINGS_FIELDS = [
   'set-signature',
   'set-sla',
 ];
+
+/*
+ * Le mode test s'enregistre dès qu'on le bascule, sans attendre
+ * « Enregistrer » : c'est un interrupteur de sécurité, son effet doit être
+ * immédiat et se voir — le bandeau apparaît ou disparaît aussitôt.
+ */
+$('set-testmode').addEventListener('change', async (event) => {
+  const actif = event.target.checked;
+  try {
+    await api('/api/settings', { method: 'PATCH', body: JSON.stringify({ testMode: actif }) });
+    $('test-notice').hidden = !actif;
+    toast(actif ? 'Mode test activé : rien ne sortira.' : 'Mode test désactivé : les actions sont de nouveau réelles.');
+  } catch (error) {
+    event.target.checked = !actif;
+    toast(error.message, true);
+  }
+});
+
+$('test-effacer').addEventListener('click', async () => {
+  if (!confirm('Effacer les colis et remboursements créés pendant le mode test ? Les données réelles ne sont pas touchées.')) {
+    return;
+  }
+  try {
+    const { colis, remboursements } = await api('/api/mode-test/effacer', { method: 'POST' });
+    toast(`Données de test effacées — colis : ${colis}, remboursements : ${remboursements}.`);
+  } catch (error) {
+    toast(error.message, true);
+  }
+});
 
 function markSettingsDirty() {
   $('set-dirty').textContent = 'Modifications non enregistrées.';

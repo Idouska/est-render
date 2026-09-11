@@ -202,6 +202,18 @@
            l'essentiel numérique. -->
       <div class="clockpop" id="clockpop" hidden></div>
 
+      <!-- Mode test : tant qu'il est allumé, ce bandeau reste sur toutes les
+           pages. Un marchand qui l'oublierait croirait ses actions réelles. -->
+      <div class="notice notice-warn" id="test-notice" hidden>
+        <span class="notice-mark">Mode test</span>
+        <div>
+          <b>Rien ne sort.</b>
+          Aucune expédition ni aucun remboursement n'est envoyé à Shopify, aucun
+          e-mail ne part vers les clients ni les fournisseurs. Les ateliers voient
+          le même bandeau. Pour l'éteindre : Réglages, « Mode test ».
+        </div>
+      </div>
+
       <div class="notice" id="mock-notice" hidden>
         <span class="notice-mark">Simulation</span>
         <div>
@@ -1589,6 +1601,26 @@ contact@runningupscale.com"></textarea>
                   <option value="72">72 heures</option>
                 </select>
                 <small>Fixe l'échéance de chaque message. Passée l'échéance, il apparaît en retard.</small>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel" id="panel-test">
+            <div class="panel-head"><span class="panel-title">Mode test</span></div>
+            <div class="card-body set-group">
+              <label class="confirm">
+                <input type="checkbox" id="set-testmode" />
+                <span>
+                  <b>Activer le mode test.</b> L'outil fonctionne normalement, mais rien
+                  ne sort : aucune expédition ni aucun remboursement chez Shopify, aucun
+                  e-mail aux clients ni aux fournisseurs. S'applique tout de suite, à
+                  tout le compte et à ses ateliers. Seuls les liens de connexion de
+                  l'équipe continuent de partir.
+                </span>
+              </label>
+              <div>
+                <button class="btn" id="test-effacer" type="button">Effacer les données de test</button>
+                <small class="set-help">Supprime les colis et remboursements créés pendant le mode test. Les données réelles ne sont pas touchées.</small>
               </div>
             </div>
           </div>

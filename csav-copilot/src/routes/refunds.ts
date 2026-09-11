@@ -9,6 +9,7 @@ import { requirePermission, requireSession } from '../plugins/auth.ts';
 import { fetchCommerceStats } from '../services/shopify/commerceStats.ts';
 import { fetchShopRefunds, type ShopRefund } from '../services/shopify/refundHistory.ts';
 import { getShopifyClient } from '../services/shopify/client.ts';
+import { enModeTest } from '../services/modeTest.ts';
 import { createRefund, getRefundableTransactions } from '../services/shopify/refunds.ts';
 
 const refundBody = z.object({
@@ -109,6 +110,7 @@ export async function refundRoutes(app: FastifyInstance): Promise<void> {
         kind,
         status: 'PENDING',
         requestedByUserId: userId,
+        test: await enModeTest(merchantId),
       },
     });
 
