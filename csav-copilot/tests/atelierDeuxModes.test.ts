@@ -135,17 +135,53 @@ test('un fichier déposé ou choisi suit le même chemin, .xlsx compris', () => 
   assert.match(depot.slice(0, depot.indexOf('\n});')), /void lireFichier\(fichier\)/);
 });
 
-test('le glisser-déposer n’intercepte rien en mode « Une par une »', () => {
-  // Hors du mode « En masse », la page se comporte comme avant.
-  for (const evenement of ['dragenter', 'dragover', 'dragleave', 'drop']) {
+test('chaque écoute du glisser passe par son garde', () => {
+  const garde = {
+    dragenter: /if \(!prendLeGlisser\(event\)\) return;/,
+    dragover: /if \(!glisserActif\(event\)\) return;/,
+    dragleave: /if \(!glisserActif\(event\)\) return;/,
+    drop: /if \(!glisserActif\(event\)\) return;/,
+  };
+  for (const [evenement, motif] of Object.entries(garde)) {
     const debut = js.indexOf(`document.addEventListener('${evenement}'`);
     assert.ok(debut >= 0, `écoute ${evenement} introuvable`);
-    assert.match(
-      js.slice(debut, debut + 200),
-      /if \(state\.mode !== 'masse' \|\| !porteDesFichiers\(event\)\) return;/,
-      `${evenement} doit laisser passer hors du mode « En masse »`,
-    );
+    assert.match(js.slice(debut, debut + 200), motif, `${evenement} : garde absent`);
   }
+});
+
+test('une feuille glissée depuis « Une par une » bascule en masse ; une photo, jamais', () => {
+  // EXÉCUTÉ : les gardes sont évalués sur de faux glisser, comme le
+  // navigateur les présente — le type se lit, pas le contenu.
+  const source = js.slice(js.indexOf('const porteDesFichiers'), js.indexOf('\n}\n', js.indexOf('function prendLeGlisser')) + 2);
+  const essai = (etat: { mode: string; view: string; focus: string | null }, types: string[], fichiers = true) => {
+    const bascules: string[] = [];
+    const prend = new Function(
+      'state',
+      'setMode',
+      `${source} return prendLeGlisser;`,
+    )(etat, (mode: string) => {
+      bascules.push(mode);
+      etat.mode = mode;
+    }) as (event: unknown) => boolean;
+    const event = {
+      dataTransfer: {
+        types: fichiers ? ['Files'] : ['text/plain'],
+        items: types.map((type) => ({ kind: 'file', type })),
+      },
+    };
+    return { pris: prend(event), bascules };
+  };
+  const xlsx = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  const liste = () => ({ mode: 'manuel', view: 'orders', focus: null as string | null });
+
+  assert.deepEqual(essai(liste(), [xlsx]), { pris: true, bascules: ['masse'] });
+  assert.deepEqual(essai(liste(), ['text/csv']), { pris: true, bascules: ['masse'] });
+  assert.deepEqual(essai(liste(), ['image/jpeg']), { pris: false, bascules: [] }, 'une photo reste au champ photo');
+  assert.deepEqual(essai(liste(), ['']), { pris: false, bascules: [] }, 'un type inconnu ne bascule pas');
+  assert.deepEqual(essai({ ...liste(), focus: 'gid://shopify/Order/1' }, [xlsx]), { pris: false, bascules: [] }, 'pas au guichet');
+  assert.deepEqual(essai({ ...liste(), view: 'tracking' }, [xlsx]), { pris: false, bascules: [] }, 'pas hors de la liste');
+  assert.deepEqual(essai({ ...liste(), mode: 'masse' }, ['image/png']), { pris: true, bascules: [] }, 'en masse, tout fichier est pris');
+  assert.deepEqual(essai(liste(), [xlsx], false), { pris: false, bascules: [] }, 'un texte glissé n’est pas un fichier');
 });
 
 test('un .xlsx est lu par le serveur, puis vérifié comme un collage', () => {
