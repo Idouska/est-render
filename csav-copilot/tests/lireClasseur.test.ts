@@ -155,6 +155,44 @@ test('les titres se reconnaissent en français et en chinois', async () => {
   assert.equal(zh.texte, '#13811\tSF1234567890\t顺丰');
 });
 
+test('les titres d’un atelier se reconnaissent, même approximatifs', async () => {
+  // Le fichier de test demandé par le marchand, tel quel. Avant, « Num de
+  // commande » n'était pas reconnu : la lecture retombait sur l'ordre des
+  // colonnes, et l'URL de suivi devenait le transporteur envoyé à Shopify.
+  const lu = await lireClasseur(
+    await classeur([
+      ['Num de commande', 'tracking number', "l'url de tracking", 'autre'],
+      ['#13811', 'TEST-13811', 'https://t.17track.net/fr#nums=TEST-13811', 'Carton 1/1'],
+      ['#13810', 'TEST-13810', 'https://t.17track.net/fr#nums=TEST-13810', ''],
+    ]),
+  );
+  assert.equal(lu.colonnes, 'titres');
+  assert.equal(lu.lues, 2, 'la ligne de titres n’est pas un numéro');
+  assert.equal(lu.texte, '#13811\tTEST-13811\t\n#13810\tTEST-13810\t', 'ni URL ni « autre » ne sont lus');
+});
+
+test('une URL de suivi n’est jamais prise pour le numéro, même placée avant lui', async () => {
+  const lu = await lireClasseur(
+    await classeur([
+      ['Tracking URL', 'N° commande', 'Numéro de tracking', 'Transporteur'],
+      ['https://t.17track.net/x', '#13811', 'LX123456789CN', 'China Post'],
+    ]),
+  );
+  assert.equal(lu.texte, '#13811\tLX123456789CN\tChina Post');
+});
+
+test('faute de titres reconnus, une ligne de titres inconnus ne se compte pas', async () => {
+  const lu = await lireClasseur(
+    await classeur([
+      ['N', 'Colis', 'Info'],
+      ['#13811', 'ABC123456', 'UPS'],
+    ]),
+  );
+  assert.equal(lu.colonnes, 'position');
+  assert.equal(lu.lues, 1);
+  assert.equal(lu.texte, '#13811\tABC123456\tUPS');
+});
+
 test('un numéro de commande stocké en nombre se relit sans virgule', async () => {
   const lu = await lireClasseur(await classeur([['Order', 'Tracking'], [13811, 'ABC123456']]));
   assert.equal(lu.texte, '13811\tABC123456\t');

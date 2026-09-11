@@ -2,6 +2,8 @@ import { crc32, inflateRawSync } from 'node:zlib';
 
 import ExcelJS from 'exceljs';
 
+import { ressembleAUnEnTete } from './importColis.ts';
+
 /**
  * Lire un classeur Excel déposé par l'atelier, et le rendre en texte.
  *
@@ -309,13 +311,44 @@ const TITRES = {
 
 type Colonne = keyof typeof TITRES;
 
-function colonneDe(titre: string): Colonne | null {
+/**
+ * Les mots qui désignent une colonne quand son titre n'est pas exactement
+ * l'un des précédents : « Num de commande », « N° commande », « Numéro de
+ * tracking ». Un atelier nomme ses colonnes comme il veut. Exiger le titre
+ * exact faisait retomber la lecture sur l'ordre des colonnes — et une URL de
+ * suivi posée en troisième colonne devenait le transporteur.
+ *
+ * Le suivi est cherché en premier : « Suivi de commande » est un numéro de
+ * suivi, pas un numéro de commande.
+ */
+const MOTS: [Colonne, RegExp][] = [
+  ['suivi', /\b(?:tracking|suivi|awb)|运单|快递单号|追踪号|物流单号/],
+  ['commande', /\b(?:commande|order|cmd)|订单/],
+  ['transporteur', /\b(?:carrier|transporteur|courier)|承运商|快递公司|物流公司/],
+];
+
+/**
+ * Ce qui n'est jamais le numéro lui-même : un lien, une date, un statut.
+ * « URL de suivi », « Tracking URL », « Date de commande », « Statut du
+ * suivi » portent les bons mots et désignent pourtant autre chose.
+ */
+const JAMAIS = /\b(?:url|urls|lien|liens|link|links|https?|www|date|heure|time|statut|status)\b/;
+
+/**
+ * Le rôle d'un titre de colonne, et la précision de la reconnaissance : un
+ * titre exact (0) l'emporte sur un mot reconnu dans un titre plus long (1).
+ * « Commande » bat « N° de commande client » ; faute de titre exact, « Num
+ * de commande » suffit.
+ */
+function colonneDe(titre: string): { role: Colonne; precision: 0 | 1 } | null {
   const t = normaliser(titre);
-  if (!t) return null;
-  for (const colonne of Object.keys(TITRES) as Colonne[]) {
-    if (TITRES[colonne].some((candidat) => t === candidat || t.startsWith(`${candidat} `))) {
-      return colonne;
-    }
+  if (!t || JAMAIS.test(t)) return null;
+
+  for (const role of Object.keys(TITRES) as Colonne[]) {
+    if (TITRES[role].includes(t)) return { role, precision: 0 };
+  }
+  for (const [role, mots] of MOTS) {
+    if (mots.test(t)) return { role, precision: 1 };
   }
   return null;
 }
@@ -398,18 +431,25 @@ function lirePremiereFeuille(classeur: ExcelJS.Workbook): ClasseurLu {
   if (!feuille) throw new ClasseurRefuse('sans_feuille', 'Ce classeur ne contient aucune feuille.');
 
   // Les titres : la première ligne, parmi les cinq premières, qui nomme au
-  // moins la commande et le suivi.
+  // moins la commande et le suivi. Pour chaque rôle, le titre le plus précis
+  // l'emporte ; à précision égale, le plus à gauche.
   let ligneTitres = 0;
   let positions: Partial<Record<Colonne, number>> = {};
   for (let r = 1; r <= Math.min(5, feuille.rowCount); r += 1) {
-    const trouve: Partial<Record<Colonne, number>> = {};
+    const trouve: Partial<Record<Colonne, { colonne: number; precision: number }>> = {};
     feuille.getRow(r).eachCell((cellule, colonne) => {
-      const role = colonneDe(texteDe(cellule));
-      if (role && trouve[role] === undefined) trouve[role] = colonne;
+      const titre = colonneDe(texteDe(cellule));
+      if (!titre) return;
+      const deja = trouve[titre.role];
+      if (!deja || titre.precision < deja.precision) trouve[titre.role] = { colonne, precision: titre.precision };
     });
-    if (trouve.commande !== undefined && trouve.suivi !== undefined) {
+    if (trouve.commande && trouve.suivi) {
       ligneTitres = r;
-      positions = trouve;
+      positions = {
+        commande: trouve.commande.colonne,
+        suivi: trouve.suivi.colonne,
+        transporteur: trouve.transporteur?.colonne,
+      };
       break;
     }
   }
@@ -419,6 +459,7 @@ function lirePremiereFeuille(classeur: ExcelJS.Workbook): ClasseurLu {
 
   const lignes: string[] = [];
   let ignorees = 0;
+  let premiere = !parTitres;
 
   for (let r = ligneTitres + 1; r <= feuille.rowCount; r += 1) {
     const rang = feuille.getRow(r);
@@ -427,6 +468,15 @@ function lirePremiereFeuille(classeur: ExcelJS.Workbook): ClasseurLu {
     const transporteur = col.transporteur ? texteDe(rang.getCell(col.transporteur)) : '';
 
     if (!commande && !suivi) continue;
+
+    // Sans titres reconnus, une première ligne de titres inconnus n'est pas
+    // une commande : elle ne se compte pas parmi les numéros lus. Même règle
+    // que pour un collage.
+    if (premiere) {
+      premiere = false;
+      if (ressembleAUnEnTete(commande)) continue;
+    }
+
     if (!suivi) {
       ignorees += 1;
       continue;
