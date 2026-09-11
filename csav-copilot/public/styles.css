@@ -5310,6 +5310,17 @@ textarea:focus-visible {
 .ret-tag.warn { background: var(--warn-soft, #fdf5e6); color: var(--warn, #b7791f); }
 .ret-tag.bad { background: #fdefee; color: #c9342f; }
 .ret-tag.ok { background: #e8f7f0; color: #12925c; }
+
+/* Le stock retours, rangé par pays puis par agence. */
+.ret-pays { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
+.ret-pays h3 { margin: 0; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+.ret-pays h4 { margin: 4px 0 0; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-mute); }
+.ret-card .btn { align-self: flex-start; margin-top: 4px; }
+.ret-controle { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.ret-meta { margin: 0 0 10px; font-size: 12.5px; color: var(--ink-mute); }
+.ret-confie { margin-bottom: 12px; }
+.ret-confie p { margin: 6px 0 0; }
+.ret-adresse { margin: 8px 0 0; padding: 8px 10px; border-radius: var(--r-sm); background: var(--surface); color: var(--ink); font: 12.5px/1.5 var(--font-mono); white-space: pre-wrap; }
 .ret-tag.dim { background: var(--inset); color: var(--ink-mute); }
 
 .ret-wa {

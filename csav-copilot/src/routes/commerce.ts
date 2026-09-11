@@ -419,7 +419,21 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
         }),
       ]);
 
-      return reply.send({ order, tickets, parcels, changes });
+      // Servie par le stock retours ? La fiche le dit : sans ça, une commande
+      // absente de chez l'atelier et sans colis semblerait oubliée.
+      const reemploi = await prisma.returnCase.findMany({
+        where: { merchantId, reusedShopifyOrderId: gid },
+        select: {
+          id: true,
+          productTitle: true,
+          variantTitle: true,
+          orderName: true,
+          reusedAt: true,
+          agency: { select: { name: true, country: true } },
+        },
+      });
+
+      return reply.send({ order, tickets, parcels, changes, reemploi });
     } catch (error) {
       const { status, message } = describeShopifyError(error);
       request.log.error({ err: error }, 'Lecture de commande en échec');

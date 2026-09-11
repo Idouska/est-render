@@ -1785,6 +1785,7 @@ document.querySelectorAll('#ws-modes [data-mode]').forEach((bouton) =>
 const STATUTS_LOT = {
   pret: 'ok',
   abime_excel: 'bad',
+  stock_retour: 'warn',
   deja_saisi: 'neutre',
   invalide: 'bad',
   introuvable: 'bad',
