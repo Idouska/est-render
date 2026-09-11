@@ -79,6 +79,11 @@ model Merchant {
   /// transporteurs, d'où la possibilité de le forcer.
   trackingUrlTemplate String?
 
+  /// Mode test : l'outil fonctionne, mais rien ne sort — aucune écriture chez
+  /// Shopify, aucun e-mail aux clients ni aux fournisseurs. Vaut pour tout le
+  /// compte, ateliers compris. Voir `services/modeTest.ts`.
+  testMode Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -496,6 +501,10 @@ model Refund {
   // Qui a cliqué. Jamais l'IA : le remboursement est toujours humain.
   requestedByUserId String
 
+  /// Créé pendant le mode test : aucun argent n'a bougé. Effacé par
+  /// « Effacer les données de test ».
+  test Boolean @default(false)
+
   createdAt   DateTime  @default(now())
   completedAt DateTime?
 
@@ -645,6 +654,9 @@ model Parcel {
   /// Qui a saisi : identifiant d'utilisateur, ou nul si c'est le fournisseur
   /// depuis son lien — il n'a pas de compte.
   createdById String?
+
+  /// Créé pendant le mode test : effacé par « Effacer les données de test ».
+  test Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

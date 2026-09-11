@@ -17,6 +17,7 @@ import { fulfillOrder } from '../services/shopify/fulfill.ts';
 import { draftChangeReply } from '../services/ai/changeReply.ts';
 import { decodePhoto, photoSchema, sendParcelPhoto, toParcelView } from './parcels.ts';
 import { ordersForSupplier, type RoutingRules } from '../services/suppliers/routing.ts';
+import { enModeTest } from '../services/modeTest.ts';
 
 /**
  * Espace de travail permanent du fournisseur.
@@ -305,6 +306,9 @@ async function enregistrerColis(
       carrier: donnees.carrier ?? null,
       index: donnees.index,
       total: donnees.total,
+      // À la création seulement : un colis réel ressaisi pendant un test
+      // reste réel, et l'effacement des données de test ne le touchera pas.
+      test: await enModeTest(workspace.merchantId),
       ...photoFields,
     },
     update: {
@@ -415,6 +419,8 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
       if (allowed?.length === 0) {
         return reply.send({
           supplier: { name: workspace.supplierName, ordersAccess: workspace.ordersAccess },
+        // Le bandeau « Mode test » de l'atelier : ses saisies n'expédient rien.
+        testMode: await enModeTest(workspace.merchantId),
           orders: [],
           reason:
             workspace.ordersAccess === 'NONE'
@@ -480,6 +486,8 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
 
       return reply.send({
         supplier: { name: workspace.supplierName, ordersAccess: workspace.ordersAccess },
+        // Le bandeau « Mode test » de l'atelier : ses saisies n'expédient rien.
+        testMode: await enModeTest(workspace.merchantId),
         orders: visible.map((order) => ({
           ...order,
           parcels: (byOrder.get(order.id) ?? []).map(toParcelView),

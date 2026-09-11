@@ -1,4 +1,5 @@
 import { env } from '../../config/env.ts';
+import { ENVOI_SIMULE, enModeTest } from '../modeTest.ts';
 import { logger } from '../../lib/logger.ts';
 import { getGmailClient } from './client.ts';
 import { buildRawEmail } from './drafts.ts';
@@ -25,10 +26,19 @@ export async function sendPlainEmail(params: {
   fromName?: string | null;
   /** Version HTML, pour les messages qui portent un lien ou une mise en forme. */
   html?: string | null;
+  /**
+   * Part même en mode test. Réservé aux liens de connexion et aux
+   * invitations d'équipe : les bloquer empêcherait de se connecter.
+   */
+  memeEnModeTest?: boolean;
 }): Promise<{ gmailMessageId: string | null; fromEmail: string }> {
   if (env.GMAIL_MOCK) {
     logger.info({ to: params.to, subject: params.subject }, 'Gmail simulé : envoi direct non effectué');
     return { gmailMessageId: null, fromEmail: 'simulation@local' };
+  }
+  if (!params.memeEnModeTest && (await enModeTest(params.merchantId))) {
+    logger.info({ to: params.to, subject: params.subject }, 'Mode test : envoi direct non effectué');
+    return { ...ENVOI_SIMULE };
   }
 
   const { gmail, emailAddress } = await getGmailClient(params.merchantId, params.mailboxId);

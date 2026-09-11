@@ -1,6 +1,7 @@
 import { env } from '../../config/env.ts';
 import { decryptSecret } from '../../lib/crypto.ts';
 import { prisma } from '../../lib/prisma.ts';
+import { ecritureSimulee } from '../modeTest.ts';
 
 export class ShopifyError extends Error {
   // Champs déclarés explicitement : la syntaxe raccourcie de TypeScript
@@ -49,7 +50,7 @@ export interface ShopifyClient {
 export async function getShopifyClient(merchantId: string): Promise<ShopifyClient> {
   const connection = await prisma.shopifyConnection.findUnique({
     where: { merchantId },
-    include: { merchant: { select: { shopDomain: true } } },
+    include: { merchant: { select: { shopDomain: true, testMode: true } } },
   });
 
   if (env.SHOPIFY_MOCK) {
@@ -71,11 +72,19 @@ export async function getShopifyClient(merchantId: string): Promise<ShopifyClien
   // token — le cas où `SHOPIFY_SCOPES` a été élargi sans réinstaller.
   const grantedScopes = connection.scopes.split(',').map((scope) => scope.trim()).filter(Boolean);
   const shopDomain = connection.merchant.shopDomain;
+  const modeTest = connection.merchant.testMode;
   const endpoint = `https://${shopDomain}/admin/api/${env.SHOPIFY_API_VERSION}/graphql.json`;
 
   return {
     shopDomain,
     async request<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
+      // Mode test : une écriture ne part pas, elle reçoit une réponse simulée
+      // — ou est refusée si on ne sait pas la simuler. Les lectures partent.
+      if (modeTest) {
+        const simulee = ecritureSimulee(query);
+        if (simulee !== null) return simulee as T;
+      }
+
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {

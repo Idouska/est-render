@@ -68,6 +68,7 @@ const patchBody = z
      */
     logo: photoSchema.nullish(),
     trackingUrlTemplate: z.string().max(300).nullish(),
+    testMode: z.boolean().optional(),
     playbook: z.string().max(8000).nullish(),
     emailSignature: z.string().max(600).nullish(),
     slaHours: z.number().int().min(1).max(240).optional(),
@@ -162,6 +163,7 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
         hasLogo: Boolean(merchant.logoMime),
         logoUpdatedAt: merchant.updatedAt,
         trackingUrlTemplate: merchant.trackingUrlTemplate,
+        testMode: merchant.testMode,
         playbook: merchant.playbook,
         emailSignature: merchant.emailSignature,
         slaHours: merchant.slaHours,
@@ -1339,6 +1341,41 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
+  /**
+   * Efface ce qui a été créé pendant le mode test : les colis saisis par les
+   * ateliers, les remboursements simulés.
+   *
+   * Seules les lignes marquées « test » partent — marquées à leur création,
+   * jamais après : un colis réel ressaisi pendant un test reste réel. Rien
+   * n'est à défaire chez Shopify ni chez les clients : en mode test, rien ne
+   * leur a été envoyé.
+   */
+  app.post(
+    "/api/mode-test/effacer",
+    { preHandler: requirePermission("configure") },
+    async (request, reply) => {
+      const { merchantId, userId } = request.session;
+
+      const [colis, remboursements] = await prisma.$transaction([
+        prisma.parcel.deleteMany({ where: { merchantId, test: true } }),
+        prisma.refund.deleteMany({ where: { merchantId, test: true } }),
+      ]);
+
+      await recordAudit({
+        merchantId,
+        actorType: "USER",
+        actorId: userId,
+        action: "merchant.test_data_cleared",
+        targetType: "Merchant",
+        targetId: merchantId,
+        metadata: { colis: colis.count, remboursements: remboursements.count },
+        ipAddress: request.ip,
+      });
+
+      return reply.send({ colis: colis.count, remboursements: remboursements.count });
+    },
+  );
+
   app.patch(
     "/api/settings",
     { preHandler: requirePermission("configure") },
@@ -1406,6 +1443,7 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
           hasLogo: Boolean(merchant.logoMime),
           logoUpdatedAt: merchant.updatedAt,
           trackingUrlTemplate: merchant.trackingUrlTemplate,
+          testMode: merchant.testMode,
         playbook: merchant.playbook,
         emailSignature: merchant.emailSignature,
         slaHours: merchant.slaHours,

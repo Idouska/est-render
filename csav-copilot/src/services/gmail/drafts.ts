@@ -1,4 +1,5 @@
 import { env } from '../../config/env.ts';
+import { ENVOI_SIMULE, enModeTest } from '../modeTest.ts';
 import { logger } from '../../lib/logger.ts';
 import { getGmailClient } from './client.ts';
 
@@ -232,6 +233,10 @@ export async function sendReplyInThread(params: {
     logger.info({ threadId: params.threadId }, 'Gmail simulé : aucun mail envoyé');
     return { gmailMessageId: null, fromEmail: 'simulation@local' };
   }
+  if (await enModeTest(params.merchantId)) {
+    logger.info({ threadId: params.threadId }, 'Mode test : aucun mail envoyé');
+    return { ...ENVOI_SIMULE };
+  }
 
   const { gmail, emailAddress } = await getGmailClient(params.merchantId, params.mailboxId);
 
@@ -266,6 +271,10 @@ export async function sendDraft(
   if (env.GMAIL_MOCK) {
     logger.info({ draftId }, 'Gmail simulé : aucun mail envoyé');
     return { gmailMessageId: null, fromEmail: 'simulation@local' };
+  }
+  if (await enModeTest(merchantId)) {
+    logger.info({ draftId }, 'Mode test : aucun mail envoyé');
+    return { ...ENVOI_SIMULE };
   }
 
   // Le brouillon appartient à une boîte précise : le poster depuis une autre
