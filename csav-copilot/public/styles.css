@@ -225,6 +225,7 @@ body {
 .app {
   background: var(--ground);
   padding: 12px;
+  --gouttiere: 12px;
   display: grid;
   grid-template-columns: 248px 1fr;
   gap: 12px;
@@ -5642,7 +5643,10 @@ textarea:focus-visible {
 
 /* ------------------------------------------------------------ structure -- */
 
-.app { grid-template-columns: 204px 1fr; padding: 8px; gap: 8px; }
+/* `--gouttiere` : l'espace libre autour de la page — le bord de l'écran,
+   l'écart avec la navigation. Le bandeau de couleur s'y étend, jamais
+   au-delà : voir `.topzone[data-teinte]`. */
+.app { grid-template-columns: 204px 1fr; padding: 8px; gap: 8px; --gouttiere: 8px; }
 
 .side { padding: 10px 8px; gap: 10px; }
 
@@ -7810,11 +7814,16 @@ html, body { overflow-x: clip; }
 
 /* Le bandeau déborde de la colonne pour toucher les bords, comme une bande le
    ferait : un fond qui s'arrête aux marges se lit comme une carte, pas comme
-   un bandeau. Les marges négatives valent le remplissage, au pixel. */
+   un bandeau. Les marges négatives valent le remplissage, au pixel : le
+   contenu du bandeau reste aligné sur les cartes du dessous.
+
+   Il débordait de 14 px quand la gouttière n'en fait que 8 : il glissait de
+   6 px sous la navigation, et la page défilait d'autant vers la droite. Il
+   s'étend désormais sur la gouttière, et pas un pixel de plus. */
 .topzone[data-teinte] {
   background: var(--top-bg);
-  padding: 11px 14px 13px;
-  margin: -11px -14px 0;
+  padding: 11px var(--gouttiere, 8px) 13px;
+  margin: -11px calc(-1 * var(--gouttiere, 8px)) 0;
   border-bottom: 1px solid var(--top-line);
   color: var(--top-ink);
 }
@@ -7990,7 +7999,7 @@ html, body { overflow-x: clip; }
 }
 
 @media (max-width: 1080px) {
-  .app { grid-template-columns: 1fr; padding: 8px; gap: 10px; }
+  .app { grid-template-columns: 1fr; padding: 8px; gap: 10px; --gouttiere: 8px; }
 
   .side {
     position: fixed;
@@ -8048,7 +8057,7 @@ html, body { overflow-x: clip; }
 }
 
 @media (max-width: 700px) {
-  .app { padding: 6px; }
+  .app { padding: 6px; --gouttiere: 6px; }
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .kpi { padding: 11px 12px; }
   .kpi-value { font-size: 21px; }
