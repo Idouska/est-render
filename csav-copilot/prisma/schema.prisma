@@ -84,6 +84,11 @@ model Merchant {
   /// compte, ateliers compris. Voir `services/modeTest.ts`.
   testMode Boolean @default(false)
 
+  /// Interrupteurs par boutique, réglés depuis la console d'administration :
+  /// `{ "importEnMasse": false }`. Une clé absente vaut « allumée ». Voir
+  /// `services/fonctionnalites.ts`.
+  fonctionnalites Json @default("{}")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

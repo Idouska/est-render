@@ -9,7 +9,7 @@
 
 const $ = (id) => document.getElementById(id);
 
-const state = { settings: [] };
+const state = { settings: [], nouveautes: [], registre: [], marchands: [] };
 
 function toast(message, isError = false) {
   const el = $('toast');
@@ -205,6 +205,199 @@ async function load() {
   state.settings = settings;
   render();
   void loadSupervision();
+  void loadFonctionnalites();
+  void loadNouveautes();
+}
+
+/* -------------------------------------------------------- fonctionnalités */
+
+/*
+ * Les interrupteurs, boutique par boutique.
+ *
+ * Le serveur envoie le registre avec l'état : l'écran n'affiche que ce que le
+ * serveur sait appliquer. Chaque bascule part aussitôt — un interrupteur
+ * qu'il faudrait « enregistrer » laisserait croire à un état qui n'est pas
+ * celui de la boutique.
+ */
+async function loadFonctionnalites() {
+  try {
+    const { registre, marchands } = await api('/api/admin/marchands');
+    state.registre = registre ?? [];
+    state.marchands = marchands ?? [];
+    renderFonctionnalites();
+  } catch (error) {
+    $('fonctionnalites-body').innerHTML = `<p class="empty">${esc(error.message)}</p>`;
+  }
+}
+
+const interrupteur = (attributs, actif, oui, non) =>
+  `<label class="fx-switch"><input type="checkbox" ${attributs} ${actif ? 'checked' : ''} /><span>${
+    actif ? oui : non
+  }</span></label>`;
+
+function renderFonctionnalites() {
+  const { registre, marchands } = state;
+  const corps = $('fonctionnalites-body');
+
+  if (!marchands.length) {
+    corps.innerHTML = '<p class="empty">Aucune boutique installée.</p>';
+    return;
+  }
+
+  corps.innerHTML = `
+    <p class="set-help">Tout est allumé par défaut. Éteindre une fonctionnalité la retire
+      vraiment : l'écran la masque, et le serveur la refuse. Le mode test est le même
+      réglage que dans les Réglages de la boutique.</p>
+    <div class="fx-wrap">
+      <table class="fx">
+        <thead><tr>
+          <th>Boutique</th>
+          <th title="Rien ne sort : ni expédition, ni remboursement, ni e-mail.">Mode test</th>
+          ${registre.map((f) => `<th title="${esc(f.description)}">${esc(f.titre)}</th>`).join('')}
+        </tr></thead>
+        <tbody>${marchands
+          .map(
+            (m) => `<tr>
+              <td><b>${esc(m.brandName ?? m.name ?? m.shopDomain)}</b>
+                <span class="admin-print">${esc(m.shopDomain)}</span></td>
+              <td>${interrupteur(`data-marchand="${esc(m.id)}" data-mode-test`, m.testMode, 'Allumé', 'Éteint')}</td>
+              ${registre
+                .map(
+                  (f) =>
+                    `<td>${interrupteur(
+                      `data-marchand="${esc(m.id)}" data-cle="${esc(f.cle)}"`,
+                      m.fonctionnalites?.[f.cle] !== false,
+                      'Allumée',
+                      'Éteinte',
+                    )}</td>`,
+                )
+                .join('')}
+            </tr>`,
+          )
+          .join('')}</tbody>
+      </table>
+    </div>
+    <dl class="fx-legende">${registre
+      .map((f) => `<dt>${esc(f.titre)}</dt><dd>${esc(f.description)}</dd>`)
+      .join('')}</dl>`;
+
+  corps.querySelectorAll('input[data-marchand]').forEach((caseACocher) =>
+    caseACocher.addEventListener('change', () => void basculer(caseACocher)),
+  );
+}
+
+async function basculer(caseACocher) {
+  const actif = caseACocher.checked;
+  const idMarchand = caseACocher.dataset.marchand;
+  const corps = caseACocher.dataset.cle
+    ? { fonctionnalite: { cle: caseACocher.dataset.cle, actif } }
+    : { testMode: actif };
+
+  caseACocher.disabled = true;
+  try {
+    const resultat = await api(`/api/admin/marchands/${encodeURIComponent(idMarchand)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(corps),
+    });
+    const marchand = state.marchands.find((m) => m.id === idMarchand);
+    if (marchand) {
+      marchand.testMode = resultat.testMode;
+      marchand.fonctionnalites = resultat.fonctionnalites;
+    }
+    toast(actif ? 'Allumé pour cette boutique.' : 'Éteint pour cette boutique.');
+    renderFonctionnalites();
+  } catch (error) {
+    caseACocher.checked = !actif;
+    caseACocher.disabled = false;
+    toast(error.message, true);
+  }
+}
+
+/* ------------------------------------------------------------- nouveautés */
+
+/*
+ * Les nouveautés, pour les tester.
+ *
+ * Les cases « Testé » vivent dans ce navigateur : elles servent de liste de
+ * contrôle à la personne qui teste, pas de registre partagé. Un navigateur
+ * qui refuse le stockage garde les coches le temps de la visite.
+ */
+const CLE_TESTEES = 'csav.admin.nouveautes.testees';
+
+function testeesLues() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(CLE_TESTEES) ?? '[]'));
+  } catch {
+    return new Set(state.testeesDeLaVisite ?? []);
+  }
+}
+
+function testeesEcrire(ensemble) {
+  state.testeesDeLaVisite = [...ensemble];
+  try {
+    localStorage.setItem(CLE_TESTEES, JSON.stringify([...ensemble]));
+  } catch {
+    // Stockage refusé : les coches durent le temps de la visite.
+  }
+}
+
+const dateCourte = (jour) =>
+  new Date(`${jour}T12:00:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
+
+async function loadNouveautes() {
+  try {
+    const { nouveautes } = await api('/api/admin/nouveautes');
+    state.nouveautes = nouveautes ?? [];
+    renderNouveautes();
+  } catch (error) {
+    $('nouveautes-body').innerHTML = `<p class="empty">${esc(error.message)}</p>`;
+  }
+}
+
+function renderNouveautes() {
+  const testees = testeesLues();
+  const reste = state.nouveautes.filter((n) => !testees.has(n.pr)).length;
+
+  $('nouveautes-compte').textContent = reste ? `À tester : ${reste}` : 'Tout est testé';
+  $('nouveautes-nav').hidden = reste === 0;
+  $('nouveautes-nav').textContent = String(reste);
+
+  $('nouveautes-body').innerHTML = state.nouveautes
+    .map(
+      (n) => `<details class="nv${testees.has(n.pr) ? ' nv-testee' : ''}">
+        <summary>
+          <span class="nv-pour">${esc(n.pour)}</span>
+          <b>${esc(n.titre)}</b>
+          <span class="admin-print">${esc(dateCourte(n.date))} · PR ${n.pr}</span>
+        </summary>
+        <p>${esc(n.resume)}</p>
+        <p class="nv-ou"><b>Où :</b> ${esc(n.ou)}</p>
+        <ol class="nv-essai">${n.essayer.map((etape) => `<li>${esc(etape)}</li>`).join('')}</ol>
+        <label class="nv-coche">
+          <input type="checkbox" data-testee="${n.pr}" ${testees.has(n.pr) ? 'checked' : ''} /> Testé
+        </label>
+      </details>`,
+    )
+    .join('');
+
+  $('nouveautes-body')
+    .querySelectorAll('[data-testee]')
+    .forEach((caseACocher) =>
+      caseACocher.addEventListener('change', () => {
+        const ensemble = testeesLues();
+        const pr = Number(caseACocher.dataset.testee);
+        if (caseACocher.checked) ensemble.add(pr);
+        else ensemble.delete(pr);
+        testeesEcrire(ensemble);
+
+        // L'entrée reste ouverte : on vient de la lire.
+        const ouverte = caseACocher.closest('details')?.open;
+        renderNouveautes();
+        if (ouverte) {
+          $('nouveautes-body').querySelector(`[data-testee="${pr}"]`)?.closest('details')?.setAttribute('open', '');
+        }
+      }),
+    );
 }
 
 /* ------------------------------------------------------------ supervision */

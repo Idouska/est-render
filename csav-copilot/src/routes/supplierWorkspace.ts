@@ -24,6 +24,7 @@ import { draftChangeReply } from '../services/ai/changeReply.ts';
 import { decodePhoto, photoSchema, sendParcelPhoto, toParcelView } from './parcels.ts';
 import { ordersForSupplier, type RoutingRules } from '../services/suppliers/routing.ts';
 import { enModeTest } from '../services/modeTest.ts';
+import { fonctionnaliteActive, fonctionnalitesDuMarchand } from '../services/fonctionnalites.ts';
 
 /**
  * Espace de travail permanent du fournisseur.
@@ -427,6 +428,8 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
           supplier: { name: workspace.supplierName, ordersAccess: workspace.ordersAccess },
         // Le bandeau « Mode test » de l'atelier : ses saisies n'expédient rien.
         testMode: await enModeTest(workspace.merchantId),
+        // Ce que la console a éteint pour cette boutique : l'écran le masque.
+        fonctionnalites: await fonctionnalitesDuMarchand(workspace.merchantId),
           orders: [],
           reason:
             workspace.ordersAccess === 'NONE'
@@ -494,6 +497,8 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
         supplier: { name: workspace.supplierName, ordersAccess: workspace.ordersAccess },
         // Le bandeau « Mode test » de l'atelier : ses saisies n'expédient rien.
         testMode: await enModeTest(workspace.merchantId),
+        // Ce que la console a éteint pour cette boutique : l'écran le masque.
+        fonctionnalites: await fonctionnalitesDuMarchand(workspace.merchantId),
         orders: visible.map((order) => ({
           ...order,
           parcels: (byOrder.get(order.id) ?? []).map(toParcelView),
@@ -693,6 +698,11 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
       const workspace = await authorize(request, reply);
       if (!workspace) return;
 
+      // Éteinte depuis la console : la route refuse, pas seulement l'écran qui se tait.
+      if (!(await fonctionnaliteActive(workspace.merchantId, 'importEnMasse'))) {
+        return reply.code(403).send({ code: 'desactivee', error: 'Le traitement en masse n’est pas activé pour cette boutique.' });
+      }
+
       const parsed = z
         .object({ fichier: z.string().min(1), nom: z.string().max(200).optional() })
         .safeParse(request.body);
@@ -734,6 +744,11 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
     async (request, reply) => {
       const workspace = await authorize(request, reply);
       if (!workspace) return;
+
+      // Éteinte depuis la console : la route refuse, pas seulement l'écran qui se tait.
+      if (!(await fonctionnaliteActive(workspace.merchantId, 'importEnMasse'))) {
+        return reply.code(403).send({ code: 'desactivee', error: 'Le traitement en masse n’est pas activé pour cette boutique.' });
+      }
 
       const parsed = z
         .object({ texte: z.string().max(200_000), apercu: z.boolean() })
@@ -1423,6 +1438,11 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
     async (request, reply) => {
       const workspace = await authorize(request, reply);
       if (!workspace) return;
+
+      // Éteinte depuis la console : la route refuse, pas seulement l'écran qui se tait.
+      if (!(await fonctionnaliteActive(workspace.merchantId, 'rupturesAtelier'))) {
+        return reply.code(403).send({ code: 'desactivee', error: 'La page Ruptures de stock n’est pas activée pour cette boutique.' });
+      }
 
       const [demandes, signalements] = await Promise.all([
         prisma.supplierEscalation.findMany({
