@@ -3442,7 +3442,7 @@ function recommendation(ticket, order) {
   if (ticket.intent === 'RETURN' && ticket.shopifyOrderId) {
     return {
       title: 'Ouvrir un dossier de retour',
-      why: 'L’article revient en agence, puis au stock France pour une réexpédition.',
+      why: 'L’article revient en agence, puis au stock retours pour une réexpédition.',
       cta: 'Reshipment',
       run: () => void openReshipment(ticket),
     };
@@ -8293,11 +8293,11 @@ function ico(name) {
 /* Une entrée par écran : icône, libellé, groupe, et le compteur affiché en
    pastille quand il y a quelque chose à traiter. */
 /* ============================================================ reshipment --
-   Les retours clients, et le stock France qu'ils deviennent.
+   Les retours clients, et le stock des agences qu'ils deviennent.
 
    Le circuit : le client renvoie (taille, défaut, modèle, ou remboursement
    sec) → l'agence du pays réceptionne → la paire contrôlée est remise en
-   stock France → la prochaine commande du même article part de ce stock au
+   stock de l'agence → la prochaine commande du même article part de ce stock au
    lieu de l'atelier. Rien ne se gâche, le client proche est livré en trois
    jours.
 
@@ -8322,7 +8322,7 @@ const RETURN_STATUSES = {
   SHIPPED: 'Expédié',
   IN_TRANSIT: 'En transit',
   RECEIVED: "Livré à l'agence",
-  RESTOCKED: 'En stock France',
+  RESTOCKED: 'En stock',
   UNUSABLE: 'Inutilisable',
   CLOSED: 'Clos',
 };
@@ -8368,6 +8368,7 @@ async function loadReturns() {
   void api('/api/returns/matches')
     .then((data) => {
       state.returns.matches = data.matches ?? [];
+      state.returns.matchMeta = { examinees: data.examinees ?? 0, tronque: Boolean(data.tronque), error: data.error ?? null };
       renderReturns();
     })
     .catch(() => {});
@@ -8414,7 +8415,7 @@ function renderReturnCases(box) {
     box.innerHTML = `<div class="empty-block">
       <b>Aucun dossier de retour en cours.</b>
       <p>Le circuit : le client renvoie → l'agence du pays réceptionne → la
-      paire contrôlée entre au stock France → la prochaine commande du même
+      paire contrôlée entre au stock de l’agence → la prochaine commande du même
       article part de ce stock, livrée en trois jours au lieu de quinze.</p>
       <p>« Nouveau retour » ouvre le premier dossier — tapez le numéro de
       commande, le reste se remplit tout seul. Pensez d'abord à renseigner
@@ -8487,6 +8488,15 @@ function renderReturnCases(box) {
                 )
                 .join('')}
             </select>
+            ${
+              // Le contrôle à la réception : deux gestes, pas un menu.
+              item.status === 'RECEIVED'
+                ? `<div class="ret-controle">
+                    <button class="btn btn-small" data-ret-restock="${esc(item.id)}">En stock</button>
+                    <button class="btn btn-small btn-danger" data-ret-defect="${esc(item.id)}">Défectueux</button>
+                  </div>`
+                : ''
+            }
           </td>
           <td style="white-space:nowrap">
             ${
@@ -8526,59 +8536,176 @@ function renderReturnCases(box) {
     </tbody></table></div>`;
 }
 
-function renderReturnMatches(box) {
-  const matches = state.returns.matches;
+/** Un pays, en toutes lettres. */
+const nomPays = (code) => RETURN_COUNTRIES[code] ?? code ?? '—';
 
-  box.innerHTML = matches.length
-    ? `<div class="table-wrap"><table class="grid"><thead><tr>
-        <th>Commande en attente</th><th>Client</th><th>Article</th>
-        <th>Paire disponible</th><th></th>
-      </tr></thead><tbody>
-      ${matches
-        .map(
-          (match) => `<tr>
-            <td><b>${esc(match.orderName)}</b><br /><small>${esc(
-              RETURN_COUNTRIES[match.country] ?? match.country,
-            )}</small></td>
-            <td>${esc(match.customer ?? '—')}</td>
-            <td>${esc(match.productTitle)}${
-              match.variantTitle ? `<br /><small>${esc(match.variantTitle)}</small>` : ''
-            }</td>
-            <td><span class="ret-tag ok">retour ${esc(match.fromOrder ?? '—')}</span></td>
-            <td><button class="btn btn-small btn-primary" data-ret-use="${esc(
-              match.returnId,
-            )}" data-ret-order="${esc(match.orderName)}">Réexpédier cette paire</button></td>
-          </tr>`,
-        )
-        .join('')}
-      </tbody></table></div>`
-    : `<p class="empty" style="padding:20px">
-        Aucun match pour le moment. Dès qu'une commande FR / ES / IT / BE porte
-        un article présent dans le stock France, elle apparaît ici.
-      </p>`;
+/** L'adresse de livraison, telle que l'agence l'écrira sur le colis. */
+function adresseTexte(adresse) {
+  if (!adresse) return '';
+  return [
+    adresse.name,
+    adresse.address1,
+    adresse.address2,
+    [adresse.zip, adresse.city].filter(Boolean).join(' '),
+    nomPays(adresse.country),
+    adresse.phone,
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
-function renderReturnStock(box) {
-  const stock = state.returns.cases.filter(
-    (item) => item.status === 'RESTOCKED' && !item.reusedAt,
-  );
+/*
+ * Les propositions : chaque commande en attente qu'une agence peut servir EN
+ * ENTIER, même pays d'abord, pays voisin ensuite. Le compte des commandes
+ * examinées est affiché : un « aucun match » doit pouvoir se lire comme
+ * « rien ne correspond », pas comme « on n'a pas regardé ».
+ */
+function renderReturnMatches(box) {
+  const { matches, matchMeta = {}, derniere } = state.returns;
 
-  box.innerHTML = stock.length
-    ? `<div class="ret-grid">${stock
-        .map(
-          (item) => `<div class="ret-card">
-            <b>${esc(item.productTitle)}</b>
-            <small>${esc([item.variantTitle, item.sku].filter(Boolean).join(' · '))}</small>
-            <small>retour ${esc(item.orderName ?? '—')} · ${esc(
-              RETURN_REASONS[item.reason] ?? '',
-            )}</small>
-          </div>`,
-        )
-        .join('')}</div>`
-    : `<p class="empty" style="padding:20px">
-        Rien en stock France. Les retours passés « En stock France » dans les
-        dossiers arrivent ici, prêts au réemploi.
-      </p>`;
+  const confiee = derniere
+    ? `<div class="notice ret-confie">
+        <span class="notice-mark">Confiée</span>
+        <div>
+          <b>${esc(derniere.commande)} part du stock retours — ${esc(nomPays(derniere.paysStock))}.</b>
+          Elle a disparu de la liste de l’atelier, qui ne l’expédiera pas.
+          <p>À expédier par : <b>${esc(derniere.agenceContact?.name ?? derniere.agence?.nom ?? 'l’agence')}</b>${
+            derniere.agenceContact?.email ? ` · ${esc(derniere.agenceContact.email)}` : ''
+          }${derniere.agenceContact?.phone ? ` · ${esc(derniere.agenceContact.phone)}` : ''}</p>
+          <pre class="ret-adresse">${esc(adresseTexte(derniere.adresse))}</pre>
+          <div class="ret-controle">
+            <button class="btn btn-small" data-ret-copier="${esc(adresseTexte(derniere.adresse))}">Copier l’adresse</button>
+            <button class="btn btn-small" data-ret-fermer>Fermer</button>
+          </div>
+        </div>
+      </div>`
+    : '';
+
+  const meta = matchMeta.error
+    ? `<p class="ret-meta">${esc(matchMeta.error)}</p>`
+    : `<p class="ret-meta">Commandes en attente examinées : ${matchMeta.examinees ?? 0}. Même pays d’abord,
+        puis pays voisin ; les paires les plus anciennes partent en premier.${
+          matchMeta.tronque ? ' <b>Seules les 1 000 plus anciennes ont été examinées.</b>' : ''
+        }</p>`;
+
+  box.innerHTML =
+    confiee +
+    meta +
+    (matches.length
+      ? `<div class="table-wrap"><table class="grid"><thead><tr>
+          <th>Commande en attente</th><th>Client</th><th>Paires</th><th>Part de</th><th></th>
+        </tr></thead><tbody>
+        ${matches
+          .map(
+            (match, rang) => `<tr>
+              <td><b>${esc(match.commande)}</b><br /><small>${esc(nomPays(match.pays))}</small></td>
+              <td>${esc(match.client ?? '—')}</td>
+              <td>${match.paires
+                .map(
+                  (paire) => `<div>${esc(paire.titre)}${
+                    paire.declinaison ? ` <small>${esc(paire.declinaison)}</small>` : ''
+                  } <small class="sub">retour ${esc(paire.retourDe ?? '—')}</small></div>`,
+                )
+                .join('')}</td>
+              <td><span class="ret-tag ${match.voisin ? 'warn' : 'ok'}">${esc(nomPays(match.paysStock))}${
+                match.agence?.nom ? ` · ${esc(match.agence.nom)}` : ''
+              }</span><br /><small>${match.voisin ? 'pays voisin' : 'même pays'}</small></td>
+              <td><button class="btn btn-small btn-primary" data-ret-serve="${rang}">Servir depuis le stock</button></td>
+            </tr>`,
+          )
+          .join('')}
+        </tbody></table></div>`
+      : `<p class="empty" style="padding:20px">
+          Aucune commande à servir pour le moment. Dès qu’une commande en attente, que
+          l’atelier n’a pas commencée, porte un article présent chez une agence de son
+          pays ou d’un pays voisin, elle apparaît ici.
+        </p>`);
+}
+
+/*
+ * Le stock retours, là où il se trouve : par pays, puis par agence. Chaque
+ * paire peut sortir du stock pour défaut ; les paires déjà confiées à une
+ * commande sont à part, et se libèrent — la commande revient alors à
+ * l'atelier.
+ */
+function renderReturnStock(box) {
+  const cases = state.returns.cases;
+  const stock = cases.filter((item) => item.status === 'RESTOCKED' && !item.reusedAt);
+  const confiees = cases.filter((item) => item.reusedShopifyOrderId);
+  const joursDepuis = (date) => Math.max(0, Math.floor((Date.now() - new Date(date).getTime()) / 86_400_000));
+
+  const parPays = new Map();
+  for (const item of stock) {
+    const pays = item.agency?.country ?? item.country ?? '—';
+    const agence = item.agency?.name ?? 'Sans agence';
+    if (!parPays.has(pays)) parPays.set(pays, new Map());
+    const parAgence = parPays.get(pays);
+    parAgence.set(agence, [...(parAgence.get(agence) ?? []), item]);
+  }
+
+  const sections = [...parPays.entries()]
+    .map(
+      ([pays, parAgence]) => `<section class="ret-pays">
+        <h3>${esc(nomPays(pays))} <span class="count">${[...parAgence.values()].flat().length}</span></h3>
+        ${[...parAgence.entries()]
+          .map(
+            ([agence, items]) => `<h4>${esc(agence)}</h4>
+              <div class="ret-grid">${items
+                .map(
+                  (item) => `<div class="ret-card">
+                    <b>${esc(item.productTitle)}</b>
+                    <small>${esc([item.variantTitle, item.sku].filter(Boolean).join(' · '))}</small>
+                    <small>retour ${esc(item.orderName ?? '—')} · ${esc(RETURN_REASONS[item.reason] ?? '')} · en stock depuis ${joursDepuis(
+                      item.restockedAt ?? item.updatedAt,
+                    )} j</small>
+                    <button class="btn btn-small btn-danger" data-ret-defect="${esc(item.id)}">Défectueux — sortir du stock</button>
+                  </div>`,
+                )
+                .join('')}</div>`,
+          )
+          .join('')}
+      </section>`,
+    )
+    .join('');
+
+  // Les paires confiées, regroupées par commande : une commande de deux
+  // paires se libère d'un seul geste.
+  const parCommande = new Map();
+  for (const item of confiees) {
+    parCommande.set(item.reusedShopifyOrderId, [...(parCommande.get(item.reusedShopifyOrderId) ?? []), item]);
+  }
+  const confieesMarkup = parCommande.size
+    ? `<section class="ret-pays">
+        <h3>Confiées à une commande <span class="count">${parCommande.size}</span></h3>
+        <div class="table-wrap"><table class="grid"><thead><tr>
+          <th>Commande</th><th>Paires</th><th>Part de</th><th>Depuis</th><th></th>
+        </tr></thead><tbody>${[...parCommande.entries()]
+          .map(([idCommande, items]) => {
+            const premiere = items[0];
+            return `<tr>
+              <td><b>${esc(premiere.reusedOrderName ?? '—')}</b></td>
+              <td>${items
+                .map((item) => `<div>${esc(item.productTitle)}${item.variantTitle ? ` <small>${esc(item.variantTitle)}</small>` : ''}</div>`)
+                .join('')}</td>
+              <td>${esc(nomPays(premiere.agency?.country ?? premiere.country))}${
+                premiere.agency?.name ? ` · ${esc(premiere.agency.name)}` : ''
+              }</td>
+              <td>${premiere.reusedAt ? `${joursDepuis(premiere.reusedAt)} j` : '—'}</td>
+              <td><button class="btn btn-small" data-ret-liberer="${esc(idCommande)}"
+                data-ret-order="${esc(premiere.reusedOrderName ?? '')}">Libérer</button></td>
+            </tr>`;
+          })
+          .join('')}</tbody></table></div>
+      </section>`
+    : '';
+
+  box.innerHTML =
+    (stock.length
+      ? sections
+      : `<p class="empty" style="padding:20px">
+          Rien en stock. Les retours contrôlés et passés « En stock » arrivent ici, rangés
+          par pays et par agence, prêts au réemploi.
+        </p>`) + confieesMarkup;
 }
 
 function renderReturnAgencies(box) {
@@ -8744,24 +8871,106 @@ $('ret-body').addEventListener('click', async (event) => {
     return;
   }
 
-  const use = event.target.closest('[data-ret-use]');
-  if (use) {
+  // Servir une commande depuis le stock : elle quitte la liste de l'atelier.
+  const serve = event.target.closest('[data-ret-serve]');
+  if (serve) {
+    const proposition = state.returns.matches[Number(serve.dataset.retServe)];
+    if (!proposition) return;
+    const ou = `${nomPays(proposition.paysStock)}${proposition.agence?.nom ? `, ${proposition.agence.nom}` : ''}`;
+    const combien = proposition.paires.length > 1 ? `${proposition.paires.length} paires` : 'une paire';
     if (
       !confirm(
-        `Confier la commande ${use.dataset.retOrder} à cette paire du stock France ? Le dossier de retour sera clos.`,
+        `Servir ${proposition.commande} avec ${combien} du stock retours (${ou}) ? La commande disparaîtra de la liste de l’atelier, qui ne l’expédiera pas.`,
+      )
+    )
+      return;
+    serve.disabled = true;
+    try {
+      const { agence } = await api('/api/returns/reemploi', {
+        method: 'POST',
+        body: JSON.stringify({
+          orderId: proposition.commandeId,
+          orderName: proposition.commande,
+          returnIds: proposition.paires.map((paire) => paire.returnId),
+        }),
+      });
+      state.returns.derniere = { ...proposition, agenceContact: agence };
+      toast(`${proposition.commande} confiée au stock retours.`);
+      await loadReturns();
+    } catch (error) {
+      serve.disabled = false;
+      toast(error.message, true);
+    }
+    return;
+  }
+
+  const liberer = event.target.closest('[data-ret-liberer]');
+  if (liberer) {
+    if (
+      !confirm(
+        `Libérer ${liberer.dataset.retOrder} ? Les paires reviennent au stock, et la commande revient dans la liste de l’atelier.`,
       )
     )
       return;
     try {
-      await api(`/api/returns/${use.dataset.retUse}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ reusedOrderName: use.dataset.retOrder }),
+      await api('/api/returns/reemploi/liberer', {
+        method: 'POST',
+        body: JSON.stringify({ orderId: liberer.dataset.retLiberer }),
       });
-      toast(`Paire réservée pour ${use.dataset.retOrder}. Pensez à prévenir l'agence.`);
+      toast('Commande libérée : elle revient chez l’atelier.');
       await loadReturns();
     } catch (error) {
       toast(error.message, true);
     }
+    return;
+  }
+
+  const defect = event.target.closest('[data-ret-defect]');
+  if (defect) {
+    const note = prompt('Défectueux : la paire sort du stock. Quel défaut ? (facultatif)');
+    if (note === null) return;
+    try {
+      await api(`/api/returns/${defect.dataset.retDefect}/defectueux`, {
+        method: 'POST',
+        body: JSON.stringify({ note: note.trim() || null }),
+      });
+      toast('Paire sortie du stock : défectueuse.');
+      await loadReturns();
+    } catch (error) {
+      toast(error.message, true);
+    }
+    return;
+  }
+
+  const restock = event.target.closest('[data-ret-restock]');
+  if (restock) {
+    try {
+      await api(`/api/returns/${restock.dataset.retRestock}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'RESTOCKED' }),
+      });
+      toast('Paire remise en stock : elle peut servir une commande.');
+      await loadReturns();
+    } catch (error) {
+      toast(error.message, true);
+    }
+    return;
+  }
+
+  const copier = event.target.closest('[data-ret-copier]');
+  if (copier) {
+    try {
+      await navigator.clipboard.writeText(copier.dataset.retCopier);
+      toast('Adresse copiée.');
+    } catch {
+      toast('Copie impossible : sélectionnez l’adresse à la main.', true);
+    }
+    return;
+  }
+
+  if (event.target.closest('[data-ret-fermer]')) {
+    state.returns.derniere = null;
+    renderReturns();
     return;
   }
 
@@ -10093,7 +10302,7 @@ const FUL_LABELS = {
  * Ici elle occupe la place qui lui revient — articles avec leurs vignettes,
  * montants, statuts, adresse, colis.
  */
-function orderDetailMarkup(order, atelier = []) {
+function orderDetailMarkup(order, atelier = [], reemploi = []) {
   const fin = order.displayFinancialStatus;
   const ful = order.displayFulfillmentStatus;
 
@@ -10174,7 +10383,22 @@ function orderDetailMarkup(order, atelier = []) {
       </div>`,
     )
     .join('');
-  const parcels = parcelsShopify + parcelsAtelier;
+  /*
+   * Servie par le stock retours : l'agence expédie, pas l'atelier. La ligne
+   * dit d'où part la paire — sans elle, une commande sans colis et absente
+   * de chez l'atelier semblerait oubliée.
+   */
+  const parcelsStock = reemploi
+    .map(
+      (paire) => `<div class="ordv-row">
+        <span>Stock retours · ${esc(RETURN_COUNTRIES[paire.agency?.country] ?? paire.agency?.country ?? '')}${
+          paire.agency?.name ? ` · ${esc(paire.agency.name)}` : ''
+        } · <span class="sub">à expédier par l’agence</span></span>
+        <b>${esc(paire.productTitle)}${paire.variantTitle ? ` · ${esc(paire.variantTitle)}` : ''}</b>
+      </div>`,
+    )
+    .join('');
+  const parcels = parcelsStock + parcelsShopify + parcelsAtelier;
 
   const address = order.shippingAddress;
 
@@ -10314,7 +10538,7 @@ async function openOrderSheet(id) {
     return;
   }
 
-  const { order, tickets = [], parcels = [], changes = [] } = data;
+  const { order, tickets = [], parcels = [], changes = [], reemploi = [] } = data;
 
   // Une réponse sans commande — droit manquant, commande supprimée — laissait
   // l'écran à moitié dessiné sur une exception. Même famille que le menu des
@@ -10339,7 +10563,7 @@ async function openOrderSheet(id) {
     `<section class="sheet-group"><span class="rail-title">${title}</span>${body}</section>`;
 
   $('sheet-body').innerHTML =
-    `<section class="sheet-group">${orderDetailMarkup(order, parcels)}</section>` +
+    `<section class="sheet-group">${orderDetailMarkup(order, parcels, reemploi)}</section>` +
     // Les gestes d'abord : c'est pour eux qu'on a ouvert la fiche.
     `<section class="sheet-group sheet-acts">
        <button class="btn btn-small btn-primary" id="ordv-change">${ico('bolt')} Demander un changement</button>

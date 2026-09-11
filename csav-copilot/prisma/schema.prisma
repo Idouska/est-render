@@ -929,6 +929,18 @@ model ReturnCase {
   /// raconte alors le cycle complet, du retour au réemploi.
   reusedOrderName String?
   reusedAt        DateTime?
+  /// La même commande, par son identifiant Shopify : c'est lui que l'atelier
+  /// ne doit plus expédier — une commande servie par le stock disparaît de sa
+  /// liste. Posé et retiré avec `reusedOrderName`.
+  reusedShopifyOrderId String?
+
+  /// Entrée au stock : les paires les plus anciennes partent en premier.
+  restockedAt DateTime?
+
+  /// Sortie du stock pour défaut : quand, et pourquoi — le dossier garde la
+  /// trace de ce qu'on n'a pas pu réemployer.
+  unusableAt   DateTime?
+  unusableNote String?   @db.Text
 
   note String? @db.Text
 
@@ -944,6 +956,7 @@ model ReturnCase {
 
   @@index([merchantId, status])
   @@index([merchantId, sku])
+  @@index([merchantId, reusedShopifyOrderId])
 }
 
 enum ReturnReason {

@@ -25,6 +25,7 @@ import { decodePhoto, photoSchema, sendParcelPhoto, toParcelView } from './parce
 import { ordersForSupplier, type RoutingRules } from '../services/suppliers/routing.ts';
 import { enModeTest } from '../services/modeTest.ts';
 import { fonctionnaliteActive, fonctionnalitesDuMarchand } from '../services/fonctionnalites.ts';
+import { commandesServiesParLeStock } from '../services/reshipment/reservations.ts';
 
 /**
  * Espace de travail permanent du fournisseur.
@@ -456,7 +457,7 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
        * règles des autres sont donc nécessaires ici : c'est ce qui distingue
        * « personne ne la prend » de « quelqu'un d'autre la prend ».
        */
-      const visible = allowed
+      const routees = allowed
         ? ordersForSupplier(
             page.orders,
             { id: workspace.supplierId, ...workspace },
@@ -464,6 +465,11 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
             allowed,
           )
         : page.orders;
+
+      // Une commande servie par le stock retours part de l'agence : l'atelier
+      // ne la voit plus, sinon le client recevrait deux paires.
+      const servies = await commandesServiesParLeStock(workspace.merchantId, routees.map((order) => order.id));
+      const visible = routees.filter((order) => !servies.has(order.id));
 
       // Colis déjà saisis, rapprochés par identifiant de commande : le
       // fournisseur doit voir ce qu'il a fait hier sans le ressaisir.
@@ -527,7 +533,11 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
         cursor: null,
       });
 
-      const visible = allowed ? page.orders.filter((order) => allowed.includes(order.id)) : page.orders;
+      const permises = allowed ? page.orders.filter((order) => allowed.includes(order.id)) : page.orders;
+      // Ni dans la liste ni dans l'export : une commande servie par le stock
+      // retours ne se prépare pas chez l'atelier.
+      const servies = await commandesServiesParLeStock(workspace.merchantId, permises.map((order) => order.id));
+      const visible = permises.filter((order) => !servies.has(order.id));
 
       const parcels = await prisma.parcel.findMany({
         where: {
@@ -605,9 +615,11 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
         cursor: null,
       });
 
-      const visible = allowed
+      const permises = allowed
         ? page.orders.filter((order) => allowed.includes(order.id))
         : page.orders;
+      const servies = await commandesServiesParLeStock(workspace.merchantId, permises.map((order) => order.id));
+      const visible = permises.filter((order) => !servies.has(order.id));
 
       const parcels = await prisma.parcel.findMany({
         where: {
@@ -666,6 +678,15 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
 
       if (parsed.data.index > parsed.data.total) {
         return reply.code(400).send({ error: 'Le rang du colis dépasse le nombre annoncé.' });
+      }
+
+      // Servie par le stock retours depuis que l'atelier a ouvert sa liste :
+      // la paire part de l'agence, pas d'ici.
+      if ((await commandesServiesParLeStock(workspace.merchantId, [parsed.data.shopifyOrderId])).size > 0) {
+        return reply.code(409).send({
+          code: 'stock_retour',
+          error: 'Cette commande est servie par le stock retours : ne l’expédiez pas.',
+        });
       }
 
       const { parcel, shopify } = await enregistrerColis(
@@ -843,6 +864,7 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
         existants.filter((colis): colis is typeof colis & { shopifyOrderId: string } =>
           Boolean(colis.shopifyOrderId),
         ),
+        await commandesServiesParLeStock(workspace.merchantId, visibles.map((commande) => commande.id)),
       );
 
       if (parsed.data.apercu) return reply.send(plan);

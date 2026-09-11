@@ -25,6 +25,21 @@ export interface Nouveaute {
 
 export const NOUVEAUTES: readonly Nouveaute[] = [
   {
+    pr: 59,
+    date: '2026-09-12',
+    pour: 'Les deux',
+    titre: 'Reshipment : le stock retours par pays, sans double envoi',
+    resume:
+      'Les paires retournées servent les commandes suivantes : même pays d’abord, puis pays voisin, une commande entière par une seule agence, les plus anciennes d’abord. Une commande confiée au stock disparaît de chez l’atelier. Bouton « Défectueux » pour sortir une paire du stock.',
+    ou: 'Reshipment → Match, Stock retours ; Dossiers, à la réception d’un retour.',
+    essayer: [
+      'Allumer le mode test.',
+      'Dossiers : sur un retour « Livré à l’agence », cliquer « En stock » (ou « Défectueux »).',
+      'Match : cliquer « Servir depuis le stock » ; la commande disparaît de la liste de l’atelier (⌘R chez lui).',
+      'Stock retours : « Libérer » la commande ; elle revient chez l’atelier.',
+    ],
+  },
+  {
     pr: 58,
     date: '2026-09-11',
     pour: 'Console',

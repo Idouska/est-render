@@ -5,25 +5,26 @@ import { recordAudit } from '../lib/audit.ts';
 import { requirePermission, requireSession } from '../plugins/auth.ts';
 import { decodePhoto, photoSchema } from './parcels.ts';
 import { getShopifyClient } from '../services/shopify/client.ts';
-import { listOrders, quoteSearchValue } from '../services/shopify/orders.ts';
+import { listOrders, quoteSearchValue, type OrderSummary } from '../services/shopify/orders.ts';
+import { PAYS_RETOUR, VOISINS, rapprocher, type PaireEnStock } from '../services/reshipment/rapprochement.ts';
 
 /**
  * Reshipment — les retours clients, et ce qu'on en refait.
  *
  * Un retour vit deux vies. D'abord un dossier à suivre : le client a-t-il son
  * bon de retour, le colis est-il arrivé chez l'agence, dans quel état. Puis,
- * s'il est remis en stock, une paire disponible en France — et c'est là que le
- * circuit se referme : la prochaine commande du même article dans un pays
- * proche se sert dans ce stock au lieu de refaire partir un colis de
- * l'atelier. Rien ne se gâche, et le client est livré en trois jours au lieu
- * de quinze.
+ * s'il est remis en stock, une paire disponible chez l'agence de son pays — et
+ * c'est là que le circuit se referme : la prochaine commande du même article
+ * dans ce pays, ou dans un pays voisin, se sert dans ce stock au lieu de
+ * refaire partir un colis de l'atelier. Rien ne se gâche, et le client est
+ * livré en trois jours au lieu de quinze.
  *
  * Les agences de traitement (une ou plusieurs par pays : FR, ES, IT, BE)
  * réceptionnent et stockent ; leurs coordonnées vivent ici, sous la main au
  * moment d'ouvrir un dossier.
  */
 
-const COUNTRIES = ['FR', 'ES', 'IT', 'BE'] as const;
+const COUNTRIES = PAYS_RETOUR;
 
 const caseBody = z.object({
   orderName: z.string().max(60).nullish(),
@@ -62,6 +63,9 @@ const agencyBody = z.object({
   notes: z.string().max(4000).nullish(),
 });
 
+/** Une paire prise entre la proposition et le clic : la réservation entière est annulée. */
+class PairePlusDisponible extends Error {}
+
 export async function returnRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', requireSession);
 
@@ -89,7 +93,7 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
         ['OPEN', 'LABEL_SENT'].includes(item.status) && item.lastContactAt < silentSince,
     ).length;
 
-    // Le stock France : remis en rayon et pas encore réutilisés.
+    // Le stock retours : remis en rayon chez une agence, pas encore réemployé.
     const stock = cases.filter((item) => item.status === 'RESTOCKED' && !item.reusedAt);
 
     return reply.send({
@@ -98,6 +102,7 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
         open: cases.filter((item) => !['CLOSED', 'UNUSABLE'].includes(item.status)).length,
         silent,
         stock: stock.length,
+        reserved: cases.filter((item) => item.reusedShopifyOrderId).length,
       },
     });
   });
@@ -159,11 +164,15 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
           // Fournir le bon fait avancer le statut tout seul : deux gestes pour
           // dire la même chose finiraient par se contredire.
           ...(fields.labelSent === true ? { status: fields.status ?? 'LABEL_SENT' } : {}),
+          // Entrée au stock datée : les paires les plus anciennes partent en premier.
+          ...(fields.status === 'RESTOCKED' ? { restockedAt: new Date() } : {}),
           ...(touch ? { lastContactAt: new Date() } : {}),
           ...(reusedOrderName !== undefined
             ? reusedOrderName
               ? { reusedOrderName, reusedAt: new Date(), status: 'CLOSED' }
-              : { reusedOrderName: null, reusedAt: null }
+              : // Annuler un réemploi rend la paire au STOCK : elle restait
+                // « close », donc perdue pour les commandes suivantes.
+                { reusedOrderName: null, reusedShopifyOrderId: null, reusedAt: null, status: 'RESTOCKED' }
             : {}),
         },
       });
@@ -335,63 +344,297 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
   /* -------------------------------------------------------------- match -- */
 
   /**
-   * Le match : commandes en attente × stock France.
+   * Le match : commandes en attente × stock retours.
    *
-   * Pour chaque commande non expédiée d'un client FR/ES/IT/BE, on cherche une
-   * paire remise en stock du même article — par SKU quand les deux en ont un,
-   * sinon par modèle + déclinaison. Le rapprochement se fait ici et pas dans
-   * le navigateur : c'est le serveur qui voit les deux listes en entier.
+   * Toutes les commandes non expédiées sont examinées, par pages, les plus
+   * anciennes d'abord — pas seulement les cent dernières. En sont retirées
+   * celles que l'atelier a déjà commencées (un colis saisi : la paire est
+   * partie de Chine, en proposer une autre ferait deux envois) et celles
+   * qu'une paire sert déjà. Le rapprochement lui-même vit dans
+   * `services/reshipment/rapprochement.ts` : même pays d'abord, puis pays
+   * voisin, une commande entière par une seule agence, les paires les plus
+   * anciennes d'abord.
    *
    * Rien ne s'engage tout seul : le match propose, le marchand confie la
-   * réexpédition d'un clic — c'est lui qui sait si la commande peut attendre
-   * le réemploi ou pas.
+   * commande d'un clic.
    */
   app.get('/api/returns/matches', async (request, reply) => {
     const { merchantId } = request.session;
 
-    const stock = await prisma.returnCase.findMany({
+    const enStock = await prisma.returnCase.findMany({
       where: { merchantId, status: 'RESTOCKED', reusedAt: null },
+      select: {
+        id: true,
+        country: true,
+        sku: true,
+        productTitle: true,
+        variantTitle: true,
+        orderName: true,
+        restockedAt: true,
+        updatedAt: true,
+        agency: { select: { id: true, name: true, country: true } },
+      },
     });
-    if (stock.length === 0) return reply.send({ matches: [] });
+    if (enStock.length === 0) return reply.send({ matches: [], examinees: 0, tronque: false });
 
-    let orders;
+    // Où se trouve la paire : chez son agence. Sans agence, dans le pays du
+    // client qui l'a renvoyée — c'est celui qui décide de l'agence.
+    const stock: PaireEnStock[] = enStock.map((paire) => ({
+      id: paire.id,
+      pays: paire.agency?.country ?? paire.country ?? null,
+      agenceId: paire.agency?.id ?? null,
+      agenceNom: paire.agency?.name ?? null,
+      sku: paire.sku,
+      titre: paire.productTitle,
+      declinaison: paire.variantTitle,
+      depuis: paire.restockedAt ?? paire.updatedAt,
+      retourDe: paire.orderName,
+    }));
+
+    // Toutes les commandes en attente, par pages de cent. Au-delà de dix
+    // pages, on s'arrête — et on le DIT : un plafond silencieux se lirait
+    // « aucune autre commande ne correspond ».
+    const PAGES_MAX = 10;
+    const commandes: OrderSummary[] = [];
+    let tronque = false;
     try {
       const client = await getShopifyClient(merchantId);
-      ({ orders } = await listOrders(client, {
-        query: 'fulfillment_status:unfulfilled',
-        limit: 100,
-      }));
+      let cursor: string | null = null;
+      for (let page = 0; page < PAGES_MAX; page += 1) {
+        const resultat = await listOrders(client, {
+          query: 'fulfillment_status:unfulfilled status:open',
+          limit: 100,
+          cursor,
+          sort: 'oldest',
+        });
+        commandes.push(...resultat.orders);
+        cursor = resultat.hasNextPage ? resultat.cursor : null;
+        if (!cursor) break;
+      }
+      tronque = Boolean(cursor);
     } catch {
-      return reply.send({ matches: [], error: 'Commandes Shopify indisponibles.' });
+      return reply.send({ matches: [], examinees: 0, tronque: false, error: 'Commandes Shopify indisponibles.' });
     }
 
-    const matches = [];
-    for (const order of orders) {
-      const country = order.shippingAddress?.country ?? null;
-      if (!country || !COUNTRIES.includes(country as (typeof COUNTRIES)[number])) continue;
+    const ids = commandes.map((commande) => commande.id);
+    const [colis, dejaServies] = await Promise.all([
+      prisma.parcel.findMany({
+        where: { merchantId, shopifyOrderId: { in: ids } },
+        select: { shopifyOrderId: true },
+      }),
+      prisma.returnCase.findMany({
+        where: { merchantId, reusedShopifyOrderId: { in: ids } },
+        select: { reusedShopifyOrderId: true },
+      }),
+    ]);
+    const commencees = new Set(colis.map((ligne) => ligne.shopifyOrderId));
+    const servies = new Set(dejaServies.map((ligne) => ligne.reusedShopifyOrderId));
 
-      for (const item of order.lineItems ?? []) {
-        const found = stock.find((unit) =>
-          unit.sku && item.sku
-            ? unit.sku === item.sku
-            : unit.productTitle === item.title &&
-              (unit.variantTitle ?? '') === (item.variantTitle ?? ''),
-        );
-        if (!found) continue;
+    const enAttente = commandes.filter(
+      (commande) =>
+        ['UNFULFILLED', 'OPEN'].includes(commande.displayFulfillmentStatus ?? '') &&
+        !commencees.has(commande.id) &&
+        !servies.has(commande.id) &&
+        commande.shippingAddress?.country &&
+        VOISINS[commande.shippingAddress.country],
+    );
 
-        matches.push({
-          returnId: found.id,
-          orderName: order.name,
-          customer: order.customer?.displayName ?? order.shippingAddress?.name ?? null,
-          country,
-          productTitle: item.title,
-          variantTitle: item.variantTitle ?? null,
-          sku: item.sku ?? null,
-          fromOrder: found.orderName,
+    const parId = new Map(enAttente.map((commande) => [commande.id, commande]));
+    const propositions = rapprocher(
+      stock,
+      enAttente.map((commande) => ({
+        id: commande.id,
+        nom: commande.name,
+        client: commande.customer?.displayName ?? commande.shippingAddress?.name ?? null,
+        pays: commande.shippingAddress?.country ?? null,
+        creeLe: commande.createdAt,
+        lignes: (commande.lineItems ?? []).map((ligne) => ({
+          titre: ligne.title,
+          declinaison: ligne.variantTitle ?? null,
+          sku: ligne.sku ?? null,
+          quantite: ligne.quantity,
+        })),
+      })),
+    );
+
+    return reply.send({
+      // L'adresse de livraison part avec la proposition : c'est ce que
+      // l'agence devra écrire sur le colis.
+      matches: propositions.map((proposition) => ({
+        ...proposition,
+        adresse: parId.get(proposition.commandeId)?.shippingAddress ?? null,
+      })),
+      examinees: commandes.length,
+      tronque,
+    });
+  });
+
+  /**
+   * Confier une commande au stock retours.
+   *
+   * Le serveur revérifie tout au moment du clic, parce que la liste affichée
+   * peut avoir vieilli : les paires sont-elles toujours en stock, l'atelier
+   * n'a-t-il pas commencé la commande entre-temps, une autre paire ne la
+   * sert-elle pas déjà ? La réservation se fait en une écriture qui exige
+   * que TOUTES les paires soient encore libres : deux clics simultanés ne
+   * peuvent pas confier la même paire à deux commandes.
+   *
+   * Dès cet instant, la commande disparaît de la liste de l'atelier.
+   */
+  app.post(
+    '/api/returns/reemploi',
+    { preHandler: requirePermission('reply') },
+    async (request, reply) => {
+      const { merchantId, userId } = request.session;
+      const parsed = z
+        .object({
+          orderId: z.string().min(1).max(120),
+          orderName: z.string().min(1).max(60),
+          returnIds: z.array(z.string().min(1).max(40)).min(1).max(20),
+        })
+        .safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Réemploi invalide' });
+      const { orderId, orderName, returnIds } = parsed.data;
+
+      const [colis, dejaServie] = await Promise.all([
+        prisma.parcel.count({ where: { merchantId, shopifyOrderId: orderId } }),
+        prisma.returnCase.count({ where: { merchantId, reusedShopifyOrderId: orderId } }),
+      ]);
+      if (colis > 0) {
+        return reply.code(409).send({
+          code: 'commencee',
+          error: `L’atelier a déjà saisi un colis pour ${orderName} : la paire est partie de chez lui.`,
         });
       }
-    }
+      if (dejaServie > 0) {
+        return reply.code(409).send({ code: 'deja_servie', error: `${orderName} est déjà servie par le stock retours.` });
+      }
 
-    return reply.send({ matches });
-  });
+      /*
+       * Toutes les paires ou aucune, dans UNE transaction : une paire prise
+       * entre-temps annule la réservation entière plutôt que de servir une
+       * commande à moitié. Chaque paire n'est prise que si elle est ENCORE
+       * libre au moment de l'écriture — la base attend qu'une écriture
+       * concurrente finisse, puis revérifie. Une première version annulait à
+       * la main en « libérant la commande » : sur un double-clic, le second
+       * clic, en échouant, libérait la réservation du premier.
+       */
+      const reservee = await prisma
+        .$transaction(async (tx) => {
+          for (const id of returnIds) {
+            const prise = await tx.returnCase.updateMany({
+              where: { id, merchantId, status: 'RESTOCKED', reusedAt: null },
+              data: { reusedOrderName: orderName, reusedShopifyOrderId: orderId, reusedAt: new Date(), status: 'CLOSED' },
+            });
+            if (prise.count !== 1) throw new PairePlusDisponible();
+          }
+          // Une seule réservation par commande, même si deux ont couru ensemble.
+          const pourCetteCommande = await tx.returnCase.count({ where: { merchantId, reusedShopifyOrderId: orderId } });
+          if (pourCetteCommande !== returnIds.length) throw new PairePlusDisponible();
+          return true;
+        })
+        .catch((erreur: unknown) => {
+          if (erreur instanceof PairePlusDisponible) return false;
+          throw erreur;
+        });
+
+      if (!reservee) {
+        return reply.code(409).send({
+          code: 'plus_disponible',
+          error: 'Une des paires n’est plus disponible, ou la commande vient d’être servie : rechargez les propositions.',
+        });
+      }
+
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId: userId,
+        action: 'return.reused',
+        targetType: 'order',
+        targetId: orderId,
+        metadata: { orderName, returnIds },
+      });
+
+      const agence = await prisma.returnCase.findFirst({
+        where: { id: returnIds[0], merchantId },
+        select: { agency: { select: { name: true, email: true, phone: true, address: true, country: true } } },
+      });
+      return reply.send({ reserve: true, agence: agence?.agency ?? null });
+    },
+  );
+
+  /** Annuler : les paires reviennent au stock, la commande revient à l'atelier. */
+  app.post(
+    '/api/returns/reemploi/liberer',
+    { preHandler: requirePermission('reply') },
+    async (request, reply) => {
+      const { merchantId, userId } = request.session;
+      const parsed = z.object({ orderId: z.string().min(1).max(120) }).safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Commande invalide' });
+
+      const liberees = await prisma.returnCase.updateMany({
+        where: { merchantId, reusedShopifyOrderId: parsed.data.orderId },
+        data: { reusedOrderName: null, reusedShopifyOrderId: null, reusedAt: null, status: 'RESTOCKED' },
+      });
+      if (liberees.count === 0) return reply.code(404).send({ error: 'Aucune paire ne sert cette commande.' });
+
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId: userId,
+        action: 'return.reuse_released',
+        targetType: 'order',
+        targetId: parsed.data.orderId,
+        metadata: { paires: liberees.count },
+      });
+      return reply.send({ liberees: liberees.count });
+    },
+  );
+
+  /**
+   * « Défectueux » : la paire sort du stock.
+   *
+   * Depuis la réception (le contrôle de l'agence) comme depuis le stock. Une
+   * paire déjà confiée à une commande ne sort pas sans qu'on libère d'abord
+   * la commande : sinon l'agence expédierait une paire que l'outil dit
+   * défectueuse, ou la commande resterait promise à une paire qui n'existe
+   * plus.
+   */
+  app.post<{ Params: { id: string } }>(
+    '/api/returns/:id/defectueux',
+    { preHandler: requirePermission('reply') },
+    async (request, reply) => {
+      const { merchantId, userId } = request.session;
+      const parsed = z.object({ note: z.string().max(2000).nullish() }).safeParse(request.body ?? {});
+      if (!parsed.success) return reply.code(400).send({ error: 'Note invalide' });
+
+      const paire = await prisma.returnCase.findFirst({
+        where: { id: request.params.id, merchantId },
+        select: { id: true, status: true, reusedOrderName: true, reusedShopifyOrderId: true },
+      });
+      if (!paire) return reply.code(404).send({ error: 'Dossier introuvable' });
+      if (paire.reusedShopifyOrderId) {
+        return reply.code(409).send({
+          code: 'reservee',
+          error: `Cette paire est confiée à ${paire.reusedOrderName ?? 'une commande'} : libérez d’abord la commande.`,
+        });
+      }
+
+      const sortie = await prisma.returnCase.update({
+        where: { id: paire.id },
+        data: { status: 'UNUSABLE', unusableAt: new Date(), unusableNote: parsed.data.note?.trim() || null },
+      });
+
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId: userId,
+        action: 'return.unusable',
+        targetType: 'return',
+        targetId: paire.id,
+        metadata: { from: paire.status, note: sortie.unusableNote },
+      });
+      return reply.send({ case: sortie });
+    },
+  );
 }

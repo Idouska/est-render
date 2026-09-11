@@ -21,15 +21,17 @@ const app = lire('public/app.js');
 /** Le calcul des lignes « Colis », exécuté pour de vrai sur des données de test. */
 function lignesColis(order: object, atelier: object[]): string {
   const debut = app.indexOf('  const expeditions = (order.fulfillments');
-  const fin = app.indexOf('  const parcels = parcelsShopify + parcelsAtelier;');
+  const fin = app.indexOf('  const parcels = parcelsStock + parcelsShopify + parcelsAtelier;');
   assert.ok(debut > 0 && fin > debut, 'calcul des colis introuvable');
   return new Function(
     'order',
     'atelier',
+    'reemploi',
     'esc',
     'SHIPMENT_LABELS',
+    'RETURN_COUNTRIES',
     `${app.slice(debut, fin)} return parcelsShopify + parcelsAtelier;`,
-  )(order, atelier, (texte: unknown) => String(texte ?? ''), {}) as string;
+  )(order, atelier, [], (texte: unknown) => String(texte ?? ''), {}, {}) as string;
 }
 
 const colisAtelier = { trackingNumber: 'TEST-13811', carrier: null, index: 1, total: 1, photoMime: null, test: true };
@@ -60,7 +62,7 @@ test('un numéro que Shopify connaît déjà n’est pas répété', () => {
 });
 
 test('la fiche passe les colis de l’atelier à la section Colis, et n’a plus de section à part', () => {
-  assert.match(app, /orderDetailMarkup\(order, parcels\)/);
+  assert.match(app, /orderDetailMarkup\(order, parcels, reemploi\)/);
   assert.equal(app.includes('"Colis saisis par l\'atelier"'), false);
 });
 

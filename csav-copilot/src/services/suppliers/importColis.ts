@@ -145,7 +145,8 @@ export type StatutLigne =
   | 'doublon'
   | 'deja_saisi'
   | 'deja_utilise'
-  | 'deja_expediee';
+  | 'deja_expediee'
+  | 'stock_retour';
 
 /** Une commande que l'atelier a le droit de voir, réduite à ce que le plan consulte. */
 export interface CommandeVisible {
@@ -205,6 +206,11 @@ export function planifierLot(
   lignes: readonly LigneCollee[],
   visibles: readonly CommandeVisible[],
   existants: readonly ColisExistant[],
+  /**
+   * Commandes servies par le stock retours : la paire part d'une agence,
+   * l'atelier ne doit pas l'expédier — la ligne est refusée, et dit pourquoi.
+   */
+  servies: ReadonlySet<string> = new Set(),
 ): PlanLot {
   const parNom = new Map(visibles.map((commande) => [commande.name, commande]));
   const suiviEnBase = new Map(existants.map((colis) => [colis.trackingNumber, colis]));
@@ -234,6 +240,8 @@ export function planifierLot(
     if (!commande) return { ...base, statut: 'introuvable' as const };
 
     const reperee = { ...base, shopifyOrderId: commande.id, client: commande.client };
+
+    if (servies.has(commande.id)) return { ...reperee, statut: 'stock_retour' as const };
 
     if (vusDansLeCollage.has(ligne.suivi)) return { ...reperee, statut: 'doublon' as const };
     vusDansLeCollage.add(ligne.suivi);
