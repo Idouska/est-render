@@ -7,6 +7,8 @@ import { decodePhoto, photoSchema } from './parcels.ts';
 import { getShopifyClient } from '../services/shopify/client.ts';
 import { listOrders, quoteSearchValue, type OrderSummary } from '../services/shopify/orders.ts';
 import { PAYS_RETOUR, VOISINS, rapprocher, type PaireEnStock } from '../services/reshipment/rapprochement.ts';
+import { signAgencyToken } from '../lib/agencyToken.ts';
+import { env } from '../config/env.ts';
 
 /**
  * Reshipment — les retours clients, et ce qu'on en refait.
@@ -328,6 +330,53 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
+  /**
+   * Le lien de travail d'une agence : elle y voit les commandes à expédier
+   * depuis son stock et y saisit ses numéros de suivi.
+   *
+   * Émis à la demande, rien de secret en base : le jeton se recalcule à partir
+   * du numéro de version. « Renouveler » l'incrémente et coupe tous les liens
+   * déjà transmis — la parade en cas de fuite.
+   */
+  app.post<{ Params: { id: string }; Body: { revoke?: boolean } }>(
+    '/api/return-agencies/:id/portal-link',
+    { preHandler: requirePermission('configure') },
+    async (request, reply) => {
+      const { merchantId, userId } = request.session;
+      const agence = await prisma.returnAgency.findFirst({
+        where: { id: request.params.id, merchantId },
+        select: { id: true, portalTokenVersion: true },
+      });
+      if (!agence) return reply.code(404).send({ error: 'Agence introuvable' });
+
+      const version = request.body?.revoke
+        ? (
+            await prisma.returnAgency.update({
+              where: { id: agence.id },
+              data: { portalTokenVersion: { increment: 1 } },
+              select: { portalTokenVersion: true },
+            })
+          ).portalTokenVersion
+        : agence.portalTokenVersion;
+
+      const token = signAgencyToken({ merchantId, agencyId: agence.id, version });
+
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId: userId,
+        action: request.body?.revoke ? 'agency.link_revoked' : 'agency.link_issued',
+        targetType: 'ReturnAgency',
+        targetId: agence.id,
+      });
+
+      return reply.send({
+        url: `${env.APP_URL}/agence/${agence.id}?token=${encodeURIComponent(token)}`,
+        revoked: Boolean(request.body?.revoke),
+      });
+    },
+  );
+
   app.delete<{ Params: { id: string } }>(
     '/api/return-agencies/:id',
     { preHandler: requirePermission('configure') },
@@ -571,6 +620,18 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
       const { merchantId, userId } = request.session;
       const parsed = z.object({ orderId: z.string().min(1).max(120) }).safeParse(request.body);
       if (!parsed.success) return reply.code(400).send({ error: 'Commande invalide' });
+
+      // L'agence a déjà expédié : la paire est partie, la commande ne peut
+      // plus revenir à l'atelier — il l'expédierait une seconde fois.
+      const expediees = await prisma.returnCase.count({
+        where: { merchantId, reusedShopifyOrderId: parsed.data.orderId, reshippedAt: { not: null } },
+      });
+      if (expediees > 0) {
+        return reply.code(409).send({
+          code: 'deja_expediee',
+          error: 'L’agence a déjà expédié cette commande : elle ne peut plus revenir à l’atelier.',
+        });
+      }
 
       const liberees = await prisma.returnCase.updateMany({
         where: { merchantId, reusedShopifyOrderId: parsed.data.orderId },

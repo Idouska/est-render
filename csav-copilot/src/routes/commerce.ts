@@ -429,6 +429,9 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
           variantTitle: true,
           orderName: true,
           reusedAt: true,
+          reshipTrackingNumber: true,
+          reshipCarrier: true,
+          reshippedAt: true,
           agency: { select: { name: true, country: true } },
         },
       });
