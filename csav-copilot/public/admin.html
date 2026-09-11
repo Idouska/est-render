@@ -31,7 +31,7 @@
       <header class="topbar">
         <div class="brand">
           <strong>Administration</strong>
-          <span>identifiants de la plateforme</span>
+          <span>plateforme, boutiques et nouveautés</span>
         </div>
         <div class="conn">
           <a class="btn btn-small" href="/dashboard">Dashboard</a>
@@ -49,6 +49,13 @@
         </div>
       </div>
 
+      <nav class="admin-nav" aria-label="Sections de la console">
+        <a href="#supervision">Supervision</a>
+        <a href="#fonctionnalites">Fonctionnalités</a>
+        <a href="#nouveautes">Nouveautés <span class="admin-nav-compte" id="nouveautes-nav" hidden></span></a>
+        <a href="#groups">Identifiants</a>
+      </nav>
+
       <section class="panel admin-group" id="supervision">
         <div class="panel-head">
           <span class="panel-title">Supervision</span>
@@ -56,6 +63,27 @@
         </div>
         <div class="card-body" id="supervision-body">
           <p class="empty">Relevé en cours…</p>
+        </div>
+      </section>
+
+      <!-- Les interrupteurs par boutique : ce qu'une boutique voit et peut faire. -->
+      <section class="panel admin-group" id="fonctionnalites">
+        <div class="panel-head">
+          <span class="panel-title">Fonctionnalités par boutique</span>
+        </div>
+        <div class="card-body" id="fonctionnalites-body">
+          <p class="empty">Chargement…</p>
+        </div>
+      </section>
+
+      <!-- Ce qui a été mis en ligne, et comment le tester. -->
+      <section class="panel admin-group" id="nouveautes">
+        <div class="panel-head">
+          <span class="panel-title">Nouveautés</span>
+          <span class="admin-print" id="nouveautes-compte"></span>
+        </div>
+        <div class="card-body" id="nouveautes-body">
+          <p class="empty">Chargement…</p>
         </div>
       </section>
 

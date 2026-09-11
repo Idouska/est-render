@@ -1548,6 +1548,69 @@ body.ws-resizing { cursor: col-resize; user-select: none; }
 
 .admin { max-width: 880px; margin: 0 auto; padding: 22px; display: flex; flex-direction: column; gap: 16px; }
 .admin-main { display: flex; flex-direction: column; gap: 16px; }
+
+/* Navigation interne de la console : quatre sections, une page. */
+.admin-nav { display: flex; flex-wrap: wrap; gap: 6px; }
+.admin-nav a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  text-decoration: none;
+}
+.admin-nav a:hover { border-color: var(--ink-mute); }
+.admin-nav-compte {
+  min-width: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+
+/* Fonctionnalités : une ligne par boutique, un interrupteur par colonne. Le
+   tableau défile dans son cadre, jamais la page. */
+.fx-wrap { overflow-x: auto; }
+.fx { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+.fx th, .fx td { padding: 9px 10px; border-bottom: 1px solid var(--line-soft); text-align: left; vertical-align: top; }
+.fx th { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-mute); }
+.fx td b { display: block; color: var(--ink); }
+.fx-switch { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; white-space: nowrap; }
+.fx-switch input { width: 16px; height: 16px; accent-color: var(--accent); }
+.fx-legende { margin: 4px 0 0; display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; font-size: 12.5px; }
+.fx-legende dt { font-weight: 600; color: var(--ink); }
+.fx-legende dd { margin: 0; color: var(--ink-mute); }
+
+/* Nouveautés : repliées sur une ligne, dépliées pour tester. */
+.nv { border: 1px solid var(--line); border-radius: var(--r-md); padding: 10px 12px; background: var(--surface); }
+.nv + .nv { margin-top: -6px; }
+.nv summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; cursor: pointer; list-style: none; }
+.nv summary::-webkit-details-marker { display: none; }
+.nv summary b { flex: 1 1 240px; color: var(--ink); font-weight: 600; }
+.nv[open] summary { margin-bottom: 8px; }
+.nv p { margin: 0 0 6px; font-size: 13.5px; color: var(--ink-soft); }
+.nv-ou { color: var(--ink-mute); }
+.nv-pour {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-size: 11px;
+  font-weight: 600;
+}
+.nv-essai { margin: 4px 0 8px; padding-left: 20px; font-size: 13.5px; color: var(--ink); }
+.nv-essai li + li { margin-top: 3px; }
+.nv-coche { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.nv-coche input { width: 16px; height: 16px; accent-color: var(--ok); }
+.nv-testee { opacity: 0.62; }
+.nv-testee summary b { text-decoration: line-through; text-decoration-color: var(--ink-mute); }
 .admin-group .card-body { display: flex; flex-direction: column; gap: 14px; }
 
 .admin-field { padding-top: 12px; border-top: 1px solid var(--line-soft); }

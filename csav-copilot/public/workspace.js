@@ -686,6 +686,8 @@ async function load() {
     $('ws-supplier').textContent = data.supplier?.name ?? '';
     state.testMode = Boolean(data.testMode);
     $('ws-test').hidden = !state.testMode;
+    state.fonctionnalites = data.fonctionnalites ?? {};
+    appliquerFonctionnalites();
     // Deux formats : la feuille Excel reprend la mise en page de l'atelier,
     // le CSV sert à qui veut retravailler les données.
     $('ws-xlsx').href = apiUrl(`/api/workspace/${supplierId}/orders.xlsx`).toString();
@@ -1719,6 +1721,8 @@ async function loadRuptures() {
  * qu'on n'a pas pu relire est un chiffre inventé.
  */
 async function rafraichirPastilleRuptures() {
+  // Page éteinte depuis la console : pas de pastille, et pas d'appel refusé.
+  if (state.fonctionnalites?.rupturesAtelier === false) return setRuptureBadge(0);
   try {
     const data = await api(`/api/workspace/${supplierId}/ruptures`);
     setRuptureBadge((data.demandes ?? []).filter((demande) => demande.statut === 'OPEN').length);
@@ -1788,6 +1792,29 @@ const STATUTS_LOT = {
   deja_utilise: 'bad',
   deja_expediee: 'neutre',
 };
+
+/*
+ * Ce que la console d'administration a éteint pour cette boutique.
+ *
+ * Masqué ici, et REFUSÉ par le serveur : l'écran qui se tait n'est que la
+ * moitié du travail. Sans le traitement en masse, le choix des modes n'a plus
+ * qu'une option — il disparaît avec elle.
+ */
+function appliquerFonctionnalites() {
+  const masse = state.fonctionnalites?.importEnMasse !== false;
+  const ruptures = state.fonctionnalites?.rupturesAtelier !== false;
+
+  $('ws-modes').hidden = !masse;
+  if (!masse && state.mode === 'masse') setMode('manuel');
+
+  document.querySelectorAll('[data-view="ruptures"]').forEach((bouton) => {
+    bouton.hidden = !ruptures;
+  });
+  if (!ruptures) {
+    setRuptureBadge(0);
+    if (state.view === 'ruptures') setView('orders');
+  }
+}
 
 /** Un fichier choisi suit la même lecture qu'un fichier déposé. */
 $('bulk-file')?.addEventListener('change', (event) => {
@@ -1893,6 +1920,7 @@ const glisserActif = (event) => state.mode === 'masse' && state.view === 'orders
 
 /** Le glisser qui commence : pris en « En masse », ou pris en y basculant pour une feuille. */
 function prendLeGlisser(event) {
+  if (state.fonctionnalites?.importEnMasse === false) return false;
   if (!porteDesFichiers(event) || state.view !== 'orders') return false;
   if (state.mode === 'masse') return true;
   if (state.focus || !porteUnTableur(event)) return false;

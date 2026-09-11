@@ -17,6 +17,10 @@ import {
   type CredentialKey,
 } from '../services/platform/credentials.ts';
 import { CHECKS, type CheckName } from '../services/platform/healthchecks.ts';
+import { NOUVEAUTES } from '../services/platform/nouveautes.ts';
+import { CLES_FONCTIONNALITES, FONCTIONNALITES, fonctionnalitesDe } from '../services/fonctionnalites.ts';
+import { prisma } from '../lib/prisma.ts';
+import { recordAudit } from '../lib/audit.ts';
 import { collectHealth } from '../services/supervision/collect.ts';
 
 /**
@@ -199,6 +203,99 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
    * la plateforme — cron, écoutes Gmail, files — et non le travail du
    * marchand, qui n'a ni les moyens ni la charge d'y remédier.
    */
+  /** Les nouveautés, pour les tester : où les trouver, comment les essayer. */
+  app.get('/api/admin/nouveautes', { preHandler: requireAdmin }, async (request, reply) =>
+    reply.send({ nouveautes: NOUVEAUTES }),
+  );
+
+  /**
+   * Les boutiques, avec leur mode test et leurs interrupteurs.
+   *
+   * Le registre part avec : l'écran n'a pas à connaître la liste des
+   * fonctionnalités, il affiche celles que le serveur sait appliquer.
+   */
+  app.get('/api/admin/marchands', { preHandler: requireAdmin }, async (request, reply) => {
+    const marchands = await prisma.merchant.findMany({
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        brandName: true,
+        shopDomain: true,
+        status: true,
+        testMode: true,
+        fonctionnalites: true,
+      },
+    });
+
+    return reply.send({
+      registre: CLES_FONCTIONNALITES.map((cle) => ({ cle, ...FONCTIONNALITES[cle] })),
+      marchands: marchands.map((marchand) => ({
+        ...marchand,
+        fonctionnalites: fonctionnalitesDe(marchand.fonctionnalites),
+      })),
+    });
+  });
+
+  /**
+   * Basculer le mode test ou une fonctionnalité d'une boutique.
+   *
+   * Seules les clés du registre sont acceptées : une faute de frappe ne doit
+   * pas créer un interrupteur que rien n'applique. Chaque bascule est
+   * consignée au journal de la boutique — c'est elle qui en subit l'effet.
+   */
+  app.patch<{ Params: { id: string } }>(
+    '/api/admin/marchands/:id',
+    { preHandler: requireAdmin },
+    async (request, reply) => {
+      const parsed = z
+        .object({
+          testMode: z.boolean().optional(),
+          fonctionnalite: z.object({ cle: z.enum(CLES_FONCTIONNALITES as [string, ...string[]]), actif: z.boolean() }).optional(),
+        })
+        .safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Réglage invalide' });
+
+      const marchand = await prisma.merchant.findUnique({
+        where: { id: request.params.id },
+        select: { id: true, fonctionnalites: true },
+      });
+      if (!marchand) return reply.code(404).send({ error: 'Boutique introuvable' });
+
+      const fonctionnalites = parsed.data.fonctionnalite
+        ? {
+            ...fonctionnalitesDe(marchand.fonctionnalites),
+            [parsed.data.fonctionnalite.cle]: parsed.data.fonctionnalite.actif,
+          }
+        : undefined;
+
+      const misAJour = await prisma.merchant.update({
+        where: { id: marchand.id },
+        data: {
+          ...(parsed.data.testMode !== undefined ? { testMode: parsed.data.testMode } : {}),
+          ...(fonctionnalites ? { fonctionnalites } : {}),
+        },
+        select: { testMode: true, fonctionnalites: true },
+      });
+
+      await recordAudit({
+        merchantId: marchand.id,
+        actorType: 'SYSTEM',
+        actorId: 'console-admin',
+        action: 'platform.merchant_features_updated',
+        targetType: 'Merchant',
+        targetId: marchand.id,
+        metadata: parsed.data,
+        ipAddress: request.ip,
+      });
+
+      return reply.send({
+        testMode: misAJour.testMode,
+        fonctionnalites: fonctionnalitesDe(misAJour.fonctionnalites),
+      });
+    },
+  );
+
   app.get('/api/admin/health', { preHandler: requireAdmin }, async (request, reply) => {
     return reply.send(await collectHealth());
   });
