@@ -1199,3 +1199,330 @@ input:focus, select:focus, textarea:focus {
 .upd.rup-p-cree { border-left-color: var(--bad); }
 .upd.rup-p-traite { border-left-color: var(--warn); }
 .upd.rup-p-classe { border-left-color: var(--ok); }
+
+
+/* ------------------------------------------------- deux modes de traitement -- */
+
+/*
+ * Le sélecteur de mode : deux grandes cartes plutôt qu'un petit segment.
+ *
+ * C'est la décision la plus importante de l'écran — une commande à la fois,
+ * ou tout le fichier du transporteur d'un coup — et elle doit se lire avant
+ * la période et les filtres. Chaque carte dit ce qu'elle fait en une ligne :
+ * « En masse » ne suffit pas à dire qu'on colle depuis Excel.
+ */
+.ws-modes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.ws-modes button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 10px 14px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--r);
+  background: var(--card);
+  color: var(--ink-soft);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.ws-modes button:hover { border-color: var(--brand); }
+.ws-modes button[aria-selected='true'] {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  color: var(--ink);
+  box-shadow: 0 0 0 1px var(--brand) inset;
+}
+.ws-modes svg {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ws-modes button[aria-selected='true'] svg { color: var(--brand); }
+.ws-mode-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ws-mode-txt b { font-size: 15px; font-weight: 650; color: var(--ink); }
+.ws-mode-txt small { font-size: 12.5px; color: var(--ink-mute); }
+
+/* En masse, la file du guichet s'efface : progression, filtres et liste
+   décrivent le travail une par une, pas l'import. */
+.hors-mode { display: none !important; }
+
+/* Au guichet, plein écran veut dire plein écran : le sélecteur part aussi. */
+.ws-focus #ws-modes { display: none; }
+
+/* ------------------------------------------------------------ en masse -- */
+
+.ws-bulk { display: flex; flex-direction: column; gap: 14px; }
+
+.bulk-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin: 0;
+  padding: 14px 16px;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--card);
+}
+.bulk-steps li { display: flex; align-items: flex-start; gap: 11px; font-size: 14.5px; color: var(--ink); }
+.bulk-num {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--brand);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.bulk-link { margin-left: 8px; color: var(--brand); font-weight: 600; }
+
+/* La zone de collage : police à chasse fixe, pour que les colonnes collées
+   depuis Excel restent alignées et qu'on repère une cellule décalée. */
+.bulk-paste textarea {
+  width: 100%;
+  min-height: 180px;
+  padding: 12px 14px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--r);
+  background: var(--card);
+  color: var(--ink);
+  font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  tab-size: 18;
+  resize: vertical;
+}
+.bulk-paste textarea:focus { outline: none; border-color: var(--brand); }
+
+.bulk-acts { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
+.bulk-file { cursor: pointer; }
+
+/* Le dépôt d'un fichier : pendant un glisser, la zone de collage se couvre
+   d'un voile qui dit où lâcher. Le reste du temps, rien ne s'affiche. */
+.bulk-paste { position: relative; display: block; }
+.bulk-voile {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--brand);
+  border-radius: var(--r);
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-size: 16px;
+  font-weight: 700;
+  pointer-events: none;
+}
+.bulk-depot .bulk-voile { display: flex; }
+.bulk-drop-hint { margin-right: auto; align-self: center; font-size: 13px; color: var(--ink-soft); }
+
+.bulk-note { margin: 0; font-size: 13.5px; color: var(--ink-soft); }
+.bulk-note-ok { color: var(--ok); }
+.bulk-note-warn { color: var(--warn); }
+.bulk-note-bad { color: var(--bad); }
+
+.bulk-msg { margin: 0; padding: 11px 14px; border-radius: var(--r-sm); background: var(--line-soft); font-size: 14px; color: var(--ink-soft); }
+.bulk-msg-bad { background: var(--bad-soft); color: var(--bad); }
+.bulk-msg-warn { background: var(--warn-soft); color: var(--warn); }
+
+.bulk-bilan { display: flex; flex-wrap: wrap; gap: 8px; }
+.bulk-bilan span {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--line-soft);
+  font-size: 13.5px;
+  color: var(--ink-soft);
+}
+.bulk-bilan b { margin-left: 4px; color: var(--ink); }
+.bulk-bilan .bulk-ok { background: var(--ok-soft); color: var(--ok); }
+.bulk-bilan .bulk-ok b { color: var(--ok); }
+.bulk-bilan .bulk-bad { background: var(--bad-soft); color: var(--bad); }
+.bulk-bilan .bulk-bad b { color: var(--bad); }
+
+/* L'aperçu. Chaque ligne porte au bord la couleur de son sort — le même
+   langage que les ruptures : on repère d'un coup d'oeil les lignes à
+   reprendre dans une liste de cinquante. */
+.bulk-table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r); background: var(--card); }
+.bulk-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.bulk-table th {
+  padding: 9px 12px;
+  text-align: left;
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.bulk-table td { padding: 9px 12px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
+.bulk-table tr:last-child td { border-bottom: 0; }
+.bulk-table td:first-child { border-left: 4px solid transparent; }
+.bulk-l-ok td:first-child { border-left-color: var(--ok); }
+.bulk-l-warn td:first-child { border-left-color: var(--warn); }
+.bulk-l-bad td:first-child { border-left-color: var(--bad); }
+.bulk-l-bad { background: var(--bad-soft); }
+.bulk-rang { color: var(--ink-mute); font-variant-numeric: tabular-nums; }
+.bulk-suivi { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; }
+.bulk-statut { font-weight: 600; }
+.bulk-l-ok .bulk-statut { color: var(--ok); }
+.bulk-l-warn .bulk-statut { color: var(--warn); }
+.bulk-l-bad .bulk-statut { color: var(--bad); }
+.bulk-l-neutre .bulk-statut { color: var(--ink-mute); }
+.bulk-statut small { font-weight: 500; color: var(--ink-mute); }
+
+/* La confirmation : la conséquence, en toutes lettres, au-dessus du bouton.
+   Chaque commande complétée envoie un mail au client — c'est la seule phrase
+   de l'écran qu'il ne faut pas pouvoir manquer. */
+.bulk-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1.5px solid var(--warn);
+  border-radius: var(--r);
+  background: var(--warn-soft);
+}
+.bulk-consequence { margin: 0; font-size: 14.5px; line-height: 1.5; color: var(--ink); }
+
+.bulk-fin {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1.5px solid var(--ok);
+  border-radius: var(--r);
+  background: var(--ok-soft);
+}
+.bulk-fin-titre { margin: 0; font-size: 16px; font-weight: 650; color: var(--ok); }
+
+@media (max-width: 560px) {
+  .ws-modes { grid-template-columns: 1fr; }
+}
+
+/* Lu par les lecteurs d'écran, invisible à l'oeil : le libellé de la zone de
+   collage, que les trois étapes au-dessus rendent évident à qui voit. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --------------------------------------------------------- guichet, lisible -- */
+
+/*
+ * Des sections nommées, pour que l'oeil sache où il en est.
+ *
+ * La fiche était un seul bloc : nom, adresse, barre, menu, champs, boutons,
+ * sans rien qui dise où finit le client et où commence l'expédition. Deux
+ * étiquettes discrètes suffisent à la découper — le même procédé que les
+ * titres de l'écran des ruptures.
+ */
+.ord-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+/* Le client en carte : le préparateur y relit l'adresse avant de coller
+   l'étiquette, c'est l'endroit où une erreur coûte un colis perdu. */
+.ord-focus .ord-who {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--paper);
+}
+.ord-focus .ord-who b { font-size: 16px; }
+
+/* Le téléphone en pastille cliquable, avec son icône : il se composait
+   comme un lien souligné en pointillés, qu'on ne reconnaissait pas. */
+.ord-phone {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+}
+.ord-phone svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; }
+.ord-phone.missing { border-color: var(--bad); background: var(--bad-soft); }
+
+/* Le statut traduit prend la couleur de son sens. Les capitales restent : ce
+   sont celles du jeton, pas celles de l'API. */
+.pill-unfulfilled,
+.pill-pending_fulfillment { background: var(--warn-soft); color: var(--warn); }
+.pill-partially_fulfilled,
+.pill-in_progress { background: var(--brand-soft); color: var(--brand); }
+.pill-fulfilled { background: var(--ok-soft); color: var(--ok); }
+.pill-on_hold { background: var(--bad-soft); color: var(--bad); }
+
+/* L'expédition : son titre, et le nombre de colis tassé à côté. */
+.ord-ship {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 6px;
+}
+.ord-ship .ord-label { margin: 0; }
+.ord-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  font-size: 13.5px;
+  color: var(--ink-soft);
+}
+.ord-count select {
+  min-height: 38px;
+  width: auto;
+  padding: 0 30px 0 12px;
+  font-size: 14.5px;
+}
+
+/* Le rappel du geste clavier, sous le formulaire, en petit : utile une fois,
+   ensuite on le sait. */
+.ord-hint { margin: 10px 2px 0; font-size: 12.5px; color: var(--ink-mute); }
+
+/* Signaler un problème : un bouton franc, ambré, avec son triangle. */
+.ord-report {
+  gap: 8px;
+  border-color: var(--warn);
+  color: var(--warn);
+  background: var(--card);
+}
+.ord-report:hover { background: var(--warn-soft); }
+.ord-report svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
