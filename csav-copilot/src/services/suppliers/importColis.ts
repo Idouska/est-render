@@ -57,6 +57,18 @@ function separateurDe(texte: string): string {
 const EN_TETE = /[A-Za-z\u00C0-\u024F\u4E00-\u9FFF]/;
 const NUMERO = /\d{3,}/;
 
+/** La règle ci-dessus, partagée avec la lecture des classeurs. */
+export function ressembleAUnEnTete(cellule: string): boolean {
+  return EN_TETE.test(cellule) && !NUMERO.test(cellule);
+}
+
+/**
+ * Une adresse web. Un transporteur n'en est jamais une : une URL de suivi
+ * collée en troisième colonne ne doit pas partir chez Shopify comme nom de
+ * transporteur, ni dans le mail du client.
+ */
+const ADRESSE_WEB = /:\/\/|^www\./i;
+
 /**
  * Lit un collage depuis Excel ou un fichier CSV.
  *
@@ -85,7 +97,7 @@ export function lireCollage(texte: string): LigneCollee[] {
 
     // L'en-tête n'est reconnu qu'en PREMIÈRE ligne non vide. Plus loin, la
     // même ligne est une vraie ligne invalide, et doit être signalée.
-    const enTete = premiere && EN_TETE.test(commande) && !NUMERO.test(commande);
+    const enTete = premiere && ressembleAUnEnTete(commande);
     premiere = false;
     if (enTete) return;
 
@@ -93,7 +105,7 @@ export function lireCollage(texte: string): LigneCollee[] {
       rang: position + 1,
       commande,
       suivi: suivi.replace(/\s+/g, ''),
-      transporteur: transporteur || null,
+      transporteur: transporteur && !ADRESSE_WEB.test(transporteur) ? transporteur : null,
     });
   });
 

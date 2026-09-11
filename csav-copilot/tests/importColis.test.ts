@@ -60,6 +60,15 @@ test('un en-tête plus bas dans le collage est une ligne à signaler', () => {
   assert.equal(lignes.length, 2, 'seule la première ligne peut être un en-tête');
 });
 
+test('une URL collée en troisième colonne n’est pas un transporteur', () => {
+  // Elle partirait chez Shopify comme nom de transporteur, puis dans le mail
+  // du client.
+  const [ligne] = lireCollage('#13811\tABC123456\thttps://t.17track.net/fr#nums=ABC123456');
+  assert.equal(ligne!.transporteur, null);
+  assert.equal(lireCollage('#13811\tABC123456\twww.17track.net')[0]!.transporteur, null);
+  assert.equal(lireCollage('#13811\tABC123456\tUPS')[0]!.transporteur, 'UPS', 'un vrai nom reste');
+});
+
 test('les espaces d’un numéro de suivi sont retirés', () => {
   // Les transporteurs impriment « 1Z99 9AA1 0123 » ; le suivi reconnaît le
   // même numéro sans espace.
