@@ -818,29 +818,25 @@ $('ws-orders').addEventListener('click', async (event) => {
      * faux — dans la liste du marchand, qui suivait un colis fantôme.
      */
     const pid = card.dataset.pid;
-    const { parcel, shopify } = await api(
-      pid
-        ? `/api/workspace/${supplierId}/parcels/${pid}`
-        : `/api/workspace/${supplierId}/parcels`,
-      {
-        method: pid ? 'PATCH' : 'POST',
-        body: pid
-          ? {
-              trackingNumber,
-              carrier: card.querySelector('[data-field="carrier"]').value.trim() || null,
-              photo: card.dataset.photo ?? null,
-            }
-          : {
-              shopifyOrderId: orderId,
-              orderName: order?.name ?? null,
-              trackingNumber,
-              carrier: card.querySelector('[data-field="carrier"]').value.trim() || null,
-              index: Number(card.dataset.index),
-              total: Number(document.querySelector(`[data-total="${CSS.escape(orderId)}"]`).value),
-              photo: card.dataset.photo ?? null,
-            },
-      },
-    );
+    const carrier = card.querySelector('[data-field="carrier"]').value.trim() || null;
+    const reponse = pid
+      ? await corrigerColis(pid, { trackingNumber, carrier, photo: card.dataset.photo ?? null })
+      : await api(`/api/workspace/${supplierId}/parcels`, {
+          method: 'POST',
+          body: {
+            shopifyOrderId: orderId,
+            orderName: order?.name ?? null,
+            trackingNumber,
+            carrier,
+            index: Number(card.dataset.index),
+            total: Number(document.querySelector(`[data-total="${CSS.escape(orderId)}"]`).value),
+            photo: card.dataset.photo ?? null,
+          },
+        });
+
+    // Correction annulée à la question « le client a déjà ce numéro » : rien n'a changé.
+    if (!reponse) return;
+    const { parcel, shopify, clientPrevenu } = reponse;
 
     order.parcels = [
       ...(order.parcels ?? []).filter((existing) => existing.index !== parcel.index),
@@ -851,7 +847,9 @@ $('ws-orders').addEventListener('click', async (event) => {
 
     // Le dernier colis déclenche l'expédition Shopify : le fournisseur doit
     // savoir si le client est prévenu, ou pourquoi il ne l'est pas.
-    if (shopify?.fulfilled && state.testMode) {
+    if (pid && clientPrevenu) {
+      toast(t(state.testMode ? 'parcel.correctedTest' : 'parcel.correctedNotified'));
+    } else if (shopify?.fulfilled && state.testMode) {
       toast(t('test.parcelSaved'));
     } else if (shopify?.fulfilled) {
       toast(t('parcel.shipped'));
@@ -869,11 +867,34 @@ $('ws-orders').addEventListener('click', async (event) => {
       renderOrders();
     }
   } catch (error) {
-    toast(error.message, true);
+    toast(messageServeur(error, 'parcel.err'), true);
   } finally {
     save.disabled = false;
   }
 });
+
+/*
+ * Corriger un colis déjà enregistré — depuis le guichet ou la liste de suivi.
+ *
+ * Si le client a déjà reçu l'ancien numéro, le serveur demande une
+ * confirmation avant tout : la correction lui enverra un nouvel e-mail. On la
+ * demande ici en nommant les deux numéros, puis on renvoie la correction
+ * confirmée. Rend `null` si l'atelier renonce — rien n'a alors changé.
+ */
+async function corrigerColis(pid, corps) {
+  const chemin = `/api/workspace/${supplierId}/parcels/${pid}`;
+  try {
+    return await api(chemin, { method: 'PATCH', body: corps });
+  } catch (error) {
+    if (error.code !== 'client_deja_prevenu') throw error;
+    const question = t(state.testMode ? 'parcel.editConfirmTest' : 'parcel.editConfirm', {
+      old: error.donnees?.ancien ?? '',
+      number: corps.trackingNumber,
+    });
+    if (!confirm(question)) return null;
+    return api(chemin, { method: 'PATCH', body: { ...corps, prevenirClient: true } });
+  }
+}
 
 $('issue-cancel').addEventListener('click', () => $('issue-modal').classList.remove('open'));
 
@@ -1162,6 +1183,12 @@ async function loadParcels() {
             )}${parcel.carrier ? ` · ${esc(parcel.carrier)}` : ''}</small>
           </div>
           <span class="trk-when">${new Date(parcel.updatedAt).toLocaleDateString(locale)}</span>
+          <button class="ico ico-edit" data-edit="${esc(parcel.id)}" title="${esc(t('parcel.edit'))}"
+            aria-label="${esc(t('parcel.edit'))}">
+            <svg viewBox="0 0 20 20" aria-hidden="true">
+              <path d="M4 16h3.2l8.3-8.3-3.2-3.2L4 12.8V16zM11.3 5.5l3.2 3.2" />
+            </svg>
+          </button>
           <button class="ico ico-del" data-del="${esc(parcel.id)}"
             data-number="${esc(parcel.trackingNumber)}" title="${esc(t('parcel.delete'))}"
             aria-label="${esc(t('parcel.delete'))}">
@@ -1178,6 +1205,65 @@ async function loadParcels() {
       deleteParcel(button.dataset.del, button.dataset.number, button),
     ),
   );
+  rows.querySelectorAll('[data-edit]').forEach((button) =>
+    button.addEventListener('click', () => ouvrirCorrection(button.closest('.trk'), button.dataset.edit)),
+  );
+}
+
+/*
+ * La correction sur place, dans la liste de suivi.
+ *
+ * La liste servait à relire ; on n'y pouvait que supprimer, et une faute de
+ * frappe obligeait à retrouver la commande au guichet. Le numéro et le
+ * transporteur se corrigent désormais là où l'erreur se voit.
+ */
+function ouvrirCorrection(ligne, pid) {
+  const parcel = (state.parcels ?? []).find((candidate) => candidate.id === pid);
+  if (!ligne || !parcel) return;
+
+  ligne.classList.add('trk-editing');
+  ligne.querySelector('.trk-main').innerHTML = `
+    <form class="trk-edit">
+      <input class="mono" data-field="tracking" value="${esc(parcel.trackingNumber)}"
+        aria-label="${esc(t('parcel.tracking'))}" autocomplete="off" spellcheck="false" />
+      <input data-field="carrier" list="ws-carriers" value="${esc(parcel.carrier ?? '')}"
+        placeholder="${esc(t('parcel.carrier'))}" aria-label="${esc(t('parcel.carrier'))}" />
+      <button class="btn btn-small btn-primary" type="submit">${esc(t('parcel.save'))}</button>
+      <button class="btn btn-small" type="button" data-cancel>${esc(t('parcel.editCancel'))}</button>
+    </form>`;
+
+  const formulaire = ligne.querySelector('.trk-edit');
+  formulaire.querySelector('[data-field="tracking"]').focus();
+  formulaire.querySelector('[data-cancel]').addEventListener('click', () => void loadParcels());
+
+  formulaire.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const trackingNumber = formulaire.querySelector('[data-field="tracking"]').value.trim();
+    const carrier = formulaire.querySelector('[data-field="carrier"]').value.trim() || null;
+    if (!trackingNumber) return toast(t('parcel.needTracking'), true);
+
+    const bouton = formulaire.querySelector('[type="submit"]');
+    bouton.disabled = true;
+    try {
+      const reponse = await corrigerColis(pid, { trackingNumber, carrier });
+      if (!reponse) return;
+
+      const { parcel: corrige, clientPrevenu } = reponse;
+      toast(
+        t(clientPrevenu ? (state.testMode ? 'parcel.correctedTest' : 'parcel.correctedNotified') : 'parcel.corrected'),
+      );
+      // La carte de la commande, au guichet, montre le même colis.
+      for (const order of state.orders) {
+        order.parcels = (order.parcels ?? []).map((existant) => (existant.id === pid ? corrige : existant));
+      }
+      rememberCarrier(corrige.carrier ?? '');
+      await loadParcels();
+    } catch (error) {
+      toast(messageServeur(error, 'parcel.err'), true);
+    } finally {
+      bouton.disabled = false;
+    }
+  });
 }
 
 /** Suppression d'un colis, avec confirmation nommant le numéro. */

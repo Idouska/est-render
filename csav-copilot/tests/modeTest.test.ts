@@ -140,7 +140,7 @@ test('toute écriture Shopify du code est connue de la simulation', () => {
   };
   parcourir(dossier.replace(/\/$/, ''));
 
-  assert.deepEqual([...trouvees].sort(), ['CreateFulfillment', 'CreateRefund']);
+  assert.deepEqual([...trouvees].sort(), ['CreateFulfillment', 'CreateRefund', 'UpdateFulfillmentTracking']);
   for (const nom of trouvees) {
     assert.doesNotThrow(() => ecritureSimulee(`mutation ${nom}($x: X) { x }`), `${nom} doit être simulée`);
   }

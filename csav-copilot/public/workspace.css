@@ -1306,6 +1306,22 @@ input:focus, select:focus, textarea:focus {
 }
 .bulk-paste textarea:focus { outline: none; border-color: var(--brand); }
 
+/* La correction d'un colis, sur place dans la liste de suivi. */
+.ico-edit svg { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; }
+.trk-edit { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.trk-edit input {
+  flex: 1 1 160px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--card);
+  color: var(--ink);
+  font-size: 14px;
+}
+.trk-edit input:focus { outline: none; border-color: var(--brand); }
+.trk-editing .trk-when { display: none; }
+
 /* Le bandeau du mode test : impossible à manquer, sur toutes les vues. */
 .ws-test {
   margin: 0 0 16px;
