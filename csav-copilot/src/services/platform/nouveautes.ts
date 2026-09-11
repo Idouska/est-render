@@ -10,7 +10,7 @@
  * code ; un test vérifie qu'aucun n'est répété et que l'ordre est tenu.
  */
 
-export type Public = 'Atelier' | 'Tableau de bord' | 'Les deux';
+export type Public = 'Atelier' | 'Tableau de bord' | 'Les deux' | 'Console';
 
 export interface Nouveaute {
   pr: number;
@@ -24,6 +24,20 @@ export interface Nouveaute {
 }
 
 export const NOUVEAUTES: readonly Nouveaute[] = [
+  {
+    pr: 58,
+    date: '2026-09-11',
+    pour: 'Console',
+    titre: 'Fonctionnalités par boutique, et cette liste de nouveautés',
+    resume:
+      'La console présente les nouveautés à tester, avec une case « Testé », et des interrupteurs par boutique : mode test, traitement en masse de l’atelier, page Ruptures de l’atelier. Une fonctionnalité éteinte disparaît de l’écran ET est refusée par le serveur.',
+    ou: 'Console d’administration → Fonctionnalités, Nouveautés.',
+    essayer: [
+      'Éteindre « Traitement en masse » pour la boutique : chez l’atelier (⌘R), le choix « En masse » disparaît.',
+      'Le rallumer : le choix revient.',
+      'Cocher « Testé » sur une nouveauté : le compteur « À tester » baisse.',
+    ],
+  },
   {
     pr: 57,
     date: '2026-09-11',

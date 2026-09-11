@@ -133,7 +133,7 @@ test('les nouveautés sont complètes, uniques, et la plus récente en tête', (
 
   for (const n of NOUVEAUTES) {
     assert.match(n.date, /^\d{4}-\d{2}-\d{2}$/, `PR ${n.pr} : date`);
-    assert.ok(['Atelier', 'Tableau de bord', 'Les deux'].includes(n.pour), `PR ${n.pr} : public`);
+    assert.ok(['Atelier', 'Tableau de bord', 'Les deux', 'Console'].includes(n.pour), `PR ${n.pr} : public`);
     assert.ok(n.titre && n.resume && n.ou, `PR ${n.pr} : texte manquant`);
     assert.ok(n.essayer.length > 0, `PR ${n.pr} : comment l’essayer`);
   }
