@@ -1782,40 +1782,59 @@ async function lireFichier(fichier) {
 }
 
 /*
- * Le glisser-déposer, sur toute la page en mode « En masse ».
+ * Le glisser-déposer, sur toute la liste des commandes en mode « En masse ».
  *
  * Toute la page, et pas seulement la zone : un fichier lâché à côté serait
  * OUVERT par le navigateur à la place de l'atelier, et le travail en cours
- * serait perdu. En mode « Une par une », rien n'est intercepté — la page se
- * comporte comme avant.
+ * serait perdu.
+ *
+ * Une feuille glissée depuis « Une par une » fait basculer la page en
+ * « En masse » d'elle-même. Pendant le glisser, le navigateur ne laisse lire
+ * que le TYPE du fichier, pas son contenu : on ne bascule que pour un type de
+ * tableur (.xlsx, .csv, texte). Une photo n'est jamais prise — au guichet,
+ * elle va au champ photo comme avant — et rien ne bascule hors de la liste
+ * des commandes, ni pendant la saisie d'une commande au guichet.
  *
  * Le compteur de profondeur évite le clignotement du voile : chaque élément
  * survolé à l'intérieur de la page émet sa propre paire entrée/sortie.
  */
 let profondeurDepot = 0;
 const porteDesFichiers = (event) => [...(event.dataTransfer?.types ?? [])].includes('Files');
+const TYPES_TABLEUR = /spreadsheet|excel|csv|tab-separated|text\/plain/i;
+const porteUnTableur = (event) =>
+  [...(event.dataTransfer?.items ?? [])].some((item) => item.kind === 'file' && TYPES_TABLEUR.test(item.type));
+const glisserActif = (event) => state.mode === 'masse' && state.view === 'orders' && porteDesFichiers(event);
+
+/** Le glisser qui commence : pris en « En masse », ou pris en y basculant pour une feuille. */
+function prendLeGlisser(event) {
+  if (!porteDesFichiers(event) || state.view !== 'orders') return false;
+  if (state.mode === 'masse') return true;
+  if (state.focus || !porteUnTableur(event)) return false;
+  setMode('masse');
+  return true;
+}
 
 document.addEventListener('dragenter', (event) => {
-  if (state.mode !== 'masse' || !porteDesFichiers(event)) return;
+  if (!prendLeGlisser(event)) return;
   event.preventDefault();
   profondeurDepot += 1;
   $('ws-bulk').classList.add('bulk-depot');
 });
 
 document.addEventListener('dragover', (event) => {
-  if (state.mode !== 'masse' || !porteDesFichiers(event)) return;
+  if (!glisserActif(event)) return;
   event.preventDefault();
   event.dataTransfer.dropEffect = 'copy';
 });
 
 document.addEventListener('dragleave', (event) => {
-  if (state.mode !== 'masse' || !porteDesFichiers(event)) return;
+  if (!glisserActif(event)) return;
   profondeurDepot = Math.max(0, profondeurDepot - 1);
   if (profondeurDepot === 0) $('ws-bulk').classList.remove('bulk-depot');
 });
 
 document.addEventListener('drop', (event) => {
-  if (state.mode !== 'masse' || !porteDesFichiers(event)) return;
+  if (!glisserActif(event)) return;
   event.preventDefault();
   profondeurDepot = 0;
   $('ws-bulk').classList.remove('bulk-depot');
