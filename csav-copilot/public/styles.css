@@ -4310,6 +4310,23 @@ textarea:focus-visible {
   align-items: center;
 }
 
+/* Le bloc d'actions est aussi une carte (`.sheet-group`), dont la bordure
+   arrondie revient après la règle du bas de tiroir. Avec les marges
+   négatives de celle-ci, il dépassait les autres cartes de 14 px de chaque
+   côté et se faisait couper au bord droit du tiroir. Il s'aligne désormais
+   sur elles, et reste collé en bas quand la fiche défile. */
+/* Un numéro de suivi ne se coupe jamais : « TEST- / 13811 » sur deux lignes
+   se lit comme deux numéros. C'est le libellé à côté qui passe à la ligne. */
+.ordv-row .linklike.mono { white-space: nowrap; }
+
+.sheet-group.sheet-acts {
+  margin: 0;
+  bottom: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+}
+
 /* ------------------------------------------- autres fils du même client ---
    Placé après le fil et avant les actions : on le consulte avant de répondre,
    jamais après. Les lignes sont des boutons pleine largeur — on y va d'un

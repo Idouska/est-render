@@ -10093,7 +10093,7 @@ const FUL_LABELS = {
  * Ici elle occupe la place qui lui revient — articles avec leurs vignettes,
  * montants, statuts, adresse, colis.
  */
-function orderDetailMarkup(order) {
+function orderDetailMarkup(order, atelier = []) {
   const fin = order.displayFinancialStatus;
   const ful = order.displayFulfillmentStatus;
 
@@ -10133,8 +10133,8 @@ function orderDetailMarkup(order) {
    * vide en toutes circonstances, et la fiche annonçait une commande sans
    * suivi pendant que Shopify en affichait un.
    */
-  const parcels = (order.fulfillments ?? [])
-    .filter((fulfillment) => fulfillment.trackingNumber)
+  const expeditions = (order.fulfillments ?? []).filter((fulfillment) => fulfillment.trackingNumber);
+  const parcelsShopify = expeditions
     .map(
       (fulfillment) => `<div class="ordv-row">
         <span>${esc(fulfillment.trackingCompany ?? 'Transporteur')}${
@@ -10148,6 +10148,33 @@ function orderDetailMarkup(order) {
       </div>`,
     )
     .join('');
+
+  /*
+   * Les colis saisis par l'atelier, au même endroit que ceux de Shopify.
+   *
+   * Ils s'affichaient tout en bas de la fiche, sous un titre à part, pendant
+   * que la section « Colis » annonçait « Aucun numéro de suivi » : un numéro
+   * saisi n'arrive chez Shopify qu'au dernier colis de la commande — et
+   * jamais en mode test. Un numéro que Shopify connaît déjà n'est pas répété.
+   */
+  const normaliserSuivi = (numero) => String(numero ?? '').replace(/\s+/g, '').toUpperCase();
+  const connusDeShopify = new Set(expeditions.map((fulfillment) => normaliserSuivi(fulfillment.trackingNumber)));
+  const parcelsAtelier = atelier
+    .filter((parcel) => !connusDeShopify.has(normaliserSuivi(parcel.trackingNumber)))
+    .map(
+      (parcel) => `<div class="ordv-row">
+        <span>${esc(parcel.carrier ?? 'Atelier')} · colis ${parcel.index}/${parcel.total}${
+          parcel.photoMime ? ' · 📷 étiquette' : ''
+        } · <span class="sub">pas encore dans Shopify</span>${
+          parcel.test ? ' <span class="tag tone-wait">test</span>' : ''
+        }</span>
+        <button class="linklike mono" data-track="${esc(parcel.trackingNumber)}">${esc(
+          parcel.trackingNumber,
+        )}</button>
+      </div>`,
+    )
+    .join('');
+  const parcels = parcelsShopify + parcelsAtelier;
 
   const address = order.shippingAddress;
 
@@ -10303,13 +10330,16 @@ async function openOrderSheet(id) {
   // était figé sur « Fiche client », quoi qu'il montre.
   $('sheet').setAttribute('aria-label', `Commande ${order.name}`);
 
-  const tracking = (order.fulfillments ?? []).find((fulfillment) => fulfillment.trackingNumber);
+  // Le suivi de Shopify d'abord ; à défaut, le premier colis saisi par l'atelier.
+  const tracking =
+    (order.fulfillments ?? []).find((fulfillment) => fulfillment.trackingNumber) ??
+    (parcels[0] ? { trackingNumber: parcels[0].trackingNumber, trackingUrl: null } : undefined);
 
   const section = (title, body) =>
     `<section class="sheet-group"><span class="rail-title">${title}</span>${body}</section>`;
 
   $('sheet-body').innerHTML =
-    `<section class="sheet-group">${orderDetailMarkup(order)}</section>` +
+    `<section class="sheet-group">${orderDetailMarkup(order, parcels)}</section>` +
     // Les gestes d'abord : c'est pour eux qu'on a ouvert la fiche.
     `<section class="sheet-group sheet-acts">
        <button class="btn btn-small btn-primary" id="ordv-change">${ico('bolt')} Demander un changement</button>
@@ -10373,25 +10403,6 @@ async function openOrderSheet(id) {
                   STATUS_LABELS[ticket.status] ?? ticket.status,
                 )}</span>
                 <span class="when">${esc(dateTime(ticket.lastMessageAt))}</span>
-              </div>`,
-            )
-            .join(''),
-        )
-      : '') +
-    // Les colis de l'atelier : ce que le fournisseur a réellement saisi,
-    // photos d'étiquettes comprises — la version Shopify n'en sait rien.
-    (parcels.length
-      ? section(
-          "Colis saisis par l'atelier",
-          parcels
-            .map(
-              (parcel) => `<div class="sheet-row">
-                <button class="linklike mono" data-track="${esc(
-                  parcel.trackingNumber,
-                )}">${esc(parcel.trackingNumber)}</button>
-                <span class="sub">colis ${parcel.index}/${parcel.total}${
-                  parcel.carrier ? ` · ${esc(parcel.carrier)}` : ''
-                }${parcel.photoMime ? ' · 📷 étiquette' : ''}</span>
               </div>`,
             )
             .join(''),

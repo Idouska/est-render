@@ -397,6 +397,8 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
             index: true,
             total: true,
             photoMime: true,
+            // Un colis saisi en mode test porte l'étiquette « test » dans la fiche.
+            test: true,
           },
         }),
         prisma.supplierAlert.findMany({
