@@ -78,6 +78,17 @@
           <span class="wsnav-badge" id="ws-rup-badge" hidden>0</span>
         </button>
 
+        <!-- Les échanges viennent après les ruptures : ils sont rares, mais
+             un client attend sa paire. La pastille compte ce qui n'est pas
+             encore parti. -->
+        <button type="button" data-view="echanges">
+          <svg viewBox="0 0 20 20" aria-hidden="true">
+            <path d="M4 7h9l-2.5-2.5M16 13H7l2.5 2.5" />
+          </svg>
+          <span data-t="nav.exchanges">Échanges</span>
+          <span class="wsnav-badge" id="ws-ech-badge" hidden>0</span>
+        </button>
+
         <!-- Réglages rarement touchés, donc rangés en bas : la langue se
              choisit une fois, l'export se prend une fois par jour. -->
         <div class="wsnav-foot">
@@ -287,6 +298,24 @@
 
           <h2 class="ws-sub" data-t="rup.mine">Ce que j'ai signalé</h2>
           <div id="rup-signalements"></div>
+        </section>
+
+        <!-- ============================================== ÉCHANGES ======= -->
+        <!-- Un client renvoie une paire et en veut une autre. Quand aucune
+             agence n'a la paire voulue en stock, c'est l'atelier qui l'envoie.
+             Il n'y a pas de commande à expédier : le marchand prévient
+             lui-même son client avec le numéro saisi ici. -->
+        <section id="view-echanges" hidden>
+          <header class="wshead">
+            <h1 data-t="ech.title">Échanges à envoyer</h1>
+          </header>
+          <p class="ws-note" id="ws-ech-adresses" hidden data-t="ech.addressDown">
+            Adresses indisponibles pour le moment : rafraîchissez dans un instant.
+          </p>
+          <div id="ech-rows"></div>
+
+          <h2 class="ws-sub" data-t="ech.sent">Envoyés — 30 derniers jours</h2>
+          <div id="ech-faits"></div>
         </section>
 
         <!-- =========================================== CHANGEMENTS ======= -->

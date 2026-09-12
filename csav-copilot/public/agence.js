@@ -16,7 +16,7 @@ const $ = (id) => document.getElementById(id);
 const agencyId = window.location.pathname.split('/').pop();
 const token = new URLSearchParams(window.location.search).get('token');
 
-const state = { lang: pickLang(), testMode: false, aExpedier: [], expediees: [] };
+const state = { lang: pickLang(), testMode: false, aExpedier: [], expediees: [], echanges: [], echangesEnvoyes: [] };
 let t = translator(state.lang);
 let locale = LOCALES[state.lang] ?? 'fr-FR';
 
@@ -98,6 +98,8 @@ async function charger() {
     state.testMode = Boolean(data.testMode);
     state.aExpedier = data.aExpedier ?? [];
     state.expediees = data.expediees ?? [];
+    state.echanges = data.echanges ?? [];
+    state.echangesEnvoyes = data.echangesEnvoyes ?? [];
 
     $('ag-nom').textContent = data.agence?.nom ?? '';
     $('ag-pays').textContent = data.agence?.pays ?? '';
@@ -146,6 +148,61 @@ function paireMarkup(paire) {
       <small class="ag-sub">${esc(t('ag.fromReturn', { commande: paire.retourDe ?? '—' }))}</small>
     </div>
   </div>`;
+}
+
+/*
+ * Un échange à envoyer.
+ *
+ * Deux articles s'y croisent, et les confondre coûte un second retour : celui
+ * que le client RENVOIE dort dans le stock de l'agence, celui qu'il VEUT est
+ * ce qu'il faut mettre dans le colis. La paire à prendre est donc donnée en
+ * premier, et la référence du stock ensuite, en petit.
+ */
+function echangeMarkup(echange, faite) {
+  const voulu = [echange.voulu?.declinaison, echange.voulu?.sku].filter(Boolean).join(' · ');
+  return `<article class="ag-cmd${faite ? ' ag-faite' : ''}" data-echange="${esc(echange.id)}">
+    <header>
+      <b>${esc(t('ag.exchangeFor', { commande: echange.commande ?? '—' }))}</b>
+      <small>${faite && echange.expedieLe ? esc(t('ag.exchangeSent', { date: new Date(echange.expedieLe).toLocaleDateString(locale) })) : esc(echange.client ?? '')}</small>
+    </header>
+
+    ${
+      faite
+        ? ''
+        : `<div class="ag-bloc">
+            <span class="ag-titre">${esc(t('ag.address'))}</span>
+            <pre class="ag-adresse">${esc(adresseTexte(echange.adresse))}</pre>
+            <button class="btn btn-small" data-copier="${esc(adresseTexte(echange.adresse))}">${esc(t('ag.copy'))}</button>
+          </div>`
+    }
+
+    <div class="ag-bloc">
+      <span class="ag-titre">${esc(t('ag.wanted'))}</span>
+      <div class="ag-paire">
+        <div>
+          <b>${esc(echange.voulu?.titre ?? '')}</b>
+          <small>${esc(voulu)}</small>
+          <small class="ag-sub">${esc(t('ag.fromStock'))} — ${esc(t('ag.fromReturn', { commande: echange.paire?.retourDe ?? '—' }))}</small>
+        </div>
+        ${
+          echange.paire?.aPhoto
+            ? `<a class="ag-photo" href="/api/agence/${esc(agencyId)}/paires/${esc(echange.paire.id)}/photo?token=${encodeURIComponent(
+                token ?? '',
+              )}" target="_blank" rel="noopener">${esc(t('ag.photo'))}</a>`
+            : ''
+        }
+      </div>
+    </div>
+
+    <form class="ag-echange">
+      <input class="mono" data-champ="suivi" value="${esc(echange.suivi ?? '')}"
+        placeholder="${esc(t('ag.tracking'))}" aria-label="${esc(t('ag.tracking'))}"
+        autocomplete="off" spellcheck="false" />
+      <input data-champ="transporteur" list="ag-carriers" value="${esc(echange.transporteur ?? '')}"
+        placeholder="${esc(t('ag.carrier'))}" aria-label="${esc(t('ag.carrier'))}" />
+      <button class="btn ${faite ? '' : 'btn-primary'}" type="submit">${esc(t(faite ? 'ag.correct' : 'ag.exchangeSave'))}</button>
+    </form>
+  </article>`;
 }
 
 function render() {
@@ -205,10 +262,26 @@ function render() {
         .join('')
     : `<p class="ag-vide">${esc(t('ag.noneShipped'))}</p>`;
 
+  // La section des échanges reste absente tant qu'il n'y en a pas : la
+  // plupart des agences n'en verront jamais.
+  const echanges = [...state.echanges, ...state.echangesEnvoyes];
+  $('ag-sec-echanges').hidden = echanges.length === 0;
+  $('ag-echanges').innerHTML = [
+    ...state.echanges.map((echange) => echangeMarkup(echange, false)),
+    ...state.echangesEnvoyes.map((echange) => echangeMarkup(echange, true)),
+  ].join('');
+
   for (const formulaire of document.querySelectorAll('.ag-envoi')) {
     formulaire.addEventListener('submit', (event) => {
       event.preventDefault();
       void expedier(formulaire);
+    });
+  }
+
+  for (const formulaire of document.querySelectorAll('.ag-echange')) {
+    formulaire.addEventListener('submit', (event) => {
+      event.preventDefault();
+      void envoyerEchange(formulaire);
     });
   }
 
@@ -272,6 +345,41 @@ async function expedier(formulaire) {
       toast(t('ag.shippedFail', { raison: resultat.shopify?.reason ?? '' }), true);
     }
 
+    await charger();
+  } catch (erreur) {
+    toast(messageServeur(erreur), true);
+  } finally {
+    bouton.disabled = false;
+    bouton.textContent = libelle;
+  }
+}
+
+/*
+ * Le numéro d'un échange.
+ *
+ * Rien ne part chez Shopify — un échange n'est pas une commande — donc aucune
+ * confirmation à demander : le client n'a encore rien reçu de notre part. Le
+ * numéro remonte au marchand, à qui son écran proposera le message à envoyer.
+ */
+async function envoyerEchange(formulaire) {
+  const carte = formulaire.closest('.ag-cmd');
+  const caseId = carte.dataset.echange;
+  const suivi = formulaire.querySelector('[data-champ="suivi"]').value.trim();
+  const transporteur = formulaire.querySelector('[data-champ="transporteur"]').value.trim() || null;
+
+  if (!suivi) return toast(t('ag.needTracking'), true);
+
+  const bouton = formulaire.querySelector('[type="submit"]');
+  const libelle = bouton.textContent;
+  bouton.disabled = true;
+  bouton.textContent = t('ag.saving');
+
+  try {
+    await api(`/api/agence/${agencyId}/echanges`, {
+      method: 'POST',
+      body: { caseId, trackingNumber: suivi, carrier: transporteur },
+    });
+    toast(t('ag.exchangeOk'));
     await charger();
   } catch (erreur) {
     toast(messageServeur(erreur), true);

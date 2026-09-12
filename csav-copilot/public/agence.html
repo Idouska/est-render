@@ -43,6 +43,19 @@
         <div id="ag-a-expedier"></div>
       </section>
 
+      <!-- Les échanges : une paire du stock promise à un client qui renvoie la
+           sienne. Il n'y a pas de commande à expédier chez Shopify, donc aucun
+           e-mail automatique : le marchand prévient son client lui-même, avec
+           le numéro saisi ici. La section reste cachée quand il n'y en a pas —
+           la plupart des agences n'en verront jamais. -->
+      <section id="ag-sec-echanges" hidden>
+        <h2 data-t="ag.exchanges">Échanges à envoyer</h2>
+        <p class="ag-note" data-t="ag.exchangesHint">
+          Pas de commande à expédier : le marchand prévient lui-même son client avec votre numéro.
+        </p>
+        <div id="ag-echanges"></div>
+      </section>
+
       <section>
         <h2 data-t="ag.shipped">Expédiées — 30 derniers jours</h2>
         <div id="ag-expediees"></div>

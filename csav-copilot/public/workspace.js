@@ -1056,6 +1056,7 @@ setInterval(loadAlerts, 120000);
 function rafraichirPastilles() {
   void rafraichirPastilleUpdates();
   void rafraichirPastilleRuptures();
+  void rafraichirPastilleEchanges();
 }
 rafraichirPastilles();
 setInterval(rafraichirPastilles, 120000);
@@ -1075,12 +1076,13 @@ const VIEWS = {
   catalog: loadCatalog,
   updates: loadUpdates,
   ruptures: loadRuptures,
+  echanges: loadEchanges,
 };
 
 function setView(view) {
   state.view = view;
 
-  for (const section of ['orders', 'tracking', 'catalog', 'updates', 'ruptures']) {
+  for (const section of ['orders', 'tracking', 'catalog', 'updates', 'ruptures', 'echanges']) {
     $(`view-${section}`).hidden = section !== view;
   }
 
@@ -1740,6 +1742,173 @@ function setRuptureBadge(nombre) {
   badge.textContent = String(nombre);
 }
 
+
+/* ------------------------------------------------------------ échanges -- */
+
+/*
+ * Les échanges confiés à l'atelier.
+ *
+ * Un client renvoie une paire et en veut une autre. Quand aucune agence n'a la
+ * paire voulue en stock, c'est l'atelier qui l'envoie — à l'adresse du client,
+ * et non à l'entrepôt.
+ *
+ * Deux articles s'y croisent, et les confondre coûte un second retour : celui
+ * que le client RENVOIE, et celui qu'il VEUT. La carte les montre donc comme
+ * un changement de taille — l'ancien barré, le nouveau en couleur — parce que
+ * c'est exactement ce que c'est, et que l'atelier connaît déjà cette forme.
+ */
+function echangeMarkup(echange, faite) {
+  const voulu = [echange.voulu?.titre, echange.voulu?.declinaison].filter(Boolean).join(' · ');
+  const renvoye = [echange.renvoye?.titre, echange.renvoye?.declinaison].filter(Boolean).join(' · ');
+  const adresse = adresseTexte(echange.adresse);
+
+  return `<article class="upd ech${faite ? ' ech-faite' : ''}" data-echange="${esc(echange.id)}">
+    <div class="upd-head">
+      <b>${esc(t('ech.for', { commande: echange.commande ?? '—' }))}</b>
+      <span class="upd-when">${
+        faite && echange.expedieLe
+          ? esc(t('ech.sentOn', { date: new Date(echange.expedieLe).toLocaleDateString(locale) }))
+          : esc(echange.client ?? '')
+      }</span>
+    </div>
+
+    <div class="upd-swap">
+      <span class="upd-before">${esc(renvoye)}</span>
+      <span class="upd-arrow" aria-hidden="true">→</span>
+      <span class="upd-after">${esc(voulu)}</span>
+    </div>
+    ${echange.voulu?.sku ? `<p class="upd-note">${esc(echange.voulu.sku)}</p>` : ''}
+
+    ${
+      faite
+        ? ''
+        : `<p class="upd-msg"><b>${esc(t('ech.address'))}</b></p>
+           <pre class="ech-adresse">${esc(adresse)}</pre>
+           ${adresse ? `<p class="ech-copier"><button class="btn btn-small" type="button" data-copier="${esc(adresse)}">${esc(t('ech.copy'))}</button></p>` : ''}`
+    }
+
+    <form class="ech-form">
+      <input class="mono" data-champ="suivi" value="${esc(echange.suivi ?? '')}"
+        placeholder="${esc(t('parcel.tracking'))}" aria-label="${esc(t('parcel.tracking'))}"
+        autocomplete="off" spellcheck="false" />
+      <input data-champ="transporteur" list="ws-carriers" value="${esc(echange.transporteur ?? '')}"
+        placeholder="${esc(t('parcel.carrier'))}" aria-label="${esc(t('parcel.carrier'))}" />
+      <button class="btn ${faite ? '' : 'btn-primary'}" type="submit">${esc(t(faite ? 'ech.correct' : 'ech.save'))}</button>
+    </form>
+  </article>`;
+}
+
+/** L'adresse, telle qu'elle doit être écrite sur le colis. */
+function adresseTexte(adresse) {
+  if (!adresse) return '';
+  return [
+    adresse.name,
+    adresse.address1,
+    adresse.address2,
+    [adresse.zip, adresse.city].filter(Boolean).join(' '),
+    adresse.country,
+    adresse.phone,
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+async function loadEchanges() {
+  const aEnvoyer = $('ech-rows');
+  const faits = $('ech-faits');
+
+  let data;
+  try {
+    data = await api(`/api/workspace/${supplierId}/echanges`);
+  } catch {
+    // Comme les ruptures : la pastille s'éteint avec la liste, pour ne pas
+    // affirmer un chiffre qu'on n'a pas pu relire.
+    setEchangeBadge(0);
+    aEnvoyer.innerHTML = `<p class="empty">${esc(t('ech.error'))}</p>`;
+    faits.innerHTML = '';
+    return;
+  }
+
+  setEchangeBadge((data.aEnvoyer ?? []).length);
+  $('ws-ech-adresses').hidden = !data.adressesIndisponibles;
+
+  aEnvoyer.innerHTML =
+    (data.aEnvoyer ?? []).map((echange) => echangeMarkup(echange, false)).join('') ||
+    `<p class="empty">${esc(t('ech.none'))}</p>`;
+  faits.innerHTML =
+    (data.envoyes ?? []).map((echange) => echangeMarkup(echange, true)).join('') ||
+    `<p class="empty">${esc(t('ech.noneSent'))}</p>`;
+
+  for (const formulaire of document.querySelectorAll('#view-echanges .ech-form')) {
+    formulaire.addEventListener('submit', (event) => {
+      event.preventDefault();
+      void envoyerEchange(formulaire);
+    });
+  }
+
+  for (const bouton of document.querySelectorAll('#view-echanges [data-copier]')) {
+    bouton.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(bouton.dataset.copier);
+        toast(t('ech.copied'));
+      } catch {
+        toast(t('ech.copyFail'), true);
+      }
+    });
+  }
+}
+
+/*
+ * Le numéro d'un échange.
+ *
+ * Rien ne part chez Shopify — un échange n'est pas une commande — donc aucune
+ * confirmation à demander : le client n'a encore rien reçu de notre part. Le
+ * numéro remonte au marchand, à qui son écran proposera le message à envoyer.
+ */
+async function envoyerEchange(formulaire) {
+  const carte = formulaire.closest('[data-echange]');
+  const caseId = carte.dataset.echange;
+  const suivi = formulaire.querySelector('[data-champ="suivi"]').value.trim();
+  const transporteur = formulaire.querySelector('[data-champ="transporteur"]').value.trim() || null;
+
+  if (!suivi) return toast(t('ech.needTracking'), true);
+
+  const bouton = formulaire.querySelector('[type="submit"]');
+  const libelle = bouton.textContent;
+  bouton.disabled = true;
+  bouton.textContent = t('ech.saving');
+
+  try {
+    await api(`/api/workspace/${supplierId}/echanges`, {
+      method: 'POST',
+      body: { caseId, trackingNumber: suivi, carrier: transporteur },
+    });
+    toast(t('ech.saved'));
+    await loadEchanges();
+  } catch (erreur) {
+    toast(messageServeur(erreur, 'ech.err'), true);
+  } finally {
+    bouton.disabled = false;
+    bouton.textContent = libelle;
+  }
+}
+
+/** La pastille compte ce qui n'est pas encore parti : un client attend. */
+async function rafraichirPastilleEchanges() {
+  try {
+    const data = await api(`/api/workspace/${supplierId}/echanges?compte=1`);
+    setEchangeBadge(data.compte ?? 0);
+  } catch {
+    setEchangeBadge(0);
+  }
+}
+
+function setEchangeBadge(nombre) {
+  const badge = $('ws-ech-badge');
+  if (!badge) return;
+  badge.hidden = nombre === 0;
+  badge.textContent = String(nombre);
+}
 
 /* ------------------------------------------------------------ en masse -- */
 

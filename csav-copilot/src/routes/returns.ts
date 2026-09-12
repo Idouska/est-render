@@ -13,6 +13,7 @@ import {
   rapprocher,
   type PaireEnStock,
 } from '../services/reshipment/rapprochement.ts';
+import { choisirSource, type AtelierCandidat } from '../services/reshipment/echange.ts';
 import { signAgencyToken } from '../lib/agencyToken.ts';
 import { env } from '../config/env.ts';
 
@@ -108,13 +109,53 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
     // Le stock retours : remis en rayon chez une agence, pas encore réemployé.
     const stock = cases.filter((item) => item.status === 'RESTOCKED' && !item.reusedAt);
 
+    // Qui envoie l'échange : le nom de l'agence qui détient la paire réservée,
+    // ou celui de l'atelier chargé du modèle. Sans eux, l'écran afficherait un
+    // identifiant.
+    const idsPaires = [...new Set(cases.flatMap((item) => (item.exchangeStockCaseId ? [item.exchangeStockCaseId] : [])))];
+    const idsAteliers = [...new Set(cases.flatMap((item) => (item.exchangeSupplierId ? [item.exchangeSupplierId] : [])))];
+    const [pairesReservees, ateliers] = await Promise.all([
+      idsPaires.length
+        ? prisma.returnCase.findMany({
+            where: { merchantId, id: { in: idsPaires } },
+            select: { id: true, country: true, agency: { select: { name: true, country: true } } },
+          })
+        : [],
+      idsAteliers.length
+        ? prisma.supplier.findMany({ where: { merchantId, id: { in: idsAteliers } }, select: { id: true, name: true } })
+        : [],
+    ]);
+    const parPaire = new Map(pairesReservees.map((paire) => [paire.id, paire]));
+    const parAtelier = new Map(ateliers.map((atelier) => [atelier.id, atelier.name]));
+
+    const dossiers = cases.map((item) => ({
+      ...item,
+      exchangeAgence: item.exchangeStockCaseId
+        ? (parPaire.get(item.exchangeStockCaseId)?.agency?.name ?? null)
+        : null,
+      exchangePays: item.exchangeStockCaseId
+        ? (parPaire.get(item.exchangeStockCaseId)?.agency?.country ??
+          parPaire.get(item.exchangeStockCaseId)?.country ??
+          null)
+        : null,
+      exchangeAtelier: item.exchangeSupplierId ? (parAtelier.get(item.exchangeSupplierId) ?? null) : null,
+    }));
+
     return reply.send({
-      cases,
+      cases: dossiers,
       counts: {
         open: cases.filter((item) => !['CLOSED', 'UNUSABLE'].includes(item.status)).length,
         silent,
         stock: stock.length,
         reserved: cases.filter((item) => item.reusedShopifyOrderId).length,
+        // Les échanges promis dont l'envoi n'est pas encore organisé.
+        echanges: cases.filter(
+          (item) =>
+            item.resolution === 'EXCHANGE' &&
+            item.wantedTitle &&
+            !item.exchangeStockCaseId &&
+            !item.exchangeSupplierId,
+        ).length,
       },
     });
   });
@@ -478,6 +519,213 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
       return reply.send({
         lieux: [...lieux.values()].sort((a, b) => Number(a.voisin) - Number(b.voisin)),
       });
+    },
+  );
+
+  /* ------------------------------------------------------------ échange -- */
+
+  /**
+   * Organiser l'envoi de l'échange : qui envoie la paire voulue ?
+   *
+   * L'agence si une paire identique dort dans son stock — elle part en deux ou
+   * trois jours et ne coûte rien à fabriquer — sinon l'atelier du modèle. La
+   * paire du stock est RÉSERVÉE au même instant : sans quoi elle serait
+   * proposée en même temps à une commande, et l'un des deux clients
+   * attendrait une paire déjà partie.
+   */
+  app.post<{ Params: { id: string } }>(
+    '/api/returns/:id/echange/organiser',
+    { preHandler: requirePermission('reply') },
+    async (request, reply) => {
+      const { merchantId, userId } = request.session;
+
+      const dossier = await prisma.returnCase.findFirst({
+        where: { id: request.params.id, merchantId },
+        select: {
+          id: true,
+          country: true,
+          resolution: true,
+          wantedTitle: true,
+          wantedVariantTitle: true,
+          wantedSku: true,
+          exchangeStockCaseId: true,
+          exchangeSupplierId: true,
+        },
+      });
+      if (!dossier) return reply.code(404).send({ code: 'introuvable', error: 'Dossier introuvable' });
+      if (dossier.resolution !== 'EXCHANGE' || !dossier.wantedTitle) {
+        return reply.code(400).send({
+          code: 'pas_un_echange',
+          error: 'Ce dossier n’attend pas d’échange : indiquez ce que le client veut à la place.',
+        });
+      }
+      if (dossier.exchangeStockCaseId || dossier.exchangeSupplierId) {
+        return reply.code(409).send({ code: 'deja_organise', error: 'L’envoi de cet échange est déjà organisé.' });
+      }
+
+      const [enStock, ateliers] = await Promise.all([
+        prisma.returnCase.findMany({
+          where: { merchantId, status: 'RESTOCKED', reusedAt: null },
+          select: {
+            id: true,
+            country: true,
+            sku: true,
+            productTitle: true,
+            variantTitle: true,
+            orderName: true,
+            restockedAt: true,
+            updatedAt: true,
+            agency: { select: { id: true, name: true, country: true } },
+          },
+        }),
+        prisma.supplier.findMany({
+          where: { merchantId, active: true },
+          select: { id: true, name: true, skuPrefixes: true, isDefault: true },
+        }),
+      ]);
+
+      const stock: PaireEnStock[] = enStock.map((paire) => ({
+        id: paire.id,
+        pays: paire.agency?.country ?? paire.country ?? null,
+        agenceId: paire.agency?.id ?? null,
+        agenceNom: paire.agency?.name ?? null,
+        sku: paire.sku,
+        titre: paire.productTitle,
+        declinaison: paire.variantTitle,
+        depuis: paire.restockedAt ?? paire.updatedAt,
+        retourDe: paire.orderName,
+      }));
+
+      const choix = choisirSource(
+        {
+          pays: dossier.country,
+          titre: dossier.wantedTitle,
+          declinaison: dossier.wantedVariantTitle,
+          sku: dossier.wantedSku,
+        },
+        stock,
+        ateliers.map((atelier): AtelierCandidat => ({
+          id: atelier.id,
+          nom: atelier.name,
+          skuPrefixes: atelier.skuPrefixes,
+          isDefault: atelier.isDefault,
+        })),
+      );
+
+      if (choix.source === 'AUCUNE') {
+        return reply.code(409).send({
+          code: 'personne',
+          error: 'Aucune paire en stock, et aucun atelier ne prend ce modèle : désignez un atelier par défaut.',
+        });
+      }
+
+      if (choix.source === 'STOCK') {
+        // La paire quitte le stock au moment où elle est promise : une
+        // écriture conditionnelle, pour que deux clics n'en promettent pas
+        // deux fois la même.
+        const prise = await prisma.returnCase.updateMany({
+          where: { id: choix.paire.id, merchantId, status: 'RESTOCKED', reusedAt: null },
+          data: { reusedReturnCaseId: dossier.id, reusedAt: new Date(), status: 'CLOSED' },
+        });
+        if (prise.count !== 1) {
+          return reply.code(409).send({
+            code: 'plus_disponible',
+            error: 'Cette paire vient d’être prise : rechargez l’écran.',
+          });
+        }
+        await prisma.returnCase.update({
+          where: { id: dossier.id },
+          data: { exchangeStockCaseId: choix.paire.id },
+        });
+      } else {
+        await prisma.returnCase.update({
+          where: { id: dossier.id },
+          data: { exchangeSupplierId: choix.atelier.id },
+        });
+      }
+
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId: userId,
+        action: 'return.exchange_arranged',
+        targetType: 'return',
+        targetId: dossier.id,
+        metadata:
+          choix.source === 'STOCK'
+            ? { source: 'STOCK', paire: choix.paire.id, agence: choix.paire.agenceNom }
+            : { source: 'ATELIER', atelier: choix.atelier.nom },
+        ipAddress: request.ip,
+      });
+
+      return reply.send(
+        choix.source === 'STOCK'
+          ? {
+              source: 'STOCK',
+              agence: choix.paire.agenceNom,
+              pays: choix.paire.pays,
+              voisin: choix.paire.pays !== dossier.country,
+            }
+          : { source: 'ATELIER', atelier: choix.atelier.nom },
+      );
+    },
+  );
+
+  /** Annuler l'organisation : la paire revient au stock, l'atelier est dételé. */
+  app.post<{ Params: { id: string } }>(
+    '/api/returns/:id/echange/annuler',
+    { preHandler: requirePermission('reply') },
+    async (request, reply) => {
+      const { merchantId, userId } = request.session;
+
+      const dossier = await prisma.returnCase.findFirst({
+        where: { id: request.params.id, merchantId },
+        select: { id: true, exchangeStockCaseId: true, exchangeShippedAt: true },
+      });
+      if (!dossier) return reply.code(404).send({ code: 'introuvable', error: 'Dossier introuvable' });
+      if (dossier.exchangeShippedAt) {
+        return reply.code(409).send({
+          code: 'deja_expedie',
+          error: 'L’échange est déjà parti : il ne peut plus être annulé.',
+        });
+      }
+
+      if (dossier.exchangeStockCaseId) {
+        await prisma.returnCase.updateMany({
+          where: { id: dossier.exchangeStockCaseId, merchantId },
+          data: { reusedReturnCaseId: null, reusedAt: null, status: 'RESTOCKED' },
+        });
+      }
+      await prisma.returnCase.update({
+        where: { id: dossier.id },
+        data: { exchangeStockCaseId: null, exchangeSupplierId: null },
+      });
+
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId: userId,
+        action: 'return.exchange_cancelled',
+        targetType: 'return',
+        targetId: dossier.id,
+        ipAddress: request.ip,
+      });
+      return reply.send({ annule: true });
+    },
+  );
+
+  /** Le client a été prévenu que son échange est parti. */
+  app.post<{ Params: { id: string } }>(
+    '/api/returns/:id/echange/prevenu',
+    { preHandler: requirePermission('reply') },
+    async (request, reply) => {
+      const { merchantId } = request.session;
+      const misAJour = await prisma.returnCase.updateMany({
+        where: { id: request.params.id, merchantId, exchangeShippedAt: { not: null } },
+        data: { exchangeNotifiedAt: new Date() },
+      });
+      if (misAJour.count === 0) return reply.code(404).send({ error: 'Échange introuvable ou pas encore parti.' });
+      return reply.send({ prevenu: true });
     },
   );
 

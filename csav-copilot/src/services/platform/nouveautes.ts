@@ -25,6 +25,20 @@ export interface Nouveaute {
 
 export const NOUVEAUTES: readonly Nouveaute[] = [
   {
+    pr: 62,
+    date: '2026-09-12',
+    pour: 'Les deux',
+    titre: 'L’échange part vraiment — de l’agence, ou de l’atelier',
+    resume:
+      'Une fois le dossier ouvert, « Organiser l’envoi » désigne qui envoie la paire voulue : l’agence qui l’a déjà en stock — même pays d’abord, pays voisin ensuite, et la paire est réservée à l’instant même — sinon l’atelier du modèle. Celui qui envoie voit l’adresse du client et rend son numéro de suivi. Comme un échange n’est pas une commande Shopify, aucun e-mail ne part tout seul : dès le numéro saisi, votre écran propose le message au client, WhatsApp ou e-mail, prêt à envoyer.',
+    ou: 'Reshipment → Dossiers, sous l’article : « Organiser l’envoi ». Portail agence : « Échanges à envoyer ». Atelier : onglet « Échanges ».',
+    essayer: [
+      'Ouvrir un dossier d’échange où le client veut une autre taille, puis « Organiser l’envoi ».',
+      'Si une paire est en stock, ouvrir le lien de l’agence : l’échange y attend, avec l’adresse du client.',
+      'Saisir un numéro de suivi côté agence ou atelier, puis revenir : « Prévenir le client » propose le message tout écrit.',
+    ],
+  },
+  {
     pr: 61,
     date: '2026-09-12',
     pour: 'Tableau de bord',
