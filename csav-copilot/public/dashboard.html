@@ -1257,89 +1257,134 @@
         <div id="ret-body"></div>
       </section>
 
+      <!-- Nouveau retour : trois temps. La commande remplit tout ce qu'elle
+           sait, l'article qui revient se choisit dedans (sa référence est donc
+           celle de Shopify, et le réemploi pourra le retrouver), et la raison
+           annonce la suite. Pour un échange, ce que le client veut à la place
+           se choisit dans le catalogue, et l'outil dit d'où partira la paire. -->
       <div class="backdrop" id="return-modal" role="dialog" aria-modal="true"
         aria-labelledby="retmodal-title">
-        <div class="modal">
+        <div class="modal modal-wide">
           <div class="modal-head">
             <h2 id="retmodal-title">Nouveau retour</h2>
-            <p>
-              La raison décide de la suite : une taille s'échange, un défaut se
-              rembourse — et la paire revenue en bon état repart chez le
-              prochain client au lieu de dormir.
-            </p>
+            <p>Trois temps : la commande, l’article qui revient, ce que le client veut.</p>
           </div>
-          <div class="modal-body">
-            <div class="field-row">
+
+          <div class="modal-body ret-form">
+            <section class="ret-etape">
+              <h3><b class="ret-num">1</b> La commande</h3>
               <div class="field">
-                <label for="ret-f-order">Commande</label>
-                <input type="text" id="ret-f-order" placeholder="#11363" />
-                <small>Tapez le numéro : client, pays et article se remplissent seuls.</small>
+                <label for="ret-f-order">Numéro de commande</label>
+                <input type="text" id="ret-f-order" placeholder="#11363" autocomplete="off" />
+                <small id="ret-f-order-etat">Tapez le numéro : le client, son pays et ses articles arrivent seuls.</small>
+              </div>
+              <div class="ret-client" id="ret-f-client" hidden></div>
+            </section>
+
+            <section class="ret-etape">
+              <h3><b class="ret-num">2</b> L’article qui revient</h3>
+              <div class="ret-articles" id="ret-f-items"></div>
+              <button type="button" class="qlink" id="ret-f-manuel">L’article n’est pas dans la commande</button>
+
+              <!-- La saisie libre : le cas rare, et la mémoire du formulaire.
+                   Ces champs portent les valeurs qu'un clic sur un article
+                   remplit — c'est eux que l'enregistrement lit. -->
+              <div class="ret-libre" id="ret-f-libre" hidden>
+                <div class="field-row">
+                  <div class="field">
+                    <label for="ret-f-product">Article retourné</label>
+                    <input type="text" id="ret-f-product" placeholder="Nike Pegasus Premium SP Black" />
+                  </div>
+                  <div class="field">
+                    <label for="ret-f-country">Pays du client</label>
+                    <select id="ret-f-country">
+                      <option value="FR">France</option>
+                      <option value="ES">Espagne</option>
+                      <option value="IT">Italie</option>
+                      <option value="BE">Belgique</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="field-row">
+                  <div class="field">
+                    <label for="ret-f-variant">Taille / déclinaison</label>
+                    <input type="text" id="ret-f-variant" placeholder="44.5" />
+                  </div>
+                  <div class="field">
+                    <label for="ret-f-sku">Référence (SKU)</label>
+                    <input type="text" id="ret-f-sku" placeholder="IH4369-001" />
+                  </div>
+                </div>
+                <div class="field-row">
+                  <div class="field">
+                    <label for="ret-f-name">Client</label>
+                    <input type="text" id="ret-f-name" placeholder="Nom du client" />
+                  </div>
+                  <div class="field">
+                    <label for="ret-f-phone">WhatsApp</label>
+                    <input type="text" id="ret-f-phone" placeholder="+33 6…" />
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="ret-etape">
+              <h3><b class="ret-num">3</b> Pourquoi, et la suite</h3>
+              <div class="ret-choix" id="ret-f-reasons" role="group" aria-label="Raison du retour">
+                <button type="button" data-reason="SIZE" aria-pressed="true">Problème de taille</button>
+                <button type="button" data-reason="DEFECT" aria-pressed="false">Défectueux</button>
+                <button type="button" data-reason="MODEL" aria-pressed="false">Ne plaît pas</button>
+                <button type="button" data-reason="OTHER" aria-pressed="false">Autre</button>
+              </div>
+              <div class="ret-choix" id="ret-f-resolutions" role="group" aria-label="Ce que veut le client">
+                <button type="button" data-resolution="EXCHANGE" aria-pressed="true">Un échange</button>
+                <button type="button" data-resolution="REFUND" aria-pressed="false">Un remboursement</button>
+              </div>
+              <p class="ret-consequence" id="ret-f-consequence"></p>
+
+              <!-- L'échange : ce que le client veut à la place, pris dans le
+                   catalogue — taille, couleur, ou les deux. -->
+              <div id="ret-f-veut" hidden>
+                <span class="ret-titre">Ce que le client veut à la place</span>
+                <div class="ret-choix" id="ret-f-veut-type" role="group" aria-label="Ce qui change">
+                  <button type="button" data-veut="SIZE" aria-pressed="true">Une autre taille</button>
+                  <button type="button" data-veut="COLOR" aria-pressed="false">Une autre couleur</button>
+                  <button type="button" data-veut="BOTH" aria-pressed="false">Les deux</button>
+                </div>
+                <div class="ret-options" id="ret-f-veut-options"></div>
+                <p class="ret-dispo" id="ret-f-dispo" hidden></p>
+              </div>
+
+              <div class="field">
+                <label for="ret-f-agency">Agence de retour</label>
+                <select id="ret-f-agency"><option value="">—</option></select>
               </div>
               <div class="field">
-                <label for="ret-f-country">Pays</label>
-                <select id="ret-f-country">
-                  <option value="FR">France</option>
-                  <option value="ES">Espagne</option>
-                  <option value="IT">Italie</option>
-                  <option value="BE">Belgique</option>
-                </select>
+                <label for="ret-f-note">Note (facultatif)</label>
+                <textarea id="ret-f-note" placeholder="État annoncé, précisions du client…"></textarea>
               </div>
-            </div>
-            <div class="field-row">
-              <div class="field">
-                <label for="ret-f-name">Client</label>
-                <input type="text" id="ret-f-name" placeholder="Nom du client" />
-              </div>
-              <div class="field">
-                <label for="ret-f-phone">WhatsApp</label>
-                <input type="text" id="ret-f-phone" placeholder="+33 6…" />
-              </div>
-            </div>
-            <div class="field">
-              <label for="ret-f-product">Article retourné</label>
-              <input type="text" id="ret-f-product" placeholder="Nike Pegasus Premium SP Black" />
-              <div class="qbar-quick" id="ret-f-items" style="margin-top:6px"></div>
-            </div>
-            <div class="field-row">
-              <div class="field">
-                <label for="ret-f-variant">Taille / déclinaison</label>
-                <input type="text" id="ret-f-variant" placeholder="44.5" />
-              </div>
-              <div class="field">
-                <label for="ret-f-sku">Référence (SKU)</label>
-                <input type="text" id="ret-f-sku" placeholder="IH4369-001" />
-              </div>
-            </div>
-            <div class="field-row">
-              <div class="field">
-                <label for="ret-f-reason">Raison du retour</label>
-                <select id="ret-f-reason">
-                  <option value="SIZE">Problème de taille</option>
-                  <option value="DEFECT">Article défectueux</option>
-                  <option value="MODEL">Le modèle ne plaît pas</option>
-                  <option value="OTHER">Autre</option>
-                </select>
-              </div>
-              <div class="field">
-                <label for="ret-f-resolution">Le client veut</label>
-                <select id="ret-f-resolution">
-                  <option value="EXCHANGE">Un échange</option>
-                  <option value="REFUND">Un remboursement, sans échange</option>
-                </select>
-              </div>
-            </div>
-            <div class="field">
-              <label for="ret-f-agency">Agence de retour</label>
-              <select id="ret-f-agency"><option value="">—</option></select>
-            </div>
-            <div class="field">
-              <label for="ret-f-note">Note (facultatif)</label>
-              <textarea id="ret-f-note" placeholder="État annoncé, précisions du client…"></textarea>
-            </div>
+            </section>
+
+            <!-- Les deux menus d'origine, gardés hors de l'écran : ce sont eux
+                 que l'enregistrement lit, et les boutons ci-dessus les règlent. -->
+            <select id="ret-f-reason" hidden>
+              <option value="SIZE">Problème de taille</option>
+              <option value="DEFECT">Article défectueux</option>
+              <option value="MODEL">Le modèle ne plaît pas</option>
+              <option value="OTHER">Autre</option>
+            </select>
+            <select id="ret-f-resolution" hidden>
+              <option value="EXCHANGE">Un échange</option>
+              <option value="REFUND">Un remboursement, sans échange</option>
+            </select>
+            <input type="hidden" id="ret-f-want-title" />
+            <input type="hidden" id="ret-f-want-variant" />
           </div>
+
           <div class="modal-foot">
+            <span class="ret-manque" id="ret-f-manque"></span>
             <button class="btn" id="ret-f-cancel">Annuler</button>
-            <button class="btn btn-primary" id="ret-f-save">Créer le dossier</button>
+            <button class="btn btn-primary" id="ret-f-save" disabled>Créer le dossier</button>
           </div>
         </div>
       </div>
