@@ -901,6 +901,14 @@ model ReturnCase {
   variantTitle String?
   sku          String?
 
+  /// Ce que le client veut à la place, pour un échange : même modèle en autre
+  /// taille, autre couleur, ou les deux. Choisi dans le catalogue, donc écrit
+  /// comme Shopify l'écrit — c'est ce qui permet de le chercher dans le stock
+  /// retours.
+  wantedTitle        String?
+  wantedVariantTitle String?
+  wantedSku          String?
+
   /// Pourquoi le client renvoie : c'est la première question du marchand,
   /// et la statistique qui dit quel modèle taille petit.
   reason     ReturnReason     @default(OTHER)

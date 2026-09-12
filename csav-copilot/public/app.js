@@ -8474,6 +8474,15 @@ function renderReturnCases(box) {
             <b>${esc(item.productTitle)}</b>${
               item.variantTitle ? ` <small>${esc(item.variantTitle)}</small>` : ''
             }
+            ${
+              // Pour un échange, ce que le client attend en retour : sans lui,
+              // le dossier ne dit pas ce qu'il faut lui envoyer.
+              item.resolution === 'EXCHANGE' && item.wantedTitle
+                ? `<small class="ret-veut">veut : ${esc(item.wantedTitle)}${
+                    item.wantedVariantTitle ? ` · ${esc(item.wantedVariantTitle)}` : ''
+                  }</small>`
+                : ''
+            }
             <div class="ret-tags">
               <span class="ret-tag ${item.reason === 'DEFECT' ? 'warn' : 'dim'}">${esc(
                 RETURN_REASONS[item.reason] ?? item.reason,
@@ -9097,6 +9106,22 @@ $('ret-body').addEventListener('change', async (event) => {
  * un champ laissé de côté garderait la valeur du dossier précédent.
  */
 function openReturnModal(prefill = {}) {
+  // Remise à zéro de TOUS les champs : le formulaire n'est pas démonté entre
+  // deux usages, et un champ laissé de côté garderait le dossier précédent.
+  for (const id of [
+    'ret-f-order',
+    'ret-f-name',
+    'ret-f-phone',
+    'ret-f-product',
+    'ret-f-variant',
+    'ret-f-sku',
+    'ret-f-note',
+    'ret-f-want-title',
+    'ret-f-want-variant',
+  ]) {
+    $(id).value = '';
+  }
+
   $('ret-f-order').value = prefill.order ?? '';
   $('ret-f-name').value = prefill.name ?? '';
   $('ret-f-phone').value = prefill.phone ?? '';
@@ -9114,9 +9139,34 @@ function openReturnModal(prefill = {}) {
   const country = prefill.country ?? 'FR';
   $('ret-f-country').value = Object.hasOwn(RETURN_COUNTRIES, country) ? country : 'FR';
 
-  renderReturnItemChips(prefill.items ?? []);
+  const articles = prefill.items ?? [];
+  retFormulaire = {
+    articles,
+    // Ouvert depuis un message client, l'article est déjà connu : on le
+    // retrouve dans la commande plutôt que de laisser la liste sans choix.
+    choisi:
+      articles.length === 1
+        ? 0
+        : prefill.product
+          ? articles.findIndex(
+              (article) =>
+                article.title === prefill.product &&
+                (article.variantTitle ?? '') === (prefill.variant ?? ''),
+            )
+          : null,
+    veutType: 'SIZE',
+    couleur: null,
+    dispo: null,
+  };
   retLookupEmail = prefill.email ?? null;
   retLookupOrderId = prefill.orderId ?? null;
+
+  $('ret-f-order-etat').textContent =
+    'Tapez le numéro : le client, son pays et ses articles arrivent seuls.';
+  $('ret-f-veut-options').innerHTML = '';
+  $('ret-f-dispo').hidden = true;
+  // La saisie libre reste ouverte tant qu'aucune commande n'a rempli la fiche.
+  $('ret-f-libre').hidden = retFormulaire.articles.length > 0;
 
   $('ret-f-agency').innerHTML =
     '<option value="">—</option>' +
@@ -9127,10 +9177,129 @@ function openReturnModal(prefill = {}) {
       )
       .join('');
 
+  renderReturnClient(prefill);
+  renderReturnItems();
+  renderReturnChoix();
+  majRetourFormulaire();
+
   $('return-modal').classList.add('open');
   // Le curseur dans le premier champ : c'est là qu'on tape, et tant qu'il y
   // est les raccourcis de la file se taisent d'eux-mêmes.
   $('ret-f-order').focus();
+}
+
+/** L'état du formulaire de retour, le temps qu'il est ouvert. */
+let retFormulaire = { articles: [], choisi: null, veutType: 'SIZE', couleur: null, dispo: null };
+
+/**
+ * La carte du client, quand la commande a été trouvée.
+ *
+ * Ce que la commande sait ne se ressaisit pas : on le MONTRE, et les champs
+ * qui le portent restent disponibles sous « l'article n'est pas dans la
+ * commande » pour les corriger si besoin.
+ */
+function renderReturnClient(infos) {
+  const nom = infos.name ?? $('ret-f-name').value;
+  const box = $('ret-f-client');
+
+  if (!nom) {
+    box.hidden = true;
+    box.innerHTML = '';
+    return;
+  }
+
+  const pays = RETURN_COUNTRIES[$('ret-f-country').value] ?? $('ret-f-country').value;
+  const tel = $('ret-f-phone').value;
+  box.hidden = false;
+  box.innerHTML = `<b>${esc(nom)}</b>
+    <span>${esc(pays)}${tel ? ` · ${esc(tel)}` : ''}${
+      retLookupEmail ? ` · ${esc(retLookupEmail)}` : ''
+    }</span>`;
+}
+
+/**
+ * Les articles de la commande, à choisir au doigt.
+ *
+ * Avec leur photo : on reconnaît une paire bien plus vite qu'à sa référence.
+ * Et surtout, le choix recopie le titre, la taille et la référence TELS QUE
+ * Shopify les écrit — c'est ce qui permettra au stock retours de retrouver
+ * cette paire plus tard. Tapé à la main, un accent ou un tiret de travers
+ * suffit à la rendre introuvable.
+ */
+function renderReturnItems() {
+  const { articles, choisi } = retFormulaire;
+
+  $('ret-f-items').innerHTML = articles.length
+    ? articles
+        .map(
+          (article, index) => `<button type="button" class="ret-article" data-ret-item="${index}"
+            aria-pressed="${index === choisi}">
+            ${
+              article.image
+                ? `<img src="${esc(article.image)}" alt="" loading="lazy" />`
+                : '<span class="ret-article-vide" aria-hidden="true"></span>'
+            }
+            <span>
+              <b>${esc(article.title)}</b>
+              <small>${esc(
+                [article.variantTitle, article.sku].filter(Boolean).join(' · '),
+              )}${article.quantity > 1 ? ` · ×${article.quantity}` : ''}</small>
+            </span>
+          </button>`,
+        )
+        .join('')
+    : '';
+}
+
+/** Les boutons de raison et de suite, réglés sur les menus cachés. */
+function renderReturnChoix() {
+  for (const bouton of document.querySelectorAll('#ret-f-reasons [data-reason]')) {
+    bouton.setAttribute('aria-pressed', String(bouton.dataset.reason === $('ret-f-reason').value));
+  }
+  for (const bouton of document.querySelectorAll('#ret-f-resolutions [data-resolution]')) {
+    bouton.setAttribute(
+      'aria-pressed',
+      String(bouton.dataset.resolution === $('ret-f-resolution').value),
+    );
+  }
+  for (const bouton of document.querySelectorAll('#ret-f-veut-type [data-veut]')) {
+    bouton.setAttribute('aria-pressed', String(bouton.dataset.veut === retFormulaire.veutType));
+  }
+}
+
+/**
+ * Ce que la raison entraîne, dit avant de créer le dossier.
+ *
+ * Le sous-titre l'annonçait sans que rien ne le montre : un défaut ne revient
+ * pas au stock, une taille si. C'est la phrase qui évite de créer un dossier
+ * en croyant l'inverse.
+ */
+function consequenceRetour() {
+  const raison = $('ret-f-reason').value;
+  const suite = $('ret-f-resolution').value;
+
+  if (raison === 'DEFECT') {
+    return 'Défectueux : la paire sortira du stock à la réception, elle ne repartira pas chez un autre client.';
+  }
+  return suite === 'EXCHANGE'
+    ? 'Échange : la paire rentrera au stock de l’agence si elle revient en bon état, et pourra servir un autre client.'
+    : 'Remboursement : la paire rentrera quand même au stock si elle revient en bon état.';
+}
+
+/** Le bouton suit ce qui manque, et le dit. */
+function majRetourFormulaire() {
+  const echange = $('ret-f-resolution').value === 'EXCHANGE';
+  $('ret-f-consequence').textContent = consequenceRetour();
+  $('ret-f-veut').hidden = !echange;
+
+  const manque = !$('ret-f-product').value.trim()
+    ? 'Choisissez l’article qui revient.'
+    : echange && !$('ret-f-want-title').value
+      ? 'Indiquez ce que le client veut à la place.'
+      : '';
+
+  $('ret-f-manque').textContent = manque;
+  $('ret-f-save').disabled = Boolean(manque);
 }
 
 /**
@@ -9172,8 +9341,8 @@ $('ret-new').addEventListener('click', () => {
  * Le numéro de commande remplit le formulaire tout seul.
  *
  * Tout ce que le dossier demande est déjà dans la commande : client,
- * téléphone, pays, article. On tape « 11363 », le reste s'écrit — et quand la
- * commande porte plusieurs articles, chacun se choisit d'un clic.
+ * téléphone, pays, articles. On tape « 11363 », le reste s'écrit — et l'écran
+ * dit ce qu'il a trouvé, ou qu'il cherche encore.
  */
 let retLookupEmail = null;
 let retLookupOrderId = null;
@@ -9184,12 +9353,18 @@ $('ret-f-order').addEventListener('input', () => {
   const name = $('ret-f-order').value.trim();
   if (name.replace(/\D/g, '').length < 3) return;
 
+  $('ret-f-order-etat').textContent = 'Recherche de la commande…';
+
   retLookupTimer = setTimeout(async () => {
     let order;
     try {
       ({ order } = await api(`/api/returns/order-lookup?name=${encodeURIComponent(name)}`));
-    } catch {
-      return; // Un numéro en cours de frappe n'est pas une erreur.
+    } catch (error) {
+      // Un numéro en cours de frappe n'est pas une erreur : on le dit sans
+      // vider ce que l'agent a déjà saisi.
+      $('ret-f-order-etat').textContent = error.message;
+      $('ret-f-libre').hidden = false;
+      return;
     }
 
     $('ret-f-order').value = order.orderName;
@@ -9201,61 +9376,222 @@ $('ret-f-order').addEventListener('input', () => {
     retLookupEmail = order.customerEmail;
     retLookupOrderId = order.shopifyOrderId;
 
-    const items = order.lineItems ?? [];
-    if (items[0]) {
-      $('ret-f-product').value = items[0].title;
-      $('ret-f-variant').value = items[0].variantTitle ?? '';
-      $('ret-f-sku').value = items[0].sku ?? '';
-    }
+    const articles = order.lineItems ?? [];
+    retFormulaire.articles = articles;
+    retFormulaire.choisi = articles.length === 1 ? 0 : null;
+    if (articles.length === 1) choisirArticle(0, { silencieux: true });
 
-    renderReturnItemChips(items);
+    // L'agence du pays, quand il n'y en a qu'une : c'est elle qui recevra.
+    const duPays = state.returns.agencies.filter((agence) => agence.country === $('ret-f-country').value);
+    if (duPays.length === 1) $('ret-f-agency').value = duPays[0].id;
 
-    toast(`Commande ${order.orderName} : champs remplis.`);
+    $('ret-f-order-etat').textContent = `Commande ${order.orderName} trouvée.`;
+    $('ret-f-libre').hidden = articles.length > 0;
+    renderReturnClient({ name: order.customerName });
+    renderReturnItems();
+    majRetourFormulaire();
   }, 450);
 });
 
-/**
- * Les articles de la commande, en puces sous le champ produit.
- *
- * Une seule puce n'apprend rien : sous deux articles, on n'affiche rien et le
- * premier reste choisi. Au-delà, l'article se désigne au doigt plutôt qu'en le
- * recopiant — et sans elles, un dossier ouvert sur une commande de trois
- * paires part silencieusement sur la première, qui n'est pas forcément celle
- * que le client renvoie.
- *
- * Partagé par les deux chemins : la recherche par numéro, et l'ouverture
- * depuis un message client.
- */
-function renderReturnItemChips(items) {
-  $('ret-f-items').innerHTML =
-    items.length > 1
-      ? items
-          .map(
-            (item, index) =>
-              `<button type="button" class="qchip" data-ret-item="${index}"
-                aria-pressed="${index === 0}">${esc(item.title)}${
-                  item.variantTitle ? ` · ${esc(item.variantTitle)}` : ''
-                }</button>`,
-          )
-          .join('')
-      : '';
-  $('ret-f-items').dataset.items = JSON.stringify(items);
+/** Choisir l'article qui revient : ses valeurs viennent de la commande. */
+function choisirArticle(index, options = {}) {
+  const article = retFormulaire.articles[index];
+  if (!article) return;
+
+  retFormulaire.choisi = index;
+  $('ret-f-product').value = article.title;
+  $('ret-f-variant').value = article.variantTitle ?? '';
+  $('ret-f-sku').value = article.sku ?? '';
+
+  // Changer d'article change ce qu'on peut vouloir à la place.
+  $('ret-f-want-title').value = '';
+  $('ret-f-want-variant').value = '';
+  retFormulaire.couleur = null;
+  $('ret-f-dispo').hidden = true;
+
+  renderReturnItems();
+  majRetourFormulaire();
+  if (!options.silencieux && $('ret-f-resolution').value === 'EXCHANGE') void chargerOptionsVoulu();
 }
 
 $('ret-f-items').addEventListener('click', (event) => {
-  const chip = event.target.closest('[data-ret-item]');
-  if (!chip) return;
-  const items = JSON.parse($('ret-f-items').dataset.items ?? '[]');
-  const item = items[Number(chip.dataset.retItem)];
-  if (!item) return;
-
-  $('ret-f-product').value = item.title;
-  $('ret-f-variant').value = item.variantTitle ?? '';
-  $('ret-f-sku').value = item.sku ?? '';
-  $('ret-f-items')
-    .querySelectorAll('[data-ret-item]')
-    .forEach((other) => other.setAttribute('aria-pressed', String(other === chip)));
+  const carte = event.target.closest('[data-ret-item]');
+  if (carte) choisirArticle(Number(carte.dataset.retItem));
 });
+
+$('ret-f-manuel').addEventListener('click', () => {
+  $('ret-f-libre').hidden = !$('ret-f-libre').hidden;
+  if (!$('ret-f-libre').hidden) $('ret-f-product').focus();
+});
+
+for (const champ of ['ret-f-product', 'ret-f-variant', 'ret-f-sku']) {
+  $(champ).addEventListener('input', majRetourFormulaire);
+}
+$('ret-f-country').addEventListener('change', () => renderReturnClient({}));
+
+$('ret-f-reasons').addEventListener('click', (event) => {
+  const bouton = event.target.closest('[data-reason]');
+  if (!bouton) return;
+  $('ret-f-reason').value = bouton.dataset.reason;
+
+  // Un défaut se rembourse, une taille s'échange : la suite se propose, et
+  // reste modifiable.
+  $('ret-f-resolution').value = bouton.dataset.reason === 'DEFECT' ? 'REFUND' : 'EXCHANGE';
+  renderReturnChoix();
+  majRetourFormulaire();
+  if ($('ret-f-resolution').value === 'EXCHANGE') void chargerOptionsVoulu();
+});
+
+$('ret-f-resolutions').addEventListener('click', (event) => {
+  const bouton = event.target.closest('[data-resolution]');
+  if (!bouton) return;
+  $('ret-f-resolution').value = bouton.dataset.resolution;
+  renderReturnChoix();
+  majRetourFormulaire();
+  if (bouton.dataset.resolution === 'EXCHANGE') void chargerOptionsVoulu();
+});
+
+$('ret-f-veut-type').addEventListener('click', (event) => {
+  const bouton = event.target.closest('[data-veut]');
+  if (!bouton) return;
+  retFormulaire.veutType = bouton.dataset.veut;
+  retFormulaire.couleur = null;
+  $('ret-f-want-title').value = '';
+  $('ret-f-want-variant').value = '';
+  $('ret-f-dispo').hidden = true;
+  renderReturnChoix();
+  majRetourFormulaire();
+  void chargerOptionsVoulu();
+});
+
+/*
+ * Ce que le client veut à la place, pris dans le catalogue.
+ *
+ * Une autre taille du même modèle, une autre couleur, ou les deux — et dans ce
+ * cas la couleur d'abord, puisque c'est elle qui désigne le modèle dont on
+ * choisira la taille. Les mêmes listes que les demandes de changement : ce
+ * sont les vraies déclinaisons de la boutique, avec leur stock.
+ */
+async function chargerOptionsVoulu() {
+  const produit = retFormulaire.couleur ?? $('ret-f-product').value.trim();
+  const box = $('ret-f-veut-options');
+  if (!produit) {
+    box.innerHTML = '';
+    return;
+  }
+
+  const couleurDAbord = retFormulaire.veutType !== 'SIZE' && !retFormulaire.couleur;
+  const scope = couleurDAbord ? 'COLOR' : 'SIZE';
+  box.innerHTML = '<span class="ret-attente">Lecture du catalogue…</span>';
+
+  let options = [];
+  try {
+    ({ options = [] } = await api(
+      `/api/variant-options?scope=${scope}&product=${encodeURIComponent(produit)}`,
+    ));
+  } catch {
+    box.innerHTML = '<span class="ret-attente">Catalogue indisponible : saisissez la taille à la main.</span>';
+    return;
+  }
+
+  if (options.length === 0) {
+    box.innerHTML = '<span class="ret-attente">Aucune déclinaison trouvée pour ce modèle.</span>';
+    return;
+  }
+
+  box.innerHTML =
+    (retFormulaire.couleur
+      ? `<span class="ret-attente">Couleur : ${esc(retFormulaire.couleur)} — choisissez la taille.</span>`
+      : '') +
+    options
+      .map(
+        (option) => `<button type="button" class="ret-option" data-option="${esc(option.value)}"
+          data-detail="${esc(option.detail ?? '')}" data-scope="${scope}"
+          aria-pressed="false">
+          ${option.image ? `<img src="${esc(option.image)}" alt="" loading="lazy" />` : ''}
+          <span><b>${esc(option.value)}</b>${
+            option.stock !== null && option.stock !== undefined
+              ? `<small>${option.stock > 0 ? `${option.stock} en stock` : 'épuisé'}</small>`
+              : ''
+          }</span>
+        </button>`,
+      )
+      .join('');
+}
+
+$('ret-f-veut-options').addEventListener('click', (event) => {
+  const bouton = event.target.closest('[data-option]');
+  if (!bouton) return;
+
+  if (bouton.dataset.scope === 'COLOR') {
+    // La couleur désigne un autre modèle : c'est dans celui-là qu'on choisira
+    // la taille, ou qu'on garde la taille d'origine si seule la couleur change.
+    retFormulaire.couleur = bouton.dataset.detail || bouton.dataset.option;
+    if (retFormulaire.veutType === 'COLOR') {
+      $('ret-f-want-title').value = retFormulaire.couleur;
+      $('ret-f-want-variant').value = $('ret-f-variant').value;
+      majRetourFormulaire();
+      void verifierStockVoulu();
+      renderChoixOption(bouton);
+      return;
+    }
+    void chargerOptionsVoulu();
+    return;
+  }
+
+  $('ret-f-want-title').value = retFormulaire.couleur ?? $('ret-f-product').value.trim();
+  $('ret-f-want-variant').value = bouton.dataset.option;
+  renderChoixOption(bouton);
+  majRetourFormulaire();
+  void verifierStockVoulu();
+});
+
+function renderChoixOption(choisi) {
+  for (const bouton of $('ret-f-veut-options').querySelectorAll('[data-option]')) {
+    bouton.setAttribute('aria-pressed', String(bouton === choisi));
+  }
+}
+
+/**
+ * D'où partira la paire d'échange.
+ *
+ * Du stock retours si une paire identique y dort — c'est l'agence qui
+ * l'expédiera — sinon de l'atelier. La réponse se lit avant de créer le
+ * dossier : elle change qui travaille.
+ */
+async function verifierStockVoulu() {
+  const titre = $('ret-f-want-title').value.trim();
+  if (!titre) return;
+
+  const params = new URLSearchParams({
+    titre,
+    declinaison: $('ret-f-want-variant').value.trim(),
+    pays: $('ret-f-country').value,
+  });
+
+  let lieux = [];
+  try {
+    ({ lieux = [] } = await api(`/api/returns/stock-dispo?${params}`));
+  } catch {
+    return;
+  }
+
+  const box = $('ret-f-dispo');
+  box.hidden = false;
+  if (lieux.length === 0) {
+    box.className = 'ret-dispo';
+    box.textContent = 'Aucune paire en stock : l’échange partira de l’atelier.';
+    return;
+  }
+
+  const premier = lieux[0];
+  box.className = 'ret-dispo ret-dispo-ok';
+  box.textContent = `En stock : ${premier.nombre} paire${premier.nombre > 1 ? 's' : ''} ${
+    premier.agence ? `chez ${premier.agence}` : ''
+  } — ${RETURN_COUNTRIES[premier.pays] ?? premier.pays}${
+    premier.voisin ? ' (pays voisin)' : ''
+  }. L’agence pourra expédier l’échange.`;
+}
 
 $('ret-f-cancel').addEventListener('click', () => $('return-modal').classList.remove('open'));
 $('return-modal').addEventListener('click', (event) => {
@@ -9265,6 +9601,8 @@ $('return-modal').addEventListener('click', (event) => {
 $('ret-f-save').addEventListener('click', async () => {
   const productTitle = $('ret-f-product').value.trim();
   if (!productTitle) return toast("L'article retourné est obligatoire.", true);
+
+  const echange = $('ret-f-resolution').value === 'EXCHANGE';
 
   try {
     await api('/api/returns', {
@@ -9279,6 +9617,9 @@ $('ret-f-save').addEventListener('click', async () => {
         productTitle,
         variantTitle: $('ret-f-variant').value.trim() || null,
         sku: $('ret-f-sku').value.trim() || null,
+        // Ce que le client veut à la place n'a de sens que pour un échange.
+        wantedTitle: echange ? $('ret-f-want-title').value.trim() || null : null,
+        wantedVariantTitle: echange ? $('ret-f-want-variant').value.trim() || null : null,
         reason: $('ret-f-reason').value,
         resolution: $('ret-f-resolution').value,
         agencyId: $('ret-f-agency').value || null,
@@ -9286,7 +9627,7 @@ $('ret-f-save').addEventListener('click', async () => {
       }),
     });
     $('return-modal').classList.remove('open');
-    toast('Dossier de retour créé.');
+    toast('Dossier de retour créé. Prochaine étape : fournir le bon de retour au client.');
     /*
      * Recharger seulement l'écran qu'on regarde.
      *

@@ -6,7 +6,13 @@ import { requirePermission, requireSession } from '../plugins/auth.ts';
 import { decodePhoto, photoSchema } from './parcels.ts';
 import { getShopifyClient } from '../services/shopify/client.ts';
 import { listOrders, quoteSearchValue, type OrderSummary } from '../services/shopify/orders.ts';
-import { PAYS_RETOUR, VOISINS, rapprocher, type PaireEnStock } from '../services/reshipment/rapprochement.ts';
+import {
+  PAYS_RETOUR,
+  VOISINS,
+  correspond,
+  rapprocher,
+  type PaireEnStock,
+} from '../services/reshipment/rapprochement.ts';
 import { signAgencyToken } from '../lib/agencyToken.ts';
 import { env } from '../config/env.ts';
 
@@ -38,6 +44,10 @@ const caseBody = z.object({
   productTitle: z.string().min(1).max(300),
   variantTitle: z.string().max(120).nullish(),
   sku: z.string().max(120).nullish(),
+  /** Pour un échange : ce que le client veut à la place. */
+  wantedTitle: z.string().max(300).nullish(),
+  wantedVariantTitle: z.string().max(120).nullish(),
+  wantedSku: z.string().max(120).nullish(),
   reason: z.enum(['SIZE', 'DEFECT', 'MODEL', 'OTHER']).optional(),
   resolution: z.enum(['EXCHANGE', 'REFUND']).optional(),
   agencyId: z.string().max(40).nullish(),
@@ -276,6 +286,10 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
             title: item.title,
             variantTitle: item.variantTitle ?? null,
             sku: item.sku ?? null,
+            // La photo : on reconnaît l'article renvoyé d'un coup d'œil, bien
+            // plus vite qu'à sa référence.
+            image: item.image ?? null,
+            quantity: item.quantity,
           })),
         },
       });
@@ -387,6 +401,83 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
       });
       if (deleted.count === 0) return reply.code(404).send({ error: 'Agence introuvable' });
       return reply.send({ deleted: true });
+    },
+  );
+
+  /**
+   * Cet article est-il dans le stock retours, et où ?
+   *
+   * Posée au moment où l'on note ce que le client veut à la place : la réponse
+   * décide qui enverra la paire d'échange — l'agence si elle l'a, l'atelier
+   * sinon. Mêmes règles que le rapprochement des commandes : même pays
+   * d'abord, puis pays voisin.
+   */
+  app.get<{ Querystring: { titre?: string; declinaison?: string; sku?: string; pays?: string } }>(
+    '/api/returns/stock-dispo',
+    async (request, reply) => {
+      const { merchantId } = request.session;
+      const titre = (request.query.titre ?? '').trim();
+      if (!titre) return reply.send({ lieux: [] });
+
+      const ligne = {
+        titre,
+        declinaison: (request.query.declinaison ?? '').trim() || null,
+        sku: (request.query.sku ?? '').trim() || null,
+        quantite: 1,
+      };
+      const pays = (request.query.pays ?? '').trim().toUpperCase();
+
+      const enStock = await prisma.returnCase.findMany({
+        where: { merchantId, status: 'RESTOCKED', reusedAt: null },
+        select: {
+          id: true,
+          country: true,
+          sku: true,
+          productTitle: true,
+          variantTitle: true,
+          orderName: true,
+          restockedAt: true,
+          updatedAt: true,
+          agency: { select: { id: true, name: true, country: true } },
+        },
+      });
+
+      const voisins = VOISINS[pays] ?? [];
+      const lieux = new Map<string, { pays: string; agence: string | null; voisin: boolean; nombre: number }>();
+
+      for (const paire of enStock) {
+        const paireEnStock: PaireEnStock = {
+          id: paire.id,
+          pays: paire.agency?.country ?? paire.country ?? null,
+          agenceId: paire.agency?.id ?? null,
+          agenceNom: paire.agency?.name ?? null,
+          sku: paire.sku,
+          titre: paire.productTitle,
+          declinaison: paire.variantTitle,
+          depuis: paire.restockedAt ?? paire.updatedAt,
+          retourDe: paire.orderName,
+        };
+        if (!correspond(paireEnStock, ligne) || !paireEnStock.pays) continue;
+        // Hors du pays du client et de ses voisins, la paire ne sert pas.
+        if (pays && paireEnStock.pays !== pays && !voisins.includes(paireEnStock.pays)) continue;
+
+        const cle = `${paireEnStock.pays}|${paireEnStock.agenceNom ?? ''}`;
+        const deja = lieux.get(cle);
+        if (deja) deja.nombre += 1;
+        else {
+          lieux.set(cle, {
+            pays: paireEnStock.pays,
+            agence: paireEnStock.agenceNom,
+            voisin: Boolean(pays) && paireEnStock.pays !== pays,
+            nombre: 1,
+          });
+        }
+      }
+
+      // Le même pays d'abord : c'est de là que la paire partira.
+      return reply.send({
+        lieux: [...lieux.values()].sort((a, b) => Number(a.voisin) - Number(b.voisin)),
+      });
     },
   );
 
