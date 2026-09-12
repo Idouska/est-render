@@ -25,6 +25,20 @@ export interface Nouveaute {
 
 export const NOUVEAUTES: readonly Nouveaute[] = [
   {
+    pr: 61,
+    date: '2026-09-12',
+    pour: 'Tableau de bord',
+    titre: 'La fenêtre « Nouveau retour », en trois temps',
+    resume:
+      'Le numéro de commande remplit le client et son pays ; l’article qui revient se choisit dans la commande, avec sa photo — sa référence est donc celle de Shopify, et le réemploi pourra la retrouver. Pour un échange, ce que le client veut à la place se choisit dans le catalogue : autre taille, autre couleur, ou les deux, et l’outil dit si la paire est déjà en stock.',
+    ou: 'Reshipment → « Nouveau retour ».',
+    essayer: [
+      'Ouvrir « Nouveau retour » et taper un numéro de commande.',
+      'Choisir l’article qui revient dans la liste.',
+      'Choisir « Un échange », puis une autre taille ou une autre couleur : l’outil dit d’où partira la paire.',
+    ],
+  },
+  {
     pr: 60,
     date: '2026-09-12',
     pour: 'Les deux',
