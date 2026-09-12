@@ -27,6 +27,9 @@ import { enModeTest } from '../services/modeTest.ts';
 import { fonctionnaliteActive, fonctionnalitesDuMarchand } from '../services/fonctionnalites.ts';
 import { commandesServiesParLeStock } from '../services/reshipment/reservations.ts';
 
+const TRENTE_JOURS = 30 * 24 * 60 * 60 * 1000;
+const ADRESSE_WEB_ATELIER = /:\/\/|^www\./i;
+
 /**
  * Espace de travail permanent du fournisseur.
  *
@@ -1709,6 +1712,171 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
       });
 
       return reply.send({ ticket });
+    },
+  );
+
+  /* ------------------------------------------------------------ échanges -- */
+
+  /**
+   * Les échanges confiés à cet atelier.
+   *
+   * Un client renvoie une paire et en veut une autre. Quand aucune agence n'a
+   * la paire voulue en stock, c'est l'atelier du modèle qui l'envoie : il voit
+   * l'adresse du client, l'article à préparer, et rend un numéro de suivi.
+   *
+   * Rien ne part chez Shopify : un échange n'est pas une commande. C'est le
+   * marchand qui préviendra son client.
+   */
+  app.get<{ Params: { id: string }; Querystring: { token?: string; compte?: string } }>(
+    '/api/workspace/:id/echanges',
+    async (request, reply) => {
+      const workspace = await authorize(request, reply);
+      if (!workspace) return;
+
+      // La pastille du menu se relève toutes les deux minutes : elle ne doit
+      // rien demander à Shopify, sinon l'atelier consomme le quota d'appels du
+      // marchand pour afficher un chiffre.
+      if (request.query.compte === '1') {
+        return reply.send({
+          compte: await prisma.returnCase.count({
+            where: {
+              merchantId: workspace.merchantId,
+              exchangeSupplierId: workspace.supplierId,
+              exchangeShippedAt: null,
+            },
+          }),
+        });
+      }
+
+      const dossiers = await prisma.returnCase.findMany({
+        where: {
+          merchantId: workspace.merchantId,
+          exchangeSupplierId: workspace.supplierId,
+          OR: [{ exchangeShippedAt: null }, { exchangeShippedAt: { gte: new Date(Date.now() - TRENTE_JOURS) } }],
+        },
+        orderBy: { updatedAt: 'asc' },
+        select: {
+          id: true,
+          orderName: true,
+          customerName: true,
+          country: true,
+          productTitle: true,
+          variantTitle: true,
+          wantedTitle: true,
+          wantedVariantTitle: true,
+          wantedSku: true,
+          exchangeTrackingNumber: true,
+          exchangeCarrier: true,
+          exchangeShippedAt: true,
+        },
+      });
+
+      const aEnvoyer = dossiers.filter((dossier) => !dossier.exchangeShippedAt);
+
+      // L'adresse est lue chez Shopify au moment d'afficher, et seulement pour
+      // ce qui reste à envoyer : rien n'est recopié en base.
+      const adresses = new Map<string, Awaited<ReturnType<typeof listOrders>>['orders'][number]['shippingAddress']>();
+      let adressesIndisponibles = false;
+      const noms = [...new Set(aEnvoyer.map((dossier) => dossier.orderName).filter((nom): nom is string => Boolean(nom)))];
+      if (noms.length > 0) {
+        try {
+          const client = await getShopifyClient(workspace.merchantId);
+          for (let debut = 0; debut < noms.length; debut += 50) {
+            const lot = noms.slice(debut, debut + 50);
+            const { orders } = await listOrders(client, {
+              query: lot.map((nom) => `name:${quoteSearchValue(nom)}`).join(' OR '),
+              limit: lot.length,
+            });
+            for (const commande of orders) adresses.set(commande.name, commande.shippingAddress ?? null);
+          }
+        } catch (error) {
+          request.log.warn({ err: error, supplierId: workspace.supplierId }, 'Adresses Shopify illisibles pour un atelier');
+          adressesIndisponibles = true;
+        }
+      }
+
+      const vue = (dossier: (typeof dossiers)[number]) => ({
+        id: dossier.id,
+        commande: dossier.orderName,
+        client: dossier.customerName,
+        pays: dossier.country,
+        renvoye: { titre: dossier.productTitle, declinaison: dossier.variantTitle },
+        voulu: { titre: dossier.wantedTitle, declinaison: dossier.wantedVariantTitle, sku: dossier.wantedSku },
+        suivi: dossier.exchangeTrackingNumber,
+        transporteur: dossier.exchangeCarrier,
+        expedieLe: dossier.exchangeShippedAt,
+        adresse: dossier.orderName ? (adresses.get(dossier.orderName) ?? null) : null,
+      });
+
+      return reply.send({
+        supplier: { name: workspace.supplierName },
+        testMode: await enModeTest(workspace.merchantId),
+        adressesIndisponibles,
+        aEnvoyer: aEnvoyer.map(vue),
+        envoyes: dossiers
+          .filter((dossier) => dossier.exchangeShippedAt)
+          .sort((a, b) => b.exchangeShippedAt!.getTime() - a.exchangeShippedAt!.getTime())
+          .map(vue),
+      });
+    },
+  );
+
+  /** L'atelier a envoyé la paire d'échange : son numéro de suivi. */
+  app.post<{ Params: { id: string }; Querystring: { token?: string } }>(
+    '/api/workspace/:id/echanges',
+    async (request, reply) => {
+      const workspace = await authorize(request, reply);
+      if (!workspace) return;
+
+      const parsed = z
+        .object({
+          caseId: z.string().min(1).max(120),
+          trackingNumber: z.string().trim().min(3).max(80),
+          carrier: z.string().max(80).nullish(),
+        })
+        .safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ code: 'invalide', error: 'Numéro de suivi invalide.' });
+
+      const suivi = parsed.data.trackingNumber.replace(/\s+/g, '');
+      if (abimeParExcel(suivi)) {
+        return reply.code(400).send({ code: 'abime_excel', error: 'Numéro abîmé par Excel : retapez-le en texte.' });
+      }
+      const brut = parsed.data.carrier?.trim() || null;
+      const transporteur = brut && !ADRESSE_WEB_ATELIER.test(brut) ? brut : null;
+
+      // Seuls les échanges confiés à CET atelier : l'écriture est bornée par
+      // la même condition que la lecture.
+      const misAJour = await prisma.returnCase.updateMany({
+        where: {
+          id: parsed.data.caseId,
+          merchantId: workspace.merchantId,
+          exchangeSupplierId: workspace.supplierId,
+        },
+        data: {
+          exchangeTrackingNumber: suivi,
+          exchangeCarrier: transporteur,
+          exchangeShippedAt: new Date(),
+          // Un numéro corrigé efface la notification : le marchand doit
+          // renvoyer le bon à son client, et son écran le lui redemandera.
+          exchangeNotifiedAt: null,
+        },
+      });
+      if (misAJour.count === 0) {
+        return reply.code(404).send({ code: 'introuvable', error: 'Cet échange ne vous est pas confié.' });
+      }
+
+      await recordAudit({
+        merchantId: workspace.merchantId,
+        actorType: 'SUPPLIER',
+        actorId: workspace.supplierId,
+        action: 'supplier.exchange_shipped',
+        targetType: 'return',
+        targetId: parsed.data.caseId,
+        metadata: { trackingNumber: suivi, carrier: transporteur },
+        ipAddress: request.ip,
+      });
+
+      return reply.send({ envoye: true });
     },
   );
 }

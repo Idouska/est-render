@@ -9229,3 +9229,16 @@ html, body { overflow-x: clip; }
 /* Ce qui manque, à côté du bouton : on sait pourquoi il est gris. */
 .ret-manque { margin-right: auto; font-size: 12.5px; color: var(--warn-ink, var(--ink-mute)); }
 .ret-veut { display: block; margin-top: 2px; color: var(--accent-ink); font-size: 12px; }
+
+/* L'envoi de l'échange : un état et un geste, sur la même ligne que l'article
+   dont il parle. Les couleurs viennent des variables du thème — la page reste
+   lisible en clair comme en sombre. */
+.ret-echange {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.ret-echange .ret-veut { display: inline; margin: 0; color: var(--ink-soft); }
+.ret-echange .qlink { font-size: 12px; }

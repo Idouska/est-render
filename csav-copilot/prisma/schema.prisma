@@ -942,6 +942,22 @@ model ReturnCase {
   /// liste. Posé et retiré avec `reusedOrderName`.
   reusedShopifyOrderId String?
 
+  /// L'échange : qui l'envoie, et où il en est.
+  ///
+  /// Une paire du stock quand il y en a une — c'est son agence qui expédie —
+  /// sinon l'atelier du modèle. Le numéro de suivi est saisi par celui qui
+  /// envoie ; le client, lui, est prévenu par le marchand, puisqu'un échange
+  /// n'est pas une commande Shopify.
+  exchangeStockCaseId    String?
+  exchangeSupplierId     String?
+  exchangeTrackingNumber String?
+  exchangeCarrier        String?
+  exchangeShippedAt      DateTime?
+  exchangeNotifiedAt     DateTime?
+
+  /// Cette paire du stock sert l'échange de ce dossier-là.
+  reusedReturnCaseId String?
+
   /// L'envoi fait par l'agence pour cette commande : son numéro de suivi, son
   /// transporteur, et quand. Les paires d'une même commande partent dans le
   /// même colis et portent le même numéro.
@@ -972,6 +988,8 @@ model ReturnCase {
   @@index([merchantId, status])
   @@index([merchantId, sku])
   @@index([merchantId, reusedShopifyOrderId])
+  @@index([merchantId, exchangeSupplierId])
+  @@index([merchantId, exchangeStockCaseId])
 }
 
 enum ReturnReason {

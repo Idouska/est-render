@@ -8413,6 +8413,87 @@ function returnWaLink(item) {
   return `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
 }
 
+/*
+ * Le message qui annonce l'échange.
+ *
+ * Un échange n'est pas une commande Shopify : aucune expédition n'y est créée,
+ * donc AUCUN e-mail automatique ne part. Sans ce message, le client verrait
+ * arriver un colis sans avoir jamais su qu'il partait — et nous écrirait
+ * entre-temps pour demander où en est son échange.
+ *
+ * WhatsApp quand on a son numéro, l'e-mail sinon : le canal par lequel il nous
+ * a déjà parlé.
+ */
+function echangeMessage(item) {
+  const marque = state.me?.merchant?.brandName || state.me?.merchant?.name || '';
+  const voulu = [item.wantedTitle, item.wantedVariantTitle].filter(Boolean).join(' · ');
+  return (
+    `Bonjour${item.customerName ? ` ${item.customerName}` : ''}, votre échange vient de partir : ` +
+    `${voulu}${item.orderName ? ` (commande ${item.orderName})` : ''}. ` +
+    `Numéro de suivi : ${item.exchangeTrackingNumber ?? ''}` +
+    `${item.exchangeCarrier ? ` — ${item.exchangeCarrier}` : ''}.` +
+    `${marque ? ` — ${marque}` : ''}`
+  );
+}
+
+function echangeLien(item) {
+  const texte = echangeMessage(item);
+  const chiffres = (item.customerPhone ?? '').replace(/[^\d+]/g, '').replace(/^\+/, '');
+  if (chiffres) return `https://wa.me/${chiffres}?text=${encodeURIComponent(texte)}`;
+  if (item.customerEmail) {
+    const sujet = `Votre échange est parti${item.orderName ? ` — commande ${item.orderName}` : ''}`;
+    return `mailto:${encodeURIComponent(item.customerEmail)}?subject=${encodeURIComponent(
+      sujet,
+    )}&body=${encodeURIComponent(texte)}`;
+  }
+  return null;
+}
+
+/*
+ * Où en est l'envoi de l'échange.
+ *
+ * Quatre états, et un seul geste proposé à chaque fois : organiser l'envoi,
+ * attendre le numéro de celui qui expédie, prévenir le client, c'est fait.
+ * Ce bloc n'apparaît que pour un échange dont on sait ce que le client veut —
+ * sans cela, personne ne saurait quoi envoyer.
+ */
+function blocEchange(item) {
+  if (item.resolution !== 'EXCHANGE' || !item.wantedTitle) return '';
+
+  const qui = item.exchangeAgence
+    ? `${esc(item.exchangeAgence)}${item.exchangePays ? ` (${esc(nomPays(item.exchangePays))})` : ''}`
+    : item.exchangeAtelier
+      ? esc(item.exchangeAtelier)
+      : '';
+
+  if (!qui) {
+    return `<div class="ret-echange">
+      <button class="btn btn-small btn-primary" data-ret-echange="${esc(item.id)}">Organiser l’envoi</button>
+    </div>`;
+  }
+
+  if (!item.exchangeShippedAt) {
+    return `<div class="ret-echange">
+      <small class="ret-veut">envoi : ${qui} — en attente du numéro</small>
+      <button class="btn btn-small" data-ret-echange-annuler="${esc(item.id)}">Annuler</button>
+    </div>`;
+  }
+
+  const suivi = `<a class="qlink mono" href="${esc(trackUrl(item.exchangeTrackingNumber ?? ''))}"
+    target="_blank" rel="noopener">${esc(item.exchangeTrackingNumber ?? '')}</a>`;
+
+  if (item.exchangeNotifiedAt) {
+    return `<div class="ret-echange">
+      <small class="ret-veut">parti de ${qui} · ${suivi} · client prévenu</small>
+    </div>`;
+  }
+
+  return `<div class="ret-echange">
+    <small class="ret-veut">parti de ${qui} · ${suivi}</small>
+    <button class="btn btn-small btn-primary" data-ret-echange-prevenu="${esc(item.id)}">Prévenir le client</button>
+  </div>`;
+}
+
 function renderReturns() {
   const box = $('ret-body');
   const r = state.returns;
@@ -8483,6 +8564,7 @@ function renderReturnCases(box) {
                   }</small>`
                 : ''
             }
+            ${blocEchange(item)}
             <div class="ret-tags">
               <span class="ret-tag ${item.reason === 'DEFECT' ? 'warn' : 'dim'}">${esc(
                 RETURN_REASONS[item.reason] ?? item.reason,
@@ -8924,6 +9006,68 @@ $('ret-body').addEventListener('click', async (event) => {
       });
       await loadReturns();
     } catch {}
+    return;
+  }
+
+  /* ---- l'envoi de l'échange ---- */
+
+  // Qui envoie la paire voulue : l'agence qui l'a en stock, sinon l'atelier du
+  // modèle. Le serveur tranche — l'écran ne fait que rapporter sa décision.
+  const organiser = event.target.closest('[data-ret-echange]');
+  if (organiser) {
+    organiser.disabled = true;
+    try {
+      const choix = await api(`/api/returns/${organiser.dataset.retEchange}/echange/organiser`, {
+        method: 'POST',
+      });
+      toast(
+        choix.source === 'STOCK'
+          ? `La paire part de ${choix.agence ?? 'l’agence'}${
+              choix.voisin ? ` (${nomPays(choix.pays)}, pays voisin)` : ''
+            } : elle saisira son numéro de suivi.`
+          : `Aucune paire en stock : l’échange est confié à ${choix.atelier}.`,
+      );
+      await loadReturns();
+    } catch (error) {
+      organiser.disabled = false;
+      toast(error.message, true);
+    }
+    return;
+  }
+
+  const annuler = event.target.closest('[data-ret-echange-annuler]');
+  if (annuler) {
+    if (!confirm('Annuler cet envoi ? La paire réservée retourne au stock et pourra servir ailleurs.')) return;
+    annuler.disabled = true;
+    try {
+      await api(`/api/returns/${annuler.dataset.retEchangeAnnuler}/echange/annuler`, { method: 'POST' });
+      toast('Envoi annulé.');
+      await loadReturns();
+    } catch (error) {
+      annuler.disabled = false;
+      toast(error.message, true);
+    }
+    return;
+  }
+
+  // Prévenir le client : c'est le seul e-mail que personne n'enverra à notre
+  // place, puisqu'il n'y a pas de commande Shopify derrière cet envoi.
+  const prevenir = event.target.closest('[data-ret-echange-prevenu]');
+  if (prevenir) {
+    const item = state.returns.cases.find((candidate) => candidate.id === prevenir.dataset.retEchangePrevenu);
+    if (!item) return;
+    const lien = echangeLien(item);
+    if (!lien) {
+      toast('Ce dossier n’a ni téléphone ni e-mail : ajoutez-en un pour prévenir le client.', true);
+      return;
+    }
+    window.open(lien, '_blank', 'noopener');
+    try {
+      await api(`/api/returns/${item.id}/echange/prevenu`, { method: 'POST' });
+      await loadReturns();
+    } catch (error) {
+      toast(error.message, true);
+    }
     return;
   }
 

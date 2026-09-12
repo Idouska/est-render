@@ -58,6 +58,11 @@ async function autoriser(request: RequeteAgence, reply: FastifyReply): Promise<A
  * Les adresses de livraison, lues chez Shopify au moment d'afficher — rien
  * n'est recopié en base. Cherchées par nom de commande, cinquante à la fois :
  * au-delà, la requête devient trop longue.
+ *
+ * Rangées sous DEUX clés, l'identifiant et le nom : les réexpéditions
+ * connaissent l'identifiant de la commande servie, les échanges n'ont que le
+ * nom de la commande d'origine. Les deux ne se confondent pas (« gid://… »
+ * contre « #1042 »).
  */
 async function adressesDe(
   client: ShopifyClient,
@@ -70,7 +75,10 @@ async function adressesDe(
       query: lot.map((nom) => `name:${quoteSearchValue(nom)}`).join(' OR '),
       limit: lot.length,
     });
-    for (const commande of orders) adresses.set(commande.id, commande.shippingAddress ?? null);
+    for (const commande of orders) {
+      adresses.set(commande.id, commande.shippingAddress ?? null);
+      adresses.set(commande.name, commande.shippingAddress ?? null);
+    }
   }
   return adresses;
 }
@@ -162,17 +170,88 @@ export async function agencyPortalRoutes(app: FastifyInstance): Promise<void> {
 
       const aExpedier = commandes.filter((commande) => !commande.expedieeLe);
 
+      // Les ÉCHANGES : une paire de son stock a été promise à un client qui
+      // renvoie la sienne. Il n'y a pas de commande Shopify à expédier — c'est
+      // le marchand qui préviendra son client — mais l'agence a besoin de
+      // l'adresse, et doit rendre un numéro de suivi.
+      const pairesEchange = await prisma.returnCase.findMany({
+        where: { merchantId: agence.merchantId, agencyId: agence.id, reusedReturnCaseId: { not: null } },
+        select: {
+          id: true,
+          productTitle: true,
+          variantTitle: true,
+          sku: true,
+          orderName: true,
+          photoMime: true,
+          reusedReturnCaseId: true,
+        },
+      });
+      const dossiers = pairesEchange.length
+        ? await prisma.returnCase.findMany({
+            where: {
+              merchantId: agence.merchantId,
+              id: { in: [...new Set(pairesEchange.map((paire) => paire.reusedReturnCaseId!))] },
+              OR: [
+                { exchangeShippedAt: null },
+                { exchangeShippedAt: { gte: new Date(Date.now() - TRENTE_JOURS) } },
+              ],
+            },
+            select: {
+              id: true,
+              orderName: true,
+              customerName: true,
+              wantedTitle: true,
+              wantedVariantTitle: true,
+              wantedSku: true,
+              exchangeTrackingNumber: true,
+              exchangeCarrier: true,
+              exchangeShippedAt: true,
+            },
+          })
+        : [];
+      const parPaire = new Map(pairesEchange.map((paire) => [paire.reusedReturnCaseId!, paire]));
+      const echanges = dossiers.map((dossier) => {
+        const paire = parPaire.get(dossier.id)!;
+        return {
+          id: dossier.id,
+          commande: dossier.orderName,
+          client: dossier.customerName,
+          voulu: {
+            titre: dossier.wantedTitle,
+            declinaison: dossier.wantedVariantTitle,
+            sku: dossier.wantedSku,
+          },
+          paire: {
+            id: paire.id,
+            titre: paire.productTitle,
+            declinaison: paire.variantTitle,
+            sku: paire.sku,
+            retourDe: paire.orderName,
+            aPhoto: Boolean(paire.photoMime),
+          },
+          suivi: dossier.exchangeTrackingNumber,
+          transporteur: dossier.exchangeCarrier,
+          expedieLe: dossier.exchangeShippedAt,
+        };
+      });
+      const echangesAEnvoyer = echanges.filter((echange) => !echange.expedieLe);
+
       // L'adresse n'est lue que pour ce qui reste à expédier : c'est la seule
       // qui serve encore à l'agence.
       let adresses = new Map<string, ShippingAddress | null>();
       let adressesIndisponibles = false;
-      if (aExpedier.length > 0) {
+      const aChercher = [
+        ...new Set(
+          [
+            ...aExpedier.map((commande) => commande.orderName),
+            ...echangesAEnvoyer.map((echange) => echange.commande),
+          ].filter((nom): nom is string => Boolean(nom)),
+        ),
+      ];
+      if (aChercher.length > 0) {
         try {
           const client = await getShopifyClient(agence.merchantId);
-          adresses = await adressesDe(
-            client,
-            aExpedier.map((commande) => commande.orderName).filter((nom): nom is string => Boolean(nom)),
-          );
+          adresses = await adressesDe(client, aChercher);
         } catch (error) {
           request.log.warn({ err: error, agencyId: agence.id }, 'Adresses Shopify illisibles pour une agence');
           adressesIndisponibles = true;
@@ -187,6 +266,13 @@ export async function agencyPortalRoutes(app: FastifyInstance): Promise<void> {
         expediees: commandes
           .filter((commande) => commande.expedieeLe)
           .sort((a, b) => (b.expedieeLe!.getTime() - a.expedieeLe!.getTime())),
+        echanges: echangesAEnvoyer.map((echange) => ({
+          ...echange,
+          adresse: echange.commande ? (adresses.get(echange.commande) ?? null) : null,
+        })),
+        echangesEnvoyes: echanges
+          .filter((echange) => echange.expedieLe)
+          .sort((a, b) => b.expedieLe!.getTime() - a.expedieLe!.getTime()),
       });
     },
   );
@@ -339,6 +425,73 @@ export async function agencyPortalRoutes(app: FastifyInstance): Promise<void> {
 
       const shopify = await tenterExpedition(client, parsed.data.orderId, suivi, transporteur, request.log);
       return reply.send({ expediee: true, shopify });
+    },
+  );
+
+  /**
+   * L'agence a envoyé une paire d'ÉCHANGE : son numéro de suivi.
+   *
+   * Rien ne part chez Shopify : un échange n'est pas une commande, il n'y a
+   * aucune expédition à créer et donc aucun e-mail automatique. Le numéro
+   * remonte au marchand, qui préviendra son client lui-même — c'est lui qui
+   * sait par quel canal ce client-là veut être joint.
+   */
+  app.post<{ Params: { id: string }; Querystring: { token?: string } }>(
+    '/api/agence/:id/echanges',
+    async (request, reply) => {
+      const agence = await autoriser(request, reply);
+      if (!agence) return;
+
+      const parsed = z
+        .object({
+          caseId: z.string().min(1).max(120),
+          trackingNumber: z.string().trim().min(3).max(80),
+          carrier: z.string().max(80).nullish(),
+        })
+        .safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ code: 'invalide', error: 'Numéro de suivi invalide.' });
+
+      const suivi = parsed.data.trackingNumber.replace(/\s+/g, '');
+      if (abimeParExcel(suivi)) {
+        return reply.code(400).send({ code: 'abime_excel', error: 'Numéro abîmé par Excel : retapez-le en texte.' });
+      }
+      const brut = parsed.data.carrier?.trim() || null;
+      const transporteur = brut && !ADRESSE_WEB.test(brut) ? brut : null;
+
+      // Seuls les échanges servis par une paire de CETTE agence : c'est la
+      // paire réservée, et elle seule, qui donne le droit d'écrire ici.
+      const paire = await prisma.returnCase.findFirst({
+        where: { merchantId: agence.merchantId, agencyId: agence.id, reusedReturnCaseId: parsed.data.caseId },
+        select: { id: true },
+      });
+      if (!paire) {
+        return reply.code(404).send({ code: 'introuvable', error: 'Cet échange n’est pas confié à votre agence.' });
+      }
+
+      // Un numéro corrigé efface la notification : le marchand doit renvoyer
+      // le bon à son client, et son écran le lui redemandera.
+      await prisma.returnCase.update({
+        where: { id: parsed.data.caseId },
+        data: {
+          exchangeTrackingNumber: suivi,
+          exchangeCarrier: transporteur,
+          exchangeShippedAt: new Date(),
+          exchangeNotifiedAt: null,
+        },
+      });
+
+      await recordAudit({
+        merchantId: agence.merchantId,
+        actorType: 'SUPPLIER',
+        actorId: `agence:${agence.id}`,
+        action: 'agency.exchange_shipped',
+        targetType: 'return',
+        targetId: parsed.data.caseId,
+        metadata: { trackingNumber: suivi, carrier: transporteur, paire: paire.id },
+        ipAddress: request.ip,
+      });
+
+      return reply.send({ envoye: true });
     },
   );
 }
