@@ -1148,12 +1148,24 @@ async function loadQueue({ append = false } = {}) {
       // pas cliquable au clavier et avale le clic de la souris une fois sur
       // deux. Elle est en position absolue par-dessus, la ligne garde sa
       // surface cliquable pleine.
+      const lu = estLu(ticket);
+
       return `<li class="qrow${state.picked.has(ticket.id) ? ' picked' : ''}">
         <label class="qpick" title="Sélectionner">
           <input type="checkbox" data-pick="${ticket.id}"${
             state.picked.has(ticket.id) ? ' checked' : ''
           } />
         </label>
+        <!--
+          La pastille de lecture, comme dans Gmail : elle DIT l'état et le
+          change du même geste. Elle est hors du bouton de la ligne, et non
+          dedans — un bouton dans un bouton n'est pas du HTML valide, et le
+          clic serait avalé par l'ouverture du message.
+        -->
+        <button class="qread${lu ? ' lu' : ''}" type="button" data-read="${ticket.id}"
+          title="${lu ? 'Marquer comme non lu' : 'Marquer comme lu'}"
+          aria-label="${lu ? 'Marquer comme non lu' : 'Marquer comme lu'}"
+          aria-pressed="${!lu}"></button>
         <button class="queue-item li-${ticket.intent ?? 'OTHER'}${
           // Le gras suit la lecture, pas l'archivage : ouvrir un message
           // suffit à l'éteindre, exactement comme dans Gmail. L'archivage
@@ -1165,7 +1177,7 @@ async function loadQueue({ append = false } = {}) {
           // message DANS Gmail, l'outil n'ayant que `gmail.readonly` et ne
           // pouvant pas retirer le libellé. `openedAt` dit qu'on l'a ouvert
           // ici. Sans le second, cliquer sur un message ne l'éteignait jamais.
-          estLu(ticket) ? ' q-done' : ''
+          lu ? ' q-done' : ''
         }" data-id="${ticket.id}"
           aria-current="${ticket.id === state.currentId}">
           <!--
@@ -1250,6 +1262,14 @@ async function loadQueue({ append = false } = {}) {
   } else {
     queueObserver?.disconnect();
   }
+
+  // Le clic n'ouvre pas le message : la pastille est POSÉE À CÔTÉ du bouton de
+  // la ligne, jamais dedans. Dedans, marquer non lu aurait ouvert le fil dans
+  // la foulée et l'aurait remarqué lu aussitôt — et un bouton dans un bouton
+  // n'est de toute façon pas du HTML valide.
+  list.querySelectorAll('[data-read]').forEach((pastille) =>
+    pastille.addEventListener('click', () => void basculerLecture(pastille.dataset.read, pastille)),
+  );
 
   list.querySelectorAll('.queue-item').forEach((button) => {
     button.addEventListener('click', () => selectTicket(button.dataset.id));
@@ -2936,6 +2956,60 @@ function estLu(ticket) {
   return ticket.gmailUnread === false || Boolean(ticket.openedAt);
 }
 
+/*
+ * Basculer lu / non lu, comme dans Gmail.
+ *
+ * L'affichage change AVANT la réponse du serveur : la pastille est un confort
+ * de lecture, et la faire attendre un aller-retour ferait clignoter la ligne
+ * une demi-seconde après le clic — ce qui se remarque bien plus qu'un état
+ * juste. En échec, elle revient à ce qu'elle était et le refus est dit.
+ *
+ * La file n'est PAS rechargée : sous le filtre « Non lu », le message
+ * disparaîtrait sous le doigt au moment même où on le marque lu, et la ligne
+ * suivante prendrait sa place — on cliquerait sur une autre sans l'avoir
+ * voulu. Seul le compteur de la pastille est ajusté.
+ */
+async function basculerLecture(id, pastille) {
+  const enFile = state.tickets.find((ticket) => ticket.id === id);
+  if (!enFile) return;
+
+  const etait = estLu(enFile);
+  const versLu = !etait;
+
+  const appliquer = (lu) => {
+    // Les deux champs, parce que la règle de lecture en demande deux : sans
+    // rallumer `gmailUnread`, un fil que Gmail dit lu resterait lu ici quoi
+    // qu'on clique. C'est la règle du serveur, écrite à l'identique.
+    enFile.openedAt = lu ? new Date().toISOString() : null;
+    if (!lu) enFile.gmailUnread = true;
+
+    const ligne = document.querySelector(`.queue-item[data-id="${CSS.escape(id)}"]`);
+    ligne?.classList.toggle('q-done', lu);
+    pastille.classList.toggle('lu', lu);
+    pastille.setAttribute('aria-pressed', String(!lu));
+    const intitule = lu ? 'Marquer comme non lu' : 'Marquer comme lu';
+    pastille.title = intitule;
+    pastille.setAttribute('aria-label', intitule);
+
+    if (state.queueCounts) {
+      state.queueCounts.UNREAD = Math.max(0, (state.queueCounts.UNREAD ?? 0) + (lu ? -1 : 1));
+      renderQueueBar();
+    }
+  };
+
+  appliquer(versLu);
+
+  try {
+    await api('/api/tickets/bulk', {
+      method: 'POST',
+      body: JSON.stringify({ ids: [id], action: versLu ? 'read' : 'unread' }),
+    });
+  } catch (error) {
+    appliquer(etait);
+    toast(error.message, true);
+  }
+}
+
 const prefetched = new Map();
 
 function prefetchTicket(id) {
@@ -3994,6 +4068,8 @@ function renderBulk() {
 
   bar.innerHTML = `
     <b>${count} sélectionné${count > 1 ? 's' : ''}</b>
+    <button class="btn btn-small" data-bulk="read">Marquer lu</button>
+    <button class="btn btn-small" data-bulk="unread">Marquer non lu</button>
     <button class="btn btn-small" data-bulk="close">Marquer résolu</button>
     <button class="btn btn-small" data-bulk="analyze">Relancer l’IA</button>
     ${

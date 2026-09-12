@@ -25,6 +25,20 @@ export interface Nouveaute {
 
 export const NOUVEAUTES: readonly Nouveaute[] = [
   {
+    pr: 63,
+    date: '2026-09-12',
+    pour: 'Tableau de bord',
+    titre: 'Lu / non lu d’un clic, comme dans Gmail',
+    resume:
+      'Chaque ligne de la file porte une pastille à droite : pleine quand le message est à lire, creuse une fois lu. Un clic bascule l’un ou l’autre, sans ouvrir le message — pratique pour laisser en évidence ce qu’on veut reprendre plus tard. La file ne se recharge pas sous le doigt, seul le compteur « Non lu » suit. Les actions groupées gagnent « Marquer lu » et « Marquer non lu ».',
+    ou: 'File des messages, pastille à droite de chaque ligne ; barre des actions groupées après sélection.',
+    essayer: [
+      'Cliquer la pastille bleue d’un message non lu : le gras s’éteint, le compteur baisse.',
+      'Survoler un message déjà lu : la pastille creuse apparaît, un clic le remet en non lu.',
+      'Cocher plusieurs messages, puis « Marquer lu » ou « Marquer non lu ».',
+    ],
+  },
+  {
     pr: 62,
     date: '2026-09-12',
     pour: 'Les deux',
