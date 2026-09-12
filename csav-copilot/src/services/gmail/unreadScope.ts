@@ -37,5 +37,21 @@ export const PORTEE_NON_LU = {
  * trois fois, la condition divergerait au premier ajustement : on verrait un
  * message en gras que la pastille ne compte pas, ce qui donne l'impression
  * que le compteur est cassé plutôt que la règle incohérente.
+ *
+ * DEUX SOURCES POUR `gmailUnread`. Depuis que l'équipe peut remettre un
+ * message en non lu d'un clic (action groupée `unread`), ce champ ne reflète
+ * plus seulement le libellé Gmail : il dit « ce fil est à lire », que ce soit
+ * Gmail ou l'équipe qui l'ait décidé. Rien ne remonte chez Google — l'outil
+ * n'a que `gmail.readonly` — donc lire le message DANS Gmail l'éteint ici
+ * aussi, ce qui est le comportement attendu.
+ *
+ * Conséquence à connaître : `npm run gmail:reprise`, qui réaligne ce champ
+ * sur l'état réel de la boîte, effacerait un « non lu » posé à la main. C'est
+ * une reprise unique, lancée à la main ; le rappeler ici évite d'en faire une
+ * surprise.
+ *
+ * La condition n'emploie ni `AND` ni `OR` : elle est répandue dans des
+ * `where` qui utilisent déjà les deux, et deux clés identiques dans le même
+ * objet s'écrasent sans la moindre erreur.
  */
 export const NON_LU = { gmailUnread: true, openedAt: null } as const;
