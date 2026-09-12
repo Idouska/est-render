@@ -567,7 +567,17 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
     const parsed = z
       .object({
         ids: z.array(z.string().min(1)).min(1).max(500),
-        action: z.enum(['close', 'reopen', 'delete', 'label-add', 'label-remove', 'assign', 'analyze']),
+        action: z.enum([
+          'close',
+          'reopen',
+          'delete',
+          'label-add',
+          'label-remove',
+          'assign',
+          'analyze',
+          'read',
+          'unread',
+        ]),
         label: z.string().min(1).max(120).optional(),
         /** Identifiant d'agent, ou null pour remettre au pot commun. */
         assignee: z.string().max(60).nullable().optional(),
@@ -625,6 +635,41 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
         break;
       }
 
+      /*
+        * Lu et non lu, comme dans Gmail.
+        *
+        * « Lu » pose la date d'ouverture, et seulement sur ce qui ne l'a pas :
+        * cette date dit la PREMIÈRE lecture, et l'écraser lui ferait perdre
+        * son sens. « Non lu » l'efface et rallume `gmailUnread`.
+        *
+        * Rallumer `gmailUnread` est nécessaire : sans lui, un fil que Gmail
+        * dit lu resterait lu ici quoi qu'on clique, puisque `NON_LU` demande
+        * les deux. Ce champ n'est donc plus seulement le reflet du libellé
+        * Gmail — c'est « ce fil est à lire », que la source soit Gmail ou
+        * l'équipe. L'outil n'ayant que `gmail.readonly`, rien de tout cela ne
+        * remonte chez Google : lire le message DANS Gmail l'éteindra, ici
+        * comme là-bas, ce qui est exactement ce qu'on attend.
+        */
+      case 'read': {
+        affected = (
+          await prisma.ticket.updateMany({
+            where: { ...scope, openedAt: null },
+            data: { openedAt: new Date() },
+          })
+        ).count;
+        break;
+      }
+
+      case 'unread': {
+        affected = (
+          await prisma.ticket.updateMany({
+            where: scope,
+            data: { openedAt: null, gmailUnread: true },
+          })
+        ).count;
+        break;
+      }
+
       case 'assign': {
         affected = (
           await prisma.ticket.updateMany({ where: scope, data: { assignedToId: assignee ?? null } })
@@ -677,16 +722,28 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
       }
     }
 
-    await recordAudit({
-      merchantId,
-      actorType: 'USER',
-      actorId: userId,
-      action: `tickets.bulk.${action}`,
-      targetType: 'Ticket',
-      targetId: `${affected} message(s)`,
-      metadata: { action, affected, label, assignee, requested: ids.length },
-      ipAddress: request.ip,
-    });
+    /*
+     * Lu et non lu ne sont pas journalisés.
+     *
+     * Pour la même raison que l'ouverture d'un message : ce n'est pas une
+     * action sur le dossier. La pastille se clique des dizaines de fois par
+     * jour, et une ligne par clic noierait les gestes qui comptent —
+     * remboursement, envoi, escalade, suppression — sous des milliers
+     * d'entrées sans objet. Le journal doit rester lisible le jour où on le
+     * consulte.
+     */
+    if (action !== 'read' && action !== 'unread') {
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId: userId,
+        action: `tickets.bulk.${action}`,
+        targetType: 'Ticket',
+        targetId: `${affected} message(s)`,
+        metadata: { action, affected, label, assignee, requested: ids.length },
+        ipAddress: request.ip,
+      });
+    }
 
     return reply.send({ affected });
   });

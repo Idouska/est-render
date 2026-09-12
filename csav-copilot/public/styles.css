@@ -4478,6 +4478,66 @@ textarea:focus-visible {
    invisible au repos ; c'est sa place qui ne bouge plus. */
 .qrow.picked .queue-item { background: color-mix(in srgb, var(--accent) 9%, transparent); }
 
+/*
+ * La pastille de lecture, à droite de chaque ligne.
+ *
+ * Elle dit l'état ET le change, comme dans Gmail : pleine quand le message est
+ * à lire, creuse quand il est lu. Non lue, elle est toujours visible — c'est
+ * elle qu'on cherche du regard ; lue, elle s'efface jusqu'au survol, sans quoi
+ * une file de deux cents lignes porterait deux cents ronds gris.
+ *
+ * Sa place est réservée en permanence par la gouttière de `.queue-item` : la
+ * faire apparaître au survol sans place réservée décalerait le texte de la
+ * ligne sous le curseur.
+ */
+.qread {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  right: 9px;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.qread::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+  /* Durée écrite en clair : `--t-fast` n’existe pas dans ce fichier — les
+     `--t-*` y sont des tailles de texte — et une valeur inconnue fait tomber
+     toute la déclaration sans le moindre avertissement. */
+  transition: background 140ms var(--ease), border-color 140ms var(--ease);
+}
+/* Le cercle creux se dessine avec l'encre discrète, pas avec la couleur des
+   traits : à 9 px, un gris de bordure sur fond blanc est invisible — la
+   pastille existait, se révélait au survol, et ne se voyait pas. */
+.qread.lu::before {
+  background: none;
+  border: 1.5px solid var(--ink-mute);
+}
+.qread.lu { opacity: 0; transition: opacity 140ms var(--ease); }
+.qrow:hover .qread.lu,
+.qrow:focus-within .qread.lu { opacity: 1; }
+.qread:hover::before { background: var(--accent); border-color: var(--accent); }
+.qread:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* La gouttière de droite, réservée comme celle de la case à cocher. */
+.qrow .queue-item { padding-right: 32px; }
+
+@media (max-width: 760px) {
+  /* Au doigt, il n'y a pas de survol : la pastille reste visible. */
+  .qread.lu { opacity: 1; }
+}
+
 /* Barre d'actions groupées, collée en tête de la file : elle doit rester
    visible pendant qu'on fait défiler pour cocher. */
 .bulk {

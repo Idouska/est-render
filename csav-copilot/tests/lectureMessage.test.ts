@@ -56,7 +56,13 @@ test('la portée du compteur exclut toujours l’historique et les clos', () => 
 test('les trois compteurs du serveur partagent la même définition', () => {
   // Trois lectures : le filtre « non lus » de la file, la pastille du rail, et
   // « En attente de vous ». Aucune ne doit tester `gmailUnread` toute seule.
-  const solitaires = routes.match(/gmailUnread: true/g) ?? [];
+  //
+  // Une ÉCRITURE est un autre sujet : remettre un message en non lu doit
+  // justement poser ce champ. On ne regarde donc que les `gmailUnread: true`
+  // qui ne sont pas dans un `data: { … }`.
+  const solitaires = [...routes.matchAll(/gmailUnread: true/g)]
+    .filter((occurrence) => !routes.slice(Math.max(0, occurrence.index - 80), occurrence.index).includes('data: {'))
+    .map((occurrence) => routes.slice(occurrence.index - 30, occurrence.index + 20).trim());
 
   assert.deepEqual(
     solitaires,
@@ -65,6 +71,38 @@ test('les trois compteurs du serveur partagent la même définition', () => {
       'ouvert dans l’outil : utiliser NON_LU.',
   );
   assert.ok(routes.includes('...NON_LU'), 'les compteurs doivent étaler NON_LU');
+});
+
+/* ---- remettre en non lu ---- */
+
+test('« non lu » repose les DEUX conditions, sinon rien ne change à l’écran', () => {
+  // `NON_LU` demande les deux : effacer la seule date d'ouverture laisserait
+  // lu un fil que Gmail dit lu, et le clic n'aurait aucun effet visible.
+  const action = routes.slice(routes.indexOf("case 'unread':"));
+  const ecriture = action.indexOf('data: {');
+  assert.ok(ecriture > 0, 'l’écriture doit exister');
+  assert.match(action.slice(ecriture, ecriture + 120), /openedAt: null/);
+  assert.match(action.slice(ecriture, ecriture + 120), /gmailUnread: true/);
+});
+
+test('lire ou dé-lire ne laisse pas de trace au journal', () => {
+  // Même raison que l'ouverture d'un message : ce n'est pas une action sur le
+  // dossier, et une ligne par clic noierait les remboursements et les envois
+  // sous des milliers d'entrées sans objet.
+  const bulk = routes.slice(routes.indexOf("app.post('/api/tickets/bulk'"));
+  const garde = bulk.indexOf("action !== 'read' && action !== 'unread'");
+  const journal = bulk.indexOf('recordAudit');
+  assert.ok(garde > 0, 'la garde doit exister');
+  assert.ok(journal > 0, 'le journal existe bien pour les autres actions');
+  assert.ok(garde < journal, 'et la garde doit le précéder');
+});
+
+test('« lu » ne réécrit pas la date de première ouverture', () => {
+  // `openedAt` répond à « quand l'a-t-on vu pour la première fois ». L'écraser
+  // à chaque clic lui ferait dire « la dernière fois », ce que personne ne
+  // demande et qui se remarquerait trop tard.
+  const action = routes.slice(routes.indexOf("case 'read':"), routes.indexOf("case 'unread':"));
+  assert.match(action, /where: \{ \.\.\.scope, openedAt: null \}/, 'seuls les fils jamais ouverts sont datés');
 });
 
 /* ---- côté navigateur ---- */
@@ -84,6 +122,51 @@ test('un message ouvert dans l’outil est lu, même s’il reste non lu chez Gm
 
 test('un message lu dans Gmail est lu, même jamais ouvert ici', () => {
   assert.equal(estLu({ gmailUnread: false, openedAt: null }), true);
+});
+
+/* ---- la pastille de la file ---- */
+
+const bascule = app.slice(app.indexOf('async function basculerLecture('), app.indexOf('const prefetched = new Map()'));
+
+test('la pastille est posée à côté du bouton de la ligne, jamais dedans', () => {
+  // Dedans, le clic serait avalé par l'ouverture du message — qui le
+  // marquerait lu dans la foulée, annulant ce qu'on vient de demander. Et un
+  // bouton dans un bouton n'est pas du HTML valide.
+  //
+  // Le gabarit de la ligne va de `<li class="qrow` au contenu du bouton : la
+  // pastille doit s'y trouver AVANT l'ouverture de `.queue-item`, donc en
+  // dehors de lui.
+  const ligne = app.slice(app.indexOf('<li class="qrow'), app.indexOf('<span class="qav"'));
+  const pastille = ligne.indexOf('data-read=');
+  const bouton = ligne.indexOf('class="queue-item');
+  assert.ok(pastille > 0, 'la pastille doit exister');
+  assert.ok(bouton > 0, 'le bouton de la ligne aussi');
+  assert.ok(pastille < bouton, 'la pastille précède le bouton, elle n’est donc pas dedans');
+  assert.match(app, /basculerLecture\(pastille\.dataset\.read, pastille\)/);
+});
+
+test('le clic bascule dans les deux sens', () => {
+  assert.match(bascule, /versLu \? 'read' : 'unread'/);
+  assert.match(bascule, /action: versLu/);
+});
+
+test('l’écran suit la même règle que le serveur : la date ET le libellé', () => {
+  assert.match(bascule, /enFile\.openedAt = lu \? new Date\(\)\.toISOString\(\) : null/);
+  assert.match(bascule, /if \(!lu\) enFile\.gmailUnread = true/);
+});
+
+test('un refus du serveur remet la pastille comme elle était', () => {
+  const rattrapage = bascule.slice(bascule.indexOf('catch'));
+  assert.match(rattrapage, /appliquer\(etait\)/, 'sans quoi l’écran mentirait sur l’état réel');
+  assert.match(rattrapage, /toast\(/);
+});
+
+test('la file n’est pas rechargée : le message ne doit pas fuir sous le doigt', () => {
+  // Sous le filtre « Non lu », recharger ferait disparaître la ligne au moment
+  // même où on la marque lue, et la suivante prendrait sa place sous le
+  // curseur — on ouvrirait une autre sans l'avoir voulu.
+  assert.ok(!bascule.includes('loadQueue('), 'seul le compteur est ajusté');
+  assert.match(bascule, /state\.queueCounts\.UNREAD/);
 });
 
 test('un message que personne n’a vu reste en gras', () => {
