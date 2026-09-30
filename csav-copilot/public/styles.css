@@ -104,6 +104,13 @@
      de pilotage le fait. Même traitement que ses deux voisines : cinq points
      de clarté en moins, teinte et saturation intactes. */
   --ok-ink: #047d59;
+  /* Les encres existaient, les règles ne les prenaient pas : quarante-trois
+     textes restaient peints en --ok, --warn ou --crit — les pastilles
+     « Payée » et « En transit » (3,35:1), le statut de livraison (2,85:1), le
+     bouton « Rembourser… » (3,91:1). Ils passent tous à l'encre, dans les deux
+     thèmes. Seules les deux icônes WhatsApp gardent l'aplat : un pictogramme
+     se mesure à 3:1, qu'il tient. tests/accessibilite.test.ts refuse le retour
+     d'un `color: var(--ok)` ailleurs. */
 
   --r-xl: 20px;
   --r-lg: 16px;
@@ -418,7 +425,7 @@ body {
   padding: 1px 7px;
   border-radius: 999px;
   background: var(--crit-soft);
-  color: var(--crit);
+  color: var(--crit-ink);
 }
 
 .me {
@@ -449,7 +456,11 @@ body {
 }
 
 .me b { display: block; font-size: 13px; font-weight: 600; }
-.me span { display: block; font-size: 11.5px; color: var(--ink-mute); }
+/* `.me-txt span`, pas `.me span` : l'avatar est lui aussi un <span> de `.me`,
+   et `.me span` (0-1-1) pesait plus que `.avatar` (0-1-0). Il lui imposait
+   `display: block` et le gris atténué — des initiales grises sur l'accent
+   (1,03:1), collées en haut du rond, à toutes les largeurs. */
+.me-txt span { display: block; font-size: 11.5px; color: var(--ink-mute); }
 
 /* -------------------------------------------------------------- main --- */
 
@@ -531,7 +542,7 @@ body {
 
 .btn-primary:hover:not(:disabled) { border-color: transparent; filter: brightness(1.06); }
 
-.btn-danger { border-color: color-mix(in srgb, var(--crit) 45%, transparent); color: var(--crit); }
+.btn-danger { border-color: color-mix(in srgb, var(--crit) 45%, transparent); color: var(--crit-ink); }
 .btn-danger:hover:not(:disabled) { background: var(--crit-soft); }
 
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
@@ -674,14 +685,14 @@ body {
 
 /* Couleurs sémantiques : indépendantes de l'accent, pour que le sens d'un
    état ne change pas quand l'utilisateur choisit sa palette. */
-.st-DRAFT_READY { background: var(--ok-soft); color: var(--ok); }
+.st-DRAFT_READY { background: var(--ok-soft); color: var(--ok-ink); }
 .st-NEEDS_REVIEW,
-.st-AWAITING_SUPPLIER { background: var(--warn-soft); color: var(--warn); }
+.st-AWAITING_SUPPLIER { background: var(--warn-soft); color: var(--warn-ink); }
 .st-NEW,
 .st-PROCESSING { background: var(--inset); color: var(--ink-mute); }
-.st-FAILED { background: var(--crit-soft); color: var(--crit); }
+.st-FAILED { background: var(--crit-soft); color: var(--crit-ink); }
 .st-CLOSED,
-.st-AUTO_SENT { background: var(--ok-soft); color: var(--ok); }
+.st-AUTO_SENT { background: var(--ok-soft); color: var(--ok-ink); }
 
 /* État des connexions : information de fond, pas d'action. Sans cadre ni
    fond, elle cesse de rivaliser visuellement avec les boutons de l'écran. */
@@ -936,9 +947,9 @@ body.ws-resizing { cursor: col-resize; user-select: none; }
 
 .age::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 
-.age-fresh { background: var(--ok-soft); color: var(--ok); }
-.age-warm { background: var(--warn-soft); color: var(--warn); }
-.age-late { background: var(--crit-soft); color: var(--crit); }
+.age-fresh { background: var(--ok-soft); color: var(--ok-ink); }
+.age-warm { background: var(--warn-soft); color: var(--warn-ink); }
+.age-late { background: var(--crit-soft); color: var(--crit-ink); }
 
 /* Pastille d'agent : deux initiales suffisent à voir d'un coup si la file est
    répartie ou si tout retombe sur la même personne. */
@@ -1073,7 +1084,7 @@ body.ws-resizing { cursor: col-resize; user-select: none; }
   padding: 0;
   background: none;
 }
-.sub-stock { font-family: var(--font-mono); color: var(--ok) !important; }
+.sub-stock { font-family: var(--font-mono); color: var(--ok-ink) !important; }
 .queue-foot .tag-order { margin-left: 0; }
 
 /* -------------------------------------------------------------- fiche --- */
@@ -1376,7 +1387,7 @@ body.ws-resizing { cursor: col-resize; user-select: none; }
   color: var(--ink-soft);
 }
 
-.warnbox b { color: var(--crit); }
+.warnbox b { color: var(--crit-ink); }
 
 /* =============================================================== modales = */
 
@@ -1441,7 +1452,7 @@ body.ws-resizing { cursor: col-resize; user-select: none; }
 .set-conn-actions { display: flex; gap: 6px; }
 .set-conn-detail { margin: 6px 0 0; font-size: 12.5px; color: var(--ink-soft); }
 .set-conn-detail code { font-family: var(--font-mono); font-size: 12px; }
-.set-alert { color: var(--crit); }
+.set-alert { color: var(--crit-ink); }
 
 /* ------------------------------------------------------------ palettes -- */
 
@@ -1645,9 +1656,9 @@ body.ws-resizing { cursor: col-resize; user-select: none; }
 .admin-print { font-size: 11.5px; color: var(--ink-mute); margin: 3px 0 0; }
 
 .src { font-size: 10.5px; font-weight: 600; padding: 1px 7px; border-radius: 999px; }
-.src-ok, .src-db, .src-database { background: var(--ok-soft); color: var(--ok); }
-.src-warn, .src-env, .src-environment, .src-default { background: var(--warn-soft); color: var(--warn); }
-.src-off, .src-none, .src-missing { background: var(--crit-soft); color: var(--crit); }
+.src-ok, .src-db, .src-database { background: var(--ok-soft); color: var(--ok-ink); }
+.src-warn, .src-env, .src-environment, .src-default { background: var(--warn-soft); color: var(--warn-ink); }
+.src-off, .src-none, .src-missing { background: var(--crit-soft); color: var(--crit-ink); }
 
 .check-result {
   display: flex;
@@ -1681,9 +1692,9 @@ body.ws-resizing { cursor: col-resize; user-select: none; }
 .sup-row .admin-print { margin: 2px 0 0; }
 
 .check-result.ok { background: var(--ok-soft); }
-.check-result.ok b { color: var(--ok); }
+.check-result.ok b { color: var(--ok-ink); }
 .check-result.ko { background: var(--crit-soft); }
-.check-result.ko b { color: var(--crit); }
+.check-result.ko b { color: var(--crit-ink); }
 .check-details { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-mute); }
 
 /* ------------------------------------------------------- histogramme --- */
@@ -1810,7 +1821,7 @@ body.ws-resizing { cursor: col-resize; user-select: none; }
 .pcl { display: grid; gap: 5px; }
 .pcl + .pcl { margin-top: 11px; padding-top: 11px; border-top: 1px solid var(--line-soft); }
 .pcl-head { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
-.pcl-nophoto { margin-left: auto; font-size: 11px; color: var(--warn); }
+.pcl-nophoto { margin-left: auto; font-size: 11px; color: var(--warn-ink); }
 .pcl code { font-family: var(--font-mono); font-size: 12px; word-break: break-all; }
 .pcl small { font-size: 11.5px; color: var(--ink-mute); }
 
@@ -1847,6 +1858,9 @@ body.ws-resizing { cursor: col-resize; user-select: none; }
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  /* La case fait 13 px ; c'est le libellé entier qui se clique, et qui doit
+     donc tenir la hauteur d'une cible. */
+  min-height: 24px;
   font-size: 11px;
   color: var(--ink-mute);
   cursor: pointer;
@@ -2058,7 +2072,7 @@ body.ws-resizing { cursor: col-resize; user-select: none; }
 
 .shopcard-rate { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-mute); }
 .shopcard-rate b { font-family: var(--font-mono); color: var(--ink); }
-.shopcard-alert { font-size: 12px; color: var(--crit); font-weight: 600; }
+.shopcard-alert { font-size: 12px; color: var(--crit-ink); font-weight: 600; }
 .shopcard .btn { align-self: flex-start; }
 
 /* Pastille de boutique sur une ligne de file : lue avant le nom du client,
@@ -2089,7 +2103,7 @@ body.ws-resizing { cursor: col-resize; user-select: none; }
 .dsp-amount { margin-left: auto; font-size: 15px; font-weight: 600; }
 
 .dsp-deadline { font-size: 13px; color: var(--ink-soft); }
-.dsp-deadline.late { color: var(--crit); font-weight: 600; }
+.dsp-deadline.late { color: var(--crit-ink); font-weight: 600; }
 
 .dsp-reason { font-size: 13px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 
@@ -2158,7 +2172,7 @@ body.ws-resizing { cursor: col-resize; user-select: none; }
 }
 
 .set-bar .btn { margin-left: auto; }
-.set-bar .hint.dirty { color: var(--warn); font-weight: 600; }
+.set-bar .hint.dirty { color: var(--warn-ink); font-weight: 600; }
 
 /* ------------------------------------------------------ identité de marque --- */
 
@@ -2744,7 +2758,7 @@ textarea:focus-visible {
   font-weight: 700;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: var(--warn);
+  color: var(--warn-ink);
   flex: none;
 }
 
@@ -3399,7 +3413,7 @@ textarea:focus-visible {
    qu'on ne lira pas. */
 .qchip[data-quick='historical'][aria-pressed='true'] {
   background: var(--warn-soft);
-  color: var(--warn);
+  color: var(--warn-ink);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warn) 40%, transparent);
 }
 
@@ -3465,11 +3479,12 @@ textarea:focus-visible {
 
 .side-fold {
   position: absolute;
-  top: 12px;
-  right: 10px;
+  /* 24 px, le minimum d'une cible (WCAG 2.5.8) ; le centre ne bouge pas. */
+  top: 11px;
+  right: 9px;
   z-index: 2;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   display: grid;
   place-items: center;
   border: 1px solid var(--line);
@@ -3495,7 +3510,7 @@ textarea:focus-visible {
 .folded .nav-label { display: none; }
 
 .folded .side { padding: 12px 8px; }
-.folded .side-fold { top: 10px; right: 8px; }
+.folded .side-fold { top: 9px; right: 7px; }
 .folded .brand-wrap { margin-top: 26px; }
 .folded .brand { justify-content: center; padding: 4px; }
 .folded .me { justify-content: center; }
@@ -3700,7 +3715,7 @@ textarea:focus-visible {
   white-space: nowrap;
 }
 
-.me span { font-size: 11px; }
+.me-txt span { font-size: 11px; }
 
 /* Le bouton perd son libellé au profit d'une icône : « Sortir » écrit en toutes
    lettres réclamait le tiers d'une barre de 224 px pour une action qu'on fait
@@ -4033,10 +4048,10 @@ textarea:focus-visible {
    mais ce n'est pas terminé. Ambre : en attente d'un tiers. Rouge : quelqu'un
    doit s'en occuper. Gris : sans objet. */
 
-.tone-ok { background: var(--ok-soft); color: var(--ok); }
+.tone-ok { background: var(--ok-soft); color: var(--ok-ink); }
 .tone-go { background: color-mix(in srgb, #2f6fe4 12%, transparent); color: #1c4fb0; }
-.tone-wait { background: var(--warn-soft); color: var(--warn); }
-.tone-bad { background: var(--crit-soft); color: var(--crit); }
+.tone-wait { background: var(--warn-soft); color: var(--warn-ink); }
+.tone-bad { background: var(--crit-soft); color: var(--crit-ink); }
 .tone-mute { background: var(--inset); color: var(--ink-mute); }
 
 [data-theme='dark'] .tone-go {
@@ -4166,7 +4181,7 @@ textarea:focus-visible {
 
 /* Un droit accordé se lit d'un regard, un droit refusé ne doit pas attirer
    l'œil : c'est la colonne des ✓ qui dessine le rôle. */
-.rights-yes { color: var(--ok); font-weight: 700; }
+.rights-yes { color: var(--ok-ink); font-weight: 700; }
 .rights-no { color: var(--ink-mute); opacity: 0.4; }
 
 /* ==========================================================================
@@ -4235,7 +4250,7 @@ textarea:focus-visible {
   color: var(--ink);
 }
 
-.alarm b { color: var(--crit); }
+.alarm b { color: var(--crit-ink); }
 .alarm span { color: var(--ink-soft); font-family: var(--font-mono); font-size: 12px; }
 .alarm .btn { margin-left: auto; }
 
@@ -4414,7 +4429,7 @@ textarea:focus-visible {
   padding: 1px 7px;
   border-radius: 999px;
   background: var(--warn-soft);
-  color: var(--warn);
+  color: var(--warn-ink);
 }
 .sib {
   display: flex;
@@ -4456,12 +4471,15 @@ textarea:focus-visible {
 .qpick {
   position: absolute;
   z-index: 3;
-  top: 10px;
-  left: 8px;
+  /* La cible est le <label>, pas la case de 15 px qu'il contient : c'est lui
+     qui doit tenir les 24 px du minimum (WCAG 2.5.8). Un pixel de moins en
+     haut et à gauche pour que le centre reste sur l'avatar. */
+  top: 9px;
+  left: 7px;
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   cursor: pointer;
   opacity: 0;
   transition: opacity var(--t-fast) var(--ease);
@@ -4494,10 +4512,10 @@ textarea:focus-visible {
   position: absolute;
   z-index: 3;
   top: 50%;
-  right: 9px;
+  right: 8px;
   transform: translateY(-50%);
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   border: none;
   border-radius: 50%;
@@ -4650,7 +4668,7 @@ textarea:focus-visible {
   letter-spacing: -0.02em;
 }
 .ckcard-sub { font-size: 11px; color: var(--ink-mute); }
-.ckcard-sub .ok { font-style: normal; color: var(--ok); font-weight: 600; }
+.ckcard-sub .ok { font-style: normal; color: var(--ok-ink); font-weight: 600; }
 .ckcard.shut .ckcard-time { color: var(--ink-mute); }
 
 /* Le grand cadran : le même DOM que le petit, agrandi par transformation —
@@ -4850,7 +4868,7 @@ textarea:focus-visible {
   background: none;
   font: inherit;
   font-size: 12.5px;
-  color: var(--crit);
+  color: var(--crit-ink);
   cursor: pointer;
   border-radius: 8px;
 }
@@ -4925,9 +4943,9 @@ textarea:focus-visible {
   padding: 2px 8px;
   border-radius: 999px;
   background: var(--ok-soft);
-  color: var(--ok);
+  color: var(--ok-ink);
 }
-.pick-stock.out { background: var(--crit-soft); color: var(--crit); }
+.pick-stock.out { background: var(--crit-soft); color: var(--crit-ink); }
 
 /* La liste du champ de droite s'aligne à droite : ancrée à gauche, elle
    débordait de la fenêtre. */
@@ -4964,7 +4982,7 @@ textarea:focus-visible {
 .sup-act b {
   font-size: 15px;
   font-weight: 700;
-  color: var(--crit);
+  color: var(--crit-ink);
   font-variant-numeric: tabular-nums;
 }
 
@@ -4981,7 +4999,7 @@ textarea:focus-visible {
   cursor: pointer;
 }
 .chgc-handled:hover { border-color: var(--accent); color: var(--accent); }
-.chgc-done { display: inline-block; margin-top: 8px; font-size: 12.5px; color: var(--ok); }
+.chgc-done { display: inline-block; margin-top: 8px; font-size: 12.5px; color: var(--ok-ink); }
 
 /* Le brouillon prêt, signalé sur la carte : sans ça, il faut ouvrir le mail
    pour découvrir qu'il y avait quelque chose à y lire. */
@@ -5062,6 +5080,16 @@ textarea:focus-visible {
 
 .qt-pick { width: 34px; padding-right: 0 !important; }
 .qt-pick input { width: 15px; height: 15px; cursor: pointer; accent-color: var(--accent); }
+/* Un <label> qui remplit la cellule : la case de 15 px devient une cible de
+   24 px au moins. Le clic de la ligne ignore déjà tout ce qui est dans
+   `.qt-pick` — cocher n'ouvre pas le message. */
+.qt-pickbox {
+  display: grid;
+  place-items: center;
+  min-width: 24px;
+  min-height: 24px;
+  cursor: pointer;
+}
 
 .qt-customer { max-width: 210px; }
 .qt-customer b {
@@ -5086,8 +5114,8 @@ textarea:focus-visible {
   background: var(--inset);
   color: var(--ink-mute);
 }
-.seg-new { background: var(--ok-soft); color: var(--ok); }
-.seg-vip { background: var(--warn-soft); color: var(--warn); }
+.seg-new { background: var(--ok-soft); color: var(--ok-ink); }
+.seg-vip { background: var(--warn-soft); color: var(--warn-ink); }
 
 .qt-subject { max-width: 420px; }
 .qt-subject b {
@@ -5120,9 +5148,9 @@ textarea:focus-visible {
 .sla b { font-size: 11.5px; font-weight: 600; color: var(--ink-mute); }
 .sla-ok i { background: var(--ok); }
 .sla-warn i { background: var(--warn); }
-.sla-warn b { color: var(--warn); }
+.sla-warn b { color: var(--warn-ink); }
 .sla-bad i { background: var(--crit); }
-.sla-bad b { color: var(--crit); }
+.sla-bad b { color: var(--crit-ink); }
 
 .qt-assignee { width: 56px; text-align: center; }
 
@@ -5224,6 +5252,17 @@ textarea:focus-visible {
 }
 
 .qsort select:focus { outline: none; }
+
+/* Le <select> ne remplit que la hauteur de son texte (19 px) : le reste de la
+   pastille ne l'ouvrait pas, et le focus n'en entourait que les lettres, d'un
+   halo à 18 %. Il occupe maintenant toute la hauteur, et c'est la pastille
+   qui porte le focus — même bordure et même halo qu'un champ du formulaire. */
+.qsort select { align-self: stretch; }
+.qsort select:focus-visible { box-shadow: none; }
+.qsort:has(select:focus-visible) {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
 
 /* Le sélecteur natif se dimensionne sur son option la plus longue ; sans cette
    contrainte, « Échéance proche » réservait sa largeur en permanence et la
@@ -6542,8 +6581,8 @@ textarea:focus-visible {
 /* Une action interdite reste visible et dit pourquoi en infobulle : la faire
    disparaître laisserait croire qu'elle n'existe pas. */
 .more-item:disabled { opacity: 0.65; }
-.more-danger { color: var(--crit); }
-.more-danger:hover:not(:disabled) { background: var(--crit-soft); color: var(--crit); }
+.more-danger { color: var(--crit-ink); }
+.more-danger:hover:not(:disabled) { background: var(--crit-soft); color: var(--crit-ink); }
 
 /* ------------------------------------------- avatars dans le fil --------- */
 
@@ -7093,7 +7132,7 @@ textarea:focus-visible {
 .compose-head h2 { margin: 0; font-size: 16px; font-weight: 620; letter-spacing: -0.01em; }
 
 .compose-sig { margin-left: auto; font-size: 12.5px; color: var(--ink-mute); white-space: nowrap; }
-.compose-sig b { color: var(--ok); font-weight: 700; margin-right: 2px; }
+.compose-sig b { color: var(--ok-ink); font-weight: 700; margin-right: 2px; }
 .compose-sig .linkish {
   appearance: none;
   background: none;
@@ -9284,7 +9323,7 @@ html, body { overflow-x: clip; }
 .ret-attente { font-size: 12.5px; color: var(--ink-mute); }
 
 .ret-dispo { margin: 0; padding: 8px 11px; border-radius: var(--r-sm); background: var(--inset); font-size: 13px; color: var(--ink-soft); }
-.ret-dispo-ok { background: var(--ok-soft); color: var(--ok); }
+.ret-dispo-ok { background: var(--ok-soft); color: var(--ok-ink); }
 
 /* Ce qui manque, à côté du bouton : on sait pourquoi il est gris. */
 .ret-manque { margin-right: auto; font-size: 12.5px; color: var(--warn-ink, var(--ink-mute)); }

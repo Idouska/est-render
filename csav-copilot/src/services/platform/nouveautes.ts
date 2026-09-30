@@ -25,6 +25,21 @@ export interface Nouveaute {
 
 export const NOUVEAUTES: readonly Nouveaute[] = [
   {
+    pr: 65,
+    date: '2026-09-30',
+    pour: 'Les deux',
+    titre: 'Des textes qui se lisent, des cases qu’on attrape',
+    resume:
+      'Les pastilles de statut (« Payée », « En transit »), le bouton « Rembourser… » et le compteur du menu passent au-dessus du seuil de lisibilité, en clair comme en sombre ; à l’atelier et dans les agences, les textes gris et les états colorés aussi. L’avatar en haut à droite affiche enfin vos initiales. Dans la file, la case de sélection, la pastille lu / non lu et le tri se cliquent plus facilement, et le tri montre où l’on est au clavier.',
+    ou: 'Tableau de bord : en-tête, file des messages, fiche commande. Atelier et agences : toutes les pages.',
+    essayer: [
+      'Regarder l’avatar en haut à droite : vos initiales, en blanc, centrées dans le rond.',
+      'Ouvrir un message rattaché à une commande : « Payée » et « En transit » se lisent sans effort, en clair comme en sombre.',
+      'Passer la file en vue Tableau et cliquer juste à côté d’une case : la ligne se coche, le message ne s’ouvre pas.',
+      'Depuis « Filtres », appuyer sur Tab : la pastille « Plus récent » s’entoure de la couleur d’accent.',
+    ],
+  },
+  {
     pr: 63,
     date: '2026-09-12',
     pour: 'Tableau de bord',

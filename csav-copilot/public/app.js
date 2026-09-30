@@ -1154,7 +1154,9 @@ async function loadQueue({ append = false } = {}) {
         <label class="qpick" title="Sélectionner">
           <input type="checkbox" data-pick="${ticket.id}"${
             state.picked.has(ticket.id) ? ' checked' : ''
-          } />
+          } aria-label="Sélectionner le message de ${esc(
+            ticket.customerName ?? ticket.customerEmail ?? 'ce client',
+          )}" />
         </label>
         <!--
           La pastille de lecture, comme dans Gmail : elle DIT l'état et le
@@ -3861,7 +3863,12 @@ function renderQueueTable(multiMailbox, shopById) {
           ticket.id === state.currentId ? ' on' : ''
         }" data-id="${esc(ticket.id)}">
           <td class="qt-pick">
-            <input type="checkbox" data-pick="${esc(ticket.id)}"${picked ? ' checked' : ''} />
+            <label class="qt-pickbox">
+              <input type="checkbox" data-pick="${esc(ticket.id)}"${picked ? ' checked' : ''}
+                aria-label="Sélectionner le message de ${esc(
+                  ticket.customerName ?? ticket.customerEmail ?? 'ce client',
+                )}" />
+            </label>
           </td>
 
           <td class="qt-status">
