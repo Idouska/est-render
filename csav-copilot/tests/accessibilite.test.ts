@@ -175,6 +175,40 @@ test('les encres du tableau de bord tiennent 4,5:1, en clair comme en sombre', (
   assert.deepEqual(verifiePaires(sombre, encres, fonds), [], 'thème sombre');
 });
 
+test('le blanc ne se pose que sur un aplat qui le porte, dans les deux thèmes', () => {
+  // L'inverse du défaut précédent : du texte blanc SUR --crit donnait 3,91:1
+  // — les pastilles rouges du menu, le message d'erreur.
+  const blanc = /(?<![-\w])color\s*:\s*(#fff\b|#ffffff\b|white\b)/;
+  const aplat = /background(?:-color)?\s*:\s*var\(\s*(--(?:ok|warn|crit|bad)[\w-]*)\s*\)/;
+  const sombre = { ':root': 10, '[data-theme="dark"]': 10, ':root[data-theme="dark"]': 20 };
+  const themes: [string, string, Map<string, string>][] = [
+    ['styles.css, clair', STYLES, jetons(STYLES, { ':root': 10 })],
+    ['styles.css, sombre', STYLES, jetons(STYLES, sombre)],
+    ['workspace.css', ATELIER, jetons(ATELIER, { ':root': 10 })],
+  ];
+
+  const fautifs: string[] = [];
+  let vus = 0;
+  for (const [nom, css, theme] of themes) {
+    for (const regle of regles(css)) {
+      const fond = regle.corps.match(aplat)?.[1];
+      if (!fond || !blanc.test(regle.corps)) continue;
+      vus += 1;
+      const valeur = theme.get(fond);
+      assert.ok(valeur, `${fond} n'est pas déclaré (${nom})`);
+      const r = ratio('#ffffff', valeur);
+      if (r < 4.5) {
+        fautifs.push(`${nom} — ${regle.selecteurs.join(', ')} : blanc sur ${fond} (${valeur}), ${r.toFixed(2)}:1`);
+      }
+    }
+  }
+
+  // Pastilles et erreur du tableau de bord, dans chaque thème, et la pastille
+  // de l'atelier : cinq rencontres au moins, sans quoi le test ne lit rien.
+  assert.ok(vus >= 5, `seulement ${vus} règles « blanc sur aplat » lues`);
+  assert.deepEqual(fautifs, [], 'poser le blanc sur --crit-strong, pas sur --crit');
+});
+
 test("les encres de l'atelier tiennent 4,5:1 sur tous ses fonds", () => {
   const atelier = jetons(ATELIER, { ':root': 10 });
   const fonds = ['--card', '--paper', '--line-soft'];
@@ -203,6 +237,57 @@ test("aucune règle n'atteint l'avatar par un `span` nu sous `.me`", () => {
   assert.ok(avatar, 'la règle `.avatar` a disparu');
   assert.match(avatar.corps, /display\s*:\s*inline-flex/);
   assert.match(avatar.corps, /(?<![-\w])color\s*:\s*var\(--on-accent\)/);
+});
+
+test('les initiales sur un fond `avatarTint` se lisent, quelle que soit la teinte et le thème', () => {
+  // Le fond est calculé en JS et ne suit pas le thème : un pastel clair,
+  // toujours. Une encre qui suit le thème (`--ink`) blanchit en sombre — des
+  // initiales à 1,04:1. `.qav` et `.ov-av` avaient été corrigés, `.msg-av` et
+  // `.rail-av` oubliés : le test retrouve lui-même tous les porteurs.
+  const source = lire('public/app.js');
+  const formule = source.match(/function avatarTint[\s\S]*?hsl\(\$\{hash\} (\d+)% (\d+)%\)/);
+  assert.ok(formule, 'avatarTint ne rend plus `hsl(${hash} S% L%)` : revoir ce test');
+  const [s, l] = [Number(formule[1]) / 100, Number(formule[2]) / 100];
+
+  const porteurs = [
+    ...new Set(
+      [...source.matchAll(/class="([\w-]+)"[^>]*?style="background:\$\{(?:esc\()?avatarTint\(/g)].map((m) => m[1]),
+    ),
+  ];
+  assert.ok(porteurs.length >= 4, `seulement ${porteurs.length} porteurs trouvés : ${porteurs.join(', ')}`);
+
+  /** hsl(h, s, l) → #rrggbb, la conversion CSS. */
+  const hsl = (h: number) => {
+    const f = (n: number) => {
+      const k = (n + h / 30) % 12;
+      const v = l - s * Math.min(l, 1 - l) * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+      return Math.round(v * 255).toString(16).padStart(2, '0');
+    };
+    return `#${f(0)}${f(8)}${f(4)}`;
+  };
+
+  const fautifs: string[] = [];
+  for (const classe of porteurs) {
+    // Toute règle dont la dernière partie vise la classe : la règle de base,
+    // et un éventuel `[data-theme="dark"] .classe` qui la contredirait.
+    const vise = new RegExp(`(^|[\\s>])\\.${classe}$`);
+    const encres = regles(STYLES)
+      .filter((r) => r.selecteurs.some((sel) => vise.test(sel)))
+      .flatMap((r) => declarations(r.corps))
+      .filter((d) => d.nom === 'color')
+      .map((d) => d.valeur);
+
+    if (encres.length === 0) fautifs.push(`.${classe} : aucune encre déclarée, elle hérite du thème`);
+    for (const encre of encres) {
+      if (!/^#[0-9a-f]{6}$/i.test(encre)) {
+        fautifs.push(`.${classe} : « ${encre} » suit le thème, le fond ne le suit pas`);
+        continue;
+      }
+      const pire = Math.min(...Array.from({ length: 360 }, (_, h) => ratio(encre, hsl(h))));
+      if (pire < 4.5) fautifs.push(`.${classe} : ${encre} tombe à ${pire.toFixed(2)}:1 sur une teinte`);
+    }
+  }
+  assert.deepEqual(fautifs, []);
 });
 
 test('les cases de sélection de la file disent quel message elles cochent', () => {
@@ -246,6 +331,47 @@ test('les petites cibles de la file tiennent 24 px (WCAG 2.5.8)', () => {
     }
   }
   assert.deepEqual(fautifs, []);
+});
+
+test('seuls les dossiers qui réclament un geste portent leur nombre', () => {
+  // Exécutée, pas lue : la vraie `renderFolders`, avec une vraie boîte.
+  const source = lire('public/app.js');
+  const debut = source.indexOf('const FOLDERS = [');
+  const corps = source.indexOf('function renderFolders(');
+  const fin = source.indexOf('\n}\n', corps);
+  assert.ok(debut > 0 && corps > debut && fin > corps, 'FOLDERS ou renderFolders introuvable');
+
+  const rendre = (compteurs: Record<string, number>, courant = 'inbox') => {
+    const barre = { innerHTML: '', querySelectorAll: () => [] };
+    const state = { queueFolders: compteurs, queue: { folder: courant } };
+    const esc = (s: unknown) => String(s);
+    new Function('$', 'state', 'esc', `${source.slice(debut, fin + 2)}\nrenderFolders();`)(
+      () => barre,
+      state,
+      esc,
+    );
+    return Object.fromEntries(
+      [...barre.innerHTML.matchAll(/<button class="folder" data-folder="(\w+)"[^>]*?(?: title="([^"]*)")?>(.*?)<\/button>/g)].map(
+        ([, cle, titre, contenu]) => [cle, { nombre: contenu.match(/folder-n">([^<]*)</)?.[1] ?? null, titre: titre ?? null }],
+      ),
+    );
+  };
+
+  const boite = rendre({ inbox: 5674, drafts: 367, sent: 353, archived: 18 });
+  assert.deepEqual(boite, {
+    inbox: { nombre: '5674', titre: null },
+    drafts: { nombre: '367', titre: null },
+    sent: { nombre: null, titre: '353 messages' },
+    archived: { nombre: null, titre: '18 messages' },
+  });
+
+  // Le nombre reste consultable quand ce dossier est ouvert, et « 1 » ne
+  // prend pas de s ; un dossier vide n'a ni nombre ni infobulle.
+  const petite = rendre({ inbox: 0, drafts: 12000, sent: 1, archived: 0 }, 'sent');
+  assert.equal(petite.drafts.nombre, '9999+');
+  assert.equal(petite.sent.titre, '1 message');
+  assert.deepEqual(petite.inbox, { nombre: null, titre: null });
+  assert.deepEqual(petite.archived, { nombre: null, titre: null });
 });
 
 test('le tri se clique sur toute sa hauteur, et montre son focus', () => {

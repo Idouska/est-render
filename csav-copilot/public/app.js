@@ -930,10 +930,10 @@ function initials(value) {
  * réellement partie.
  */
 const FOLDERS = [
-  { key: 'inbox', label: 'Réception' },
-  { key: 'drafts', label: 'Brouillons' },
-  { key: 'sent', label: 'Envoyés' },
-  { key: 'archived', label: 'Archivés' },
+  { key: 'inbox', label: 'Réception', compte: true },
+  { key: 'drafts', label: 'Brouillons', compte: true },
+  { key: 'sent', label: 'Envoyés', compte: false },
+  { key: 'archived', label: 'Archivés', compte: false },
 ];
 
 function renderFolders() {
@@ -945,12 +945,19 @@ function renderFolders() {
 
   bar.innerHTML = FOLDERS.map((folder) => {
     const n = counts[folder.key];
+    // Seuls les dossiers qui réclament un geste portent leur nombre : ce qui
+    // reste à traiter, ce qui attend d'être relu. Envoyés et Archivés servent
+    // à vérifier ou à retrouver — « 353 envoyés » n'appelle rien, et ces deux
+    // nombres faisaient passer « Archivés » à la ligne avec une vraie boîte
+    // (5 674 en réception). Rien ne se perd : le nombre reste en infobulle, et
+    // le titre de la file affiche celui du dossier ouvert.
+    const titre = !folder.compte && n ? ` title="${n} message${n > 1 ? 's' : ''}"` : '';
     return `<button class="folder" data-folder="${folder.key}" aria-pressed="${
       folder.key === current
-    }">${esc(folder.label)}${
+    }"${titre}>${esc(folder.label)}${
       // Un dossier vide n'affiche pas « 0 » : le nombre sert à décider d'y
       // aller, et « 0 » dit déjà tout en ne disant rien.
-      n ? `<span class="folder-n">${n > 9999 ? '9999+' : n}</span>` : ''
+      folder.compte && n ? `<span class="folder-n">${n > 9999 ? '9999+' : n}</span>` : ''
     }</button>`;
   }).join('');
 
