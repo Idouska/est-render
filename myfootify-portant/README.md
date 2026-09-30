@@ -3,16 +3,15 @@
 La même animation que le hero de [bolapsd « The rail »](https://bolapsd-the-rail.web.app/),
 avec les maillots de la boutique :
 
-- les maillots pendent **de biais sur une barre chromée**, chacun sur son cintre,
-  et se balancent doucement ; le tissu ondule, plus fort vers l'ourlet ;
-- au **survol**, le maillot se tourne vers vous et les voisins s'écartent ;
-- en **faisant glisser** le portant, les cintres glissent sur la barre avec de
-  l'inertie (sur mobile, le portant défile) ;
-- au **clic**, le maillot vient au premier plan avec sa fiche : prix, **Face / Dos**
-  (on peut aussi le tourner au doigt), **tailles** (aperçu visuel de la taille),
-  **Ajouter au panier** et **Voir le maillot** ;
-- flèches, pastilles de couleur, clavier (← →, Échap), bouton pour couper le
-  mouvement, et respect du réglage « réduire les animations » du téléphone.
+- les maillots pendent **serrés sur une barre chromée**, vus presque par la
+  tranche, chacun sur son cintre, et se balancent doucement ; le tissu ondule ;
+- au **survol**, le maillot se tourne vers vous, les voisins s'écartent, et son
+  nom s'affiche dessous avec un lien **Voir le maillot** ;
+- en **faisant glisser** le portant, les cintres glissent avec de l'inertie
+  (sur mobile, le portant défile) ;
+- au **clic**, le maillot vient au centre, en grand, le portant **flouté**
+  derrière ; flèches ‹ › pour passer au suivant, **Fermer** (ou Échap) pour
+  revenir ; on peut le tourner au doigt pour voir le dos.
 
 ## Comment les maillots deviennent des objets 3D
 
@@ -93,9 +92,3 @@ npx serve myfootify-portant
   l'onglet est caché.
 - **Sans WebGL**, ou si le script ne se charge pas au bout de 8 secondes, la
   section affiche une simple rangée de maillots cliquables.
-- **Ajouter au panier** envoie le formulaire Shopify standard (`/cart/add`) et
-  mène au panier. Si les maillots se personnalisent (flocage) sur la fiche
-  produit, c'est **Voir le maillot** qu'il faut mettre en avant : il ouvre la
-  fiche avec la taille déjà choisie.
-- L'aperçu des tailles (S → XXL) agrandit le maillot à l'écran ; ce n'est pas un
-  guide des tailles.

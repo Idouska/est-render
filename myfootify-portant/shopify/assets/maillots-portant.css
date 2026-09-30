@@ -33,49 +33,17 @@
 .mfp__stage.is-selected .mfp__canvas { cursor: default; }
 .mfp__loading { position: absolute; inset: 50% 0 auto; text-align: center; font-size: 13px; color: var(--mfp-muted); z-index: 10; }
 .mfp__loading span { animation: mfp-dots 1.2s steps(4) infinite; display: inline-block; overflow: hidden; vertical-align: bottom; width: 1em; }
-.mfp__return { position: absolute; top: 0; left: 0; z-index: 55; font-size: 25px; display: flex; gap: 10px; align-items: center; }
-.mfp__return span { font-size: 13px; }
-.mfp__motion { position: absolute; top: 0; right: 0; z-index: 40; display: flex; gap: 8px; align-items: center; font-size: 11px; padding: 8px 12px; border: 1px solid var(--mfp-line) !important; border-radius: 30px; }
-.mfp__stage.is-selected .mfp__motion { display: none; }
+.mfp__close { position: absolute; top: 0; right: 0; z-index: 20; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; padding: 8px 0; }
+.mfp__side { position: absolute; top: 50%; z-index: 20; transform: translateY(-50%); width: 40px; height: 40px; border-radius: 50%; border: 1px solid #c6c8bd !important; font-size: 24px; line-height: 1; transition: background .2s, color .2s; }
+.mfp__side:hover { background: var(--mfp-ink); color: var(--mfp-bg); }
+.mfp__side--prev { left: 22%; }
+.mfp__side--next { right: 22%; }
 
-.mfp__panel { position: absolute; right: 5%; top: 92px; width: 300px; z-index: 50; animation: mfp-appear .5s var(--mfp-ease); }
-.mfp__kicker { font-size: 12px; color: var(--mfp-muted); }
-.mfp__panel h3 { font-size: 24px; line-height: 1.25; letter-spacing: -1px; font-weight: 500; margin: 6px 0 8px; color: inherit; }
-.mfp__price { font-size: 16px; margin: 0 0 12px; }
-.mfp__views { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; }
-.mfp__views button { font-size: 12px; border: 1px solid #d8d8ce !important; padding: 8px 16px; }
-.mfp__views button[aria-pressed="true"] { background: var(--mfp-ink); color: var(--mfp-bg); border-color: var(--mfp-ink) !important; }
-.mfp__views span { font-size: 10px; color: var(--mfp-muted); margin-left: 5px; }
-.mfp__back-note { font-size: 11px; line-height: 1.5; color: var(--mfp-muted); margin: -6px 0 16px; }
-.mfp__size-label { font-size: 12px; display: flex; justify-content: space-between; color: var(--mfp-muted); }
-.mfp__swatch { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; box-shadow: inset 0 0 0 1px #0002; }
-.mfp__sizes { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
-.mfp__sizes button { min-width: 42px; height: 35px; padding: 0 8px; border: 1px solid #bfc1b6 !important; font-size: 13px; transition: all .2s; }
-.mfp__sizes button.is-selected { background: var(--mfp-ink); color: var(--mfp-bg); border-color: var(--mfp-ink) !important; }
-.mfp__sizes button:disabled { opacity: .3; text-decoration: line-through; }
-.mfp__cart { margin: 0; }
-.mfp__buy { width: 100%; min-height: 46px; background: var(--mfp-ink) !important; color: var(--mfp-bg) !important; font-size: 14px; transition: background .2s; }
-.mfp__buy:hover:not(:disabled) { background: #44483d !important; }
-.mfp__buy:disabled { opacity: .4; }
-.mfp__more { display: inline-block; margin-top: 10px; font-size: 13px; border-bottom: 1px solid #999b91; padding-bottom: 2px; }
-.mfp__note { font-size: 10px; line-height: 1.6; color: var(--mfp-muted); margin: 8px 0 0; }
-
-.mfp__caption { display: grid; grid-template-columns: 1fr 2fr 1fr; align-items: center; margin: 8px auto 0; max-width: 1100px; padding: 0 12px; }
-.mfp__index { display: flex; align-items: center; gap: 13px; font-size: 12px; color: var(--mfp-muted); }
-.mfp__index > span:first-child { color: var(--mfp-ink); }
-.mfp__index-line { height: 1px; width: 38px; background: #a9aba1; }
-.mfp__caption-main { text-align: center; min-height: 53px; }
-.mfp__caption-main p { font-size: 14px; margin: 0 0 7px; font-weight: 600; }
-.mfp__caption-main > span { font-size: 12px; color: var(--mfp-muted); }
-.mfp__arrows { display: flex; justify-content: flex-end; gap: 8px; }
-.mfp__arrows button { border: 1px solid #c6c8bd !important; border-radius: 50%; height: 37px; width: 37px; font-size: 25px; line-height: 1; transition: background .2s, color .2s; }
-.mfp__arrows button:hover { background: var(--mfp-ink); color: var(--mfp-bg); }
-.mfp__dots { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin: 19px 0 20px; }
-.mfp__dot { width: 21px; height: 21px; padding: 4px !important; border-radius: 50%; border: 1px solid transparent !important; }
-.mfp__dot i { display: block; width: 11px; height: 11px; border-radius: 50%; background: var(--swatch, #c9cac2); box-shadow: inset 0 0 0 1px #0001; transition: background .4s; }
-.mfp__dot.is-current { border-color: #77796d !important; }
-.mfp__dot:hover { border-color: #a5a79c !important; }
-.mfp__sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+/* Sous le portant : le nom du maillot, et le lien vers sa fiche. */
+.mfp__caption { display: flex; flex-direction: column; align-items: center; gap: 10px; min-height: 76px; margin-top: 6px; text-align: center; }
+.mfp__caption p { margin: 0; min-height: 1.3em; font-size: 15px; font-style: italic; }
+.mfp__more { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; padding: 7px 16px; border: 1px solid #b9bbb1; border-radius: 30px; transition: background .2s, color .2s; }
+.mfp__more:hover { background: var(--mfp-ink); color: var(--mfp-bg); }
 
 /* Sans WebGL, ou si le script ne se charge pas : une simple rangée de maillots. */
 [data-mfp-fallback] { display: none; }
@@ -85,16 +53,13 @@
 .mfp__flat li { flex: 0 0 220px; scroll-snap-align: start; }
 .mfp__flat img { width: 100%; height: auto; aspect-ratio: 1; object-fit: contain; mix-blend-mode: multiply; }
 .mfp__empty { margin: 40px 0; font-size: 14px; color: var(--mfp-muted); }
-.mfp__flat span, .mfp__flat small { display: block; font-size: 13px; margin-top: 6px; }
-.mfp__flat small { color: var(--mfp-muted); }
-.mfp--flat .mfp__caption, .mfp--flat .mfp__dots { display: none; }
+.mfp__flat span { display: block; font-size: 13px; margin-top: 6px; }
+.mfp--flat .mfp__caption { display: none; }
 
-@keyframes mfp-appear { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 @keyframes mfp-dots { from { width: 0; } to { width: 1em; } }
 
 @media (min-height: 900px) and (min-width: 800px) {
   .mfp__stage { height: 500px; margin-top: 25px; }
-  .mfp__panel { top: 110px; }
 }
 @media (max-width: 800px) {
   .mfp__inner { padding: 32px 5% 20px; }
@@ -102,27 +67,11 @@
   .mfp__edition { font-size: 9px; }
   /* Le portant file jusqu'aux bords de l'écran. */
   .mfp__stage { height: 390px; margin-inline: calc(50% - 50vw); }
-  .mfp__stage.is-selected { height: 740px; }
-  .mfp__return { left: 5vw; }
-  .mfp__motion { right: 5vw; }
-  .mfp__panel { top: 390px; right: 0; left: 0; width: auto; padding: 20px 5% 5px; border-top: 1px solid var(--mfp-line); background: var(--mfp-bg); }
-  .mfp__panel h3 { font-size: 21px; max-width: 70%; }
-  .mfp__price { position: absolute; top: 44px; right: 5%; font-size: 13px; }
-  .mfp__return { font-size: 20px; }
-  .mfp__return span { font-size: 12px; }
-  .mfp__motion span:last-child { display: none; }
-  .mfp__caption { padding: 0; grid-template-columns: 1fr 3fr 1fr; }
-  .mfp__caption-main p { font-size: 12px; }
-  .mfp__caption-main > span { font-size: 11px; }
-  .mfp__index { gap: 7px; font-size: 11px; }
-  .mfp__index-line { width: 20px; }
-  .mfp__arrows { gap: 4px; }
-  .mfp__arrows button { height: 30px; width: 30px; font-size: 20px; }
-  .mfp__dots { margin-top: 15px; }
-}
-@media (max-width: 450px) {
-  .mfp__index { gap: 5px; }
-  .mfp__index-line { width: 13px; }
+  .mfp__close { right: 5vw; }
+  .mfp__side { width: 34px; height: 34px; font-size: 20px; }
+  .mfp__side--prev { left: 4vw; }
+  .mfp__side--next { right: 4vw; }
+  .mfp__caption p { font-size: 13px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .mfp *, .mfp *::before, .mfp *::after { animation: none !important; transition: none !important; }

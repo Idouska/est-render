@@ -12,17 +12,14 @@
  */
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js';
 
-const SPACING = 1.18; // écart entre deux cintres sur la barre
+const SPACING = 0.66; // écart entre deux cintres : les maillots se serrent sur la barre
 const RAIL_Y = 1.5; // hauteur de la barre
-const ANGLE = -1.12; // les maillots se présentent de biais, comme sur un vrai portant
+const ANGLE = -1.36; // presque par la tranche, comme sur un vrai portant
+const SPREAD = 1.05; // de combien les voisins s'écartent du maillot survolé
 const SHIRT_H = 2.62; // hauteur d'un maillot, en unités de scène
 const SHIRT_MAX_W = 2.9;
 const COLLAR_Y = -0.33; // le haut du col, sous la barre, là où arrive la tige du cintre
 const STEP = 1 / 60; // pas d'intégration des ressorts
-const SIZE_SCALE = {
-  XS: [0.86, 0.9], S: [0.93, 0.95], M: [1, 1], L: [1.08, 1.055],
-  XL: [1.16, 1.11], XXL: [1.24, 1.16], '3XL': [1.3, 1.2],
-};
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 
 /* ------------------------------------------------------------------------ */
@@ -709,7 +706,6 @@ export class Rail {
     this.hover = -1;
     this.offset = 0;
     this.time = 0;
-    this.size = 'M';
     this.turn = 0;
     this.visible = true;
     this.fits = true;
@@ -769,6 +765,35 @@ export class Rail {
     this.hookGeometry = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(hook.map(([x, y]) => new THREE.Vector3(x, y, 0))), 40, 0.012, 10, false);
     this.hookMaterial = new THREE.MeshStandardMaterial({ color: 0x696b61, metalness: 0.6, roughness: 0.35 });
 
+    // Quand un maillot est choisi, le reste du portant passe flou derrière lui :
+    // on le rend dans une petite texture, qu'on étale à l'écran en la floutant.
+    this.blur = 0;
+    this.backdrop = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType });
+    this.veil = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
+      uniforms: { map: { value: this.backdrop.texture }, texel: { value: new THREE.Vector2() }, amount: { value: 0 } },
+      vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+      fragmentShader: `uniform sampler2D map; uniform vec2 texel; uniform float amount; varying vec2 vUv;
+void main() {
+  vec4 sum = vec4(0.0); float total = 0.0;
+  for (int x = -3; x <= 3; x++) for (int y = -3; y <= 3; y++) {
+    float w = exp(-float(x * x + y * y) / 8.0);
+    sum += texture2D(map, vUv + vec2(float(x), float(y)) * texel * 2.2 * amount) * w; total += w;
+  }
+  sum /= total;
+  gl_FragColor = vec4(sum.rgb / max(sum.a, 1e-4), sum.a * (1.0 - 0.3 * amount));
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+}`,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+      toneMapped: true,
+    }));
+    this.veil.frustumCulled = false;
+    this.veilScene = new THREE.Scene();
+    this.veilScene.add(this.veil);
+    this.veilCamera = new THREE.Camera();
+
     this.raycaster = new THREE.Raycaster();
     this.pointer = new THREE.Vector2();
     this.drag = null;
@@ -797,7 +822,6 @@ export class Rail {
         this.drag.moved = true;
         if (this.selected >= 0) {
           this.turn = this.drag.turn + (dx / this.host.clientWidth) * Math.PI * 2;
-          this.callbacks.onRotate(Math.cos(this.turn) < 0 ? 'back' : 'front');
         } else {
           this.offset = (dx / this.host.clientWidth) * 7;
           this.setHover(-1);
@@ -860,16 +884,9 @@ export class Rail {
     return -1;
   }
 
-  setView(view) {
-    this.turn = view === 'back' ? Math.PI : 0;
-    this.callbacks.onRotate(view);
-  }
-
-  // « M », « M / Flocage », « 2XL »… ramenés à une taille connue ; sinon, M.
-  setSize(title) {
-    const size = String(title).split(/[\s/]+/)[0].toUpperCase();
-    const alias = { '2XL': 'XXL', XXXL: '3XL' }[size] || size;
-    this.size = SIZE_SCALE[alias] ? alias : 'M';
+  // De face, pour chaque nouveau maillot choisi.
+  resetTurn() {
+    this.turn = 0;
   }
 
   setHover(index) {
@@ -890,11 +907,14 @@ export class Rail {
     const width = this.host.clientWidth, height = this.host.clientHeight;
     if (!width || !height) return;
     this.mobile = width < 720;
-    const h = this.selected >= 0 && this.mobile ? 385 : height;
+    const h = height;
     if (this.canvasSize !== width + 'x' + h) {
       this.canvasSize = width + 'x' + h;
       this.renderer.setSize(width, h, false);
       this.renderer.domElement.style.height = h + 'px';
+      const ratio = this.renderer.getPixelRatio();
+      this.backdrop.setSize(Math.ceil((width * ratio) / 3), Math.ceil((h * ratio) / 3));
+      this.veil.material.uniforms.texel.value.set(3 / (width * ratio), 3 / (h * ratio));
     }
     const half = this.mobile ? 2.5 : 2.35;
     Object.assign(this.camera, { left: (-half * width) / h, right: (half * width) / h, top: half, bottom: -half });
@@ -926,27 +946,19 @@ export class Rail {
       let x = this.targetX(i) + this.offset, angle = ANGLE, z = 0, scale = 1;
       const active = chosen ? i === this.selected : i === this.hover;
       if (chosen) {
+        // Le maillot choisi vient au centre, en grand ; le portant reste derrière, flou.
         if (active) {
-          x = this.mobile ? 0 : -2.05;
-          z = 0.62;
+          x = 0;
+          z = 1.2;
           angle = this.turn;
-          scale = 1.09;
+          scale = 1.32;
         } else {
-          const far = this.camera.right + 4.5;
-          x = i < this.selected ? -far - (this.selected - i) * 0.45 : far + (i - this.selected) * 0.45;
-          z = -0.5;
-          angle = -1.3;
-          scale = 0.84;
+          z = -0.4;
         }
       } else if (this.hover >= 0) {
-        if (active) { angle = -0.08; z = 0.7; scale = 1.025; }
-        else x += i < this.hover ? -0.68 : 0.68;
+        if (active) { angle = -0.06; z = 0.7; scale = 1.03; }
+        else x += i < this.hover ? -SPREAD : SPREAD;
       }
-
-      const [sx, sy] = chosen && active ? SIZE_SCALE[this.size] : [1, 1];
-      const snap = reducedMotion.matches ? 1 : ease;
-      item.shirt.scale.x = THREE.MathUtils.lerp(item.shirt.scale.x, sx, snap);
-      item.shirt.scale.y = THREE.MathUtils.lerp(item.shirt.scale.y, sy, snap);
 
       item.pivot.position.z = THREE.MathUtils.lerp(item.pivot.position.z, z, ease);
       item.pivot.scale.setScalar(THREE.MathUtils.lerp(item.pivot.scale.x, scale, ease));
@@ -970,7 +982,37 @@ export class Rail {
       item.uniforms.impulse.value = this.moving ? THREE.MathUtils.clamp(item.va * 0.022 + item.vx * 0.012, -0.085, 0.085) : 0;
       item.uniforms.time.value = this.time + i * 0.7;
     });
+    this.blur += ((chosen ? 1 : 0) - this.blur) * (reducedMotion.matches ? 1 : ease);
+    this.draw();
+  }
+
+  draw() {
+    const active = this.items[this.selected];
+    if (this.blur < 0.01 || !active) {
+      this.renderer.render(this.scene, this.camera);
+      return;
+    }
+    // 1. le portant sans le maillot choisi, dans la petite texture ;
+    active.pivot.visible = false;
+    this.renderer.setRenderTarget(this.backdrop);
+    this.renderer.setClearColor(0x000000, 0);
+    this.renderer.clear();
     this.renderer.render(this.scene, this.camera);
+    this.renderer.setRenderTarget(null);
+    active.pivot.visible = true;
+    // 2. étalé et flouté à l'écran ;
+    this.veil.material.uniforms.amount.value = this.blur;
+    this.renderer.render(this.veilScene, this.veilCamera);
+    // 3. puis le maillot choisi, net, par-dessus.
+    const hidden = [];
+    for (const child of this.scene.children) {
+      if (child !== active.pivot && !child.isLight && child.visible) { child.visible = false; hidden.push(child); }
+    }
+    this.renderer.autoClear = false;
+    this.renderer.clearDepth();
+    this.renderer.render(this.scene, this.camera);
+    this.renderer.autoClear = true;
+    for (const child of hidden) child.visible = true;
   }
 
   dispose() {
@@ -989,13 +1031,16 @@ export class Rail {
         m.dispose();
       }
     });
+    this.backdrop.dispose();
+    this.veil.geometry.dispose();
+    this.veil.material.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }
 }
 
 /* ------------------------------------------------------------------------ */
-/* L'interface autour : légende, pastilles, fiche du maillot choisi         */
+/* L'interface autour : le nom du maillot, les flèches, la fermeture        */
 /* ------------------------------------------------------------------------ */
 
 // Les prix arrivent tels que les formate la boutique, parfois avec des entités (« 54,90 &euro; »).
@@ -1005,64 +1050,39 @@ const decode = (s) => {
   return t.value;
 };
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-const pad = (n) => String(n).padStart(2, '0');
-const withVariant = (url, id) => url + (url.includes('?') ? '&' : '?') + 'variant=' + id;
-
 function mount(root) {
   if (root.portant) return;
   const script = root.querySelector('[data-mfp-products]');
   const products = (script ? JSON.parse(script.textContent) : []).filter((p) => p && p.front);
-  for (const p of products) {
-    p.price = decode(p.price);
-    for (const v of p.variants || []) v.price = decode(v.price);
-  }
+  for (const p of products) p.price = decode(p.price);
   const body = root.querySelector('[data-mfp-body]');
   if (!products.length || !body) return;
-  const cartUrl = root.dataset.cartUrl || '/cart/add';
   root.classList.remove('mfp--flat');
 
   body.innerHTML = `
     <div class="mfp__stage" data-stage>
       <div class="mfp__rack" data-rack></div>
       <div class="mfp__loading" data-loading>On accroche les maillots<span>…</span></div>
-      <button class="mfp__return" type="button" data-return hidden>× <span>Retour au portant</span></button>
-      <button class="mfp__motion" type="button" data-motion aria-pressed="true"><span data-motion-icon>Ⅱ</span><span data-motion-label>Mouvement</span></button>
-      <aside class="mfp__panel" data-panel aria-label="Maillot sélectionné" hidden></aside>
+      <button class="mfp__close" type="button" data-close aria-label="Retour au portant" hidden>Fermer</button>
+      <button class="mfp__side mfp__side--prev" type="button" data-prev aria-label="Maillot précédent" hidden>‹</button>
+      <button class="mfp__side mfp__side--next" type="button" data-next aria-label="Maillot suivant" hidden>›</button>
     </div>
-    <div class="mfp__caption">
-      <div class="mfp__index"><span data-index>01</span><span class="mfp__index-line"></span><span>${pad(products.length)}</span></div>
-      <div class="mfp__caption-main"><p data-name></p><span data-hint></span></div>
-      <div class="mfp__arrows">
-        <button type="button" data-prev aria-label="Maillot précédent">‹</button>
-        <button type="button" data-next aria-label="Maillot suivant">›</button>
-      </div>
-    </div>
-    <div class="mfp__dots" data-dots role="group" aria-label="Choisir un maillot"></div>
-    <div class="mfp__sr" aria-live="polite" data-announcer></div>`;
+    <div class="mfp__caption" aria-live="polite">
+      <p data-name></p>
+      <a class="mfp__more" data-more href="#" hidden>Voir le maillot</a>
+    </div>`;
   const $ = (s) => body.querySelector(s);
-  const stage = $('[data-stage]'), panel = $('[data-panel]'), announcer = $('[data-announcer]');
+  const stage = $('[data-stage]');
 
-  let selected = -1, focused = Math.floor((products.length - 1) / 2), hovered = -1;
-  let moving = !reducedMotion.matches, loaded = 0;
-
-  const dots = products.map((p, i) => {
-    const dot = document.createElement('button');
-    dot.type = 'button';
-    dot.className = 'mfp__dot';
-    dot.setAttribute('aria-label', 'Voir ' + p.title);
-    dot.innerHTML = '<i></i>';
-    dot.addEventListener('click', () => select(i));
-    $('[data-dots]').append(dot);
-    return dot;
-  });
+  let selected = -1, focused = Math.floor((products.length - 1) / 2), hovered = -1, loaded = 0;
+  const moving = !reducedMotion.matches;
 
   let rail;
   try {
     rail = new Rail($('[data-rack]'), products.length, {
       onSelect: (i) => select(i),
-      onRotate: (view) => showView(view),
-      onHover: (i) => { hovered = i; caption(i); },
-      onBrowse: (delta) => { focused = Math.max(0, Math.min(products.length - 1, focused + delta)); hovered = -1; sync(); caption(focused); },
+      onHover: (i) => { hovered = i; caption(); },
+      onBrowse: (delta) => { focused = Math.max(0, Math.min(products.length - 1, focused + delta)); hovered = -1; sync(); caption(); },
     });
   } catch (error) {
     console.error(error);
@@ -1080,9 +1100,6 @@ function mount(root) {
           const jersey = await buildJersey(products[i].front, products[i].back, rail.anisotropy);
           if (!root.portant) return;
           rail.add(i, jersey);
-          products[i].swatch = jersey.swatch;
-          products[i].hasBack = jersey.hasBack;
-          dots[i].style.setProperty('--swatch', jersey.swatch);
           loaded++;
           $('[data-loading]').hidden = true;
         } catch (error) {
@@ -1096,118 +1113,64 @@ function mount(root) {
 
   function sync() {
     rail.setState({ selected, focused, hovered, moving });
-    dots.forEach((d, i) => d.classList.toggle('is-current', i === (selected >= 0 ? selected : focused)));
   }
 
-  function caption(i) {
-    const p = products[i];
-    $('[data-name]').textContent = p ? p.title : 'Toute la collection';
-    $('[data-hint]').textContent = p
-      ? `${p.price} · ${selected >= 0 ? 'Sélectionné sur le portant' : 'Cliquez pour le voir de près'}`
-      : 'Faites glisser pour parcourir. Choisissez un maillot.';
-    $('[data-index]').textContent = pad((i >= 0 ? i : focused) + 1);
+  // Sous le portant : le nom du maillot survolé (ou choisi), et le lien vers sa fiche.
+  function caption() {
+    const p = products[selected >= 0 ? selected : hovered];
+    $('[data-name]').textContent = p ? p.title : '';
+    const more = $('[data-more]');
+    more.hidden = !p;
+    if (p) more.href = p.url;
   }
 
   function select(i) {
-    const p = products[i];
     selected = focused = i;
     hovered = -1;
-    const variants = p.variants || [];
-    const initial = variants.find((v) => v.title === 'M' && v.available) || variants.find((v) => v.available) || variants[0];
-    rail.setSize(initial ? initial.title : 'M');
-    rail.setView('front');
+    rail.resetTurn();
     stage.classList.add('is-selected');
-    $('[data-return]').hidden = false;
-    panel.hidden = false;
-    panel.innerHTML = `
-      ${p.type ? `<span class="mfp__kicker">${esc(p.type)}</span>` : ''}
-      <h3>${esc(p.title)}</h3>
-      <p class="mfp__price" data-price>${esc(initial ? initial.price : p.price)}</p>
-      <div class="mfp__views" role="group" aria-label="Vue du maillot">
-        <button type="button" data-view="front" aria-pressed="true">Face</button>
-        <button type="button" data-view="back" aria-pressed="false">Dos</button>
-        <span>Glissez le maillot pour le tourner</span>
-      </div>
-      <p class="mfp__back-note" hidden>Pas de photo du dos pour ce maillot · couleur indicative.</p>
-      <div class="mfp__size-label"><span><i class="mfp__swatch" style="background:${esc(p.swatch || '#999')}"></i>Taille</span><span>${variants.some((v) => v.available) ? 'Choisissez votre taille' : 'Épuisé'}</span></div>
-      <div class="mfp__sizes" role="group" aria-label="Taille">${variants.map((v) => `<button type="button" data-variant="${esc(v.id)}" aria-pressed="${v === initial}" class="${v === initial ? 'is-selected' : ''}"${v.available ? '' : ' disabled'}>${esc(v.title)}</button>`).join('')}</div>
-      <form class="mfp__cart" method="post" action="${esc(cartUrl)}">
-        <input type="hidden" name="id" value="${esc(initial ? initial.id : '')}">
-        <input type="hidden" name="quantity" value="1">
-        <button type="submit" class="mfp__buy"${initial && initial.available ? '' : ' disabled'}>Ajouter au panier</button>
-      </form>
-      <a class="mfp__more" data-more href="${esc(initial ? withVariant(p.url, initial.id) : p.url)}">Voir le maillot →</a>
-      <p class="mfp__note">Aperçu visuel des tailles · proportions indicatives.</p>`;
-    panel.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => rail.setView(b.dataset.view)));
-    panel.querySelectorAll('[data-variant]').forEach((b) => b.addEventListener('click', () => {
-      const v = variants.find((x) => String(x.id) === b.dataset.variant);
-      panel.querySelectorAll('[data-variant]').forEach((o) => {
-        o.classList.toggle('is-selected', o === b);
-        o.setAttribute('aria-pressed', String(o === b));
-      });
-      rail.setSize(v.title);
-      panel.querySelector('[name=id]').value = v.id;
-      panel.querySelector('[data-price]').textContent = v.price;
-      panel.querySelector('[data-more]').href = withVariant(p.url, v.id);
-      announcer.textContent = `${p.title} : aperçu en taille ${v.title}.`;
-    }));
+    for (const b of body.querySelectorAll('[data-close], [data-prev], [data-next]')) b.hidden = false;
     sync();
-    caption(i);
-    announcer.textContent = `${p.title} sélectionné. ${p.price}.`;
-  }
-
-  function showView(view) {
-    panel.querySelectorAll('[data-view]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.view === view)));
-    const note = panel.querySelector('.mfp__back-note');
-    if (note) note.hidden = view !== 'back' || Boolean(products[selected]?.hasBack);
+    caption();
   }
 
   function release() {
     const was = selected;
     selected = hovered = -1;
-    panel.hidden = true;
     stage.classList.remove('is-selected');
-    $('[data-return]').hidden = true;
+    for (const b of body.querySelectorAll('[data-close], [data-prev], [data-next]')) b.hidden = true;
     sync();
-    caption(-1);
+    caption();
+    rail.renderer.domElement.focus();
     return was;
   }
 
   function shift(delta) {
     const i = ((selected >= 0 ? selected : focused) + delta + products.length) % products.length;
     if (selected >= 0) select(i);
-    else { focused = hovered = i; sync(); caption(i); }
-  }
-
-  function setMotion(on) {
-    moving = on;
-    const button = $('[data-motion]');
-    button.setAttribute('aria-pressed', String(on));
-    button.setAttribute('aria-label', on ? 'Mettre le mouvement en pause' : 'Relancer le mouvement');
-    $('[data-motion-icon]').textContent = on ? 'Ⅱ' : '▷';
-    sync();
+    else { focused = hovered = i; sync(); caption(); }
   }
 
   // Sans WebGL : une simple rangée de maillots.
   function fallback() {
     root.classList.add('mfp--flat');
-    body.innerHTML = `<ul class="mfp__flat" data-mfp-fallback>${products.map((p) => `<li><a href="${esc(p.url)}"><img src="${esc(p.front)}" alt="${esc(p.title)}" loading="lazy"><span>${esc(p.title)}</span><small>${esc(p.price)}</small></a></li>`).join('')}</ul>`;
+    body.innerHTML = `<ul class="mfp__flat" data-mfp-fallback>${products.map((p) => `<li><a href="${esc(p.url)}"><img src="${esc(p.front)}" alt="${esc(p.title)}" loading="lazy"><span>${esc(p.title)}</span></a></li>`).join('')}</ul>`;
   }
 
   $('[data-prev]').addEventListener('click', () => shift(-1));
   $('[data-next]').addEventListener('click', () => shift(1));
-  $('[data-return]').addEventListener('click', () => dots[release()]?.focus());
-  $('[data-motion]').addEventListener('click', () => setMotion(!moving));
+  $('[data-close]').addEventListener('click', release);
   root.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && selected >= 0) { dots[release()]?.focus(); return; }
-    if (e.target.closest('.mfp__sizes, a, form')) return;
+    if (e.key === 'Escape' && selected >= 0) { release(); return; }
+    if (e.target.closest('a')) return;
     if (e.key === 'ArrowRight') { e.preventDefault(); shift(1); }
     if (e.key === 'ArrowLeft') { e.preventDefault(); shift(-1); }
+    if (e.key === 'Enter' && e.target === rail.renderer.domElement && selected < 0) select(hovered >= 0 ? hovered : focused);
   });
   root.portantDispose = () => { root.portant = null; rail.dispose(); };
 
-  setMotion(moving);
-  caption(-1);
+  sync();
+  caption();
 }
 
 function mountAll(scope = document) {
