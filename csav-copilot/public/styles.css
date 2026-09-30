@@ -112,6 +112,15 @@
      se mesure à 3:1, qu'il tient. tests/accessibilite.test.ts refuse le retour
      d'un `color: var(--ok)` ailleurs. */
 
+  /* L'inverse du même défaut : du blanc SUR l'aplat. Les pastilles rouges du
+     menu (Fournisseurs, Ruptures, Reshipment…) et le message d'erreur
+     écrivaient en blanc sur --crit — 3,91:1, sous le seuil, pour un nombre
+     qui réclame un geste et une phrase qui dit ce qui a échoué. Même teinte,
+     sept points de clarté en moins : 4,61:1. Une seule valeur pour les deux
+     thèmes, puisque le blanc ne s'inverse pas ; sur la surface sombre, la
+     pastille garde 3,7:1, assez pour qu'on la voie. */
+  --crit-strong: #e1292f;
+
   --r-xl: 20px;
   --r-lg: 16px;
   --r-md: 11px;
@@ -1513,7 +1522,7 @@ body.ws-resizing { cursor: col-resize; user-select: none; }
 }
 
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
-.toast.error { background: var(--crit); color: #fff; }
+.toast.error { background: var(--crit-strong); color: #fff; }
 
 .gate {
   max-width: 520px;
@@ -4736,7 +4745,7 @@ textarea:focus-visible {
    réponse est une promesse faite à un client, elle réclame, elle n'informe
    pas. */
 .tally-hot {
-  background: var(--crit) !important;
+  background: var(--crit-strong) !important;
   color: #fff !important;
 }
 
@@ -6971,7 +6980,13 @@ textarea:focus-visible {
      mesurer la police de l'utilisateur, on peut lui laisser de la place.
 
      Le repli sur deux lignes reste le filet : un compteur à cinq chiffres doit
-     provoquer une seconde ligne, jamais une entrée coupée. */
+     provoquer une seconde ligne, jamais une entrée coupée.
+
+     Une vraie boîte a ramené la marge à 4 px (« Réception 5674 · Brouillons
+     367 · Envoyés 353 · Archivés 18 » : 332 px), et « Archivés » passait à la
+     ligne en production. Envoyés et Archivés ne portent plus leur nombre (voir
+     `renderFolders`) : 291 px, 45 de marge ; 311 au pire, « 9999+ » deux fois,
+     encore 25. Le filet ne sert plus qu'à qui rétrécit la file sous 305 px. */
   padding: 6px 4px 7px;
   gap: 4px;
   background: none;

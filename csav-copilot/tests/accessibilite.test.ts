@@ -175,6 +175,40 @@ test('les encres du tableau de bord tiennent 4,5:1, en clair comme en sombre', (
   assert.deepEqual(verifiePaires(sombre, encres, fonds), [], 'thème sombre');
 });
 
+test('le blanc ne se pose que sur un aplat qui le porte, dans les deux thèmes', () => {
+  // L'inverse du défaut précédent : du texte blanc SUR --crit donnait 3,91:1
+  // — les pastilles rouges du menu, le message d'erreur.
+  const blanc = /(?<![-\w])color\s*:\s*(#fff\b|#ffffff\b|white\b)/;
+  const aplat = /background(?:-color)?\s*:\s*var\(\s*(--(?:ok|warn|crit|bad)[\w-]*)\s*\)/;
+  const sombre = { ':root': 10, '[data-theme="dark"]': 10, ':root[data-theme="dark"]': 20 };
+  const themes: [string, string, Map<string, string>][] = [
+    ['styles.css, clair', STYLES, jetons(STYLES, { ':root': 10 })],
+    ['styles.css, sombre', STYLES, jetons(STYLES, sombre)],
+    ['workspace.css', ATELIER, jetons(ATELIER, { ':root': 10 })],
+  ];
+
+  const fautifs: string[] = [];
+  let vus = 0;
+  for (const [nom, css, theme] of themes) {
+    for (const regle of regles(css)) {
+      const fond = regle.corps.match(aplat)?.[1];
+      if (!fond || !blanc.test(regle.corps)) continue;
+      vus += 1;
+      const valeur = theme.get(fond);
+      assert.ok(valeur, `${fond} n'est pas déclaré (${nom})`);
+      const r = ratio('#ffffff', valeur);
+      if (r < 4.5) {
+        fautifs.push(`${nom} — ${regle.selecteurs.join(', ')} : blanc sur ${fond} (${valeur}), ${r.toFixed(2)}:1`);
+      }
+    }
+  }
+
+  // Pastilles et erreur du tableau de bord, dans chaque thème, et la pastille
+  // de l'atelier : cinq rencontres au moins, sans quoi le test ne lit rien.
+  assert.ok(vus >= 5, `seulement ${vus} règles « blanc sur aplat » lues`);
+  assert.deepEqual(fautifs, [], 'poser le blanc sur --crit-strong, pas sur --crit');
+});
+
 test("les encres de l'atelier tiennent 4,5:1 sur tous ses fonds", () => {
   const atelier = jetons(ATELIER, { ':root': 10 });
   const fonds = ['--card', '--paper', '--line-soft'];
@@ -246,6 +280,47 @@ test('les petites cibles de la file tiennent 24 px (WCAG 2.5.8)', () => {
     }
   }
   assert.deepEqual(fautifs, []);
+});
+
+test('seuls les dossiers qui réclament un geste portent leur nombre', () => {
+  // Exécutée, pas lue : la vraie `renderFolders`, avec une vraie boîte.
+  const source = lire('public/app.js');
+  const debut = source.indexOf('const FOLDERS = [');
+  const corps = source.indexOf('function renderFolders(');
+  const fin = source.indexOf('\n}\n', corps);
+  assert.ok(debut > 0 && corps > debut && fin > corps, 'FOLDERS ou renderFolders introuvable');
+
+  const rendre = (compteurs: Record<string, number>, courant = 'inbox') => {
+    const barre = { innerHTML: '', querySelectorAll: () => [] };
+    const state = { queueFolders: compteurs, queue: { folder: courant } };
+    const esc = (s: unknown) => String(s);
+    new Function('$', 'state', 'esc', `${source.slice(debut, fin + 2)}\nrenderFolders();`)(
+      () => barre,
+      state,
+      esc,
+    );
+    return Object.fromEntries(
+      [...barre.innerHTML.matchAll(/<button class="folder" data-folder="(\w+)"[^>]*?(?: title="([^"]*)")?>(.*?)<\/button>/g)].map(
+        ([, cle, titre, contenu]) => [cle, { nombre: contenu.match(/folder-n">([^<]*)</)?.[1] ?? null, titre: titre ?? null }],
+      ),
+    );
+  };
+
+  const boite = rendre({ inbox: 5674, drafts: 367, sent: 353, archived: 18 });
+  assert.deepEqual(boite, {
+    inbox: { nombre: '5674', titre: null },
+    drafts: { nombre: '367', titre: null },
+    sent: { nombre: null, titre: '353 messages' },
+    archived: { nombre: null, titre: '18 messages' },
+  });
+
+  // Le nombre reste consultable quand ce dossier est ouvert, et « 1 » ne
+  // prend pas de s ; un dossier vide n'a ni nombre ni infobulle.
+  const petite = rendre({ inbox: 0, drafts: 12000, sent: 1, archived: 0 }, 'sent');
+  assert.equal(petite.drafts.nombre, '9999+');
+  assert.equal(petite.sent.titre, '1 message');
+  assert.deepEqual(petite.inbox, { nombre: null, titre: null });
+  assert.deepEqual(petite.archived, { nombre: null, titre: null });
 });
 
 test('le tri se clique sur toute sa hauteur, et montre son focus', () => {

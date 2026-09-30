@@ -25,6 +25,20 @@ export interface Nouveaute {
 
 export const NOUVEAUTES: readonly Nouveaute[] = [
   {
+    pr: 66,
+    date: '2026-09-30',
+    pour: 'Tableau de bord',
+    titre: 'Pastilles rouges lisibles, dossiers sur une ligne',
+    resume:
+      'Les pastilles rouges du menu (Fournisseurs, Ruptures de stock, Reshipment…) et le message qui annonce un échec passent sur un rouge plus profond : le chiffre blanc s’y lit, en clair comme en sombre. Au-dessus de la file, « Archivés » ne passe plus à la ligne : seuls Réception et Brouillons affichent leur nombre, ceux qui réclament un geste. Celui d’Envoyés et d’Archivés reste en infobulle, et s’affiche en titre dès qu’on ouvre le dossier.',
+    ou: 'Menu de gauche ; dossiers en haut de la file des messages.',
+    essayer: [
+      'Regarder les pastilles rouges du menu : le chiffre blanc se détache nettement.',
+      'Vérifier que Réception, Brouillons, Envoyés et Archivés tiennent sur une seule ligne.',
+      'Survoler « Envoyés » : l’infobulle donne le nombre de messages.',
+    ],
+  },
+  {
     pr: 65,
     date: '2026-09-30',
     pour: 'Les deux',
