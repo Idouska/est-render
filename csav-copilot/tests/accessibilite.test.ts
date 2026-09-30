@@ -239,6 +239,57 @@ test("aucune règle n'atteint l'avatar par un `span` nu sous `.me`", () => {
   assert.match(avatar.corps, /(?<![-\w])color\s*:\s*var\(--on-accent\)/);
 });
 
+test('les initiales sur un fond `avatarTint` se lisent, quelle que soit la teinte et le thème', () => {
+  // Le fond est calculé en JS et ne suit pas le thème : un pastel clair,
+  // toujours. Une encre qui suit le thème (`--ink`) blanchit en sombre — des
+  // initiales à 1,04:1. `.qav` et `.ov-av` avaient été corrigés, `.msg-av` et
+  // `.rail-av` oubliés : le test retrouve lui-même tous les porteurs.
+  const source = lire('public/app.js');
+  const formule = source.match(/function avatarTint[\s\S]*?hsl\(\$\{hash\} (\d+)% (\d+)%\)/);
+  assert.ok(formule, 'avatarTint ne rend plus `hsl(${hash} S% L%)` : revoir ce test');
+  const [s, l] = [Number(formule[1]) / 100, Number(formule[2]) / 100];
+
+  const porteurs = [
+    ...new Set(
+      [...source.matchAll(/class="([\w-]+)"[^>]*?style="background:\$\{(?:esc\()?avatarTint\(/g)].map((m) => m[1]),
+    ),
+  ];
+  assert.ok(porteurs.length >= 4, `seulement ${porteurs.length} porteurs trouvés : ${porteurs.join(', ')}`);
+
+  /** hsl(h, s, l) → #rrggbb, la conversion CSS. */
+  const hsl = (h: number) => {
+    const f = (n: number) => {
+      const k = (n + h / 30) % 12;
+      const v = l - s * Math.min(l, 1 - l) * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+      return Math.round(v * 255).toString(16).padStart(2, '0');
+    };
+    return `#${f(0)}${f(8)}${f(4)}`;
+  };
+
+  const fautifs: string[] = [];
+  for (const classe of porteurs) {
+    // Toute règle dont la dernière partie vise la classe : la règle de base,
+    // et un éventuel `[data-theme="dark"] .classe` qui la contredirait.
+    const vise = new RegExp(`(^|[\\s>])\\.${classe}$`);
+    const encres = regles(STYLES)
+      .filter((r) => r.selecteurs.some((sel) => vise.test(sel)))
+      .flatMap((r) => declarations(r.corps))
+      .filter((d) => d.nom === 'color')
+      .map((d) => d.valeur);
+
+    if (encres.length === 0) fautifs.push(`.${classe} : aucune encre déclarée, elle hérite du thème`);
+    for (const encre of encres) {
+      if (!/^#[0-9a-f]{6}$/i.test(encre)) {
+        fautifs.push(`.${classe} : « ${encre} » suit le thème, le fond ne le suit pas`);
+        continue;
+      }
+      const pire = Math.min(...Array.from({ length: 360 }, (_, h) => ratio(encre, hsl(h))));
+      if (pire < 4.5) fautifs.push(`.${classe} : ${encre} tombe à ${pire.toFixed(2)}:1 sur une teinte`);
+    }
+  }
+  assert.deepEqual(fautifs, []);
+});
+
 test('les cases de sélection de la file disent quel message elles cochent', () => {
   const cases = [...APP.matchAll(/<input type="checkbox" data-pick=[\s\S]*?\/>/g)].map((m) => m[0]);
   assert.equal(cases.length, 2, 'une case en liste, une en tableau');

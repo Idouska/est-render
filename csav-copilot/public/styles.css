@@ -6606,7 +6606,12 @@ textarea:focus-visible {
   place-items: center;
   font-size: 9px;
   font-weight: 650;
-  color: var(--ink);
+  /* Encre fixe, comme `.qav` et `.ov-av` : le fond vient d'`avatarTint`, un
+     pastel clair dans les deux thèmes. `--ink` blanchissait en sombre — des
+     initiales à 1,04:1, un rond vide. Les deux premiers avaient été corrigés,
+     ces deux-ci oubliés ; tests/accessibilite.test.ts les suit désormais tous,
+     y compris un cinquième qui naîtrait. */
+  color: #101018;
 }
 
 /* ------------------------------------------------ en-tête de la file ----- */
@@ -6851,7 +6856,8 @@ textarea:focus-visible {
   place-items: center;
   font-size: 13px;
   font-weight: 650;
-  color: var(--ink);
+  /* Encre fixe : voir `.msg-av`. */
+  color: #101018;
 }
 
 .rail-id-txt { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
