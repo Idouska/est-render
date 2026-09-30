@@ -1,0 +1,234 @@
+{%- comment -%}
+  Portant de maillots — hero 3D (voir myfootify-portant/README.md).
+
+  Chaque maillot est reconstruit en volume à partir de ses photos :
+  - la face : la photo principale du produit (fond blanc ou uni, ou PNG détouré) ;
+  - le dos : la première photo dont le texte alternatif parle du dos
+    (« vue de dos », « dos du maillot », « vue arrière »…).
+  Les métachamps custom.portant_face et custom.portant_dos (fichier image)
+  remplacent ce choix automatique quand ils sont remplis.
+{%- endcomment -%}
+{{ 'maillots-portant.css' | asset_url | stylesheet_tag }}
+
+{%- liquid
+  assign source = section.settings.products
+  if source == blank
+    assign source = section.settings.collection.products
+  endif
+-%}
+
+<div
+  class="mfp"
+  id="mfp-{{ section.id }}"
+  data-mfp
+  data-cart-url="{{ routes.cart_add_url }}"
+  style="--mfp-bg: {{ section.settings.background }}; --mfp-ink: {{ section.settings.text }}; --mfp-accent: {{ section.settings.accent }};"
+>
+  <div class="mfp__inner">
+    <header class="mfp__head">
+      <div>
+        {%- if section.settings.eyebrow != blank -%}
+          <p class="mfp__eyebrow">{{ section.settings.eyebrow | escape }}</p>
+        {%- endif -%}
+        <h2 class="mfp__title">{{ section.settings.heading | escape }}</h2>
+      </div>
+      <div class="mfp__edition">
+        <span>{{ section.settings.edition_top | escape }}</span>
+        <span>{{ section.settings.edition_bottom | escape }}</span>
+      </div>
+    </header>
+
+    <div data-mfp-body>
+      {%- if source == blank -%}
+        {%- if request.design_mode -%}
+          <p class="mfp__empty">Choisissez une collection de maillots dans les réglages de la section.</p>
+        {%- endif -%}
+      {%- else -%}
+        <div class="mfp__stage">
+          <div class="mfp__loading">On accroche les maillots<span>…</span></div>
+        </div>
+        {%- comment -%} Si le portant 3D ne peut pas se charger, cette rangée prend le relais. {%- endcomment -%}
+        <ul class="mfp__flat" data-mfp-fallback>
+          {%- for product in source limit: section.settings.limit -%}
+            <li>
+              <a href="{{ product.url }}">
+                {%- if product.featured_media -%}
+                  {{ product.featured_media | image_url: width: 480 | image_tag: loading: 'lazy', alt: product.title }}
+                {%- endif -%}
+                <span>{{ product.title | escape }}</span>
+                <small>{{ product.price | money | strip_html }}</small>
+              </a>
+            </li>
+          {%- endfor -%}
+        </ul>
+      {%- endif -%}
+    </div>
+  </div>
+
+  <script type="application/json" data-mfp-products>
+    [
+      {%- for product in source limit: section.settings.limit -%}
+        {%- liquid
+          assign front_url = ''
+          assign back_url = ''
+          if product.metafields.custom.portant_face != blank
+            assign front_url = product.metafields.custom.portant_face.value | image_url: width: 1200
+          elsif product.featured_media != blank
+            assign front_url = product.featured_media | image_url: width: 1200
+          endif
+
+          if product.metafields.custom.portant_dos != blank
+            assign back_url = product.metafields.custom.portant_dos.value | image_url: width: 1200
+          else
+            for media in product.media
+              if media.media_type == 'image' and media.id != product.featured_media.id
+                assign alt = media.alt | downcase
+                if alt contains 'vue de dos' or alt contains 'dos du maillot' or alt contains 'vue arrière' or alt contains 'vue arriere' or alt contains 'back view'
+                  assign back_url = media | image_url: width: 1200
+                  break
+                endif
+              endif
+            endfor
+            if back_url == blank
+              for media in product.media
+                if media.media_type == 'image' and media.id != product.featured_media.id
+                  assign alt = media.alt | downcase | prepend: ' '
+                  if alt contains ' dos ' or alt contains ' dos,' or alt contains 'arrière' or alt contains ' back'
+                    assign back_url = media | image_url: width: 1200
+                    break
+                  endif
+                endif
+              endfor
+            endif
+          endif
+        -%}
+        {
+          "title": {{ product.title | json }},
+          "type": {{ product.type | json }},
+          "url": {{ product.url | json }},
+          "price": {{ product.price | money | strip_html | json }},
+          "front": {{ front_url | json }},
+          "back": {{ back_url | json }},
+          "variants": [
+            {%- for variant in product.variants -%}
+              {
+                "id": {{ variant.id }},
+                "title": {{ variant.title | json }},
+                "price": {{ variant.price | money | strip_html | json }},
+                "available": {{ variant.available | json }}
+              }
+              {%- unless forloop.last -%},{%- endunless -%}
+            {%- endfor -%}
+          ]
+        }
+        {%- unless forloop.last -%},{%- endunless -%}
+      {%- endfor -%}
+    ]
+  </script>
+
+  {%- comment -%}
+    Filet de sécurité : si le module (ou Three.js, chargé depuis jsDelivr) n'a
+    pas pris la main au bout de 8 s, on montre la rangée de maillots.
+  {%- endcomment -%}
+  <script>
+    setTimeout(function () {
+      var root = document.getElementById('mfp-{{ section.id }}');
+      if (root && !root.portant) root.classList.add('mfp--flat');
+    }, 8000);
+  </script>
+</div>
+
+<script type="module" src="{{ 'maillots-portant.js' | asset_url }}"></script>
+
+{% schema %}
+{
+  "name": "Portant de maillots",
+  "tag": "section",
+  "class": "section-maillots-portant",
+  "settings": [
+    {
+      "type": "header",
+      "content": "Textes"
+    },
+    {
+      "type": "text",
+      "id": "eyebrow",
+      "label": "Sur-titre"
+    },
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Titre",
+      "default": "La collection."
+    },
+    {
+      "type": "text",
+      "id": "edition_top",
+      "label": "Mention à droite (haut)",
+      "default": "Le portant"
+    },
+    {
+      "type": "text",
+      "id": "edition_bottom",
+      "label": "Mention à droite (bas)",
+      "default": "Saison 2026/27"
+    },
+    {
+      "type": "header",
+      "content": "Maillots"
+    },
+    {
+      "type": "collection",
+      "id": "collection",
+      "label": "Collection"
+    },
+    {
+      "type": "product_list",
+      "id": "products",
+      "label": "Ou les maillots, un par un",
+      "limit": 12,
+      "info": "Si des maillots sont choisis ici, ils remplacent la collection."
+    },
+    {
+      "type": "range",
+      "id": "limit",
+      "min": 3,
+      "max": 12,
+      "step": 1,
+      "label": "Nombre de maillots sur le portant",
+      "default": 9
+    },
+    {
+      "type": "paragraph",
+      "content": "Face : la photo principale du produit, sur fond blanc ou uni. Dos : la photo dont le texte alternatif contient « vue de dos », « dos du maillot » ou « vue arrière »."
+    },
+    {
+      "type": "header",
+      "content": "Couleurs"
+    },
+    {
+      "type": "color",
+      "id": "background",
+      "label": "Fond",
+      "default": "#f5f5f1"
+    },
+    {
+      "type": "color",
+      "id": "text",
+      "label": "Texte",
+      "default": "#20211f"
+    },
+    {
+      "type": "color",
+      "id": "accent",
+      "label": "Accent",
+      "default": "#aa3527"
+    }
+  ],
+  "presets": [
+    {
+      "name": "Portant de maillots"
+    }
+  ]
+}
+{% endschema %}
