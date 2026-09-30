@@ -20,7 +20,12 @@
 :root {
   --ink: #14162a;
   --ink-soft: #5c5f74;
-  --ink-mute: #8b8ea3;
+  /* 4,56:1 au pire des fonds de la feuille (--brand-soft), contre 3,02:1 sur
+     --paper avant. Ce gris écrit vingt-sept textes, et l'écran se lit sous un
+     néon d'entrepôt : c'est le dernier endroit où tolérer un gris pâle. Même
+     teinte, même saturation, treize points de clarté en moins — on retombe,
+     par le même calcul, sur le gris du tableau de bord à un souffle près. */
+  --ink-mute: #676a82;
   --line: #e6e7ef;
   --line-soft: #f0f1f6;
   --paper: #f6f7fb;
@@ -33,6 +38,14 @@
   --warn-soft: #fdf5e6;
   --bad: #c9342f;
   --bad-soft: #fdefee;
+  /* Une couleur d'aplat n'est pas une couleur de texte. Le vert donne 3,59:1
+     sur son propre fond pâle, l'orange 3,36:1 : « Expédiée », « En attente »,
+     le bilan d'un import passaient sous le seuil. Ces deux encres servent au
+     texte ; --ok et --warn restent pour les fonds, les bordures et les
+     traits. Le rouge n'en a pas besoin : 4,64:1 au pire des fonds où il
+     écrit — il ne se pose jamais sur --brand-soft, où il tomberait à 4,49. */
+  --ok-ink: #0e7349;
+  --warn-ink: #936119;
   --r: 14px;
   --r-sm: 10px;
   --shadow: 0 1px 2px rgb(20 22 42 / 6%), 0 4px 14px rgb(20 22 42 / 5%);
@@ -386,7 +399,7 @@ p { margin: 0; }
   transition: width 0.35s ease;
 }
 .ws-progress.full .ws-progress-bar > i { background: var(--ok); }
-.ws-progress.full > span { color: var(--ok); }
+.ws-progress.full > span { color: var(--ok-ink); }
 
 /* La barre d'une commande se répète cinquante fois : elle ne doit pas crier
    cinquante fois. */
@@ -525,7 +538,7 @@ input:focus, select:focus, textarea:focus {
   text-transform: uppercase;
   color: var(--ink-mute);
 }
-.pk-done { margin-left: auto; color: var(--ok); letter-spacing: 0.02em; }
+.pk-done { margin-left: auto; color: var(--ok-ink); letter-spacing: 0.02em; }
 
 /* L'article, avec sa photo : c'est le seul moment où elle sert — celui où
    l'on attrape la paire avant de la mettre dans le carton. */
@@ -721,8 +734,8 @@ input:focus, select:focus, textarea:focus {
   color: var(--ink-soft);
 }
 .tag-order { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-.tone-wait { background: var(--warn-soft); color: var(--warn); }
-.tone-ok { background: var(--ok-soft); color: var(--ok); }
+.tone-wait { background: var(--warn-soft); color: var(--warn-ink); }
+.tone-ok { background: var(--ok-soft); color: var(--ok-ink); }
 .tone-bad { background: var(--bad-soft); color: var(--bad); }
 
 /* ----------------------------------------------------------- écran vide -- */
@@ -749,8 +762,8 @@ input:focus, select:focus, textarea:focus {
   color: var(--ink-mute);
   font-size: 18px;
 }
-.empty-good { border-color: #bfe6d3; background: var(--ok-soft); color: var(--ok); }
-.empty-good .empty-mark { background: #cdeadb; color: var(--ok); }
+.empty-good { border-color: #bfe6d3; background: var(--ok-soft); color: var(--ok-ink); }
+.empty-good .empty-mark { background: #cdeadb; color: var(--ok-ink); }
 
 /* -------------------------------------------------------------- modale --- */
 
@@ -1004,7 +1017,7 @@ input:focus, select:focus, textarea:focus {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.rowo-state.ok { color: var(--ok); font-size: 16px; }
+.rowo-state.ok { color: var(--ok-ink); font-size: 16px; }
 
 .rowo-car { width: 15px; height: 15px; flex: none; stroke: var(--ink-mute); fill: none;
   stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
@@ -1192,7 +1205,7 @@ input:focus, select:focus, textarea:focus {
 .varr-stock {
   font-size: 12px;
   font-weight: 650;
-  color: var(--ok);
+  color: var(--ok-ink);
   background: var(--ok-soft);
   border-radius: 999px;
   padding: 3px 9px;
@@ -1374,7 +1387,7 @@ input:focus, select:focus, textarea:focus {
   border: 1.5px solid var(--warn);
   border-radius: var(--r);
   background: var(--warn-soft);
-  color: var(--warn);
+  color: var(--warn-ink);
   font-size: 14px;
 }
 .ws-test b { margin-right: 6px; }
@@ -1404,13 +1417,13 @@ input:focus, select:focus, textarea:focus {
 .bulk-drop-hint { margin-right: auto; align-self: center; font-size: 13px; color: var(--ink-soft); }
 
 .bulk-note { margin: 0; font-size: 13.5px; color: var(--ink-soft); }
-.bulk-note-ok { color: var(--ok); }
-.bulk-note-warn { color: var(--warn); }
+.bulk-note-ok { color: var(--ok-ink); }
+.bulk-note-warn { color: var(--warn-ink); }
 .bulk-note-bad { color: var(--bad); }
 
 .bulk-msg { margin: 0; padding: 11px 14px; border-radius: var(--r-sm); background: var(--line-soft); font-size: 14px; color: var(--ink-soft); }
 .bulk-msg-bad { background: var(--bad-soft); color: var(--bad); }
-.bulk-msg-warn { background: var(--warn-soft); color: var(--warn); }
+.bulk-msg-warn { background: var(--warn-soft); color: var(--warn-ink); }
 
 .bulk-bilan { display: flex; flex-wrap: wrap; gap: 8px; }
 .bulk-bilan span {
@@ -1421,8 +1434,8 @@ input:focus, select:focus, textarea:focus {
   color: var(--ink-soft);
 }
 .bulk-bilan b { margin-left: 4px; color: var(--ink); }
-.bulk-bilan .bulk-ok { background: var(--ok-soft); color: var(--ok); }
-.bulk-bilan .bulk-ok b { color: var(--ok); }
+.bulk-bilan .bulk-ok { background: var(--ok-soft); color: var(--ok-ink); }
+.bulk-bilan .bulk-ok b { color: var(--ok-ink); }
 .bulk-bilan .bulk-bad { background: var(--bad-soft); color: var(--bad); }
 .bulk-bilan .bulk-bad b { color: var(--bad); }
 
@@ -1452,8 +1465,8 @@ input:focus, select:focus, textarea:focus {
 .bulk-rang { color: var(--ink-mute); font-variant-numeric: tabular-nums; }
 .bulk-suivi { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; }
 .bulk-statut { font-weight: 600; }
-.bulk-l-ok .bulk-statut { color: var(--ok); }
-.bulk-l-warn .bulk-statut { color: var(--warn); }
+.bulk-l-ok .bulk-statut { color: var(--ok-ink); }
+.bulk-l-warn .bulk-statut { color: var(--warn-ink); }
 .bulk-l-bad .bulk-statut { color: var(--bad); }
 .bulk-l-neutre .bulk-statut { color: var(--ink-mute); }
 .bulk-statut small { font-weight: 500; color: var(--ink-mute); }
@@ -1481,7 +1494,7 @@ input:focus, select:focus, textarea:focus {
   border-radius: var(--r);
   background: var(--ok-soft);
 }
-.bulk-fin-titre { margin: 0; font-size: 16px; font-weight: 650; color: var(--ok); }
+.bulk-fin-titre { margin: 0; font-size: 16px; font-weight: 650; color: var(--ok-ink); }
 
 @media (max-width: 560px) {
   .ws-modes { grid-template-columns: 1fr; }
@@ -1549,10 +1562,10 @@ input:focus, select:focus, textarea:focus {
 /* Le statut traduit prend la couleur de son sens. Les capitales restent : ce
    sont celles du jeton, pas celles de l'API. */
 .pill-unfulfilled,
-.pill-pending_fulfillment { background: var(--warn-soft); color: var(--warn); }
+.pill-pending_fulfillment { background: var(--warn-soft); color: var(--warn-ink); }
 .pill-partially_fulfilled,
 .pill-in_progress { background: var(--brand-soft); color: var(--brand); }
-.pill-fulfilled { background: var(--ok-soft); color: var(--ok); }
+.pill-fulfilled { background: var(--ok-soft); color: var(--ok-ink); }
 .pill-on_hold { background: var(--bad-soft); color: var(--bad); }
 
 /* L'expédition : son titre, et le nombre de colis tassé à côté. */
@@ -1586,7 +1599,7 @@ input:focus, select:focus, textarea:focus {
 .ord-report {
   gap: 8px;
   border-color: var(--warn);
-  color: var(--warn);
+  color: var(--warn-ink);
   background: var(--card);
 }
 .ord-report:hover { background: var(--warn-soft); }
@@ -1622,7 +1635,7 @@ input:focus, select:focus, textarea:focus {
   padding: 10px 12px;
   border-radius: var(--r-sm);
   background: var(--warn-soft);
-  color: var(--warn);
+  color: var(--warn-ink);
   font-size: 13.5px;
 }
 
