@@ -17,19 +17,36 @@
   endif
 -%}
 
+{%- liquid
+  assign hero = section.settings.hero
+  assign titre_tag = 'h2'
+  if hero
+    assign titre_tag = 'h1'
+  endif
+-%}
+{%- if hero -%}
+  {%- comment -%} Hero : Three.js est demandé tout de suite, en parallèle du reste de la page. {%- endcomment -%}
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js" crossorigin>
+{%- endif -%}
+
 <div
-  class="mfp"
+  class="mfp{% if hero %} mfp--hero{% endif %} mfp--{{ section.settings.ambiance | default: 'claire' }}"
   id="mfp-{{ section.id }}"
   data-mfp
+  data-ambiance="{{ section.settings.ambiance | default: 'claire' }}"
   style="--mfp-bg: {{ section.settings.background }}; --mfp-ink: {{ section.settings.text }}; --mfp-accent: {{ section.settings.accent }};"
 >
   <div class="mfp__inner">
     <header class="mfp__head">
-      <div>
+      <div class="mfp__intro">
         {%- if section.settings.eyebrow != blank -%}
           <p class="mfp__eyebrow">{{ section.settings.eyebrow | escape }}</p>
         {%- endif -%}
-        <h2 class="mfp__title">{{ section.settings.heading | escape }}</h2>
+        <{{ titre_tag }} class="mfp__title">{{ section.settings.heading | escape }}</{{ titre_tag }}>
+        {%- if section.settings.subheading != blank -%}
+          <p class="mfp__sub">{{ section.settings.subheading | escape }}</p>
+        {%- endif -%}
       </div>
       <div class="mfp__edition">
         <span>{{ section.settings.edition_top | escape }}</span>
@@ -61,6 +78,17 @@
         </ul>
       {%- endif -%}
     </div>
+
+    {%- if section.settings.button_1_label != blank or section.settings.button_2_label != blank -%}
+      <div class="mfp__actions">
+        {%- if section.settings.button_1_label != blank -%}
+          <a class="mfp__cta" href="{{ section.settings.button_1_link | default: routes.all_products_collection_url }}">{{ section.settings.button_1_label | escape }}</a>
+        {%- endif -%}
+        {%- if section.settings.button_2_label != blank -%}
+          <a class="mfp__cta mfp__cta--ghost" href="{{ section.settings.button_2_link | default: routes.all_products_collection_url }}">{{ section.settings.button_2_label | escape }}</a>
+        {%- endif -%}
+      </div>
+    {%- endif -%}
   </div>
 
   <script type="application/json" data-mfp-products>
@@ -104,6 +132,7 @@
           "title": {{ product.title | json }},
           "type": {{ product.type | json }},
           "url": {{ product.url | json }},
+          "price": {{ product.price | money | json }},
           "front": {{ front_url | json }},
           "back": {{ back_url | json }}
         }
@@ -133,6 +162,13 @@
   "class": "section-maillots-portant",
   "settings": [
     {
+      "type": "checkbox",
+      "id": "hero",
+      "label": "Utiliser comme hero (haut de page)",
+      "info": "Plein écran sous l'en-tête, titre en H1 (un seul H1 par page) et Three.js chargé en priorité.",
+      "default": false
+    },
+    {
       "type": "header",
       "content": "Textes"
     },
@@ -146,6 +182,31 @@
       "id": "heading",
       "label": "Titre",
       "default": "La collection."
+    },
+    {
+      "type": "text",
+      "id": "subheading",
+      "label": "Sous-titre"
+    },
+    {
+      "type": "text",
+      "id": "button_1_label",
+      "label": "Bouton principal"
+    },
+    {
+      "type": "url",
+      "id": "button_1_link",
+      "label": "Lien du bouton principal"
+    },
+    {
+      "type": "text",
+      "id": "button_2_label",
+      "label": "Bouton secondaire"
+    },
+    {
+      "type": "url",
+      "id": "button_2_link",
+      "label": "Lien du bouton secondaire"
     },
     {
       "type": "text",
@@ -191,6 +252,18 @@
     {
       "type": "header",
       "content": "Couleurs"
+    },
+    {
+      "type": "select",
+      "id": "ambiance",
+      "label": "Ambiance",
+      "options": [
+        { "value": "claire", "label": "Claire (portant sur fond uni)" },
+        { "value": "galerie", "label": "Galerie minimaliste (fond noir, barre suspendue)" },
+        { "value": "penderie", "label": "Penderie sombre éclairée (LED)" }
+      ],
+      "default": "claire",
+      "info": "Penderie : caisson en noyer, réglette LED, maillots éclairés par le haut. Pensez à un fond sombre et un texte clair ci-dessous."
     },
     {
       "type": "color",

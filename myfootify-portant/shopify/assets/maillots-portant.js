@@ -15,7 +15,8 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.m
 const SPACING = 0.66; // écart entre deux cintres : les maillots se serrent sur la barre
 const RAIL_Y = 1.5; // hauteur de la barre
 const ANGLE = -1.36; // presque par la tranche, comme sur un vrai portant
-const SPREAD = 1.05; // de combien les voisins s'écartent du maillot survolé
+const SPREAD = 1.3; // de combien les voisins s'écartent du maillot survolé
+const THICK = 0.45; // épaisseur du tissu (1 = « gonflé ») : fin, pour ne pas voir une tranche de mousse de profil
 const SHIRT_H = 2.62; // hauteur d'un maillot, en unités de scène
 const SHIRT_MAX_W = 2.9;
 const COLLAR_Y = -0.33; // le haut du col, sous la barre, là où arrive la tige du cintre
@@ -40,7 +41,8 @@ function makeCanvas(w, h) {
 }
 
 async function loadBitmap(url) {
-  const res = await fetch(url, { mode: 'cors', credentials: 'omit' });
+  // Le CDN Shopify renvoie du WebP/AVIF (transparence comprise) si on le demande : ~7× plus léger qu'un PNG.
+  const res = await fetch(url, { mode: 'cors', credentials: 'omit', headers: { Accept: 'image/avif,image/webp,image/*;q=0.8,*/*;q=0.5' } });
   if (!res.ok) throw new Error('Image introuvable : ' + url);
   return createImageBitmap(await res.blob());
 }
@@ -289,7 +291,7 @@ function dropShadow(fg, c, w, h) {
  * silhouette à la résolution d'analyse, son cadre et la couleur moyenne du
  * maillot. `tune` ne sert qu'aux essais de réglages.
  */
-export function cutout(img, maxSide = 640, tune = {}) {
+export function cutout(img, maxSide = 1024, tune = {}) {
   const k = Math.min(1, maxSide / Math.max(img.width, img.height));
   const w = Math.max(8, Math.round(img.width * k));
   const h = Math.max(8, Math.round(img.height * k));
@@ -385,8 +387,8 @@ function measure(cut) {
  */
 function inflate(dw) {
   const ramp = (t) => (t >= 1 ? 1 : 2 * t - t * t);
-  if (dw <= 0) return Math.max(-0.04, dw * (2 * 0.05 / 0.07 + 2 * 0.075 / 0.6));
-  return 0.05 * ramp(dw / 0.07) + 0.075 * ramp(dw / 0.6);
+  if (dw <= 0) return THICK * Math.max(-0.04, dw * (2 * 0.05 / 0.07 + 2 * 0.075 / 0.6));
+  return THICK * (0.05 * ramp(dw / 0.07) + 0.075 * ramp(dw / 0.6));
 }
 
 // Le maillage, en tableaux bruts (le worker ne connaît pas Three.js).
@@ -460,8 +462,31 @@ function buildMesh(shape) {
   const back = [];
   for (let t = 0; t < front.length; t += 3) back.push(front[t] + count, front[t + 2] + count, front[t + 1] + count);
 
+  // Le bras du cintre, glissé dans le maillot : il suit la ligne des épaules de
+  // CETTE silhouette, un peu en dessous, et s'arrête avant l'emmanchure. Seul
+  // le bois vu par l'encolure reste visible, comme sur un vrai portant.
+  const topRow = (col) => {
+    const c = Math.round(col);
+    if (c < 0 || c >= w) return -1;
+    for (let y = 0; y < h; y++) if (fg[y * w + c]) return y;
+    return -1;
+  };
+  const chest = Math.min(h - 1, Math.round(neckTop + 0.3 / s));
+  let left = -1, right = -1;
+  for (let x = 0; x < w; x++) if (fg[chest * w + x]) { if (left < 0) left = x; right = x; }
+  const half = left < 0 ? 0.5 : Math.min(0.66, ((right - left) / 2) * s * 0.74);
+  const arm = [];
+  for (let k = -4; k <= 4; k++) {
+    const ax = (k / 4) * half;
+    const row = topRow(neckX + ax / s);
+    if (row < 0) continue;
+    const t = Math.abs(k) / 4; // 0 au col, 1 au bout du bras
+    arm.push(ax, -(row - neckTop) * s + 0.045 - 0.15 * Math.min(1, t * 1.6));
+  }
+
   const Index = pos.length / 3 > 65535 ? Uint32Array : Uint16Array;
   return {
+    arm,
     position: new Float32Array(pos),
     uv: new Float32Array(uv),
     index: Index.from(front.concat(back)),
@@ -594,7 +619,7 @@ let jobId = 0;
 function startWorker() {
   if (worker !== null) return worker;
   try {
-    const source = `const SHIRT_H = ${SHIRT_H}, SHIRT_MAX_W = ${SHIRT_MAX_W};\n${PIPELINE.join('\n')}
+    const source = `const SHIRT_H = ${SHIRT_H}, SHIRT_MAX_W = ${SHIRT_MAX_W}, THICK = ${THICK};\n${PIPELINE.join('\n')}
 self.onmessage = async ({ data }) => {
   try {
     const out = await prepare(data.front, data.back);
@@ -669,6 +694,7 @@ export async function buildJersey(front, back, anisotropy = 4) {
     alphaMap: texture(out.mask, false),
     hasBack: out.hasBack,
     swatch: out.swatch,
+    arm: out.mesh.arm,
   };
 }
 
@@ -682,20 +708,200 @@ function fabric(uniforms) {
   return (shader) => {
     shader.uniforms.fabricTime = uniforms.time;
     shader.uniforms.fabricImpulse = uniforms.impulse;
-    shader.vertexShader = 'uniform float fabricTime; uniform float fabricImpulse;\n' + shader.vertexShader.replace(
+    shader.uniforms.fabricSwing = uniforms.swing;
+    shader.uniforms.fabricTwist = uniforms.twist;
+    shader.vertexShader = 'uniform float fabricTime; uniform float fabricImpulse; uniform float fabricSwing; uniform float fabricTwist;\n' + shader.vertexShader.replace(
       '#include <begin_vertex>',
       `#include <begin_vertex>
 float rise = 1.0 - uv.y; // 1 au col, 0 à l'ourlet
 float fall = pow(1.0 - rise, 2.0);
 transformed.z += (sin(fabricTime * 1.35 + rise * 5.0 + uv.x * 2.0) * 0.014 + sin(rise * 3.1) * fabricImpulse) * fall;
-transformed.x += sin(fabricTime * 1.1 + rise * 4.0) * 0.008 * fall;`,
+transformed.x += sin(fabricTime * 1.1 + rise * 4.0) * 0.008 * fall;
+// Le bas suit le haut avec retard : il traîne quand le cintre glisse et se
+// vrille quand il pivote, plus fort vers l'ourlet (le col, tenu par le cintre, ne bouge pas).
+float lag = pow(1.0 - rise, 1.6);
+float twist = fabricTwist * lag;
+float tc = cos(twist), ts = sin(twist);
+transformed.xz = vec2(transformed.x * tc - transformed.z * ts, transformed.x * ts + transformed.z * tc);
+transformed.x += fabricSwing * lag;
+transformed.y += abs(fabricSwing) * lag * 0.18; // en balançant, l'ourlet remonte un peu, comme un pendule`,
     );
   };
 }
 
+/*
+ * Bois procédural, dessiné sur un canvas : aucun fichier à charger.
+ * `lines` : veinage le long de x (bras de cintre, planches horizontales) ou de y (panneaux).
+ */
+function woodTexture({ base, dark, light, vertical = false, size = 512, veins = 140 }) {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const g = c.getContext('2d');
+  g.fillStyle = base;
+  g.fillRect(0, 0, size, size);
+  for (let k = 0; k < veins; k++) {
+    const at = Math.random() * size, amp = 2 + Math.random() * 7, freq = 0.004 + Math.random() * 0.012, ph = Math.random() * 6.3;
+    g.strokeStyle = Math.random() < 0.7 ? dark : light;
+    g.globalAlpha = 0.05 + Math.random() * 0.16;
+    g.lineWidth = 0.6 + Math.random() * 2.2;
+    g.beginPath();
+    for (let t = 0; t <= size; t += 8) {
+      const off = at + Math.sin(t * freq + ph) * amp + Math.sin(t * freq * 3.1 + ph) * amp * 0.3;
+      if (vertical) (t ? g.lineTo(off, t) : g.moveTo(off, t)); else (t ? g.lineTo(t, off) : g.moveTo(t, off));
+    }
+    g.stroke();
+  }
+  g.globalAlpha = 1;
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.anisotropy = 4;
+  return tex;
+}
+
+/* ------------------------------------------------------------------------ */
+/* Le son de la penderie                                                    */
+/*                                                                          */
+/* Tout est synthétisé (Web Audio) : pas de fichier, pas de droits. Les     */
+/* navigateurs n'autorisent le son qu'après un geste (clic, toucher,        */
+/* touche) : avant, tout reste muet, et le survol seul n'en déclenche jamais. */
+/* ------------------------------------------------------------------------ */
+const SOUND_KEY = 'mfp-son';
+class PenderieSound {
+  constructor() {
+    let saved = null;
+    try { saved = localStorage.getItem(SOUND_KEY); } catch {}
+    this.enabled = saved === 'on'; // coupé tant que le visiteur ne l'a pas activé
+    this.ctx = null;
+    this.lastTick = 0;
+    document.addEventListener('visibilitychange', () => {
+      if (!this.ctx) return;
+      if (document.hidden) this.ctx.suspend(); else if (this.enabled) this.ctx.resume();
+    });
+  }
+  get ready() { return this.enabled && this.ctx && this.ctx.state === 'running'; }
+  // Appelé sur un geste du visiteur : c'est là seulement que le son peut démarrer.
+  unlock() {
+    if (!this.enabled) return;
+    if (!this.ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      try { this.ctx = new AC(); } catch { return; }
+      this.build();
+    }
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+  }
+  setEnabled(on) {
+    this.enabled = on;
+    try { localStorage.setItem(SOUND_KEY, on ? 'on' : 'off'); } catch {}
+    if (!on && this.ctx) this.ctx.suspend();
+    if (on) this.unlock();
+  }
+  build() {
+    const c = this.ctx;
+    this.out = c.createGain();
+    this.out.gain.value = 0.5;
+    this.out.connect(c.destination);
+    // Une petite pièce en bois : courte réverbération (bruit qui s'éteint).
+    const len = Math.round(c.sampleRate * 0.4);
+    const ir = c.createBuffer(2, len, c.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = ir.getChannelData(ch);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3.4);
+    }
+    const verb = c.createConvolver();
+    verb.buffer = ir;
+    const wet = c.createGain();
+    wet.gain.value = 0.16;
+    this.out.connect(verb).connect(wet).connect(c.destination);
+    // Le frottement des crochets sur la barre : un bruit filtré dont le volume suit la vitesse.
+    const noise = c.createBuffer(1, c.sampleRate * 2, c.sampleRate);
+    const d = noise.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    this.noise = noise;
+    const src = c.createBufferSource();
+    src.buffer = noise;
+    src.loop = true;
+    const hp = c.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 900;
+    this.band = c.createBiquadFilter();
+    this.band.type = 'bandpass';
+    this.band.frequency.value = 3200;
+    this.band.Q.value = 2.4;
+    this.scrape = c.createGain();
+    this.scrape.gain.value = 0;
+    src.connect(hp).connect(this.band).connect(this.scrape).connect(this.out);
+    src.start();
+  }
+  // À chaque image : `speed` = somme des vitesses des cintres (unités de scène par seconde).
+  frame(speed) {
+    if (!this.ready) return;
+    const t = this.ctx.currentTime;
+    const level = Math.min(0.2, Math.max(0, speed - 0.3) * 0.03) * (0.7 + Math.random() * 0.6); // grain irrégulier
+    this.scrape.gain.setTargetAtTime(level, t, 0.035);
+    this.band.frequency.setTargetAtTime(2700 + Math.min(speed, 12) * 150, t, 0.08);
+  }
+  // Un crochet qui accroche la barre : trois partiels inharmoniques de métal, très courts.
+  tick(strength = 0.5, delay = 0) {
+    if (!this.ready) return;
+    const c = this.ctx, t = c.currentTime + delay;
+    if (!delay && t - this.lastTick < 0.03) return;
+    if (!delay) this.lastTick = t;
+    const f = 2200 + Math.random() * 1600;
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.015 + 0.075 * strength, t + 0.002);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+    g.connect(this.out);
+    for (const [r, a] of [[1, 1], [2.76, 0.45], [5.4, 0.2]]) {
+      const o = c.createOscillator();
+      o.frequency.value = Math.min(f * r, 18000);
+      const og = c.createGain();
+      og.gain.value = a;
+      o.connect(og).connect(g);
+      o.start(t);
+      o.stop(t + 0.17);
+    }
+  }
+  // Le bois du cintre qui cogne : un « toc » grave et bref.
+  knock(strength = 0.6, delay = 0) {
+    if (!this.ready) return;
+    const c = this.ctx, t = c.currentTime + delay;
+    const o = c.createOscillator();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(210, t);
+    o.frequency.exponentialRampToValueAtTime(120, t + 0.08);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.16 * strength, t + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.11);
+    o.connect(g).connect(this.out);
+    o.start(t);
+    o.stop(t + 0.12);
+    const n = c.createBufferSource();
+    n.buffer = this.noise;
+    const lp = c.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 1800;
+    const ng = c.createGain();
+    ng.gain.setValueAtTime(0.09 * strength, t);
+    ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.035);
+    n.connect(lp).connect(ng).connect(this.out);
+    n.start(t, Math.random());
+    n.stop(t + 0.04);
+  }
+  lift() { this.knock(0.55); this.tick(0.9, 0.03); this.tick(0.45, 0.085); } // on décroche le cintre
+  drop() { this.tick(0.8); this.knock(0.45, 0.05); } // on le raccroche
+}
+
 export class Rail {
-  constructor(host, count, callbacks) {
+  constructor(host, count, callbacks, options = {}) {
     this.host = host;
+    this.penderie = options.ambiance === 'penderie';
+    this.galerie = options.ambiance === 'galerie';
+    this.dark = this.penderie || this.galerie; // pièce sombre : mêmes lumières, mêmes reflets
+    this.sound = options.sound || null;
     this.count = count;
     this.callbacks = callbacks;
     this.items = [];
@@ -703,6 +909,9 @@ export class Rail {
     this.moving = true;
     this.selected = -1;
     this.focus = Math.floor((count - 1) / 2);
+    // L'ordre sur la barre, de gauche à droite (indices des produits). Le client peut le changer.
+    this.order = Array.isArray(options.order) && options.order.length === count ? options.order.slice() : [...Array(count).keys()];
+    this.carry = null; // le maillot qu'on tient en main pendant un déplacement
     this.hover = -1;
     this.offset = 0;
     this.time = 0;
@@ -721,15 +930,18 @@ export class Rail {
     canvas.className = 'mfp__canvas';
     canvas.tabIndex = 0;
     canvas.setAttribute('role', 'img');
-    canvas.setAttribute('aria-label', 'Portant de maillots : faites-le glisser ou choisissez un maillot');
+    canvas.setAttribute('aria-label', 'Portant de maillots. Flèches : parcourir ; Entrée : voir de près ; Maj + flèches : changer un maillot de place');
     host.append(canvas);
     this.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
 
     this.scene = new THREE.Scene();
     this.camera = new THREE.OrthographicCamera(-6, 6, 2.4, -2.4, 0.1, 80);
-    this.scene.add(new THREE.AmbientLight(0xffffff, 1.7));
-    const key = new THREE.DirectionalLight(0xfffcf5, 2.1);
-    key.position.set(-3, 7, 6);
+    // En galerie, le fond noir ne renvoie rien : les maillots ont besoin de plus de lumière pour rester
+    // fidèles (un maillot blanc doit rester blanc, pas gris).
+    this.scene.add(new THREE.AmbientLight(this.dark ? 0xfff6ee : 0xffffff, this.galerie ? 1.45 : this.dark ? 0.85 : 1.7));
+    const key = new THREE.DirectionalLight(0xfffcf5, this.dark ? 0.7 : 2.1);
+    if (this.dark) key.position.set(0, 7, 5); // d'en haut : les ombres tombent sur le fond de la penderie
+    else key.position.set(-3, 7, 6);
     key.castShadow = true;
     key.shadow.mapSize.set(1024, 1024);
     Object.assign(key.shadow.camera, { left: -9, right: 9, top: 7, bottom: -7 });
@@ -740,30 +952,121 @@ export class Rail {
     const fill = new THREE.DirectionalLight(0xdde5ef, 0.8);
     fill.position.set(5, 1, -2);
     this.scene.add(fill);
+    if (this.dark) {
+      fill.intensity = 0.3;
+      // Un peu de lumière neutre de face : les couleurs des maillots restent fidèles.
+      const front = new THREE.DirectionalLight(0xf6f4f1, this.galerie ? 1.15 : 0.8);
+      front.position.set(0, 0.6, 8);
+      this.scene.add(front);
+    }
 
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(60, 25), new THREE.ShadowMaterial({ opacity: 0.065 }));
     floor.rotation.x = -Math.PI / 2;
     floor.position.y = -2;
     floor.receiveShadow = true;
+    floor.visible = !this.dark; // dans la penderie, c'est le socle en bois qui reçoit les ombres
     this.scene.add(floor);
 
-    const chrome = new THREE.MeshStandardMaterial({ color: 0x9a9d95, metalness: 0.74, roughness: 0.26 });
-    this.bar = new THREE.Mesh(new THREE.CylinderGeometry(0.031, 0.031, 1, 32), chrome);
+    // Un chrome n'a de couleur que ce qu'il reflète : on lui donne une pièce
+    // (plafond clair, néons, sol sombre) à refléter, sinon il paraît gris mat.
+    const room = document.createElement('canvas');
+    room.width = 256; room.height = 128;
+    const g = room.getContext('2d');
+    const grad = g.createLinearGradient(0, 0, 0, 128);
+    grad.addColorStop(0, '#ffffff'); grad.addColorStop(0.42, '#e4e6e8'); grad.addColorStop(0.5, '#8d9196');
+    grad.addColorStop(0.62, '#3b3e42'); grad.addColorStop(1, '#1d1f22');
+    g.fillStyle = grad; g.fillRect(0, 0, 256, 128);
+    g.fillStyle = '#ffffff';
+    for (const x of [30, 110, 190]) g.fillRect(x, 18, 46, 6); // néons du vestiaire
+    if (this.dark) {
+      // Intérieur de penderie : bois sombre, et la réglette LED comme seule lumière vive.
+      const inside = g.createLinearGradient(0, 0, 0, 128);
+      inside.addColorStop(0, '#2b2019'); inside.addColorStop(0.45, '#3d2c20'); inside.addColorStop(0.55, '#20170f'); inside.addColorStop(1, '#0c0907');
+      g.fillStyle = inside; g.fillRect(0, 0, 256, 128);
+      g.fillStyle = '#fff0dc'; g.fillRect(0, 34, 256, 5);
+      g.fillStyle = 'rgba(255,225,190,0.35)'; g.fillRect(0, 30, 256, 14);
+    }
+    const roomTex = new THREE.CanvasTexture(room);
+    roomTex.mapping = THREE.EquirectangularReflectionMapping;
+    roomTex.colorSpace = THREE.SRGBColorSpace;
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.scene.environment = pmrem.fromEquirectangular(roomTex).texture; // seuls les métaux et le bois en tiennent compte
+    roomTex.dispose(); pmrem.dispose();
+
+    // Sous les LED, un chrome poli renverrait un trait blanc : dans la penderie, il est satiné et plus sombre.
+    const chrome = this.galerie
+      ? new THREE.MeshStandardMaterial({ color: 0x55585d, metalness: 1, roughness: 0.32 }) // métal noir satiné
+      : this.dark
+      ? new THREE.MeshStandardMaterial({ color: 0x9ba1a8, metalness: 1, roughness: 0.3 })
+      : new THREE.MeshStandardMaterial({ color: 0xe9ebed, metalness: 1, roughness: 0.14 });
+    this.bar = new THREE.Mesh(new THREE.CylinderGeometry(this.galerie ? 0.03 : 0.042, this.galerie ? 0.03 : 0.042, 1, 40), chrome);
     this.bar.rotation.z = Math.PI / 2;
     this.bar.position.y = RAIL_Y;
     this.bar.castShadow = true;
     this.scene.add(this.bar);
+    // Fixations murales, comme dans un vestiaire : une platine vissée au mur et
+    // un bras qui vient tenir la barre.
+    const plateGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.035, 32);
+    const armGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.42, 24);
+    const screwGeo = new THREE.CylinderGeometry(0.018, 0.018, 0.012, 12);
+    const screwMat = new THREE.MeshStandardMaterial({ color: 0x9da1a6, metalness: 1, roughness: 0.3 });
+    const brushed = new THREE.MeshStandardMaterial({ color: 0xf1f2f3, metalness: 0.85, roughness: 0.38 });
     this.ends = [-1, 1].map(() => {
-      const end = new THREE.Mesh(new THREE.SphereGeometry(0.058, 18, 14), chrome);
+      const end = new THREE.Group();
       end.position.y = RAIL_Y;
+      const plate = new THREE.Mesh(plateGeo, brushed);
+      plate.rotation.x = Math.PI / 2;
+      plate.position.z = -0.42;
+      const arm = new THREE.Mesh(armGeo, chrome);
+      arm.rotation.x = Math.PI / 2;
+      arm.position.z = -0.21;
+      for (const x of [-0.055, 0.055]) {
+        const screw = new THREE.Mesh(screwGeo, screwMat);
+        screw.position.set(x, 0.02, -0.035); // sur la face avant de la rosace (repère tourné)
+        plate.add(screw);
+      }
+      plate.castShadow = arm.castShadow = true;
+      if (this.galerie) {
+        // Galerie : la barre est suspendue au plafond par une tige fine, et finie par un embout.
+        const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.011, 4, 12), chrome);
+        rod.position.set(0, 2, 0);
+        const cap = new THREE.Mesh(new THREE.SphereGeometry(0.036, 20, 14), chrome);
+        end.add(rod, cap);
+      } else if (this.penderie) {
+        // Dans la penderie, la barre est tenue par les côtés : une douille chromée à chaque bout.
+        const socket = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.05, 28), chrome);
+        socket.rotation.z = Math.PI / 2;
+        end.add(socket);
+      } else end.add(plate, arm);
       this.scene.add(end);
       return end;
     });
 
+    if (this.penderie) this.buildPenderie();
+    if (this.galerie) {
+      // Une lumière douce qui tombe d'en haut, hors champ : le haut des maillots est plus lumineux.
+      this.leds = [0, 1, 2, 3].map(() => {
+        const l = new THREE.PointLight(0xfff1e2, 1.35, 0, 0.7);
+        l.position.set(0, RAIL_Y + 1.1, 1.0);
+        this.scene.add(l);
+        return l;
+      });
+    }
+
     // Le crochet du cintre, qui passe par-dessus la barre et descend jusqu'au col.
-    const hook = [[-0.06, 0.025], [-0.08, 0.115], [0.015, 0.16], [0.105, 0.11], [0.075, 0.025], [0, -0.045], [0, COLLAR_Y - 0.03]];
-    this.hookGeometry = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(hook.map(([x, y]) => new THREE.Vector3(x, y, 0))), 40, 0.012, 10, false);
-    this.hookMaterial = new THREE.MeshStandardMaterial({ color: 0x696b61, metalness: 0.6, roughness: 0.35 });
+    const hook = [[-0.06, 0.025], [-0.08, 0.115], [0.015, 0.16], [0.105, 0.11], [0.075, 0.025], [0, -0.045], [0, COLLAR_Y + 0.03]];
+    this.hookGeometry = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(hook.map(([x, y]) => new THREE.Vector3(x, y, 0))), 40, 0.013, 10, false);
+    // Cintre de costume : crochet noir, bois d'acajou verni et veiné (le vernis
+    // accroche la lumière grâce à l'environnement ; le veinage suit le bras).
+    this.hookMaterial = new THREE.MeshStandardMaterial({ color: this.galerie ? 0x6a6d72 : 0x1c1c1e, metalness: 0.95, roughness: 0.28 });
+    this.hangerMaterial = new THREE.MeshStandardMaterial({
+      map: woodTexture({ base: '#7a3a22', dark: '#4a1f10', light: '#9a5436', veins: 90 }),
+      roughness: 0.34,
+      metalness: 0,
+    });
+    // La pièce du col, là où le crochet entre dans le bois : c'est elle qu'on voit dépasser.
+    this.bossGeometry = new THREE.CapsuleGeometry(0.037, 0.12, 6, 14);
+
 
     // Quand un maillot est choisi, le reste du portant passe flou derrière lui :
     // on le rend dans une petite texture, qu'on étale à l'écran en la floutant.
@@ -780,7 +1083,7 @@ void main() {
     sum += texture2D(map, vUv + vec2(float(x), float(y)) * texel * 2.2 * amount) * w; total += w;
   }
   sum /= total;
-  gl_FragColor = vec4(sum.rgb / max(sum.a, 1e-4), sum.a * (1.0 - 0.3 * amount));
+  gl_FragColor = vec4(sum.rgb / max(sum.a, 1e-4), sum.a * (1.0 - 0.8 * amount));
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }`,
@@ -809,19 +1112,58 @@ void main() {
     this.frame = requestAnimationFrame(this.loop);
   }
 
+  // Position x (unités de scène) sous le pointeur : caméra orthographique centrée en x = 0.
+  worldX(clientX) {
+    const r = this.renderer.domElement.getBoundingClientRect();
+    return this.camera.left + ((clientX - r.left) / r.width) * (this.camera.right - this.camera.left);
+  }
+
+  slotOf(index) {
+    return this.order.indexOf(index);
+  }
+
+  /*
+   * Gestes :
+   * - souris : clic sur un maillot = le voir de près ; on le fait glisser = on le déplace ;
+   *   glisser à côté des maillots = faire défiler le portant ;
+   * - doigt : toucher = voir de près ; appui long (0,3 s) = décrocher le maillot et le déplacer ;
+   *   glissement rapide = faire défiler (ainsi les deux gestes ne se confondent jamais) ;
+   * - maillot choisi : glisser = le tourner.
+   */
   listen(canvas) {
+    const LONG_PRESS = 300;
     canvas.addEventListener('pointerdown', (e) => {
       if (e.button > 0) return;
-      this.drag = { x: e.clientX, moved: false, target: this.pick(e), turn: this.turn };
-      canvas.setPointerCapture(e.pointerId);
+      const target = this.pick(e);
+      this.drag = { x: e.clientX, y: e.clientY, moved: false, target, turn: this.turn, mode: null, touch: e.pointerType !== 'mouse', t0: e.timeStamp, carried: false };
+      try { canvas.setPointerCapture(e.pointerId); } catch {} // rare : pointeur déjà relâché
+      if (this.drag.touch && target >= 0 && this.selected < 0) {
+        const drag = this.drag;
+        drag.timer = setTimeout(() => {
+          if (this.drag !== drag || drag.mode) return;
+          drag.mode = 'carry';
+          drag.moved = true;
+          this.pickUp(target, e.clientX);
+          navigator.vibrate?.(12);
+        }, LONG_PRESS);
+      }
     });
     canvas.addEventListener('pointermove', (e) => {
-      if (this.drag) {
-        const dx = e.clientX - this.drag.x;
-        if (Math.abs(dx) <= 7) return;
-        this.drag.moved = true;
-        if (this.selected >= 0) {
-          this.turn = this.drag.turn + (dx / this.host.clientWidth) * Math.PI * 2;
+      const drag = this.drag;
+      if (drag) {
+        const dx = e.clientX - drag.x;
+        if (drag.mode === 'carry') { if (Math.abs(dx) > 7) drag.carried = true; this.moveCarry(e.clientX); return; }
+        if (Math.abs(dx) <= 7 && Math.abs(e.clientY - drag.y) <= 7) return;
+        clearTimeout(drag.timer);
+        drag.moved = true;
+        if (!drag.mode) {
+          if (this.selected >= 0) drag.mode = 'turn';
+          else if (!drag.touch && drag.target >= 0) { drag.mode = 'carry'; this.pickUp(drag.target, drag.x); this.moveCarry(e.clientX); return; }
+          else drag.mode = 'scroll';
+        }
+        if (drag.mode === 'turn') {
+          this.turn = drag.turn + (dx / this.host.clientWidth) * Math.PI * 2;
+          this.callbacks.onTurn?.(this.turn);
         } else {
           this.offset = (dx / this.host.clientWidth) * 7;
           this.setHover(-1);
@@ -829,28 +1171,105 @@ void main() {
       } else if (this.selected < 0 && e.pointerType === 'mouse') {
         const hit = this.pick(e);
         this.setHover(hit);
-        canvas.style.cursor = hit >= 0 ? 'pointer' : 'grab';
+        canvas.style.cursor = hit >= 0 ? 'grab' : 'default';
       }
     });
-    canvas.addEventListener('pointerup', () => {
-      if (!this.drag) return;
+    const end = (cancel, e) => {
       const drag = this.drag;
+      if (!drag) return;
+      clearTimeout(drag.timer);
       this.drag = null;
-      if (!drag.moved && drag.target >= 0) this.callbacks.onSelect(drag.target);
-      else if (drag.moved && this.selected < 0) {
+      // Un toucher bref resté sur place reste un toucher, même si la page, occupée, a laissé
+      // passer le délai de l'appui long avant de traiter le relâché : on se fie à l'horodatage réel.
+      const quickTap = drag.touch && !drag.carried && e && e.timeStamp - drag.t0 < LONG_PRESS;
+      if (drag.mode === 'carry') {
+        this.putDown();
+        if (quickTap && !cancel && drag.target >= 0) this.callbacks.onSelect(drag.target);
+      }
+      else if (!cancel && !drag.moved && drag.target >= 0) this.callbacks.onSelect(drag.target);
+      else if (!cancel && drag.mode === 'scroll' && this.selected < 0) {
         this.callbacks.onBrowse(Math.round(-this.offset / SPACING) || Math.sign(-this.offset));
       }
       this.offset = 0;
-    });
-    canvas.addEventListener('pointercancel', () => { this.drag = null; this.offset = 0; });
+    };
+    canvas.addEventListener('pointerup', (e) => end(false, e));
+    canvas.addEventListener('pointercancel', (e) => end(true, e));
     canvas.addEventListener('pointerleave', () => { if (!this.drag && this.selected < 0) this.setHover(-1); });
   }
 
+  // Décrocher : le maillot suit la main, en gardant le point où on l'a saisi.
+  pickUp(index, clientX) {
+    const item = this.items[index];
+    if (!item) return;
+    // Le portant est figé pendant qu'on tient un maillot : il ne défile que si la main approche d'un bord.
+    const center = this.mobile || !this.fits ? this.slotOf(this.focus) : (this.count - 1) / 2;
+    this.carry = { index, grab: this.worldX(clientX) - item.pivot.position.x, x: item.pivot.position.x, edgeAt: 0, center };
+    this.setHover(-1);
+    this.renderer.domElement.style.cursor = 'grabbing';
+    this.host.classList.add('is-carrying');
+    this.callbacks.onCarry?.(index, true);
+  }
+
+  moveCarry(clientX) {
+    const c = this.carry;
+    if (!c) return;
+    const half = (this.bar.scale.y || 6) / 2 - 0.3;
+    c.x = THREE.MathUtils.clamp(this.worldX(clientX) - c.grab, -half, half);
+    // Portant plus large que l'écran (mobile) : près d'un bord, il défile sous la main.
+    const r = this.renderer.domElement.getBoundingClientRect();
+    const edge = (clientX - r.left) / r.width;
+    const now = performance.now();
+    if ((this.mobile || !this.fits) && (edge < 0.12 || edge > 0.88) && now - c.edgeAt > 380) {
+      c.edgeAt = now;
+      c.center = THREE.MathUtils.clamp(c.center + (edge < 0.12 ? -1 : 1), 0, this.count - 1);
+    }
+    // La place visée : la plus proche de la main ; les autres maillots s'écartent.
+    const slot = THREE.MathUtils.clamp(Math.round(c.x / SPACING + c.center), 0, this.count - 1);
+    const from = this.slotOf(c.index);
+    if (slot !== from) {
+      this.order.splice(from, 1);
+      this.order.splice(slot, 0, c.index);
+      this.sound?.tick(0.6);
+    }
+  }
+
+  // Raccrocher : le maillot rejoint sa nouvelle place sur la barre.
+  putDown() {
+    const c = this.carry;
+    if (!c) return;
+    this.carry = null;
+    // La vue reste où elle était : le maillot central est celui qui occupe maintenant la place du centre.
+    if (this.mobile || !this.fits) this.focus = this.order[Math.round(c.center)];
+    this.renderer.domElement.style.cursor = 'grab';
+    this.host.classList.remove('is-carrying');
+    this.callbacks.onCarry?.(c.index, false);
+    this.callbacks.onReorder?.(this.order.slice(), c.index);
+  }
+
+  // Clavier : décaler un maillot d'une place (Maj + flèche).
+  nudge(index, delta) {
+    const from = this.slotOf(index), to = from + delta;
+    if (from < 0 || to < 0 || to >= this.count) return false;
+    this.order.splice(from, 1);
+    this.order.splice(to, 0, index);
+    this.callbacks.onReorder?.(this.order.slice(), index);
+    return true;
+  }
+
   add(index, jersey) {
-    const uniforms = { time: { value: 0 }, impulse: { value: 0 } };
+    const uniforms = { time: { value: 0 }, impulse: { value: 0 }, swing: { value: 0 }, twist: { value: 0 } };
     // Un tissu mat, sans reflet ; le matériau le plus léger, ce qui compte sur mobile.
-    const front = new THREE.MeshLambertMaterial({ map: jersey.frontMap, alphaMap: jersey.alphaMap, alphaTest: 0.5 });
-    const back = new THREE.MeshLambertMaterial({ map: jersey.backMap, alphaMap: jersey.alphaMap, alphaTest: 0.5 });
+    // alphaToCoverage : le bord du masque est anticrénelé (MSAA) au lieu d'être coupé net en escalier.
+    const front = new THREE.MeshLambertMaterial({ map: jersey.frontMap, alphaMap: jersey.alphaMap, alphaTest: 0.5, alphaToCoverage: true });
+    const back = new THREE.MeshLambertMaterial({ map: jersey.backMap, alphaMap: jersey.alphaMap, alphaTest: 0.5, alphaToCoverage: true });
+    if (this.dark) {
+      // Dans la pénombre, un léger éclairage propre au tissu (et à lui seul) garde des blancs
+      // blancs et des couleurs fidèles, sans éclaircir le bois de la penderie.
+      for (const [m, map] of [[front, jersey.frontMap], [back, jersey.backMap]]) {
+        m.emissive = new THREE.Color(0x3a3a3a);
+        m.emissiveMap = map;
+      }
+    }
     front.onBeforeCompile = back.onBeforeCompile = fabric(uniforms);
 
     const mesh = new THREE.Mesh(jersey.geometry, [front, back]);
@@ -864,14 +1283,29 @@ void main() {
     const pivot = new THREE.Group();
     pivot.position.set(this.targetX(index), RAIL_Y, 0);
     pivot.rotation.y = ANGLE;
+    const pts = [];
+    for (let k = 0; k + 1 < (jersey.arm || []).length; k += 2) pts.push(new THREE.Vector3(jersey.arm[k], jersey.arm[k + 1], 0));
+    if (pts.length >= 3) {
+      const armMesh = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 36, 0.03, 10, false), this.hangerMaterial);
+      armMesh.scale.z = 0.75; // un bras de cintre est plat, pas rond
+      armMesh.castShadow = true;
+      shirt.add(armMesh);
+      const center = pts.reduce((a, b) => (Math.abs(b.x) < Math.abs(a.x) ? b : a));
+      const boss = new THREE.Mesh(this.bossGeometry, this.hangerMaterial);
+      boss.rotation.z = Math.PI / 2;
+      boss.scale.z = 0.75;
+      boss.position.set(0, center.y + 0.012, 0);
+      boss.castShadow = true;
+      shirt.add(boss);
+    }
     pivot.add(shirt, new THREE.Mesh(this.hookGeometry, this.hookMaterial));
     this.scene.add(pivot);
-    this.items[index] = { pivot, shirt, uniforms, vx: 0, va: 0, sway: 0, vs: 0 };
+    this.items[index] = { pivot, shirt, uniforms, vx: 0, va: 0, sway: 0, vs: 0, lag: 0, vl: 0, tw: 0, vt: 0, odo: 0 };
   }
 
   targetX(index) {
-    const center = this.mobile || !this.fits ? this.focus : (this.count - 1) / 2;
-    return (index - center) * SPACING;
+    const center = this.carry ? this.carry.center : this.mobile || !this.fits ? this.slotOf(this.focus) : (this.count - 1) / 2;
+    return (this.slotOf(index) - center) * SPACING;
   }
 
   pick(e) {
@@ -887,6 +1321,90 @@ void main() {
   // De face, pour chaque nouveau maillot choisi.
   resetTurn() {
     this.turn = 0;
+    this.callbacks.onTurn?.(0);
+  }
+
+  // Face (0) ou dos (π), par le chemin le plus court depuis l'angle actuel.
+  turnTo(side) {
+    const target = side === 'dos' ? Math.PI : 0;
+    this.turn = target + Math.round((this.turn - target) / (Math.PI * 2)) * Math.PI * 2;
+    this.callbacks.onTurn?.(this.turn);
+  }
+
+  /*
+   * La penderie : un caisson en noyer (fond, étagère, côtés, socle), une
+   * réglette LED sous l'étagère et une rangée de petites sources chaudes qui
+   * éclairent les maillots par le haut. Tout est à l'échelle 1 et étiré par
+   * resize() selon la longueur de la barre.
+   */
+  buildPenderie() {
+    const walnut = (vertical) => new THREE.MeshStandardMaterial({
+      map: woodTexture({ base: '#3a2517', dark: '#1d110a', light: '#5b3a24', vertical, veins: 170 }),
+      roughness: 0.62,
+      metalness: 0,
+    });
+    const panel = walnut(true), board = walnut(false);
+    const TOP = RAIL_Y + 0.62, BASE = -2.0, DEPTH = 1.1;
+    this.cab = { TOP, BASE, parts: {} };
+    const P = this.cab.parts;
+    P.back = new THREE.Mesh(new THREE.PlaneGeometry(1, TOP - BASE), panel);
+    P.back.position.set(0, (TOP + BASE) / 2, -0.5);
+    P.back.receiveShadow = true;
+    P.shelf = new THREE.Mesh(new THREE.BoxGeometry(1, 0.1, DEPTH), board);
+    P.shelf.position.set(0, TOP + 0.05, 0.05);
+    P.base = new THREE.Mesh(new THREE.BoxGeometry(1, 0.12, DEPTH), board);
+    P.base.position.set(0, BASE - 0.06, 0.05);
+    P.base.receiveShadow = true;
+    P.sides = [-1, 1].map(() => {
+      const side = new THREE.Mesh(new THREE.BoxGeometry(0.1, TOP - BASE + 0.22, DEPTH), panel);
+      side.position.set(0, (TOP + BASE) / 2, 0.05);
+      side.receiveShadow = true;
+      return side;
+    });
+    // La réglette : une ligne de lumière franche sous l'étagère (non soumise au tone mapping)...
+    P.led = new THREE.Mesh(new THREE.BoxGeometry(1, 0.016, 0.03), new THREE.MeshBasicMaterial({ color: 0xfff1dc, toneMapped: false }));
+    P.led.position.set(0, TOP - 0.012, 0.42);
+    // ... et son halo sur le haut du fond, en fondu vers le bas.
+    const glowCanvas = document.createElement('canvas');
+    glowCanvas.width = 8; glowCanvas.height = 256;
+    const gg = glowCanvas.getContext('2d');
+    const grad = gg.createLinearGradient(0, 0, 0, 256);
+    grad.addColorStop(0, 'rgba(255,228,190,0.55)');
+    grad.addColorStop(0.25, 'rgba(255,220,180,0.18)');
+    grad.addColorStop(1, 'rgba(255,220,180,0)');
+    gg.fillStyle = grad;
+    gg.fillRect(0, 0, 8, 256);
+    const glowTex = new THREE.CanvasTexture(glowCanvas);
+    glowTex.colorSpace = THREE.SRGBColorSpace;
+    P.glow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1.6), new THREE.MeshBasicMaterial({ map: glowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
+    P.glow.position.set(0, TOP - 0.8, -0.49);
+    this.scene.add(P.back, P.shelf, P.base, ...P.sides, P.led, P.glow);
+    // Les LED : quelques sources chaudes le long de la réglette. Peu d'atténuation
+    // (decay < 1) : le haut des maillots et du fond est plus lumineux que le bas.
+    this.leds = [0, 1, 2, 3].map(() => {
+      const l = new THREE.PointLight(0xffe9cf, 1.5, 0, 0.7);
+      l.position.set(0, TOP - 0.1, 0.5);
+      this.scene.add(l);
+      return l;
+    });
+  }
+
+  layoutPenderie(length) {
+    if (this.galerie) {
+      this.leds.forEach((l, k) => { l.position.x = (k / (this.leds.length - 1) - 0.5) * (length - 1.2); });
+      for (const end of this.ends) end.position.x = Math.sign(end.position.x) * (length / 2 - 0.25); // tiges un peu rentrées
+      return;
+    }
+    if (!this.cab) return;
+    const P = this.cab.parts, W = length;
+    P.back.scale.x = W;
+    P.back.material.map.repeat.set(W / 2.2, 1);
+    P.shelf.scale.x = P.base.scale.x = W + 0.2;
+    P.led.scale.x = W - 0.2;
+    P.glow.scale.x = W;
+    P.sides[0].position.x = -W / 2 - 0.05;
+    P.sides[1].position.x = W / 2 + 0.05;
+    this.leds.forEach((l, k) => { l.position.x = (k / (this.leds.length - 1) - 0.5) * (W - 1.2); });
   }
 
   setHover(index) {
@@ -926,10 +1444,13 @@ void main() {
     // défile, et la barre file hors champ des deux côtés.
     const span = (this.count - 1) * SPACING;
     this.fits = span + 2.4 <= this.camera.right * 2;
-    const length = this.fits && !this.mobile ? Math.min(span + 2.7, this.camera.right * 1.9) : this.camera.right * 2.4;
+    // Dans la penderie, le caisson laisse la place aux voisins qui s'écartent au survol.
+    const room = this.dark ? span + 2 * SPREAD + 1.3 : span + 2.7;
+    const length = this.fits && !this.mobile ? Math.min(room, this.camera.right * 1.9) : this.camera.right * 2.4;
     this.bar.scale.y = length;
     this.ends[0].position.x = -length / 2;
     this.ends[1].position.x = length / 2;
+    this.layoutPenderie(length);
   }
 
   loop(now) {
@@ -941,10 +1462,13 @@ void main() {
 
     const ease = 1 - Math.exp(-dt * 8);
     const chosen = this.selected >= 0;
+    let speed = 0, ticks = 0;
     this.items.forEach((item, i) => {
       if (!item) return;
       let x = this.targetX(i) + this.offset, angle = ANGLE, z = 0, scale = 1;
       const active = chosen ? i === this.selected : i === this.hover;
+      const carried = !chosen && this.carry && this.carry.index === i;
+      if (carried) { angle = -0.55; z = 0.7; scale = 1.06; } // en main : il avance et se tourne un peu vers soi
       if (chosen) {
         // Le maillot choisi vient au centre, en grand ; le portant reste derrière, flou.
         if (active) {
@@ -956,8 +1480,15 @@ void main() {
           z = -0.4;
         }
       } else if (this.hover >= 0) {
-        if (active) { angle = -0.06; z = 0.7; scale = 1.03; }
-        else x += i < this.hover ? -SPREAD : SPREAD;
+        if (active) { angle = 0; z = 0.9; scale = 1.22; }
+        else x += this.slotOf(i) < this.slotOf(this.hover) ? -SPREAD : SPREAD;
+      }
+
+      // Un maillot mis en avant (survolé ou choisi) reste entier dans le cadre :
+      // de face et agrandi, il est bien plus large que de profil.
+      if (active) {
+        const room = this.camera.right - (SHIRT_MAX_W * scale) / 2 - 0.1;
+        x = THREE.MathUtils.clamp(x, -Math.max(0, room), Math.max(0, room));
       }
 
       item.pivot.position.z = THREE.MathUtils.lerp(item.pivot.position.z, z, ease);
@@ -968,20 +1499,47 @@ void main() {
       // pivote avec un peu d'inertie ; le maillot se balance doucement et
       // traîne derrière quand il glisse.
       const swell = this.moving ? Math.sin(this.time * 0.85 + i * 0.87) * 0.012 : 0;
+      if (carried && dt > 0) {
+        // Suivi direct de la main ; la vitesse mesurée nourrit le balancement et le tissu.
+        const v = (this.carry.x - item.pivot.position.x) / dt;
+        item.vx += (THREE.MathUtils.clamp(v, -14, 14) - item.vx) * 0.5;
+        item.pivot.position.x = this.carry.x;
+      }
       for (let left = dt; left > 1e-6; left -= STEP) {
         const step = Math.min(left, STEP);
-        item.vx += ((x - item.pivot.position.x) * 62 - item.vx * 13) * step;
+        if (!carried) {
+          item.vx += ((x - item.pivot.position.x) * 62 - item.vx * 13) * step;
+          item.pivot.position.x += item.vx * step;
+        }
         item.va += ((angle - item.pivot.rotation.y) * 58 - item.va * 12) * step;
-        item.pivot.position.x += item.vx * step;
         item.pivot.rotation.y += item.va * step;
-        const sway = this.moving ? swell - THREE.MathUtils.clamp(item.vx * 0.035, -0.09, 0.09) : 0;
+        const sway = this.moving ? swell - THREE.MathUtils.clamp(item.vx * 0.05, -0.14, 0.14) : 0;
         item.vs += ((sway - item.sway) * 35 - item.vs * 7) * step;
         item.sway += item.vs * step;
+        if (carried) item.vx *= Math.exp(-step * 6); // main immobile : le balancement s'apaise
+        // Ressorts du tissu, plus mous et moins amortis que ceux du cintre :
+        // l'ourlet part en retard, dépasse un peu, puis se pose.
+        const lagTarget = this.moving ? THREE.MathUtils.clamp(-item.vx * 0.075, -0.32, 0.32) : 0;
+        item.vl += ((lagTarget - item.lag) * 26 - item.vl * 4.2) * step;
+        item.lag += item.vl * step;
+        const twistTarget = this.moving ? THREE.MathUtils.clamp(-item.va * 0.11, -0.55, 0.55) : 0;
+        item.vt += ((twistTarget - item.tw) * 22 - item.vt * 3.8) * step;
+        item.tw += item.vt * step;
       }
       item.pivot.rotation.z = item.sway;
+      // Le son suit le mouvement réel des cintres sur la barre.
+      if (!(chosen && i === this.selected)) {
+        const v = Math.abs(item.vx);
+        speed += v;
+        item.odo += v * dt;
+        if (item.odo > 0.24) { item.odo = 0; if (ticks++ < 2) this.sound?.tick(Math.min(1, v / 4)); }
+      }
       item.uniforms.impulse.value = this.moving ? THREE.MathUtils.clamp(item.va * 0.022 + item.vx * 0.012, -0.085, 0.085) : 0;
       item.uniforms.time.value = this.time + i * 0.7;
+      item.uniforms.swing.value = item.lag;
+      item.uniforms.twist.value = item.tw;
     });
+    this.sound?.frame(speed);
     this.blur += ((chosen ? 1 : 0) - this.blur) * (reducedMotion.matches ? 1 : ease);
     this.draw();
   }
@@ -1050,6 +1608,13 @@ const decode = (s) => {
   return t.value;
 };
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const ARROW = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+// Tant qu'aucun maillot n'est survolé : dire qu'on peut jouer avec le portant.
+const HINT = matchMedia('(hover: hover)').matches
+  ? 'Clique sur un maillot pour le voir de près · fais-le glisser pour le changer de place'
+  : 'Touche un maillot pour le voir de près · maintiens-le pour le déplacer';
+const pad = (n) => String(n).padStart(2, '0');
+const SPEAKER = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path class="mfp__waves" d="M15.5 9a4.5 4.5 0 0 1 0 6M18 6.5a8 8 0 0 1 0 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path class="mfp__mute" d="M16 9.5l5 5M21 9.5l-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
 function mount(root) {
   if (root.portant) return;
   const script = root.querySelector('[data-mfp-products]');
@@ -1064,17 +1629,41 @@ function mount(root) {
       <div class="mfp__rack" data-rack></div>
       <div class="mfp__loading" data-loading>On accroche les maillots<span>…</span></div>
       <button class="mfp__close" type="button" data-close aria-label="Retour au portant" hidden>Fermer</button>
-      <button class="mfp__side mfp__side--prev" type="button" data-prev aria-label="Maillot précédent" hidden>‹</button>
-      <button class="mfp__side mfp__side--next" type="button" data-next aria-label="Maillot suivant" hidden>›</button>
+      <button class="mfp__side mfp__side--prev" type="button" data-prev aria-label="Maillot précédent" hidden>${ARROW}</button>
+      <button class="mfp__side mfp__side--next" type="button" data-next aria-label="Maillot suivant" hidden>${ARROW}</button>
+      <div class="mfp__view" data-faces hidden>
+        <div class="mfp__faces" role="group" aria-label="Vue du maillot">
+          <button type="button" data-face="face" aria-pressed="true">Face</button>
+          <button type="button" data-face="dos" aria-pressed="false">Dos</button>
+        </div>
+        <span class="mfp__turn">Ou glisse pour tourner</span>
+      </div>
     </div>
-    <div class="mfp__caption" aria-live="polite">
-      <p data-name></p>
+    <div class="mfp__caption">
+      <span class="mfp__count" data-count hidden></span>
+      <p data-name aria-live="polite"></p>
+      <p class="mfp__price" data-price hidden></p>
       <a class="mfp__more" data-more href="#" hidden>Voir le maillot</a>
     </div>`;
   const $ = (s) => body.querySelector(s);
   const stage = $('[data-stage]');
+  // Pas de son : sur une boutique, le silence fait partie de l'élégance. Un vrai enregistrement
+  // pourrait être branché plus tard sur `sound` (lift / drop / frame).
+  const sound = { lift() {}, drop() {}, frame() {}, tick() {} };
 
-  let selected = -1, focused = Math.floor((products.length - 1) / 2), hovered = -1, loaded = 0;
+  // L'ordre choisi par le client est gardé pendant sa visite (même liste de maillots seulement).
+  const ORDER_KEY = 'mfp-ordre-' + (root.id || '') + '-' + products.map((p) => p.url).join('|').length;
+  let savedOrder = null;
+  try {
+    const raw = JSON.parse(sessionStorage.getItem(ORDER_KEY) || 'null');
+    if (Array.isArray(raw) && raw.length === products.length && [...raw].sort((a, b) => a - b).every((v, k) => v === k)) savedOrder = raw;
+  } catch {}
+  const announce = document.createElement('p');
+  announce.className = 'visually-hidden';
+  announce.setAttribute('aria-live', 'polite');
+  root.append(announce);
+
+  let selected = -1, focused = (savedOrder || products.map((_, k) => k))[Math.floor((products.length - 1) / 2)], hovered = -1, loaded = 0;
   const moving = !reducedMotion.matches;
 
   let rail;
@@ -1083,7 +1672,15 @@ function mount(root) {
       onSelect: (i) => select(i),
       onHover: (i) => { hovered = i; caption(); },
       onBrowse: (delta) => { focused = Math.max(0, Math.min(products.length - 1, focused + delta)); hovered = -1; sync(); caption(); },
-    });
+      onTurn: (turn) => faces(turn),
+      onReorder: (order, moved) => {
+        focused = rail.focus;
+        try { sessionStorage.setItem(ORDER_KEY, JSON.stringify(order)); } catch {}
+        announce.textContent = products[moved].title + ' : place ' + (order.indexOf(moved) + 1) + ' sur ' + products.length;
+        caption();
+      },
+      onCarry: (i, on) => { $('[data-name]').textContent = on ? products[i].title : ''; if (!on) caption(); },
+    }, { ambiance: root.dataset.ambiance, order: savedOrder });
   } catch (error) {
     console.error(error);
     fallback();
@@ -1092,7 +1689,7 @@ function mount(root) {
   root.portant = rail;
 
   // Le centre d'abord, puis vers les bords : le portant se remplit sous les yeux.
-  const order = products.map((_, i) => i).sort((a, b) => Math.abs(a - focused) - Math.abs(b - focused));
+  const order = products.map((_, i) => i).sort((a, b) => Math.abs(rail.slotOf(a) - rail.slotOf(focused)) - Math.abs(rail.slotOf(b) - rail.slotOf(focused)));
   (async () => {
     for (let at = 0; at < order.length; at += 3) {
       await Promise.all(order.slice(at, at + 3).map(async (i) => {
@@ -1117,14 +1714,29 @@ function mount(root) {
 
   // Sous le portant : le nom du maillot survolé (ou choisi), et le lien vers sa fiche.
   function caption() {
-    const p = products[selected >= 0 ? selected : hovered];
-    $('[data-name]').textContent = p ? p.title : '';
+    const i = selected >= 0 ? selected : hovered;
+    const p = products[i];
+    const name = $('[data-name]'), price = $('[data-price]'), count = $('[data-count]');
+    name.textContent = p ? p.title : HINT;
+    name.classList.toggle('is-hint', !p);
+    price.hidden = !(p && p.price);
+    if (p) price.textContent = p.price || '';
+    count.hidden = selected < 0;
+    if (selected >= 0) count.textContent = pad(rail.slotOf(selected) + 1) + ' / ' + pad(products.length);
     const more = $('[data-more]');
-    more.hidden = !p;
+    more.hidden = selected < 0;
     if (p) more.href = p.url;
+    $('[data-faces]').hidden = selected < 0;
+  }
+
+  // Face / Dos : le bouton actif suit l'angle réel (aussi quand on tourne au doigt).
+  function faces(turn) {
+    const dos = Math.cos(turn) < 0;
+    for (const b of body.querySelectorAll('[data-face]')) b.setAttribute('aria-pressed', String((b.dataset.face === 'dos') === dos));
   }
 
   function select(i) {
+    sound.lift();
     selected = focused = i;
     hovered = -1;
     rail.resetTurn();
@@ -1135,6 +1747,7 @@ function mount(root) {
   }
 
   function release() {
+    sound.drop();
     const was = selected;
     selected = hovered = -1;
     stage.classList.remove('is-selected');
@@ -1145,8 +1758,10 @@ function mount(root) {
     return was;
   }
 
+  // Précédent / suivant : dans l'ordre de la barre, celui que le client a peut-être changé.
   function shift(delta) {
-    const i = ((selected >= 0 ? selected : focused) + delta + products.length) % products.length;
+    const n = products.length;
+    const i = rail.order[(rail.slotOf(selected >= 0 ? selected : focused) + delta + n) % n];
     if (selected >= 0) select(i);
     else { focused = hovered = i; sync(); caption(); }
   }
@@ -1160,9 +1775,17 @@ function mount(root) {
   $('[data-prev]').addEventListener('click', () => shift(-1));
   $('[data-next]').addEventListener('click', () => shift(1));
   $('[data-close]').addEventListener('click', release);
+  for (const b of body.querySelectorAll('[data-face]')) b.addEventListener('click', () => rail.turnTo(b.dataset.face));
   root.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && selected >= 0) { release(); return; }
     if (e.target.closest('a')) return;
+    // Maj + flèche : déplacer le maillot mis en avant d'une place.
+    if (e.shiftKey && selected < 0 && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
+      e.preventDefault();
+      const who = hovered >= 0 ? hovered : focused;
+      if (rail.nudge(who, e.key === 'ArrowRight' ? 1 : -1)) { focused = hovered = who; sync(); }
+      return;
+    }
     if (e.key === 'ArrowRight') { e.preventDefault(); shift(1); }
     if (e.key === 'ArrowLeft') { e.preventDefault(); shift(-1); }
     if (e.key === 'Enter' && e.target === rail.renderer.domElement && selected < 0) select(hovered >= 0 ? hovered : focused);
