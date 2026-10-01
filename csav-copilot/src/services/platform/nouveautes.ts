@@ -25,6 +25,20 @@ export interface Nouveaute {
 
 export const NOUVEAUTES: readonly Nouveaute[] = [
   {
+    pr: 70,
+    date: '2026-10-01',
+    pour: 'Tableau de bord',
+    titre: 'Sur tablette, tout ce qui se cachait sous la souris est là',
+    resume:
+      'Trois commandes n’apparaissaient qu’au passage de la souris : la case pour sélectionner un message, la pastille pour le remettre en non lu, et « Copier » sur chaque message. Sur une tablette, elles n’existaient pas — et « Copier » manquait aussi sur téléphone. Au doigt, elles restent maintenant visibles, et chacune s’attrape facilement : toute la marge pour la case et la pastille, la taille d’un doigt pour « Copier ». Sur ordinateur, rien ne change.',
+    ou: 'File des messages et fil des échanges, sur tablette et téléphone.',
+    essayer: [
+      'Sur une tablette, cocher deux messages dans la file : les cases sont là, à côté des avatars.',
+      'Toucher la pastille d’un message lu pour le remettre en non lu : elle se remplit, et se vide au toucher suivant.',
+      'Ouvrir un message sur téléphone : « ··· » en haut à droite de chaque échange copie son texte.',
+    ],
+  },
+  {
     pr: 69,
     date: '2026-10-01',
     pour: 'Tableau de bord',

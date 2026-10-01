@@ -304,11 +304,23 @@ test('les petites cibles de la file tiennent 24 px (WCAG 2.5.8)', () => {
   const toutes = regles(STYLES);
   const px = (valeur: string) => Number(valeur.match(/^(\d+(?:\.\d+)?)px$/)?.[1] ?? NaN);
 
-  /** Toutes les dimensions données au sélecteur exact, @media comprises. */
+  /**
+   * Toutes les dimensions données au sélecteur exact, @media comprises.
+   *
+   * Une hauteur `auto` sur une règle qui ancre l'élément en haut ET en bas
+   * (`top: 0; bottom: 0`) l'étire sur toute la ligne : c'est la cible au doigt
+   * de la case et de la pastille, plus haute que 24 px par construction.
+   */
   const dimensions = (selecteur: string, proprietes: string[]) =>
     toutes
       .filter((r) => r.selecteurs.includes(selecteur))
-      .flatMap((r) => declarations(r.corps))
+      .flatMap((r) => {
+        const decl = declarations(r.corps);
+        // La valeur qui compte est la dernière écrite, comme pour le navigateur.
+        const effective = (nom: string) => decl.filter((d) => d.nom === nom).at(-1)?.valeur;
+        const etire = effective('top') === '0' && effective('bottom') === '0';
+        return decl.filter((d) => !(etire && d.nom === 'height' && d.valeur === 'auto'));
+      })
       .filter((d) => proprietes.includes(d.nom))
       .map((d) => ({ ...d, px: px(d.valeur) }));
 
@@ -372,6 +384,129 @@ test('seuls les dossiers qui réclament un geste portent leur nombre', () => {
   assert.equal(petite.sent.titre, '1 message');
   assert.deepEqual(petite.inbox, { nombre: null, titre: null });
   assert.deepEqual(petite.archived, { nombre: null, titre: null });
+});
+
+/* ------------------------------------------------------- au doigt --- */
+
+interface RegleEnContexte {
+  selecteurs: string[];
+  corps: string;
+  /** Les @media, @supports, @keyframes qui l'entourent, du plus large au plus proche. */
+  conditions: string[];
+}
+
+/** Les règles avec leur contexte : `regles()` aplatit les @media, ici on les garde. */
+function reglesEnContexte(css: string): RegleEnContexte[] {
+  const sortie: RegleEnContexte[] = [];
+  const pile: { prelude: string; debut: number }[] = [];
+  let depuis = 0;
+  for (let i = 0; i < css.length; i += 1) {
+    const c = css[i];
+    if (c === '{') {
+      pile.push({ prelude: css.slice(depuis, i).trim(), debut: i + 1 });
+      depuis = i + 1;
+    } else if (c === '}') {
+      const bloc = pile.pop();
+      if (bloc && !bloc.prelude.startsWith('@')) {
+        sortie.push({
+          selecteurs: bloc.prelude.split(',').map((sel) => sel.trim().replace(/\s+/g, ' ')),
+          corps: css.slice(bloc.debut, i),
+          conditions: pile.map((b) => b.prelude),
+        });
+      }
+      depuis = i + 1;
+    } else if (c === ';' && pile.every((b) => b.prelude.startsWith('@'))) {
+      depuis = i + 1;
+    }
+  }
+  return sortie;
+}
+
+const sansSurvol = (regle: RegleEnContexte) =>
+  regle.conditions.some((condition) => /^@media\b[^{]*\(\s*hover\s*:\s*none\s*\)/.test(condition));
+const masque = (corps: string) => /(?<![-\w])opacity\s*:\s*0(\.0+)?\s*(;|$)/.test(corps.trim() + ';');
+const montre = (corps: string) => /(?<![-\w])opacity\s*:\s*1(\.0+)?\s*(;|$)/.test(corps.trim() + ';');
+
+test('rien ne se montre au seul survol : au doigt, chaque commande cachée reste visible', () => {
+  // Au doigt, rien ne survole. Une commande cachée que seul `:hover`
+  // découvre n'existe pas sur une tablette : la case de sélection, la
+  // pastille « lu » et « Copier » étaient dans ce cas.
+  const fautifs: string[] = [];
+  let decouvertes = 0;
+
+  for (const [nom, css] of [['styles.css', STYLES], ['workspace.css', ATELIER]] as const) {
+    const toutes = reglesEnContexte(css).filter(
+      (regle) => !regle.conditions.some((condition) => condition.startsWith('@keyframes')),
+    );
+
+    const caches = new Set(
+      toutes.filter((r) => masque(r.corps)).flatMap((r) => r.selecteurs.filter((sel) => !sel.includes(':hover'))),
+    );
+
+    // « .qrow:hover .qpick » découvre `.qpick` ; « .x:hover » se découvre lui-même.
+    const decouvertesAuSurvol = new Set(
+      toutes
+        .filter((r) => montre(r.corps))
+        .flatMap((r) => r.selecteurs.filter((sel) => sel.includes(':hover')))
+        .map((sel) => {
+          const apres = sel.slice(sel.lastIndexOf(':hover') + ':hover'.length).trim();
+          return apres || sel.slice(0, sel.lastIndexOf(':hover')).trim();
+        }),
+    );
+
+    for (const cible of decouvertesAuSurvol) {
+      if (!caches.has(cible)) continue;
+      decouvertes += 1;
+      const repli = toutes.some((r) => sansSurvol(r) && r.selecteurs.includes(cible) && montre(r.corps));
+      if (!repli) fautifs.push(`${nom} — ${cible}`);
+    }
+  }
+
+  // L'instrument doit les avoir trouvées : la case, la pastille, « Copier ».
+  assert.ok(decouvertes >= 3, `seulement ${decouvertes} commande(s) découverte(s) au survol`);
+  assert.deepEqual(fautifs, [], 'ajouter la commande au bloc @media (hover: none) — « au doigt »');
+});
+
+test('au doigt, chaque commande s’attrape : sa gouttière entière, ou 44 px', () => {
+  const toutes = reglesEnContexte(STYLES);
+  const auDoigt = (selecteur: string) =>
+    Object.fromEntries(
+      toutes
+        .filter((r) => sansSurvol(r) && r.selecteurs.includes(selecteur))
+        .flatMap((r) => declarations(r.corps))
+        .map((d) => [d.nom, d.valeur]),
+    );
+  const px = (valeur: string | undefined) => Number(valeur?.match(/^(-?\d+(?:\.\d+)?)px$/)?.[1] ?? NaN);
+
+  // La case : toute la gouttière de gauche, que la ligne lui réserve.
+  const caseAuDoigt = auDoigt('.qpick');
+  const gouttiereGauche = auDoigt('.qrow .queue-item')['padding-left'];
+  assert.deepEqual([caseAuDoigt.top, caseAuDoigt.bottom, caseAuDoigt.left], ['0', '0', '0']);
+  assert.ok(px(caseAuDoigt.width) >= 34, `.qpick : ${caseAuDoigt.width}`);
+  assert.ok(px(gouttiereGauche) >= px(caseAuDoigt.width), 'la case ne doit pas se poser sur l’avatar');
+
+  // La pastille : toute la gouttière de droite, exactement — au-delà, un
+  // toucher sur le numéro de commande changerait l'état de lecture.
+  const pastille = auDoigt('.qread');
+  const gouttiereDroite = toutes.find((r) => r.conditions.length === 0 && r.selecteurs.includes('.qrow .queue-item') && /padding-right/.test(r.corps));
+  assert.ok(gouttiereDroite, 'la gouttière de droite a disparu');
+  const droite = declarations(gouttiereDroite.corps).find((d) => d.nom === 'padding-right')?.valeur;
+  assert.deepEqual([pastille.top, pastille.bottom, pastille.right], ['0', '0', '0']);
+  assert.equal(px(pastille.width), px(droite));
+
+  // « Copier » : 44 px, la taille d'un doigt.
+  const copier = auDoigt('.msg-copy');
+  assert.ok(px(copier.width) >= 44 && px(copier.height) >= 44, `.msg-copy : ${copier.width} × ${copier.height}`);
+});
+
+test('au doigt, le survol qui colle ne remplit plus la pastille qu’on vient de vider', () => {
+  // Sur iOS, `:hover` reste sur l'élément touché. `.qread:hover::before`
+  // remplit la pastille : marquée lue, elle avait toujours l'air non lue.
+  const regle = reglesEnContexte(STYLES).find(
+    (r) => sansSurvol(r) && r.selecteurs.includes('.qread.lu:hover::before'),
+  );
+  assert.ok(regle, 'règle absente du bloc « au doigt »');
+  assert.match(regle.corps, /background\s*:\s*none/);
 });
 
 test('le tri se clique sur toute sa hauteur, et montre son focus', () => {
