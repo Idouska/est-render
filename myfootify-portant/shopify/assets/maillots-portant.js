@@ -481,7 +481,8 @@ function buildMesh(shape) {
     const row = topRow(neckX + ax / s);
     if (row < 0) continue;
     const t = Math.abs(k) / 4; // 0 au col, 1 au bout du bras
-    arm.push(ax, -(row - neckTop) * s + 0.045 - 0.15 * Math.min(1, t * 1.6));
+    // Sous le bord du col, jamais par-dessus : le bois reste dans le maillot, seul le crochet en sort.
+    arm.push(ax, -(row - neckTop) * s - 0.07 - 0.13 * Math.min(1, t * 1.6));
   }
 
   const Index = pos.length / 3 > 65535 ? Uint32Array : Uint16Array;
@@ -1054,7 +1055,7 @@ export class Rail {
     }
 
     // Le crochet du cintre, qui passe par-dessus la barre et descend jusqu'au col.
-    const hook = [[-0.06, 0.025], [-0.08, 0.115], [0.015, 0.16], [0.105, 0.11], [0.075, 0.025], [0, -0.045], [0, COLLAR_Y + 0.03]];
+    const hook = [[-0.06, 0.025], [-0.08, 0.115], [0.015, 0.16], [0.105, 0.11], [0.075, 0.025], [0, -0.045], [0, COLLAR_Y - 0.06]];
     this.hookGeometry = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(hook.map(([x, y]) => new THREE.Vector3(x, y, 0))), 40, 0.013, 10, false);
     // Cintre de costume : crochet noir, bois d'acajou verni et veiné (le vernis
     // accroche la lumière grâce à l'environnement ; le veinage suit le bras).
