@@ -300,7 +300,9 @@ export const STRINGS = {
     'kind.CANCEL': 'Commande annulée',
     'kind.MISSING_ITEM': 'Article manquant',
     'kind.DELAY': 'Date d’expédition demandée',
+    'kind.TRACKING': 'Point sur le colis',
     'updates.missing': 'Manque',
+    'updates.parcels': 'Colis',
     'updates.shipBy': 'Expédier avant le',
     'kind.OTHER': 'Message urgent',
 
@@ -609,7 +611,9 @@ export const STRINGS = {
     'kind.CANCEL': 'Order cancelled',
     'kind.MISSING_ITEM': 'Missing item',
     'kind.DELAY': 'Ship-by date requested',
+    'kind.TRACKING': 'Parcel status request',
     'updates.missing': 'Missing',
+    'updates.parcels': 'Parcels',
     'updates.shipBy': 'Ship by',
     'kind.OTHER': 'Urgent message',
 
@@ -918,7 +922,9 @@ export const STRINGS = {
     'kind.CANCEL': '订单已取消',
     'kind.MISSING_ITEM': '缺件',
     'kind.DELAY': '要求发货日期',
+    'kind.TRACKING': '包裹进度查询',
     'updates.missing': '缺少',
+    'updates.parcels': '包裹',
     'updates.shipBy': '最晚发货日期',
     'kind.OTHER': '紧急消息',
 

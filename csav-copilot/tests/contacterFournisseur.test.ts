@@ -79,3 +79,16 @@ test('l’atelier ouvre un ticket depuis Tickets, commande retrouvée par son nu
     assert.equal(i18n.split(`'${cle}'`).length - 1, 3, `${cle} dans les trois langues`);
   }
 });
+
+test('menu Actions et barre Fournisseur : les gestes demandés, dans cet ordre', () => {
+  const brut = lire('public/app.js');
+  const menu = brut.slice(brut.indexOf("menu.innerHTML =\n      actionButton('reshipment'"), brut.indexOf('const quick = {'));
+  const libelles = [...menu.matchAll(/actionButton\('\w+', '([^']+)'/g)].map((m) => m[1]);
+  assert.deepEqual(libelles, ['Retour', 'Modification', 'Annulation', 'Update', 'Renvoi']);
+  assert.doesNotMatch(menu.replace(/\/\/[^\n]*/g, ''), /Supprimer le message|WhatsApp|Gmail|Rembourser/);
+
+  const meta = brut.slice(brut.indexOf('const VIEW_META = {'), brut.indexOf('const NAV_GROUPS'));
+  const fournisseur = [...meta.matchAll(/label: '([^']+)', group: 'Fournisseur'(?![^}]*hidden: true)/g)].map((m) => m[1]);
+  assert.deepEqual(fournisseur, ['Modification', 'Annulation/Remboursement', 'Renvoi', 'Retour']);
+  assert.match(brut, /const NAV_GROUPS = \['Pilotage', 'Commerce', 'Fournisseur', 'Atelier', 'Finance', 'Plateforme'\];/);
+});

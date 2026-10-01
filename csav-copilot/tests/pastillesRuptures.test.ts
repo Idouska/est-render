@@ -83,7 +83,7 @@ test('la pastille est relevée avec les autres, et rouge', () => {
   assert.match(app, /ruptures: ruptures\?\.ouverts \?\? state\.navCounts\?\.ruptures \?\? 0/);
   assert.match(
     app,
-    /\['changes', 'suppliers', 'returns', 'ruptures'\]\.includes\(view\)/,
+    /\['changes', 'suppliers', 'retour', 'ruptures'\]\.includes\(view\)/,
     'une pastille grise se lit comme un volume, pas comme du travail en attente',
   );
 });

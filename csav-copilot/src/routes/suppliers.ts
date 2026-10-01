@@ -38,6 +38,7 @@ const alertKind = z.enum([
   'CANCEL',
   'MISSING_ITEM',
   'DELAY',
+  'TRACKING',
   'OTHER',
 ]);
 
@@ -680,6 +681,7 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
         CANCEL: 'Commande annulée',
         MISSING_ITEM: 'Article manquant',
         DELAY: 'Date d’expédition demandée',
+        TRACKING: 'Point sur le colis',
         OTHER: 'Message urgent',
       } as const;
 

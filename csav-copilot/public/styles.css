@@ -9486,3 +9486,8 @@ html, body { overflow-x: clip; }
   .envoi-acts { flex-direction: column; }
   .envoi-bar #envoi-go { margin-left: 0; width: 100%; }
 }
+
+/* Fenêtre « Update » : un colis par ligne, à cocher. */
+.upd-tracks { display: flex; flex-direction: column; gap: 6px; }
+.upd-tracks label { display: flex; align-items: center; gap: 8px; font-weight: 500; text-transform: none; letter-spacing: 0; }
+.upd-tracks .mono { font-size: 13px; }
