@@ -4291,10 +4291,8 @@ function renderTicketLabels(ticket) {
     modification: () => openChangeRequest(ticket, { motifs: ['SIZE', 'PRODUCT', 'ADDRESS'], titre: 'Modification' }),
     annulation: () => ouvrirCommandeShopify(state.detail?.order),
     update: () => void ouvrirUpdate(ticket),
-    renvoi: () => {
-      setView('returns');
-      document.querySelector('#ret-tabs [data-rtab="stock"]')?.click();
-    },
+    // Même porte que la barre latérale : même titre, même entrée surlignée.
+    renvoi: () => document.querySelector('.nav-item[data-view="renvoi"]')?.click(),
     reshipment: () => void openReshipment(ticket),
   };
 
@@ -9895,25 +9893,35 @@ const VIEW_META = {
   orders: { icon: 'bag', label: 'Commandes', group: 'Commerce', title: 'Commandes' },
   customers: { icon: 'users', label: 'Clients', group: 'Commerce', title: 'Clients' },
   catalog: { icon: 'box', label: 'Catalogue', group: 'Commerce', title: 'Catalogue' },
+  /*
+   * Fournisseur : les quatre gestes du SAV, rien d'autre.
+   *
+   * Renvoi et Retour sont deux portes vers le même écran (Reshipment), chacune
+   * sur son onglet : `alias` dit l'écran, `onglet` l'onglet ouvert.
+   */
+  changes: { icon: 'bolt', label: 'Modification', group: 'Fournisseur', title: 'Modification — demandes au fournisseur' },
+  refunds: { icon: 'euro', label: 'Annulation/Remboursement', group: 'Fournisseur', title: 'Annulations et remboursements' },
+  renvoi: { icon: 'box', label: 'Renvoi', group: 'Fournisseur', title: 'Renvoi — stock retours', alias: 'returns', onglet: 'stock' },
+  retour: { icon: 'box', label: 'Retour', group: 'Fournisseur', title: 'Retours clients', alias: 'returns', onglet: 'cases' },
+  // Atelier : le travail avec le fournisseur au quotidien.
   envoi: {
     icon: 'truck',
     label: 'Commandes du jour',
-    group: 'Fournisseur',
+    group: 'Atelier',
     title: 'Commandes du jour',
     sous: 'Stock retours d’abord, fournisseur ensuite',
   },
-  suppliers: { icon: 'truck', label: 'Fournisseurs', group: 'Fournisseur', title: 'Contacts fournisseurs' },
+  suppliers: { icon: 'truck', label: 'Fournisseurs', group: 'Atelier', title: 'Contacts fournisseurs' },
   ruptures: {
     icon: 'box',
     label: 'Ruptures de stock',
-    group: 'Fournisseur',
+    group: 'Atelier',
     title: 'Ruptures de stock',
     sous: 'Commandes nécessitant une action suite à une indisponibilité produit',
   },
-  returns: { icon: 'box', label: 'Reshipment', group: 'Fournisseur', title: 'Reshipment — retours clients' },
-  changes: { icon: 'bolt', label: 'Update', group: 'Fournisseur', title: 'Update — demandes de changement' },
-  tracking: { icon: 'pin', label: 'Suivi colis', group: 'Fournisseur', title: 'Suivi des colis' },
-  refunds: { icon: 'euro', label: 'Remboursements', group: 'Finance', title: 'Remboursements' },
+  tracking: { icon: 'pin', label: 'Suivi colis', group: 'Atelier', title: 'Suivi des colis' },
+  // Hors navigation : on y entre par Renvoi ou Retour.
+  returns: { icon: 'box', label: 'Reshipment', group: 'Fournisseur', title: 'Reshipment — retours clients', hidden: true },
   disputes: { icon: 'shield', label: 'Litiges Shopify', group: 'Finance', title: 'Litiges Shopify' },
   team: { icon: 'users', label: 'Équipe & rôles', group: 'Plateforme', title: 'Équipe & rôles' },
   canned: { icon: 'inbox', label: 'Réponses types', group: 'Plateforme', title: 'Réponses types' },
@@ -9923,7 +9931,7 @@ const VIEW_META = {
   settings: { icon: 'gear', label: 'Réglages', group: 'Plateforme', title: 'Réglages' },
 };
 
-const NAV_GROUPS = ['Pilotage', 'Commerce', 'Fournisseur', 'Finance', 'Plateforme'];
+const NAV_GROUPS = ['Pilotage', 'Commerce', 'Fournisseur', 'Atelier', 'Finance', 'Plateforme'];
 
 const VIEWS = Object.keys(VIEW_META);
 
@@ -10008,7 +10016,9 @@ function renderNav() {
           const tally =
             view === 'tickets'
               ? (state.pendingCount ?? 0)
-              : (state.navCounts?.[view] ?? 0);
+              : view === 'retour'
+                ? (state.navCounts?.returns ?? 0)
+                : (state.navCounts?.[view] ?? 0);
           /*
            * Deux familles de pastilles, deux couleurs.
            *
@@ -10027,12 +10037,13 @@ function renderNav() {
            */
           const mute = ['orders', 'customers', 'catalog'].includes(view);
           const dim = view === 'tracking';
-          const hot = ['changes', 'suppliers', 'returns', 'ruptures'].includes(view) && tally > 0;
+          const hot = ['changes', 'suppliers', 'retour', 'ruptures'].includes(view) && tally > 0;
           const shown = tally > 9999 ? '9999+' : tally;
           const badge = tally && !mute;
-          return `<button class="nav-item" data-view="${view}" aria-current="${
-            view === state.view
-          }">${ico(meta.icon)}<span class="nav-label">${esc(meta.label)}</span>${
+          const courant = meta.alias
+            ? state.view === meta.alias && state.returns?.tab === meta.onglet
+            : view === state.view;
+          return `<button class="nav-item" data-view="${view}" aria-current="${courant}">${ico(meta.icon)}<span class="nav-label">${esc(meta.label)}</span>${
             badge
               ? `<span class="tally${hot ? ' tally-hot' : dim ? ' tally-dim' : ''}">${shown}</span>`
               : ''
@@ -10048,7 +10059,16 @@ function renderNav() {
 
   $('nav')
     .querySelectorAll('.nav-item')
-    .forEach((item) => item.addEventListener('click', () => setView(item.dataset.view)));
+    .forEach((item) =>
+      item.addEventListener('click', () => {
+        const meta = VIEW_META[item.dataset.view];
+        if (!meta.alias) return setView(item.dataset.view);
+        setView(meta.alias);
+        document.querySelector(`#ret-tabs [data-rtab="${meta.onglet}"]`)?.click();
+        renderNav();
+        $('view-title').textContent = meta.title;
+      }),
+    );
 }
 
 $('nav-search').addEventListener('input', (event) => {
