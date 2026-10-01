@@ -39,14 +39,6 @@
           <span data-t="nav.orders">Commandes</span>
         </button>
 
-        <button type="button" data-view="tracking">
-          <svg viewBox="0 0 20 20" aria-hidden="true">
-            <path d="M10 2.8 17 6.4v7.2L10 17.2 3 13.6V6.4z" />
-            <path d="M3 6.4 10 10m0 0 7-3.6M10 10v7.2" />
-          </svg>
-          <span data-t="nav.tracking">Suivi</span>
-        </button>
-
         <button type="button" data-view="catalog">
           <svg viewBox="0 0 20 20" aria-hidden="true">
             <rect x="3" y="3.5" width="6" height="6" rx="1.4" />
@@ -57,36 +49,18 @@
           <span data-t="nav.catalog">Catalogue</span>
         </button>
 
-        <button type="button" data-view="updates">
+        <!-- Un seul guichet pour tout ce que le marchand demande.
+             Il y en avait trois — Changements, Ruptures, Échanges — avec trois
+             pastilles : trois boîtes de réception pour une seule question,
+             « qu'attend-on de moi ? ». Le tri par type reste, mais à
+             l'intérieur, où il coûte un clic au lieu d'un choix permanent. -->
+        <button type="button" data-view="tickets">
           <svg viewBox="0 0 20 20" aria-hidden="true">
-            <path d="M11 2.5 4.5 11.2h4.2L9 17.5l6.5-8.7h-4.2z" />
+            <path d="M3 6.5h14v3a1.6 1.6 0 0 0 0 3v3H3v-3a1.6 1.6 0 0 0 0-3z" />
+            <path d="M12 6.5v10" />
           </svg>
-          <span data-t="nav.updates">Changements</span>
-          <span class="wsnav-badge" id="ws-badge" hidden>0</span>
-        </button>
-
-        <!-- Les ruptures ont leur écran parce qu'elles ont leur rythme : un
-             article manquant bloque un colis aujourd'hui, pas la semaine
-             prochaine. La pastille compte ce qui attend une réponse de
-             l'atelier — pas ce qu'il a déjà signalé. -->
-        <button type="button" data-view="ruptures">
-          <svg viewBox="0 0 20 20" aria-hidden="true">
-            <path d="M10 2.6 3 6.3v7.4l7 3.7 7-3.7V6.3z" />
-            <path d="M3 6.3 10 10l7-3.7M10 10v7.4" />
-          </svg>
-          <span data-t="nav.ruptures">Ruptures de stock</span>
-          <span class="wsnav-badge" id="ws-rup-badge" hidden>0</span>
-        </button>
-
-        <!-- Les échanges viennent après les ruptures : ils sont rares, mais
-             un client attend sa paire. La pastille compte ce qui n'est pas
-             encore parti. -->
-        <button type="button" data-view="echanges">
-          <svg viewBox="0 0 20 20" aria-hidden="true">
-            <path d="M4 7h9l-2.5-2.5M16 13H7l2.5 2.5" />
-          </svg>
-          <span data-t="nav.exchanges">Échanges</span>
-          <span class="wsnav-badge" id="ws-ech-badge" hidden>0</span>
+          <span data-t="nav.tickets">Tickets</span>
+          <span class="wsnav-badge" id="ws-tickets-badge" hidden>0</span>
         </button>
 
         <!-- Réglages rarement touchés, donc rangés en bas : la langue se
@@ -103,6 +77,15 @@
           <span data-t="test.banner">Vos saisies sont enregistrées, mais aucune commande n’est expédiée et aucun client n’est prévenu.</span>
         </p>
         <!-- ============================================ COMMANDES ======= -->
+        <!-- Sous-navigation des commandes. « Suivi » n'était pas un écran :
+             il reliste les colis déjà saisis juste à côté. Il redevient donc
+             ce qu'il est — l'autre face du même travail — et libère une entrée
+             de menu. -->
+        <div class="ws-sous" id="ws-sous-cmd" hidden>
+          <button type="button" data-sous="orders" aria-pressed="true" data-t="sous.toPrepare">À préparer</button>
+          <button type="button" data-sous="tracking" data-t="sous.parcels">Colis enregistrés</button>
+        </div>
+
         <section id="view-orders">
           <header class="wshead">
             <h1 id="ws-title" data-t="head.title">Commandes à préparer</h1>
@@ -157,6 +140,18 @@
           <!-- La période en un geste. Les dates précises et les exports vivent
                derrière « … » : ils servent une fois par jour, la période à
                chaque ouverture. -->
+          <!-- Retrouver n'importe quelle commande par son numéro, hors plage
+               de dates : un client cite une commande d'il y a trois semaines,
+               et la liste ne remonte qu'à hier. -->
+          <label class="ws-search-wrap" id="ws-cmd-search">
+            <svg viewBox="0 0 20 20" aria-hidden="true">
+              <circle cx="9" cy="9" r="5.2" />
+              <path d="m13 13 3.5 3.5" />
+            </svg>
+            <input type="search" id="ws-cmd-q" data-tph="orders.search"
+              placeholder="Chercher une commande (ex. #14674)" autocomplete="off" />
+          </label>
+
           <div class="seg" id="ws-quick" role="group">
             <button type="button" data-range="yesterday" data-t="range.yesterday">Hier</button>
             <button type="button" data-range="today" data-t="range.today">Aujourd'hui</button>
@@ -286,6 +281,19 @@
         </section>
 
         <!-- ============================================= RUPTURES ======== -->
+        <!-- Sous-navigation des tickets : le tri par type, à l'intérieur. -->
+        <div class="ws-sous" id="ws-sous-tickets" hidden>
+          <button type="button" data-sous="ruptures" aria-pressed="true">
+            <span data-t="nav.ruptures">Ruptures</span><b class="ws-sous-n" id="ws-n-rup" hidden>0</b>
+          </button>
+          <button type="button" data-sous="updates">
+            <span data-t="nav.updates">Changements</span><b class="ws-sous-n" id="ws-n-upd" hidden>0</b>
+          </button>
+          <button type="button" data-sous="echanges">
+            <span data-t="nav.exchanges">Échanges</span><b class="ws-sous-n" id="ws-n-ech" hidden>0</b>
+          </button>
+        </div>
+
         <section id="view-ruptures" hidden>
           <header class="wshead">
             <h1 data-t="rup.title">Ruptures de stock</h1>

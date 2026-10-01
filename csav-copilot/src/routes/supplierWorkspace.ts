@@ -4,7 +4,7 @@ import { env } from '../config/env.ts';
 import { recordAudit } from '../lib/audit.ts';
 import { prisma } from '../lib/prisma.ts';
 import { signSupplierToken } from '../lib/supplierToken.ts';
-import { lignesArticle } from '../services/suppliers/signalement.ts';
+import { lignesArticle, lireArticle } from '../services/suppliers/signalement.ts';
 import {
   LIGNES_MAX,
   abimeParExcel,
@@ -1484,7 +1484,7 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
             note: true,
             createdAt: true,
             notifiedAt: true,
-            ticket: { select: { orderName: true } },
+            ticket: { select: { id: true, orderName: true } },
             messages: {
               orderBy: { createdAt: 'asc' },
               take: 1,
@@ -1544,6 +1544,47 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
         : [];
       const reponduLe = new Map(reponses.map((ligne) => [ligne.ticketId, ligne._max.receivedAt]));
 
+      /*
+       * Les modèles de remplacement proposés par le marchand.
+       *
+       * C'est ce qui remplace le fil de discussion : au lieu de lire « on peut
+       * mettre la 44 ? » dans un message, l'atelier voit le modèle en rupture
+       * face aux remplacements possibles, et répond d'un bouton.
+       */
+      const ticketsConcernes = [
+        ...new Set([
+          ...demandes.map((demande) => demande.ticket.id),
+          ...signalements.map((ticket) => ticket.id),
+        ]),
+      ];
+      const substitutions = ticketsConcernes.length
+        ? await prisma.ruptureSubstitution.findMany({
+            where: {
+              merchantId: workspace.merchantId,
+              supplierId: workspace.supplierId,
+              ticketId: { in: ticketsConcernes },
+            },
+            orderBy: { createdAt: 'asc' },
+            select: {
+              id: true,
+              ticketId: true,
+              productTitle: true,
+              variantTitle: true,
+              sku: true,
+              image: true,
+              inventory: true,
+              libre: true,
+              accepte: true,
+              note: true,
+              reponduLe: true,
+            },
+          })
+        : [];
+      const parTicket = new Map<string, typeof substitutions>();
+      for (const proposition of substitutions) {
+        parTicket.set(proposition.ticketId, [...(parTicket.get(proposition.ticketId) ?? []), proposition]);
+      }
+
       return reply.send({
         demandes: demandes
           // Une escalade encore en brouillon n'a pas été envoyée : la montrer
@@ -1551,10 +1592,15 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
           .filter((demande) => demande.status !== 'DRAFTING')
           .map((demande) => ({
             id: demande.id,
+            ticketId: demande.ticket.id,
             statut: demande.status,
             orderName: demande.ticket.orderName,
             note: demande.note,
             message: demande.messages[0]?.body ?? null,
+            // Le modèle en rupture, en champs : la carte le montre face aux
+            // remplacements au lieu d'un paragraphe à relire.
+            article: lireArticle(demande.messages[0]?.body ?? demande.note),
+            substitutions: parTicket.get(demande.ticket.id) ?? [],
             envoyeLe: demande.notifiedAt ?? demande.createdAt,
             // Vue depuis l'atelier : créé tant qu'il n'a pas répondu, traité
             // quand il l'a fait, classé quand le marchand a clos.
@@ -1585,6 +1631,8 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
                 ? 'traite'
                 : 'cree',
           detail: ticket.messages[0]?.bodyText ?? null,
+          article: lireArticle(ticket.messages[0]?.bodyText),
+          substitutions: parTicket.get(ticket.id) ?? [],
           signaleLe: ticket.createdAt,
         })),
       });
@@ -1712,6 +1760,159 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
       });
 
       return reply.send({ ticket });
+    },
+  );
+
+  /* ------------------------------------------------------- substitutions -- */
+
+  /**
+   * L'atelier répond à un modèle de remplacement : oui, ou non.
+   *
+   * Un bouton, pas une phrase. C'est tout l'objet du changement : la réponse
+   * doit se lire d'un coup d'œil chez le marchand, ce qu'un message en texte
+   * libre ne permet jamais — il faut le lire, l'interpréter, et il arrive
+   * plusieurs jours après la question.
+   */
+  app.post<{ Params: { id: string; subId: string }; Querystring: { token?: string } }>(
+    '/api/workspace/:id/substitutions/:subId',
+    async (request, reply) => {
+      const workspace = await authorize(request, reply);
+      if (!workspace) return;
+
+      const parsed = z
+        .object({ accepte: z.boolean(), note: z.string().trim().max(500).nullish() })
+        .safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ code: 'invalide', error: 'Réponse invalide.' });
+
+      // Bornée à l'atelier du lien : une proposition faite à un autre
+      // fournisseur ne se répond pas d'ici.
+      const misAJour = await prisma.ruptureSubstitution.updateMany({
+        where: {
+          id: request.params.subId,
+          merchantId: workspace.merchantId,
+          supplierId: workspace.supplierId,
+        },
+        data: {
+          accepte: parsed.data.accepte,
+          note: parsed.data.note?.trim() || null,
+          reponduLe: new Date(),
+        },
+      });
+      if (misAJour.count === 0) {
+        return reply.code(404).send({ code: 'introuvable', error: 'Cette proposition ne vous est pas adressée.' });
+      }
+
+      await recordAudit({
+        merchantId: workspace.merchantId,
+        actorType: 'SUPPLIER',
+        actorId: workspace.supplierId,
+        action: parsed.data.accepte ? 'supplier.substitution_accepted' : 'supplier.substitution_refused',
+        targetType: 'RuptureSubstitution',
+        targetId: request.params.subId,
+        ipAddress: request.ip,
+      });
+
+      return reply.send({ repondu: true });
+    },
+  );
+
+  /* ---------------------------------------------- chercher une commande -- */
+
+  /**
+   * Retrouver N'IMPORTE QUELLE commande par son numéro.
+   *
+   * La liste des commandes est bornée par une plage de dates : un atelier à
+   * qui un client cite une commande d'il y a trois semaines ne pouvait pas la
+   * retrouver, quel que soit son niveau d'accès. Cette recherche ignore les
+   * dates — c'est tout ce qu'elle change.
+   *
+   * Elle n'ouvre AUCUN droit nouveau : le niveau d'accès du fournisseur
+   * s'applique exactement comme dans la liste. `ASSIGNED` ne rend que ce qui
+   * lui est confié ou que ses règles réclament, `NONE` ne rend rien, et seul
+   * `ALL` — que le marchand pose lui-même — rend toutes les commandes.
+   */
+  app.get<{ Params: { id: string }; Querystring: { token?: string; q?: string } }>(
+    '/api/workspace/:id/orders/search',
+    async (request, reply) => {
+      const workspace = await authorize(request, reply);
+      if (!workspace) return;
+
+      const terme = (request.query.q ?? '').trim();
+      if (terme.length < 2) return reply.send({ orders: [], reason: null });
+
+      if (workspace.ordersAccess === 'NONE') {
+        return reply.send({
+          orders: [],
+          reason: 'Le marchand n’a pas ouvert le carnet de commandes pour ce compte.',
+        });
+      }
+
+      const client = await getShopifyClient(workspace.merchantId);
+      // Le numéro, avec ou sans dièse : l'atelier recopie ce qu'il a sous les
+      // yeux, et Shopify ne trouve rien sur « 14674 » cherché tel quel.
+      const numero = terme.replace(/^#/, '');
+      const page = await listOrders(client, {
+        query: `name:${quoteSearchValue(`#${numero}`)} OR name:${quoteSearchValue(numero)}`,
+        limit: 10,
+      });
+
+      const allowed = await allowedOrderIds(workspace);
+      const routees = allowed
+        ? ordersForSupplier(
+            page.orders,
+            { id: workspace.supplierId, ...workspace },
+            await otherSupplierRules(workspace),
+            allowed,
+          )
+        : page.orders;
+
+      // Une commande servie par le stock retours part de l'agence : la montrer
+      // ici ferait préparer un colis que personne n'attend.
+      const servies = await commandesServiesParLeStock(
+        workspace.merchantId,
+        routees.map((order) => order.id),
+      );
+      const visible = routees.filter((order) => !servies.has(order.id));
+
+      const parcels = visible.length
+        ? await prisma.parcel.findMany({
+            where: {
+              merchantId: workspace.merchantId,
+              shopifyOrderId: { in: visible.map((order) => order.id) },
+            },
+            orderBy: { index: 'asc' },
+            select: {
+              id: true,
+              shopifyOrderId: true,
+              trackingNumber: true,
+              carrier: true,
+              index: true,
+              total: true,
+              orderName: true,
+              photoMime: true,
+              photoTakenAt: true,
+              updatedAt: true,
+            },
+          })
+        : [];
+      const byOrder = new Map<string, typeof parcels>();
+      for (const parcel of parcels) {
+        const key = parcel.shopifyOrderId ?? '';
+        byOrder.set(key, [...(byOrder.get(key) ?? []), parcel]);
+      }
+
+      return reply.send({
+        orders: visible.map((order) => ({
+          ...order,
+          parcels: (byOrder.get(order.id) ?? []).map(toParcelView),
+        })),
+        // Trouvée chez Shopify mais écartée par le niveau d'accès : le dire,
+        // plutôt que laisser croire que la commande n'existe pas.
+        reason:
+          page.orders.length > 0 && visible.length === 0
+            ? 'Cette commande ne vous est pas confiée.'
+            : null,
+      });
     },
   );
 

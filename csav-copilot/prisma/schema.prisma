@@ -107,6 +107,7 @@ model Merchant {
   returnCases         ReturnCase[]
   returnAgencies      ReturnAgency[]
 
+  substitutions RuptureSubstitution[]
   @@index([organizationId])
 }
 
@@ -325,6 +326,7 @@ model Ticket {
   escalations    SupplierEscalation[]
   supplierAlerts SupplierAlert[]
 
+  substitutions RuptureSubstitution[]
   @@unique([merchantId, gmailThreadId])
   @@index([merchantId, status])
   @@index([merchantId, gmailUnread, openedAt])
@@ -600,6 +602,7 @@ model Supplier {
 
   // Deux fiches pour la même adresse chez un même marchand n'ont pas de sens :
   // les réponses arrivant par mail seraient impossibles à attribuer.
+  substitutions RuptureSubstitution[]
   @@unique([merchantId, contactEmail])
   @@index([merchantId, active])
 }
@@ -700,6 +703,51 @@ enum EscalationStatus {
   OPEN // envoyé, en attente de réponse
   ANSWERED // le fournisseur a répondu, en attente de traitement par l'agent
   RESOLVED // clôturée par l'agent
+}
+
+/// Un modèle de remplacement proposé à l'atelier pour une rupture.
+///
+/// POURQUOI UNE TABLE ET PAS UN MESSAGE. La substitution se discutait par
+/// e-mail et par fil de discussion : le marchand écrivait « on peut mettre la
+/// 44 à la place ? », l'atelier répondait en texte, et personne ne savait d'un
+/// coup d'œil ce qui avait été proposé ni ce qui avait été accepté. Posée en
+/// table, la proposition se montre en vis-à-vis du modèle en rupture, se
+/// compte, et sa réponse tient en un bouton.
+///
+/// Rattachée au TICKET et non à l'escalade : une rupture a deux origines —
+/// une escalade du marchand, ou un signalement de l'atelier — et seul le
+/// ticket existe dans les deux cas.
+model RuptureSubstitution {
+  id         String @id @default(cuid())
+  merchantId String
+  ticketId   String
+  /// L'atelier à qui on la propose : c'est lui, et lui seul, qui la voit.
+  supplierId String
+
+  productTitle String
+  variantTitle String?
+  sku          String?
+  /// Vignette Shopify, pour que l'atelier reconnaisse le modèle sans chercher.
+  image        String?
+  /// Stock au moment de la proposition : l'atelier doit savoir si on lui
+  /// propose une paire qui existe ou une qu'il faudra fabriquer.
+  inventory    Int?
+  /// Saisie à la main, hors catalogue.
+  libre        Boolean @default(false)
+
+  /// La réponse de l'atelier. `null` tant qu'il n'a pas répondu.
+  accepte   Boolean?
+  note      String?   @db.Text
+  reponduLe DateTime?
+
+  createdAt DateTime @default(now())
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  ticket   Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId, ticketId])
+  @@index([merchantId, supplierId, accepte])
 }
 
 model SupplierMessage {

@@ -248,7 +248,11 @@ test('l’atelier lit ses échanges dans sa langue', () => {
 
 test('la section des échanges existe des deux côtés', () => {
   assert.match(lire('public/workspace.html'), /id="view-echanges"/);
-  assert.match(lire('public/workspace.html'), /data-view="echanges"/);
+  // Les échanges ne sont plus une entrée de menu : le menu de l'atelier avait
+  // trois boîtes de réception pour la même question, elles sont regroupées
+  // sous « Tickets » et se choisissent à l'intérieur.
+  assert.match(lire('public/workspace.html'), /data-sous="echanges"/);
+  assert.match(lire('public/workspace.js'), /tickets: \['ruptures', 'updates', 'echanges'\]/);
   assert.match(lire('public/agence.html'), /id="ag-sec-echanges"/);
   assert.match(lire('public/agence.js'), /ag-sec-echanges'\)\.hidden = echanges\.length === 0/);
 });
