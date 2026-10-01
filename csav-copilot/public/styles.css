@@ -8318,6 +8318,76 @@ html, body { overflow-x: clip; }
   .btn:hover:not(:disabled) { transform: none; }
 }
 
+/* ---------------------------------------------------------- au doigt --- */
+
+/*
+ * Trois commandes ne se montraient qu'au survol : la case de sélection et la
+ * pastille « lu » de chaque ligne de la file, et « Copier » sur chaque message.
+ * Au doigt, rien ne survole. Leur seul repli était une largeur d'écran — moins
+ * de 760 px —, comme si étroit voulait dire tactile : sur une tablette, on ne
+ * pouvait ni cocher plusieurs messages, ni remettre un message en non lu, et
+ * « Copier » n'existait sur aucun écran tactile, téléphone compris.
+ *
+ * C'est la capacité de survol qui décide, pas la largeur. Les règles des
+ * écrans étroits restent : une fenêtre étroite à la souris les garde.
+ */
+@media (hover: none) {
+  .qpick,
+  .qread.lu,
+  .msg-copy { opacity: 1; }
+
+  /* La case prend sa gouttière, comme sur téléphone : visible en permanence,
+     elle ne peut plus se poser sur l'avatar. */
+  .qrow .queue-item { padding-left: 34px; }
+
+  /* Au doigt, 24 px ne s'attrapent pas : chaque commande occupe toute sa
+     gouttière, ou 44 px autour de son point. Rien ne bouge à l'œil — la case,
+     la pastille et les trois points restent où ils étaient dessinés. */
+  /* La case de 15 px reste à 12 px du bord et 13,5 px du haut, là où la
+     centrait son carré de 24 px. Sa marge par défaut — 4 px à gauche, 3 en
+     haut chez Chrome, autre chose ailleurs — est remise à zéro : une case
+     posée par le padding doit l'être au même endroit dans tous les
+     navigateurs. */
+  .qpick {
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 34px;
+    height: auto;
+    place-items: start;
+    padding: 13.5px 0 0 12px;
+  }
+  .qpick input { margin: 0; }
+
+  /* Le point de 9 px reste centré en hauteur, à 15,5 px du bord droit. */
+  .qread {
+    top: 0;
+    bottom: 0;
+    right: 0;
+    width: 32px;
+    height: auto;
+    transform: none;
+    justify-items: end;
+    padding-right: 15.5px;
+    border-radius: var(--r-sm);
+  }
+
+  .msg-copy {
+    top: -9px;
+    right: -9px;
+    width: 44px;
+    height: 44px;
+  }
+
+  /* Le survol reste collé à ce que le doigt vient de toucher. Sur la pastille,
+     il la remplissait : on marquait un message lu, et il avait toujours l'air
+     non lu jusqu'au toucher suivant. */
+  .qread.lu:hover::before {
+    background: none;
+    border-color: var(--ink-mute);
+  }
+}
+
 @media (max-width: 700px) {
   body::before { display: none; }
 }
