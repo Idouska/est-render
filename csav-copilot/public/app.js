@@ -14977,7 +14977,10 @@ async function ouvrirFenetreSubstitution(d) {
   $('subst-l-taille').value = '';
   $('subst-l-ref').value = '';
   majFenetreSubstitution();
+  // `.backdrop` est en `display:none` tant qu'il n'a pas `.open` : retirer
+  // `hidden` seul laissait la fenêtre invisible.
   $('subst-modal').hidden = false;
+  $('subst-modal').classList.add('open');
 
   const boite = $('subst-options');
   boite.innerHTML = '<p class="empty">Recherche des références en stock…</p>';
@@ -15080,8 +15083,14 @@ $('subst-l-add')?.addEventListener('click', () => {
   majFenetreSubstitution();
 });
 
-$('subst-cancel')?.addEventListener('click', () => {
+function fermerFenetreSubstitution() {
   $('subst-modal').hidden = true;
+  $('subst-modal').classList.remove('open');
+}
+
+$('subst-cancel')?.addEventListener('click', fermerFenetreSubstitution);
+$('subst-modal')?.addEventListener('click', (event) => {
+  if (event.target === event.currentTarget) fermerFenetreSubstitution();
 });
 
 $('subst-send')?.addEventListener('click', async () => {
@@ -15097,7 +15106,7 @@ $('subst-send')?.addEventListener('click', async () => {
         propositions: fenetreSubst.choisis.map(({ cle, ...reste }) => reste),
       }),
     });
-    $('subst-modal').hidden = true;
+    fermerFenetreSubstitution();
     toast(
       resultat.avertiPar === 'email'
         ? `${resultat.creees} modèle(s) envoyé(s) à ${resultat.atelier}, qui est prévenu.`
