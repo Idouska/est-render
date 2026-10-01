@@ -25,6 +25,20 @@ export interface Nouveaute {
 
 export const NOUVEAUTES: readonly Nouveaute[] = [
   {
+    pr: 69,
+    date: '2026-10-01',
+    pour: 'Tableau de bord',
+    titre: 'Une réponse ne part plus jamais deux fois',
+    resume:
+      'Un double clic sur « Envoyer la réponse », un Cmd+Entrée répété ou deux onglets ouverts sur le même message pouvaient envoyer la même réponse deux fois au client — et la même notification deux fois au fournisseur. Le bouton se bloque désormais dès le clic et affiche « Envoi… » ; et quoi qu’il arrive à l’écran, le serveur refuse un second envoi tant que le premier n’a pas abouti. Si Gmail refuse, le bouton revient : on peut réessayer.',
+    ou: 'Bouton « Envoyer la réponse » d’un message ; envoi au fournisseur, depuis un message et depuis Ruptures de stock.',
+    essayer: [
+      'Cliquer deux fois de suite sur « Envoyer la réponse » : le bouton affiche « Envoi… », un seul message part.',
+      'Ouvrir le même message dans deux onglets et envoyer des deux côtés : le second onglet répond « Envoi déjà en cours » ou « Déjà envoyé ».',
+      'Envoyer une demande au fournisseur depuis Ruptures de stock en double-cliquant : une seule notification.',
+    ],
+  },
+  {
     pr: 67,
     date: '2026-09-30',
     pour: 'Tableau de bord',

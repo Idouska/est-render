@@ -1,8 +1,10 @@
 import { env } from '../../config/env.ts';
 import { recordAudit } from '../../lib/audit.ts';
 import { signSupplierToken } from '../../lib/supplierToken.ts';
+import { logger } from '../../lib/logger.ts';
 import { prisma } from '../../lib/prisma.ts';
 import { generateSupplierDraft } from '../ai/supplierDraft.ts';
+import { personneNEnvoie, type IssueEnvoi } from '../envoi/uneSeuleFois.ts';
 import { sendPlainEmail } from '../gmail/send.ts';
 import { escalationSubject, escalationText } from './notifyEmail.ts';
 import { getShopifyClient } from '../shopify/client.ts';
@@ -123,19 +125,24 @@ export async function createEscalation(params: {
  * direct (ce qui recréerait le problème que le portail évite : personne
  * ne surveille une boîte mail supplémentaire).
  */
-export async function sendEscalation(params: {
-  merchantId: string;
-  escalationId: string;
-  userId: string;
-}): Promise<void> {
+const DEPENDANCES_ESCALADE = { prisma, sendPlainEmail, recordAudit };
+export type DependancesEscalade = typeof DEPENDANCES_ESCALADE;
+
+export async function sendEscalation(
+  params: {
+    merchantId: string;
+    escalationId: string;
+    userId: string;
+  },
+  deps: DependancesEscalade = DEPENDANCES_ESCALADE,
+): Promise<IssueEnvoi> {
+  const { prisma, sendPlainEmail, recordAudit } = deps;
   const escalation = await prisma.supplierEscalation.findFirstOrThrow({
     where: { id: params.escalationId, merchantId: params.merchantId },
     include: { supplier: true, ticket: true },
   });
 
-  if (escalation.status !== 'DRAFTING') {
-    throw new Error(`Escalade déjà envoyée (statut ${escalation.status})`);
-  }
+  if (escalation.status !== 'DRAFTING') return 'deja-envoye';
 
   const token = signSupplierToken({
     escalationId: escalation.id,
@@ -161,18 +168,53 @@ export async function sendEscalation(params: {
     note: escalation.note,
   };
 
-  await sendPlainEmail({
-    merchantId: params.merchantId,
-    to: escalation.supplier.contactEmail,
-    fromName: context.merchantName,
-    subject: escalationSubject(context),
-    body: escalationText(context),
+  // La prise, juste avant l'appel : le même verrou que la réponse au client
+  // (voir envoi/uneSeuleFois). Un double clic notifiait le fournisseur deux
+  // fois — deux mails identiques, deux liens vers le même portail.
+  const maintenant = new Date();
+  const prise = await prisma.supplierEscalation.updateMany({
+    where: {
+      id: escalation.id,
+      merchantId: params.merchantId,
+      status: 'DRAFTING',
+      ...personneNEnvoie(maintenant),
+    },
+    data: { sendStartedAt: maintenant },
   });
+
+  if (prise.count !== 1) {
+    const actuel = await prisma.supplierEscalation.findFirst({
+      where: { id: escalation.id, merchantId: params.merchantId },
+      select: { status: true },
+    });
+    return actuel?.status === 'DRAFTING' ? 'en-cours' : 'deja-envoye';
+  }
+
+  try {
+    await sendPlainEmail({
+      merchantId: params.merchantId,
+      to: escalation.supplier.contactEmail,
+      fromName: context.merchantName,
+      subject: escalationSubject(context),
+      body: escalationText(context),
+    });
+  } catch (error) {
+    // Rien n'est parti : la place est rendue pour un nouvel essai.
+    await prisma.supplierEscalation
+      .updateMany({
+        where: { id: escalation.id, sendStartedAt: maintenant },
+        data: { sendStartedAt: null },
+      })
+      .catch((liberation: unknown) =>
+        logger.warn({ err: liberation, escalationId: escalation.id }, 'Place d’envoi non rendue : elle expirera'),
+      );
+    throw error;
+  }
 
   await prisma.$transaction([
     prisma.supplierEscalation.update({
       where: { id: escalation.id },
-      data: { status: 'OPEN', notifiedAt: new Date() },
+      data: { status: 'OPEN', notifiedAt: new Date(), sendStartedAt: null },
     }),
     prisma.ticket.update({
       where: { id: escalation.ticketId },
@@ -189,6 +231,8 @@ export async function sendEscalation(params: {
     targetId: escalation.id,
     metadata: { supplierEmail: escalation.supplier.contactEmail },
   });
+
+  return 'envoye';
 }
 
 /** Clôture manuelle par l'agent — le fournisseur a répondu, le sujet est traité. */
