@@ -99,7 +99,7 @@
 
 /* Ambiance « galerie » : minimaliste. Noir mat, un halo de lumière douce au-dessus du portant,
    rien d'autre que les maillots. */
-.mfp--galerie { --mfp-muted: #a8a49e; --mfp-line: rgba(240, 237, 232, .14); background: radial-gradient(70% 60% at 50% 40%, #1d1c1b 0%, #0f0f10 58%, #0b0b0c 100%); }
+.mfp--galerie { --mfp-muted: #b9b6b1; --mfp-line: rgba(240, 237, 232, .18); background: radial-gradient(75% 65% at 50% 40%, #4a4a4f 0%, #36363a 55%, #2c2c30 100%) !important; }
 .mfp--galerie .mfp__side { border-color: rgba(240, 237, 232, .26) !important; background: rgba(11, 11, 12, .5) !important; color: var(--mfp-ink); }
 .mfp--galerie .mfp__side:hover { background: var(--mfp-ink) !important; color: var(--mfp-bg); }
 .mfp--galerie .mfp__more { border-color: rgba(240, 237, 232, .36); }
