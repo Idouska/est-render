@@ -1,3 +1,4 @@
+import { repartirDeclinaison } from '../services/shopify/declinaison.ts';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { env } from '../config/env.ts';
@@ -294,10 +295,11 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
           const raw = String(variant.variantTitle ?? '').trim();
           if (!raw || raw === 'Default Title') continue;
 
-          // Une déclinaison composée — « Blackened Blue / 45 » — garde son
-          // segment numérique ; sinon le libellé entier est la pointure.
-          const parts = raw.split('/').map((part) => part.trim()).filter(Boolean);
-          const value = parts.find((part) => /^\d/.test(part)) ?? parts[0] ?? '';
+          // Une déclinaison composée — « Blackened Blue / 45 1/3 » — garde sa
+          // pointure ; sans pointure reconnaissable (« M », « XL »), une option
+          // unique est la taille elle-même.
+          const { taille } = repartirDeclinaison(raw);
+          const value = taille || (raw.includes(' / ') ? '' : raw);
 
           if (!value) continue;
           if (term && !value.toLowerCase().includes(term.toLowerCase())) continue;

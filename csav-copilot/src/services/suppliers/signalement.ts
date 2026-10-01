@@ -1,3 +1,5 @@
+import { ressembleAUneTaille } from '../shopify/declinaison.ts';
+
 /**
  * Le détail d'un article signalé en rupture par l'atelier : l'écrire, le relire.
  *
@@ -86,6 +88,17 @@ export function lireArticle(texte: string | null | undefined): ArticleSignale {
         lu[cle] = valeur;
       }
     }
+  }
+
+  /*
+   * Les signalements écrits avant la correction du pré-remplissage ont rangé
+   * la pointure dans « Couleur » — « Couleur : 45 1/3 ». Relue, elle reprend
+   * sa place : une couleur qui a la forme d'une pointure, sans taille à côté,
+   * est une taille.
+   */
+  if (lu.taille === null && ressembleAUneTaille(lu.couleur)) {
+    lu.taille = lu.couleur;
+    lu.couleur = null;
   }
 
   return lu;
