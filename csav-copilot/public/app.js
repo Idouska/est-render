@@ -1938,12 +1938,11 @@ const ACTION_META = {
   substitute: { label: 'Proposer un remplacement', note: 'Le client garde sa commande, on remplace la référence indisponible.' },
   refund: { label: 'Rembourser…', note: 'Irréversible : l’argent repart chez le client immédiatement.' },
   client: { label: 'Écrire au client', note: 'Message direct, hors brouillon proposé.' },
-  supplier: { label: 'Écrire au fournisseur', note: 'Ouvre une escalade suivie, avec relance automatique.' },
-  tracking: { label: 'Voir le suivi', note: 'Position du colis d’après le transporteur.' },
-  change: {
-    label: '⚡ Demander un changement',
-    note: 'Taille, couleur, modèle, adresse — le fournisseur confirme depuis son atelier.',
+  supplier: {
+    label: 'Contacter le fournisseur',
+    note: 'Rupture, taille, adresse, article manquant… — l’atelier répond d’un bouton.',
   },
+  tracking: { label: 'Voir le suivi', note: 'Position du colis d’après le transporteur.' },
 };
 
 function renderActionBar() {
@@ -2003,13 +2002,11 @@ function replySubject(ticket) {
   return `Re: ${bare || 'votre commande'}`;
 }
 
-function openCompose(target, ticket) {
+function openCompose(ticket) {
   const zone = $('compose');
-  zone.dataset.target = target;
   setComposeOpen(true);
 
-  $('compose-title').textContent =
-    target === 'client' ? 'Écrire au client' : 'Écrire au fournisseur';
+  $('compose-title').textContent = 'Écrire au client';
 
   // Les icônes se posent ici et non au chargement : `ICONS` est un `const`
   // déclaré plus bas, hors de portée quand ce fichier s'exécute.
@@ -2019,67 +2016,30 @@ function openCompose(target, ticket) {
   $('compose-close').innerHTML = ico('close');
 
   const body = $('compose-body');
-  body.placeholder =
-    target === 'client' ? 'Votre message au client…' : 'Votre message au fournisseur…';
+  body.placeholder = 'Votre message au client…';
 
   /*
-   * La signature entre avec le message, pour le client seulement.
-   *
-   * Elle se règle dans Réglages › Signature, dont le texte d'aide promet
-   * depuis toujours « vers vos fournisseurs comme vers vos clients ». Côté
-   * fournisseur, le serveur l'ajoute à l'envoi ; la poser ici aussi la ferait
-   * partir deux fois. Côté client, rien ne l'ajoutait : la promesse était
-   * fausse. Elle vit dans le corps, donc se corrige comme le reste — le
+   * La signature entre avec le message : rien d'autre ne l'ajoute pour le
+   * client. Elle vit dans le corps, donc se corrige comme le reste — le
    * curseur reste au-dessus.
    */
-  const signature = target === 'client' ? currentSignature() : '';
+  const signature = currentSignature();
   body.value = signature ? `\n\n${signature}` : '';
   zone.dataset.initialBody = body.value;
 
-  /*
-   * L'objet et le destinataire n'existent que pour le client : une escalade
-   * fournisseur compose le sien à partir de la boutique, de la commande et du
-   * motif, et le laisser modifier ici casserait le fil que le fournisseur
-   * suit dans son espace.
-   */
   const subject = $('compose-subject');
-  subject.closest('.compose-subject').hidden = target !== 'client';
-  $('compose-to-row').hidden = target !== 'client';
-  $('compose-tools').hidden = target !== 'client';
-  if (target === 'client') {
-    subject.value = replySubject(ticket);
-    $('compose-to').textContent = ticket.customerEmail ?? '';
-    renderComposeCanned(ticket);
-  } else {
-    subject.value = '';
-  }
+  subject.value = replySubject(ticket);
+  $('compose-to').textContent = ticket.customerEmail ?? '';
+  renderComposeCanned(ticket);
   zone.dataset.initialSubject = subject.value;
 
-  renderComposeSignatureBadge(target, signature);
+  renderComposeSignatureBadge(signature);
 
   body.focus();
   body.setSelectionRange(0, 0);
 
-  const relay = $('compose-relay');
-  const hint = $('compose-hint');
-
-  if (target === 'supplier') {
-    // L'heure locale de l'atelier décide du canal : un mail à 5 h du matin
-    // attend le réveil, un message instantané aussi — mais on ne le découvre
-    // qu'après avoir attendu. Le dire ici évite la relance inutile.
-    const local = supplierLocalTime();
-    relay.hidden = false;
-    relay.textContent = 'Relancer sur WhatsApp';
-    hint.textContent = local
-      ? `Il est ${local.time} en Chine — ${
-          local.open ? 'heures ouvrées' : 'hors horaires, réponse probable demain matin'
-        }.`
-      : '';
-  } else {
-    relay.hidden = true;
-    // Le destinataire est dans le champ « À » : le répéter ici doublonnait.
-    hint.textContent = '';
-  }
+  // Le destinataire est dans le champ « À » : le répéter ici doublonnait.
+  $('compose-hint').textContent = '';
 }
 
 /*
@@ -2100,14 +2060,9 @@ function currentSignature() {
   return (state.me?.merchant?.emailSignature ?? '').trim();
 }
 
-function renderComposeSignatureBadge(target, signature) {
+function renderComposeSignatureBadge(signature) {
   const badge = $('compose-sig');
   badge.hidden = false;
-
-  if (target === 'supplier') {
-    badge.textContent = 'Signature ajoutée à l’envoi';
-    return;
-  }
 
   badge.innerHTML = signature
     ? '<b aria-hidden="true">✓</b> Signature automatique activée'
@@ -2241,20 +2196,6 @@ document.addEventListener('keydown', (event) => {
   closeCompose();
 });
 
-/** Heure de l'atelier, et si l'on peut espérer une réponse tout de suite. */
-function supplierLocalTime() {
-  const now = new Date();
-  const time = now.toLocaleTimeString('fr-FR', {
-    timeZone: 'Asia/Shanghai',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-  const hour = Number(
-    now.toLocaleString('en-GB', { timeZone: 'Asia/Shanghai', hour: '2-digit', hour12: false }),
-  );
-  return { time, open: hour >= 9 && hour < 18 };
-}
-
 $('compose-cancel')?.addEventListener('click', () => closeCompose());
 
 /*
@@ -2292,27 +2233,7 @@ $('compose-resolve')?.addEventListener('click', async () => {
   }
 });
 
-/* « Nouvelle escalade » : ouvre la rédaction fournisseur sur le ticket courant.
-   Le bouton ne paraît que là où il a un objet — un ticket ouvert. */
-/*
- * Le bouton « Nouvelle escalade » de la barre haute est retiré.
- *
- * Le geste reste : « Écrire au fournisseur », dans l'en-tête du ticket, appelle
- * le même `openCompose('supplier')`. Le CTA de la barre haute promettait une
- * action hors contexte — il exigeait un ticket ouvert pour faire quoi que ce
- * soit, et se contentait de faire défiler jusqu'à la zone de rédaction du
- * ticket qu'on regardait déjà.
- */
-
-$('compose-relay')?.addEventListener('click', () => {
-  const text = $('compose-body').value.trim();
-  // WhatsApp Web plutôt qu'un envoi silencieux : le numéro du fournisseur
-  // appartient à sa fiche, et l'agent doit voir partir son message.
-  window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
-});
-
 $('compose-send')?.addEventListener('click', async () => {
-  const zone = $('compose');
   const text = $('compose-body').value.trim();
   const ticket = state.detail?.ticket;
 
@@ -2320,48 +2241,21 @@ $('compose-send')?.addEventListener('click', async () => {
 
   $('compose-send').disabled = true;
   try {
-    if (zone.dataset.target === 'client') {
-      await api('/api/emails', {
-        method: 'POST',
-        body: JSON.stringify({
-          to: ticket.customerEmail,
-          // Ce que l'agent lit dans le champ, pas ce qu'on aurait recalculé :
-          // un objet corrigé puis ignoré à l'envoi serait pire que pas de
-          // champ du tout.
-          subject: $('compose-subject').value.trim() || replySubject(ticket),
-          body: text,
-          // Rattaché au fil : la réponse s'écrit dans la conversation, elle
-          // ne part pas dans le vide.
-          ticketId: ticket.id,
-        }),
-      });
-      toast('Message envoyé au client — visible dans le fil.');
-    } else {
-      const { escalation } = await api(`/api/tickets/${ticket.id}/escalations`, {
-        method: 'POST',
-        // Le motif suit l'intention détectée : une rupture escalade autrement
-        // qu'une adresse incomplète, et le service route d'après lui.
-        body: JSON.stringify({
-          reason:
-            ticket.intent === 'RETURN' || ticket.intent === 'REFUND'
-              ? 'MISSING_ITEM'
-              : 'OTHER',
-          note: text,
-        }),
-      });
-
-      /*
-       * Créer PUIS envoyer : la création ne fait qu'un brouillon.
-       *
-       * Sans ce second appel, l'escalade restait en brouillon pour toujours —
-       * le fournisseur ne recevait rien, le ticket ne passait pas « Chez le
-       * fournisseur », l'écran Fournisseurs restait vide, et le toast
-       * « envoyée » mentait. L'agent vient d'écrire son message lui-même :
-       * il n'y a rien à relire, l'envoi suit immédiatement.
-       */
-      await api(`/api/escalations/${escalation.id}/send`, { method: 'POST', body: '{}' });
-      toast('Escalade envoyée au fournisseur — le ticket passe « Chez le fournisseur ».');
-    }
+    await api('/api/emails', {
+      method: 'POST',
+      body: JSON.stringify({
+        to: ticket.customerEmail,
+        // Ce que l'agent lit dans le champ, pas ce qu'on aurait recalculé :
+        // un objet corrigé puis ignoré à l'envoi serait pire que pas de
+        // champ du tout.
+        subject: $('compose-subject').value.trim() || replySubject(ticket),
+        body: text,
+        // Rattaché au fil : la réponse s'écrit dans la conversation, elle
+        // ne part pas dans le vide.
+        ticketId: ticket.id,
+      }),
+    });
+    toast('Message envoyé au client — visible dans le fil.');
     closeCompose({ force: true });
     await selectTicket(ticket.id);
   } catch (error) {
@@ -2379,8 +2273,7 @@ function actionBlockedReason(key, ticket) {
   if ((key === 'substitute' || key === 'tracking') && !ticket.shopifyOrderId) {
     return 'Aucune commande rattachée à ce message.';
   }
-  if (key === 'supplier' && !canI('escalate')) return 'Votre rôle ne permet pas d’escalader.';
-  if (key === 'change') {
+  if (key === 'supplier') {
     if (!canI('escalate')) return 'Votre rôle ne permet pas d’escalader.';
     if (activeSuppliers().length === 0) return 'Aucun fournisseur actif à qui adresser la demande.';
   }
@@ -2537,11 +2430,10 @@ $('actbar-row').addEventListener('click', async (event) => {
   $('subs').hidden = true;
 
   if (key === 'refund') return $('btn-refund').click();
-  if (key === 'client') return openCompose('client', ticket);
-  if (key === 'supplier') return openCompose('supplier', ticket);
+  if (key === 'client') return openCompose(ticket);
+  if (key === 'supplier') return openChangeRequest(ticket);
   if (key === 'tracking') return setView('tracking');
   if (key === 'substitute') return loadSubstitutions(ticket.id);
-  if (key === 'change') return openChangeRequest(ticket);
 });
 
 /**
@@ -3630,8 +3522,26 @@ const CHANGE_KINDS = {
   COLOR: 'Couleur',
   HOLD: 'Ne pas expédier',
   CANCEL: 'Annulation',
+  MISSING_ITEM: 'Article manquant',
+  DELAY: 'Retard',
   OTHER: 'Autre',
 };
+
+/**
+ * La valeur d'une demande à une seule valeur, en clair : l'article qui
+ * manque, ou la date attendue. `null` pour un changement « avant → après ».
+ */
+function valeurSimple(change) {
+  if (change.kind === 'MISSING_ITEM' && change.beforeValue) return `Manque : ${change.beforeValue}`;
+  if (change.kind === 'DELAY' && change.afterValue) return `Expédier avant le ${dateCourteIso(change.afterValue)}`;
+  return null;
+}
+
+/** « 2026-10-12 » → « 12 oct. » ; toute autre forme passe telle quelle. */
+function dateCourteIso(valeur) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(valeur)) return valeur;
+  return new Date(`${valeur}T12:00:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+}
 
 const CHANGE_STATUS = {
   PENDING: { tone: 'wait', label: 'en attente du fournisseur' },
@@ -3665,7 +3575,9 @@ function renderChanges(changes) {
         return `<div class="chg-row">
           <b>${esc(CHANGE_KINDS[change.kind] ?? change.kind)}</b>
           ${
-            change.afterValue
+            valeurSimple(change)
+              ? `<span class="chg-swap"><b>${esc(valeurSimple(change))}</b></span>`
+              : change.afterValue
               ? `<span class="chg-swap">${esc(change.beforeValue ?? '—')} → <b>${esc(
                   change.afterValue,
                 )}</b></span>`
@@ -4361,8 +4273,7 @@ function renderTicketLabels(ticket) {
     menu.innerHTML =
       // Les trois gestes descendus de la rangée principale gardent leur clé,
       // donc leur écouteur et leur blocage conditionnel.
-      actionButton('supplier', 'Écrire au fournisseur', ticket, 'more-item') +
-      actionButton('change', 'Modifier la commande', ticket, 'more-item') +
+      actionButton('supplier', 'Contacter le fournisseur', ticket, 'more-item') +
       actionButton('refund', 'Rembourser…', ticket, 'more-item') +
       actionButton('reshipment', 'Ouvrir un dossier de retour', ticket, 'more-item') +
       // WhatsApp, en second accès : le premier reste la fiche client du rail.
@@ -4391,10 +4302,9 @@ function renderTicketLabels(ticket) {
   }
 
   const quick = {
-    client: () => openCompose('client', ticket),
-    supplier: () => openCompose('supplier', ticket),
+    client: () => openCompose(ticket),
+    supplier: () => openChangeRequest(ticket),
     refund: () => $('btn-refund').click(),
-    change: () => openChangeRequest(ticket),
     reshipment: () => void openReshipment(ticket),
   };
 
@@ -5898,15 +5808,47 @@ function alertContextFromOrder(order) {
       .filter(Boolean)
       .join(', '),
     PHONE: address.phone ?? '',
+    MISSING_ITEM: item ? [item.title, item.variantTitle].filter(Boolean).join(' · ') : '',
   };
 }
 
+/*
+ * Les motifs à une seule valeur : rien n'est « remplacé », on désigne.
+ *
+ * L'article manquant se range dans `beforeValue` (ce qui était attendu), la
+ * date d'expédition dans `afterValue` (ce qu'on demande) : l'atelier et le
+ * mail les lisent ainsi, sans champ de plus en base.
+ */
+const KINDS_SINGLE = {
+  MISSING_ITEM: { label: 'Article manquant', champ: 'before', type: 'text', exemple: 'Chaussette Hyper Crimson · 42' },
+  DELAY: { label: 'À expédier au plus tard le', champ: 'after', type: 'date', exemple: '' },
+};
+
 function setAlertKind(kind) {
   closeVariantPicker();
+
+  // Une rupture n'est pas une demande de changement : c'est un dossier, avec
+  // ses modèles de remplacement. On passe à la fenêtre qui les propose.
+  if (kind === 'RUPTURE') return void ouvrirRuptureDepuisFenetre();
+
   $('alert-kind').value = kind;
   document.querySelectorAll('#alert-kinds [data-kind]').forEach((button) =>
     button.setAttribute('aria-pressed', String(button.dataset.kind === kind)),
   );
+
+  // Pas de rupture sans message client, ni pendant la correction d'une
+  // demande existante : elle ne changera pas de nature.
+  $('alert-kind-rupture').hidden =
+    !$('alert-modal').dataset.ticket || Boolean($('alert-modal').dataset.editing);
+
+  const single = KINDS_SINGLE[kind];
+  $('alert-single-field').hidden = !single;
+  if (single) {
+    $('alert-single-label').textContent = single.label;
+    $('alert-single').type = single.type;
+    $('alert-single').placeholder = single.exemple;
+    $('alert-single').value = kind === 'MISSING_ITEM' ? (state.alertCtx?.MISSING_ITEM ?? '') : '';
+  }
 
   const swap = KINDS_WITH_SWAP.has(kind);
   $('alert-swap-field').hidden = !swap;
@@ -6067,11 +6009,20 @@ $('alert-modal')?.addEventListener('click', (event) => {
 
 $('alert-send')?.addEventListener('click', async () => {
   const message = $('alert-message').value.trim();
-  const after = $('alert-after').value.trim();
+  const kind = $('alert-kind').value;
+  const single = KINDS_SINGLE[kind];
+  const valeur = single ? $('alert-single').value.trim() : '';
+  const before = single ? (single.champ === 'before' ? valeur : '') : $('alert-before').value.trim();
+  const after = single ? (single.champ === 'after' ? valeur : '') : $('alert-after').value.trim();
+
+  if (single && !valeur) {
+    toast(`Indiquez : ${single.label.toLowerCase()}.`, true);
+    return;
+  }
 
   // L'un ou l'autre suffit : « ne pas expédier » n'a pas de valeur « après »,
   // et « 44 → 45 » n'a pas besoin de phrase.
-  if (!after && message.length < 3) {
+  if (!single && !after && message.length < 3) {
     toast('Indiquez la nouvelle valeur, ou écrivez une précision.', true);
     return;
   }
@@ -6094,9 +6045,9 @@ $('alert-send')?.addEventListener('click', async () => {
       ? await api(`/api/changes/${editing}`, {
           method: 'PATCH',
           body: JSON.stringify({
-            kind: $('alert-kind').value,
+            kind,
             message,
-            beforeValue: $('alert-before').value.trim() || null,
+            beforeValue: before || null,
             afterValue: after || null,
             orderName: $('alert-order').value.trim() || null,
           }),
@@ -6104,9 +6055,9 @@ $('alert-send')?.addEventListener('click', async () => {
       : await api(`/api/suppliers/${supplierId}/alert`, {
           method: 'POST',
           body: JSON.stringify({
-            kind: $('alert-kind').value,
+            kind,
             message,
-            beforeValue: $('alert-before').value.trim() || null,
+            beforeValue: before || null,
             afterValue: after || null,
             orderName: $('alert-order').value.trim() || null,
             shopifyOrderId: $('alert-modal').dataset.order || null,
@@ -10218,7 +10169,9 @@ function renderChangesScreen() {
           </div>
 
           ${
-            change.afterValue
+            valeurSimple(change)
+              ? `<div class="chgc-swap"><b>${esc(valeurSimple(change))}</b></div>`
+              : change.afterValue
               ? `<div class="chgc-swap">
                    <s>${esc(change.beforeValue ?? '—')}</s>
                    <span aria-hidden="true">→</span>
@@ -10326,6 +10279,11 @@ function renderChangesScreen() {
       setAlertKind(change.kind);
       $('alert-before').value = change.beforeValue ?? '';
       $('alert-after').value = change.afterValue ?? '';
+      const single = KINDS_SINGLE[change.kind];
+      if (single) {
+        $('alert-single').value =
+          (single.champ === 'before' ? change.beforeValue : change.afterValue) ?? '';
+      }
       $('alert-order').value = change.orderName ?? '';
       $('alert-message').value = change.message ?? '';
       renderAlertSuppliers();
@@ -11221,7 +11179,7 @@ async function openOrderSheet(id) {
     `<section class="sheet-group">${orderDetailMarkup(order, parcels, reemploi)}</section>` +
     // Les gestes d'abord : c'est pour eux qu'on a ouvert la fiche.
     `<section class="sheet-group sheet-acts">
-       <button class="btn btn-small btn-primary" id="ordv-change">${ico('bolt')} Demander un changement</button>
+       <button class="btn btn-small btn-primary" id="ordv-change">${ico('bolt')} Contacter le fournisseur</button>
        ${
          tracking
            ? `<button class="btn btn-small" data-track="${esc(tracking.trackingNumber)}"${
@@ -11250,7 +11208,9 @@ async function openOrderSheet(id) {
               return `<div class="sheet-row" style="display:block">
                 <b>${esc(CHANGE_KINDS[change.kind] ?? change.kind)}</b>
                 ${
-                  change.afterValue
+                  valeurSimple(change)
+                    ? ` <span class="mono">${esc(valeurSimple(change))}</span>`
+                    : change.afterValue
                     ? ` <span class="mono">${esc(change.beforeValue ?? '—')} → ${esc(
                         change.afterValue,
                       )}</span>`
@@ -12042,35 +12002,11 @@ async function loadEscalations(ticketId) {
 
   const contacts = activeSuppliers();
 
+  // Écrire au fournisseur passe par la fenêtre « Contacter le fournisseur » :
+  // un motif, des champs, une réponse d'un bouton — plus de texte libre ici.
   const newForm = contacts.length
-    ? `<div class="escalation" id="escalation-form">
-        <div class="field">
-          <label for="esc-supplier">Destinataire</label>
-          <select id="esc-supplier">
-            <option value="">Premier contact actif</option>
-            ${contacts
-              .map(
-                (supplier) => `<option value="${esc(supplier.id)}">${esc(supplier.name)}</option>`,
-              )
-              .join('')}
-          </select>
-        </div>
-        <div class="field" style="margin-top:8px">
-          <label for="esc-reason">Motif</label>
-          <select id="esc-reason">
-            <option value="OUT_OF_STOCK">Rupture de stock</option>
-            <option value="INCORRECT_ADDRESS">Adresse incorrecte ou incomplète</option>
-            <option value="MISSING_ITEM">Article manquant</option>
-            <option value="OTHER">Autre</option>
-          </select>
-        </div>
-        <div class="field" style="margin-top:8px">
-          <label for="esc-note">Note pour l'IA (facultatif)</label>
-          <textarea id="esc-note" placeholder="Contexte à transmettre au fournisseur…"></textarea>
-        </div>
-        <div class="actions" style="margin-top:8px">
-          <button class="btn" id="esc-create">Rédiger un message fournisseur</button>
-        </div>
+    ? `<div class="actions" style="margin-bottom:8px">
+        <button class="btn" id="esc-contact" type="button">Contacter le fournisseur</button>
       </div>`
     : '';
 
@@ -12078,7 +12014,6 @@ async function loadEscalations(ticketId) {
     newForm +
     escalations
       .map((escalation) => {
-        const draft = escalation.status === 'DRAFTING';
         const messages = escalation.messages
           .map(
             (message) => `<div class="msg${message.direction === 'FROM_SUPPLIER' ? ' out' : ''}">
@@ -12086,20 +12021,14 @@ async function loadEscalations(ticketId) {
                 <b>${message.direction === 'FROM_SUPPLIER' ? 'Fournisseur' : 'Vous'}</b>
                 <span>${shortTime(message.createdAt)}</span>
               </div>
-              ${
-                draft && message === escalation.messages[escalation.messages.length - 1]
-                  ? `<textarea class="esc-body" data-id="${escalation.id}">${esc(message.body)}</textarea>`
-                  : `<div class="msg-body">${esc(message.body)}</div>`
-              }
+              <div class="msg-body">${esc(message.body)}</div>
             </div>`,
           )
           .join('');
 
-        const actions = draft
-          ? `<div class="actions" style="margin-top:8px">
-              <button class="btn btn-primary esc-send" data-id="${escalation.id}">Envoyer au fournisseur</button>
-            </div>`
-          : escalation.status !== 'RESOLVED'
+        // Un brouillon de l'ancien format n'est plus envoyé : il se clôt, et
+        // la demande se refait par la fenêtre.
+        const actions = escalation.status !== 'RESOLVED'
             ? `<div class="actions" style="margin-top:8px">
                 <button class="btn esc-resolve" data-id="${escalation.id}">Marquer résolu</button>
               </div>`
@@ -12116,57 +12045,12 @@ async function loadEscalations(ticketId) {
       })
       .join('');
 
-  $('esc-create')?.addEventListener('click', () => createEscalation(ticketId));
-  container.querySelectorAll('.esc-send').forEach((button) => {
-    button.addEventListener('click', () => sendEscalation(ticketId, button.dataset.id, button));
+  $('esc-contact')?.addEventListener('click', () => {
+    if (state.detail?.ticket) openChangeRequest(state.detail.ticket);
   });
   container.querySelectorAll('.esc-resolve').forEach((button) => {
     button.addEventListener('click', () => resolveEscalation(ticketId, button.dataset.id));
   });
-}
-
-async function createEscalation(ticketId) {
-  try {
-    await api(`/api/tickets/${ticketId}/escalations`, {
-      method: 'POST',
-      body: JSON.stringify({
-        reason: $('esc-reason').value,
-        note: $('esc-note').value.trim() || undefined,
-        supplierId: $('esc-supplier').value || undefined,
-      }),
-    });
-    toast('Brouillon fournisseur rédigé.');
-    await loadEscalations(ticketId);
-  } catch (error) {
-    toast(error.message, true);
-  }
-}
-
-async function sendEscalation(ticketId, escalationId, bouton) {
-  // Même garde que la réponse au client : un double clic notifiait le
-  // fournisseur deux fois.
-  const envoi = fermerPendantLEnvoi(bouton);
-  if (!envoi) return;
-
-  const textarea = document.querySelector(`.esc-body[data-id="${escalationId}"]`);
-  let parti = false;
-  try {
-    if (textarea) {
-      await api(`/api/escalations/${escalationId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ body: textarea.value }),
-      });
-    }
-    await api(`/api/escalations/${escalationId}/send`, { method: 'POST' });
-    parti = true;
-    toast('Fournisseur notifié.');
-    await Promise.all([loadAudit(), selectTicket(ticketId)]);
-    envoi.garder();
-  } catch (error) {
-    toast(error.message, true);
-    if (parti) envoi.garder('Envoyé');
-    else envoi.rendre();
-  }
 }
 
 async function resolveEscalation(ticketId, escalationId) {
@@ -14957,9 +14841,40 @@ async function chargerSubstitutions(d) {
  */
 const fenetreSubst = { dossier: null, choisis: [] };
 
-async function ouvrirFenetreSubstitution(d) {
+/**
+ * « Rupture » choisi dans « Contacter le fournisseur ».
+ *
+ * La rupture se dit en modèles de remplacement, pas en phrase : on passe à la
+ * fenêtre qui les propose, adressée à l'atelier choisi. L'envoi ouvre le
+ * dossier côté serveur.
+ */
+function ouvrirRuptureDepuisFenetre() {
+  const ticketId = $('alert-modal').dataset.ticket;
+  const supplierId = $('alert-supplier').value || $('alert-modal').dataset.supplier;
+  if (!ticketId) return;
+  if (!supplierId) {
+    toast('Choisissez le fournisseur destinataire.', true);
+    return;
+  }
+
+  const item = state.detail?.order?.lineItems?.[0];
+  closeAlertModal();
+  void ouvrirFenetreSubstitution(
+    {
+      ticketId,
+      article: item
+        ? { titre: item.title, variante: item.variantTitle, sku: item.sku, image: item.image ?? null }
+        : null,
+    },
+    { supplierId, depuisTicket: true },
+  );
+}
+
+async function ouvrirFenetreSubstitution(d, options = {}) {
   fenetreSubst.dossier = d;
   fenetreSubst.choisis = [];
+  fenetreSubst.supplierId = options.supplierId ?? null;
+  fenetreSubst.depuisTicket = Boolean(options.depuisTicket);
 
   const article = d.article;
   $('subst-rupture').innerHTML = article
@@ -15103,6 +15018,7 @@ $('subst-send')?.addEventListener('click', async () => {
     const resultat = await api(`/api/ruptures/${d.ticketId}/substitutions`, {
       method: 'POST',
       body: JSON.stringify({
+        ...(fenetreSubst.supplierId ? { supplierId: fenetreSubst.supplierId } : {}),
         propositions: fenetreSubst.choisis.map(({ cle, ...reste }) => reste),
       }),
     });
@@ -15113,7 +15029,12 @@ $('subst-send')?.addEventListener('click', async () => {
         : `${resultat.creees} modèle(s) posé(s) pour ${resultat.atelier} — l’avis par mail n’est pas parti.`,
       resultat.avertiPar === null,
     );
-    await chargerSubstitutions(d);
+    if (fenetreSubst.depuisTicket) {
+      prefetched.delete(d.ticketId);
+      await selectTicket(d.ticketId);
+    } else {
+      await Promise.all([chargerSubstitutions(d), loadRuptures()]);
+    }
   } catch (error) {
     bouton.disabled = false;
     toast(error.message, true);
@@ -15183,10 +15104,12 @@ function renderRuptureActions(d) {
     label: 'Marquer résolu',
     faire: () => void resoudreRupture(d),
   };
-  const envoyer = {
-    cle: 'envoyer',
-    label: 'Envoyer au fournisseur',
-    faire: (bouton) => void envoyerEscalade(d, bouton),
+  // Une rupture se dit à l'atelier en modèles de remplacement : la
+  // proposition ouvre le dossier et le prévient, sans message libre.
+  const proposer = {
+    cle: 'proposer',
+    label: 'Proposer un remplacement',
+    faire: () => void ouvrirFenetreSubstitution(d),
   };
   const ouvrirDossier = {
     cle: 'dossier',
@@ -15200,7 +15123,7 @@ function renderRuptureActions(d) {
   // L'ordre dit la recommandation. « Sauver la vente » d'abord : une rupture
   // ne mène au remboursement qu'en dernier recours, et l'écran doit rendre le
   // bon geste plus facile que le mauvais.
-  if (d.etat === 'A_TRAITER') gestes.push(envoyer, chercherAlt, ecrireClient, ouvrirDossier);
+  if (d.etat === 'A_TRAITER') gestes.push(proposer, chercherAlt, ecrireClient, ouvrirDossier);
   else if (d.etat === 'FOURNISSEUR_EN_ATTENTE')
     gestes.push(chercherAlt, ecrireClient, ouvrirDossier);
   else if (d.etat === 'CLIENT_A_PREVENIR') gestes.push(ecrireClient, chercherAlt, ouvrirDossier);
@@ -15257,7 +15180,7 @@ async function ecrireAuClientDepuisRupture(d, phrase = null) {
     }
 
     state.detail = detail;
-    openCompose('client', detail.ticket);
+    openCompose(detail.ticket);
 
     if (phrase) {
       const corps = $('compose-body');
@@ -15266,25 +15189,6 @@ async function ecrireAuClientDepuisRupture(d, phrase = null) {
     }
   } catch (error) {
     toast(error.message, true);
-  }
-}
-
-async function envoyerEscalade(d, bouton) {
-  // Même garde que la réponse au client (voir `fermerPendantLEnvoi`).
-  const envoi = fermerPendantLEnvoi(bouton);
-  if (!envoi) return;
-
-  let parti = false;
-  try {
-    await api(`/api/escalations/${d.id}/send`, { method: 'POST', body: '{}' });
-    parti = true;
-    toast('Demande envoyée au fournisseur.');
-    await loadRuptures();
-    envoi.garder();
-  } catch (error) {
-    toast(error.message, true);
-    if (parti) envoi.garder('Envoyé');
-    else envoi.rendre();
   }
 }
 

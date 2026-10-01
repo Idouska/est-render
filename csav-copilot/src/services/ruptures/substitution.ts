@@ -109,6 +109,65 @@ export function avisSubstitution(contexte: {
 }
 
 /**
+ * Le dossier de rupture qu'une proposition suppose.
+ *
+ * Proposer un remplacement depuis la fenêtre « Contacter le fournisseur » est
+ * la façon d'ouvrir une rupture : il n'y a plus d'autre message à envoyer.
+ * Sans escalade, la console Ruptures et l'atelier ne verraient pas le dossier.
+ *
+ * Un signalement de l'atelier en a déjà un — son ticket — et une escalade
+ * restée en brouillon passe en « envoyée » : l'avis de substitution est le
+ * message qu'elle attendait.
+ */
+export async function ouvrirDossierRupture(params: {
+  merchantId: string;
+  ticketId: string;
+  supplierId: string;
+}): Promise<void> {
+  const { merchantId, ticketId, supplierId } = params;
+
+  const ticket = await prisma.ticket.findFirst({
+    where: { id: ticketId, merchantId },
+    select: {
+      gmailThreadId: true,
+      escalations: {
+        where: { reason: 'OUT_OF_STOCK', supplierId, status: { not: 'RESOLVED' } },
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+        select: { id: true, status: true },
+      },
+    },
+  });
+  if (!ticket || fournisseurDuFil(ticket.gmailThreadId)) return;
+
+  const maintenant = new Date();
+  const existante = ticket.escalations[0];
+
+  if (existante?.status === 'DRAFTING') {
+    await prisma.supplierEscalation.updateMany({
+      where: { id: existante.id, merchantId, status: 'DRAFTING' },
+      data: { status: 'OPEN', notifiedAt: maintenant },
+    });
+  } else if (!existante) {
+    await prisma.supplierEscalation.create({
+      data: {
+        merchantId,
+        ticketId,
+        supplierId,
+        reason: 'OUT_OF_STOCK',
+        status: 'OPEN',
+        notifiedAt: maintenant,
+      },
+    });
+  }
+
+  await prisma.ticket.updateMany({
+    where: { id: ticketId, merchantId },
+    data: { status: 'AWAITING_SUPPLIER' },
+  });
+}
+
+/**
  * Propose des modèles de remplacement, et prévient l'atelier.
  *
  * L'e-mail part APRÈS l'écriture : une panne d'envoi ne doit pas perdre des

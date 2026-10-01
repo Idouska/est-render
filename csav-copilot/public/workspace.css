@@ -672,6 +672,7 @@ input:focus, select:focus, textarea:focus {
   letter-spacing: -0.02em;
 }
 .upd-before { color: var(--ink-mute); text-decoration: line-through; }
+.upd-label { color: var(--ink-mute); }
 .upd-arrow { color: var(--ink-mute); font-size: 18px; }
 .upd-after { color: var(--brand); }
 
@@ -691,6 +692,15 @@ input:focus, select:focus, textarea:focus {
   flex-wrap: wrap;
   margin-bottom: 14px;
 }
+/* Le seul geste de création de la barre : à droite, à part des filtres. */
+.ws-sous .ws-new {
+  margin-left: auto;
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+.issue-find-res { margin: 6px 0 0; font-size: 13px; color: var(--ink-mute); }
+.issue-find-res:empty { display: none; }
 .ws-sous button {
   display: inline-flex;
   align-items: center;

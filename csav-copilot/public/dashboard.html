@@ -1840,7 +1840,6 @@ contact@runningupscale.com"></textarea>
         </div>
         <textarea id="compose-body" rows="5"></textarea>
         <div class="compose-foot">
-          <button class="btn btn-small" id="compose-relay" hidden></button>
           <span class="hint" id="compose-hint"></span>
           <button class="btn" id="compose-cancel">Annuler</button>
           <button class="btn" id="compose-resolve">Marquer résolu</button>
@@ -2168,7 +2167,7 @@ contact@runningupscale.com"></textarea>
     <div class="backdrop" id="alert-modal" hidden>
       <div class="modal">
         <div class="modal-head">
-          <h2>Demander un changement</h2>
+          <h2>Contacter le fournisseur</h2>
           <p id="alert-who"></p>
         </div>
         <div class="modal-body">
@@ -2176,8 +2175,11 @@ contact@runningupscale.com"></textarea>
                voient d'un coup d'œil, un menu les cache derrière un clic — et
                c'est le premier champ, celui qui oriente tous les autres. -->
           <div class="field">
-            <label>Nature</label>
+            <label>Motif</label>
             <div class="kgrid" id="alert-kinds" role="group">
+              <!-- Seulement depuis un message client : une rupture est un
+                   dossier rattaché à un ticket. -->
+              <button type="button" data-kind="RUPTURE" id="alert-kind-rupture">Rupture</button>
               <button type="button" data-kind="SIZE">Taille</button>
               <button type="button" data-kind="COLOR">Couleur</button>
               <button type="button" data-kind="PRODUCT">Modèle</button>
@@ -2185,6 +2187,8 @@ contact@runningupscale.com"></textarea>
               <button type="button" data-kind="PHONE">Téléphone</button>
               <button type="button" data-kind="HOLD">Ne pas expédier</button>
               <button type="button" data-kind="CANCEL">Annulation</button>
+              <button type="button" data-kind="MISSING_ITEM">Article manquant</button>
+              <button type="button" data-kind="DELAY">Retard</button>
               <button type="button" data-kind="OTHER">Autre</button>
             </div>
             <input type="hidden" id="alert-kind" value="SIZE" />
@@ -2210,6 +2214,13 @@ contact@runningupscale.com"></textarea>
             </div>
           </div>
 
+          <!-- Un motif à une seule valeur : l'article qui manque, ou la date
+               d'expédition attendue. Pas de « avant → après » à remplir. -->
+          <div class="field" id="alert-single-field" hidden>
+            <label for="alert-single" id="alert-single-label"></label>
+            <input id="alert-single" type="text" autocomplete="off" />
+          </div>
+
           <div class="field-duo">
             <div class="field">
               <label for="alert-supplier">Fournisseur</label>
@@ -2228,8 +2239,8 @@ contact@runningupscale.com"></textarea>
           </div>
 
           <p class="modal-hint">
-            Part par mail depuis votre boîte SAV et s'affiche dans son atelier,
-            onglet Update — vous verrez ici sa réponse.
+            Un mail court le prévient, et la demande s'affiche dans son atelier,
+            rubrique Tickets, où il répond d'un bouton — vous verrez ici sa réponse.
           </p>
         </div>
         <div class="modal-foot">

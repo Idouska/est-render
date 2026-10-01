@@ -292,6 +292,9 @@
           <button type="button" data-sous="echanges">
             <span data-t="nav.exchanges">Échanges</span><b class="ws-sous-n" id="ws-n-ech" hidden>0</b>
           </button>
+          <!-- Ouvrir un ticket sans passer par la liste des commandes : on
+               le retrouve par son numéro, dans la fenêtre de signalement. -->
+          <button type="button" class="ws-new" id="ws-new-ticket" data-t="ticket.new">＋ Nouveau ticket</button>
         </div>
 
         <section id="view-ruptures" hidden>
@@ -366,6 +369,17 @@
           <p id="issue-order"></p>
         </div>
         <div class="modal-body">
+          <!-- « Nouveau ticket » : la commande se retrouve par son numéro.
+               Depuis une ligne de commande, elle est déjà connue. -->
+          <div class="field" id="issue-find" hidden>
+            <span data-t="ticket.order">Numéro de commande</span>
+            <div class="field-row">
+              <input id="issue-num" type="text" placeholder="#10480" autocomplete="off" />
+              <button class="btn" type="button" id="issue-find-btn" data-t="ticket.find">Chercher</button>
+            </div>
+            <p class="issue-find-res" id="issue-find-res"></p>
+          </div>
+
           <label class="field">
             <span data-t="issue.kind">Nature du problème</span>
             <select id="issue-kind">

@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.ts';
 import { recordAudit } from '../lib/audit.ts';
 import { requirePermission, requireSession } from '../plugins/auth.ts';
-import { atelierDuDossier, proposerSubstitutions } from '../services/ruptures/substitution.ts';
+import { atelierDuDossier, ouvrirDossierRupture, proposerSubstitutions } from '../services/ruptures/substitution.ts';
 import { getShopifyClient, ShopifyError } from '../services/shopify/client.ts';
 import { listOrders, quoteSearchValue } from '../services/shopify/orders.ts';
 import { fournisseurDuFil, lireArticle } from '../services/suppliers/signalement.ts';
@@ -552,6 +552,8 @@ export async function ruptureRoutes(app: FastifyInstance): Promise<void> {
       if (!connu) {
         return reply.code(409).send({ code: 'sans_atelier', error: 'Cet atelier n’existe pas ou n’est plus actif.' });
       }
+
+      await ouvrirDossierRupture({ merchantId, ticketId: ticket.id, supplierId: connu.id });
 
       const resultat = await proposerSubstitutions({
         merchantId,

@@ -1,3 +1,4 @@
+import { enTete } from '../suppliers/demande.ts';
 import { getAiProvider } from './factory.ts';
 
 /**
@@ -49,6 +50,8 @@ const KIND_LABELS: Record<string, string> = {
   PHONE: 'une correction du numéro de téléphone',
   HOLD: "une suspension de l'expédition",
   CANCEL: 'une annulation de commande',
+  MISSING_ITEM: "un article manquant dans le colis",
+  DELAY: "une date d'expédition",
   OTHER: 'une demande particulière',
 };
 
@@ -72,9 +75,7 @@ export async function draftChangeReply(context: ChangeReplyContext): Promise<{
   const provider = await getAiProvider();
 
   const change =
-    context.beforeValue && context.afterValue
-      ? `${context.beforeValue} → ${context.afterValue}`
-      : (context.afterValue ?? context.note ?? '');
+    enTete(context.kind, context.beforeValue, context.afterValue) ?? context.note ?? '';
 
   const result = await provider.completeJson<{
     body: string;
