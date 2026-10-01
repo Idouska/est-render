@@ -1047,6 +1047,74 @@ body.ws-resizing { cursor: col-resize; user-select: none; }
 
 .actbar-note { margin: 0; font-size: 12.5px; color: var(--ink-mute); }
 
+/* ---- la fenêtre de remplacement, pour l'atelier ---- */
+
+/* Le modèle en rupture d'abord, encadré : c'est la référence de tout ce qui
+   suit, et la confondre avec un remplacement coûte un second colis. */
+.subst-rupture {
+  padding: 11px 13px;
+  margin-bottom: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--inset);
+}
+.subst-t,
+.subst-h {
+  display: block;
+  margin: 0 0 7px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+.subst-h { margin-top: 18px; }
+.subst-aide { margin: 0 0 8px; font-size: 12.5px; color: var(--ink-mute); }
+
+.subst-opt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  margin-bottom: 7px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  cursor: pointer;
+}
+.subst-opt:hover { background: var(--inset); }
+.subst-opt img,
+.subst-opt .rup-blank {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: var(--r-sm);
+  object-fit: cover;
+  background: var(--inset);
+}
+.subst-opt b { display: block; font-size: 14px; }
+.subst-opt small { display: block; font-size: 12px; color: var(--ink-mute); }
+.subst-stock { flex: none; font-size: 12px; font-weight: 600; color: var(--ok-ink); }
+
+.subst-libre { display: flex; gap: 8px; flex-wrap: wrap; }
+.subst-libre input {
+  flex: 1 1 130px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13.5px;
+}
+.subst-manque { margin: 10px 0 0; font-size: 12.5px; color: var(--warn-ink); }
+
+/* L'état d'une proposition, dans le panneau du dossier. */
+.rup-sub-line small { color: var(--ink-mute); }
+.rup-sub-ok { color: var(--ok-ink); font-weight: 600; }
+.rup-sub-ko { color: var(--crit-ink); font-weight: 600; }
+.rup-sub-wait { color: var(--ink-mute); }
+
 /* Propositions de remplacement : la vignette et le stock priment, ce sont les
    deux choses que l'agent regarde avant de s'engager auprès du client. */
 .subs { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; }

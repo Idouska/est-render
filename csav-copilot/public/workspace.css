@@ -680,6 +680,105 @@ input:focus, select:focus, textarea:focus {
 .upd-acts { display: flex; gap: 8px; }
 .upd-acts .btn { flex: 1; }
 
+/* ------------------------------------------- sous-navigation et tickets -- */
+
+/* Le tri par type est passé du menu à l'intérieur de l'écran : il se choisit
+   en un clic quand on en a besoin, au lieu d'occuper trois entrées de menu en
+   permanence. */
+.ws-sous {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.ws-sous button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ws-sous button[aria-pressed='true'] {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+.ws-sous-n {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--bad);
+  color: #fff;
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+}
+.ws-sous button[aria-pressed='true'] .ws-sous-n { background: rgb(255 255 255 / 28%); }
+
+/* Le modèle en rupture, en champs plutôt qu'en paragraphe : la taille et la
+   référence décident du colis, et on ne doit pas les chercher dans une phrase. */
+.rup-bloc { margin: 12px 0; }
+.rup-bloc-t {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+.rup-champs {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 14px;
+  margin: 0;
+  font-size: 14px;
+}
+.rup-champs dt { color: var(--ink-mute); }
+.rup-champs dd { margin: 0; font-weight: 600; }
+
+/* Une proposition de remplacement : la vignette et le modèle d'abord, la
+   réponse au bout — c'est elle qu'on vient poser. */
+.rup-sub {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 11px;
+  margin-bottom: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--card);
+}
+.rup-sub img,
+.rup-sub-vide {
+  width: 46px;
+  height: 46px;
+  flex: none;
+  border-radius: var(--r-sm);
+  object-fit: cover;
+  background: var(--paper);
+}
+.rup-sub-txt { flex: 1; min-width: 0; }
+.rup-sub-txt b { display: block; font-size: 14.5px; }
+.rup-sub-txt small { display: block; font-size: 12.5px; color: var(--ink-soft); }
+.rup-sub-stock { color: var(--ok-ink) !important; font-weight: 600; }
+.rup-sub-acts { display: flex; gap: 6px; flex: none; }
+.rup-sub-oui { border-color: var(--ok); background: var(--ok-soft); }
+.rup-sub-non { border-color: var(--line); opacity: 0.72; }
+
+@media (max-width: 560px) {
+  .rup-sub { flex-wrap: wrap; }
+  .rup-sub-acts { width: 100%; }
+  .rup-sub-acts .btn { flex: 1; }
+}
+
 /* ------------------------------------------------------------ échanges -- */
 
 /* La même carte que les changements : l'atelier y lit la même chose — un

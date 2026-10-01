@@ -25,6 +25,21 @@ export interface Nouveaute {
 
 export const NOUVEAUTES: readonly Nouveaute[] = [
   {
+    pr: 72,
+    date: '2026-10-01',
+    pour: 'Les deux',
+    titre: 'Ruptures : le remplacement se propose dans une fenêtre, et l’atelier répond d’un bouton',
+    resume:
+      'Proposer un remplacement à l’atelier ne passe plus par un fil de discussion : depuis une rupture, une fenêtre montre le modèle manquant et les modèles en stock au catalogue (avec photo et stock), plus un champ libre pour un modèle hors catalogue. L’atelier reçoit un mail court qui le renvoie à son atelier, où la carte montre le modèle en rupture face aux remplacements — il répond « Je peux l’envoyer » ou « Impossible », sans écrire. Côté atelier, le menu passe de six entrées à trois (Commandes, Catalogue, Tickets) avec une seule pastille, une recherche retrouve n’importe quelle commande par son numéro, et la taille ne se range plus dans « Couleur ».',
+    ou: 'Ruptures de stock → un dossier → « Proposer un remplacement ». Atelier : Tickets → Ruptures ; Commandes → champ de recherche.',
+    essayer: [
+      'Ouvrir un dossier de rupture, cliquer « Proposer un remplacement », cocher un ou deux modèles, envoyer.',
+      'Ouvrir le lien de l’atelier : Tickets → Ruptures montre la proposition, avec deux boutons.',
+      'Répondre côté atelier, puis revenir au dossier : l’état s’affiche sous « Remplacement proposé à l’atelier ».',
+      'Dans l’atelier, chercher « 14674 » dans Commandes : la commande sort, quelle que soit la plage de dates.',
+    ],
+  },
+  {
     pr: 71,
     date: '2026-10-01',
     pour: 'Tableau de bord',

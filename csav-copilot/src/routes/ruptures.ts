@@ -1,7 +1,10 @@
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
 
 import { prisma } from '../lib/prisma.ts';
-import { requireSession } from '../plugins/auth.ts';
+import { recordAudit } from '../lib/audit.ts';
+import { requirePermission, requireSession } from '../plugins/auth.ts';
+import { atelierDuDossier, proposerSubstitutions } from '../services/ruptures/substitution.ts';
 import { getShopifyClient, ShopifyError } from '../services/shopify/client.ts';
 import { listOrders, quoteSearchValue } from '../services/shopify/orders.ts';
 import { fournisseurDuFil, lireArticle } from '../services/suppliers/signalement.ts';
@@ -457,4 +460,118 @@ export async function ruptureRoutes(app: FastifyInstance): Promise<void> {
       shopifyError,
     });
   });
+
+  /* ------------------------------------------------------ substitutions -- */
+
+  /**
+   * Les modèles de remplacement déjà proposés sur ce dossier, et leur réponse.
+   *
+   * Lus séparément de la liste : la console affiche vingt-cinq dossiers, et
+   * joindre leurs propositions à chacun ferait payer une requête de plus pour
+   * une information qu'on ne lit que dans le panneau ouvert.
+   */
+  app.get<{ Params: { ticketId: string } }>('/api/ruptures/:ticketId/substitutions', async (request, reply) => {
+    const { merchantId } = request.session;
+
+    const propositions = await prisma.ruptureSubstitution.findMany({
+      where: { merchantId, ticketId: request.params.ticketId },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        productTitle: true,
+        variantTitle: true,
+        sku: true,
+        image: true,
+        inventory: true,
+        libre: true,
+        accepte: true,
+        note: true,
+        reponduLe: true,
+        createdAt: true,
+      },
+    });
+
+    return reply.send({ propositions });
+  });
+
+  /**
+   * Proposer un ou plusieurs modèles de remplacement à l'atelier.
+   *
+   * C'est le geste qui remplace le fil de discussion : le marchand choisit,
+   * l'atelier répond d'un bouton. Rien ne s'écrit en texte libre, donc rien ne
+   * se relit en diagonale.
+   */
+  app.post<{ Params: { ticketId: string } }>(
+    '/api/ruptures/:ticketId/substitutions',
+    { preHandler: requirePermission('reply') },
+    async (request, reply) => {
+      const { merchantId, userId } = request.session;
+
+      const parsed = z
+        .object({
+          supplierId: z.string().min(1).max(60).optional(),
+          propositions: z
+            .array(
+              z.object({
+                productTitle: z.string().trim().min(1).max(300),
+                variantTitle: z.string().trim().max(120).nullish(),
+                sku: z.string().trim().max(120).nullish(),
+                image: z.string().trim().max(2000).nullish(),
+                inventory: z.number().int().min(-99999).max(999999).nullish(),
+                libre: z.boolean().optional(),
+              }),
+            )
+            .min(1)
+            .max(10),
+        })
+        .safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({ code: 'invalide', error: 'Proposition invalide.' });
+      }
+
+      const ticket = await prisma.ticket.findFirst({
+        where: { id: request.params.ticketId, merchantId },
+        select: { id: true },
+      });
+      if (!ticket) return reply.code(404).send({ code: 'introuvable', error: 'Dossier introuvable.' });
+
+      // L'atelier annoncé par le client est vérifié, jamais cru : un
+      // identifiant choisi dans le corps de la requête enverrait la
+      // proposition chez n'importe quel fournisseur de la boutique.
+      const atelier = parsed.data.supplierId ?? (await atelierDuDossier(merchantId, ticket.id));
+      if (!atelier) {
+        return reply.code(409).send({
+          code: 'sans_atelier',
+          error: 'Aucun atelier n’est rattaché à ce dossier : escaladez-le d’abord.',
+        });
+      }
+      const connu = await prisma.supplier.findFirst({
+        where: { id: atelier, merchantId, active: true },
+        select: { id: true, name: true },
+      });
+      if (!connu) {
+        return reply.code(409).send({ code: 'sans_atelier', error: 'Cet atelier n’existe pas ou n’est plus actif.' });
+      }
+
+      const resultat = await proposerSubstitutions({
+        merchantId,
+        ticketId: ticket.id,
+        supplierId: connu.id,
+        propositions: parsed.data.propositions,
+      });
+
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId: userId,
+        action: 'rupture.substitutions_proposed',
+        targetType: 'Ticket',
+        targetId: ticket.id,
+        metadata: { atelier: connu.name, combien: resultat.creees, avertiPar: resultat.avertiPar },
+        ipAddress: request.ip,
+      });
+
+      return reply.send({ ...resultat, atelier: connu.name });
+    },
+  );
 }

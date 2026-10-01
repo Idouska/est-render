@@ -14861,8 +14861,18 @@ function renderRupturePanneau() {
     <!-- Les alternatives ne sont pas cherchées au rendu de la liste : ce
          serait un appel au catalogue par ligne. Elles se demandent pour le
          dossier ouvert, et pour lui seul. -->
+    <!-- Ce que l'atelier a déjà reçu, et ce qu'il en a dit. C'est la
+         réponse à « où en est-on ? », qui demandait jusqu'ici de rouvrir un
+         fil de discussion et de le relire. -->
     <div class="rup-sec">
-      <h3>Alternative</h3>
+      <h3>Remplacement proposé à l’atelier</h3>
+      <div id="rup-subs"></div>
+      <button class="btn btn-small btn-primary" type="button" id="rup-proposer"
+        style="margin-top:8px">Proposer un remplacement</button>
+    </div>
+
+    <div class="rup-sec">
+      <h3>Alternative pour le client</h3>
       <div id="rup-alts"></div>
     </div>
 
@@ -14893,7 +14903,213 @@ function renderRupturePanneau() {
 
   renderRuptureActions(d);
   renderRuptureAlternatives(d);
+  void chargerSubstitutions(d);
+
+  $('rup-proposer')?.addEventListener('click', () => void ouvrirFenetreSubstitution(d));
 }
+
+/* ---- le remplacement proposé à l'atelier ---- */
+
+/*
+ * Ce qui a déjà été proposé, et la réponse de l'atelier.
+ *
+ * Trois états par ligne, et aucun à lire entre les lignes : proposé, « il
+ * peut l'envoyer », « impossible ». C'est tout ce que le fil de discussion
+ * disait, en trois jours et douze phrases.
+ */
+async function chargerSubstitutions(d) {
+  const boite = $('rup-subs');
+  if (!boite) return;
+
+  try {
+    const { propositions } = await api(`/api/ruptures/${d.ticketId}/substitutions`);
+    boite.innerHTML = propositions.length
+      ? propositions
+          .map((proposition) => {
+            const details = [proposition.variantTitle, proposition.sku].filter(Boolean).join(' · ');
+            const etat =
+              proposition.accepte === true
+                ? '<span class="rup-sub-ok">peut l’envoyer</span>'
+                : proposition.accepte === false
+                  ? '<span class="rup-sub-ko">impossible</span>'
+                  : '<span class="rup-sub-wait">en attente</span>';
+            return `<div class="rup-line rup-sub-line">
+              <span>${esc(proposition.productTitle)}${details ? ` <small>${esc(details)}</small>` : ''}</span>
+              ${etat}
+            </div>${
+              proposition.note ? `<p class="rup-message">${esc(proposition.note)}</p>` : ''
+            }`;
+          })
+          .join('')
+      : '<p class="empty">Rien n’a encore été proposé à l’atelier.</p>';
+  } catch {
+    boite.innerHTML = '<p class="empty">Propositions illisibles pour le moment.</p>';
+  }
+}
+
+/*
+ * La fenêtre de remplacement.
+ *
+ * Elle ne parle qu'à l'atelier : rien n'en sort vers le client. C'est la
+ * distinction que l'ancien écran ne faisait pas — le seul bouton « Proposer »
+ * ouvrait un brouillon client, et il n'existait aucun chemin pour demander à
+ * l'atelier s'il avait la 44.
+ */
+const fenetreSubst = { dossier: null, choisis: [] };
+
+async function ouvrirFenetreSubstitution(d) {
+  fenetreSubst.dossier = d;
+  fenetreSubst.choisis = [];
+
+  const article = d.article;
+  $('subst-rupture').innerHTML = article
+    ? `<span class="subst-t">En rupture</span>
+       <div class="rup-prod">
+         ${article.image ? `<img src="${esc(article.image)}" alt="" loading="lazy" />` : '<span class="rup-blank"></span>'}
+         <span style="min-width:0">
+           <b>${esc(article.titre)}</b>
+           <small>${esc([article.variante, article.sku].filter(Boolean).join(' · ') || '—')}</small>
+         </span>
+       </div>`
+    : '<p class="empty">Article non précisé par l’atelier.</p>';
+
+  $('subst-l-model').value = '';
+  $('subst-l-taille').value = '';
+  $('subst-l-ref').value = '';
+  majFenetreSubstitution();
+  $('subst-modal').hidden = false;
+
+  const boite = $('subst-options');
+  boite.innerHTML = '<p class="empty">Recherche des références en stock…</p>';
+  try {
+    const data = await api(`/api/tickets/${d.ticketId}/substitutions`);
+    const options = data.options ?? [];
+    boite.innerHTML = options.length
+      ? options
+          .slice(0, 8)
+          .map(
+            (option) => `<label class="subst-opt">
+              <input type="checkbox" data-subst-opt="${esc(option.id)}" />
+              ${option.image ? `<img src="${esc(option.image)}" alt="" loading="lazy" />` : '<span class="rup-blank"></span>'}
+              <span style="min-width:0;flex:1">
+                <b>${esc(option.productTitle)}</b>
+                <small>${esc(option.variantTitle ?? '—')}</small>
+              </span>
+              <span class="subst-stock">${option.inventoryQuantity ?? 0} en stock</span>
+            </label>`,
+          )
+          .join('')
+      : `<p class="empty">${esc(data.reason ?? 'Aucune référence équivalente en stock.')}</p>`;
+
+    boite.querySelectorAll('[data-subst-opt]').forEach((case_) =>
+      case_.addEventListener('change', () => {
+        const option = options.find((candidat) => candidat.id === case_.dataset.substOpt);
+        if (!option) return;
+        if (case_.checked) {
+          fenetreSubst.choisis.push({
+            cle: option.id,
+            productTitle: option.productTitle,
+            variantTitle: option.variantTitle ?? null,
+            sku: option.sku ?? null,
+            image: option.image ?? null,
+            inventory: option.inventoryQuantity ?? null,
+            libre: false,
+          });
+        } else {
+          fenetreSubst.choisis = fenetreSubst.choisis.filter((choisi) => choisi.cle !== option.id);
+        }
+        majFenetreSubstitution();
+      }),
+    );
+  } catch (error) {
+    boite.innerHTML = `<p class="empty">${esc(error.message)}</p>`;
+  }
+}
+
+function majFenetreSubstitution() {
+  const liste = $('subst-choisis');
+  liste.innerHTML = fenetreSubst.choisis.length
+    ? `<span class="subst-t">À envoyer</span>` +
+      fenetreSubst.choisis
+        .map(
+          (choisi) => `<div class="rup-line">
+            <span>${esc(choisi.productTitle)}${
+              choisi.variantTitle ? ` <small>${esc(choisi.variantTitle)}</small>` : ''
+            }</span>
+            <button class="linkish" type="button" data-subst-del="${esc(choisi.cle)}">retirer</button>
+          </div>`,
+        )
+        .join('')
+    : '';
+
+  liste.querySelectorAll('[data-subst-del]').forEach((bouton) =>
+    bouton.addEventListener('click', () => {
+      fenetreSubst.choisis = fenetreSubst.choisis.filter(
+        (choisi) => choisi.cle !== bouton.dataset.substDel,
+      );
+      // La case du catalogue se décoche avec : laisser la coche posée sur une
+      // ligne retirée ferait croire qu'elle part encore.
+      const case_ = $('subst-options').querySelector(`[data-subst-opt="${CSS.escape(bouton.dataset.substDel)}"]`);
+      if (case_) case_.checked = false;
+      majFenetreSubstitution();
+    }),
+  );
+
+  $('subst-manque').textContent = fenetreSubst.choisis.length
+    ? ''
+    : 'Choisissez au moins un modèle à proposer.';
+  $('subst-send').disabled = fenetreSubst.choisis.length === 0;
+}
+
+$('subst-l-add')?.addEventListener('click', () => {
+  const modele = $('subst-l-model').value.trim();
+  if (!modele) return toast('Indiquez au moins le modèle.', true);
+
+  fenetreSubst.choisis.push({
+    cle: `libre-${fenetreSubst.choisis.length}-${modele}`,
+    productTitle: modele,
+    variantTitle: $('subst-l-taille').value.trim() || null,
+    sku: $('subst-l-ref').value.trim() || null,
+    image: null,
+    inventory: null,
+    libre: true,
+  });
+  $('subst-l-model').value = '';
+  $('subst-l-taille').value = '';
+  $('subst-l-ref').value = '';
+  majFenetreSubstitution();
+});
+
+$('subst-cancel')?.addEventListener('click', () => {
+  $('subst-modal').hidden = true;
+});
+
+$('subst-send')?.addEventListener('click', async () => {
+  const d = fenetreSubst.dossier;
+  if (!d || fenetreSubst.choisis.length === 0) return;
+
+  const bouton = $('subst-send');
+  bouton.disabled = true;
+  try {
+    const resultat = await api(`/api/ruptures/${d.ticketId}/substitutions`, {
+      method: 'POST',
+      body: JSON.stringify({
+        propositions: fenetreSubst.choisis.map(({ cle, ...reste }) => reste),
+      }),
+    });
+    $('subst-modal').hidden = true;
+    toast(
+      resultat.avertiPar === 'email'
+        ? `${resultat.creees} modèle(s) envoyé(s) à ${resultat.atelier}, qui est prévenu.`
+        : `${resultat.creees} modèle(s) posé(s) pour ${resultat.atelier} — l’avis par mail n’est pas parti.`,
+      resultat.avertiPar === null,
+    );
+    await chargerSubstitutions(d);
+  } catch (error) {
+    bouton.disabled = false;
+    toast(error.message, true);
+  }
+});
 
 function dateCourte(iso) {
   return new Date(iso).toLocaleDateString('fr-FR', {

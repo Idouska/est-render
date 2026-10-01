@@ -787,8 +787,9 @@ $('ws-orders').addEventListener('click', async (event) => {
     // dix c'est celui qui manque, et le fournisseur n'a plus qu'à corriger.
     const first = state.issueOrder?.lineItems?.[0];
     $('issue-product').value = first?.title ?? '';
-    $('issue-color').value = first?.variantTitle ?? '';
-    $('issue-size').value = '';
+    const { couleur, taille } = repartirDeclinaison(first?.variantTitle);
+    $('issue-color').value = couleur;
+    $('issue-size').value = taille;
     $('issue-sku').value = first?.sku ?? '';
     $('issue-qty').value = String(first?.quantity ?? 1);
     toggleIssueItem();
@@ -1079,11 +1080,38 @@ const VIEWS = {
   echanges: loadEchanges,
 };
 
+/*
+ * Trois écrans, et non six.
+ *
+ * « Suivi » n'était pas un écran : il reliste les colis saisis dans
+ * « Commandes ». Et « Changements », « Ruptures », « Échanges » sont trois
+ * boîtes de réception pour une seule question — qu'attend-on de moi ?
+ * Le contenu n'a pas bougé ; c'est la navigation qui cesse de faire choisir
+ * en permanence ce qui se choisit en un clic, à l'intérieur.
+ */
+const ECRANS = {
+  orders: ['orders', 'tracking'],
+  catalog: ['catalog'],
+  tickets: ['ruptures', 'updates', 'echanges'],
+};
+const TOUTES = ['orders', 'tracking', 'catalog', 'updates', 'ruptures', 'echanges'];
+
 function setView(view) {
   state.view = view;
+  const sections = ECRANS[view] ?? [view];
+  const courant = sections.length > 1 ? (state.sous?.[view] ?? sections[0]) : sections[0];
 
-  for (const section of ['orders', 'tracking', 'catalog', 'updates', 'ruptures', 'echanges']) {
-    $(`view-${section}`).hidden = section !== view;
+  for (const section of TOUTES) {
+    const bloc = $(`view-${section}`);
+    if (bloc) bloc.hidden = section !== courant;
+  }
+
+  $('ws-sous-cmd').hidden = view !== 'orders';
+  $('ws-sous-tickets').hidden = view !== 'tickets';
+  for (const barre of ['ws-sous-cmd', 'ws-sous-tickets']) {
+    $(barre)?.querySelectorAll('[data-sous]').forEach((bouton) => {
+      bouton.setAttribute('aria-pressed', String(bouton.dataset.sous === courant));
+    });
   }
 
   document.querySelectorAll('#ws-nav [data-view]').forEach((button) => {
@@ -1093,8 +1121,19 @@ function setView(view) {
 
   // Chaque écran recharge à l'ouverture : le fournisseur laisse l'onglet
   // ouvert toute la journée, et des données de ce matin valent moins que rien.
-  void VIEWS[view]?.();
+  void VIEWS[courant]?.();
+
+  // Les trois comptes du guichet se relèvent ensemble : n'en relever qu'un
+  // ferait choisir un onglet sur un chiffre périmé.
+  if (view === 'tickets') rafraichirPastilles();
 }
+
+document.querySelectorAll('[data-sous]').forEach((bouton) =>
+  bouton.addEventListener('click', () => {
+    state.sous = { ...(state.sous ?? {}), [state.view]: bouton.dataset.sous };
+    setView(state.view);
+  }),
+);
 
 document.querySelectorAll('#ws-nav [data-view]').forEach((button) =>
   button.addEventListener('click', () => setView(button.dataset.view)),
@@ -1554,15 +1593,87 @@ async function loadUpdates() {
   );
 }
 
+/*
+ * La déclinaison Shopify, rangée dans le bon champ.
+ *
+ * Elle allait TOUJOURS dans « Couleur ». Pour une chaussure, la déclinaison
+ * est la pointure : le marchand recevait « Couleur : 45 1/3 », qui est une
+ * taille — et la console des ruptures, qui relit ces champs, rangeait la
+ * pointure dans la colonne couleur et laissait la taille vide.
+ *
+ * Shopify n'étiquette pas ses options dans ce titre : « Black / 42 »,
+ * « 45 1/3 », « Rouge ». On sépare donc sur la barre oblique quand elle
+ * existe, et sinon on regarde la forme — une pointure est faite de chiffres,
+ * avec parfois une fraction ou une virgule. Le reste est une couleur.
+ *
+ * Le fournisseur corrige en un clic si l'on s'est trompé : les deux champs
+ * sont côte à côte, et c'est lui qui a la chaussure en main.
+ */
+function repartirDeclinaison(variante) {
+  const texte = (variante ?? '').trim();
+  if (!texte) return { couleur: '', taille: '' };
+
+  /*
+   * Shopify joint ses options par une barre oblique ENTOURÉE d'espaces, et
+   * c'est cette exigence d'espaces qui fait tout le travail : « 45 1/3 »
+   * porte une barre oblique qui n'est PAS un séparateur. Découper sans
+   * l'exiger donnait « Couleur : 45 1 » et « Taille : 3 », pire que l'erreur
+   * d'origine.
+   */
+  const morceaux = texte.split(/\s+\/\s+/).map((morceau) => morceau.trim()).filter(Boolean);
+  const taille = morceaux.find(ressembleAUneTaille);
+
+  // Aucune option ne ressemble à une pointure — « Black / Rouge » : tout est
+  // couleur, et l'atelier remplira la taille lui-même.
+  if (!taille) return { couleur: texte, taille: '' };
+
+  return { couleur: morceaux.filter((morceau) => morceau !== taille).join(' / '), taille };
+}
+
+/* Une pointure : des chiffres, éventuellement une décimale ou une fraction —
+   « 42 », « 45 1/3 », « 38,5 », « 10.5 ». Pas « Black », pas « Lucid Red ». */
+function ressembleAUneTaille(valeur) {
+  return /^\d{1,2}([.,]\d)?(\s+\d\/\d)?$/.test((valeur ?? '').trim());
+}
+
 function kindLabel(kind) {
   const label = t(`kind.${kind}`);
   return label === `kind.${kind}` ? t('alert.fallback') : label;
 }
 
+/*
+ * Une seule pastille, trois comptes.
+ *
+ * L'atelier avait trois entrées de menu et trois pastilles — Changements,
+ * Ruptures, Échanges — pour une seule question : qu'attend-on de moi ? Le
+ * total s'affiche maintenant sur « Tickets », et le détail par type sur les
+ * onglets intérieurs, où il sert à choisir par quoi commencer.
+ */
+const attentes = { updates: 0, ruptures: 0, echanges: 0 };
+
+function majPastilleTickets() {
+  const total = attentes.updates + attentes.ruptures + attentes.echanges;
+  const badge = $('ws-tickets-badge');
+  if (badge) {
+    badge.hidden = total === 0;
+    badge.textContent = String(total);
+  }
+
+  for (const [cle, id] of [
+    ['ruptures', 'ws-n-rup'],
+    ['updates', 'ws-n-upd'],
+    ['echanges', 'ws-n-ech'],
+  ]) {
+    const compteur = $(id);
+    if (!compteur) continue;
+    compteur.hidden = attentes[cle] === 0;
+    compteur.textContent = String(attentes[cle]);
+  }
+}
+
 function setBadge(count) {
-  const badge = $('ws-badge');
-  badge.hidden = count === 0;
-  badge.textContent = String(count);
+  attentes.updates = count;
+  majPastilleTickets();
 }
 
 /*
@@ -1610,6 +1721,51 @@ $('ws-reload').addEventListener('click', load);
 load();
 
 
+/* ------------------------------------------- chercher une commande -- */
+
+/*
+ * Retrouver n'importe quelle commande par son numéro.
+ *
+ * La liste est bornée par une plage de dates : un client cite une commande
+ * d'il y a trois semaines, et l'atelier ne peut pas la retrouver — il n'a que
+ * « Hier / Aujourd'hui / 7 jours » et un export. La recherche ignore les
+ * dates ; elle n'ouvre aucun droit nouveau, le niveau d'accès posé par le
+ * marchand s'applique exactement comme dans la liste.
+ *
+ * Le champ vidé rend la liste de la période : chercher ne doit pas obliger à
+ * recharger la page pour revenir à sa journée.
+ */
+let chercheCommande;
+
+async function chercherCommande(terme) {
+  const propre = terme.trim();
+  if (propre.length < 2) {
+    await load();
+    return;
+  }
+
+  try {
+    const data = await api(
+      `/api/workspace/${supplierId}/orders/search?q=${encodeURIComponent(propre)}`,
+    );
+    state.orders = data.orders ?? [];
+    renderOrders();
+
+    if (state.orders.length === 0) {
+      $('ws-orders').innerHTML = `<p class="empty">${esc(data.reason ?? t('orders.notFound'))}</p>`;
+    }
+  } catch (error) {
+    $('ws-orders').innerHTML = `<p class="empty">${esc(messageServeur(error, 'orders.err'))}</p>`;
+  }
+}
+
+$('ws-cmd-q')?.addEventListener('input', (event) => {
+  // Une frappe par caractère déclencherait un appel Shopify par touche.
+  clearTimeout(chercheCommande);
+  const terme = event.target.value;
+  chercheCommande = setTimeout(() => void chercherCommande(terme), 400);
+});
+
 /* ------------------------------------------------------------ ruptures -- */
 
 /*
@@ -1649,65 +1805,157 @@ async function loadRuptures() {
 
   demandes.innerHTML =
     (data.demandes ?? [])
-      .map((demande) => {
-        // Trois temps, même code couleur que la page du marchand : rouge tant
-        // qu'il n'a pas répondu, orange quand il l'a fait, vert quand c'est clos.
-        const phase = demande.phase ?? 'cree';
-        const label = {
-          cree: t('rup.waiting'),
-          traite: t('rup.answered'),
-          classe: t('rup.closed'),
-        }[phase];
-
-        return `<div class="upd rup-p-${esc(phase)}">
-          <div class="upd-head">
-            <b>${esc(
-              demande.orderName
-                ? t('rup.order').replace('{name}', demande.orderName)
-                : t('rup.noOrder'),
-            )}</b>
-            <span class="pill">${esc(label)}</span>
-            <span class="upd-when">${esc(new Date(demande.envoyeLe).toLocaleDateString(locale))}</span>
-          </div>
-          ${demande.message ? `<p class="upd-msg">${esc(demande.message)}</p>` : ''}
-          ${demande.note ? `<p class="upd-note">${esc(demande.note)}</p>` : ''}
-          ${
-            demande.statut === 'OPEN'
-              ? `<div class="upd-acts"><a class="btn btn-small btn-primary"
-                   href="${esc(demande.lien)}">${esc(t('rup.answer'))}</a></div>`
-              : ''
-          }
-        </div>`;
-      })
+      .map((demande) => carteRupture(demande, demande.phase ?? 'cree', demande.envoyeLe, true))
       .join('') || `<p class="empty">${esc(t('rup.askedEmpty'))}</p>`;
 
   signalements.innerHTML =
     (data.signalements ?? [])
-      .map(
-        (signalement) => `<div class="upd rup-p-${esc(signalement.phase ?? 'cree')}">
-          <div class="upd-head">
-            <b>${esc(
-              signalement.orderName
-                ? t('rup.order').replace('{name}', signalement.orderName)
-                : t('rup.noOrder'),
-            )}</b>
-            <span class="pill">${esc(
-              {
-                cree: t('rup.todo'),
-                traite: t('rup.done'),
-                classe: t('rup.closed'),
-              }[signalement.phase ?? 'cree'],
-            )}</span>
-            <span class="upd-when">${esc(new Date(signalement.signaleLe).toLocaleDateString(locale))}</span>
-          </div>
-          ${
-            signalement.detail
-              ? `<p class="upd-msg rup-detail">${esc(signalement.detail)}</p>`
-              : ''
-          }
-        </div>`,
+      .map((signalement) =>
+        carteRupture(signalement, signalement.phase ?? 'cree', signalement.signaleLe, false),
       )
       .join('') || `<p class="empty">${esc(t('rup.mineEmpty'))}</p>`;
+
+  cablerSubstitutions();
+}
+
+/*
+ * La carte d'une rupture : le modèle manquant, et ce qu'on propose à la place.
+ *
+ * ELLE NE RENVOIE PLUS VERS UN FIL DE DISCUSSION. L'atelier devait cliquer
+ * « Répondre au marchand », quitter son outil, lire un message, écrire une
+ * phrase. Entre la question et la réponse il se passait des jours, et
+ * personne ne savait d'un coup d'œil ce qui avait été proposé.
+ *
+ * Le modèle en rupture est donc montré en champs — article, taille, référence,
+ * quantité — et les remplacements proposés en face, chacun avec deux boutons.
+ * Répondre ne demande plus d'écrire.
+ */
+function carteRupture(dossier, phase, date, estDemande) {
+  const label = {
+    cree: t(estDemande ? 'rup.waiting' : 'rup.todo'),
+    traite: t(estDemande ? 'rup.answered' : 'rup.done'),
+    classe: t('rup.closed'),
+  }[phase];
+
+  const article = dossier.article ?? {};
+  const champs = [
+    [t('rup.model'), article.produit],
+    [t('issue.color'), article.couleur],
+    [t('issue.size'), article.taille],
+    [t('rup.ref'), article.reference],
+    [t('issue.qty'), article.quantite],
+  ].filter(([, valeur]) => valeur);
+
+  const propositions = dossier.substitutions ?? [];
+
+  return `<div class="upd rup-p-${esc(phase)}" data-rup-ticket="${esc(dossier.ticketId ?? dossier.id)}">
+    <div class="upd-head">
+      <b>${esc(
+        dossier.orderName ? t('rup.order').replace('{name}', dossier.orderName) : t('rup.noOrder'),
+      )}</b>
+      <span class="pill">${esc(label)}</span>
+      <span class="upd-when">${esc(new Date(date).toLocaleDateString(locale))}</span>
+    </div>
+
+    ${
+      champs.length
+        ? `<div class="rup-bloc">
+             <span class="rup-bloc-t">${esc(t('rup.outOfStock'))}</span>
+             <dl class="rup-champs">${champs
+               .map(([nom, valeur]) => `<dt>${esc(nom)}</dt><dd>${esc(valeur)}</dd>`)
+               .join('')}</dl>
+           </div>`
+        : dossier.message || dossier.detail
+          ? `<p class="upd-msg rup-detail">${esc(dossier.message ?? dossier.detail)}</p>`
+          : ''
+    }
+    ${dossier.note ? `<p class="upd-note">${esc(dossier.note)}</p>` : ''}
+
+    ${
+      propositions.length
+        ? `<div class="rup-bloc">
+             <span class="rup-bloc-t">${esc(t('rup.proposed'))}</span>
+             ${propositions.map(substitutionMarkup).join('')}
+           </div>`
+        : ''
+    }
+  </div>`;
+}
+
+/* Une proposition : ce qu'on envoie à la place, et deux boutons pour le dire. */
+function substitutionMarkup(proposition) {
+  const details = [proposition.variantTitle, proposition.sku].filter(Boolean).join(' · ');
+  const repondu = proposition.accepte !== null && proposition.accepte !== undefined;
+
+  return `<div class="rup-sub${repondu ? (proposition.accepte ? ' rup-sub-oui' : ' rup-sub-non') : ''}"
+    data-sub="${esc(proposition.id)}">
+    ${
+      proposition.image
+        ? `<img src="${esc(proposition.image)}" alt="" loading="lazy" />`
+        : '<span class="rup-sub-vide"></span>'
+    }
+    <div class="rup-sub-txt">
+      <b>${esc(proposition.productTitle)}</b>
+      ${details ? `<small>${esc(details)}</small>` : ''}
+      ${
+        typeof proposition.inventory === 'number'
+          ? `<small class="rup-sub-stock">${esc(
+              t('rup.inStock').replace('{n}', String(proposition.inventory)),
+            )}</small>`
+          : proposition.libre
+            ? `<small class="rup-sub-stock">${esc(t('rup.offCatalog'))}</small>`
+            : ''
+      }
+    </div>
+    ${
+      repondu
+        ? `<span class="pill">${esc(t(proposition.accepte ? 'rup.canDo' : 'rup.cannot'))}</span>`
+        : `<div class="rup-sub-acts">
+             <button class="btn btn-small btn-primary" type="button" data-sub-oui="${esc(proposition.id)}">${esc(
+               t('rup.yes'),
+             )}</button>
+             <button class="btn btn-small" type="button" data-sub-non="${esc(proposition.id)}">${esc(
+               t('rup.no'),
+             )}</button>
+           </div>`
+    }
+  </div>`;
+}
+
+/* Un seul câblage pour les deux listes : les cartes sont les mêmes. */
+function cablerSubstitutions() {
+  for (const [attribut, accepte] of [
+    ['data-sub-oui', true],
+    ['data-sub-non', false],
+  ]) {
+    document.querySelectorAll(`#view-ruptures [${attribut}]`).forEach((bouton) =>
+      bouton.addEventListener('click', () => {
+        const id = bouton.getAttribute(attribut);
+        void repondreSubstitution(id, accepte, bouton);
+      }),
+    );
+  }
+}
+
+async function repondreSubstitution(id, accepte, bouton) {
+  const ligne = bouton.closest('.rup-sub');
+  ligne?.querySelectorAll('button').forEach((autre) => {
+    autre.disabled = true;
+  });
+
+  try {
+    await api(`/api/workspace/${supplierId}/substitutions/${id}`, {
+      method: 'POST',
+      body: { accepte },
+    });
+    toast(t(accepte ? 'rup.sentYes' : 'rup.sentNo'));
+    await loadRuptures();
+  } catch (error) {
+    ligne?.querySelectorAll('button').forEach((autre) => {
+      autre.disabled = false;
+    });
+    toast(messageServeur(error, 'rup.err'), true);
+  }
 }
 
 /*
@@ -1736,10 +1984,8 @@ async function rafraichirPastilleRuptures() {
 /* La pastille ne compte que ce qui attend une réponse de l'atelier. Y ajouter
    ses propres signalements lui reprocherait le travail qu'il a déjà fait. */
 function setRuptureBadge(nombre) {
-  const badge = $('ws-rup-badge');
-  if (!badge) return;
-  badge.hidden = nombre === 0;
-  badge.textContent = String(nombre);
+  attentes.ruptures = nombre;
+  majPastilleTickets();
 }
 
 
@@ -1904,10 +2150,8 @@ async function rafraichirPastilleEchanges() {
 }
 
 function setEchangeBadge(nombre) {
-  const badge = $('ws-ech-badge');
-  if (!badge) return;
-  badge.hidden = nombre === 0;
-  badge.textContent = String(nombre);
+  attentes.echanges = nombre;
+  majPastilleTickets();
 }
 
 /* ------------------------------------------------------------ en masse -- */

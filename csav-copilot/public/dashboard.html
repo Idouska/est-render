@@ -2078,6 +2078,43 @@ contact@runningupscale.com"></textarea>
       </div>
     </div>
 
+    <!-- La fenêtre de remplacement, pour l'atelier.
+         L'échange se faisait par mail et par fil de discussion : le marchand
+         écrivait « on peut mettre la 44 ? », l'atelier répondait en texte, et
+         il fallait relire le fil pour savoir où l'on en était. Ici, le modèle
+         en rupture est à gauche de ce qu'on propose, et l'atelier répondra
+         d'un bouton. -->
+    <div class="backdrop" id="subst-modal" role="dialog" aria-modal="true" aria-labelledby="subst-title" hidden>
+      <div class="modal modal-wide">
+        <div class="modal-head">
+          <h2 id="subst-title">Proposer un remplacement à l’atelier</h2>
+          <p id="subst-sub">L’atelier répondra d’un bouton, sans écrire. Rien ne part au client.</p>
+        </div>
+        <div class="modal-body">
+          <div class="subst-rupture" id="subst-rupture"></div>
+
+          <h3 class="subst-h">En stock au catalogue</h3>
+          <div id="subst-options"><p class="empty">Recherche des références en stock…</p></div>
+
+          <h3 class="subst-h">Hors catalogue</h3>
+          <p class="subst-aide">Un modèle que l’atelier a sous la main et que la boutique ne liste pas.</p>
+          <div class="subst-libre">
+            <input type="text" id="subst-l-model" placeholder="Modèle" />
+            <input type="text" id="subst-l-taille" placeholder="Taille" />
+            <input type="text" id="subst-l-ref" placeholder="Référence" />
+            <button class="btn btn-small" type="button" id="subst-l-add">Ajouter</button>
+          </div>
+
+          <div id="subst-choisis"></div>
+          <p class="subst-manque" id="subst-manque"></p>
+        </div>
+        <div class="modal-foot">
+          <button class="btn" type="button" id="subst-cancel">Annuler</button>
+          <button class="btn btn-primary" type="button" id="subst-send" disabled>Envoyer à l’atelier</button>
+        </div>
+      </div>
+    </div>
+
     <div class="backdrop" id="canned-modal" role="dialog" aria-modal="true" aria-labelledby="canned-title" hidden>
       <div class="modal modal-wide">
         <div class="modal-head">
