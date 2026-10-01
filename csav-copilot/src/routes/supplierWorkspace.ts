@@ -26,6 +26,7 @@ import { ordersForSupplier, type RoutingRules } from '../services/suppliers/rout
 import { enModeTest } from '../services/modeTest.ts';
 import { fonctionnaliteActive, fonctionnalitesDuMarchand } from '../services/fonctionnalites.ts';
 import { commandesServiesParLeStock } from '../services/reshipment/reservations.ts';
+import { enTete } from '../services/suppliers/demande.ts';
 
 const TRENTE_JOURS = 30 * 24 * 60 * 60 * 1000;
 const ADRESSE_WEB_ATELIER = /:\/\/|^www\./i;
@@ -248,7 +249,7 @@ async function draftReplyAfterChange(alertId: string, merchantId: string): Promi
       // texte qui parle d'un échange dont le fil ne dit rien.
       summary: [
         alert.status === 'ACKNOWLEDGED'
-          ? `L'atelier a confirmé : ${alert.beforeValue ?? '?'} → ${alert.afterValue ?? '?'}`
+          ? `L'atelier a confirmé : ${enTete(alert.kind, alert.beforeValue, alert.afterValue) ?? alert.message}`
           : `L'atelier ne peut pas : ${alert.supplierNote ?? 'motif non précisé'}`,
       ],
       ask:

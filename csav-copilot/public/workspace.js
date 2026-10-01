@@ -780,19 +780,9 @@ $('ws-orders').addEventListener('click', async (event) => {
 
   const issue = event.target.closest('[data-issue]');
   if (issue) {
-    state.issueOrder = state.orders.find((order) => order.id === issue.dataset.issue);
-    $('issue-order').textContent = t('issue.order', { name: state.issueOrder?.name ?? '' });
+    $('issue-find').hidden = true;
     $('issue-note').value = '';
-    // Pré-rempli avec le premier article de la commande : dans neuf cas sur
-    // dix c'est celui qui manque, et le fournisseur n'a plus qu'à corriger.
-    const first = state.issueOrder?.lineItems?.[0];
-    $('issue-product').value = first?.title ?? '';
-    const { couleur, taille } = repartirDeclinaison(first?.variantTitle);
-    $('issue-color').value = couleur;
-    $('issue-size').value = taille;
-    $('issue-sku').value = first?.sku ?? '';
-    $('issue-qty').value = String(first?.quantity ?? 1);
-    toggleIssueItem();
+    preparerSignalement(state.orders.find((order) => order.id === issue.dataset.issue) ?? null);
     $('issue-modal').classList.add('open');
     return;
   }
@@ -899,6 +889,67 @@ async function corrigerColis(pid, corps) {
   }
 }
 
+/**
+ * La commande visée par le signalement, et l'article pré-rempli.
+ *
+ * Le premier article de la commande : dans neuf cas sur dix c'est celui qui
+ * manque, et le fournisseur n'a plus qu'à corriger.
+ */
+function preparerSignalement(order) {
+  state.issueOrder = order;
+  $('issue-order').textContent = order ? t('issue.order', { name: order.name ?? '' }) : '';
+  const first = order?.lineItems?.[0];
+  $('issue-product').value = first?.title ?? '';
+  const { couleur, taille } = repartirDeclinaison(first?.variantTitle);
+  $('issue-color').value = couleur;
+  $('issue-size').value = taille;
+  $('issue-sku').value = first?.sku ?? '';
+  $('issue-qty').value = String(first?.quantity ?? 1);
+  toggleIssueItem();
+}
+
+/*
+ * « Nouveau ticket », depuis la rubrique Tickets.
+ *
+ * Même fenêtre que depuis une ligne de commande, la commande en moins : elle
+ * se retrouve par son numéro, avec la même recherche que la liste — donc le
+ * même niveau d'accès.
+ */
+$('ws-new-ticket')?.addEventListener('click', () => {
+  preparerSignalement(null);
+  $('issue-find').hidden = false;
+  $('issue-num').value = '';
+  $('issue-find-res').textContent = '';
+  $('issue-note').value = '';
+  $('issue-modal').classList.add('open');
+  $('issue-num').focus();
+});
+
+async function trouverCommandeDuTicket() {
+  const terme = $('issue-num').value.trim();
+  if (terme.length < 2) return;
+
+  $('issue-find-res').textContent = '…';
+  try {
+    const data = await api(`/api/workspace/${supplierId}/orders/search?q=${encodeURIComponent(terme)}`);
+    const order = data.orders?.[0] ?? null;
+    preparerSignalement(order);
+    $('issue-find-res').textContent = order
+      ? t('ticket.found', { name: order.name ?? '' })
+      : (data.reason ?? t('orders.notFound'));
+  } catch (error) {
+    preparerSignalement(null);
+    $('issue-find-res').textContent = messageServeur(error, 'orders.err');
+  }
+}
+
+$('issue-find-btn')?.addEventListener('click', () => void trouverCommandeDuTicket());
+$('issue-num')?.addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter') return;
+  event.preventDefault();
+  void trouverCommandeDuTicket();
+});
+
 $('issue-cancel').addEventListener('click', () => $('issue-modal').classList.remove('open'));
 
 $('issue-modal').addEventListener('click', (event) => {
@@ -907,6 +958,10 @@ $('issue-modal').addEventListener('click', (event) => {
 
 $('issue-send').addEventListener('click', async () => {
   const note = $('issue-note').value.trim();
+  if (!state.issueOrder) {
+    toast(t('ticket.needOrder'), true);
+    return;
+  }
   if (!note) {
     toast(t('issue.needNote'), true);
     return;
@@ -1549,7 +1604,21 @@ async function loadUpdates() {
           </div>
 
           ${
-            update.afterValue
+            update.kind === 'MISSING_ITEM' && update.beforeValue
+              ? `<div class="upd-swap">
+                   <span class="upd-label">${esc(t('updates.missing'))}</span>
+                   <span class="upd-after">${esc(update.beforeValue)}</span>
+                 </div>`
+              : update.kind === 'DELAY' && update.afterValue
+              ? `<div class="upd-swap">
+                   <span class="upd-label">${esc(t('updates.shipBy'))}</span>
+                   <span class="upd-after">${esc(
+                     /^\d{4}-\d{2}-\d{2}$/.test(update.afterValue)
+                       ? new Date(`${update.afterValue}T12:00:00`).toLocaleDateString(locale)
+                       : update.afterValue,
+                   )}</span>
+                 </div>`
+              : update.afterValue
               ? `<div class="upd-swap">
                    <span class="upd-before">${esc(update.beforeValue ?? '—')}</span>
                    <span class="upd-arrow" aria-hidden="true">→</span>

@@ -5,6 +5,7 @@ import { recordAudit } from '../lib/audit.ts';
 import { signSupplierWorkspaceToken } from '../lib/supplierToken.ts';
 import { prisma } from '../lib/prisma.ts';
 import { requirePermission, requireSession } from '../plugins/auth.ts';
+import { enTete } from '../services/suppliers/demande.ts';
 import { createEscalation, resolveEscalation, sendEscalation } from '../services/suppliers/escalate.ts';
 import { MESSAGES_ENVOI } from '../services/envoi/uneSeuleFois.ts';
 import { sendPlainEmail } from '../services/gmail/send.ts';
@@ -25,6 +26,20 @@ const supplierBody = z.object({
   skuPrefixes: z.array(z.string().min(1).max(60)).max(50).optional(),
   isDefault: z.boolean().optional(),
 });
+
+/** Les motifs d'une demande à l'atelier : un par bouton de la fenêtre. */
+const alertKind = z.enum([
+  'ADDRESS',
+  'PHONE',
+  'PRODUCT',
+  'SIZE',
+  'COLOR',
+  'HOLD',
+  'CANCEL',
+  'MISSING_ITEM',
+  'DELAY',
+  'OTHER',
+]);
 
 const escalationBody = z.object({
   reason: z.enum(['OUT_OF_STOCK', 'INCORRECT_ADDRESS', 'MISSING_ITEM', 'OTHER']),
@@ -543,7 +558,7 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
 
       const parsed = z
         .object({
-          kind: z.enum(['ADDRESS', 'PHONE', 'PRODUCT', 'SIZE', 'COLOR', 'HOLD', 'CANCEL', 'OTHER']).optional(),
+          kind: alertKind.optional(),
           beforeValue: z.string().max(500).nullish(),
           afterValue: z.string().max(500).nullish(),
           message: z.string().max(4000).optional(),
@@ -598,7 +613,7 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const parsed = z
         .object({
-          kind: z.enum(['ADDRESS', 'PHONE', 'PRODUCT', 'SIZE', 'COLOR', 'HOLD', 'CANCEL', 'OTHER']),
+          kind: alertKind,
           message: z.string().max(1000).default(''),
           shopifyOrderId: z.string().max(120).nullish(),
           orderName: z.string().max(60).nullish(),
@@ -611,7 +626,9 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
         })
         // Une demande sans rien à changer ni rien à dire n'apprend rien au
         // fournisseur : on refuse plutôt que d'envoyer une alerte vide.
-        .refine((value) => value.message.trim() !== '' || value.afterValue, {
+        // « Article manquant » se dit par son seul `beforeValue` : l'article
+        // attendu, sans « à la place ».
+        .refine((value) => value.message.trim() !== '' || value.afterValue || value.beforeValue, {
           message: 'Précisez le changement demandé',
         })
         .safeParse(request.body);
@@ -661,6 +678,8 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
         COLOR: 'Couleur à changer',
         HOLD: 'Ne pas expédier',
         CANCEL: 'Commande annulée',
+        MISSING_ITEM: 'Article manquant',
+        DELAY: 'Date d’expédition demandée',
         OTHER: 'Message urgent',
       } as const;
 
@@ -684,14 +703,12 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
           body: [
             // Le changement en premier, avant toute phrase : c'est ce qu'on
             // lit sur l'écran verrouillé d'un téléphone.
-            parsed.data.afterValue
-              ? `${parsed.data.beforeValue ?? '?'} → ${parsed.data.afterValue}`
-              : null,
+            enTete(parsed.data.kind, parsed.data.beforeValue, parsed.data.afterValue),
             parsed.data.orderName ? `Commande : ${parsed.data.orderName}` : null,
             parsed.data.message.trim() || null,
             '',
-            'Ouvrez votre espace de travail, onglet « Update », pour confirmer ' +
-              'que vous en tenez compte.',
+            'Ouvrez votre espace de travail, rubrique « Tickets », pour répondre ' +
+              'd’un bouton.',
           ]
             .filter((line) => line !== null)
             .join('\n'),

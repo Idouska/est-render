@@ -14,6 +14,7 @@
 import type { Prisma } from '@prisma/client';
 import { logger } from './lib/logger.ts';
 import { sendPlainEmail } from './services/gmail/send.ts';
+import { enTete } from './services/suppliers/demande.ts';
 import { disconnectPrisma, prisma } from './lib/prisma.ts';
 import { renewExpiringWatches } from './services/gmail/watch.ts';
 
@@ -128,12 +129,12 @@ async function remindSilentSuppliers(): Promise<number> {
         to: alert.supplier.contactEmail,
         subject: `RAPPEL — demande sans réponse${alert.orderName ? ` · ${alert.orderName}` : ''}`,
         body: [
-          alert.afterValue ? `${alert.beforeValue ?? '?'} → ${alert.afterValue}` : null,
+          enTete(alert.kind, alert.beforeValue, alert.afterValue),
           alert.orderName ? `Commande : ${alert.orderName}` : null,
           alert.message || null,
           '',
           'Cette demande attend votre réponse depuis hier. Ouvrez votre espace',
-          'de travail, onglet Update, pour confirmer — ou dire pourquoi c’est',
+          'de travail, rubrique Tickets, pour confirmer — ou dire pourquoi c’est',
           'impossible.',
         ]
           .filter((line) => line !== null)

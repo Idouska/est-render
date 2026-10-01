@@ -440,38 +440,12 @@ test('parti, mais la fiche n’a pas pu être relue : le bouton reste fermé et 
   assert.equal(e.bouton.occupe(), false);
 });
 
-test('les deux envois d’escalade se ferment aussi pendant l’envoi', async () => {
-  for (const [signature, appel] of [
-    ['async function sendEscalation(', (f: Function, b: unknown) => f('t1', 'e1', b)],
-    ['async function envoyerEscalade(', (f: Function, b: unknown) => f({ id: 'e1' }, b)],
-  ] as const) {
-    const bouton = boutonSimule('Envoyer');
-    const envois: string[] = [];
-    const doublures = {
-      document: { querySelector: () => null },
-      api: async (chemin: string) => {
-        if (chemin.endsWith('/send')) envois.push(chemin);
-        await pause(20);
-        return {};
-      },
-      toast: () => {},
-      loadAudit: async () => {},
-      selectTicket: async () => {},
-      loadRuptures: async () => {},
-    };
-    const source = `${fonctionDeLApp('function fermerPendantLEnvoi(')}\n${fonctionDeLApp(signature)}`;
-    const nom = signature.replace('async function ', '').replace('(', '');
-    const fonction = new Function(...Object.keys(doublures), `${source}\nreturn ${nom};`)(
-      ...Object.values(doublures),
-    );
-
-    await Promise.all([appel(fonction, bouton), appel(fonction, bouton)]);
-    assert.equal(envois.length, 1, `${nom} : une seule requête`);
-  }
-
-  // Et chaque bouton est bien passé à sa fonction.
+test('aucun écran du marchand n’envoie plus de texte libre au fournisseur', () => {
+  // Les deux boutons « Envoyer au fournisseur » ont disparu avec la fenêtre
+  // « Contacter le fournisseur » : plus d'envoi d'escalade, donc plus de
+  // double envoi possible par ce chemin.
   const app = sansCommentaires(lire('public/app.js'));
-  assert.match(app, /sendEscalation\(ticketId, button\.dataset\.id, button\)/);
-  assert.match(app, /faire: \(bouton\) => void envoyerEscalade\(d, bouton\)/);
-  assert.match(app, /geste\.faire\(bouton\)/);
+  assert.doesNotMatch(app, /function (sendEscalation|envoyerEscalade)\(/);
+  assert.doesNotMatch(app, /\/api\/escalations\/\$\{[^}]+\}\/send/);
+  assert.doesNotMatch(app, /method: 'POST'[^)]*\n?[^)]*\/api\/tickets\/\$\{[^}]+\}\/escalations/);
 });
