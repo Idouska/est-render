@@ -5767,10 +5767,9 @@ const KINDS_WITH_SWAP = new Set(['SIZE', 'COLOR', 'PRODUCT', 'ADDRESS', 'PHONE']
  * rebascule les deux champs.
  *
  * La déclinaison Shopify arrive souvent en un seul libellé — « Blackened
- * Blue / 45 » : on sépare la taille (le segment qui commence par un chiffre)
- * de la couleur (l'autre). Faillible sur un catalogue exotique, mais sur des
- * chaussures c'est la forme constante, et un champ prérempli faux se corrige
- * d'un regard là où un champ vide se ressaisit à chaque fois.
+ * Blue / 45 1/3 » : `repartirDeclinaison` sépare la pointure de la couleur.
+ * Un champ prérempli faux se corrige d'un regard là où un champ vide se
+ * ressaisit à chaque fois.
  */
 const ALERT_HINTS = {
   SIZE: { before: '42.5', after: '45' },
@@ -5782,18 +5781,36 @@ const ALERT_HINTS = {
 
 state.alertCtx = null;
 
+/*
+ * Couleur et taille d'une déclinaison Shopify.
+ *
+ * Les options sont jointes par une barre oblique ENTOURÉE d'espaces : celle de
+ * « 45 1/3 » n'en est pas une. Découper sur chaque barre donnait « Taille :
+ * 45 1 » et « Couleur : 3 ». Même règle que l'atelier (workspace.js) et le
+ * serveur (services/shopify/declinaison.ts) — un test les compare.
+ */
+function ressembleAUneTaille(valeur) {
+  return /^\d{1,2}([.,]\d)?(\s+\d\/\d)?$/.test((valeur ?? '').trim());
+}
+
+function repartirDeclinaison(variante) {
+  const texte = (variante ?? '').trim();
+  if (!texte) return { couleur: '', taille: '' };
+
+  const morceaux = texte.split(/\s+\/\s+/).map((morceau) => morceau.trim()).filter(Boolean);
+  const taille = morceaux.find(ressembleAUneTaille);
+  if (!taille) return { couleur: texte, taille: '' };
+
+  return { couleur: morceaux.filter((morceau) => morceau !== taille).join(' / '), taille };
+}
+
 function alertContextFromOrder(order) {
   if (!order) return null;
 
   const item = order.lineItems?.[0];
   const address = order.shippingAddress ?? {};
 
-  const parts = String(item?.variantTitle ?? '')
-    .split('/')
-    .map((part) => part.trim())
-    .filter(Boolean);
-  const size = parts.find((part) => /^\d/.test(part)) ?? (parts.length === 1 ? parts[0] : '');
-  const color = parts.find((part) => part !== size) ?? '';
+  const { couleur: color, taille: size } = repartirDeclinaison(item?.variantTitle);
 
   return {
     SIZE: size,
