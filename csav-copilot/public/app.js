@@ -12091,7 +12091,7 @@ async function loadEscalations(ticketId) {
 
   $('esc-create')?.addEventListener('click', () => createEscalation(ticketId));
   container.querySelectorAll('.esc-send').forEach((button) => {
-    button.addEventListener('click', () => sendEscalation(ticketId, button.dataset.id));
+    button.addEventListener('click', () => sendEscalation(ticketId, button.dataset.id, button));
   });
   container.querySelectorAll('.esc-resolve').forEach((button) => {
     button.addEventListener('click', () => resolveEscalation(ticketId, button.dataset.id));
@@ -12115,8 +12115,14 @@ async function createEscalation(ticketId) {
   }
 }
 
-async function sendEscalation(ticketId, escalationId) {
+async function sendEscalation(ticketId, escalationId, bouton) {
+  // Même garde que la réponse au client : un double clic notifiait le
+  // fournisseur deux fois.
+  const envoi = fermerPendantLEnvoi(bouton);
+  if (!envoi) return;
+
   const textarea = document.querySelector(`.esc-body[data-id="${escalationId}"]`);
+  let parti = false;
   try {
     if (textarea) {
       await api(`/api/escalations/${escalationId}`, {
@@ -12125,10 +12131,14 @@ async function sendEscalation(ticketId, escalationId) {
       });
     }
     await api(`/api/escalations/${escalationId}/send`, { method: 'POST' });
+    parti = true;
     toast('Fournisseur notifié.');
     await Promise.all([loadAudit(), selectTicket(ticketId)]);
+    envoi.garder();
   } catch (error) {
     toast(error.message, true);
+    if (parti) envoi.garder('Envoyé');
+    else envoi.rendre();
   }
 }
 
@@ -12239,11 +12249,54 @@ $('btn-save').addEventListener('click', async () => {
   }
 });
 
-$('btn-send').addEventListener('click', async () => {
+/*
+ * Un bouton d'envoi se ferme dès le clic, et dit qu'il travaille.
+ *
+ * Il restait actif pendant l'appel à Gmail — une à deux secondes sans le
+ * moindre signe. On recliquait pour s'assurer que le clic avait pris, on
+ * répétait Cmd+Entrée, et le message partait deux fois. Fermé, il ne reçoit
+ * plus rien : ni clic, ni `.click()` du raccourci clavier.
+ *
+ * Le serveur refuse de toute façon un second envoi (envoi/uneSeuleFois).
+ * Les deux protections ne se remplacent pas : celle-ci évite la requête,
+ * celle du serveur couvre deux onglets, deux agents, un écran rafraîchi.
+ *
+ * Rend `null` si le bouton travaille déjà — l'appelant s'arrête là.
+ */
+function fermerPendantLEnvoi(bouton) {
+  if (!bouton) return { rendre() {}, garder() {} };
+  if (bouton.disabled) return null;
+
+  const libelle = bouton.textContent;
+  bouton.disabled = true;
+  bouton.setAttribute('aria-busy', 'true');
+  bouton.textContent = 'Envoi…';
+
+  return {
+    // Rien n'est parti : on doit pouvoir réessayer.
+    rendre() {
+      bouton.disabled = false;
+      bouton.textContent = libelle;
+      bouton.removeAttribute('aria-busy');
+    },
+    // Parti : le bouton reste fermé. L'écran relu le remplace d'ordinaire ;
+    // s'il n'a pas pu l'être, le libellé dit au moins ce qui s'est passé.
+    garder(texte) {
+      if (texte) bouton.textContent = texte;
+      bouton.removeAttribute('aria-busy');
+    },
+  };
+}
+
+async function envoyerLaReponse() {
   const draft = state.detail?.ticket.drafts?.[0];
   if (!draft) return;
 
+  const envoi = fermerPendantLEnvoi($('btn-send'));
+  if (!envoi) return;
+
   const edited = $('d-body').value !== draft.body;
+  let parti = false;
 
   try {
     // On enregistre avant d'envoyer : sinon les retouches de l'agent seraient
@@ -12256,12 +12309,18 @@ $('btn-send').addEventListener('click', async () => {
     }
 
     await api(`/api/drafts/${draft.id}/send`, { method: 'POST' });
+    parti = true;
     toast('Réponse envoyée.');
     await Promise.all([selectTicket(state.currentId), loadMetrics(), loadAudit()]);
+    envoi.garder();
   } catch (error) {
     toast(error.message, true);
+    if (parti) envoi.garder('Réponse envoyée');
+    else envoi.rendre();
   }
-});
+}
+
+$('btn-send').addEventListener('click', envoyerLaReponse);
 
 /* ---------------------------------------------------------- remboursement */
 
@@ -14837,7 +14896,7 @@ function renderRuptureActions(d) {
   const envoyer = {
     cle: 'envoyer',
     label: 'Envoyer au fournisseur',
-    faire: () => void envoyerEscalade(d),
+    faire: (bouton) => void envoyerEscalade(d, bouton),
   };
   const ouvrirDossier = {
     cle: 'dossier',
@@ -14880,7 +14939,9 @@ function renderRuptureActions(d) {
 
   boite.querySelectorAll('[data-rup-act]').forEach((bouton) => {
     const geste = gestes.find((candidat) => candidat.cle === bouton.dataset.rupAct);
-    bouton.addEventListener('click', () => geste.faire());
+    // Le bouton est passé au geste : celui qui envoie s'en sert pour se fermer
+    // pendant l'envoi. Les autres l'ignorent.
+    bouton.addEventListener('click', () => geste.faire(bouton));
   });
 }
 
@@ -14918,13 +14979,22 @@ async function ecrireAuClientDepuisRupture(d, phrase = null) {
   }
 }
 
-async function envoyerEscalade(d) {
+async function envoyerEscalade(d, bouton) {
+  // Même garde que la réponse au client (voir `fermerPendantLEnvoi`).
+  const envoi = fermerPendantLEnvoi(bouton);
+  if (!envoi) return;
+
+  let parti = false;
   try {
     await api(`/api/escalations/${d.id}/send`, { method: 'POST', body: '{}' });
+    parti = true;
     toast('Demande envoyée au fournisseur.');
     await loadRuptures();
+    envoi.garder();
   } catch (error) {
     toast(error.message, true);
+    if (parti) envoi.garder('Envoyé');
+    else envoi.rendre();
   }
 }
 

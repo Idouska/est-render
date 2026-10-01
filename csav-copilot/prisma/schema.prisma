@@ -466,6 +466,12 @@ model Draft {
 
   createdAt DateTime  @default(now())
   sentAt    DateTime?
+  /// Envoi commencé, pas encore confirmé. Posé par une écriture conditionnelle
+  /// AVANT l'appel à Gmail : un second clic, un second onglet, un second
+  /// serveur trouvent la place prise et ne renvoient pas. Effacé à la
+  /// confirmation, ou à l'échec pour qu'on puisse réessayer ; tenu pour
+  /// abandonné au-delà de deux minutes (voir services/envoi/uneSeuleFois.ts).
+  sendStartedAt DateTime?
 
   ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
@@ -613,6 +619,8 @@ model SupplierEscalation {
   createdAt  DateTime  @default(now())
   notifiedAt DateTime? // email de notification envoyé au fournisseur
   resolvedAt DateTime?
+  /// Notification en cours d'envoi — même verrou que `Draft.sendStartedAt`.
+  sendStartedAt DateTime?
 
   merchant Merchant          @relation(fields: [merchantId], references: [id], onDelete: Cascade)
   ticket   Ticket            @relation(fields: [ticketId], references: [id], onDelete: Cascade)

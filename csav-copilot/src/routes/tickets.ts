@@ -7,7 +7,7 @@ import { prisma } from '../lib/prisma.ts';
 import { PERMISSIONS, PREVIEW_COOKIE, requirePermission, requireSession } from '../plugins/auth.ts';
 import { enqueueTicket } from '../queue/index.ts';
 import { accessibleMerchantIds, listShopsFor } from './shops.ts';
-import { sendDraft, sendReplyInThread, updateDraftBody } from '../services/gmail/drafts.ts';
+import { updateDraftBody } from '../services/gmail/drafts.ts';
 import { syncTicketThread } from '../services/gmail/thread.ts';
 import { NON_LU, PORTEE_NON_LU } from '../services/gmail/unreadScope.ts';
 import { sendPlainEmail } from '../services/gmail/send.ts';
@@ -17,6 +17,9 @@ import { getOrderById, quoteSearchValue, searchOrders } from '../services/shopif
 import { QUEUE_SELECT } from './queueFields.ts';
 import { processTicket } from '../services/tickets/process.ts';
 import { discardPendingDrafts } from '../services/tickets/discardDrafts.ts';
+import { recordOutbound } from '../services/tickets/outbound.ts';
+import { envoyerBrouillon } from '../services/tickets/envoyerBrouillon.ts';
+import { MESSAGES_ENVOI } from '../services/envoi/uneSeuleFois.ts';
 import { translateToFrench } from '../services/ai/translate.ts';
 import { retardFournisseurs } from '../services/suppliers/retard.ts';
 import { fenetresJour } from '../services/tickets/fenetresJour.ts';
@@ -226,50 +229,6 @@ async function listMerchantLabels(merchantIds: string[]): Promise<string[]> {
   `;
 
   return rows.map((row) => row.label);
-}
-
-/**
- * Consigne une réponse partie dans le fil du ticket.
- *
- * Les messages sortants n'étaient enregistrés nulle part : l'ingestion ne
- * ramasse que la boîte de réception, et l'envoi ne laissait qu'une ligne de
- * journal. Le « fil complet » montrait donc une conversation où le client
- * parle seul, l'agent suivant croyait le message oublié et répondait deux
- * fois — et le corpus d'apprentissage de l'IA, qui cherche des paires
- * question/réponse, ne trouvait jamais une seule réponse.
- *
- * Tolérante à l'échec : le mail est déjà parti quand on arrive ici. Rater la
- * trace est regrettable, refuser l'envoi pour autant serait pire.
- */
-async function recordOutbound(params: {
-  merchantId: string;
-  ticketId: string;
-  gmailMessageId: string | null;
-  fromEmail: string;
-  toEmail: string | null;
-  subject: string | null;
-  body: string;
-}): Promise<void> {
-  try {
-    await prisma.message.create({
-      data: {
-        merchantId: params.merchantId,
-        ticketId: params.ticketId,
-        // Sans identifiant Gmail (simulation), une clé locale suffit : elle
-        // ne sert qu'à garantir l'unicité.
-        gmailMessageId: params.gmailMessageId ?? `local-${params.ticketId}-${Date.now()}`,
-        direction: 'OUTBOUND',
-        fromEmail: params.fromEmail,
-        toEmail: params.toEmail,
-        subject: params.subject,
-        bodyText: params.body,
-        snippet: params.body.slice(0, 200),
-        receivedAt: new Date(),
-      },
-    });
-  } catch (error) {
-    logger.warn({ err: error, ticketId: params.ticketId }, 'Réponse non consignée dans le fil');
-  }
 }
 
 export async function ticketRoutes(app: FastifyInstance): Promise<void> {
@@ -1892,77 +1851,23 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
-  // Envoi — toujours déclenché par un humain en phase 1.
+  // Envoi — toujours déclenché par un humain en phase 1. Le verrou qui
+  // empêche un second envoi vit dans le service : voir envoi/uneSeuleFois.
   app.post<{ Params: { id: string } }>(
     '/api/drafts/:id/send',
     { preHandler: requirePermission('reply') },
     async (request, reply) => {
     const { merchantId, userId } = request.session;
 
-    const draft = await prisma.draft.findFirst({
-      where: { id: request.params.id, merchantId },
-      include: { ticket: true },
-    });
-
-    if (!draft) return reply.code(404).send({ error: 'Brouillon introuvable' });
-    if (draft.status === 'SENT') return reply.code(409).send({ error: 'Déjà envoyé' });
-
-    // Deux chemins, le temps que les anciens tickets s'écoulent : un brouillon
-    // Gmail hérité s'envoie tel quel — sinon il resterait dans la boîte après
-    // l'envoi. Les propositions créées depuis partent directement dans le fil.
-    let sent: { gmailMessageId: string | null; fromEmail: string };
-
-    if (draft.gmailDraftId) {
-      sent = await sendDraft(merchantId, draft.gmailDraftId, draft.ticket.mailboxId);
-    } else {
-      const lastInbound = await prisma.message.findFirst({
-        where: { ticketId: draft.ticketId, merchantId, direction: 'INBOUND' },
-        orderBy: { receivedAt: 'desc' },
-        select: { gmailMessageId: true },
-      });
-
-      sent = await sendReplyInThread({
-        merchantId,
-        mailboxId: draft.ticket.mailboxId,
-        threadId: draft.ticket.gmailThreadId,
-        to: draft.ticket.customerEmail,
-        subject: draft.ticket.subject ?? 'Votre demande',
-        body: draft.body,
-        inReplyToMessageId: lastInbound?.gmailMessageId,
-      });
-    }
-
-    await prisma.$transaction([
-      prisma.draft.update({
-        where: { id: draft.id },
-        data: { status: 'SENT', sentAt: new Date() },
-      }),
-      prisma.ticket.update({
-        where: { id: draft.ticketId },
-        data: { status: 'CLOSED', lastMessageAt: new Date() },
-      }),
-    ]);
-
-    await recordOutbound({
+    const issue = await envoyerBrouillon({
+      draftId: request.params.id,
       merchantId,
-      ticketId: draft.ticketId,
-      gmailMessageId: sent.gmailMessageId,
-      fromEmail: sent.fromEmail,
-      toEmail: draft.ticket.customerEmail,
-      subject: draft.ticket.subject,
-      body: draft.body,
-    });
-
-    await recordAudit({
-      merchantId,
-      actorType: 'USER',
-      actorId: userId,
-      action: 'draft.sent',
-      targetType: 'Draft',
-      targetId: draft.id,
-      metadata: { ticketId: draft.ticketId },
+      userId,
       ipAddress: request.ip,
     });
+
+    if (issue === 'introuvable') return reply.code(404).send({ error: 'Brouillon introuvable' });
+    if (issue !== 'envoye') return reply.code(409).send({ error: MESSAGES_ENVOI[issue] });
 
     return reply.send({ ok: true });
   });

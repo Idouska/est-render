@@ -6,6 +6,7 @@ import { signSupplierWorkspaceToken } from '../lib/supplierToken.ts';
 import { prisma } from '../lib/prisma.ts';
 import { requirePermission, requireSession } from '../plugins/auth.ts';
 import { createEscalation, resolveEscalation, sendEscalation } from '../services/suppliers/escalate.ts';
+import { MESSAGES_ENVOI } from '../services/envoi/uneSeuleFois.ts';
 import { sendPlainEmail } from '../services/gmail/send.ts';
 import { getShopifyClient } from '../services/shopify/client.ts';
 import { listOrders } from '../services/shopify/orders.ts';
@@ -815,7 +816,11 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(409).send({ error: 'Escalade déjà envoyée' });
     }
 
-    await sendEscalation({ merchantId, escalationId: escalation.id, userId });
+    // La vérification ci-dessus répond vite au cas courant ; c'est le service
+    // qui départage deux envois simultanés (voir envoi/uneSeuleFois).
+    const issue = await sendEscalation({ merchantId, escalationId: escalation.id, userId });
+    if (issue === 'deja-envoye') return reply.code(409).send({ error: 'Escalade déjà envoyée' });
+    if (issue === 'en-cours') return reply.code(409).send({ error: MESSAGES_ENVOI['en-cours'] });
     return reply.send({ ok: true });
   });
 
