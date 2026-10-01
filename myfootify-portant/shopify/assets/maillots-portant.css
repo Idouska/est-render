@@ -42,12 +42,13 @@
 
 /* Sous le portant : le nom du maillot, et le lien vers sa fiche. */
 .mfp__caption { display: flex; flex-direction: column; align-items: center; gap: 6px; min-height: 92px; margin-top: 6px; text-align: center; }
-.mfp__count { font-size: 12px; letter-spacing: 1px; color: var(--mfp-muted); font-variant-numeric: tabular-nums; }
 .mfp__price { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .mfp__caption p.is-hint { font-style: normal; font-size: 13px; color: var(--mfp-muted); }
 .mfp__caption p { margin: 0; min-height: 1.3em; font-size: 15px; font-style: italic; }
-.mfp__more { margin-top: 4px; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; padding: 7px 16px; border: 1px solid #b9bbb1; border-radius: 30px; transition: background .2s, color .2s; }
-.mfp__more:hover { background: var(--mfp-ink); color: var(--mfp-bg); }
+/* Le bouton reprend celui des fiches produit (« Choisis ta taille ») : orange plein, texte noir. */
+.mfp { --mfp-orange: #ff6600; }
+.mfp .mfp__more { margin-top: 8px; padding: 14px 34px; border: 0 !important; border-radius: 10px; background: var(--mfp-orange); color: #111 !important; font-family: var(--font-heading-family, inherit); font-weight: 700; font-size: 17px; letter-spacing: .5px; text-transform: uppercase; transition: filter .2s; }
+.mfp .mfp__more:hover { background: var(--mfp-orange); color: #111; filter: brightness(1.08); }
 
 /* Boutons permanents sous le portant (aux couleurs du site). */
 .mfp__actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 18px; }
@@ -67,7 +68,10 @@
 .mfp--hero .mfp__title { font-size: clamp(32px, 3.2vw, 50px); line-height: 1.12; letter-spacing: -1px; padding-top: .08em; }
 /* Sous les maillots, la scène garde de la place pour le maillot choisi : on y remonte la légende. */
 .mfp--hero .mfp__caption { position: relative; z-index: 3; margin-top: -64px; }
-.mfp--hero .mfp__stage.is-selected ~ .mfp__caption { margin-top: 0; }
+.mfp--hero [data-mfp-body] { position: relative; }
+.mfp--hero .mfp__stage.is-selected ~ .mfp__caption { position: absolute; z-index: 25; right: 0; top: 50%; transform: translateY(-50%); width: min(300px, 22%); margin: 0; min-height: 0; align-items: flex-start; text-align: left; }
+.mfp--hero .mfp__stage.is-selected ~ .mfp__caption [data-name] { font-size: 18px; line-height: 1.35; }
+.mfp--hero .mfp__stage.is-selected ~ .mfp__caption .mfp__price { font-size: 18px; color: var(--mfp-ink); }
 .mfp__sub { margin: 10px 0 0; max-width: 60ch; font-size: 15px; line-height: 1.5; color: var(--mfp-muted); }
 
 /* Vue choisie : Face / Dos et « glisse pour tourner », en haut à gauche du portant (face à « Fermer »). */
@@ -104,6 +108,7 @@
 /* Typographie sobre : nom en capitales espacées, prix discret. */
 .mfp--galerie .mfp__caption p, .mfp--penderie .mfp__caption p { font-style: normal; }
 .mfp--galerie .mfp__caption [data-name]:not(.is-hint) { font-size: 13px; letter-spacing: 2px; text-transform: uppercase; }
+.mfp__caption [data-name]:not(.is-hint) { color: var(--mfp-orange); font-weight: 600; }
 .mfp--galerie .mfp__price { font-weight: 500; color: var(--mfp-muted); }
 
 /* Sans WebGL, ou si le script ne se charge pas : une simple rangée de maillots. */
@@ -133,6 +138,8 @@
   .mfp--hero .mfp__sub { display: none; }
   .mfp--hero .mfp__stage { flex: none; height: 350px; min-height: 0; margin-top: 4px; }
   .mfp--hero .mfp__caption { min-height: 64px; margin-top: -72px; }
+  /* Sur mobile, le maillot choisi laisse la place à ses infos juste dessous. */
+  .mfp--hero .mfp__stage.is-selected ~ .mfp__caption { position: relative; transform: none; top: auto; right: auto; width: auto; margin-top: -6px; align-items: center; text-align: center; }
   .mfp__actions, .mfp--hero .mfp__actions { flex-direction: column; align-items: stretch; align-self: stretch; margin-top: 8px; }
   .mfp__title { font-size: 25px; }
   .mfp__edition { font-size: 11px; }

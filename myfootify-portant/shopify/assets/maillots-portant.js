@@ -1468,7 +1468,9 @@ void main() {
       let x = this.targetX(i) + this.offset, angle = ANGLE, z = 0, scale = 1;
       const active = chosen ? i === this.selected : i === this.hover;
       const carried = !chosen && this.carry && this.carry.index === i;
-      if (carried) { angle = -0.55; z = 0.7; scale = 1.06; } // en main : il avance et se tourne un peu vers soi
+      // En main : il avance un peu et se tourne à peine, sans passer de face — de face il
+      // serait trois fois plus large et recouvrirait ses voisins.
+      if (carried) { angle = ANGLE + 0.3; z = 0.5; scale = 1.03; }
       if (chosen) {
         // Le maillot choisi vient au centre, en grand ; le portant reste derrière, flou.
         if (active) {
@@ -1479,6 +1481,10 @@ void main() {
         } else {
           z = -0.4;
         }
+      } else if (this.carry && !carried) {
+        // Les voisins s'écartent autour de la place visée.
+        const at = this.slotOf(this.carry.index);
+        if (Math.abs(this.slotOf(i) - at) === 1) x += this.slotOf(i) < at ? -SPREAD * 0.4 : SPREAD * 0.4;
       } else if (this.hover >= 0) {
         if (active) { angle = 0; z = 0.9; scale = 1.22; }
         else x += this.slotOf(i) < this.slotOf(this.hover) ? -SPREAD : SPREAD;
@@ -1640,7 +1646,6 @@ function mount(root) {
       </div>
     </div>
     <div class="mfp__caption">
-      <span class="mfp__count" data-count hidden></span>
       <p data-name aria-live="polite"></p>
       <p class="mfp__price" data-price hidden></p>
       <a class="mfp__more" data-more href="#" hidden>Voir le maillot</a>
@@ -1716,13 +1721,11 @@ function mount(root) {
   function caption() {
     const i = selected >= 0 ? selected : hovered;
     const p = products[i];
-    const name = $('[data-name]'), price = $('[data-price]'), count = $('[data-count]');
+    const name = $('[data-name]'), price = $('[data-price]');
     name.textContent = p ? p.title : HINT;
     name.classList.toggle('is-hint', !p);
     price.hidden = !(p && p.price);
     if (p) price.textContent = p.price || '';
-    count.hidden = selected < 0;
-    if (selected >= 0) count.textContent = pad(rail.slotOf(selected) + 1) + ' / ' + pad(products.length);
     const more = $('[data-more]');
     more.hidden = selected < 0;
     if (p) more.href = p.url;
