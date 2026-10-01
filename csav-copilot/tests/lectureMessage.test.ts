@@ -124,6 +124,30 @@ test('un message lu dans Gmail est lu, même jamais ouvert ici', () => {
   assert.equal(estLu({ gmailUnread: false, openedAt: null }), true);
 });
 
+/* ---- ce qui vaut lecture ---- */
+
+test('ouvrir l’outil ne lit aucun message', () => {
+  /*
+   * Au chargement, la page ouvre le premier message pour ne pas laisser la
+   * colonne de droite vide. Elle le marquait lu au passage : chaque
+   * rafraîchissement éteignait le gras du message du haut, puis du suivant.
+   * Au bout de quelques retours sur la page, la file était « traitée » sans
+   * que personne n'ait rien lu.
+   */
+  const boot = app.slice(app.indexOf('async function boot('), app.indexOf('boot();'));
+  assert.match(boot, /selectTicket\(state\.tickets\[0\]\.id, \{ silent: true \}\)/);
+
+  const select = app.slice(app.indexOf('async function selectTicket('), app.indexOf('function renderDetail('));
+  assert.match(select, /marqueOuvert\(detail, id, \{ automatique: silent \}\)/, 'l’ouverture automatique se dit');
+
+  const marque = app.slice(app.indexOf('async function marqueOuvert('));
+  assert.match(
+    marque.slice(0, 1400),
+    /if \(automatique \|\| detail\.readOnly \|\| estLu\(detail\.ticket\)\) return;/,
+    'et elle sort avant d’écrire quoi que ce soit',
+  );
+});
+
 /* ---- la pastille de la file ---- */
 
 const bascule = app.slice(app.indexOf('async function basculerLecture('), app.indexOf('const prefetched = new Map()'));
@@ -224,5 +248,11 @@ test('une consultation en lecture seule n’éteint rien', () => {
     return app.slice(i, app.indexOf('\n}', i) + 2);
   })();
 
-  assert.match(marque, /if \(detail\.readOnly \|\| estLu\(detail\.ticket\)\) return;/);
+  // La garde porte sur trois cas — ouverture automatique, lecture seule, déjà
+  // lu — et c'est `detail.readOnly` qui protège celui-ci. On vérifie qu'il y
+  // figure, et qu'on sort AVANT la moindre écriture.
+  const garde = marque.indexOf('detail.readOnly');
+  assert.ok(garde > 0, 'la lecture seule doit être écartée');
+  assert.ok(garde < marque.indexOf('openedAt ='), 'et avant que quoi que ce soit ne soit posé');
+  assert.match(marque.slice(garde, garde + 60), /\) return;/, 'par un retour, pas par une branche');
 });

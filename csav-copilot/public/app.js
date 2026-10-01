@@ -3081,7 +3081,9 @@ async function selectTicket(id, { silent = false } = {}) {
    */
   const etaitNonLu = !estLu(detail.ticket);
 
-  await marqueOuvert(detail, id);
+  // `silent` est l'ouverture AUTOMATIQUE du premier message au chargement :
+  // personne ne l'a demandée, donc elle ne doit rien marquer comme lu.
+  await marqueOuvert(detail, id, { automatique: silent });
 
   renderDetail();
 
@@ -3119,8 +3121,20 @@ async function selectTicket(id, { silent = false } = {}) {
  * L'objet local est modifié en même temps : `loadQueue()` va suivre, mais
  * entre les deux la file rendue porte encore l'ancienne valeur.
  */
-async function marqueOuvert(detail, id) {
-  if (detail.readOnly || estLu(detail.ticket)) return;
+async function marqueOuvert(detail, id, { automatique = false } = {}) {
+  /*
+   * Une ouverture automatique ne lit rien.
+   *
+   * Au chargement, la page ouvre le premier message de la file pour ne pas
+   * laisser la colonne de droite vide. Elle le marquait lu au passage : chaque
+   * rafraîchissement — y compris un Cmd+Maj+R — éteignait donc le gras du
+   * message du haut, puis du suivant, sans que personne ne les ait lus. Au
+   * bout de quelques retours sur la page, la file était « traitée » et les
+   * messages passaient inaperçus.
+   *
+   * C'est le CLIC qui vaut lecture, jamais le chargement.
+   */
+  if (automatique || detail.readOnly || estLu(detail.ticket)) return;
 
   detail.ticket.openedAt = new Date().toISOString();
   const ligne = document.querySelector(`.queue-item[data-id="${CSS.escape(id)}"]`);
@@ -13158,13 +13172,34 @@ $('auto-refresh').addEventListener('change', (event) => {
   toast(event.target.checked ? 'Actualisation automatique activée.' : 'Actualisation automatique coupée.');
 });
 
-// Toutes les 60 secondes, et seulement si l'onglet est visible : recharger en
-// arrière-plan consommerait l'API Shopify pour un écran que personne ne
-// regarde.
+/*
+ * Le tour automatique, et pourquoi il n'a pas la même cadence partout.
+ *
+ * Sur l'écran SAV, un tour ne coûte qu'un appel Gmail par boîte et quelques
+ * lectures de notre base : rien chez Shopify. Soixante secondes y étaient donc
+ * un plafond gratuit — un mail arrivé juste après un tour attendait une minute
+ * entière avant de s'afficher, alors qu'il était déjà entré en base.
+ *
+ * Les autres écrans — commandes, clients, catalogue — interrogent Shopify à
+ * chaque tour : ils gardent la minute, qui n'y est pas un retard mais une
+ * économie.
+ *
+ * Et toujours seulement si l'onglet est visible : personne ne lit un écran
+ * caché, et le quota dépensé pour lui est perdu.
+ */
+const TOUR_SAV_MS = 20000;
+const TOUR_AUTRE_MS = 60000;
+// Daté dès le chargement : la page vient de relever, le premier tour n'a rien
+// à rattraper.
+let dernierTour = Date.now();
+
 setInterval(() => {
   if (!$('auto-refresh').checked || document.hidden || !state.me) return;
+  const attendu = state.view === 'tickets' ? TOUR_SAV_MS : TOUR_AUTRE_MS;
+  if (Date.now() - dernierTour < attendu) return;
+  dernierTour = Date.now();
   void refreshCurrent({ silent: true });
-}, 60000);
+}, 5000);
 
 // Au retour sur l'onglet après une absence : ce qui est affiché a toutes les
 // chances d'être périmé.
@@ -13388,6 +13423,23 @@ async function boot() {
   renderMe();
   renderClocks();
   setView('tickets');
+
+  /*
+   * Relever le courrier À L'OUVERTURE, et pas seulement au premier tour.
+   *
+   * L'ouverture ne lisait que la base : on arrivait donc sur l'état d'avant, et
+   * ce qui était arrivé entre-temps n'apparaissait qu'au bout d'une minute —
+   * le temps du premier tour automatique. C'est précisément le moment où l'on
+   * regarde, et le seul où ce retard se remarque.
+   *
+   * En parallèle du reste, et sans bloquer : la file s'affiche tout de suite
+   * avec ce que la base sait déjà, puis se complète quand la relève répond.
+   */
+  void pullMail()
+    .then((entres) => (entres ? loadQueue() : undefined))
+    // Silencieux : la file s'affiche de toute façon avec ce que la base sait,
+    // et une relève en échec le dit déjà au premier clic sur « Actualiser ».
+    .catch(() => {});
 
   await Promise.all([
     loadAgents(),

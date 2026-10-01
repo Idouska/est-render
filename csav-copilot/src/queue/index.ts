@@ -44,9 +44,15 @@ export const ticketQueue = new Queue<TicketJob>(QUEUE_TICKET, {
  * Une notification Pub/Sub par mail reçu, mais un seul job d'ingestion utile
  * par marchand : on déduplique sur une fenêtre courte via un jobId stable.
  */
-export async function enqueueIngest(job: IngestJob): Promise<void> {
+export async function enqueueIngest(
+  job: IngestJob,
+  options: { delay?: number } = {},
+): Promise<void> {
   const bucket = Math.floor(Date.now() / 5000);
-  await ingestQueue.add('ingest', job, { jobId: ingestJobId(job, bucket) });
+  await ingestQueue.add('ingest', job, {
+    jobId: ingestJobId(job, bucket),
+    ...(options.delay ? { delay: options.delay } : {}),
+  });
 }
 
 /**

@@ -15,8 +15,16 @@ import type { IngestJob, TicketJob } from './types.ts';
  * échouait en boucle sans que rien ne l'indique à l'écran.
  */
 
+/*
+ * Le rang de relance entre dans l'identifiant.
+ *
+ * Sans lui, une relance différée posée dans la même fenêtre de cinq secondes
+ * qu'une notification serait prise pour un doublon et jetée — c'est-à-dire
+ * exactement dans le cas qu'elle existe pour rattraper.
+ */
 export function ingestJobId(job: IngestJob, bucket: number): string {
-  return `ingest-${job.merchantId}-${job.mailboxId ?? 'default'}-${bucket}`;
+  const rang = job.relance ? `-r${job.relance}` : '';
+  return `ingest-${job.merchantId}-${job.mailboxId ?? 'default'}-${bucket}${rang}`;
 }
 
 export function ticketJobId(job: TicketJob): string {
