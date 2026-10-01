@@ -39,6 +39,20 @@ export const NOUVEAUTES: readonly Nouveaute[] = [
     ],
   },
   {
+    pr: 67,
+    date: '2026-09-30',
+    pour: 'Tableau de bord',
+    titre: 'Un seul défilement dans la fiche d’un message',
+    resume:
+      'Sur grand écran, la colonne du milieu avait deux barres de défilement côte à côte : l’une pour la fiche, l’autre pour les échanges, enfermés dans une fenêtre d’un tiers d’écran. Il n’y en a plus qu’une — la fiche se lit d’un bout à l’autre, de l’en-tête à la réponse. Et un autre message s’ouvre désormais en haut, sur son titre et son résumé, même si l’on était descendu jusqu’à la réponse du précédent.',
+    ou: 'Écran SAV, colonne du milieu, sur un écran de plus de 1 200 px.',
+    essayer: [
+      'Ouvrir un message avec plusieurs échanges : une seule barre de défilement, et tout le fil se lit sans fenêtre intérieure.',
+      'Descendre jusqu’à la réponse, puis ouvrir un autre message : il s’affiche en haut.',
+      'Envoyer une réponse : l’écran reste où il était.',
+    ],
+  },
+  {
     pr: 66,
     date: '2026-09-30',
     pour: 'Tableau de bord',
