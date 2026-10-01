@@ -25,6 +25,21 @@ export interface Nouveaute {
 
 export const NOUVEAUTES: readonly Nouveaute[] = [
   {
+    pr: 71,
+    date: '2026-10-01',
+    pour: 'Tableau de bord',
+    titre: 'Le courrier arrive enfin tout de suite',
+    resume:
+      'Un mail pouvait mettre de longues minutes à apparaître — et « Actualiser » répondait « aucun nouveau message » sur une boîte qui venait d’en recevoir un. Trois causes, toutes corrigées : le repère de lecture de Gmail sautait par-dessus un message dont l’historique n’était pas encore complet, et ce message n’entrait plus jamais par la voie rapide ; le rattrapage passait par la recherche Gmail, qui ne voit un mail tout neuf qu’au bout d’un moment ; et l’écran, lui, ne regardait que toutes les minutes — sans jamais relever au moment où vous ouvriez l’outil. Désormais : relève à l’ouverture, tour toutes les vingt secondes sur l’écran SAV, et une seconde tentative automatique quinze secondes après une notification restée bredouille. Au passage : rafraîchir la page ne marque plus le message du haut comme lu — c’est le clic qui vaut lecture, jamais le chargement.',
+    ou: 'File des messages — rien à faire, c’est le délai lui-même qui change.',
+    essayer: [
+      'S’envoyer un mail à l’adresse du SAV, puis regarder la file : il doit apparaître en quelques secondes.',
+      'Fermer l’outil, recevoir un mail, rouvrir l’outil : il est là sans avoir à cliquer.',
+      'Cliquer « Actualiser » juste après l’arrivée d’un mail : il doit entrer du premier coup.',
+      'Rafraîchir la page plusieurs fois de suite : les messages non lus doivent le rester.',
+    ],
+  },
+  {
     pr: 69,
     date: '2026-10-01',
     pour: 'Tableau de bord',

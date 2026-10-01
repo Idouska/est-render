@@ -4,6 +4,7 @@ import { disconnectPrisma } from './lib/prisma.ts';
 import {
   closeQueues,
   connection,
+  enqueueIngest,
   QUEUE_INGEST,
   QUEUE_TICKET,
   type IngestJob,
@@ -12,10 +13,32 @@ import {
 import { ingestMerchantInbox } from './services/tickets/ingest.ts';
 import { processTicket } from './services/tickets/process.ts';
 
+/*
+ * La relance d'une relève restée bredouille.
+ *
+ * Gmail n'envoie qu'UNE notification par message, et son historique n'est pas
+ * complet dans la seconde : la relève déclenchée par la notification peut donc
+ * ne rien trouver, et rien ne reviendra le lui dire. Sans relance, le message
+ * attend qu'un autre mail arrive ou qu'un navigateur ouvre la file — des
+ * minutes, parfois la nuit entière.
+ *
+ * Deux relances espacées de quinze secondes suffisent largement, et ne coûtent
+ * que deux appels Gmail quand la notification ne concernait rien d'ingérable —
+ * un libellé posé à la main, un message qu'on écarte. Bornées, pour qu'une
+ * boîte bavarde ne s'auto-entretienne pas.
+ */
+const RELANCES_MAX = 2;
+const RELANCE_APRES_MS = 15_000;
+
 const ingestWorker = new Worker<IngestJob>(
   QUEUE_INGEST,
   async (job) => {
-    await ingestMerchantInbox(job.data.merchantId, job.data.mailboxId);
+    const { ingested } = await ingestMerchantInbox(job.data.merchantId, job.data.mailboxId);
+
+    const rang = job.data.relance ?? 0;
+    if (ingested === 0 && rang < RELANCES_MAX) {
+      await enqueueIngest({ ...job.data, relance: rang + 1 }, { delay: RELANCE_APRES_MS });
+    }
   },
   { connection, concurrency: 5 },
 );

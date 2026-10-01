@@ -1,6 +1,7 @@
 import { logger } from '../../lib/logger.ts';
 import { prisma } from '../../lib/prisma.ts';
 import { getGmailClient } from './client.ts';
+import { curseurApres } from './curseur.ts';
 import { isUnknownCursor } from './errors.ts';
 import { parseMessage, type ParsedMessage } from './messages.ts';
 
@@ -20,6 +21,26 @@ import { parseMessage, type ParsedMessage } from './messages.ts';
  * arrêté — le curseur n'avance que si tout a été traité.
  */
 const MAX_PER_RUN = 60;
+
+/**
+ * Le filet : combien des derniers messages de la boîte de réception on
+ * re-regarde à chaque relève.
+ *
+ * POURQUOI UN FILET. L'historique Gmail est le chemin temps réel, mais il
+ * n'est pas instantanément complet : un message peut être livré sans que son
+ * enregistrement d'historique soit encore rendu par `history.list`. Et la
+ * recherche (`q:`) ne rattrape pas ce trou, car elle passe par l'index de
+ * recherche, qui met lui aussi un moment à voir un message tout neuf — c'est
+ * elle qui faisait répondre « aucun nouveau message » à un clic sur
+ * « Actualiser » donné dix secondes après l'arrivée du mail.
+ *
+ * `messages.list` filtré par LIBELLÉ ne demande rien à l'index de recherche :
+ * il lit la liste de la boîte de réception. C'est le seul chemin qui réponde
+ * juste tout de suite, et il coûte cinq unités de quota — contre six mille
+ * disponibles par minute.
+ */
+const FILET_INBOX = 25;
+
 
 /**
  * Rattrape le courrier déjà présent dans la boîte.
@@ -138,7 +159,11 @@ export async function fetchNewMessages(
   const { gmail } = await getGmailClient(merchantId, connection.id);
 
   let messageIds: string[] = [];
-  let newHistoryId: string | null = null;
+  // Vrai quand la relève a bien suivi l'historique : le curseur se déduit
+  // alors de ce qui a été lu. Faux au premier branchement et après un curseur
+  // périmé, où il faut au contraire en poser un neuf.
+  let suivaitLHistorique = false;
+  let enregistrementsLus: string[] = [];
 
   if (connection.lastHistoryId) {
     try {
@@ -159,6 +184,9 @@ export async function fetchNewMessages(
          éteint le gras dans la file. */
       const read = new Set<string>();
       const unread = new Set<string>();
+      // Les identifiants des enregistrements réellement lus : c'est eux, et
+      // eux seuls, qui ont le droit de faire avancer le curseur.
+      const lus: string[] = [];
       let pageToken: string | undefined;
 
       do {
@@ -171,6 +199,8 @@ export async function fetchNewMessages(
         });
 
         for (const entry of response.data.history ?? []) {
+          if (entry.id) lus.push(entry.id);
+
           for (const added of entry.messagesAdded ?? []) {
             if (added.message?.id) ids.add(added.message.id);
           }
@@ -206,9 +236,11 @@ export async function fetchNewMessages(
           }
         }
 
-        newHistoryId = response.data.historyId ?? newHistoryId;
         pageToken = response.data.nextPageToken ?? undefined;
       } while (pageToken);
+
+      enregistrementsLus = lus;
+      suivaitLHistorique = true;
 
       // L'historique est lu dans l'ordre : le dernier mouvement d'un fil est
       // celui qui compte, d'où les `delete` croisés ci-dessus plutôt qu'une
@@ -239,6 +271,37 @@ export async function fetchNewMessages(
     messageIds = await listRecentMessageIds(gmail);
   }
 
+  /*
+   * Le filet, sur chaque relève.
+   *
+   * On relit les derniers messages de la boîte de réception et on garde ceux
+   * que la base ne connaît pas. C'est ce qui rattrape un enregistrement
+   * d'historique arrivé en retard, sans attendre ni un curseur ni l'index de
+   * recherche.
+   *
+   * On s'arrête au PREMIER message déjà connu : au-dessus de lui se trouve ce
+   * qui est vraiment nouveau, en dessous ce qu'on a déjà. Après la première
+   * passe, le filet ne coûte donc qu'un appel et un contrôle.
+   */
+  const dejaVus = new Set(messageIds);
+  try {
+    for (const id of await listerInbox(gmail, FILET_INBOX)) {
+      if (dejaVus.has(id)) continue;
+      const connu = await prisma.message.findUnique({
+        where: { merchantId_gmailMessageId: { merchantId, gmailMessageId: id } },
+        select: { id: true },
+      });
+      // Le premier connu arrête la descente : la suite est plus ancienne.
+      if (connu) break;
+      messageIds.push(id);
+      dejaVus.add(id);
+    }
+  } catch (error) {
+    // Le filet ne doit jamais faire tomber la relève : l'historique a déjà
+    // fait son travail, et une panne ici ne doit pas annuler le sien.
+    logger.warn({ merchantId, err: error }, 'Filet de la boîte de réception indisponible');
+  }
+
   // Les identifiants arrivent du plus ancien au plus récent : tronquer par la
   // fin traite d'abord ce qui attend depuis le plus longtemps.
   const truncated = messageIds.length > MAX_PER_RUN;
@@ -266,17 +329,29 @@ export async function fetchNewMessages(
     parsed.push(message);
   }
 
-  // Curseur avancé seulement si le lot était complet. L'avancer après une
-  // troncature sauterait définitivement le reliquat : ces messages ne
-  // reviendraient dans aucun historique, et disparaîtraient sans trace.
+  /*
+   * Le curseur.
+   *
+   * Deux situations, et une seule des deux a le droit de regarder l'heure.
+   *
+   * Quand la relève a SUIVI l'historique, le curseur ne va que jusqu'au
+   * dernier enregistrement lu — voir `curseurApres`. Rien lu, rien à avancer :
+   * le curseur attend, et ce qui tarde sera lu au passage suivant.
+   *
+   * Quand il n'y avait AUCUN curseur — premier branchement, ou curseur périmé
+   * qu'on vient d'effacer — il faut bien en poser un, et l'identifiant courant
+   * de la boîte est alors le bon point de départ : ce qui précède vient
+   * d'être relu par le balayage.
+   */
   if (!truncated) {
-    const profileHistoryId =
-      newHistoryId ?? (await gmail.users.getProfile({ userId: 'me' })).data.historyId ?? null;
+    const avance = suivaitLHistorique
+      ? curseurApres(enregistrementsLus, truncated)
+      : ((await gmail.users.getProfile({ userId: 'me' })).data.historyId ?? null);
 
-    if (profileHistoryId) {
+    if (avance) {
       await prisma.gmailConnection.update({
         where: { id: connection.id },
-        data: { lastHistoryId: profileHistoryId },
+        data: { lastHistoryId: avance },
       });
     }
   } else {
@@ -287,6 +362,25 @@ export async function fetchNewMessages(
   }
 
   return parsed;
+}
+
+/**
+ * Les derniers messages de la boîte de réception, par LIBELLÉ.
+ *
+ * Sans `q` : une requête de recherche passerait par l'index, qui ne voit un
+ * message tout neuf qu'au bout d'un moment. Le filtre par libellé lit la liste
+ * de la boîte, qui est à jour dès la livraison.
+ */
+async function listerInbox(
+  gmail: Awaited<ReturnType<typeof getGmailClient>>['gmail'],
+  combien: number,
+): Promise<string[]> {
+  const response = await gmail.users.messages.list({
+    userId: 'me',
+    labelIds: ['INBOX'],
+    maxResults: combien,
+  });
+  return (response.data.messages ?? []).map((m) => m.id!).filter(Boolean);
 }
 
 async function listRecentMessageIds(
