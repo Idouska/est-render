@@ -10,6 +10,8 @@ export const connection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null 
 
 export const QUEUE_INGEST = 'gmail-ingest';
 export const QUEUE_TICKET = 'ticket-process';
+/** Le passage de l'envoi automatique des commandes du jour. */
+export const QUEUE_ENVOI = 'envoi-du-jour';
 
 import type { IngestJob, TicketJob } from './types.ts';
 
@@ -29,6 +31,23 @@ export const ticketQueue = new Queue<TicketJob>(QUEUE_TICKET, {
   connection,
   defaultJobOptions,
 });
+
+export const envoiQueue = new Queue(QUEUE_ENVOI, { connection });
+
+/**
+ * Le passage toutes les quinze minutes, posé une fois au démarrage du worker.
+ *
+ * Un job répétable : BullMQ le garde en Redis et n'en lance qu'un à la fois,
+ * même si plusieurs workers démarrent. La clé fixe évite d'empiler un nouveau
+ * planning à chaque redémarrage.
+ */
+export async function planifierEnvoiDuJour(): Promise<void> {
+  await envoiQueue.upsertJobScheduler(
+    'envoi-du-jour-passage',
+    { every: 15 * 60 * 1000 },
+    { name: 'passage', opts: { removeOnComplete: { count: 50 }, removeOnFail: { count: 50 } } },
+  );
+}
 
 /*
  * Les identifiants de job ne contiennent pas de deux-points.
@@ -92,6 +111,6 @@ export async function enqueueTicket(
 }
 
 export async function closeQueues(): Promise<void> {
-  await Promise.all([ingestQueue.close(), ticketQueue.close()]);
+  await Promise.all([ingestQueue.close(), ticketQueue.close(), envoiQueue.close()]);
   await connection.quit();
 }

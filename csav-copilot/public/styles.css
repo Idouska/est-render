@@ -9441,3 +9441,48 @@ html, body { overflow-x: clip; }
 }
 .ret-echange .ret-veut { display: inline; margin: 0; color: var(--ink-soft); }
 .ret-echange .qlink { font-size: 12px; }
+
+/* ------------------------------------------------- commandes du jour ----
+   Trois listes dans l'ordre du geste : décider pour le stock, vérifier ce qui
+   part, retrouver ce qu'on expédie soi-même. */
+.envoi-bar { flex-wrap: wrap; gap: 10px; }
+.envoi-bar #envoi-go { margin-left: auto; }
+.envoi-heure { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-mute); }
+.envoi-bloc { margin-top: 18px; }
+.envoi-h {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+.envoi-h small { margin-left: 6px; color: var(--ink); letter-spacing: 0; }
+.envoi-aide { margin: -2px 0 10px; font-size: 13px; color: var(--ink-mute); max-width: 70ch; }
+.envoi-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  margin-bottom: 6px;
+}
+.envoi-cmd { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; min-width: 0; flex: 1; }
+.envoi-cmd small { flex-basis: 100%; color: var(--ink-mute); font-size: 12.5px; }
+.envoi-match { border-left: 3px solid var(--accent); }
+.envoi-paires { display: flex; flex-direction: column; gap: 2px; font-size: 13px; flex: 1; min-width: 0; }
+.envoi-paire small { color: var(--ink-mute); }
+.envoi-acts { display: flex; gap: 6px; flex-shrink: 0; }
+.envoi-dest { font-size: 13px; color: var(--ink-mute); flex-shrink: 0; }
+.envoi-sans { color: var(--bad, #b42318); }
+.envoi-hist-row { font-size: 13px; flex-wrap: wrap; }
+.envoi-mode { color: var(--ink-mute); }
+.envoi-err { flex-basis: 100%; color: var(--bad, #b42318); }
+
+@media (max-width: 720px) {
+  .envoi-row { flex-direction: column; align-items: stretch; }
+  .envoi-acts { flex-direction: column; }
+  .envoi-bar #envoi-go { margin-left: 0; width: 100%; }
+}

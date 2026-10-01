@@ -2,7 +2,7 @@ import { env } from '../../config/env.ts';
 import { ENVOI_SIMULE, enModeTest } from '../modeTest.ts';
 import { logger } from '../../lib/logger.ts';
 import { getGmailClient } from './client.ts';
-import { buildRawEmail } from './drafts.ts';
+import { buildRawEmail, type PieceJointe } from './mime.ts';
 
 /**
  * Envoi direct, sans passer par un brouillon — réservé aux notifications que
@@ -31,6 +31,7 @@ export async function sendPlainEmail(params: {
    * invitations d'équipe : les bloquer empêcherait de se connecter.
    */
   memeEnModeTest?: boolean;
+  attachments?: readonly PieceJointe[];
 }): Promise<{ gmailMessageId: string | null; fromEmail: string }> {
   if (env.GMAIL_MOCK) {
     logger.info({ to: params.to, subject: params.subject }, 'Gmail simulé : envoi direct non effectué');
@@ -53,6 +54,7 @@ export async function sendPlainEmail(params: {
         subject: params.subject,
         body: params.body,
         html: params.html,
+        attachments: params.attachments,
       }),
     },
   });

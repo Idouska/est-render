@@ -74,6 +74,19 @@ model Merchant {
 
   slaHours Int @default(24)
 
+  /// L'envoi des commandes de la veille au fournisseur.
+  ///
+  /// MANUEL : rien ne part sans un clic, après contrôle du stock retours.
+  /// AUTO : à l'heure réglée, ce qui n'est pas parti part — sans jamais
+  /// réserver une paire du stock sans accord.
+  envoiMode  EnvoiMode @default(MANUEL)
+  /// Heure de l'envoi automatique, heure de Paris (0-23).
+  envoiHeure Int       @default(9)
+  /// Plancher : les commandes plus anciennes sont réputées déjà transmises.
+  /// Posé à la première ouverture de l'écran, sinon tout l'historique
+  /// apparaîtrait comme « à envoyer ».
+  envoiDepuis DateTime?
+
   /// Gabarit de lien de suivi, `{tracking}` remplacé par le numéro. Vide, on
   /// utilise le lien fourni par Shopify — qui manque chez certains
   /// transporteurs, d'où la possibilité de le forcer.
@@ -108,6 +121,7 @@ model Merchant {
   returnAgencies      ReturnAgency[]
 
   substitutions RuptureSubstitution[]
+  envoisFournisseur EnvoiFournisseur[]
   @@index([organizationId])
 }
 
@@ -603,6 +617,7 @@ model Supplier {
   // Deux fiches pour la même adresse chez un même marchand n'ont pas de sens :
   // les réponses arrivant par mail seraient impossibles à attribuer.
   substitutions RuptureSubstitution[]
+  envoisCommandes EnvoiFournisseur[]
   @@unique([merchantId, contactEmail])
   @@index([merchantId, active])
 }
@@ -1134,4 +1149,47 @@ model CronRun {
   detail Json?
 
   @@index([task, ranAt])
+}
+
+enum EnvoiMode {
+  MANUEL
+  AUTO
+}
+
+/// Un fichier de commandes envoyé à un fournisseur.
+model EnvoiFournisseur {
+  id         String    @id @default(cuid())
+  merchantId String
+  supplierId String
+  mode       EnvoiMode
+  /// Utilisateur qui a cliqué ; vide pour un envoi automatique.
+  userId     String?
+  combien    Int
+  /// Le mail est parti. Nul si l'envoi a échoué : les commandes sont alors
+  /// rendues, et repartiront au prochain envoi.
+  emailedAt  DateTime?
+  erreur     String?
+  /// Mode test ou Gmail simulé : rien n'est réellement parti.
+  simule     Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+
+  merchant  Merchant        @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  supplier  Supplier        @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  commandes EnvoiCommande[]
+
+  @@index([merchantId, createdAt])
+}
+
+/// Une commande transmise au fournisseur : une seule fois, jamais deux.
+model EnvoiCommande {
+  id             String @id @default(cuid())
+  merchantId     String
+  envoiId        String
+  shopifyOrderId String
+  orderName      String
+
+  envoi EnvoiFournisseur @relation(fields: [envoiId], references: [id], onDelete: Cascade)
+
+  @@unique([merchantId, shopifyOrderId])
+  @@index([envoiId])
 }

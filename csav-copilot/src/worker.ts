@@ -5,6 +5,8 @@ import {
   closeQueues,
   connection,
   enqueueIngest,
+  planifierEnvoiDuJour,
+  QUEUE_ENVOI,
   QUEUE_INGEST,
   QUEUE_TICKET,
   type IngestJob,
@@ -12,6 +14,7 @@ import {
 } from './queue/index.ts';
 import { ingestMerchantInbox } from './services/tickets/ingest.ts';
 import { processTicket } from './services/tickets/process.ts';
+import { passageAutomatique } from './services/envoi/quotidien.ts';
 
 /*
  * La relance d'une relève restée bredouille.
@@ -70,7 +73,18 @@ const ticketWorker = new Worker<TicketJob>(
   },
 );
 
-for (const worker of [ingestWorker, ticketWorker]) {
+// L'envoi automatique des commandes du jour : un passage toutes les quinze
+// minutes, qui n'envoie que pour les boutiques dont l'heure est passée.
+const envoiWorker = new Worker(
+  QUEUE_ENVOI,
+  async () => {
+    await passageAutomatique();
+  },
+  { connection, concurrency: 1 },
+);
+await planifierEnvoiDuJour();
+
+for (const worker of [ingestWorker, ticketWorker, envoiWorker]) {
   worker.on('failed', (job, error) => {
     logger.error({ queue: worker.name, jobId: job?.id, err: error }, 'Job en échec');
   });
@@ -80,7 +94,7 @@ logger.info('Workers démarrés');
 
 async function shutdown(signal: string): Promise<void> {
   logger.info({ signal }, 'Arrêt des workers');
-  await Promise.all([ingestWorker.close(), ticketWorker.close()]);
+  await Promise.all([ingestWorker.close(), ticketWorker.close(), envoiWorker.close()]);
   await closeQueues();
   await disconnectPrisma();
   process.exit(0);
