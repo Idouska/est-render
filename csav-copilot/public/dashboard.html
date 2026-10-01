@@ -1110,6 +1110,50 @@
       <!-- Demandes de changement envoyées aux fournisseurs : la boucle se
            fermait à moitié — le fournisseur répondait dans son atelier, et on
            ne l'apprenait qu'en rouvrant le mail concerné. -->
+      <!-- ============================================ COMMANDES DU JOUR ==
+           Les commandes de la veille, contrôlées contre le stock retours
+           avant de partir en fichier chez le fournisseur. -->
+      <section class="browse envoi" id="view-envoi" hidden aria-label="Commandes du jour">
+        <div class="browse-bar envoi-bar">
+          <div class="filters" id="envoi-modes" role="group" aria-label="Mode d’envoi">
+            <button class="chip" data-envoi-mode="MANUEL" aria-pressed="false">Manuel</button>
+            <button class="chip" data-envoi-mode="AUTO" aria-pressed="false">Automatique</button>
+          </div>
+          <label class="envoi-heure" id="envoi-heure-wrap" hidden>
+            à <select id="envoi-heure" aria-label="Heure de l’envoi automatique"></select>
+          </label>
+          <span class="browse-count" id="envoi-periode"></span>
+          <button class="btn btn-primary btn-small" id="envoi-go" disabled>Envoyer au fournisseur</button>
+        </div>
+
+        <div class="notice notice-warn" id="envoi-notice" hidden>
+          <span class="notice-mark">Attention</span>
+          <div id="envoi-notice-txt"></div>
+        </div>
+
+        <div class="envoi-bloc">
+          <h3 class="envoi-h">Dans votre stock retours <small id="envoi-n-match"></small></h3>
+          <p class="envoi-aide">Ces commandes peuvent partir de chez vous, avec une paire retournée
+            déjà contrôlée. Réservée, la paire est à vous d’expédier, et la commande sort du fichier.</p>
+          <div id="envoi-matches"></div>
+        </div>
+
+        <div class="envoi-bloc">
+          <h3 class="envoi-h">Partiront au fournisseur <small id="envoi-n-list"></small></h3>
+          <div id="envoi-list"></div>
+        </div>
+
+        <div class="envoi-bloc" id="envoi-res-bloc" hidden>
+          <h3 class="envoi-h">Vous les expédiez <small id="envoi-n-res"></small></h3>
+          <div id="envoi-reservees"></div>
+        </div>
+
+        <div class="envoi-bloc">
+          <h3 class="envoi-h">Derniers envois</h3>
+          <div id="envoi-hist"></div>
+        </div>
+      </section>
+
       <section class="browse" id="view-changes" hidden aria-label="Demandes de changement">
         <div class="browse-bar">
           <!-- Créer une demande sans passer par un mail : le client a pu

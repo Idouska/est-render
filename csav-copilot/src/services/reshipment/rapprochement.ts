@@ -188,3 +188,48 @@ export function rapprocher(stock: readonly PaireEnStock[], commandes: readonly C
 
   return propositions;
 }
+
+/** Ce que le stock du marchand peut servir : une commande, ses paires. */
+export interface CorrespondanceStock {
+  commandeId: string;
+  paires: Proposition['paires'];
+}
+
+/**
+ * Le rapprochement pour un stock unique, chez le marchand.
+ *
+ * Sans agence, la règle des pays n'a pas d'objet : le marchand expédie
+ * lui-même, d'où qu'il soit et où que le client habite. Restent les trois
+ * autres — une commande servie en entier ou pas du tout, une paire pour une
+ * seule commande, les plus anciennes d'abord des deux côtés.
+ */
+export function rapprocherStockUnique(
+  stock: readonly PaireEnStock[],
+  commandes: readonly CommandeEnAttente[],
+): CorrespondanceStock[] {
+  const paires = [...stock].sort((a, b) => a.depuis.getTime() - b.depuis.getTime());
+  const enAttente = [...commandes]
+    .filter((commande) => commande.lignes.length > 0)
+    .sort((a, b) => a.creeLe.localeCompare(b.creeLe));
+
+  const prises = new Set<string>();
+  const correspondances: CorrespondanceStock[] = [];
+
+  for (const commande of enAttente) {
+    const choisies = couvrir(commande, paires, prises);
+    if (!choisies) continue;
+    for (const paire of choisies) prises.add(paire.id);
+    correspondances.push({
+      commandeId: commande.id,
+      paires: choisies.map((paire) => ({
+        returnId: paire.id,
+        titre: paire.titre,
+        declinaison: paire.declinaison,
+        sku: paire.sku,
+        retourDe: paire.retourDe,
+      })),
+    });
+  }
+
+  return correspondances;
+}

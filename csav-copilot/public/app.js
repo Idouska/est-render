@@ -9872,6 +9872,13 @@ const VIEW_META = {
   orders: { icon: 'bag', label: 'Commandes', group: 'Commerce', title: 'Commandes' },
   customers: { icon: 'users', label: 'Clients', group: 'Commerce', title: 'Clients' },
   catalog: { icon: 'box', label: 'Catalogue', group: 'Commerce', title: 'Catalogue' },
+  envoi: {
+    icon: 'truck',
+    label: 'Commandes du jour',
+    group: 'Fournisseur',
+    title: 'Commandes du jour',
+    sous: 'Stock retours d’abord, fournisseur ensuite',
+  },
   suppliers: { icon: 'truck', label: 'Fournisseurs', group: 'Fournisseur', title: 'Contacts fournisseurs' },
   ruptures: {
     icon: 'box',
@@ -10371,6 +10378,7 @@ const VIEW_LOADERS = {
   },
   changes: () => loadChanges(),
   ruptures: () => loadRuptures(),
+  envoi: () => loadEnvoi(),
   returns: () => loadReturns(),
   tracking: () => loadTracking(),
   refunds: () => loadRefunds(),
@@ -15399,3 +15407,260 @@ $('rup-bulk')?.addEventListener('click', async () => {
   );
   await loadRuptures();
 });
+
+/* ------------------------------------------------- commandes du jour ---- */
+
+/*
+ * Les commandes de la veille, avant le fournisseur.
+ *
+ * Trois listes, dans l'ordre du geste : ce que le stock retours peut servir
+ * (à décider), ce qui partira au fournisseur, ce que le marchand expédie
+ * lui-même. Une correspondance qu'on laisse n'est pas enregistrée : elle part
+ * simplement avec le reste, comme en mode automatique.
+ */
+state.envoi = { donnees: null, laissees: new Set() };
+
+const lignesTexte = (lignes) =>
+  lignes
+    .map((ligne) => `${ligne.quantite > 1 ? `${ligne.quantite} × ` : ''}${[ligne.titre, ligne.declinaison].filter(Boolean).join(' · ')}`)
+    .join(', ');
+
+async function loadEnvoi() {
+  $('envoi-list').innerHTML = '<p class="empty">Lecture des commandes…</p>';
+  try {
+    state.envoi.donnees = await api('/api/envoi-du-jour');
+  } catch (error) {
+    state.envoi.donnees = null;
+    $('envoi-list').innerHTML = `<p class="empty">${esc(error.message)}</p>`;
+    return;
+  }
+  renderEnvoi();
+}
+
+function renderEnvoi() {
+  const d = state.envoi.donnees;
+  if (!d) return;
+
+  const auto = d.reglage.mode === 'AUTO';
+  document.querySelectorAll('[data-envoi-mode]').forEach((bouton) =>
+    bouton.setAttribute('aria-pressed', String(bouton.dataset.envoiMode === d.reglage.mode)),
+  );
+  $('envoi-heure-wrap').hidden = !auto;
+  const heure = $('envoi-heure');
+  if (!heure.options.length) {
+    heure.innerHTML = Array.from({ length: 24 }, (_, h) => `<option value="${h}">${String(h).padStart(2, '0')} h</option>`).join('');
+  }
+  heure.value = String(d.reglage.heure);
+
+  const jour = new Date(new Date(d.jusqua).getTime() - 1).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  const depuis = new Date(d.depuis).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+  $('envoi-periode').textContent = `Commandes jusqu’au ${jour} (depuis le ${depuis})`;
+
+  const parId = new Map(d.commandes.map((commande) => [commande.id, commande]));
+  const aTrancher = d.correspondances.filter((c) => !state.envoi.laissees.has(c.commandeId));
+
+  // Correspondances avec le stock
+  $('envoi-n-match').textContent = aTrancher.length ? `${aTrancher.length}` : '';
+  $('envoi-matches').innerHTML = aTrancher.length
+    ? aTrancher
+        .map((c) => {
+          const commande = parId.get(c.commandeId);
+          return `<div class="envoi-row envoi-match">
+            <div class="envoi-cmd">
+              <b>${esc(commande?.name ?? '')}</b>
+              <span>${esc(commande?.client ?? '')}</span>
+              <small>${esc(lignesTexte(commande?.lignes ?? []))}</small>
+            </div>
+            <div class="envoi-paires">
+              ${c.paires
+                .map(
+                  (paire) => `<span class="envoi-paire">${esc([paire.titre, paire.declinaison].filter(Boolean).join(' · '))}${
+                    paire.retourDe ? ` <small>retour de ${esc(paire.retourDe)}</small>` : ''
+                  }</span>`,
+                )
+                .join('')}
+            </div>
+            <div class="envoi-acts">
+              <button class="btn btn-small btn-primary" data-envoi-reserver="${esc(c.commandeId)}">Je l’expédie moi-même</button>
+              <button class="btn btn-small" data-envoi-laisser="${esc(c.commandeId)}">Laisser au fournisseur</button>
+            </div>
+          </div>`;
+        })
+        .join('')
+    : '<p class="empty">Aucune commande ne correspond à une paire de votre stock retours.</p>';
+
+  // Ce qui partira
+  const partiront = d.commandes;
+  $('envoi-n-list').textContent = partiront.length ? `${partiront.length}` : '';
+  $('envoi-list').innerHTML = partiront.length
+    ? partiront
+        .map(
+          (commande) => `<div class="envoi-row">
+            <div class="envoi-cmd">
+              <b>${esc(commande.name)}</b>
+              <span>${esc(commande.client ?? '')}</span>
+              <small>${esc(lignesTexte(commande.lignes))}</small>
+            </div>
+            <span class="envoi-dest${commande.fournisseur ? '' : ' envoi-sans'}">${esc(
+              commande.fournisseur?.name ?? 'Aucun fournisseur — ne partira pas',
+            )}</span>
+          </div>`,
+        )
+        .join('')
+    : '<p class="empty">Rien à envoyer : toutes les commandes de la période sont parties ou servies par votre stock.</p>';
+
+  // Réservées au stock
+  $('envoi-res-bloc').hidden = d.reservees.length === 0;
+  $('envoi-n-res').textContent = d.reservees.length ? `${d.reservees.length}` : '';
+  $('envoi-reservees').innerHTML = d.reservees
+    .map(
+      (commande) => `<div class="envoi-row">
+        <div class="envoi-cmd"><b>${esc(commande.name)}</b><small>${esc(commande.paires.join(', '))}</small></div>
+        <button class="btn btn-small" data-envoi-liberer="${esc(commande.id)}" data-nom="${esc(commande.name)}">Rendre au fournisseur</button>
+      </div>`,
+    )
+    .join('');
+
+  // Historique
+  $('envoi-hist').innerHTML = d.envois?.length
+    ? d.envois
+        .map(
+          (envoi) => `<div class="envoi-row envoi-hist-row">
+            <span>${esc(dateTime(envoi.createdAt))}</span>
+            <b>${esc(envoi.supplier?.name ?? '')}</b>
+            <span>${envoi.combien} commande(s)</span>
+            <span class="tag tone-${envoi.emailedAt ? (envoi.simule ? 'mute' : 'ok') : 'bad'}">${
+              envoi.emailedAt ? (envoi.simule ? 'Simulé (mode test)' : 'Envoyé') : 'Échec'
+            }</span>
+            <span class="envoi-mode">${envoi.mode === 'AUTO' ? 'automatique' : 'manuel'}</span>
+            ${envoi.erreur ? `<small class="envoi-err">${esc(envoi.erreur)}</small>` : ''}
+          </div>`,
+        )
+        .join('')
+    : '<p class="empty">Aucun envoi pour l’instant.</p>';
+
+  const envoyables = partiront.filter((commande) => commande.fournisseur).length;
+  $('envoi-go').disabled = envoyables === 0 || !canI('escalate');
+  $('envoi-go').textContent = envoyables
+    ? `Envoyer au fournisseur (${envoyables})`
+    : 'Envoyer au fournisseur';
+
+  const sans = partiront.length - envoyables;
+  const notes = [
+    d.tronque ? 'Plus de mille commandes sur la période : seules les mille premières sont affichées.' : null,
+    sans ? `${sans} commande(s) ne correspondent à aucun fournisseur : réglez les marques ou le fournisseur par défaut dans l’écran Fournisseurs.` : null,
+    auto && aTrancher.length
+      ? `Envoi automatique à ${String(d.reglage.heure).padStart(2, '0')} h : les correspondances non tranchées d’ici là partiront au fournisseur.`
+      : null,
+  ].filter(Boolean);
+  $('envoi-notice').hidden = notes.length === 0;
+  $('envoi-notice-txt').innerHTML = notes.map((note) => `<div>${esc(note)}</div>`).join('');
+}
+
+$('view-envoi')?.addEventListener('click', async (event) => {
+  const reserver = event.target.closest('[data-envoi-reserver]');
+  const laisser = event.target.closest('[data-envoi-laisser]');
+  const liberer = event.target.closest('[data-envoi-liberer]');
+  const d = state.envoi.donnees;
+  if (!d) return;
+
+  if (laisser) {
+    state.envoi.laissees.add(laisser.dataset.envoiLaisser);
+    renderEnvoi();
+    return;
+  }
+
+  if (reserver) {
+    const id = reserver.dataset.envoiReserver;
+    const correspondance = d.correspondances.find((c) => c.commandeId === id);
+    const commande = d.commandes.find((c) => c.id === id);
+    if (!correspondance || !commande) return;
+    reserver.disabled = true;
+    try {
+      await api('/api/returns/reemploi', {
+        method: 'POST',
+        body: JSON.stringify({
+          orderId: id,
+          orderName: commande.name,
+          returnIds: correspondance.paires.map((paire) => paire.returnId),
+        }),
+      });
+      toast(`${commande.name} réservée à votre stock : elle ne partira pas au fournisseur.`);
+      await loadEnvoi();
+    } catch (error) {
+      reserver.disabled = false;
+      toast(error.message, true);
+    }
+    return;
+  }
+
+  if (liberer) {
+    liberer.disabled = true;
+    try {
+      await api('/api/returns/reemploi/liberer', {
+        method: 'POST',
+        body: JSON.stringify({ orderId: liberer.dataset.envoiLiberer }),
+      });
+      toast(`${liberer.dataset.nom} repart avec les commandes du fournisseur.`);
+      await loadEnvoi();
+    } catch (error) {
+      liberer.disabled = false;
+      toast(error.message, true);
+    }
+  }
+});
+
+$('envoi-go')?.addEventListener('click', async () => {
+  const d = state.envoi.donnees;
+  if (!d) return;
+  const envoyables = d.commandes.filter((commande) => commande.fournisseur).length;
+  const nonTranchees = d.correspondances.filter((c) => !state.envoi.laissees.has(c.commandeId)).length;
+
+  const question = [
+    `Envoyer ${envoyables} commande(s) au fournisseur ?`,
+    nonTranchees ? `${nonTranchees} pourraient partir de votre stock retours : elles partiront au fournisseur.` : null,
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+  if (!confirm(question)) return;
+
+  const bouton = $('envoi-go');
+  bouton.disabled = true;
+  try {
+    const { resultats } = await api('/api/envoi-du-jour/envoyer', { method: 'POST', body: '{}' });
+    const ratees = resultats.filter((resultat) => !resultat.parti);
+    toast(
+      ratees.length
+        ? `Échec de l’envoi à ${ratees.map((r) => r.fournisseur).join(', ')} : ${ratees[0].erreur}`
+        : resultats.length
+          ? resultats.map((r) => `${r.combien} commande(s) envoyée(s) à ${r.fournisseur}${r.simule ? ' (simulé)' : ''}`).join(' · ')
+          : 'Rien n’était à envoyer.',
+      ratees.length > 0,
+    );
+    state.envoi.laissees.clear();
+    await loadEnvoi();
+  } catch (error) {
+    toast(error.message, true);
+    bouton.disabled = false;
+  }
+});
+
+async function enregistrerReglageEnvoi(mode, heure) {
+  try {
+    await api('/api/envoi-du-jour/reglage', { method: 'PATCH', body: JSON.stringify({ mode, heure }) });
+    if (state.envoi.donnees) state.envoi.donnees.reglage = { mode, heure };
+    renderEnvoi();
+    toast(mode === 'AUTO' ? `Envoi automatique chaque jour à ${String(heure).padStart(2, '0')} h.` : 'Envoi manuel : rien ne part sans votre clic.');
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+document.querySelectorAll('[data-envoi-mode]').forEach((bouton) =>
+  bouton.addEventListener('click', () =>
+    void enregistrerReglageEnvoi(bouton.dataset.envoiMode, Number($('envoi-heure').value || state.envoi.donnees?.reglage.heure || 9)),
+  ),
+);
+$('envoi-heure')?.addEventListener('change', (event) =>
+  void enregistrerReglageEnvoi('AUTO', Number(event.target.value)),
+);

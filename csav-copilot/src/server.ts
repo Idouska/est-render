@@ -11,6 +11,7 @@ import { shopifyAuthRoutes } from './routes/auth.shopify.ts';
 import { adminRoutes } from './routes/admin.ts';
 import { commerceRoutes } from './routes/commerce.ts';
 import { devRoutes } from './routes/dev.ts';
+import { envoiQuotidienRoutes } from './routes/envoiQuotidien.ts';
 import { refundRoutes } from './routes/refunds.ts';
 import { cannedReplyRoutes } from './routes/cannedReplies.ts';
 import { parcelRoutes } from './routes/parcels.ts';
@@ -177,6 +178,7 @@ export async function buildServer() {
   await app.register(supplierRoutes);
   await app.register(ruptureRoutes);
   await app.register(returnRoutes);
+  await app.register(envoiQuotidienRoutes);
   await app.register(teamRoutes);
   await app.register(supplierPortalRoutes);
   await app.register(supplierWorkspaceRoutes);
