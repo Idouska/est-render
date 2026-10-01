@@ -3043,6 +3043,7 @@ function prefetchTicket(id) {
 }
 
 async function selectTicket(id, { silent = false } = {}) {
+  const autreTicket = id !== state.currentId;
   state.currentId = id;
 
   // Retour visuel immédiat, avant toute requête : la ligne cliquée s'allume
@@ -3083,6 +3084,18 @@ async function selectTicket(id, { silent = false } = {}) {
   await marqueOuvert(detail, id);
 
   renderDetail();
+
+  /*
+   * Un autre ticket s'ouvre en haut, sur son titre et son résumé.
+   *
+   * La colonne du détail défile pour son compte et gardait sa position d'un
+   * ticket à l'autre : descendu jusqu'à la réponse du précédent, on ouvrait
+   * le suivant au milieu de ses échanges, sans voir de qui il s'agit. Le même
+   * ticket, lui, ne bouge pas — après un envoi, `selectTicket` le relit, et
+   * l'écran ne doit pas sauter sous les yeux de qui vient de cliquer.
+   */
+  if (autreTicket) $('d-pane').scrollTop = 0;
+
   await Promise.all([loadQueue(), loadEscalations(id)]);
 
   // Seulement si l'état a pu changer : recompter à chaque ouverture ajouterait
