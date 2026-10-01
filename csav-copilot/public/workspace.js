@@ -1604,7 +1604,12 @@ async function loadUpdates() {
           </div>
 
           ${
-            update.kind === 'MISSING_ITEM' && update.beforeValue
+            update.kind === 'TRACKING' && update.beforeValue
+              ? `<div class="upd-swap">
+                   <span class="upd-label">${esc(t('updates.parcels'))}</span>
+                   <span class="upd-after">${esc(update.beforeValue)}</span>
+                 </div>`
+              : update.kind === 'MISSING_ITEM' && update.beforeValue
               ? `<div class="upd-swap">
                    <span class="upd-label">${esc(t('updates.missing'))}</span>
                    <span class="upd-after">${esc(update.beforeValue)}</span>

@@ -2294,6 +2294,41 @@ contact@runningupscale.com"></textarea>
       </div>
     </div>
 
+    <!-- « Update » : où en sont ces colis ? Le fournisseur répond d'un
+         bouton depuis son atelier, comme pour un changement. -->
+    <div class="backdrop" id="upd-modal" role="dialog" aria-modal="true" aria-labelledby="upd-title" hidden>
+      <div class="modal">
+        <div class="modal-head">
+          <h2 id="upd-title">Update</h2>
+          <p>Demander au fournisseur où en sont un ou plusieurs colis.</p>
+        </div>
+        <div class="modal-body">
+          <div class="field-duo">
+            <div class="field">
+              <label for="upd-order">Commande</label>
+              <input id="upd-order" type="text" placeholder="#10480" />
+            </div>
+            <div class="field">
+              <label for="upd-supplier">Fournisseur</label>
+              <select id="upd-supplier"></select>
+            </div>
+          </div>
+          <div class="field">
+            <label>Colis concernés</label>
+            <div id="upd-tracks" class="upd-tracks"></div>
+          </div>
+          <div class="field">
+            <label for="upd-message">Précision (facultatif)</label>
+            <textarea id="upd-message" rows="2" placeholder="Ex. : le suivi ne bouge plus depuis cinq jours."></textarea>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn" id="upd-cancel">Annuler</button>
+          <button class="btn btn-primary" id="upd-send">Envoyer au fournisseur</button>
+        </div>
+      </div>
+    </div>
+
     <div class="toast" id="toast" role="status"></div>
 
     <script type="module" src="/static/app.js"></script>

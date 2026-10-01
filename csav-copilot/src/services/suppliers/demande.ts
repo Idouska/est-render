@@ -9,6 +9,7 @@ export function enTete(
   afterValue: string | null | undefined,
 ): string | null {
   if (kind === 'MISSING_ITEM') return beforeValue ? `Article manquant : ${beforeValue}` : null;
+  if (kind === 'TRACKING') return beforeValue ? `Colis : ${beforeValue}` : null;
   if (kind === 'DELAY') return afterValue ? `Expédition attendue au plus tard le ${afterValue}` : null;
   return afterValue ? `${beforeValue ?? '?'} → ${afterValue}` : null;
 }

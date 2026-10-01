@@ -52,6 +52,7 @@ const KIND_LABELS: Record<string, string> = {
   CANCEL: 'une annulation de commande',
   MISSING_ITEM: "un article manquant dans le colis",
   DELAY: "une date d'expédition",
+  TRACKING: 'un point sur le colis',
   OTHER: 'une demande particulière',
 };
 

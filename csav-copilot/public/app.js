@@ -2273,7 +2273,8 @@ function actionBlockedReason(key, ticket) {
   if ((key === 'substitute' || key === 'tracking') && !ticket.shopifyOrderId) {
     return 'Aucune commande rattachée à ce message.';
   }
-  if (key === 'supplier') {
+  if (key === 'annulation' && !shopifyOrderLink(state.detail?.order)) return 'Aucune commande Shopify rattachée.';
+  if (['supplier', 'modification', 'update'].includes(key)) {
     if (!canI('escalate')) return 'Votre rôle ne permet pas d’escalader.';
     if (activeSuppliers().length === 0) return 'Aucun fournisseur actif à qui adresser la demande.';
   }
@@ -2481,8 +2482,10 @@ async function openReshipment(ticket) {
  * actuelle déjà remplis. Retaper tout cela dans l'écran Fournisseurs, c'est
  * la garantie qu'on ne le fera pas, ou qu'on se trompera de commande.
  */
-function openChangeRequest(ticket) {
+function openChangeRequest(ticket, options = {}) {
   const order = state.detail?.order;
+  $('alert-modal').dataset.motifs = (options.motifs ?? []).join(',');
+  $('alert-modal').querySelector('.modal-head h2').textContent = options.titre ?? 'Contacter le fournisseur';
 
   $('alert-modal').dataset.supplier = '';
   $('alert-modal').dataset.ticket = ticket.id;
@@ -2492,7 +2495,7 @@ function openChangeRequest(ticket) {
     : (ticket.customerName ?? ticket.customerEmail);
 
   state.alertCtx = alertContextFromOrder(order);
-  setAlertKind('SIZE');
+  setAlertKind(options.motifs?.[0] ?? 'SIZE');
   $('alert-order').value = order?.name ?? ticket.orderName ?? '';
   $('alert-message').value = '';
 
@@ -3524,6 +3527,7 @@ const CHANGE_KINDS = {
   CANCEL: 'Annulation',
   MISSING_ITEM: 'Article manquant',
   DELAY: 'Retard',
+  TRACKING: 'Update colis',
   OTHER: 'Autre',
 };
 
@@ -3533,6 +3537,7 @@ const CHANGE_KINDS = {
  */
 function valeurSimple(change) {
   if (change.kind === 'MISSING_ITEM' && change.beforeValue) return `Manque : ${change.beforeValue}`;
+  if (change.kind === 'TRACKING' && change.beforeValue) return `Colis : ${change.beforeValue}`;
   if (change.kind === 'DELAY' && change.afterValue) return `Expédier avant le ${dateCourteIso(change.afterValue)}`;
   return null;
 }
@@ -4270,41 +4275,26 @@ function renderTicketLabels(ticket) {
    */
   const menu = $('d-more-menu');
   if (menu) {
+    // Cinq gestes, dans l'ordre du métier. Rembourser reste dans le bloc
+    // commande, à côté du montant.
     menu.innerHTML =
-      // Les trois gestes descendus de la rangée principale gardent leur clé,
-      // donc leur écouteur et leur blocage conditionnel.
-      actionButton('supplier', 'Contacter le fournisseur', ticket, 'more-item') +
-      actionButton('refund', 'Rembourser…', ticket, 'more-item') +
-      actionButton('reshipment', 'Ouvrir un dossier de retour', ticket, 'more-item') +
-      // WhatsApp, en second accès : le premier reste la fiche client du rail.
-      // Un lien, comme celui de Gmail plus bas — pas de bouton à câbler.
-      (customerPhone(state.detail?.order)?.link
-        ? `<a class="more-item" target="_blank" rel="noopener noreferrer"
-            href="${esc(customerPhone(state.detail?.order).link)}"
-            aria-label="Ouvrir WhatsApp avec ${esc(ticket.customerName ?? 'le client')}">WhatsApp</a>`
-        : '') +
-      /*
-       * Le fil d'origine, dans Gmail.
-       *
-       * Tout ne se fait pas ici : transférer à un collègue, retrouver une
-       * pièce jointe que l'ingestion n'a pas gardée, vérifier un en-tête.
-       * L'identifiant de fil est celui de Gmail — l'URL n'invente rien, elle
-       * l'ouvre. Sans identifiant, pas d'entrée : un lien mort vaut moins que
-       * pas de lien.
-       */
-      (ticket.gmailThreadId
-        ? `<a class="more-item" target="_blank" rel="noopener noreferrer"
-            href="https://mail.google.com/mail/u/0/#all/${esc(
-              ticket.gmailThreadId,
-            )}">Ouvrir le fil dans Gmail</a>`
-        : '') +
-      `<button class="more-item more-danger" type="button" id="d-delete">Supprimer le message</button>`;
+      actionButton('reshipment', 'Retour', ticket, 'more-item') +
+      actionButton('modification', 'Modification', ticket, 'more-item') +
+      actionButton('annulation', 'Annulation', ticket, 'more-item') +
+      actionButton('update', 'Update', ticket, 'more-item') +
+      actionButton('renvoi', 'Renvoi', ticket, 'more-item');
   }
 
   const quick = {
     client: () => openCompose(ticket),
     supplier: () => openChangeRequest(ticket),
-    refund: () => $('btn-refund').click(),
+    modification: () => openChangeRequest(ticket, { motifs: ['SIZE', 'PRODUCT', 'ADDRESS'], titre: 'Modification' }),
+    annulation: () => ouvrirCommandeShopify(state.detail?.order),
+    update: () => void ouvrirUpdate(ticket),
+    renvoi: () => {
+      setView('returns');
+      document.querySelector('#ret-tabs [data-rtab="stock"]')?.click();
+    },
     reshipment: () => void openReshipment(ticket),
   };
 
@@ -5746,6 +5736,8 @@ function closeAlertModal() {
   // Le mode correction ne doit pas survivre à la fermeture : la prochaine
   // ouverture serait une création qui réécrirait l'ancienne demande.
   delete $('alert-modal').dataset.editing;
+  delete $('alert-modal').dataset.motifs;
+  $('alert-modal').querySelector('.modal-head h2').textContent = 'Contacter le fournisseur';
 }
 
 
@@ -5857,6 +5849,20 @@ function setAlertKind(kind) {
   // demande existante : elle ne changera pas de nature.
   $('alert-kind-rupture').hidden =
     !$('alert-modal').dataset.ticket || Boolean($('alert-modal').dataset.editing);
+
+  // « Modification » : trois motifs seulement — Taille, Modèle, Coordonnées.
+  const permis = ($('alert-modal').dataset.motifs ?? '').split(',').filter(Boolean);
+  if (permis.length) {
+    document.querySelectorAll('#alert-kinds [data-kind]').forEach((bouton) => {
+      bouton.hidden = !permis.includes(bouton.dataset.kind);
+      if (bouton.dataset.kind === 'ADDRESS') bouton.textContent = 'Coordonnées';
+    });
+  } else {
+    document.querySelectorAll('#alert-kinds [data-kind]').forEach((bouton) => {
+      if (bouton.id !== 'alert-kind-rupture') bouton.hidden = false;
+      if (bouton.dataset.kind === 'ADDRESS') bouton.textContent = 'Adresse';
+    });
+  }
 
   const single = KINDS_SINGLE[kind];
   $('alert-single-field').hidden = !single;
@@ -15681,3 +15687,116 @@ document.querySelectorAll('[data-envoi-mode]').forEach((bouton) =>
 $('envoi-heure')?.addEventListener('change', (event) =>
   void enregistrerReglageEnvoi('AUTO', Number(event.target.value)),
 );
+
+
+/* ----------------------------------------------- annulation, update ---- */
+
+/** « Annulation » se fait dans Shopify : on ouvre la commande là-bas. */
+function ouvrirCommandeShopify(order) {
+  const shop = state.me?.merchant?.shopDomain;
+  const id = String(order?.id ?? '').split('/').pop();
+  if (!shop || !/^\d+$/.test(id)) return toast('Aucune commande Shopify rattachée.', true);
+  window.open(`https://${shop}/admin/orders/${id}`, '_blank', 'noopener');
+}
+
+/*
+ * « Update » : où en sont ces colis ?
+ *
+ * Les numéros viennent des deux sources de la fiche — expéditions Shopify et
+ * colis saisis par l'atelier —, cochés d'office quand il n'y en a qu'un. Le
+ * fournisseur pré-choisi est celui qui a déjà la commande en main.
+ */
+async function ouvrirUpdate(ticket) {
+  const order = state.detail?.order;
+  const modal = $('upd-modal');
+  modal.dataset.ticket = ticket.id;
+  modal.dataset.order = order?.id ?? ticket.shopifyOrderId ?? '';
+  $('upd-order').value = order?.name ?? ticket.orderName ?? '';
+  $('upd-message').value = '';
+
+  const usable = activeSuppliers();
+  let prefere = null;
+  try {
+    const { escalations } = await api(`/api/tickets/${ticket.id}/escalations`);
+    prefere = escalations?.[0]?.supplierId ?? null;
+  } catch {
+    // Sans historique, le fournisseur par défaut.
+  }
+  $('upd-supplier').innerHTML = usable
+    .map(
+      (supplier) => `<option value="${esc(supplier.id)}"${
+        supplier.id === prefere || (!prefere && supplier.isDefault) ? ' selected' : ''
+      }>${esc(supplier.name)}</option>`,
+    )
+    .join('');
+
+  const numeros = new Set((order?.fulfillments ?? []).map((f) => f.trackingNumber).filter(Boolean));
+  if (modal.dataset.order) {
+    try {
+      const data = await api(`/api/parcels?orderId=${encodeURIComponent(modal.dataset.order)}`);
+      for (const parcel of data.parcels ?? []) if (parcel.trackingNumber) numeros.add(parcel.trackingNumber);
+    } catch {
+      // Les expéditions Shopify suffisent.
+    }
+  }
+  const liste = [...numeros];
+  $('upd-tracks').innerHTML = liste.length
+    ? liste
+        .map(
+          (numero) => `<label><input type="checkbox" value="${esc(numero)}"${liste.length === 1 ? ' checked' : ''} />
+            <span class="mono">${esc(numero)}</span></label>`,
+        )
+        .join('')
+    : '<p class="empty">Aucun numéro de suivi sur cette commande : précisez la demande ci-dessous.</p>';
+
+  modal.hidden = false;
+  modal.classList.add('open');
+}
+
+function fermerUpdate() {
+  $('upd-modal').hidden = true;
+  $('upd-modal').classList.remove('open');
+}
+
+$('upd-cancel')?.addEventListener('click', fermerUpdate);
+$('upd-modal')?.addEventListener('click', (event) => {
+  if (event.target === event.currentTarget) fermerUpdate();
+});
+
+$('upd-send')?.addEventListener('click', async () => {
+  const modal = $('upd-modal');
+  const coches = [...$('upd-tracks').querySelectorAll('input:checked')].map((box) => box.value);
+  const message = $('upd-message').value.trim();
+  const supplierId = $('upd-supplier').value;
+
+  if (!supplierId) return toast('Choisissez le fournisseur destinataire.', true);
+  if (coches.length === 0 && message.length < 3) {
+    return toast('Cochez au moins un colis, ou écrivez une précision.', true);
+  }
+
+  const bouton = $('upd-send');
+  bouton.disabled = true;
+  try {
+    const result = await api(`/api/suppliers/${supplierId}/alert`, {
+      method: 'POST',
+      body: JSON.stringify({
+        kind: 'TRACKING',
+        message,
+        beforeValue: coches.join(', ') || null,
+        orderName: $('upd-order').value.trim() || null,
+        shopifyOrderId: modal.dataset.order || null,
+        ticketId: modal.dataset.ticket || null,
+      }),
+    });
+    fermerUpdate();
+    toast(result.emailed ? 'Demande envoyée au fournisseur.' : 'Demande affichée dans son atelier — le mail n’a pas pu partir.', !result.emailed);
+    if (state.currentId) {
+      prefetched.delete(state.currentId);
+      await selectTicket(state.currentId);
+    }
+  } catch (error) {
+    toast(error.message, true);
+  } finally {
+    bouton.disabled = false;
+  }
+});

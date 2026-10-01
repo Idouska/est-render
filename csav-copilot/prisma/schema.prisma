@@ -936,6 +936,8 @@ enum SupplierAlertKind {
   MISSING_ITEM
   /// La commande tarde : on demande une date d'expédition.
   DELAY
+  /// « Update » : où en sont ces colis ? Les numéros dans `beforeValue`.
+  TRACKING
   OTHER
 }
 
