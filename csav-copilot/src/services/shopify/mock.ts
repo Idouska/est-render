@@ -262,6 +262,14 @@ function toGraphQL(order: MockOrder) {
           provinceCode: order.address.province,
           countryCodeV2: order.address.country,
           phone: order.address.phone ?? null,
+          // Comme Shopify : nom, rues, « code postal ville », pays en toutes lettres.
+          formatted: [
+            order.address.name,
+            order.address.address1,
+            order.address.address2,
+            [order.address.zip, order.address.city].filter(Boolean).join(' '),
+            new Intl.DisplayNames(['fr'], { type: 'region' }).of(order.address.country) ?? order.address.country,
+          ].filter((ligne): ligne is string => Boolean(ligne)),
         }
       : null,
   };

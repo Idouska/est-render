@@ -188,7 +188,7 @@ export async function etatDuJour(merchantId: string, maintenant = new Date()): P
     prisma.supplier.findMany({
       where: { merchantId, active: true },
       orderBy: { createdAt: 'asc' },
-      select: { id: true, name: true, vendors: true, skuPrefixes: true, isDefault: true },
+      select: { id: true, name: true, vendors: true, skuPrefixes: true, isDefault: true, joursCommande: true },
     }),
   ]);
 
@@ -274,7 +274,9 @@ function repartir(
   suppliers: Array<RoutingRules & { name: string }>,
 ): Map<string, string> {
   const destinataire = new Map<string, string>();
-  if (suppliers.length === 1) {
+  // Un seul fournisseur, tous les jours : il prend tout. Limité à certains
+  // jours, il passe par les règles comme les autres.
+  if (suppliers.length === 1 && (suppliers[0]!.joursCommande ?? 'TOUS') === 'TOUS') {
     for (const order of orders) destinataire.set(order.id, suppliers[0]!.id);
     return destinataire;
   }

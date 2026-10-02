@@ -23,13 +23,38 @@ import type { OrderSummary } from '../shopify/orders.ts';
  * dont la marque n'a été déclarée nulle part n'apparaîtrait dans aucun atelier
  * et personne ne l'expédierait — la panne la plus coûteuse et la plus
  * silencieuse qui soit.
+ *
+ * Et une condition sur les trois : le jour. Un fournisseur peut ne prendre
+ * que les commandes passées un jour pair du mois, ou impair (heure de Paris)
+ * — deux agents qui se partagent le travail un jour sur deux. Deux ateliers
+ * « par défaut » sont alors possibles, un pour les jours pairs, un pour les
+ * jours impairs.
  */
+
+export type JoursCommande = 'TOUS' | 'PAIRS' | 'IMPAIRS';
 
 export interface RoutingRules {
   id: string;
   vendors: string[];
   skuPrefixes: string[];
   isDefault: boolean;
+  /** Absent : tous les jours, comme avant. */
+  joursCommande?: string | null;
+}
+
+/** Le jour du mois de la commande, heure de Paris. */
+export function jourDuMoisParis(iso: string | Date): number {
+  return Number(
+    new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', day: 'numeric' }).format(new Date(iso)),
+  );
+}
+
+/** Ce fournisseur prend-il les commandes de ce jour-là ? */
+export function prendCeJour(order: Pick<OrderSummary, 'createdAt'>, rules: Pick<RoutingRules, 'joursCommande'>): boolean {
+  if (rules.joursCommande !== 'PAIRS' && rules.joursCommande !== 'IMPAIRS') return true;
+  if (!order.createdAt) return true;
+  const pair = jourDuMoisParis(order.createdAt) % 2 === 0;
+  return rules.joursCommande === 'PAIRS' ? pair : !pair;
 }
 
 function normalize(value: string | null | undefined): string {
@@ -42,6 +67,7 @@ export function hasRules(rules: RoutingRules): boolean {
 }
 
 export function matchesSupplier(order: OrderSummary, rules: RoutingRules): boolean {
+  if (!prendCeJour(order, rules)) return false;
   const vendors = rules.vendors.map(normalize).filter(Boolean);
   const prefixes = rules.skuPrefixes.map(normalize).filter(Boolean);
 
@@ -75,9 +101,10 @@ export function ordersForSupplier(
     if (claimed.has(order.id)) return true;
     if (hasRules(supplier) && matchesSupplier(order, supplier)) return true;
 
-    // Atelier par défaut : il prend ce que personne d'autre ne réclame.
+    // Atelier par défaut : il prend ce que personne d'autre ne réclame —
+    // les jours qui sont les siens.
     if (supplier.isDefault) {
-      return !others.some((other) => hasRules(other) && matchesSupplier(order, other));
+      return prendCeJour(order, supplier) && !others.some((other) => hasRules(other) && matchesSupplier(order, other));
     }
 
     return false;

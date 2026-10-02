@@ -1,6 +1,7 @@
 import { Worker } from 'bullmq';
 import { logger } from './lib/logger.ts';
 import { disconnectPrisma } from './lib/prisma.ts';
+import { annoncer, fermerEvenements } from './lib/evenements.ts';
 import {
   closeQueues,
   connection,
@@ -40,6 +41,8 @@ const ingestWorker = new Worker<IngestJob>(
   QUEUE_INGEST,
   async (job) => {
     const { ingested } = await ingestMerchantInbox(job.data.merchantId, job.data.mailboxId);
+    // Un mail est entré : l'écran l'affiche maintenant, pas à son prochain tour.
+    if (ingested > 0) await annoncer(job.data.merchantId, 'tickets');
 
     const rang = job.data.relance ?? 0;
     if (ingested === 0 && rang < RELANCES_MAX) {
@@ -53,6 +56,8 @@ const ticketWorker = new Worker<TicketJob>(
   QUEUE_TICKET,
   async (job) => {
     await processTicket(job.data.merchantId, job.data.ticketId);
+    // Classé, brouillon prêt : l'écran le montre aussitôt.
+    await annoncer(job.data.merchantId, 'tickets');
   },
   {
     connection,
@@ -107,6 +112,7 @@ async function shutdown(signal: string): Promise<void> {
   logger.info({ signal }, 'Arrêt des workers');
   await Promise.all([ingestWorker.close(), ticketWorker.close(), envoiWorker.close()]);
   await closeQueues();
+  await fermerEvenements();
   await disconnectPrisma();
   process.exit(0);
 }

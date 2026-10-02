@@ -1,4 +1,5 @@
 import { VOISINS, correspond, type PaireEnStock } from './rapprochement.ts';
+import { prendCeJour } from '../suppliers/routing.ts';
 
 /**
  * Qui envoie la paire d'échange.
@@ -28,6 +29,8 @@ export interface AtelierCandidat {
   nom: string;
   skuPrefixes: string[];
   isDefault: boolean;
+  /** « PAIRS » / « IMPAIRS » : il ne prend que les jours qui sont les siens. */
+  joursCommande?: string | null;
 }
 
 export type SourceEchange =
@@ -42,9 +45,17 @@ const normaliser = (texte: string | null | undefined) => (texte ?? '').trim().to
  *
  * Par le préfixe de référence, comme la répartition des commandes. À défaut,
  * l'atelier par défaut : c'est lui qui prend ce que personne ne réclame.
+ *
+ * L'échange est une commande à préparer aujourd'hui : un atelier qui ne
+ * travaille qu'un jour sur deux ne la reçoit que si c'est son jour.
  */
-export function atelierPour(sku: string | null, ateliers: readonly AtelierCandidat[]): AtelierCandidat | null {
+export function atelierPour(
+  sku: string | null,
+  tous: readonly AtelierCandidat[],
+  maintenant: Date = new Date(),
+): AtelierCandidat | null {
   const reference = normaliser(sku);
+  const ateliers = tous.filter((atelier) => prendCeJour({ createdAt: maintenant.toISOString() }, atelier));
 
   if (reference) {
     const revendique = ateliers.find((atelier) =>

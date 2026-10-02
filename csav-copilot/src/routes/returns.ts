@@ -580,7 +580,7 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
         }),
         prisma.supplier.findMany({
           where: { merchantId, active: true },
-          select: { id: true, name: true, skuPrefixes: true, isDefault: true },
+          select: { id: true, name: true, skuPrefixes: true, isDefault: true, joursCommande: true },
         }),
       ]);
 
@@ -609,6 +609,7 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
           nom: atelier.name,
           skuPrefixes: atelier.skuPrefixes,
           isDefault: atelier.isDefault,
+          joursCommande: atelier.joursCommande,
         })),
       );
 
