@@ -9491,3 +9491,16 @@ html, body { overflow-x: clip; }
 .upd-tracks { display: flex; flex-direction: column; gap: 6px; }
 .upd-tracks label { display: flex; align-items: center; gap: 8px; font-weight: 500; text-transform: none; letter-spacing: 0; }
 .upd-tracks .mono { font-size: 13px; }
+
+/* Écran Fournisseur : la carte choisie filtre les demandes en dessous. */
+#suppliers-rows .supc { cursor: pointer; }
+#suppliers-rows .supc.supc-on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.sup-dem { margin-top: 22px; }
+.sup-dem-bar { flex-wrap: wrap; gap: 10px; }
+.sup-dem-h { margin: 0; font-size: 14px; font-weight: 650; }
+.sup-dem-h small { color: var(--ink-mute); font-weight: 500; }
+.sup-dem-types { flex-wrap: wrap; margin: 8px 0 12px; }
+
+/* Un libellé long (« Annulation/Remboursement ») passe à la ligne au lieu
+   d'être coupé net par la barre. */
+.nav-item .nav-label { white-space: normal; line-height: 1.25; }
