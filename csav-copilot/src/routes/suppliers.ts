@@ -6,6 +6,7 @@ import { signSupplierWorkspaceToken } from '../lib/supplierToken.ts';
 import { prisma } from '../lib/prisma.ts';
 import { requirePermission, requireSession } from '../plugins/auth.ts';
 import { enTete } from '../services/suppliers/demande.ts';
+import { fiabiliteDesFournisseurs } from '../services/suppliers/fiabiliteDonnees.ts';
 import { createEscalation, resolveEscalation, sendEscalation } from '../services/suppliers/escalate.ts';
 import { MESSAGES_ENVOI } from '../services/envoi/uneSeuleFois.ts';
 import { sendPlainEmail } from '../services/gmail/send.ts';
@@ -128,7 +129,7 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
       shopifyError = 'Commandes Shopify injoignables — les « à préparer » manquent.';
     }
 
-    const [alerts, escalations, parcels] = await Promise.all([
+    const [alerts, escalations, parcels, fiabilite] = await Promise.all([
       prisma.supplierAlert.findMany({
         where: { merchantId, status: 'PENDING' },
         select: { supplierId: true, createdAt: true },
@@ -146,6 +147,7 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
           escalation: { select: { supplierId: true } },
         },
       }),
+      fiabiliteDesFournisseurs(merchantId),
     ]);
 
     const escalationCounts = new Map(
@@ -194,6 +196,7 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
           pendingChanges: pending.length,
           oldestPendingAt: oldest,
           openEscalations: escalationCounts.get(supplier.id) ?? 0,
+          fiabilite: fiabilite.get(supplier.id) ?? null,
         };
       }),
     });

@@ -80,7 +80,7 @@ export interface CommandeDuJour {
 }
 
 export interface EtatDuJour {
-  reglage: { mode: 'MANUEL' | 'AUTO'; heure: number };
+  reglage: { mode: 'MANUEL' | 'AUTO'; heure: number; delaiJours: number };
   /** Commandes créées à partir de cet instant, et avant minuit ce matin. */
   depuis: string;
   jusqua: string;
@@ -122,7 +122,7 @@ export async function etatDuJour(merchantId: string, maintenant = new Date()): P
   const [merchant, depuis] = await Promise.all([
     prisma.merchant.findUniqueOrThrow({
       where: { id: merchantId },
-      select: { envoiMode: true, envoiHeure: true },
+      select: { envoiMode: true, envoiHeure: true, lotDelaiJours: true },
     }),
     plancher(merchantId, maintenant),
   ]);
@@ -241,7 +241,7 @@ export async function etatDuJour(merchantId: string, maintenant = new Date()): P
   );
 
   return {
-    reglage: { mode: merchant.envoiMode, heure: merchant.envoiHeure },
+    reglage: { mode: merchant.envoiMode, heure: merchant.envoiHeure, delaiJours: merchant.lotDelaiJours },
     depuis: depuis.toISOString(),
     jusqua: jusqua.toISOString(),
     commandes: aEnvoyer.map((order) => {

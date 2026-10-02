@@ -15,6 +15,7 @@ import {
 import { ingestMerchantInbox } from './services/tickets/ingest.ts';
 import { processTicket } from './services/tickets/process.ts';
 import { passageAutomatique } from './services/envoi/quotidien.ts';
+import { relancerLotsEnRetard } from './services/envoi/relances.ts';
 
 /*
  * La relance d'une relève restée bredouille.
@@ -79,6 +80,9 @@ const envoiWorker = new Worker(
   QUEUE_ENVOI,
   async () => {
     await passageAutomatique();
+    // Même rythme pour les rappels de retard : ils ne partent qu'une fois
+    // par commande, et seulement aux heures de l'atelier.
+    await relancerLotsEnRetard();
   },
   { connection, concurrency: 1 },
 );

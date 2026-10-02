@@ -21,3 +21,27 @@ export function resumeArticles(
     )
     .join(', ');
 }
+
+const JOUR_MS = 86_400_000;
+
+/** Jours entiers écoulés depuis l'envoi du lot. */
+export function joursDepuis(envoyeLe: Date, maintenant: Date): number {
+  return Math.max(0, Math.floor((maintenant.getTime() - envoyeLe.getTime()) / JOUR_MS));
+}
+
+/**
+ * Une commande est en retard quand elle n'est pas expédiée au-delà du délai
+ * laissé à l'atelier. « En production » ne suffit pas : le client attend sa
+ * paire, pas l'annonce qu'on la fabrique.
+ */
+export function estEnRetard(commande: {
+  statut: StatutLot;
+  envoyeLe: Date;
+  delaiJours: number;
+  maintenant: Date;
+}): boolean {
+  return (
+    commande.statut !== 'EXPEDIEE' &&
+    commande.maintenant.getTime() - commande.envoyeLe.getTime() > commande.delaiJours * JOUR_MS
+  );
+}

@@ -15,9 +15,9 @@ import { prisma } from '../../lib/prisma.ts';
  * déclaré à côté des colis finirait par les contredire.
  */
 
-import { statutDeLaCommande, type StatutLot } from './statutLot.ts';
+import { estEnRetard, joursDepuis, statutDeLaCommande, type StatutLot } from './statutLot.ts';
 
-export { resumeArticles, statutDeLaCommande, type StatutLot } from './statutLot.ts';
+export { estEnRetard, joursDepuis, resumeArticles, statutDeLaCommande, type StatutLot } from './statutLot.ts';
 
 export interface CommandeDuLot {
   shopifyOrderId: string;
@@ -26,6 +26,9 @@ export interface CommandeDuLot {
   statut: StatutLot;
   enProductionLe: Date | null;
   suivis: string[];
+  /** Non expédiée au-delà du délai laissé à l'atelier. */
+  enRetard: boolean;
+  joursDepuis: number;
 }
 
 export interface Lot {
@@ -33,7 +36,8 @@ export interface Lot {
   envoyeLe: Date;
   fournisseur: { id: string; name: string };
   commandes: CommandeDuLot[];
-  compte: Record<StatutLot, number>;
+  compte: Record<StatutLot, number> & { RETARD: number };
+  delaiJours: number;
 }
 
 /**
@@ -48,7 +52,12 @@ export async function lotsRecents(params: {
   jours?: number;
   limite?: number;
 }): Promise<Lot[]> {
-  const depuis = new Date(Date.now() - (params.jours ?? 14) * 86_400_000);
+  const maintenant = new Date();
+  const depuis = new Date(maintenant.getTime() - (params.jours ?? 14) * 86_400_000);
+  const { lotDelaiJours: delaiJours } = await prisma.merchant.findUniqueOrThrow({
+    where: { id: params.merchantId },
+    select: { lotDelaiJours: true },
+  });
   const envois = await prisma.envoiFournisseur.findMany({
     where: {
       merchantId: params.merchantId,
@@ -86,18 +95,24 @@ export async function lotsRecents(params: {
   return envois.map((envoi) => {
     const commandes = envoi.commandes.map((commande) => {
       const numeros = suivis.get(commande.shopifyOrderId) ?? [];
+      const statut = statutDeLaCommande({ enProductionLe: commande.enProductionLe, colis: numeros.length });
       return {
         shopifyOrderId: commande.shopifyOrderId,
         orderName: commande.orderName,
         articles: commande.articles,
-        statut: statutDeLaCommande({ enProductionLe: commande.enProductionLe, colis: numeros.length }),
+        statut,
         enProductionLe: commande.enProductionLe,
         suivis: numeros,
+        enRetard: estEnRetard({ statut, envoyeLe: envoi.emailedAt!, delaiJours, maintenant }),
+        joursDepuis: joursDepuis(envoi.emailedAt!, maintenant),
       };
     });
-    const compte: Record<StatutLot, number> = { A_PREPARER: 0, EN_PRODUCTION: 0, EXPEDIEE: 0 };
-    for (const commande of commandes) compte[commande.statut] += 1;
-    return { id: envoi.id, envoyeLe: envoi.emailedAt!, fournisseur: envoi.supplier, commandes, compte };
+    const compte = { A_PREPARER: 0, EN_PRODUCTION: 0, EXPEDIEE: 0, RETARD: 0 };
+    for (const commande of commandes) {
+      compte[commande.statut] += 1;
+      if (commande.enRetard) compte.RETARD += 1;
+    }
+    return { id: envoi.id, envoyeLe: envoi.emailedAt!, fournisseur: envoi.supplier, commandes, compte, delaiJours };
   });
 }
 
@@ -122,4 +137,40 @@ export async function marquerEnProduction(params: {
     data: { enProductionLe: params.enProduction ? new Date() : null },
   });
   return resultat.count;
+}
+
+/**
+ * Le nombre de commandes de lot en retard, pour la pastille du menu.
+ *
+ * Borné aux trente derniers jours : une commande d'il y a trois mois sans
+ * colis est un dossier perdu à régler une fois, pas une alerte quotidienne.
+ */
+export async function compterRetards(merchantId: string, maintenant = new Date()): Promise<number> {
+  const { lotDelaiJours } = await prisma.merchant.findUniqueOrThrow({
+    where: { id: merchantId },
+    select: { lotDelaiJours: true },
+  });
+  const commandes = await prisma.envoiCommande.findMany({
+    where: {
+      merchantId,
+      envoi: {
+        emailedAt: {
+          not: null,
+          lt: new Date(maintenant.getTime() - lotDelaiJours * 86_400_000),
+          gte: new Date(maintenant.getTime() - 30 * 86_400_000),
+        },
+      },
+    },
+    select: { shopifyOrderId: true },
+  });
+  if (commandes.length === 0) return 0;
+  const expediees = new Set(
+    (
+      await prisma.parcel.findMany({
+        where: { merchantId, shopifyOrderId: { in: commandes.map((commande) => commande.shopifyOrderId) } },
+        select: { shopifyOrderId: true },
+      })
+    ).map((colis) => colis.shopifyOrderId),
+  );
+  return commandes.filter((commande) => !expediees.has(commande.shopifyOrderId)).length;
 }

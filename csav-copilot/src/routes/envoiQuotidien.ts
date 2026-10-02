@@ -81,6 +81,8 @@ export async function envoiQuotidienRoutes(app: FastifyInstance): Promise<void> 
         .object({
           mode: z.enum(['MANUEL', 'AUTO']),
           heure: z.number().int().min(0).max(23),
+          // Jours laissés à l'atelier avant qu'une commande soit en retard.
+          delaiJours: z.number().int().min(1).max(30).optional(),
         })
         .safeParse(request.body);
       if (!parsed.success) return reply.code(400).send({ error: 'Réglage invalide' });
@@ -88,7 +90,11 @@ export async function envoiQuotidienRoutes(app: FastifyInstance): Promise<void> 
       const { merchantId, userId } = request.session;
       await prisma.merchant.update({
         where: { id: merchantId },
-        data: { envoiMode: parsed.data.mode, envoiHeure: parsed.data.heure },
+        data: {
+          envoiMode: parsed.data.mode,
+          envoiHeure: parsed.data.heure,
+          ...(parsed.data.delaiJours ? { lotDelaiJours: parsed.data.delaiJours } : {}),
+        },
       });
       await recordAudit({
         merchantId,

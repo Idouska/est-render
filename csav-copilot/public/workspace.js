@@ -2972,6 +2972,7 @@ function ligneDuLot(commande) {
       }
     </div>
     <span class="pill lot-pill">${esc(t(`lots.s.${commande.statut}`))}</span>
+    ${commande.enRetard ? `<span class="pill lot-retard">${esc(t('lots.late', { n: commande.joursDepuis }))}</span>` : ''}
     <div class="lot-gestes">
       ${geste}
       ${

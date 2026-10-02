@@ -5489,6 +5489,53 @@ $('supplier-edit-toggle').addEventListener('click', () => setView('suppliers'));
  * ici ne montrait que l'email et le téléphone : un carnet d'adresses sur
  * l'écran d'où l'on pilote la production.
  */
+/** « 6 h », « 2,5 j » : une durée en heures, lisible d'un coup d'œil. */
+function dureeLisible(heures) {
+  return heures < 24 ? `${heures} h` : `${(heures / 24).toFixed(1).replace('.', ',')} j`;
+}
+
+/*
+ * La fiabilité de l'atelier sur trente jours : quatre chiffres vérifiables
+ * dans nos propres données, chacun avec son volume. Rouge au-delà d'un seuil
+ * qui mérite un coup de fil : deux jours pour répondre, un refus sur trois,
+ * une commande sur cinq en retard.
+ */
+function fiabiliteMarkup(f) {
+  if (!f || (f.demandes === 0 && f.commandes === 0)) {
+    return '<p class="supc-fiab-vide">Fiabilité : pas encore de données sur 30 jours.</p>';
+  }
+  const cases = [
+    {
+      valeur: f.reponseMoyenneH === null ? '—' : dureeLisible(f.reponseMoyenneH),
+      libelle: `pour répondre · ${f.demandes} demande${f.demandes > 1 ? 's' : ''}`,
+      chaud: f.reponseMoyenneH !== null && f.reponseMoyenneH > 48,
+    },
+    {
+      valeur: f.refusPct === null ? '—' : `${f.refusPct} %`,
+      libelle: 'de refus',
+      chaud: f.refusPct !== null && f.refusPct >= 33,
+    },
+    {
+      valeur: f.expeditionMoyenneJ === null ? '—' : `${String(f.expeditionMoyenneJ).replace('.', ',')} j`,
+      libelle: 'pour expédier un lot',
+      chaud: false,
+    },
+    {
+      valeur: f.retardPct === null ? '—' : `${f.retardPct} %`,
+      libelle: `en retard · ${f.commandes} commande${f.commandes > 1 ? 's' : ''}`,
+      chaud: f.retardPct !== null && f.retardPct >= 20,
+    },
+  ];
+  return `<div class="supc-fiab">
+    <span class="supc-fiab-t">Fiabilité · 30 jours</span>
+    <div class="supc-stats">${cases
+      .map(
+        (c) => `<div class="supc-stat${c.chaud ? ' hot' : ''}"><b>${esc(c.valeur)}</b><span>${esc(c.libelle)}</span></div>`,
+      )
+      .join('')}</div>
+  </div>`;
+}
+
 function renderSuppliers() {
   const rows = state.suppliers;
   const hub = state.supplierHub ?? {};
@@ -5542,6 +5589,8 @@ function renderSuppliers() {
               stats.photoRate != null ? ` · ${stats.photoRate}% photo` : ''
             }</span></div>
           </div>
+
+          ${fiabiliteMarkup(stats.fiabilite)}
 
           <p class="supc-last">${
             stats.lastParcelAt
@@ -10066,7 +10115,7 @@ function renderNav() {
            */
           const mute = ['orders', 'customers', 'catalog'].includes(view);
           const dim = view === 'tracking';
-          const hot = ['changes', 'suppliers', 'retour', 'ruptures'].includes(view) && tally > 0;
+          const hot = ['changes', 'suppliers', 'retour', 'ruptures', 'envoi'].includes(view) && tally > 0;
           const shown = tally > 9999 ? '9999+' : tally;
           const badge = tally && !mute;
           const courant = meta.alias
@@ -15520,8 +15569,9 @@ const STATUTS_LOT = {
  */
 function avancementDuLot(lot) {
   const { A_PREPARER: a, EN_PRODUCTION: p, EXPEDIEE: e } = lot.compte;
-  return `<details class="envoi-lot">
-    <summary><span class="tag tone-bad">${a} à préparer</span>
+  return `<details class="envoi-lot"${lot.compte.RETARD ? ' open' : ''}>
+    <summary>${lot.compte.RETARD ? `<span class="tag tone-bad envoi-retard">${lot.compte.RETARD} en retard</span>` : ''}
+      <span class="tag tone-bad">${a} à préparer</span>
       <span class="tag tone-wait">${p} en production</span>
       <span class="tag tone-ok">${e} expédiée(s)</span></summary>
     ${lot.commandes
@@ -15530,6 +15580,7 @@ function avancementDuLot(lot) {
           <b>${esc(commande.orderName)}</b>
           <small>${esc(commande.articles ?? '')}</small>
           <span class="tag tone-${STATUTS_LOT[commande.statut].tone}">${STATUTS_LOT[commande.statut].label}</span>
+          ${commande.enRetard ? `<span class="tag tone-bad envoi-retard">En retard · ${commande.joursDepuis} j</span>` : ''}
           ${commande.suivis.length ? `<span class="mono">${esc(commande.suivis.join(' · '))}</span>` : ''}
         </div>`,
       )
@@ -15563,6 +15614,11 @@ function renderEnvoi() {
     heure.innerHTML = Array.from({ length: 24 }, (_, h) => `<option value="${h}">${String(h).padStart(2, '0')} h</option>`).join('');
   }
   heure.value = String(d.reglage.heure);
+  const delai = $('envoi-delai');
+  if (!delai.options.length) {
+    delai.innerHTML = [1, 2, 3, 4, 5, 7, 10, 14].map((n) => `<option value="${n}">${n} j</option>`).join('');
+  }
+  delai.value = String(d.reglage.delaiJours ?? 2);
 
   const jour = new Date(new Date(d.jusqua).getTime() - 1).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
   const depuis = new Date(d.depuis).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
@@ -15661,7 +15717,17 @@ function renderEnvoi() {
     : 'Envoyer au fournisseur';
 
   const sans = partiront.length - envoyables;
+  const retards = (d.lots ?? []).reduce((total, lot) => total + (lot.compte.RETARD ?? 0), 0);
+  // La pastille du menu suit l'écran tout de suite : le compte serveur est
+  // mis en cache cinq minutes, et un délai qu'on vient de changer le périme.
+  if ((state.navCounts?.envoi ?? 0) !== retards) {
+    state.navCounts = { ...state.navCounts, envoi: retards };
+    renderNav();
+  }
   const notes = [
+    retards
+      ? `${retards} commande(s) en retard chez l’atelier : non expédiées ${d.reglage.delaiJours ?? 2} jours après l’envoi. Détail sous « Derniers envois ».`
+      : null,
     d.tronque ? 'Plus de mille commandes sur la période : seules les mille premières sont affichées.' : null,
     sans ? `${sans} commande(s) ne correspondent à aucun fournisseur : réglez les marques ou le fournisseur par défaut dans l’écran Fournisseurs.` : null,
     auto && aTrancher.length
@@ -15760,10 +15826,15 @@ $('envoi-go')?.addEventListener('click', async () => {
   }
 });
 
-async function enregistrerReglageEnvoi(mode, heure) {
+async function enregistrerReglageEnvoi(mode, heure, delaiJours = Number($('envoi-delai').value || 2)) {
   try {
-    await api('/api/envoi-du-jour/reglage', { method: 'PATCH', body: JSON.stringify({ mode, heure }) });
-    if (state.envoi.donnees) state.envoi.donnees.reglage = { mode, heure };
+    await api('/api/envoi-du-jour/reglage', { method: 'PATCH', body: JSON.stringify({ mode, heure, delaiJours }) });
+    // Le retard se recalcule côté serveur : on relit l'écran plutôt que de deviner.
+    if (state.envoi.donnees && state.envoi.donnees.reglage.delaiJours !== delaiJours) {
+      await loadEnvoi();
+      return toast(`Une commande non expédiée ${delaiJours} jour(s) après l’envoi passera en retard.`);
+    }
+    if (state.envoi.donnees) state.envoi.donnees.reglage = { mode, heure, delaiJours };
     renderEnvoi();
     toast(mode === 'AUTO' ? `Envoi automatique chaque jour à ${String(heure).padStart(2, '0')} h.` : 'Envoi manuel : rien ne part sans votre clic.');
   } catch (error) {
@@ -15779,6 +15850,10 @@ document.querySelectorAll('[data-envoi-mode]').forEach((bouton) =>
 $('envoi-heure')?.addEventListener('change', (event) =>
   void enregistrerReglageEnvoi('AUTO', Number(event.target.value)),
 );
+$('envoi-delai')?.addEventListener('change', () => {
+  const reglage = state.envoi.donnees?.reglage ?? { mode: 'MANUEL', heure: 9 };
+  void enregistrerReglageEnvoi(reglage.mode, reglage.heure, Number($('envoi-delai').value));
+});
 
 
 /* ----------------------------------------------- annulation, update ---- */

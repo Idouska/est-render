@@ -60,7 +60,7 @@ export async function atelierDuDossier(
 }
 
 /** Le lien de travail de l'atelier — le même que celui du marchand. */
-async function lienAtelier(merchantId: string, supplierId: string): Promise<string | null> {
+export async function lienAtelier(merchantId: string, supplierId: string): Promise<string | null> {
   const supplier = await prisma.supplier.findFirst({
     where: { id: supplierId, merchantId },
     select: { portalTokenVersion: true },
