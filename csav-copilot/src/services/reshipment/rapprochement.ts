@@ -193,17 +193,32 @@ export function rapprocher(stock: readonly PaireEnStock[], commandes: readonly C
 export interface CorrespondanceStock {
   commandeId: string;
   paires: Proposition['paires'];
+  /**
+   * Où sont les paires : une agence (avec son pays), ou `null` chez le
+   * marchand. Absent du rapprochement à stock unique.
+   */
+  agence?: { id: string; nom: string | null; pays: string | null } | null;
+  /** Les paires partent d'une agence d'un pays voisin de celui du client. */
+  voisin?: boolean;
 }
 
 /**
- * Le rapprochement pour un stock unique, chez le marchand.
+ * Le rapprochement avant l'envoi du fichier au fournisseur, agences comprises.
  *
- * Sans agence, la règle des pays n'a pas d'objet : le marchand expédie
- * lui-même, d'où qu'il soit et où que le client habite. Restent les trois
- * autres — une commande servie en entier ou pas du tout, une paire pour une
- * seule commande, les plus anciennes d'abord des deux côtés.
+ * Les mêmes règles que les échanges, plus le stock du marchand :
+ *
+ *   1. une agence du pays du client — la paire arrive en deux jours ;
+ *   2. à défaut, une agence d'un pays voisin ;
+ *   3. à défaut, le stock du marchand lui-même (paires sans agence), qu'il
+ *      expédie d'où qu'il soit — comme avant l'arrivée des agences.
+ *
+ * Une agence d'un pays ni identique ni voisin n'est pas proposée : la paire
+ * arriverait aussi tard que celle de l'atelier. Une commande dont on ignore
+ * le pays ne peut être servie que par le stock du marchand. Et toujours :
+ * une commande servie en entier par UN lieu ou pas du tout, une paire pour
+ * une seule commande, les plus anciennes d'abord des deux côtés.
  */
-export function rapprocherStockUnique(
+export function rapprocherAvantEnvoi(
   stock: readonly PaireEnStock[],
   commandes: readonly CommandeEnAttente[],
 ): CorrespondanceStock[] {
@@ -213,22 +228,50 @@ export function rapprocherStockUnique(
     .sort((a, b) => a.creeLe.localeCompare(b.creeLe));
 
   const prises = new Set<string>();
+  const servies = new Set<string>();
   const correspondances: CorrespondanceStock[] = [];
 
-  for (const commande of enAttente) {
-    const choisies = couvrir(commande, paires, prises);
-    if (!choisies) continue;
-    for (const paire of choisies) prises.add(paire.id);
-    correspondances.push({
-      commandeId: commande.id,
-      paires: choisies.map((paire) => ({
-        returnId: paire.id,
-        titre: paire.titre,
-        declinaison: paire.declinaison,
-        sku: paire.sku,
-        retourDe: paire.retourDe,
-      })),
-    });
+  const admise = {
+    meme: (paire: PaireEnStock, pays: string | null) => Boolean(paire.agenceId && pays && paire.pays === pays),
+    voisin: (paire: PaireEnStock, pays: string | null) =>
+      Boolean(paire.agenceId && pays && paire.pays && (VOISINS[pays] ?? []).includes(paire.pays)),
+    maison: (paire: PaireEnStock) => !paire.agenceId,
+  };
+
+  for (const passe of ['meme', 'voisin', 'maison'] as const) {
+    for (const commande of enAttente) {
+      if (servies.has(commande.id)) continue;
+
+      // Les lieux candidats, dans l'ordre de leur paire la plus ancienne.
+      const lieux = new Map<string, PaireEnStock[]>();
+      for (const paire of paires) {
+        if (prises.has(paire.id) || !admise[passe](paire, commande.pays)) continue;
+        const cle = paire.agenceId ?? 'maison';
+        lieux.set(cle, [...(lieux.get(cle) ?? []), paire]);
+      }
+
+      for (const pairesDuLieu of lieux.values()) {
+        const choisies = couvrir(commande, pairesDuLieu, prises);
+        if (!choisies) continue;
+
+        for (const paire of choisies) prises.add(paire.id);
+        servies.add(commande.id);
+        const premiere = choisies[0]!;
+        correspondances.push({
+          commandeId: commande.id,
+          paires: choisies.map((paire) => ({
+            returnId: paire.id,
+            titre: paire.titre,
+            declinaison: paire.declinaison,
+            sku: paire.sku,
+            retourDe: paire.retourDe,
+          })),
+          agence: premiere.agenceId ? { id: premiere.agenceId, nom: premiere.agenceNom, pays: premiere.pays } : null,
+          voisin: passe === 'voisin',
+        });
+        break;
+      }
+    }
   }
 
   return correspondances;

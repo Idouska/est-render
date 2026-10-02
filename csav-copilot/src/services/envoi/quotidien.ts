@@ -6,7 +6,7 @@ import { sendPlainEmail } from '../gmail/send.ts';
 import { langueAtelier, mailDuJour } from '../suppliers/langueAtelier.ts';
 import { ENVOI_SIMULE } from '../modeTest.ts';
 import {
-  rapprocherStockUnique,
+  rapprocherAvantEnvoi,
   type CorrespondanceStock,
   type PaireEnStock,
 } from '../reshipment/rapprochement.ts';
@@ -22,9 +22,10 @@ import { ordersForSupplier, type RoutingRules } from '../suppliers/routing.ts';
  * rangée chez le marchand restait sur l'étagère pendant que l'atelier en
  * fabriquait une neuve, livrée en quinze jours au lieu de deux.
  *
- * Désormais, avant l'envoi, chaque commande est rapprochée du stock. Celles
- * que le marchand décide d'expédier lui-même sont réservées — et retirées du
- * fichier. Le reste part, une seule fois : une commande transmise est notée,
+ * Désormais, avant l'envoi, chaque commande est rapprochée du stock — dans
+ * l'agence du pays du client d'abord, puis d'un pays voisin, puis chez le
+ * marchand. Celles qu'il décide de servir par le stock sont réservées — et
+ * retirées du fichier. Le reste part, une seule fois : une commande transmise est notée,
  * et ne repartira jamais.
  */
 
@@ -183,6 +184,9 @@ export async function etatDuJour(merchantId: string, maintenant = new Date()): P
         orderName: true,
         restockedAt: true,
         updatedAt: true,
+        // Où la paire est rangée : l'agence et son pays décident qui
+        // l'expédie, et à quel client elle arrive vite.
+        agency: { select: { id: true, name: true, country: true } },
       },
     }),
     prisma.supplier.findMany({
@@ -211,9 +215,11 @@ export async function etatDuJour(merchantId: string, maintenant = new Date()): P
 
   const stock: PaireEnStock[] = enStock.map((paire) => ({
     id: paire.id,
-    pays: null,
-    agenceId: null,
-    agenceNom: null,
+    // Le pays de l'AGENCE, pas celui du client qui a retourné la paire : sans
+    // agence, la paire est chez le marchand.
+    pays: paire.agency?.country ?? null,
+    agenceId: paire.agency?.id ?? null,
+    agenceNom: paire.agency?.name ?? null,
     sku: paire.sku,
     titre: paire.productTitle,
     declinaison: paire.variantTitle,
@@ -229,13 +235,13 @@ export async function etatDuJour(merchantId: string, maintenant = new Date()): P
       quantite: ligne.quantity,
     }));
 
-  const correspondances = rapprocherStockUnique(
+  const correspondances = rapprocherAvantEnvoi(
     stock,
     aEnvoyer.map((order) => ({
       id: order.id,
       nom: order.name,
       client: order.customer?.displayName ?? null,
-      pays: null,
+      pays: order.shippingAddress?.country ?? null,
       creeLe: order.createdAt,
       lignes: enLignes(order),
     })),

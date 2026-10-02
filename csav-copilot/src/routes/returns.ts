@@ -6,6 +6,7 @@ import { requirePermission, requireSession } from '../plugins/auth.ts';
 import { decodePhoto, photoSchema } from './parcels.ts';
 import { getShopifyClient } from '../services/shopify/client.ts';
 import { listOrders, quoteSearchValue, type OrderSummary } from '../services/shopify/orders.ts';
+import { listVariants } from '../services/shopify/catalog.ts';
 import {
   PAYS_RETOUR,
   VOISINS,
@@ -105,6 +106,8 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
       (item) =>
         ['OPEN', 'LABEL_SENT'].includes(item.status) && item.lastContactAt < silentSince,
     ).length;
+    // Une paire ajoutée à la main n'est pas un dossier de retour.
+    const retours = cases.filter((item) => item.origine !== 'MANUEL');
 
     // Le stock retours : remis en rayon chez une agence, pas encore réemployé.
     const stock = cases.filter((item) => item.status === 'RESTOCKED' && !item.reusedAt);
@@ -144,7 +147,7 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({
       cases: dossiers,
       counts: {
-        open: cases.filter((item) => !['CLOSED', 'UNUSABLE'].includes(item.status)).length,
+        open: retours.filter((item) => !['CLOSED', 'UNUSABLE'].includes(item.status)).length,
         silent,
         stock: stock.length,
         reserved: cases.filter((item) => item.reusedShopifyOrderId).length,
@@ -180,6 +183,99 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
     });
 
     return reply.send({ case: created });
+  });
+
+  /**
+   * Ajouter des paires au stock à la main.
+   *
+   * Le stock ne naissait que des retours clients. Une fin de série, une paire
+   * d'exposition, un surplus restaient donc invisibles — et l'atelier en
+   * refabriquait. Ici, le modèle et sa déclinaison viennent du catalogue
+   * Shopify (sans quoi la paire ne correspondrait jamais à une commande), et
+   * chaque paire devient une ligne, comme une paire retournée : elle sert une
+   * commande ou un échange, une seule fois.
+   */
+  app.post('/api/returns/stock', { preHandler: requirePermission('reply') }, async (request, reply) => {
+    const { merchantId, userId } = request.session;
+    const parsed = z
+      .object({
+        productTitle: z.string().trim().min(1).max(300),
+        variantTitle: z.string().trim().max(200).nullish(),
+        sku: z.string().trim().max(120).nullish(),
+        quantite: z.number().int().min(1).max(50),
+        agencyId: z.string().min(1).max(40).nullish(),
+        note: z.string().trim().max(2000).nullish(),
+      })
+      .safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Modèle et quantité (1 à 50) requis.' });
+
+    // L'agence est vérifiée, pas recopiée : un identifiant venu du navigateur
+    // ne range jamais une paire chez l'agence d'une autre boutique.
+    const agence = parsed.data.agencyId
+      ? await prisma.returnAgency.findFirst({
+          where: { id: parsed.data.agencyId, merchantId },
+          select: { id: true, country: true, name: true },
+        })
+      : null;
+    if (parsed.data.agencyId && !agence) return reply.code(404).send({ error: 'Agence introuvable' });
+
+    const maintenant = new Date();
+    await prisma.returnCase.createMany({
+      data: Array.from({ length: parsed.data.quantite }, () => ({
+        merchantId,
+        origine: 'MANUEL',
+        status: 'RESTOCKED' as const,
+        restockedAt: maintenant,
+        productTitle: parsed.data.productTitle,
+        variantTitle: parsed.data.variantTitle || null,
+        sku: parsed.data.sku || null,
+        agencyId: agence?.id ?? null,
+        country: agence?.country ?? null,
+        note: parsed.data.note || null,
+      })),
+    });
+
+    await recordAudit({
+      merchantId,
+      actorType: 'USER',
+      actorId: userId,
+      action: 'stock.added',
+      targetType: 'return',
+      targetId: parsed.data.productTitle,
+      metadata: {
+        produit: parsed.data.productTitle,
+        declinaison: parsed.data.variantTitle ?? null,
+        quantite: parsed.data.quantite,
+        agence: agence?.name ?? null,
+      },
+      ipAddress: request.ip,
+    });
+
+    return reply.send({ ajoutees: parsed.data.quantite, agence: agence?.name ?? null });
+  });
+
+  /**
+   * Les déclinaisons d'un modèle du catalogue, telles que Shopify les écrit —
+   * la déclinaison et la référence d'une paire ajoutée à la main doivent être
+   * celles des commandes, sinon elle ne servirait jamais.
+   */
+  app.get<{ Querystring: { produit?: string } }>('/api/returns/declinaisons', async (request, reply) => {
+    const produit = (request.query.produit ?? '').trim();
+    if (!produit) return reply.send({ declinaisons: [] });
+    try {
+      const client = await getShopifyClient(request.session.merchantId);
+      const variantes = await listVariants(client, { query: `product_title:${quoteSearchValue(produit)}`, limit: 100 });
+      return reply.send({
+        declinaisons: variantes
+          .filter((variante) => variante.productTitle === produit)
+          .map((variante) => ({
+            declinaison: variante.variantTitle && variante.variantTitle !== 'Default Title' ? variante.variantTitle : null,
+            sku: variante.sku ?? null,
+          })),
+      });
+    } catch {
+      return reply.code(502).send({ error: 'Catalogue Shopify indisponible pour le moment.' });
+    }
   });
 
   app.patch<{ Params: { id: string } }>(

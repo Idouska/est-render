@@ -394,6 +394,33 @@ export function createMockShopifyClient(shopDomain: string): ShopifyClient {
         } as T;
       }
 
+      // Les déclinaisons du catalogue fictif : celles des commandes ci-dessus,
+      // pour qu'une paire ajoutée au stock corresponde à ce qui se commande.
+      if (query.includes('query ListVariants')) {
+        const filtre = String(variables?.query ?? '');
+        const titre = /product_title:"?([^"]+)"?/.exec(filtre)?.[1]?.toLowerCase() ?? '';
+        const vues = new Set<string>();
+        const nodes = ORDERS.flatMap((o) => o.items)
+          .filter((item) => !titre || item.title.toLowerCase() === titre)
+          .filter((item) => {
+            const cle = `${item.title}|${item.variantTitle ?? ''}`;
+            if (vues.has(cle)) return false;
+            vues.add(cle);
+            return true;
+          })
+          .map((item, index) => ({
+            id: `gid://shopify/ProductVariant/${index + 1}`,
+            title: item.variantTitle ?? 'Default Title',
+            sku: null,
+            price: '49.00',
+            inventoryQuantity: 6,
+            availableForSale: true,
+            image: null,
+            product: { id: `gid://shopify/Product/${item.title}`, title: item.title, featuredMedia: null },
+          }));
+        return { productVariants: { nodes } } as T;
+      }
+
       if (query.includes('query ListCollections')) {
         const nodes = ['Luminaires', 'Nouveautés', 'Fin de série'].map((title, index) => ({
           id: `gid://shopify/Collection/${index + 1}`,
