@@ -27,6 +27,7 @@ import { enModeTest } from '../services/modeTest.ts';
 import { fonctionnaliteActive, fonctionnalitesDuMarchand } from '../services/fonctionnalites.ts';
 import { commandesServiesParLeStock } from '../services/reshipment/reservations.ts';
 import { enTete } from '../services/suppliers/demande.ts';
+import { lotsRecents, marquerEnProduction } from '../services/envoi/lots.ts';
 
 const TRENTE_JOURS = 30 * 24 * 60 * 60 * 1000;
 const ADRESSE_WEB_ATELIER = /:\/\/|^www\./i;
@@ -111,9 +112,11 @@ async function allowedOrderIds(workspace: Workspace): Promise<string[] | null> {
   if (workspace.ordersAccess === 'ALL') return null;
   if (workspace.ordersAccess === 'NONE') return [];
 
-  // Confiée = une escalade lui a été adressée, ou un colis de cette commande
-  // porte son nom. Les deux traces existent déjà, rien à saisir en plus.
-  const [escalations, parcels] = await Promise.all([
+  // Confiée = une escalade lui a été adressée, un colis de cette commande
+  // porte son nom, ou elle est partie dans un de ses lots du jour. Sans ce
+  // dernier cas, un atelier en accès « confiées » recevait ses commandes par
+  // fichier mais ne pouvait ni les voir ni y saisir un colis.
+  const [escalations, parcels, lots] = await Promise.all([
     prisma.supplierEscalation.findMany({
       where: { merchantId: workspace.merchantId, supplierId: workspace.supplierId },
       select: { ticket: { select: { shopifyOrderId: true } } },
@@ -125,6 +128,13 @@ async function allowedOrderIds(workspace: Workspace): Promise<string[] | null> {
       },
       select: { shopifyOrderId: true },
     }),
+    prisma.envoiCommande.findMany({
+      where: {
+        merchantId: workspace.merchantId,
+        envoi: { supplierId: workspace.supplierId, createdAt: { gte: new Date(Date.now() - 90 * 86_400_000) } },
+      },
+      select: { shopifyOrderId: true },
+    }),
   ]);
 
   return [
@@ -132,6 +142,7 @@ async function allowedOrderIds(workspace: Workspace): Promise<string[] | null> {
       [
         ...escalations.map((row) => row.ticket.shopifyOrderId),
         ...parcels.map((row) => row.shopifyOrderId),
+        ...lots.map((row) => row.shopifyOrderId),
       ].filter(Boolean) as string[],
     ),
   ];
@@ -1667,6 +1678,60 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
           })),
         signalements,
       });
+    },
+  );
+
+  /**
+   * Les lots reçus : chaque fichier du jour, commande par commande.
+   *
+   * Lu dans nos envois, pas chez Shopify : c'est la liste exacte de ce qui
+   * est parti chez CET atelier, avec ce qu'il en a fait depuis.
+   */
+  app.get<{ Params: { id: string }; Querystring: { token?: string } }>(
+    '/api/workspace/:id/lots',
+    async (request, reply) => {
+      const workspace = await authorize(request, reply);
+      if (!workspace) return;
+      return reply.send({
+        lots: await lotsRecents({ merchantId: workspace.merchantId, supplierId: workspace.supplierId }),
+      });
+    },
+  );
+
+  /** « En production » : une commande, plusieurs, ou tout un lot d'un geste. */
+  app.post<{ Params: { id: string }; Querystring: { token?: string } }>(
+    '/api/workspace/:id/lots/production',
+    async (request, reply) => {
+      const workspace = await authorize(request, reply);
+      if (!workspace) return;
+
+      const parsed = z
+        .object({
+          shopifyOrderIds: z.array(z.string().min(1).max(120)).min(1).max(500),
+          enProduction: z.boolean(),
+        })
+        .safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Demande invalide' });
+
+      const modifiees = await marquerEnProduction({
+        merchantId: workspace.merchantId,
+        supplierId: workspace.supplierId,
+        shopifyOrderIds: parsed.data.shopifyOrderIds,
+        enProduction: parsed.data.enProduction,
+      });
+
+      await recordAudit({
+        merchantId: workspace.merchantId,
+        actorType: 'SUPPLIER',
+        actorId: workspace.supplierId,
+        action: parsed.data.enProduction ? 'supplier.lot_production' : 'supplier.lot_production_cancelled',
+        targetType: 'Supplier',
+        targetId: workspace.supplierId,
+        metadata: { commandes: modifiees },
+        ipAddress: request.ip,
+      });
+
+      return reply.send({ modifiees });
     },
   );
 

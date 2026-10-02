@@ -198,7 +198,7 @@ test('le contenu n’a pas disparu : il a changé de place', () => {
   for (const section of ['home', 'orders', 'tracking', 'catalog', 'tickets']) {
     assert.match(html, new RegExp(`id="view-${section}"`), `l’écran ${section} existe`);
   }
-  assert.match(workspace, /orders: \['orders', 'tracking'\]/);
+  assert.match(workspace, /orders: \['orders', 'tracking', 'lots'\]/);
   assert.match(workspace, /tickets: \['tickets'\]/);
   // Changements, ruptures, signalements et échanges : tous dans la liste unique.
   const chargement = workspace.slice(workspace.indexOf('async function chargerTickets'));

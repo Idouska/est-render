@@ -1884,3 +1884,52 @@ input:focus, select:focus, textarea:focus {
 .home-ligne:hover { border-color: var(--brand); }
 .home-quoi { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .home-rien { padding: 18px; text-align: center; border: 1px dashed var(--line); border-radius: var(--r); background: var(--card); }
+
+
+/* ------------------------------------------------- lots reçus : le suivi
+   Une ligne par commande du fichier du jour, son état en couleur : rouge à
+   lancer, orange en production, vert expédiée. */
+.lot {
+  margin-bottom: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--card);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.lot-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  padding: 14px 16px;
+  cursor: pointer;
+  list-style: none;
+}
+.lot-head::-webkit-details-marker { display: none; }
+.lot-head b { font-size: 16px; }
+.lot-compte { font-size: 13px; color: var(--ink-soft); }
+.lot-head .ws-progress { flex-basis: 100%; }
+.lot-tout { margin: 0; padding: 0 16px 10px; }
+.lot-ligne {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--line-soft);
+  border-left: 3px solid transparent;
+}
+.lot-s-A_PREPARER { border-left-color: var(--bad); }
+.lot-s-EN_PRODUCTION { border-left-color: var(--warn); }
+.lot-s-EXPEDIEE { border-left-color: var(--ok); }
+.lot-quoi { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.lot-quoi small { color: var(--ink-mute); font-size: 12.5px; }
+.lot-s-EN_PRODUCTION .lot-pill { background: var(--warn-soft); color: var(--warn-ink); }
+.lot-s-EXPEDIEE .lot-pill { background: var(--ok-soft); color: var(--ok-ink); }
+.lot-gestes { display: flex; gap: 6px; flex-shrink: 0; }
+
+@media (max-width: 640px) {
+  .lot-ligne { flex-wrap: wrap; }
+  .lot-gestes { width: 100%; }
+  .lot-gestes .btn { flex: 1; min-height: var(--tap); }
+}
