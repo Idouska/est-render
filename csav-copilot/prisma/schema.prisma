@@ -105,6 +105,10 @@ model Merchant {
   /// `services/fonctionnalites.ts`.
   fonctionnalites Json @default("{}")
 
+  /// Ce que coûte chaque geste du SAV, en euros, saisi par le marchand :
+  /// `{ "bonRetour": 6.5, "fraisAgence": 3, ... }`. Voir `services/couts/calcul.ts`.
+  coutsSav Json @default("{}")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1026,8 +1030,13 @@ model ReturnCase {
   /// Le bon de retour a-t-il été fourni au client ? Tant que non, le dossier
   /// n'avance pas — c'est la case à vérifier en premier.
   labelSent Boolean @default(false)
+  /// Quand le bon a été fourni : c'est ce jour-là qu'il se paie.
+  labelSentAt DateTime?
 
   status ReturnStatus @default(OPEN)
+  /// Arrivée de la paire chez l'agence (ou chez le marchand) : c'est ce
+  /// jour-là que l'agence facture sa réception.
+  receivedAt DateTime?
 
   /// Numéro de suivi du colis retour, quand le client l'a communiqué.
   trackingNumber String?

@@ -1108,6 +1108,57 @@
         </div>
       </section>
 
+      <!-- ================================================== COÛTS DU SAV ==
+           Ce que coûtent les retours, les renvois et échanges, les paires
+           perdues — mois par mois. Le mois choisi gouverne les tuiles et le
+           détail ; le graphe garde ses douze mois. -->
+      <section class="browse couts" id="view-couts" hidden aria-label="Coûts du SAV">
+        <div class="stats-bar couts-bar">
+          <div class="couts-mois" role="group" aria-label="Mois affiché">
+            <button class="btn btn-small" id="couts-prec" type="button" aria-label="Mois précédent">‹</button>
+            <span class="couts-mois-nom" id="couts-mois-nom" aria-live="polite"></span>
+            <button class="btn btn-small" id="couts-suiv" type="button" aria-label="Mois suivant">›</button>
+          </div>
+          <button class="btn" id="couts-reglages" type="button">Mes coûts unitaires</button>
+        </div>
+
+        <div class="notice notice-warn" id="couts-vide" hidden></div>
+
+        <div class="kpis couts-tuiles" id="couts-tuiles"></div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <span class="panel-title" id="couts-graphe-t">Coût du SAV, 12 derniers mois</span>
+            <span class="hint" id="couts-annee"></span>
+            <div class="seg couts-vue" role="group" aria-label="Affichage du graphe">
+              <button type="button" data-vue="graphe" aria-pressed="true">Graphique</button>
+              <button type="button" data-vue="tableau" aria-pressed="false">Tableau</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div id="couts-graphe"><p class="empty">Chargement…</p></div>
+            <div class="table-wrap couts-table" id="couts-table" hidden></div>
+          </div>
+        </div>
+
+        <div class="stats-duo">
+          <div class="panel">
+            <div class="panel-head">
+              <span class="panel-title">Détail du calcul</span>
+              <span class="hint" id="couts-detail-mois"></span>
+            </div>
+            <div class="card-body" id="couts-detail"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><span class="panel-title">Motifs de retour</span></div>
+            <div class="card-body" id="couts-motifs"></div>
+            <div class="panel-head couts-sous-tete"><span class="panel-title">Modèles les plus retournés</span></div>
+            <div class="card-body" id="couts-modeles"></div>
+          </div>
+        </div>
+        <div class="cg-tip" id="couts-tip" role="tooltip" hidden></div>
+      </section>
+
       <section class="browse" id="view-catalog" hidden aria-label="Catalogue">
         <div class="browse-bar">
           <div class="seg" id="catalog-seg" style="max-width: 260px">
@@ -2378,6 +2429,46 @@ contact@runningupscale.com"></textarea>
         <div class="modal-foot">
           <button class="btn" id="stk-cancel">Annuler</button>
           <button class="btn btn-primary" id="stk-save" disabled>Ajouter au stock</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Les coûts unitaires du SAV : ce que coûte chaque geste. L'écran des
+         coûts les multiplie par le nombre de gestes du mois. -->
+    <div class="backdrop" id="cu-modal" role="dialog" aria-modal="true" aria-labelledby="cu-title" hidden>
+      <div class="modal">
+        <div class="modal-head">
+          <h2 id="cu-title">Mes coûts unitaires</h2>
+          <p>Ce que vous payez pour chaque geste du SAV, en euros. Laissez 0 pour ce qui ne vous coûte rien.</p>
+        </div>
+        <div class="modal-body cu-champs">
+          <div class="field">
+            <label for="cu-bonRetour">Bon de retour fourni au client</label>
+            <span class="cu-euro"><input id="cu-bonRetour" type="text" inputmode="decimal" autocomplete="off" /> € le bon</span>
+          </div>
+          <div class="field">
+            <label for="cu-fraisAgence">Réception d’une paire par l’agence</label>
+            <span class="cu-euro"><input id="cu-fraisAgence" type="text" inputmode="decimal" autocomplete="off" /> € la paire</span>
+          </div>
+          <div class="field">
+            <label for="cu-colisAgence">Colis envoyé par une agence (port et préparation)</label>
+            <span class="cu-euro"><input id="cu-colisAgence" type="text" inputmode="decimal" autocomplete="off" /> € le colis</span>
+          </div>
+          <div class="field">
+            <label for="cu-colisAtelier">Colis d’échange envoyé par l’atelier</label>
+            <span class="cu-euro"><input id="cu-colisAtelier" type="text" inputmode="decimal" autocomplete="off" /> € le colis</span>
+            <span class="set-help">0 si le prix de la paire comprend déjà le port.</span>
+          </div>
+          <div class="field">
+            <label for="cu-prixPaire">Prix d’achat d’une paire à l’atelier</label>
+            <span class="cu-euro"><input id="cu-prixPaire" type="text" inputmode="decimal" autocomplete="off" /> € la paire</span>
+            <span class="set-help">Sert trois fois : paire neuve pour un échange, paire perdue, et paire réemployée (l’économie).</span>
+          </div>
+          <p class="cu-erreur" id="cu-erreur" role="alert" hidden></p>
+        </div>
+        <div class="modal-foot">
+          <button class="btn" id="cu-annuler" type="button">Annuler</button>
+          <button class="btn btn-primary" id="cu-enregistrer" type="button">Enregistrer</button>
         </div>
       </div>
     </div>

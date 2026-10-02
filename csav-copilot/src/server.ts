@@ -22,6 +22,7 @@ import { shopRoutes } from './routes/shops.ts';
 import { supplierWorkspaceRoutes } from './routes/supplierWorkspace.ts';
 import { supplierPortalRoutes } from './routes/supplierPortal.ts';
 import { statsRoutes } from './routes/stats.ts';
+import { coutsRoutes } from './routes/couts.ts';
 import { returnRoutes } from './routes/returns.ts';
 import { agencyPortalRoutes } from './routes/agencyPortal.ts';
 import { ruptureRoutes } from './routes/ruptures.ts';
@@ -176,6 +177,7 @@ export async function buildServer() {
   await app.register(shopRoutes);
   await app.register(commerceRoutes);
   await app.register(statsRoutes);
+  await app.register(coutsRoutes);
   await app.register(supplierRoutes);
   await app.register(ruptureRoutes);
   await app.register(returnRoutes);
