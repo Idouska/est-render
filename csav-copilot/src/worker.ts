@@ -17,6 +17,7 @@ import { processTicket } from './services/tickets/process.ts';
 import { passageAutomatique } from './services/envoi/quotidien.ts';
 import { relancerLotsEnRetard } from './services/envoi/relances.ts';
 import { envoyerRecapitulatifs } from './services/suppliers/recap.ts';
+import { signalerUrgencesSansReponse } from './services/suppliers/urgencesSansReponse.ts';
 
 /*
  * La relance d'une relève restée bredouille.
@@ -86,6 +87,9 @@ const envoiWorker = new Worker(
     await relancerLotsEnRetard();
     // Et le récapitulatif du matin : un par atelier et par jour, à 9 h chez lui.
     await envoyerRecapitulatifs();
+    // Et, à toute heure, les urgences restées sans réponse : au marchand,
+    // qui peut encore appeler l'atelier avant que le colis parte.
+    await signalerUrgencesSansReponse();
   },
   { connection, concurrency: 1 },
 );

@@ -89,6 +89,9 @@
                reprend l'espacement de son parent pour que rien ne bouge
                quand aucune couleur n'est choisie. -->
           <div class="topzone" id="topzone">
+          <!-- Urgences restées sans réponse de l'atelier : en tête de tous
+               les écrans, avec le numéro à appeler, jusqu'à sa réponse. -->
+          <div class="urg-banner" id="urg-banner" role="alert" hidden></div>
           <header class="head">
             <button class="navtoggle" id="navtoggle" type="button" aria-label="Ouvrir la navigation"
               aria-expanded="false">
@@ -2063,6 +2066,16 @@ contact@runningupscale.com"></textarea>
           <div class="field">
             <label for="sup-f-contact">Interlocuteur (facultatif)</label>
             <input type="text" id="sup-f-contact" placeholder="Nom de la personne" />
+          </div>
+          <!-- Ses mails — urgences, récapitulatif, rappels, fichier du jour —
+               partent dans cette langue. Son espace a son propre sélecteur. -->
+          <div class="field">
+            <label for="sup-f-langue">Langue de ses mails</label>
+            <select id="sup-f-langue">
+              <option value="fr">Français</option>
+              <option value="en">English</option>
+              <option value="zh">中文</option>
+            </select>
           </div>
           <div class="field">
             <label for="sup-f-phone">Téléphone (facultatif)</label>

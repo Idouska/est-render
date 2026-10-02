@@ -615,6 +615,10 @@ model Supplier {
   /// le lendemain au lieu de déclencher un mail à elle seule.
   recapLe DateTime?
 
+  /// Langue de ses mails : « fr », « en » ou « zh ». Celle de son espace
+  /// se choisit dans l'espace même ; celle-ci, le marchand la fixe.
+  langue String @default("fr")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -915,6 +919,9 @@ model SupplierAlert {
   /// Rappel envoyé au fournisseur resté muet. Un seul : au-delà, c'est au
   /// marchand de décrocher son téléphone, pas à l'outil d'insister.
   remindedAt     DateTime?
+  /// Urgence restée sans réponse, signalée au marchand. Une fois : le
+  /// bandeau du tableau de bord la garde sous ses yeux jusqu'à la réponse.
+  signaleLe      DateTime?
 
   /// Le marchand a pris acte de la réponse du fournisseur.
   ///
@@ -1205,9 +1212,6 @@ model EnvoiCommande {
   /// Les articles, tels qu'ils sont partis dans le fichier : « 2 × Nike Mind
   /// 001 · 45 ». Gardés ici pour suivre le lot sans réinterroger Shopify.
   articles       String?   @db.Text
-  /// L'atelier a lancé la commande. « Expédiée » ne se stocke pas : ce sont
-  /// ses colis qui le disent.
-  enProductionLe DateTime?
   /// Rappel de retard envoyé à l'atelier. Un seul : au-delà, c'est au
   /// marchand de décrocher son téléphone, pas à l'outil d'insister.
   rappeleLe      DateTime?

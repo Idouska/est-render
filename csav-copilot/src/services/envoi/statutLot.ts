@@ -3,11 +3,11 @@
  * réseau : se teste seul.
  */
 
-export type StatutLot = 'A_PREPARER' | 'EN_PRODUCTION' | 'EXPEDIEE';
+export type StatutLot = 'A_PREPARER' | 'EXPEDIEE';
 
-export function statutDeLaCommande(commande: { enProductionLe: Date | null; colis: number }): StatutLot {
-  if (commande.colis > 0) return 'EXPEDIEE';
-  return commande.enProductionLe ? 'EN_PRODUCTION' : 'A_PREPARER';
+/** Deux états : un colis saisi, et la commande est expédiée. */
+export function statutDeLaCommande(commande: { colis: number }): StatutLot {
+  return commande.colis > 0 ? 'EXPEDIEE' : 'A_PREPARER';
 }
 
 /** Les articles d'une commande en une ligne : « 2 × Nike Mind 001 · 45 ». */
@@ -31,8 +31,7 @@ export function joursDepuis(envoyeLe: Date, maintenant: Date): number {
 
 /**
  * Une commande est en retard quand elle n'est pas expédiée au-delà du délai
- * laissé à l'atelier. « En production » ne suffit pas : le client attend sa
- * paire, pas l'annonce qu'on la fabrique.
+ * laissé à l'atelier.
  */
 export function estEnRetard(commande: {
   statut: StatutLot;

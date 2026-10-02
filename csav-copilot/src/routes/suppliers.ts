@@ -5,8 +5,8 @@ import { recordAudit } from '../lib/audit.ts';
 import { signSupplierWorkspaceToken } from '../lib/supplierToken.ts';
 import { prisma } from '../lib/prisma.ts';
 import { requirePermission, requireSession } from '../plugins/auth.ts';
-import { enTete } from '../services/suppliers/demande.ts';
-import { TITRES_DEMANDE, estUrgente } from '../services/suppliers/urgence.ts';
+import { LANGUES_ATELIER, langueAtelier, mailUrgent as texteUrgent } from '../services/suppliers/langueAtelier.ts';
+import { estUrgente } from '../services/suppliers/urgence.ts';
 import { fiabiliteDesFournisseurs } from '../services/suppliers/fiabiliteDonnees.ts';
 import { resolveEscalation } from '../services/suppliers/escalate.ts';
 import { sendPlainEmail } from '../services/gmail/send.ts';
@@ -26,6 +26,8 @@ const supplierBody = z.object({
   vendors: z.array(z.string().min(1).max(120)).max(50).optional(),
   skuPrefixes: z.array(z.string().min(1).max(60)).max(50).optional(),
   isDefault: z.boolean().optional(),
+  /** Langue de ses mails. */
+  langue: z.enum(LANGUES_ATELIER).optional(),
 });
 
 /**
@@ -46,25 +48,16 @@ async function mailUrgent(
     afterValue: string | null;
     message: string;
   },
-  to: string,
+  atelier: { contactEmail: string; langue: string },
   log: FastifyBaseLogger,
 ): Promise<boolean> {
   try {
     await sendPlainEmail({
       merchantId: alert.merchantId,
-      to,
-      subject: `URGENT — ${TITRES_DEMANDE[alert.kind]}${alert.orderName ? ` · ${alert.orderName}` : ''}`,
-      body: [
-        // Le changement en premier, avant toute phrase : c'est ce qu'on lit
-        // sur l'écran verrouillé d'un téléphone.
-        enTete(alert.kind, alert.beforeValue, alert.afterValue),
-        alert.orderName ? `Commande : ${alert.orderName}` : null,
-        alert.message.trim() || null,
-        '',
-        'Ouvrez votre espace de travail, rubrique « Tickets », pour répondre d’un bouton.',
-      ]
-        .filter((line) => line !== null)
-        .join('\n'),
+      to: atelier.contactEmail,
+      // Dans sa langue : un « Ne pas expédier » compris à moitié, c'est un
+      // colis qui part quand même.
+      ...texteUrgent(alert, langueAtelier(atelier.langue)),
     });
     await prisma.supplierAlert.update({ where: { id: alert.id }, data: { emailedAt: new Date() } });
     return true;
@@ -111,6 +104,7 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
         contactEmail: supplier.contactEmail,
         contactName: supplier.contactName,
         phone: supplier.phone,
+        langue: supplier.langue,
         active: supplier.active,
         ordersAccess: supplier.ordersAccess,
         vendors: supplier.vendors,
@@ -437,7 +431,8 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
         acknowledgedAt: true,
         emailedAt: true,
         handledAt: true,
-        supplier: { select: { id: true, name: true } },
+        // Le téléphone : le bandeau des urgences sans réponse dit qui appeler.
+        supplier: { select: { id: true, name: true, phone: true } },
         ticket: { select: { id: true, subject: true, customerName: true, customerEmail: true } },
       },
     });
@@ -625,11 +620,11 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
       // expédier ») : elle part maintenant, pas au récapitulatif de demain.
       const corrigee = await prisma.supplierAlert.findFirst({
         where: { id: request.params.id, merchantId },
-        include: { supplier: { select: { contactEmail: true, active: true } } },
+        include: { supplier: { select: { contactEmail: true, langue: true, active: true } } },
       });
       const emailed =
         corrigee && corrigee.supplier.active && !corrigee.emailedAt && estUrgente(corrigee.kind)
-          ? await mailUrgent(corrigee, corrigee.supplier.contactEmail, request.log)
+          ? await mailUrgent(corrigee, corrigee.supplier, request.log)
           : false;
 
       await recordAudit({
@@ -693,7 +688,7 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
 
       const supplier = await prisma.supplier.findFirst({
         where: { id: request.params.id, merchantId, active: true },
-        select: { id: true, name: true, contactEmail: true },
+        select: { id: true, name: true, contactEmail: true, langue: true },
       });
       if (!supplier) return reply.code(404).send({ error: 'Fournisseur introuvable' });
 
@@ -734,7 +729,7 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
        */
       const differe = !estUrgente(parsed.data.kind);
 
-      const emailed = differe ? false : await mailUrgent(alert, supplier.contactEmail, request.log);
+      const emailed = differe ? false : await mailUrgent(alert, supplier, request.log);
 
       await recordAudit({
         merchantId,

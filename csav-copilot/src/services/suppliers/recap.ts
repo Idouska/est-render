@@ -3,6 +3,7 @@ import { prisma } from '../../lib/prisma.ts';
 import { FERMETURE, heureAtelier, jourAtelier } from '../envoi/rappel.ts';
 import { sendPlainEmail } from '../gmail/send.ts';
 import { lienAtelier } from '../ruptures/substitution.ts';
+import { langueAtelier } from './langueAtelier.ts';
 import { recapDuJour, type RuptureDuRecap } from './recapTexte.ts';
 import { KINDS_DU_RECAP } from './urgence.ts';
 
@@ -70,6 +71,7 @@ export async function envoyerRecapitulatifs(maintenant = new Date()): Promise<nu
       merchantId: true,
       contactEmail: true,
       recapLe: true,
+      langue: true,
       merchant: { select: { name: true, brandName: true, shopDomain: true, emailSignature: true } },
     },
   });
@@ -115,6 +117,7 @@ export async function envoyerRecapitulatifs(maintenant = new Date()): Promise<nu
     const nom = atelier.merchant.brandName || atelier.merchant.name || atelier.merchant.shopDomain;
     const jours = (date: Date) => Math.floor((maintenant.getTime() - date.getTime()) / 86_400_000);
     const recap = recapDuJour({
+      langue: langueAtelier(atelier.langue),
       merchantName: nom,
       nouvelles: { demandes: nouvelles, ruptures: parDossier(propositions, maintenant) },
       enAttente: {

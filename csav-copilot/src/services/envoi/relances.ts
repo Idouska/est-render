@@ -2,6 +2,7 @@ import { logger } from '../../lib/logger.ts';
 import { prisma } from '../../lib/prisma.ts';
 import { sendPlainEmail } from '../gmail/send.ts';
 import { lienAtelier } from '../ruptures/substitution.ts';
+import { langueAtelier } from '../suppliers/langueAtelier.ts';
 import { FERMETURE, OUVERTURE, heureAtelier, rappelDuRetard } from './rappel.ts';
 
 /**
@@ -66,11 +67,12 @@ export async function relancerLotsEnRetard(maintenant = new Date()): Promise<num
     for (const [supplierId, commandes] of parAtelier) {
       const atelier = await prisma.supplier.findFirst({
         where: { id: supplierId, merchantId: boutique.id, active: true },
-        select: { contactEmail: true },
+        select: { contactEmail: true, langue: true },
       });
       if (!atelier) continue;
 
       const rappel = rappelDuRetard({
+        langue: langueAtelier(atelier.langue),
         merchantName: nom,
         delaiJours: boutique.lotDelaiJours,
         commandes: commandes.map((commande) => ({
