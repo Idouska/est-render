@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { enTete } from '../src/services/suppliers/demande.ts';
@@ -57,6 +57,17 @@ test('plus aucun chemin n’écrit au fournisseur en texte libre', () => {
   assert.doesNotMatch(app, /id="esc-create"|esc-reason|esc-note/);
   assert.doesNotMatch(app, /\/api\/tickets\/\$\{[^}]+\}\/escalations`, \{\s*method: 'POST'/);
   assert.match(app, /supplier: \(\) => openChangeRequest\(ticket\)/);
+});
+
+test('l’ancien portail de réponse en texte libre a disparu', () => {
+  const portail = lire('src/routes/supplierPortal.ts');
+  // Une page qui renvoie à l'atelier, et rien d'autre : ni lecture, ni écriture.
+  assert.match(portail, /reply\.code\(410\)\.type\('text\/html'\)\.sendFile\('supplier\.html'\)/);
+  assert.doesNotMatch(portail, /\/api\/supplier-portal|verifySupplierToken|signSupplierWorkspaceToken/);
+  assert.ok(!existsSync(fileURLToPath(new URL('../public/supplier.js', import.meta.url))));
+  assert.doesNotMatch(lire('src/routes/supplierWorkspace.ts'), /\/supplier\/\$\{/);
+  // Le jeton d'escalade n'est plus émis nulle part.
+  assert.doesNotMatch(lire('src/lib/supplierToken.ts'), /export function (sign|verify)SupplierToken\(/);
 });
 
 test('une proposition de remplacement ouvre le dossier de rupture qui manque', () => {

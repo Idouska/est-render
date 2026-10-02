@@ -11,10 +11,11 @@
  * en silence et personne ne le voit.
  */
 
-import type { Prisma } from '@prisma/client';
+import type { Prisma, SupplierAlertKind } from '@prisma/client';
 import { logger } from './lib/logger.ts';
 import { sendPlainEmail } from './services/gmail/send.ts';
 import { enTete } from './services/suppliers/demande.ts';
+import { KINDS_URGENTS } from './services/suppliers/urgence.ts';
 import { disconnectPrisma, prisma } from './lib/prisma.ts';
 import { renewExpiringWatches } from './services/gmail/watch.ts';
 
@@ -90,18 +91,22 @@ export async function purgeExpiredData(): Promise<{
 }
 
 /**
- * Rappel aux fournisseurs restés muets sur une demande de changement.
+ * Rappel aux fournisseurs restés muets sur une demande urgente.
  *
  * Une demande sans réponse est une promesse faite à un client qui attend. Le
- * cron tourne chaque jour : toute demande en attente depuis plus de douze
- * heures reçoit un rappel par mail — un seul. Au-delà, l'outil n'insiste
- * plus : c'est au marchand de décrocher son téléphone, et la demande reste
- * en rouge chez lui précisément pour ça.
+ * cron tourne chaque jour : toute demande urgente en attente depuis plus de
+ * douze heures reçoit un rappel par mail — un seul. Au-delà, l'outil
+ * n'insiste plus : c'est au marchand de décrocher son téléphone, et la
+ * demande reste en rouge chez lui précisément pour ça.
+ *
+ * Les autres sont rappelées dans le récapitulatif du matin : les rappeler ici
+ * aussi ferait deux mails pour une seule demande.
  */
 async function remindSilentSuppliers(): Promise<number> {
   const stale = await prisma.supplierAlert.findMany({
     where: {
       status: 'PENDING',
+      kind: { in: [...KINDS_URGENTS] as SupplierAlertKind[] },
       remindedAt: null,
       createdAt: { lte: new Date(Date.now() - 12 * 60 * 60 * 1000) },
     },
