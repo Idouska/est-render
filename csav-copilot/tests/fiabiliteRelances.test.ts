@@ -9,8 +9,7 @@ import { calculerFiabilite } from '../src/services/suppliers/fiabilite.ts';
 /*
  * Relances de retard et fiabilité des ateliers.
  *
- * CE QUE CES TESTS PROTÈGENT. Un retard se juge sur l'expédition, pas sur
- * l'annonce d'une production ; le rappel ne part qu'une fois, et seulement
+ * CE QUE CES TESTS PROTÈGENT. Un retard se juge sur l'expédition ; le rappel ne part qu'une fois, et seulement
  * s'il est vraiment parti ; et un chiffre de fiabilité sans donnée reste vide
  * plutôt que de valoir zéro, qui se lirait « parfait ».
  */
@@ -20,11 +19,10 @@ const lire = (chemin: string) =>
 const maintenant = new Date('2026-10-10T10:00:00Z');
 const ilYa = (jours: number) => new Date(maintenant.getTime() - jours * 86_400_000);
 
-test('en retard : non expédiée au-delà du délai, même « en production »', () => {
+test('en retard : non expédiée au-delà du délai', () => {
   const base = { delaiJours: 2, maintenant };
   assert.equal(estEnRetard({ ...base, statut: 'A_PREPARER', envoyeLe: ilYa(1) }), false);
   assert.equal(estEnRetard({ ...base, statut: 'A_PREPARER', envoyeLe: ilYa(3) }), true);
-  assert.equal(estEnRetard({ ...base, statut: 'EN_PRODUCTION', envoyeLe: ilYa(3) }), true);
   assert.equal(estEnRetard({ ...base, statut: 'EXPEDIEE', envoyeLe: ilYa(9) }), false);
   assert.equal(joursDepuis(ilYa(3.4), maintenant), 3);
 });

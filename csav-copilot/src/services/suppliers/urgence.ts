@@ -8,7 +8,8 @@
  * manquant, une date — se lit très bien dans un seul mail, à son heure.
  *
  * Sans base ni réseau : se teste seul, et le tableau de bord en garde une
- * copie que les tests comparent.
+ * copie que les tests comparent. Les titres des motifs, dans chaque langue,
+ * sont dans `langueAtelier.ts`.
  */
 
 export const KINDS_URGENTS: ReadonlySet<string> = new Set([
@@ -26,16 +27,8 @@ export const KINDS_DU_RECAP = ['MISSING_ITEM', 'DELAY', 'TRACKING', 'OTHER'] as 
 
 export const estUrgente = (kind: string): boolean => KINDS_URGENTS.has(kind);
 
-export const TITRES_DEMANDE: Readonly<Record<string, string>> = {
-  ADDRESS: 'Adresse à corriger',
-  PHONE: 'Téléphone à corriger',
-  PRODUCT: 'Modèle à changer',
-  SIZE: 'Taille à changer',
-  COLOR: 'Couleur à changer',
-  HOLD: 'Ne pas expédier',
-  CANCEL: 'Commande annulée',
-  MISSING_ITEM: 'Article manquant',
-  DELAY: 'Date d’expédition demandée',
-  TRACKING: 'Point sur le colis',
-  OTHER: 'Message',
-};
+/**
+ * Au-delà, une urgence sans réponse est signalée au marchand : le colis
+ * risque de partir, et c'est le moment de décrocher le téléphone.
+ */
+export const DELAI_URGENCE_H = 4;

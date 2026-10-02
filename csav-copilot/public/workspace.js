@@ -624,10 +624,80 @@ function renderFocus(shown) {
           ${esc(t('orders.report'))}
         </button>
       </div>
+
+      <!-- Tout ce qui est arrivé à cette commande, à la suite : chargé à
+           l'ouverture seulement, la plupart des commandes se préparent sans. -->
+      <details class="ord-hist" data-hist="${esc(order.id)}" data-hist-no="${esc(order.name)}">
+        <summary>${esc(t('hist.title'))}</summary>
+        <div class="ord-hist-list"></div>
+      </details>
     </article>`;
+
+  $('ws-orders')
+    .querySelector('[data-hist]')
+    ?.addEventListener('toggle', (event) => {
+      if (event.currentTarget.open) void chargerHistorique(event.currentTarget);
+    });
 
   // Le guichet s'ouvre en haut de la commande, pas là où la liste en était.
   $('ws-orders').scrollIntoView({ block: 'start' });
+}
+
+/*
+ * L'historique d'une commande : reçue dans un lot, demandes et réponses,
+ * remplacements, signalements, colis. Le serveur ne renvoie que des faits ;
+ * la phrase se compose ici, dans la langue de l'atelier.
+ */
+async function chargerHistorique(details) {
+  if (details.dataset.charge) return;
+  details.dataset.charge = '1';
+  const liste = details.querySelector('.ord-hist-list');
+  liste.innerHTML = `<p class="empty">${esc(t('tk.loading'))}</p>`;
+  try {
+    const { evenements } = await api(
+      `/api/workspace/${supplierId}/historique?commande=${encodeURIComponent(details.dataset.hist)}&numero=${encodeURIComponent(details.dataset.histNo)}`,
+    );
+    liste.innerHTML = evenements.length
+      ? `<ol>${evenements.map(ligneHistorique).join('')}</ol>`
+      : `<p class="empty">${esc(t('hist.empty'))}</p>`;
+  } catch (error) {
+    // Un échec se réessaie en refermant puis rouvrant.
+    delete details.dataset.charge;
+    liste.innerHTML = `<p class="empty">${esc(error.code ? messageServeur(error, 'hist') : t('hist.error'))}</p>`;
+  }
+}
+
+function ligneHistorique(evenement) {
+  const changement =
+    evenement.afterValue && !['DELAY', 'MISSING_ITEM', 'TRACKING'].includes(evenement.kind)
+      ? ` : ${evenement.beforeValue ?? '?'} → ${evenement.afterValue}`
+      : evenement.kind === 'DELAY' && evenement.afterValue
+        ? ` : ${evenement.afterValue}`
+        : evenement.beforeValue && ['MISSING_ITEM', 'TRACKING'].includes(evenement.kind)
+          ? ` : ${evenement.beforeValue}`
+          : '';
+  const texte = {
+    LOT: () => t('hist.lot'),
+    DEMANDE: () => `${t('hist.request')} — ${kindLabel(evenement.kind)}${changement}`,
+    REPONSE: () =>
+      `${t(evenement.accepte ? 'hist.confirmed' : 'hist.refused', { quoi: kindLabel(evenement.kind) })}${
+        evenement.note ? ` — « ${evenement.note} »` : ''
+      }`,
+    REMPLACEMENT: () => t('hist.subst', { n: evenement.combien }),
+    REMPLACEMENT_REPONSE: () => t(evenement.accepte ? 'hist.substYes' : 'hist.substNo', { modele: evenement.modele }),
+    SIGNALEMENT: () => `${t('hist.report')}${evenement.sujet ? ` — ${evenement.sujet}` : ''}`,
+    COLIS: () =>
+      `${t('hist.parcel', { i: evenement.index, n: evenement.total })} : ${evenement.numero}${
+        evenement.transporteur ? ` (${evenement.transporteur})` : ''
+      }`,
+  }[evenement.type];
+  const date = new Date(evenement.date);
+  return `<li class="hist-${esc(evenement.type.toLowerCase())}">
+    <time datetime="${esc(evenement.date)}">${esc(
+      date.toLocaleDateString(locale, { day: '2-digit', month: '2-digit' }),
+    )} ${esc(date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }))}</time>
+    <span>${esc(texte ? texte() : evenement.type)}</span>
+  </li>`;
 }
 
 /**
@@ -2906,9 +2976,8 @@ function resumeDe(html) {
    LOTS REÇUS — le fichier du jour, suivi commande par commande
 
    Le marchand envoie chaque matin ses commandes en fichier. L'atelier les
-   retrouve ici, avec trois états : à préparer, en production, expédiée. Il
-   lance une commande — ou tout le lot — d'un bouton ; « expédiée » vient de
-   lui-même dès qu'un colis est saisi, comme d'habitude.
+   retrouve ici, avec deux états : à préparer, puis expédiée — qui vient
+   d'elle-même dès qu'un colis est saisi, comme d'habitude.
    ========================================================================== */
 
 async function loadLots() {
@@ -2935,39 +3004,21 @@ function renderLots() {
   rows.innerHTML = lots
     .map((lot, rang) => {
       const total = lot.commandes.length;
-      const aLancer = lot.commandes.filter((commande) => commande.statut === 'A_PREPARER');
       const jour = new Date(lot.envoyeLe).toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' });
       // Le lot le plus récent s'ouvre seul : c'est celui du jour.
       return `<details class="lot"${rang === 0 ? ' open' : ''}>
         <summary class="lot-head">
           <b>${esc(t('lots.of', { date: jour }))}</b>
           <span class="lot-compte">${esc(
-            t('lots.summary', { a: lot.compte.A_PREPARER, p: lot.compte.EN_PRODUCTION, e: lot.compte.EXPEDIEE }),
+            t('lots.summary', { a: lot.compte.A_PREPARER, e: lot.compte.EXPEDIEE }),
           )}</span>
           ${progressBar(lot.compte.EXPEDIEE, total, t('lots.shipped', { n: lot.compte.EXPEDIEE, total }))}
         </summary>
-        ${
-          aLancer.length
-            ? `<p class="lot-tout"><button class="btn btn-small btn-primary" type="button"
-                 data-lot-tout="${esc(aLancer.map((commande) => commande.shopifyOrderId).join(','))}">${esc(
-                 t('lots.allProd', { n: aLancer.length }),
-               )}</button></p>`
-            : ''
-        }
         ${lot.commandes.map(ligneDuLot).join('')}
       </details>`;
     })
     .join('');
 
-  rows.querySelectorAll('[data-lot-prod]').forEach((bouton) =>
-    bouton.addEventListener('click', () => void lancerProduction([bouton.dataset.lotProd], true, bouton)),
-  );
-  rows.querySelectorAll('[data-lot-annuler]').forEach((bouton) =>
-    bouton.addEventListener('click', () => void lancerProduction([bouton.dataset.lotAnnuler], false, bouton)),
-  );
-  rows.querySelectorAll('[data-lot-tout]').forEach((bouton) =>
-    bouton.addEventListener('click', () => void lancerProduction(bouton.dataset.lotTout.split(','), true, bouton)),
-  );
   rows.querySelectorAll('[data-lot-colis]').forEach((bouton) =>
     bouton.addEventListener('click', () => saisirColisDuLot(bouton.dataset.lotColis)),
   );
@@ -2975,18 +3026,6 @@ function renderLots() {
 
 /** Une commande du lot : ce qui part, où elle en est, et le geste suivant. */
 function ligneDuLot(commande) {
-  const geste = {
-    A_PREPARER: `<button class="btn btn-small" type="button" data-lot-prod="${esc(commande.shopifyOrderId)}">${esc(
-      t('lots.prod'),
-    )}</button>`,
-    // Une commande lancée par erreur se reprend : le marchand lirait sinon
-    // « en production » sur une paire qui n'a jamais été commencée.
-    EN_PRODUCTION: `<button class="btn btn-small btn-ghost" type="button" data-lot-annuler="${esc(
-      commande.shopifyOrderId,
-    )}">${esc(t('lots.undo'))}</button>`,
-    EXPEDIEE: '',
-  }[commande.statut];
-
   return `<div class="lot-ligne lot-s-${esc(commande.statut)}">
     <div class="lot-quoi">
       <b>${esc(commande.orderName)}</b>
@@ -3000,7 +3039,6 @@ function ligneDuLot(commande) {
     <span class="pill lot-pill">${esc(t(`lots.s.${commande.statut}`))}</span>
     ${commande.enRetard ? `<span class="pill lot-retard">${esc(t('lots.late', { n: commande.joursDepuis }))}</span>` : ''}
     <div class="lot-gestes">
-      ${geste}
       ${
         commande.statut === 'EXPEDIEE'
           ? ''
@@ -3010,21 +3048,6 @@ function ligneDuLot(commande) {
       }
     </div>
   </div>`;
-}
-
-async function lancerProduction(ids, enProduction, bouton) {
-  bouton.disabled = true;
-  try {
-    await api(`/api/workspace/${supplierId}/lots/production`, {
-      method: 'POST',
-      body: { shopifyOrderIds: ids, enProduction },
-    });
-    toast(t('lots.done'));
-    await loadLots();
-  } catch (error) {
-    bouton.disabled = false;
-    toast(messageServeur(error, 'lots.error'), true);
-  }
 }
 
 /*

@@ -26,7 +26,8 @@ import { enModeTest } from '../services/modeTest.ts';
 import { fonctionnaliteActive, fonctionnalitesDuMarchand } from '../services/fonctionnalites.ts';
 import { commandesServiesParLeStock } from '../services/reshipment/reservations.ts';
 import { enTete } from '../services/suppliers/demande.ts';
-import { lotsRecents, marquerEnProduction } from '../services/envoi/lots.ts';
+import { lotsRecents } from '../services/envoi/lots.ts';
+import { chronologie } from '../services/suppliers/historique.ts';
 
 const TRENTE_JOURS = 30 * 24 * 60 * 60 * 1000;
 const ADRESSE_WEB_ATELIER = /:\/\/|^www\./i;
@@ -1690,40 +1691,81 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
     },
   );
 
-  /** « En production » : une commande, plusieurs, ou tout un lot d'un geste. */
-  app.post<{ Params: { id: string }; Querystring: { token?: string } }>(
-    '/api/workspace/:id/lots/production',
+
+  /**
+   * L'historique d'une commande : reçue dans un lot, demandes et réponses,
+   * remplacements, signalements, colis — à la suite.
+   *
+   * Même règle d'accès que la liste : en « confiées », seulement ses
+   * commandes. Et chaque source est bornée à CET atelier — les demandes faites
+   * à un autre fournisseur sur la même commande ne le regardent pas.
+   */
+  app.get<{ Params: { id: string }; Querystring: { token?: string; commande?: string; numero?: string } }>(
+    '/api/workspace/:id/historique',
     async (request, reply) => {
       const workspace = await authorize(request, reply);
       if (!workspace) return;
 
-      const parsed = z
-        .object({
-          shopifyOrderIds: z.array(z.string().min(1).max(120)).min(1).max(500),
-          enProduction: z.boolean(),
-        })
-        .safeParse(request.body);
-      if (!parsed.success) return reply.code(400).send({ error: 'Demande invalide' });
+      const commande = String(request.query.commande ?? '').slice(0, 120);
+      const numero = String(request.query.numero ?? '').slice(0, 60);
+      if (!commande) return reply.code(400).send({ error: 'Commande requise' });
 
-      const modifiees = await marquerEnProduction({
-        merchantId: workspace.merchantId,
-        supplierId: workspace.supplierId,
-        shopifyOrderIds: parsed.data.shopifyOrderIds,
-        enProduction: parsed.data.enProduction,
+      const autorisees = await allowedOrderIds(workspace);
+      if (autorisees && !autorisees.includes(commande)) {
+        return reply.code(403).send({ code: 'non_confiee', error: 'Cette commande ne vous est pas confiée.' });
+      }
+
+      const chez = { merchantId: workspace.merchantId };
+      const [lots, demandes, remplacements, signalements, colis] = await Promise.all([
+        prisma.envoiCommande.findMany({
+          where: { ...chez, shopifyOrderId: commande, envoi: { supplierId: workspace.supplierId } },
+          select: { envoi: { select: { emailedAt: true } } },
+        }),
+        prisma.supplierAlert.findMany({
+          where: {
+            ...chez,
+            supplierId: workspace.supplierId,
+            // Une demande saisie à la main n'a parfois que le numéro.
+            OR: [{ shopifyOrderId: commande }, ...(numero ? [{ shopifyOrderId: null, orderName: numero }] : [])],
+          },
+          select: {
+            kind: true,
+            beforeValue: true,
+            afterValue: true,
+            message: true,
+            status: true,
+            supplierNote: true,
+            createdAt: true,
+            acknowledgedAt: true,
+          },
+        }),
+        prisma.ruptureSubstitution.findMany({
+          where: { ...chez, supplierId: workspace.supplierId, ticket: { shopifyOrderId: commande } },
+          select: { productTitle: true, variantTitle: true, accepte: true, createdAt: true, reponduLe: true },
+        }),
+        prisma.ticket.findMany({
+          where: {
+            ...chez,
+            shopifyOrderId: commande,
+            gmailThreadId: { startsWith: `supplier:${workspace.supplierId}:` },
+          },
+          select: { subject: true, createdAt: true },
+        }),
+        prisma.parcel.findMany({
+          where: { ...chez, shopifyOrderId: commande },
+          select: { trackingNumber: true, index: true, total: true, carrier: true, createdAt: true },
+        }),
+      ]);
+
+      return reply.send({
+        evenements: chronologie({
+          lots: lots.map((lot) => ({ envoyeLe: lot.envoi.emailedAt })),
+          demandes,
+          remplacements,
+          signalements,
+          colis,
+        }),
       });
-
-      await recordAudit({
-        merchantId: workspace.merchantId,
-        actorType: 'SUPPLIER',
-        actorId: workspace.supplierId,
-        action: parsed.data.enProduction ? 'supplier.lot_production' : 'supplier.lot_production_cancelled',
-        targetType: 'Supplier',
-        targetId: workspace.supplierId,
-        metadata: { commandes: modifiees },
-        ipAddress: request.ip,
-      });
-
-      return reply.send({ modifiees });
     },
   );
 

@@ -5742,6 +5742,7 @@ function openSupplierForm(id) {
   $('sup-f-email').value = supplier?.contactEmail ?? '';
   $('sup-f-contact').value = supplier?.contactName ?? '';
   $('sup-f-phone').value = supplier?.phone ?? '';
+  $('sup-f-langue').value = supplier?.langue ?? 'fr';
   $('sup-f-notes').value = supplier?.notes ?? '';
   $('sup-f-active').checked = supplier ? supplier.active : true;
 
@@ -6238,6 +6239,7 @@ $('sup-f-save').addEventListener('click', async () => {
     ordersAccess: $('sup-f-access').value,
     contactName: $('sup-f-contact').value.trim() || null,
     phone: $('sup-f-phone').value.trim() || null,
+    langue: $('sup-f-langue').value,
     notes: $('sup-f-notes').value.trim() || null,
     active: $('sup-f-active').checked,
     // Saisi en une ligne, stocké en liste : demander un champ par marque
@@ -10037,6 +10039,52 @@ function modificationsEnAttente(demandes) {
   return (demandes ?? []).filter((d) => d.status === 'PENDING' && KINDS_MODIFICATION.has(d.kind)).length;
 }
 
+/** Copie de `DELAI_URGENCE_H` (src/services/suppliers/urgence.ts), comparée par les tests. */
+const DELAI_URGENCE_H = 4;
+
+/**
+ * Les urgences auxquelles l'atelier n'a pas répondu à temps. Au-delà de trois
+ * jours, le colis est parti ou non : le bandeau n'y changerait plus rien.
+ */
+function urgencesSansReponse(demandes, maintenant = Date.now()) {
+  return (demandes ?? []).filter((demande) => {
+    const age = maintenant - new Date(demande.createdAt).getTime();
+    return (
+      demande.status === 'PENDING' &&
+      KINDS_URGENTS.has(demande.kind) &&
+      age > DELAI_URGENCE_H * 3_600_000 &&
+      age < 3 * 86_400_000
+    );
+  });
+}
+
+function renderUrgencesSansReponse(demandes) {
+  const bandeau = $('urg-banner');
+  if (!bandeau) return;
+  const liste = urgencesSansReponse(demandes);
+  bandeau.hidden = liste.length === 0;
+  if (liste.length === 0) return;
+
+  const heures = (demande) => Math.floor((Date.now() - new Date(demande.createdAt).getTime()) / 3_600_000);
+  bandeau.innerHTML = `<p><b>${
+    liste.length > 1 ? `${liste.length} demandes urgentes` : 'Une demande urgente'
+  } sans réponse de l’atelier depuis plus de ${DELAI_URGENCE_H} h.</b> Le colis peut partir tel quel : appelez l’atelier.</p>
+    <ul>${liste
+      .slice(0, 5)
+      .map(
+        (demande) => `<li><b>${esc(demande.orderName ?? 'Sans commande')}</b> · ${esc(CHANGE_KINDS[demande.kind] ?? demande.kind)}${
+          demande.afterValue ? ` (${esc(demande.beforeValue ?? '?')} → ${esc(demande.afterValue)})` : ''
+        } · ${esc(demande.supplier?.name ?? '—')}${
+          demande.supplier?.phone
+            ? ` · <a href="tel:${esc(demande.supplier.phone.replace(/[^\d+]/g, ''))}">${esc(demande.supplier.phone)}</a>`
+            : ''
+        } · depuis ${heures(demande)} h</li>`,
+      )
+      .join('')}</ul>
+    <button class="btn btn-small" type="button" id="urg-voir">Voir les demandes</button>`;
+  $('urg-voir').addEventListener('click', () => setView('suppliers'));
+}
+
 let changesCountAt = 0;
 
 async function refreshChangesCount() {
@@ -10062,6 +10110,7 @@ async function refreshChangesCount() {
 
     const pending = modificationsEnAttente(demandes);
     state.changesPending = pending;
+    renderUrgencesSansReponse(demandes);
     state.supplierActivity = activity;
     state.navCounts = {
       ...state.navCounts,
@@ -15582,20 +15631,18 @@ const lignesTexte = (lignes) =>
 
 const STATUTS_LOT = {
   A_PREPARER: { label: 'À préparer', tone: 'bad' },
-  EN_PRODUCTION: { label: 'En production', tone: 'wait' },
   EXPEDIEE: { label: 'Expédiée', tone: 'ok' },
 };
 
 /*
- * Où en est le lot chez l'atelier, sans lui écrire : trois chiffres, et le
+ * Où en est le lot chez l'atelier, sans lui écrire : deux chiffres, et le
  * détail par commande à la demande. « Expédiée » vient de ses colis saisis.
  */
 function avancementDuLot(lot) {
-  const { A_PREPARER: a, EN_PRODUCTION: p, EXPEDIEE: e } = lot.compte;
+  const { A_PREPARER: a, EXPEDIEE: e } = lot.compte;
   return `<details class="envoi-lot"${lot.compte.RETARD ? ' open' : ''}>
     <summary>${lot.compte.RETARD ? `<span class="tag tone-bad envoi-retard">${lot.compte.RETARD} en retard</span>` : ''}
       <span class="tag tone-bad">${a} à préparer</span>
-      <span class="tag tone-wait">${p} en production</span>
       <span class="tag tone-ok">${e} expédiée(s)</span></summary>
     ${lot.commandes
       .map(

@@ -18,12 +18,19 @@ import { resumeArticles, statutDeLaCommande } from '../src/services/envoi/statut
 const lire = (chemin: string) =>
   readFileSync(fileURLToPath(new URL(`../${chemin}`, import.meta.url)), 'utf8');
 
-test('le statut d’une commande : les colis d’abord, puis le geste de l’atelier', () => {
-  assert.equal(statutDeLaCommande({ enProductionLe: null, colis: 0 }), 'A_PREPARER');
-  assert.equal(statutDeLaCommande({ enProductionLe: new Date(), colis: 0 }), 'EN_PRODUCTION');
-  // Un colis saisi l'emporte : l'atelier n'a pas à déclarer qu'il a expédié.
-  assert.equal(statutDeLaCommande({ enProductionLe: null, colis: 1 }), 'EXPEDIEE');
-  assert.equal(statutDeLaCommande({ enProductionLe: new Date(), colis: 2 }), 'EXPEDIEE');
+test('deux états : à préparer, puis expédiée dès qu’un colis est saisi', () => {
+  assert.equal(statutDeLaCommande({ colis: 0 }), 'A_PREPARER');
+  // L'atelier n'a rien à déclarer : son colis suffit.
+  assert.equal(statutDeLaCommande({ colis: 1 }), 'EXPEDIEE');
+  assert.equal(statutDeLaCommande({ colis: 2 }), 'EXPEDIEE');
+});
+
+test('plus d’étape « en production », nulle part', () => {
+  assert.doesNotMatch(lire('prisma/schema.prisma'), /enProductionLe/);
+  assert.doesNotMatch(lire('src/routes/supplierWorkspace.ts'), /lots\/production|marquerEnProduction/);
+  for (const fichier of ['public/workspace.js', 'public/workspace.i18n.js', 'public/app.js', 'src/services/envoi/lots.ts']) {
+    assert.doesNotMatch(lire(fichier), /EN_PRODUCTION|lots\.prod|lancerProduction/, fichier);
+  }
 });
 
 test('les articles partent avec la commande, en une ligne', () => {
@@ -37,14 +44,12 @@ test('les articles partent avec la commande, en une ligne', () => {
   assert.match(lire('src/services/envoi/quotidien.ts'), /articles: resumeArticles\(commande\.lignes\),/);
 });
 
-test('un atelier ne lit et ne lance que ses propres lots', () => {
+test('un atelier ne lit que ses propres lots', () => {
   const service = lire('src/services/envoi/lots.ts');
   assert.match(service, /\.\.\.\(params\.supplierId \? \{ supplierId: params\.supplierId \} : \{\}\)/);
-  assert.match(service, /envoi: \{ supplierId: params\.supplierId \},/);
 
   const routes = lire('src/routes/supplierWorkspace.ts');
   assert.match(routes, /lotsRecents\(\{ merchantId: workspace\.merchantId, supplierId: workspace\.supplierId \}\)/);
-  assert.match(routes, /marquerEnProduction\(\{\s*merchantId: workspace\.merchantId,\s*supplierId: workspace\.supplierId,/);
 });
 
 test('en accès « confiées », les commandes reçues par fichier sont visibles', () => {
@@ -66,10 +71,10 @@ test('l’atelier suit ses lots dans « Commandes », et saisit le colis au guic
 
   const appelees = new Set([
     ...[...js.matchAll(/\bt\('(lots\.[\w.]+)'/g)].map((m) => m[1]!),
-    ...['A_PREPARER', 'EN_PRODUCTION', 'EXPEDIEE'].map((statut) => `lots.s.${statut}`),
+    ...['A_PREPARER', 'EXPEDIEE'].map((statut) => `lots.s.${statut}`),
     'sous.lots',
   ]);
-  assert.ok(appelees.size >= 14);
+  assert.ok(appelees.size >= 9);
   for (const { code } of LANGS as Array<{ code: string }>) {
     const table = (STRINGS as Record<string, Record<string, string>>)[code]!;
     assert.deepEqual([...appelees].filter((cle) => typeof table[cle] !== 'string'), [], `${code} : une clé absente`);

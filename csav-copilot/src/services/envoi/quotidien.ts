@@ -3,6 +3,7 @@ import { prisma } from '../../lib/prisma.ts';
 import { ordersToXlsx } from '../export/ordersXlsx.ts';
 import { resumeArticles } from './statutLot.ts';
 import { sendPlainEmail } from '../gmail/send.ts';
+import { langueAtelier, mailDuJour } from '../suppliers/langueAtelier.ts';
 import { ENVOI_SIMULE } from '../modeTest.ts';
 import {
   rapprocherStockUnique,
@@ -298,9 +299,6 @@ export interface ResultatEnvoi {
 }
 
 /** Libellé du jour pour l'objet du mail : « 1 oct. ». */
-function jourCourt(date: Date): string {
-  return date.toLocaleDateString('fr-FR', { timeZone: FUSEAU, day: 'numeric', month: 'short' });
-}
 
 /**
  * Envoie à chaque fournisseur le fichier de ses commandes.
@@ -342,7 +340,7 @@ export async function envoyerAuxFournisseurs(params: {
   for (const [supplierId, commandes] of parFournisseur) {
     const supplier = await prisma.supplier.findUniqueOrThrow({
       where: { id: supplierId },
-      select: { name: true, contactEmail: true },
+      select: { name: true, contactEmail: true, langue: true },
     });
 
     const envoi = await prisma.envoiFournisseur.create({
@@ -383,22 +381,19 @@ export async function envoyerAuxFournisseurs(params: {
       const fichier = await ordersToXlsx(
         completes.map((order) => ({ order, storeUrl: `https://${merchant.shopDomain}` })),
       );
-      // Le jour des commandes : la veille de la borne de minuit.
-      const jour = jourCourt(new Date(new Date(etat.jusqua).getTime() - 1));
-
       const envoye = await sendPlainEmail({
         merchantId,
         to: supplier.contactEmail,
         fromName: nom,
-        subject: `Commandes du ${jour} — ${ids.size} à préparer`,
-        body: [
-          'Bonjour,',
-          '',
-          `Voici les ${ids.size} commande(s) à préparer, dans le fichier joint.`,
-          'Les commandes que nous expédions nous-mêmes depuis notre stock ne sont pas dans le fichier : ne les préparez pas.',
-          '',
-          merchant.emailSignature?.trim() || nom,
-        ].join('\n'),
+        // Dans la langue de l'atelier ; le jour des commandes est la veille
+        // de la borne de minuit.
+        ...mailDuJour({
+          langue: langueAtelier(supplier.langue),
+          date: new Date(new Date(etat.jusqua).getTime() - 1),
+          fuseau: FUSEAU,
+          combien: ids.size,
+          signature: merchant.emailSignature?.trim() || nom,
+        }),
         attachments: [
           {
             filename: `commandes-${new Date(etat.jusqua).toISOString().slice(0, 10)}.xlsx`,

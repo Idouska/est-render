@@ -1,4 +1,4 @@
-import { TITRES_DEMANDE } from './urgence.ts';
+import { MOTS, type LangueAtelier } from './langueAtelier.ts';
 
 /**
  * Le texte du récapitulatif du matin. Sans base ni réseau : se teste seul.
@@ -26,9 +26,9 @@ type EnAttente<T> = T & { jours: number };
 
 const MESSAGE_MAX = 140;
 
-function detail(demande: DemandeDuRecap): string | null {
+function detail(demande: DemandeDuRecap, langue: LangueAtelier): string | null {
   if (demande.kind === 'MISSING_ITEM' || demande.kind === 'TRACKING') return demande.beforeValue;
-  if (demande.kind === 'DELAY') return demande.afterValue ? `au plus tard le ${demande.afterValue}` : null;
+  if (demande.kind === 'DELAY') return demande.afterValue ? MOTS[langue].auPlusTard(demande.afterValue) : null;
   return demande.afterValue ? `${demande.beforeValue ?? '?'} → ${demande.afterValue}` : null;
 }
 
@@ -38,52 +38,56 @@ function message(texte: string): string | null {
   return uneLigne.length > MESSAGE_MAX ? `${uneLigne.slice(0, MESSAGE_MAX - 1)}…` : uneLigne;
 }
 
-export function ligneDemande(demande: DemandeDuRecap): string {
-  const titre = TITRES_DEMANDE[demande.kind] ?? 'Demande';
-  const precision = detail(demande);
+export function ligneDemande(demande: DemandeDuRecap, langue: LangueAtelier = 'fr'): string {
+  const mots = MOTS[langue];
+  const titre = mots.titres[demande.kind] ?? mots.demande;
+  const precision = detail(demande, langue);
   const mot = message(demande.message);
+  // Les deux-points à la française gardent leur espace ; pas les autres.
+  const deuxPoints = langue === 'fr' ? ' : ' : langue === 'zh' ? '：' : ': ';
   return [
-    `- ${demande.orderName ?? 'Sans commande'} — ${titre}${precision ? ` : ${precision}` : ''}`,
+    `- ${demande.orderName ?? mots.sansCommande} — ${titre}${precision ? `${deuxPoints}${precision}` : ''}`,
     mot ? ` — « ${mot} »` : '',
   ].join('');
 }
 
-export function ligneRupture(rupture: RuptureDuRecap): string {
-  const modeles = rupture.combien > 1 ? `${rupture.combien} modèles de remplacement` : 'un modèle de remplacement';
-  return `- ${rupture.orderName ?? 'Sans commande'} — Rupture : ${modeles} à valider`;
+export function ligneRupture(rupture: RuptureDuRecap, langue: LangueAtelier = 'fr'): string {
+  return `- ${rupture.orderName ?? MOTS[langue].sansCommande} — ${MOTS[langue].rupture(rupture.combien)}`;
 }
 
-const depuis = (jours: number) => ` (depuis ${Math.max(1, jours)} j)`;
-
 export function recapDuJour(contexte: {
+  langue?: LangueAtelier;
   merchantName: string;
   nouvelles: { demandes: readonly DemandeDuRecap[]; ruptures: readonly RuptureDuRecap[] };
   enAttente: { demandes: ReadonlyArray<EnAttente<DemandeDuRecap>>; ruptures: ReadonlyArray<EnAttente<RuptureDuRecap>> };
   lien: string | null;
   signature?: string | null;
 }): { subject: string; body: string } | null {
+  const langue = contexte.langue ?? 'fr';
+  const mots = MOTS[langue];
+  const depuis = (jours: number) => mots.depuis(Math.max(1, jours));
   const nouvelles = [
-    ...contexte.nouvelles.demandes.map(ligneDemande),
-    ...contexte.nouvelles.ruptures.map(ligneRupture),
+    ...contexte.nouvelles.demandes.map((demande) => ligneDemande(demande, langue)),
+    ...contexte.nouvelles.ruptures.map((rupture) => ligneRupture(rupture, langue)),
   ];
   const enAttente = [
-    ...contexte.enAttente.demandes.map((demande) => ligneDemande(demande) + depuis(demande.jours)),
-    ...contexte.enAttente.ruptures.map((rupture) => ligneRupture(rupture) + depuis(rupture.jours)),
+    ...contexte.enAttente.demandes.map((demande) => ligneDemande(demande, langue) + depuis(demande.jours)),
+    ...contexte.enAttente.ruptures.map((rupture) => ligneRupture(rupture, langue) + depuis(rupture.jours)),
   ];
   // Rien à dire : pas de mail. Un récapitulatif vide apprend à ne plus l'ouvrir.
   const n = nouvelles.length + enAttente.length;
   if (n === 0) return null;
 
   return {
-    subject: `Récapitulatif du jour — ${n} demande${n > 1 ? 's' : ''} à traiter`,
+    subject: mots.recapSujet(n),
     body: [
-      'Bonjour,',
+      mots.bonjour,
       '',
-      'Voici ce qui attend votre réponse. Tout se répond d’un bouton dans votre atelier, rubrique « Tickets ».',
-      ...(nouvelles.length ? ['', 'Nouvelles demandes :', ...nouvelles] : []),
-      ...(enAttente.length ? ['', 'Toujours sans réponse :', ...enAttente] : []),
+      mots.recapIntro,
+      ...(nouvelles.length ? ['', mots.nouvelles, ...nouvelles] : []),
+      ...(enAttente.length ? ['', mots.enAttente, ...enAttente] : []),
       '',
-      contexte.lien ?? 'Ouvrez votre atelier avec le lien habituel.',
+      contexte.lien ?? mots.lienHabituel,
       '',
       contexte.signature?.trim() || contexte.merchantName,
     ].join('\n'),

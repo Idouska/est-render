@@ -1,3 +1,5 @@
+import { MOTS, type LangueAtelier } from '../suppliers/langueAtelier.ts';
+
 /**
  * Le rappel de retard : son texte, et l'heure de l'atelier qui décide s'il
  * part. Sans base ni réseau : se teste seul.
@@ -26,6 +28,7 @@ export function jourAtelier(date: Date): string {
 }
 
 export function rappelDuRetard(contexte: {
+  langue?: LangueAtelier;
   merchantName: string;
   delaiJours: number;
   commandes: ReadonlyArray<{ orderName: string; articles: string | null; jours: number }>;
@@ -33,20 +36,20 @@ export function rappelDuRetard(contexte: {
   signature?: string | null;
 }): { subject: string; body: string } {
   const n = contexte.commandes.length;
+  const mots = MOTS[contexte.langue ?? 'fr'];
   return {
-    subject: `Rappel — ${n} commande${n > 1 ? 's' : ''} à expédier depuis plus de ${contexte.delaiJours} jours`,
+    subject: mots.retardSujet(n, contexte.delaiJours),
     body: [
-      'Bonjour,',
+      mots.bonjour,
       '',
-      `Ces commandes vous ont été envoyées il y a plus de ${contexte.delaiJours} jours et n'ont pas encore de colis :`,
+      mots.retardIntro(contexte.delaiJours),
       '',
       ...contexte.commandes.map(
-        (commande) => `- ${commande.orderName}${commande.articles ? ` — ${commande.articles}` : ''} (depuis ${commande.jours} j)`,
+        (commande) =>
+          `- ${commande.orderName}${commande.articles ? ` — ${commande.articles}` : ''}${mots.depuis(commande.jours)}`,
       ),
       '',
-      contexte.lien
-        ? `Saisissez leur numéro de suivi dans votre atelier, onglet « Lots reçus » :\n${contexte.lien}`
-        : 'Saisissez leur numéro de suivi dans votre atelier, onglet « Lots reçus ».',
+      contexte.lien ? `${mots.retardLien}${{ fr: ' :', en: ':', zh: '：' }[contexte.langue ?? 'fr']}\n${contexte.lien}` : `${mots.retardLien}.`,
       '',
       contexte.signature?.trim() || contexte.merchantName,
     ].join('\n'),
