@@ -94,8 +94,10 @@ export async function googleAuthRoutes(app: FastifyInstance): Promise<void> {
           accessTokenEnc: tokens.access_token ? encryptSecret(tokens.access_token) : null,
           accessTokenExpiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
           lastHistoryId: profile.historyId ?? null,
+          scopes: tokens.scope ?? null,
         },
         update: {
+          scopes: tokens.scope ?? null,
           refreshTokenEnc: encryptSecret(tokens.refresh_token),
           accessTokenEnc: tokens.access_token ? encryptSecret(tokens.access_token) : null,
           accessTokenExpiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : null,

@@ -167,3 +167,8 @@ export async function syncTicketLabels(params: {
   await applyLabels(byTicket);
   return byTicket.size;
 }
+
+/** Oublie la table d'une boîte : un libellé vient d'y être créé. */
+export function forgetLabelNames(mailboxId: string): void {
+  cache.delete(mailboxId);
+}
