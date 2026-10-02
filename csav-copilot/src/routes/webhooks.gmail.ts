@@ -6,6 +6,7 @@ import { logger } from '../lib/logger.ts';
 import { prisma } from '../lib/prisma.ts';
 import { enqueueIngest } from '../queue/index.ts';
 import { requireCredential } from '../services/platform/credentials.ts';
+import { secretsPourWebhook } from '../services/shopify/applis.ts';
 
 interface PubSubPushBody {
   message?: {
@@ -99,24 +100,18 @@ export async function gmailWebhookRoutes(app: FastifyInstance): Promise<void> {
   // Webhook Shopify de désinstallation — révoque l'accès et arrête l'ingestion.
   app.post<{ Body: unknown }>('/webhooks/shopify/app-uninstalled', async (request, reply) => {
     const signature = request.headers['x-shopify-hmac-sha256'];
+    const shop = request.headers['x-shopify-shop-domain'];
+    // Signé par l'appli de la boutique ou par celle de la plateforme : l'une
+    // des deux doit correspondre, sinon rien ne passe.
+    const secrets = await secretsPourWebhook(typeof shop === 'string' ? shop : undefined);
     if (
       typeof signature !== 'string' ||
       !request.rawBody ||
-      !safeEqual(
-        signature,
-        hmacSha256Base64(
-          await requireCredential(
-            'SHOPIFY_API_SECRET',
-            'Nécessaire pour vérifier la signature des webhooks Shopify.',
-          ),
-          request.rawBody,
-        ),
-      )
+      !secrets.some((secret) => safeEqual(signature, hmacSha256Base64(secret, request.rawBody!)))
     ) {
       return reply.code(401).send({ error: 'Signature Shopify invalide' });
     }
 
-    const shop = request.headers['x-shopify-shop-domain'];
     if (typeof shop !== 'string') return reply.code(400).send();
 
     const merchant = await prisma.merchant.findUnique({ where: { shopDomain: shop } });

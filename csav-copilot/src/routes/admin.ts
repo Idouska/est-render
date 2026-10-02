@@ -1,6 +1,8 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { env } from '../config/env.ts';
+import { env, shopifyRedirectUri } from '../config/env.ts';
+import { encryptSecret } from '../lib/crypto.ts';
+import { estDomaineShopify, normaliserBoutique } from '../services/shopify/applis.ts';
 import {
   ADMIN_COOKIE,
   adminEnabled,
@@ -293,6 +295,69 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         testMode: misAJour.testMode,
         fonctionnalites: fonctionnalitesDe(misAJour.fonctionnalites),
       });
+    },
+  );
+
+  /*
+   * Les applis Shopify par boutique.
+   *
+   * Une appli en distribution personnalisée ne s'installe que sur une
+   * boutique : chacune peut donc avoir la sienne. Le secret s'écrit mais ne
+   * se relit jamais — même règle que les identifiants de la plateforme.
+   * L'écran reçoit aussi les deux adresses à recopier dans le Partner
+   * Dashboard, pour ne pas les deviner.
+   */
+  app.get('/api/admin/applis-shopify', { preHandler: requireAdmin }, async (request, reply) => {
+    const [applis, boutiques] = await Promise.all([
+      prisma.shopifyApp.findMany({
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, shopDomain: true, clientId: true, createdAt: true, updatedAt: true },
+      }),
+      prisma.merchant.findMany({ select: { shopDomain: true, status: true } }),
+    ]);
+    const etat = new Map(boutiques.map((boutique) => [boutique.shopDomain, boutique.status]));
+    return reply.send({
+      applis: applis.map((appli) => ({ ...appli, installee: etat.get(appli.shopDomain) === 'ACTIVE' })),
+      adresses: { appUrl: `${env.APP_URL}/auth/shopify`, redirectUrl: shopifyRedirectUri },
+    });
+  });
+
+  app.put('/api/admin/applis-shopify', { preHandler: requireAdmin }, async (request, reply) => {
+    const parsed = z
+      .object({
+        shopDomain: z.string().min(3).max(120),
+        clientId: z.string().min(8).max(200),
+        clientSecret: z.string().min(8).max(400),
+      })
+      .safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Domaine, Client ID et secret requis.' });
+
+    const shopDomain = normaliserBoutique(parsed.data.shopDomain);
+    if (!estDomaineShopify(shopDomain)) {
+      return reply.code(400).send({ error: 'Le domaine doit être celui de Shopify : boutique.myshopify.com' });
+    }
+
+    const appli = await prisma.shopifyApp.upsert({
+      where: { shopDomain },
+      create: {
+        shopDomain,
+        clientId: parsed.data.clientId.trim(),
+        clientSecretEnc: encryptSecret(parsed.data.clientSecret.trim()),
+      },
+      update: { clientId: parsed.data.clientId.trim(), clientSecretEnc: encryptSecret(parsed.data.clientSecret.trim()) },
+      select: { id: true, shopDomain: true },
+    });
+    logger.info({ shopDomain }, 'Appli Shopify de boutique enregistrée');
+    return reply.send({ appli, installation: `${env.APP_URL}/auth/shopify?shop=${encodeURIComponent(shopDomain)}` });
+  });
+
+  app.delete<{ Params: { id: string } }>(
+    '/api/admin/applis-shopify/:id',
+    { preHandler: requireAdmin },
+    async (request, reply) => {
+      const supprimee = await prisma.shopifyApp.deleteMany({ where: { id: request.params.id } });
+      if (supprimee.count === 0) return reply.code(404).send({ error: 'Appli introuvable' });
+      return reply.send({ ok: true });
     },
   );
 

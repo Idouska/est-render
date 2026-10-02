@@ -9551,3 +9551,10 @@ html, body { overflow-x: clip; }
 .releve-table td { padding: 7px 10px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
 .releve-table td:nth-child(2) { min-width: 200px; color: var(--ink-soft); }
 .releve-table .tag { white-space: nowrap; }
+
+/* Console : brancher une boutique avec sa propre appli Shopify. */
+.applis-etapes { padding-left: 18px; }
+.applis-etapes li { margin: 4px 0; }
+.applis-etapes code { font-size: 12px; user-select: all; }
+.applis-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0 14px; margin-top: 14px; align-items: end; }
+.applis-form .actions { grid-column: 1 / -1; }
