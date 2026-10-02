@@ -2329,6 +2329,29 @@ contact@runningupscale.com"></textarea>
       </div>
     </div>
 
+    <!-- Relevé mensuel d'un atelier : pour vérifier sa facture. Les totaux
+         en tête, une ligne par commande, et le même relevé en Excel. -->
+    <div class="backdrop" id="releve-modal" role="dialog" aria-modal="true" aria-labelledby="releve-title" hidden>
+      <div class="modal modal-releve">
+        <div class="modal-head">
+          <h2 id="releve-title">Relevé du mois</h2>
+          <p id="releve-who"></p>
+        </div>
+        <div class="modal-body">
+          <div class="releve-barre">
+            <label for="releve-mois">Mois</label>
+            <select id="releve-mois"></select>
+            <a class="btn btn-small" id="releve-xlsx" download>Télécharger en Excel</a>
+          </div>
+          <div class="releve-totaux" id="releve-totaux"></div>
+          <div class="releve-table" id="releve-rows"></div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn" id="releve-close">Fermer</button>
+        </div>
+      </div>
+    </div>
+
     <!-- « Update » : où en sont ces colis ? Le fournisseur répond d'un
          bouton depuis son atelier, comme pour un changement. -->
     <div class="backdrop" id="upd-modal" role="dialog" aria-modal="true" aria-labelledby="upd-title" hidden>

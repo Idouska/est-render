@@ -9515,6 +9515,8 @@ html, body { overflow-x: clip; }
 .supc-fiab { margin-top: 10px; }
 .supc-fiab-t { display: block; margin-bottom: 4px; font-size: 11.5px; font-weight: 650; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-mute); }
 .supc-fiab-vide { margin: 10px 0 0; font-size: 12.5px; color: var(--ink-mute); }
+/* La ligne « Qualité » se détache de celle du dessus. */
+.supc-fiab .supc-stats + .supc-fiab-t { margin-top: 10px; }
 
 /* ------------------------------------------- urgences sans réponse
    Le seul bandeau rouge du haut de page : une urgence que l'atelier n'a
@@ -9534,3 +9536,18 @@ html, body { overflow-x: clip; }
 .urg-banner li { margin: 2px 0; }
 .urg-banner li b { color: var(--ink); }
 .urg-banner a { color: var(--crit-ink); font-weight: 600; }
+
+/* ------------------------------------------- relevé mensuel d'un atelier
+   Large : huit colonnes, une ligne par commande. Les totaux reprennent la
+   grille des chiffres de sa carte. */
+.modal-releve { width: min(1040px, 100%); }
+.releve-barre { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.releve-barre label { font-weight: 600; }
+.releve-barre a { margin-left: auto; }
+.releve-totaux { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin-bottom: 12px; }
+.releve-table { max-height: 52vh; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
+.releve-table table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.releve-table th { position: sticky; top: 0; background: var(--surface); text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); font-weight: 650; }
+.releve-table td { padding: 7px 10px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+.releve-table td:nth-child(2) { min-width: 200px; color: var(--ink-soft); }
+.releve-table .tag { white-space: nowrap; }

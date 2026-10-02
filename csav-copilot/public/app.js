@@ -5501,10 +5501,18 @@ function dureeLisible(heures) {
  * une commande sur cinq en retard.
  */
 function fiabiliteMarkup(f) {
-  if (!f || (f.demandes === 0 && f.commandes === 0)) {
+  const q = f?.qualite;
+  if (!f || (f.demandes === 0 && f.commandes === 0 && !q?.commandes)) {
     return '<p class="supc-fiab-vide">Fiabilité : pas encore de données sur 30 jours.</p>';
   }
-  const cases = [
+  const pct = (valeur) => (valeur === null || valeur === undefined ? '—' : `${String(valeur).replace('.', ',')} %`);
+  const ligne = (titre, cases) => `<span class="supc-fiab-t">${esc(titre)}</span>
+    <div class="supc-stats">${cases
+      .map(
+        (c) => `<div class="supc-stat${c.chaud ? ' hot' : ''}"><b>${esc(c.valeur)}</b><span>${esc(c.libelle)}</span></div>`,
+      )
+      .join('')}</div>`;
+  const fiabilite = [
     {
       valeur: f.reponseMoyenneH === null ? '—' : dureeLisible(f.reponseMoyenneH),
       libelle: `pour répondre · ${f.demandes} demande${f.demandes > 1 ? 's' : ''}`,
@@ -5526,13 +5534,21 @@ function fiabiliteMarkup(f) {
       chaud: f.retardPct !== null && f.retardPct >= 20,
     },
   ];
+  /*
+   * La qualité, sur 90 jours : un retour arrive des semaines après
+   * l'expédition. Le défaut est la part qui revient à l'atelier — une taille
+   * qui ne va pas tient au produit, pas à lui.
+   */
+  const qualite = q?.commandes
+    ? [
+        { valeur: pct(q.retoursPct), libelle: `de retours · ${q.commandes} commande${q.commandes > 1 ? 's' : ''}`, chaud: false },
+        { valeur: pct(q.defautPct), libelle: 'pour défaut', chaud: (q.defautPct ?? 0) >= 3 },
+        { valeur: pct(q.manquantsPct), libelle: 'partis incomplets', chaud: (q.manquantsPct ?? 0) >= 2 },
+      ]
+    : null;
   return `<div class="supc-fiab">
-    <span class="supc-fiab-t">Fiabilité · 30 jours</span>
-    <div class="supc-stats">${cases
-      .map(
-        (c) => `<div class="supc-stat${c.chaud ? ' hot' : ''}"><b>${esc(c.valeur)}</b><span>${esc(c.libelle)}</span></div>`,
-      )
-      .join('')}</div>
+    ${ligne('Fiabilité · 30 jours', fiabilite)}
+    ${qualite ? ligne('Qualité · 90 jours', qualite) : ''}
   </div>`;
 }
 
@@ -5603,6 +5619,7 @@ function renderSuppliers() {
               Copier le lien atelier
             </button>
             <button class="btn btn-small" data-sup-open="${esc(supplier.id)}">Ouvrir l'atelier</button>
+            <button class="btn btn-small" data-sup-releve="${esc(supplier.id)}">Relevé du mois</button>
             ${
               waiting > 0
                 ? `<button class="btn btn-small" data-sup-updates="${esc(supplier.id)}">Voir ce qui attend</button>`
@@ -5644,6 +5661,10 @@ function renderSuppliers() {
         }
       }),
     );
+
+  $('suppliers-rows')
+    .querySelectorAll('[data-sup-releve]')
+    .forEach((button) => button.addEventListener('click', () => void ouvrirReleve(button.dataset.supReleve)));
 
   $('suppliers-rows')
     .querySelectorAll('[data-sup-updates]')
@@ -16121,4 +16142,97 @@ $('suppliers-rows')?.addEventListener('click', (event) => {
   state.demandesFiltre.fournisseur = state.demandesFiltre.fournisseur === id ? null : id;
   renderDemandesFournisseur();
   $('sup-dem-rows').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+});
+
+
+/* ==========================================================================
+   RELEVÉ MENSUEL D'UN ATELIER
+
+   Pour vérifier sa facture : ce qu'on lui a envoyé dans le mois, ce qu'il a
+   expédié, ce qui a été annulé, remplacé ou retourné. Douze mois au choix,
+   le mois en cours d'abord ; le même relevé se télécharge en Excel.
+   ========================================================================== */
+
+const STATUTS_RELEVE = {
+  EXPEDIEE: { label: 'Expédiée', tone: 'ok' },
+  NON_EXPEDIEE: { label: 'Non expédiée', tone: 'bad' },
+  ANNULEE: { label: 'Annulée', tone: 'mute' },
+};
+
+function derniersMois(n = 12) {
+  const maintenant = new Date();
+  return Array.from({ length: n }, (_, rang) => {
+    const date = new Date(maintenant.getFullYear(), maintenant.getMonth() - rang, 1);
+    return {
+      valeur: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`,
+      libelle: date.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }),
+    };
+  });
+}
+
+async function ouvrirReleve(supplierId) {
+  const modal = $('releve-modal');
+  modal.dataset.supplier = supplierId;
+  $('releve-who').textContent = (state.suppliers ?? []).find((s) => s.id === supplierId)?.name ?? '';
+  $('releve-mois').innerHTML = derniersMois()
+    .map((mois) => `<option value="${mois.valeur}">${esc(mois.libelle)}</option>`)
+    .join('');
+  modal.hidden = false;
+  modal.classList.add('open');
+  await chargerReleve();
+}
+
+async function chargerReleve() {
+  const supplierId = $('releve-modal').dataset.supplier;
+  const mois = $('releve-mois').value;
+  $('releve-xlsx').href = `/api/suppliers/${encodeURIComponent(supplierId)}/releve?mois=${mois}&format=xlsx`;
+  $('releve-totaux').innerHTML = '';
+  $('releve-rows').innerHTML = '<p class="empty">Chargement…</p>';
+  try {
+    const releve = await api(`/api/suppliers/${encodeURIComponent(supplierId)}/releve?mois=${mois}`);
+    const t = releve.totaux;
+    $('releve-totaux').innerHTML = [
+      [t.envoyees, 'envoyées'],
+      [t.expediees, 'expédiées'],
+      [t.nonExpediees, 'non expédiées', t.nonExpediees > 0],
+      [t.annulees, 'annulées'],
+      [t.remplacees, 'remplacées'],
+      [t.retours, 'retours clients'],
+    ]
+      .map(([n, libelle, chaud]) => `<div class="supc-stat${chaud ? ' hot' : ''}"><b>${n}</b><span>${libelle}</span></div>`)
+      .join('');
+    const jour = (iso) => (iso ? new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : '—');
+    $('releve-rows').innerHTML = releve.lignes.length
+      ? `<table>
+          <thead><tr><th>Commande</th><th>Articles</th><th>Envoyée</th><th>Expédiée</th><th>Suivi</th><th>Statut</th><th>Remplacement</th><th>Retour</th></tr></thead>
+          <tbody>${releve.lignes
+            .map(
+              (ligne) => `<tr>
+                <td><b>${esc(ligne.commande)}</b></td>
+                <td>${esc(ligne.articles ?? '')}</td>
+                <td>${jour(ligne.envoyeLe)}</td>
+                <td>${jour(ligne.expedieeLe)}</td>
+                <td class="mono">${esc(ligne.suivis.join(', '))}</td>
+                <td><span class="tag tone-${STATUTS_RELEVE[ligne.statut].tone}">${STATUTS_RELEVE[ligne.statut].label}</span></td>
+                <td>${esc(ligne.remplacement ?? '')}</td>
+                <td>${esc(ligne.retour ?? '')}</td>
+              </tr>`,
+            )
+            .join('')}</tbody>
+        </table>`
+      : '<p class="empty">Aucune commande envoyée à cet atelier ce mois-ci.</p>';
+  } catch (error) {
+    $('releve-rows').innerHTML = `<p class="empty">${esc(error.message)}</p>`;
+  }
+}
+
+function fermerReleve() {
+  $('releve-modal').hidden = true;
+  $('releve-modal').classList.remove('open');
+}
+
+$('releve-mois')?.addEventListener('change', () => void chargerReleve());
+$('releve-close')?.addEventListener('click', fermerReleve);
+$('releve-modal')?.addEventListener('click', (event) => {
+  if (event.target === event.currentTarget) fermerReleve();
 });
