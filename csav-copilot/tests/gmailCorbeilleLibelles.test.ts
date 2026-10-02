@@ -69,3 +69,13 @@ test('l’écran dit ce que Gmail a fait, et comment l’activer', () => {
   assert.doesNotMatch(app, /Le mail reste dans votre boîte Gmail\. Irréversible\./);
   assert.match(lire('src/routes/settings.ts'), /gmailModifie: peutModifier\(mailbox\.scopes\),/);
 });
+
+test('lu ici, lu dans Gmail — et non lu aussi', () => {
+  assert.match(service, /requestBody: lu \? \{ removeLabelIds: \['UNREAD'\] \} : \{ addLabelIds: \['UNREAD'\] \}/);
+  const ouvert = routes.slice(routes.indexOf("'/api/tickets/:id/ouvert'"));
+  assert.match(ouvert, /data: \{ openedAt, gmailUnread: false \}/);
+  assert.match(ouvert, /void marquerLu\(merchantId, ticket, true\);/);
+  assert.match(routes, /void reporterLecture\(merchantId, fils, true\);/);
+  assert.match(routes, /void reporterLecture\(merchantId, fils, false\);/);
+  assert.match(routes, /for \(const fil of fils\) await marquerLu\(merchantId, fil, lu\);/);
+});

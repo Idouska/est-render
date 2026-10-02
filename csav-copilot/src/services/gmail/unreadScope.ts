@@ -28,9 +28,9 @@ export const PORTEE_NON_LU = {
  *
  * Deux conditions et non une : le fil porte encore le libellé `UNREAD` de
  * Gmail, ET personne de l'équipe ne l'a ouvert dans l'outil. La seconde est
- * nécessaire parce que l'outil n'a que `gmail.readonly` : ouvrir un message
- * ici ne retire pas le libellé chez Google, donc `gmailUnread` reste vrai
- * indéfiniment et le gras ne s'éteindrait jamais.
+ * nécessaire pour une boîte connectée sans `gmail.modify` : ouvrir un message
+ * ici ne retire alors pas le libellé chez Google, et `gmailUnread` resterait
+ * vrai. Avec l'autorisation, ouvrir ici le marque aussi lu dans Gmail.
  *
  * Trois endroits en dépendent — le gras de la file, la pastille « Non lus »
  * du rail de filtres, et « En attente de vous » du poste de pilotage. Écrite
