@@ -8,6 +8,8 @@ import { requirePermission, requireSession } from '../plugins/auth.ts';
 import { LANGUES_ATELIER, langueAtelier, mailUrgent as texteUrgent } from '../services/suppliers/langueAtelier.ts';
 import { estUrgente } from '../services/suppliers/urgence.ts';
 import { fiabiliteDesFournisseurs } from '../services/suppliers/fiabiliteDonnees.ts';
+import { moisCourant } from '../services/suppliers/releve.ts';
+import { releveDuMois, releveEnXlsx } from '../services/suppliers/releveDonnees.ts';
 import { resolveEscalation } from '../services/suppliers/escalate.ts';
 import { sendPlainEmail } from '../services/gmail/send.ts';
 import { getShopifyClient } from '../services/shopify/client.ts';
@@ -275,6 +277,36 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
       throw error;
     }
   });
+
+  /**
+   * Le relevé mensuel d'un atelier, pour vérifier sa facture : à l'écran, ou
+   * en classeur avec `format=xlsx`. Lecture seule, borné à la boutique.
+   */
+  app.get<{ Params: { id: string }; Querystring: { mois?: string; format?: string } }>(
+    '/api/suppliers/:id/releve',
+    async (request, reply) => {
+      const { merchantId } = request.session;
+      const atelier = await prisma.supplier.findFirst({
+        where: { id: request.params.id, merchantId },
+        select: { id: true, name: true },
+      });
+      if (!atelier) return reply.code(404).send({ error: 'Fournisseur introuvable' });
+
+      const mois = request.query.mois ?? moisCourant();
+      const releve = await releveDuMois({ merchantId, supplierId: atelier.id, mois });
+      if (!releve) return reply.code(400).send({ error: 'Mois invalide (attendu : AAAA-MM).' });
+
+      if (request.query.format === 'xlsx') {
+        const fichier = await releveEnXlsx(releve, atelier.name);
+        const nom = `releve-${atelier.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'atelier'}-${mois}.xlsx`;
+        return reply
+          .type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+          .header('Content-Disposition', `attachment; filename="${nom}"`)
+          .send(fichier);
+      }
+      return reply.send({ atelier: atelier.name, ...releve });
+    },
+  );
 
   app.patch<{ Params: { id: string } }>(
     '/api/suppliers/:id',

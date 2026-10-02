@@ -87,3 +87,39 @@ export function calculerFiabilite(params: {
     retardPct: jugeables.length ? Math.round((enRetard.length / jugeables.length) * 100) : null,
   };
 }
+
+/**
+ * La qualité d'un atelier, sur les commandes de ses lots.
+ *
+ * Mesurée sur 90 jours, pas 30 : un retour arrive deux ou trois semaines
+ * après l'expédition, et un mois ne verrait que les plus rapides. Trois
+ * parts, rapportées aux mêmes commandes :
+ *
+ *   - les retours clients, toutes raisons ;
+ *   - ceux pour défaut — la part qui lui revient vraiment : une taille qui
+ *     ne va pas ou un modèle qui déplaît tient au produit, pas à l'atelier ;
+ *   - les colis partis incomplets (« article manquant » signalé).
+ *
+ * Sans commande, des chiffres vides — jamais zéro, qui se lirait « parfait ».
+ */
+export interface Qualite {
+  commandes: number;
+  retoursPct: number | null;
+  defautPct: number | null;
+  manquantsPct: number | null;
+}
+
+export function calculerQualite(params: {
+  commandes: number;
+  retours: ReadonlyArray<{ raison: string }>;
+  manquants: number;
+}): Qualite {
+  const part = (n: number) =>
+    params.commandes ? Math.round((n / params.commandes) * 1000) / 10 : null;
+  return {
+    commandes: params.commandes,
+    retoursPct: part(params.retours.length),
+    defautPct: part(params.retours.filter((retour) => retour.raison === 'DEFECT').length),
+    manquantsPct: part(params.manquants),
+  };
+}
