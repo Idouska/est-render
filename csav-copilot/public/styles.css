@@ -9558,3 +9558,34 @@ html, body { overflow-x: clip; }
 .applis-etapes code { font-size: 12px; user-select: all; }
 .applis-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0 14px; margin-top: 14px; align-items: end; }
 .applis-form .actions { grid-column: 1 / -1; }
+
+/* ------------------------------------------- tirer pour actualiser
+   L'indicateur naît en haut du menu pendant qu'on tire : la flèche se
+   retourne au seuil, puis tourne le temps de la mise à jour. */
+.ptr {
+  display: none;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 0;
+  overflow: hidden;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--ink-mute);
+  transition: height 0.18s ease;
+}
+.ptr.ptr-visible,
+.ptr.ptr-charge { display: flex; }
+.ptr-fleche { display: inline-block; transition: transform 0.18s ease; }
+.ptr-pret { color: var(--accent-ink, var(--ink)); }
+.ptr-pret .ptr-fleche { transform: rotate(180deg); }
+.ptr-charge .ptr-fleche { animation: ptr-tour 0.8s linear infinite; }
+.side.ptr-actif { cursor: grabbing; user-select: none; }
+.side.ptr-actif .ptr { transition: none; }
+@keyframes ptr-tour { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .ptr, .ptr-fleche { transition: none; }
+  .ptr-charge .ptr-fleche { animation: none; }
+}

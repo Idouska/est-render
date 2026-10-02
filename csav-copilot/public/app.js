@@ -13271,6 +13271,115 @@ async function refreshCurrent({ silent = false } = {}) {
   }
 }
 
+/*
+ * Tirer pour actualiser, depuis la colonne de gauche.
+ *
+ * Le geste du téléphone, à la souris : cliquer dans le menu, tirer vers le
+ * bas, relâcher. Au-delà du seuil, c'est le bouton « Rafraîchir » — relève
+ * du courrier, écran rechargé — plus les compteurs du menu. En deçà, rien :
+ * le menu revient à sa place.
+ *
+ * Seulement depuis le haut du menu : tiré au milieu d'une liste qu'on a fait
+ * défiler, le geste voudrait dire « remonter », pas « actualiser ». Et le
+ * clic qui suit un relâcher n'ouvre pas l'écran survolé : on voulait
+ * actualiser, pas changer de page.
+ */
+const SEUIL_TIRAGE = 64;
+const TIRAGE_MAX = 96;
+let ignorerClicJusqua = 0;
+
+function installerTirage() {
+  const colonne = document.querySelector('.side');
+  if (!colonne) return;
+
+  const indicateur = document.createElement('div');
+  indicateur.className = 'ptr';
+  indicateur.setAttribute('aria-hidden', 'true');
+  indicateur.innerHTML = '<span class="ptr-fleche">↓</span><span class="ptr-texte"></span>';
+  colonne.prepend(indicateur);
+  const texte = indicateur.querySelector('.ptr-texte');
+
+  let depart = null;
+  let distance = 0;
+  let tire = false;
+
+  const afficher = () => {
+    const pret = distance >= SEUIL_TIRAGE;
+    indicateur.classList.toggle('ptr-visible', distance > 0);
+    indicateur.classList.toggle('ptr-pret', pret);
+    indicateur.style.height = `${distance}px`;
+    texte.textContent = pret ? 'Relâcher pour actualiser' : 'Tirer pour actualiser';
+  };
+
+  colonne.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0 || event.pointerType === 'touch') return;
+    if (colonne.scrollTop > 0 || state.refreshing) return;
+    if (event.target.closest('input, textarea, select, .shop-menu')) return;
+    depart = { y: event.clientY, id: event.pointerId };
+    distance = 0;
+    tire = false;
+  });
+
+  colonne.addEventListener('pointermove', (event) => {
+    if (!depart || event.pointerId !== depart.id) return;
+    const ecart = event.clientY - depart.y;
+    if (!tire) {
+      // Un clic qui tremble n'est pas un tirage ; un geste vers le haut non plus.
+      if (ecart < -4) depart = null;
+      if (ecart < 8) return;
+      tire = true;
+      colonne.setPointerCapture(event.pointerId);
+      colonne.classList.add('ptr-actif');
+    }
+    event.preventDefault();
+    // Une résistance, comme sur un téléphone : la moitié du mouvement.
+    distance = Math.min(TIRAGE_MAX, Math.max(0, ecart * 0.5));
+    afficher();
+  });
+
+  const relacher = async (event) => {
+    if (!depart || event.pointerId !== depart.id) return;
+    depart = null;
+    if (!tire) return;
+    tire = false;
+    colonne.classList.remove('ptr-actif');
+    ignorerClicJusqua = Date.now() + 400;
+
+    if (distance < SEUIL_TIRAGE || state.refreshing) {
+      distance = 0;
+      afficher();
+      return;
+    }
+
+    indicateur.classList.add('ptr-charge');
+    indicateur.style.height = '40px';
+    texte.textContent = 'Mise à jour…';
+    try {
+      changesCountAt = 0;
+      await Promise.all([refreshCurrent(), refreshChangesCount()]);
+    } finally {
+      indicateur.classList.remove('ptr-charge');
+      distance = 0;
+      afficher();
+    }
+  };
+  colonne.addEventListener('pointerup', relacher);
+  colonne.addEventListener('pointercancel', relacher);
+
+  colonne.addEventListener(
+    'click',
+    (event) => {
+      if (Date.now() < ignorerClicJusqua) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    },
+    { capture: true },
+  );
+}
+
+installerTirage();
+
 /**
  * Le bouton dit ce qu'il fait, pas depuis quand il ne l'a pas fait.
  *
