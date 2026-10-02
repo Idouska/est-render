@@ -9596,3 +9596,209 @@ html, body { overflow-x: clip; }
 .ret-stock-barre { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 4px 0 14px; }
 .ret-stock-barre small { color: var(--ink-mute); }
 #stk-modal .pickwrap { width: 100%; }
+
+/* ======================================================== coûts du SAV ===
+
+   Trois postes, une couleur chacun, dans l'ordre de la légende. Teintes
+   validées contre la surface des cartes (#ffffff, #191c23) : séparation
+   daltonienne ΔE ≥ 9 pour toutes les paires, dans les deux thèmes. Le vert
+   d'eau ne tient que 2,8:1 sur le blanc — d'où la légende, l'infobulle et la
+   vue en tableau, qui donnent chaque valeur sans lui. Le texte n'est jamais
+   écrit dans ces couleurs : elles ne peignent que les marques. */
+.cg-s1 { background: #2a78d6; }
+.cg-s2 { background: #eb6834; }
+.cg-s3 { background: #1baf7a; }
+[data-theme="dark"] .cg-s1 { background: #3987e5; }
+[data-theme="dark"] .cg-s2 { background: #d95926; }
+[data-theme="dark"] .cg-s3 { background: #199e70; }
+
+.couts-bar { justify-content: space-between; flex-wrap: wrap; }
+.couts-mois { display: flex; align-items: center; gap: 8px; }
+.couts-mois-nom { min-width: 132px; text-align: center; font-weight: 600; font-size: 14px; }
+.couts-mois-nom::first-letter { text-transform: uppercase; }
+#couts-vide { align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.couts-vue { margin-left: auto; }
+.couts-sous-tete { border-top: 1px solid var(--line-soft); }
+
+/* Pastille de légende : un rectangle, comme les barres qu'elle nomme. */
+.cg-cle { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 7px; vertical-align: -1px; flex: none; }
+.cg-legende { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0 0 14px; padding: 0; list-style: none; font-size: 12.5px; color: var(--ink-soft); }
+.cg-legende li { display: flex; align-items: center; }
+
+/* Le tracé : l'axe à gauche, douze colonnes à droite. La hauteur est fixée
+   par le script (--cg-h) : les barres s'y calculent au pixel près. */
+.cg { display: grid; grid-template-columns: auto 1fr; gap: 10px; margin-top: 22px; }
+.cg-y { position: relative; height: var(--cg-h); min-width: 44px; }
+.cg-y span {
+  position: absolute;
+  right: 0;
+  transform: translateY(50%);
+  font-size: 11px;
+  color: var(--ink-mute);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.cg-plot { position: relative; min-width: 0; }
+.cg-grille { position: absolute; left: 0; right: 0; top: 0; height: var(--cg-h); pointer-events: none; }
+.cg-grille i { position: absolute; left: 0; right: 0; height: 1px; background: var(--line); }
+.cg-cols { position: relative; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); }
+
+.cg-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+/* Le survol éclaire toute la colonne : la cible est le mois, pas la barre. */
+.cg-col:hover,
+.cg-col:focus-visible { background: color-mix(in srgb, var(--inset) 70%, transparent); }
+.cg-col:focus-visible { outline-offset: 0; }
+
+.cg-pile { position: relative; width: min(24px, 64%); height: var(--cg-h); }
+.cg-seg { position: absolute; left: 0; right: 0; }
+.cg-seg.cg-bout { border-radius: 4px 4px 0 0; }
+.cg-col:hover .cg-seg,
+.cg-col:focus-visible .cg-seg { filter: brightness(1.08); }
+
+.cg-val {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.cg-col:first-child .cg-val { left: 0; transform: none; }
+.cg-col:last-child .cg-val { left: auto; right: 0; transform: none; }
+
+.cg-x { padding: 6px 0 4px; font-size: 11px; color: var(--ink-mute); white-space: nowrap; }
+.cg-x-court { display: none; }
+.cg-choisi .cg-x { color: var(--ink); font-weight: 600; box-shadow: inset 0 -2px 0 var(--accent); }
+
+/* Pendant la relecture, le graphe reste en place, estompé. */
+#couts-graphe { transition: opacity 0.2s ease; }
+#couts-graphe.cg-relit { opacity: 0.55; }
+
+.cg-tip {
+  position: fixed;
+  z-index: 60;
+  min-width: 170px;
+  padding: 9px 12px 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--e3);
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  pointer-events: none;
+}
+.cg-tip-t { font-size: 11.5px; color: var(--ink-mute); margin-bottom: 5px; }
+.cg-tip-t::first-letter { text-transform: uppercase; }
+.cg-tip-l { display: flex; align-items: center; gap: 7px; line-height: 1.7; }
+.cg-tip-l b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+/* Dans l'infobulle, un trait plutôt qu'une pastille : à cette densité, un
+   bloc plein pèserait plus lourd que le chiffre qu'il annonce. */
+.cg-trait { display: inline-block; width: 12px; height: 3px; border-radius: 2px; flex: none; }
+
+.couts-table,
+.cd-wrap { margin: 0; border: 0; box-shadow: none; max-height: none; border-radius: 0; }
+/* Les en-têtes de ligne se lisent comme des cellules, pas comme des titres
+   de colonne : ni capitales, ni gris, ni collés en haut au défilement. */
+.couts-table tbody th,
+.couts-table tfoot th,
+.cd tbody th {
+  position: static;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  background: none;
+  border-bottom: 1px solid var(--line-soft);
+}
+.couts-table .cg-ligne-choisie th,
+.couts-table .cg-ligne-choisie td { background: var(--accent-soft); }
+.couts-table tbody tr:last-child th { border-bottom: 0; }
+.couts-table tfoot th,
+.couts-table tfoot td { font-weight: 600; border-top: 1px solid var(--line); }
+
+/* Six tuiles : une rangée sur grand écran, deux de trois ailleurs, jamais
+   cinq et une orpheline. */
+.couts-tuiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (min-width: 1360px) { .couts-tuiles { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .couts-tuiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* Motifs : la part et le nombre tiennent sur une ligne ; la barre part
+   d'une base carrée et s'arrondit à son bout, comme les colonnes. */
+#couts-motifs .ibar { grid-template-columns: 110px minmax(0, 1fr) 84px; }
+#couts-motifs .ibar-count { white-space: nowrap; }
+#couts-motifs .ibar-track { border-radius: 0 5px 5px 0; }
+#couts-motifs .ibar-fill { border-radius: 0 4px 4px 0; }
+.couts .panel-head { flex-wrap: wrap; }
+.couts-vue { display: inline-grid; grid-auto-flow: column; }
+
+/* Détail du calcul : un poste, ses gestes, puis les totaux. */
+.cd td:first-child { white-space: normal; }
+.cd th, .cd td { padding: 8px 10px; }
+.cd .cd-poste th { font-weight: 600; }
+.cd .cd-poste th, .cd .cd-poste td { background: var(--sunk); }
+.cd .cd-total th, .cd .cd-total td { font-weight: 600; color: var(--ink); border-top: 1px solid var(--line); }
+.cd-note { margin: 10px 0 0; }
+.cd tbody:last-child tr:last-child th { border-bottom: 0; }
+
+/* Les coûts unitaires : un montant, son unité. */
+.cu-euro { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-mute); }
+.cu-euro input { width: 110px; text-align: right; font-variant-numeric: tabular-nums; }
+.cu-erreur { margin: 0; color: var(--crit-ink); font-size: 13px; }
+
+/* Au doigt, l'application fait de chaque ligne de tableau une fiche. Le
+   détail du calcul reste un tableau : quatre colonnes courtes tiennent sur
+   un téléphone, et vingt fiches pour dix lignes noieraient le calcul. */
+@media (max-width: 760px) {
+  .grid.cd { display: table; width: 100%; }
+  .grid.cd thead { display: table-header-group; }
+  .grid.cd tbody { display: table-row-group; }
+  .grid.cd tr { display: table-row; margin: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+  .grid.cd thead th { display: table-cell; padding: 8px 6px; }
+  .grid.cd tbody th,
+  .grid.cd td,
+  .grid.cd td:first-child {
+    display: table-cell;
+    width: auto;
+    padding: 7px 6px;
+    font-size: 12.5px;
+    font-weight: inherit;
+    text-align: left;
+    border: 0;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .grid.cd td.num,
+  .grid.cd th.num { text-align: right; white-space: nowrap; }
+  .grid.cd td::before { display: none; }
+  .grid.cd .cd-total th,
+  .grid.cd .cd-total td { font-weight: 600; border-top: 1px solid var(--line); }
+  .grid.cd .cd-poste th { font-weight: 600; }
+
+  /* La vue en tableau, elle, passe en fiches : le mois en titre. */
+  .couts-table tfoot { display: block; }
+  .couts-table th[scope="row"] { display: block; padding: 10px 12px 4px; font-size: 14px; font-weight: 600; border: 0; }
+}
+
+@media (max-width: 560px) {
+  .cg-x-long { display: none; }
+  .cg-x-court { display: inline; }
+  .cg-y { min-width: 38px; }
+  .cg-y span { font-size: 10.5px; }
+  .couts-mois-nom { min-width: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #couts-graphe { transition: none; }
+}

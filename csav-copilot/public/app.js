@@ -7715,6 +7715,534 @@ $('stats-range').addEventListener('click', (event) => {
   loadStats();
 });
 
+/* --------------------------------------------------------- coûts du SAV -- */
+
+/*
+ * Ce que coûte le SAV, mois par mois.
+ *
+ * Trois postes, une couleur chacun, dans un ordre fixe : la couleur suit le
+ * poste, jamais son rang. Les teintes sont validées contre la surface des
+ * cartes, en clair comme en sombre (voir `.cg-s1` dans la feuille). Le vert
+ * d'eau des paires perdues ne tient que 2,8:1 sur le blanc : la légende,
+ * l'infobulle et la vue en tableau portent chaque valeur sans lui.
+ *
+ * Copie de `CLES_COUTS` (src/services/couts/calcul.ts), comparée par les tests.
+ */
+const CLES_COUTS = ['bonRetour', 'fraisAgence', 'colisAgence', 'colisAtelier', 'prixPaire'];
+const POSTES_COUTS = [
+  { cle: 'retours', nom: 'Retours' },
+  { cle: 'renvois', nom: 'Renvois et échanges' },
+  { cle: 'perdues', nom: 'Paires perdues' },
+];
+/** Hauteur du tracé, en pixels : les barres se calculent au pixel près. */
+const HAUTEUR_COUTS = 200;
+
+const couts = { donnees: null, commandes: undefined, choisi: null, vue: 'graphe' };
+
+/** Les montants arrivent en centimes. */
+function euros(centimes, rond = false) {
+  return new Intl.NumberFormat('fr-FR', {
+    style: 'currency',
+    currency: 'EUR',
+    minimumFractionDigits: rond ? 0 : 2,
+    maximumFractionDigits: rond ? 0 : 2,
+  }).format(centimes / 100);
+}
+
+const nombreDe = (n, un, plusieurs) => `${n} ${n > 1 ? plusieurs : un}`;
+
+/** « 2026-10 » → « octobre 2026 », « oct. » ou « O ». */
+function nomDuMois(mois, forme = 'long') {
+  const [annee, numero] = mois.split('-').map(Number);
+  // Le 15 à midi UTC : aucun fuseau ne fait basculer le mois.
+  const date = new Date(Date.UTC(annee, numero - 1, 15, 12));
+  const options =
+    forme === 'court' ? { month: 'short' } : forme === 'initiale' ? { month: 'narrow' } : { month: 'long', year: 'numeric' };
+  return date.toLocaleDateString('fr-FR', { ...options, timeZone: 'UTC' });
+}
+
+/** Des graduations rondes au-dessus du pic : 1 240 € donne 0, 500, 1 000, 1 500. */
+function graduationsCouts(pic) {
+  const brut = pic / 4;
+  const puissance = 10 ** Math.floor(Math.log10(brut));
+  const pas = [1, 2, 2.5, 5, 10].map((p) => p * puissance).find((p) => p >= brut);
+  const haut = Math.ceil(pic / pas) * pas;
+  return Array.from({ length: Math.round(haut / pas) + 1 }, (_, i) => i * pas);
+}
+
+const moisAffiches = () => couts.donnees.mois.slice(1);
+const moisChoisi = () => couts.donnees.mois.find((m) => m.mois === couts.choisi);
+
+async function loadCouts() {
+  const cadre = $('couts-graphe');
+  // La relecture garde le graphe en place, estompé : ni squelette, ni saut.
+  cadre.classList.add('cg-relit');
+  try {
+    couts.donnees = await api('/api/couts');
+    if (!couts.donnees.mois.slice(1).some((m) => m.mois === couts.choisi)) couts.choisi = couts.donnees.courant;
+    renderCouts();
+  } catch (error) {
+    cadre.innerHTML = `<p class="empty">${esc(error.message)}</p>`;
+  } finally {
+    cadre.classList.remove('cg-relit');
+  }
+
+  // Shopify à part : lent ou en panne, il ne retient pas l'écran.
+  api('/api/couts/commandes')
+    .then((reponse) => {
+      couts.commandes = reponse.commandes;
+    })
+    .catch(() => {
+      couts.commandes = null;
+    })
+    .finally(() => couts.donnees && renderCoutsTuiles());
+}
+
+function renderCouts() {
+  const affiches = moisAffiches();
+  const rang = affiches.findIndex((m) => m.mois === couts.choisi);
+  $('couts-mois-nom').textContent = nomDuMois(couts.choisi);
+  $('couts-prec').disabled = rang <= 0;
+  $('couts-suiv').disabled = rang >= affiches.length - 1;
+  $('couts-reglages').hidden = !canI('configure');
+
+  const avis = $('couts-vide');
+  avis.hidden = couts.donnees.renseignes;
+  if (!couts.donnees.renseignes) {
+    avis.innerHTML = canI('configure')
+      ? `<span><b>Renseignez vos coûts unitaires.</b> L’écran compte déjà chaque geste du SAV ; il lui manque ce que chacun vous coûte pour le chiffrer.</span>
+         <button class="btn btn-small" type="button" id="couts-vide-ouvrir">Renseigner</button>`
+      : '<span><b>Les coûts unitaires ne sont pas encore renseignés.</b> Le propriétaire ou un superviseur peut les saisir ; d’ici là, l’écran compte les gestes sans les chiffrer.</span>';
+    $('couts-vide-ouvrir')?.addEventListener('click', ouvrirCoutsUnitaires);
+  }
+
+  renderCoutsTuiles();
+  renderCoutsGraphe();
+  renderCoutsDetail();
+  renderCoutsMotifs();
+}
+
+function renderCoutsTuiles() {
+  const tous = couts.donnees.mois;
+  const rang = tous.findIndex((m) => m.mois === couts.choisi);
+  const { mois, montants: m, volumes: v } = tous[rang];
+  const avant = rang > 0 ? tous[rang - 1] : null;
+  const enCours = mois === couts.donnees.courant;
+
+  // L'écart ne se lit qu'entre deux mois complets : comparé à un mois entier,
+  // le mois en cours baisse toujours.
+  let delta = null;
+  if (!enCours && avant && avant.montants.total > 0) {
+    const pct = Math.round(((m.total - avant.montants.total) / avant.montants.total) * 100);
+    delta = {
+      texte: `${pct > 0 ? '↑' : pct < 0 ? '↓' : '='} ${Math.abs(pct)} %`,
+      // Un coût qui monte est une mauvaise nouvelle.
+      ton: pct > 0 ? 'bad' : pct < 0 ? 'ok' : '',
+      vs: nomDuMois(avant.mois, 'court'),
+    };
+  }
+
+  // Sans coûts unitaires, un montant serait un zéro trompeur : un tiret, et
+  // les gestes comptés dans la note.
+  const argent = (centimes) => (couts.donnees.renseignes ? euros(centimes) : '—');
+  const commandes = couts.commandes?.[mois];
+  const parCommande =
+    commandes > 0
+      ? {
+          valeur: argent(Math.round(m.total / commandes)),
+          note: `${nombreDe(commandes, 'commande', 'commandes')} · ${String(((v.retours / commandes) * 100).toFixed(1)).replace('.', ',')} % de retours`,
+        }
+      : {
+          valeur: '—',
+          note:
+            couts.commandes === undefined
+              ? 'Shopify en cours de lecture…'
+              : couts.commandes === null
+                ? 'Shopify n’a pas répondu'
+                : 'Shopify ne montre que les 60 derniers jours',
+        };
+
+  const tuiles = [
+    {
+      label: 'Coût du SAV',
+      valeur: argent(m.total),
+      note: enCours ? 'mois en cours' : nombreDe(v.retours, 'retour demandé', 'retours demandés'),
+      delta,
+    },
+    {
+      label: 'Retours',
+      poste: 1,
+      valeur: argent(m.retours),
+      note: `${nombreDe(v.bons, 'bon', 'bons')} · ${nombreDe(v.recues, 'paire reçue', 'paires reçues')}`,
+    },
+    {
+      label: 'Renvois et échanges',
+      poste: 2,
+      valeur: argent(m.renvois),
+      note: `${nombreDe(v.colisAgence + v.colisAtelier, 'colis', 'colis')} · ${nombreDe(v.echangesAtelier, 'paire neuve', 'paires neuves')}`,
+    },
+    {
+      label: 'Paires perdues',
+      poste: 3,
+      valeur: argent(m.perdues),
+      note: nombreDe(v.perdues, 'paire inutilisable', 'paires inutilisables'),
+    },
+    {
+      label: 'Économie du réemploi',
+      valeur: argent(m.economie),
+      note: `${nombreDe(v.reemployees, 'paire réemployée', 'paires réemployées')}${
+        couts.donnees.renseignes ? ` · net ${euros(m.net)}` : ''
+      }`,
+    },
+    { label: 'Coût par commande', ...parCommande },
+  ];
+
+  $('couts-tuiles').innerHTML = tuiles
+    .map(
+      (tuile) => `<div class="kpi">
+        <span class="kpi-label">${
+          tuile.poste ? `<span class="cg-cle cg-s${tuile.poste}" aria-hidden="true"></span>` : ''
+        }${esc(tuile.label)}</span>
+        <span class="kpi-value">${esc(tuile.valeur)}${
+          tuile.delta
+            ? `<span class="kpi-delta${tuile.delta.ton ? ` kd-${tuile.delta.ton}` : ''}">${esc(tuile.delta.texte)} <small>vs ${esc(tuile.delta.vs)}</small></span>`
+            : ''
+        }</span>
+        <span class="kpi-note">${esc(tuile.note)}</span>
+      </div>`,
+    )
+    .join('');
+}
+
+function renderCoutsGraphe() {
+  // Les colonnes vont être remplacées : une infobulle restée ouverte
+  // désignerait une colonne qui n'existe plus.
+  cacherBulleCouts();
+  const affiches = moisAffiches();
+  const cadre = $('couts-graphe');
+  const total12 = affiches.reduce((somme, m) => somme + m.montants.total, 0);
+  $('couts-annee').textContent = total12 > 0 ? `${euros(total12, true)} sur 12 mois` : '';
+
+  document.querySelectorAll('#view-couts .couts-vue [data-vue]').forEach((bouton) => {
+    bouton.setAttribute('aria-pressed', String(bouton.dataset.vue === couts.vue));
+  });
+  cadre.hidden = couts.vue !== 'graphe';
+  $('couts-table').hidden = couts.vue !== 'tableau';
+  $('couts-table').innerHTML = coutsTableHtml(affiches);
+
+  if (total12 === 0) {
+    cadre.innerHTML = `<p class="empty">${
+      couts.donnees.renseignes
+        ? 'Aucune dépense du SAV sur les douze derniers mois.'
+        : 'Les montants apparaîtront ici dès que vos coûts unitaires seront renseignés.'
+    }</p>`;
+    return;
+  }
+
+  const graduations = graduationsCouts(Math.max(...affiches.map((m) => m.montants.total)) / 100);
+  const haut = graduations.at(-1);
+  const px = (centimes) => (centimes / 100 / haut) * HAUTEUR_COUTS;
+
+  const colonnes = affiches
+    .map((m) => {
+      // De bas en haut, dans l'ordre de la légende. Chaque segment cède deux
+      // pixels à l'écart qui le sépare du précédent : le haut de la pile reste
+      // exactement à sa valeur sur l'axe.
+      const segments = POSTES_COUTS.map((poste, n) => ({ n: n + 1, h: px(m.montants[poste.cle]) })).filter((s) => s.h > 0);
+      let bas = 0;
+      const pile = segments
+        .map((segment, k) => {
+          const ecart = k > 0 ? 2 : 0;
+          const bloc = `<i class="cg-seg cg-s${segment.n}${k === segments.length - 1 ? ' cg-bout' : ''}" style="bottom:${(bas + ecart).toFixed(1)}px;height:${Math.max(0, segment.h - ecart).toFixed(1)}px"></i>`;
+          bas += segment.h;
+          return bloc;
+        })
+        .join('');
+      const choisi = m.mois === couts.choisi;
+      const resume = `${nomDuMois(m.mois)} : ${euros(m.montants.total)}, dont ${POSTES_COUTS.map(
+        (poste) => `${poste.nom.toLowerCase()} ${euros(m.montants[poste.cle])}`,
+      ).join(', ')}`;
+      return `<button type="button" class="cg-col${choisi ? ' cg-choisi' : ''}" data-mois="${esc(m.mois)}"
+          data-haut="${bas.toFixed(1)}" aria-pressed="${choisi}" aria-label="${esc(resume)}">
+        <span class="cg-pile">${pile}${
+          // Une seule étiquette : celle du mois choisi. Les autres valeurs
+          // vivent dans l'infobulle et le tableau.
+          choisi ? `<span class="cg-val" style="bottom:${(bas + 4).toFixed(1)}px">${esc(euros(m.montants.total, true))}</span>` : ''
+        }</span>
+        <span class="cg-x" aria-hidden="true"><span class="cg-x-long">${esc(nomDuMois(m.mois, 'court'))}</span><span class="cg-x-court">${esc(
+          nomDuMois(m.mois, 'initiale'),
+        )}</span></span>
+      </button>`;
+    })
+    .join('');
+
+  cadre.innerHTML = `<ul class="cg-legende">${POSTES_COUTS.map(
+    (poste, n) => `<li><span class="cg-cle cg-s${n + 1}" aria-hidden="true"></span>${esc(poste.nom)}</li>`,
+  ).join('')}</ul>
+    <div class="cg" style="--cg-h:${HAUTEUR_COUTS}px">
+      <div class="cg-y" aria-hidden="true">${graduations
+        .map((g) => `<span style="bottom:${((g / haut) * 100).toFixed(2)}%">${esc(euros(g * 100, true))}</span>`)
+        .join('')}</div>
+      <div class="cg-plot">
+        <div class="cg-grille" aria-hidden="true">${graduations
+          .map((g) => `<i style="bottom:${((g / haut) * 100).toFixed(2)}%"></i>`)
+          .join('')}</div>
+        <div class="cg-cols" role="group" aria-label="Coût du SAV par mois — choisir un mois">${colonnes}</div>
+      </div>
+    </div>`;
+}
+
+/** La vue en tableau : les mêmes chiffres, sans dépendre de la couleur ni du survol. */
+function coutsTableHtml(affiches) {
+  // `data-label` : au doigt, chaque ligne devient une fiche qui recopie
+  // l'intitulé de sa colonne.
+  const ligne = (titre, m, classe = '') => `<tr${classe ? ` class="${classe}"` : ''}>
+      <th scope="row">${esc(titre)}</th>
+      <td class="num mono" data-label="Retours">${esc(euros(m.retours))}</td>
+      <td class="num mono" data-label="Renvois et échanges">${esc(euros(m.renvois))}</td>
+      <td class="num mono" data-label="Paires perdues">${esc(euros(m.perdues))}</td>
+      <td class="num mono" data-label="Total"><b>${esc(euros(m.total))}</b></td>
+      <td class="num mono" data-label="Économie">${esc(euros(m.economie))}</td>
+      <td class="num mono" data-label="Net">${esc(euros(m.net))}</td>
+    </tr>`;
+  const somme = Object.fromEntries(
+    ['retours', 'renvois', 'perdues', 'total', 'economie', 'net'].map((cle) => [
+      cle,
+      affiches.reduce((total, m) => total + m.montants[cle], 0),
+    ]),
+  );
+  return `<table class="grid">
+    <caption class="sr-only">Coût du SAV par mois, du plus récent au plus ancien</caption>
+    <thead><tr><th>Mois</th><th class="num">Retours</th><th class="num">Renvois et échanges</th>
+      <th class="num">Paires perdues</th><th class="num">Total</th><th class="num">Économie</th><th class="num">Net</th></tr></thead>
+    <tbody>${affiches
+      .slice()
+      .reverse()
+      .map((m) => ligne(nomDuMois(m.mois), m.montants, m.mois === couts.choisi ? 'cg-ligne-choisie' : ''))
+      .join('')}</tbody>
+    <tfoot>${ligne('12 mois', somme)}</tfoot>
+  </table>`;
+}
+
+/* Une infobulle pour toute la colonne : les trois postes et le total, au
+   survol comme au clavier. La valeur d'abord, le nom du poste ensuite. */
+function montrerBulleCouts(colonne) {
+  const m = couts.donnees.mois.find((mois) => mois.mois === colonne.dataset.mois);
+  if (!m) return;
+  const bulle = $('couts-tip');
+  bulle.replaceChildren();
+
+  const titre = document.createElement('div');
+  titre.className = 'cg-tip-t';
+  titre.textContent = nomDuMois(m.mois);
+  bulle.append(titre);
+
+  const rangee = (valeur, nom, poste) => {
+    const div = document.createElement('div');
+    div.className = 'cg-tip-l';
+    if (poste) {
+      const trait = document.createElement('i');
+      trait.className = `cg-trait cg-s${poste}`;
+      div.append(trait);
+    }
+    const fort = document.createElement('b');
+    fort.textContent = valeur;
+    div.append(fort, ` ${nom}`);
+    bulle.append(div);
+  };
+  rangee(euros(m.montants.total), 'au total');
+  POSTES_COUTS.slice()
+    .reverse()
+    .forEach((poste) => rangee(euros(m.montants[poste.cle]), poste.nom, POSTES_COUTS.indexOf(poste) + 1));
+
+  bulle.hidden = false;
+  const pile = colonne.querySelector('.cg-pile').getBoundingClientRect();
+  const sommet = pile.bottom - Number(colonne.dataset.haut || 0);
+  const largeur = bulle.offsetWidth;
+  const hauteur = bulle.offsetHeight;
+  const x = Math.min(Math.max(8, pile.left + pile.width / 2 - largeur / 2), window.innerWidth - largeur - 8);
+  // Au-dessus de la pile ; à défaut de place, sous les mois.
+  const y = sommet - hauteur - 12 >= 8 ? sommet - hauteur - 12 : pile.bottom + 28;
+  bulle.style.left = `${x}px`;
+  bulle.style.top = `${y}px`;
+}
+
+function cacherBulleCouts() {
+  $('couts-tip').hidden = true;
+}
+
+function renderCoutsDetail() {
+  const { mois, volumes: v, montants: m } = moisChoisi();
+  const { couts: prix, renseignes } = couts.donnees;
+  $('couts-detail-mois').textContent = nomDuMois(mois);
+
+  const ligne = (libelle, nombre, euro) => `<tr>
+      <td>${esc(libelle)}</td>
+      <td class="num mono">${nombre}</td>
+      <td class="num mono">${renseignes ? `× ${esc(euros(Math.round(euro * 100)))}` : '—'}</td>
+      <td class="num mono">${renseignes ? esc(euros(nombre * Math.round(euro * 100))) : '—'}</td>
+    </tr>`;
+  const poste = (n, nom, total, lignes) => `<tbody>
+      <tr class="cd-poste">
+        <th scope="rowgroup" colspan="3"><span class="cg-cle cg-s${n}" aria-hidden="true"></span>${esc(nom)}</th>
+        <td class="num mono"><b>${esc(euros(total))}</b></td>
+      </tr>${lignes}</tbody>`;
+
+  $('couts-detail').innerHTML = `<div class="table-wrap cd-wrap"><table class="grid cd">
+      <caption class="sr-only">Détail du calcul de ${esc(nomDuMois(mois))}</caption>
+      <thead><tr><th>Geste</th><th class="num">Nombre</th><th class="num">Prix</th><th class="num">Montant</th></tr></thead>
+      ${poste(
+        1,
+        'Retours',
+        m.retours,
+        ligne('Bons de retour fournis', v.bons, prix.bonRetour) + ligne('Paires reçues en agence', v.recues, prix.fraisAgence),
+      )}
+      ${poste(
+        2,
+        'Renvois et échanges',
+        m.renvois,
+        ligne('Colis envoyés par une agence', v.colisAgence, prix.colisAgence) +
+          ligne('Colis d’échange envoyés par l’atelier', v.colisAtelier, prix.colisAtelier) +
+          ligne('Paires neuves pour un échange', v.echangesAtelier, prix.prixPaire),
+      )}
+      ${poste(3, 'Paires perdues', m.perdues, ligne('Paires inutilisables', v.perdues, prix.prixPaire))}
+      <tbody>
+        <tr class="cd-total"><th scope="row" colspan="3">Coût du SAV</th><td class="num mono"><b>${esc(euros(m.total))}</b></td></tr>
+        ${ligne('Économie : paires de retour réemployées', v.reemployees, prix.prixPaire)}
+        <tr class="cd-total"><th scope="row" colspan="3">Coût net, après réemploi</th><td class="num mono"><b>${esc(euros(m.net))}</b></td></tr>
+      </tbody>
+    </table></div>
+    <p class="set-help cd-note">Un colis se compte une fois, même avec deux paires dedans ; un bon, une fois par commande.
+      Ce mois-ci : ${nombreDe(v.renvois, 'paire du stock partie', 'paires du stock parties')} sur une commande,
+      ${nombreDe(v.echangesStock, 'échange servi', 'échanges servis')} par le stock. Remboursements et temps de l’équipe non compris.</p>`;
+}
+
+function renderCoutsMotifs() {
+  const { motifs, modeles } = moisChoisi();
+  const total = Object.values(motifs).reduce((somme, n) => somme + n, 0);
+  if (total === 0) {
+    $('couts-motifs').innerHTML = '<p class="empty">Aucun retour demandé ce mois-ci.</p>';
+    $('couts-modeles').innerHTML = '<p class="empty">—</p>';
+    return;
+  }
+
+  $('couts-motifs').innerHTML = Object.entries(motifs)
+    .sort((a, b) => b[1] - a[1])
+    .map(
+      ([motif, n]) => `<div class="ibar">
+        <span class="ibar-label">${esc(RETURN_REASONS[motif] ?? motif)}</span>
+        <span class="ibar-track"><i class="ibar-fill cg-s1" style="width:${((n / total) * 100).toFixed(1)}%"></i></span>
+        <span class="ibar-count mono">${Math.round((n / total) * 100)} %<span class="ibar-vol"> (${n})</span></span>
+      </div>`,
+    )
+    .join('');
+
+  $('couts-modeles').innerHTML = `<div class="table-wrap cd-wrap"><table class="grid cd">
+      <thead><tr><th>Modèle</th><th class="num">Retours</th><th>Motif principal</th></tr></thead>
+      <tbody>${modeles
+        .map(
+          (modele) => `<tr>
+            <td>${esc(modele.titre)}</td>
+            <td class="num mono">${modele.retours}</td>
+            <td>${esc(RETURN_REASONS[modele.motif] ?? modele.motif)}</td>
+          </tr>`,
+        )
+        .join('')}</tbody>
+    </table></div>`;
+}
+
+function decalerMoisCouts(pas) {
+  const affiches = moisAffiches();
+  const rang = affiches.findIndex((m) => m.mois === couts.choisi) + pas;
+  if (rang < 0 || rang >= affiches.length) return;
+  couts.choisi = affiches[rang].mois;
+  renderCouts();
+}
+
+function ouvrirCoutsUnitaires() {
+  const prix = couts.donnees?.couts ?? {};
+  for (const cle of CLES_COUTS) {
+    $(`cu-${cle}`).value = prix[cle] ? String(prix[cle]).replace('.', ',') : '';
+  }
+  $('cu-erreur').hidden = true;
+  $('cu-modal').hidden = false;
+  $('cu-modal').classList.add('open');
+  $('cu-bonRetour').focus();
+}
+
+function fermerCoutsUnitaires() {
+  $('cu-modal').hidden = true;
+  $('cu-modal').classList.remove('open');
+}
+
+async function enregistrerCoutsUnitaires() {
+  const corps = {};
+  for (const cle of CLES_COUTS) {
+    const champ = $(`cu-${cle}`);
+    const brut = champ.value.replace(/[\s €]/g, '').replace(',', '.');
+    const valeur = brut === '' ? 0 : Number(brut);
+    if (!Number.isFinite(valeur) || valeur < 0 || valeur > 10000) {
+      $('cu-erreur').textContent = `« ${document.querySelector(`label[for="cu-${cle}"]`).textContent} » : un montant entre 0 et 10 000 €.`;
+      $('cu-erreur').hidden = false;
+      champ.focus();
+      return;
+    }
+    corps[cle] = Math.round(valeur * 100) / 100;
+  }
+
+  const bouton = $('cu-enregistrer');
+  bouton.disabled = true;
+  try {
+    await api('/api/couts/unitaires', { method: 'PUT', body: JSON.stringify(corps) });
+    fermerCoutsUnitaires();
+    toast('Coûts unitaires enregistrés : les douze mois sont recalculés.');
+    await loadCouts();
+  } catch (error) {
+    $('cu-erreur').textContent = error.message;
+    $('cu-erreur').hidden = false;
+  } finally {
+    bouton.disabled = false;
+  }
+}
+
+$('couts-prec').addEventListener('click', () => decalerMoisCouts(-1));
+$('couts-suiv').addEventListener('click', () => decalerMoisCouts(1));
+$('couts-reglages').addEventListener('click', ouvrirCoutsUnitaires);
+$('cu-annuler').addEventListener('click', fermerCoutsUnitaires);
+$('cu-enregistrer').addEventListener('click', enregistrerCoutsUnitaires);
+$('cu-modal').addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') fermerCoutsUnitaires();
+  if (event.key === 'Enter' && event.target.tagName === 'INPUT') void enregistrerCoutsUnitaires();
+});
+document.querySelector('#view-couts .couts-vue').addEventListener('click', (event) => {
+  const bouton = event.target.closest('[data-vue]');
+  if (!bouton || !couts.donnees) return;
+  couts.vue = bouton.dataset.vue;
+  renderCoutsGraphe();
+});
+
+{
+  const graphe = $('couts-graphe');
+  graphe.addEventListener('click', (event) => {
+    const colonne = event.target.closest('.cg-col');
+    if (!colonne) return;
+    couts.choisi = colonne.dataset.mois;
+    renderCouts();
+    // Le graphe vient d'être redessiné : le focus revient sur le mois choisi.
+    graphe.querySelector(`.cg-col[data-mois="${couts.choisi}"]`)?.focus();
+  });
+  graphe.addEventListener('pointerover', (event) => {
+    const colonne = event.target.closest('.cg-col');
+    if (colonne) montrerBulleCouts(colonne);
+  });
+  graphe.addEventListener('pointerleave', cacherBulleCouts);
+  graphe.addEventListener('focusin', (event) => {
+    const colonne = event.target.closest('.cg-col');
+    if (colonne) montrerBulleCouts(colonne);
+  });
+  graphe.addEventListener('focusout', cacherBulleCouts);
+}
+
 /* -------------------------------------------------------------- catalogue */
 
 const CATALOG_HEADS = {
@@ -10178,6 +10706,15 @@ const VIEW_META = {
   },
   tickets: { icon: 'inbox', label: 'SAV client', group: 'Pilotage', title: 'SAV client' },
   stats: { icon: 'chart', label: "Statistiques", group: 'Pilotage', title: "Statistiques d'équipe" },
+  couts: {
+    icon: 'euro',
+    label: 'Coûts SAV',
+    group: 'Pilotage',
+    // Le même mot que dans le menu : « Coûts du SAV » se cassait sur deux
+    // lignes dans l'en-tête, à côté de la recherche.
+    title: 'Coûts SAV',
+    sous: 'Ce que le SAV vous coûte, mois par mois',
+  },
   orders: { icon: 'bag', label: 'Commandes', group: 'Commerce', title: 'Commandes' },
   customers: { icon: 'users', label: 'Clients', group: 'Commerce', title: 'Clients' },
   catalog: { icon: 'box', label: 'Catalogue', group: 'Commerce', title: 'Catalogue' },
@@ -10796,6 +11333,7 @@ const VIEW_LOADERS = {
   disputes: () => loadDisputes(),
   team: () => loadTeam(),
   stats: () => loadStats(),
+  couts: () => loadCouts(),
   palettes: () => {
     renderPalettes();
     renderTopBg();

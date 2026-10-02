@@ -538,6 +538,24 @@ export function createMockShopifyClient(shopDomain: string): ShopifyClient {
         } as T;
       }
 
+      // Les mêmes ventes que « CommerceStats » ci-dessus, comptées par mois :
+      // le coût par commande de la démonstration se recoupe avec ses statistiques.
+      if (query.includes('query CommandesParMois')) {
+        const jours = Array.from({ length: 60 }, (_, back) => ({
+          instant: Date.now() - back * 86_400_000,
+          nombre: 2 + (((back * 7919) % 23) % 5),
+        }));
+        return Object.fromEntries(
+          Object.entries(variables ?? {}).map(([cle, filtre]) => {
+            const [, debut = '', fin = ''] = /created_at:>='([^']+)' created_at:<'([^']+)'/.exec(String(filtre)) ?? [];
+            const count = jours
+              .filter((jour) => jour.instant >= Date.parse(debut) && jour.instant < Date.parse(fin))
+              .reduce((somme, jour) => somme + jour.nombre, 0);
+            return [cle.replace(/^q/, 'm'), { count, precision: 'EXACT' }];
+          }),
+        ) as T;
+      }
+
       if (query.includes('query ShopPolicies')) {
         return {
           shop: {

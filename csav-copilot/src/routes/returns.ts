@@ -15,6 +15,7 @@ import {
   type PaireEnStock,
 } from '../services/reshipment/rapprochement.ts';
 import { choisirSource, type AtelierCandidat } from '../services/reshipment/echange.ts';
+import { datesDuGeste } from '../services/couts/datesRetour.ts';
 import { signAgencyToken } from '../lib/agencyToken.ts';
 import { env } from '../config/env.ts';
 
@@ -288,11 +289,12 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
 
       const existing = await prisma.returnCase.findFirst({
         where: { id: request.params.id, merchantId },
-        select: { id: true },
+        select: { id: true, labelSentAt: true, receivedAt: true, unusableAt: true },
       });
       if (!existing) return reply.code(404).send({ error: 'Dossier introuvable' });
 
       const { touch, reusedOrderName, photo, ...fields } = parsed.data;
+      const dates = datesDuGeste(existing, fields, new Date());
 
       // `photo: null` retire la photo ; absente, elle ne bouge pas.
       const photoFields =
@@ -310,6 +312,7 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
         data: {
           ...fields,
           ...photoFields,
+          ...dates,
           // Fournir le bon fait avancer le statut tout seul : deux gestes pour
           // dire la même chose finiraient par se contredire.
           ...(fields.labelSent === true ? { status: fields.status ?? 'LABEL_SENT' } : {}),
@@ -1107,7 +1110,7 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
 
       const paire = await prisma.returnCase.findFirst({
         where: { id: request.params.id, merchantId },
-        select: { id: true, status: true, reusedOrderName: true, reusedShopifyOrderId: true },
+        select: { id: true, status: true, reusedOrderName: true, reusedShopifyOrderId: true, receivedAt: true },
       });
       if (!paire) return reply.code(404).send({ error: 'Dossier introuvable' });
       if (paire.reusedShopifyOrderId) {
@@ -1119,7 +1122,13 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
 
       const sortie = await prisma.returnCase.update({
         where: { id: paire.id },
-        data: { status: 'UNUSABLE', unusableAt: new Date(), unusableNote: parsed.data.note?.trim() || null },
+        data: {
+          status: 'UNUSABLE',
+          unusableAt: new Date(),
+          unusableNote: parsed.data.note?.trim() || null,
+          // Une paire du stock est arrivée un jour : si ce jour manque, c'est aujourd'hui.
+          ...(paire.receivedAt ? {} : { receivedAt: new Date() }),
+        },
       });
 
       await recordAudit({
