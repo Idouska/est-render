@@ -5556,7 +5556,7 @@ function renderSuppliers() {
             <button class="btn btn-small" data-sup-open="${esc(supplier.id)}">Ouvrir l'atelier</button>
             ${
               waiting > 0
-                ? `<button class="btn btn-small" data-sup-updates="1">Voir ce qui attend</button>`
+                ? `<button class="btn btn-small" data-sup-updates="${esc(supplier.id)}">Voir ce qui attend</button>`
                 : ''
             }
           </div>
@@ -5598,7 +5598,22 @@ function renderSuppliers() {
 
   $('suppliers-rows')
     .querySelectorAll('[data-sup-updates]')
-    .forEach((button) => button.addEventListener('click', () => setView('changes')));
+    .forEach((button) =>
+      button.addEventListener('click', () => {
+        // Ses demandes en attente, juste en dessous — plus besoin de changer d'écran.
+        state.demandesFiltre = { fournisseur: button.dataset.supUpdates, type: '', statut: 'PENDING' };
+        $('sup-dem-statut')
+          ?.querySelectorAll('[data-dstatut]')
+          .forEach((chip) => chip.setAttribute('aria-pressed', String(chip.dataset.dstatut === 'PENDING')));
+        renderDemandesFournisseur();
+        $('sup-dem-rows').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }),
+    );
+
+  // Le hub re-rend les cartes : la sélection doit survivre.
+  document.querySelectorAll('#suppliers-rows .supc').forEach((carte) =>
+    carte.classList.toggle('supc-on', carte.dataset.supplier === state.demandesFiltre?.fournisseur),
+  );
 }
 
 /** Chiffres du hub, chargés après la liste : l'écran paraît, puis se remplit. */
@@ -9899,8 +9914,14 @@ const VIEW_META = {
    * Renvoi et Retour sont deux portes vers le même écran (Reshipment), chacune
    * sur son onglet : `alias` dit l'écran, `onglet` l'onglet ouvert.
    */
+  suppliers: {
+    icon: 'truck',
+    label: 'Fournisseur',
+    group: 'Fournisseur',
+    title: 'Fournisseurs',
+  },
   changes: { icon: 'bolt', label: 'Modification', group: 'Fournisseur', title: 'Modification — demandes au fournisseur' },
-  refunds: { icon: 'euro', label: 'Annulation/Remboursement', group: 'Fournisseur', title: 'Annulations et remboursements' },
+  refunds: { icon: 'euro', label: 'Annulation/\u200bRemboursement', group: 'Fournisseur', title: 'Annulations et remboursements' },
   renvoi: { icon: 'box', label: 'Renvoi', group: 'Fournisseur', title: 'Renvoi — stock retours', alias: 'returns', onglet: 'stock' },
   retour: { icon: 'box', label: 'Retour', group: 'Fournisseur', title: 'Retours clients', alias: 'returns', onglet: 'cases' },
   // Atelier : le travail avec le fournisseur au quotidien.
@@ -9911,7 +9932,6 @@ const VIEW_META = {
     title: 'Commandes du jour',
     sous: 'Stock retours d’abord, fournisseur ensuite',
   },
-  suppliers: { icon: 'truck', label: 'Fournisseurs', group: 'Atelier', title: 'Contacts fournisseurs' },
   ruptures: {
     icon: 'box',
     label: 'Ruptures de stock',
@@ -9942,6 +9962,14 @@ const VIEWS = Object.keys(VIEW_META);
  * recharge à chaque geste, et ce compte ne bouge que lorsqu'un fournisseur
  * répond.
  */
+/** « Modification » : Taille, Modèle, Coordonnées — le reste vit dans Fournisseur. */
+const KINDS_MODIFICATION = new Set(['SIZE', 'PRODUCT', 'ADDRESS', 'PHONE']);
+
+/** La pastille dit ce que l'écran montre : les seules modifications en attente. */
+function modificationsEnAttente(demandes) {
+  return (demandes ?? []).filter((d) => d.status === 'PENDING' && KINDS_MODIFICATION.has(d.kind)).length;
+}
+
 let changesCountAt = 0;
 
 async function refreshChangesCount() {
@@ -9949,7 +9977,7 @@ async function refreshChangesCount() {
   changesCountAt = Date.now();
 
   try {
-    const [{ pending }, { counts }, activity, returns, ruptures] = await Promise.all([
+    const [{ changes: demandes }, { counts }, activity, returns, ruptures] = await Promise.all([
       api('/api/changes'),
       // Commandes, clients, catalogue, colis : les volumes, en gris. Seuls
       // les comptes qui réclament une action sont rouges.
@@ -9965,6 +9993,7 @@ async function refreshChangesCount() {
       api('/api/ruptures/compte').catch(() => null),
     ]);
 
+    const pending = modificationsEnAttente(demandes);
     state.changesPending = pending;
     state.supplierActivity = activity;
     state.navCounts = {
@@ -10179,22 +10208,32 @@ async function loadChanges() {
   }
 
   state.changesRows = data.changes ?? [];
-  state.changesPending = data.pending ?? 0;
+  state.changesPending = modificationsEnAttente(state.changesRows);
   state.navCounts = { ...state.navCounts, changes: state.changesPending };
   renderNav();
   renderChangesScreen();
 }
 
-function renderChangesScreen() {
-  const rows = $('changes-rows');
-  const filter = state.changesFilter;
-  const shown = filter
-    ? state.changesRows.filter((change) => change.status === filter)
-    : state.changesRows;
 
-  $('changes-count').textContent = shown.length
-    ? `${shown.length} demande${shown.length > 1 ? 's' : ''}`
-    : '';
+function renderChangesScreen() {
+  const filter = state.changesFilter;
+  const shown = state.changesRows.filter(
+    (change) => KINDS_MODIFICATION.has(change.kind) && (!filter || change.status === filter),
+  );
+  renderDemandes($('changes-rows'), $('changes-count'), shown);
+  if (state.view === 'suppliers') renderDemandesFournisseur();
+}
+
+/*
+ * Les demandes aux fournisseurs, en cartes. Le même rendu sert deux écrans :
+ * « Modification » (les trois motifs de modification) et « Fournisseur »
+ * (toutes, triées par fournisseur et par type).
+ */
+function renderDemandes(rows, compteur, shown) {
+  if (!rows) return;
+  if (compteur) {
+    compteur.textContent = shown.length ? `${shown.length} demande${shown.length > 1 ? 's' : ''}` : '';
+  }
 
   rows.innerHTML =
     shown
@@ -10418,6 +10457,7 @@ const VIEW_LOADERS = {
     renderSuppliers();
     void renderSupplierActivity();
     void loadSupplierHub();
+    void chargerDemandesFournisseur();
   },
   changes: () => loadChanges(),
   ruptures: () => loadRuptures(),
@@ -15819,4 +15859,80 @@ $('upd-send')?.addEventListener('click', async () => {
   } finally {
     bouton.disabled = false;
   }
+});
+
+
+/* --------------------------------------- écran Fournisseur : demandes ---- */
+
+state.demandesFiltre = { fournisseur: null, type: '', statut: 'PENDING' };
+
+function renderDemandesFournisseur() {
+  const filtre = state.demandesFiltre;
+  const toutes = state.changesRows ?? [];
+
+  // Les types proposés sont ceux qui existent : un bouton qui ne trie rien
+  // n'apprend qu'à ne plus cliquer.
+  const types = [...new Set(toutes.map((change) => change.kind))];
+  $('sup-dem-types').innerHTML = [
+    `<button class="chip" data-dtype="" aria-pressed="${!filtre.type}">Tous les types</button>`,
+    ...types.map(
+      (kind) => `<button class="chip" data-dtype="${esc(kind)}" aria-pressed="${filtre.type === kind}">${esc(
+        CHANGE_KINDS[kind] ?? kind,
+      )}</button>`,
+    ),
+  ].join('');
+
+  const fournisseur = state.suppliers?.find((supplier) => supplier.id === filtre.fournisseur);
+  $('sup-dem-qui').textContent = fournisseur ? `· ${fournisseur.name}` : '';
+  document.querySelectorAll('#suppliers-rows .supc').forEach((carte) =>
+    carte.classList.toggle('supc-on', carte.dataset.supplier === filtre.fournisseur),
+  );
+
+  const shown = toutes.filter(
+    (change) =>
+      (!filtre.fournisseur || change.supplier?.id === filtre.fournisseur) &&
+      (!filtre.type || change.kind === filtre.type) &&
+      (!filtre.statut || change.status === filtre.statut),
+  );
+  renderDemandes($('sup-dem-rows'), $('sup-dem-count'), shown);
+}
+
+async function chargerDemandesFournisseur() {
+  try {
+    const data = await api('/api/changes');
+    state.changesRows = data.changes ?? [];
+  } catch (error) {
+    $('sup-dem-rows').innerHTML = `<p class="empty">${esc(error.message)}</p>`;
+    return;
+  }
+  renderDemandesFournisseur();
+}
+
+$('sup-dem-types')?.addEventListener('click', (event) => {
+  const chip = event.target.closest('[data-dtype]');
+  if (!chip) return;
+  state.demandesFiltre.type = chip.dataset.dtype;
+  renderDemandesFournisseur();
+});
+
+$('sup-dem-statut')?.addEventListener('click', (event) => {
+  const chip = event.target.closest('[data-dstatut]');
+  if (!chip) return;
+  state.demandesFiltre.statut = chip.dataset.dstatut;
+  $('sup-dem-statut')
+    .querySelectorAll('[data-dstatut]')
+    .forEach((other) => other.setAttribute('aria-pressed', String(other.dataset.dstatut === chip.dataset.dstatut)));
+  renderDemandesFournisseur();
+});
+
+// Un clic sur la carte d'un fournisseur (hors de ses boutons) ne garde que
+// ses demandes ; un second clic les rend toutes.
+$('suppliers-rows')?.addEventListener('click', (event) => {
+  if (event.target.closest('button, a')) return;
+  const carte = event.target.closest('.supc[data-supplier]');
+  if (!carte) return;
+  const id = carte.dataset.supplier;
+  state.demandesFiltre.fournisseur = state.demandesFiltre.fournisseur === id ? null : id;
+  renderDemandesFournisseur();
+  $('sup-dem-rows').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 });

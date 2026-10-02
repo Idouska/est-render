@@ -88,7 +88,16 @@ test('menu Actions et barre Fournisseur : les gestes demandés, dans cet ordre',
   assert.doesNotMatch(menu.replace(/\/\/[^\n]*/g, ''), /Supprimer le message|WhatsApp|Gmail|Rembourser/);
 
   const meta = brut.slice(brut.indexOf('const VIEW_META = {'), brut.indexOf('const NAV_GROUPS'));
-  const fournisseur = [...meta.matchAll(/label: '([^']+)', group: 'Fournisseur'(?![^}]*hidden: true)/g)].map((m) => m[1]);
-  assert.deepEqual(fournisseur, ['Modification', 'Annulation/Remboursement', 'Renvoi', 'Retour']);
+  const fournisseur = [...meta.matchAll(/label: '([^']+)',\s*group: 'Fournisseur'(?![^}]*hidden: true)/g)].map((m) => m[1]);
+  assert.deepEqual(fournisseur, ['Fournisseur', 'Modification', 'Annulation/\\u200bRemboursement', 'Renvoi', 'Retour']);
   assert.match(brut, /const NAV_GROUPS = \['Pilotage', 'Commerce', 'Fournisseur', 'Atelier', 'Finance', 'Plateforme'\];/);
+});
+
+test('Fournisseur : toutes les demandes, triées par fournisseur et par type ; Modification : trois motifs', () => {
+  assert.match(app, /const KINDS_MODIFICATION = new Set\(\['SIZE', 'PRODUCT', 'ADDRESS', 'PHONE'\]\);/);
+  assert.match(app, /\(!filtre\.fournisseur \|\| change\.supplier\?\.id === filtre\.fournisseur\)/);
+  assert.match(app, /\(!filtre\.type \|\| change\.kind === filtre\.type\)/);
+  assert.match(html, /id="sup-dem-types"/);
+  // Les ruptures restent dans leur écran : la liste ne lit que les demandes de changement.
+  assert.match(app, /async function chargerDemandesFournisseur\(\) \{\s*try \{\s*const data = await api\('\/api\/changes'\);/);
 });

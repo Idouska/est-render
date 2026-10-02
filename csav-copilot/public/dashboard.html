@@ -873,6 +873,24 @@
           </button>
         </div>
         <div class="sup-grid" id="suppliers-rows"></div>
+
+        <!-- Toutes les demandes envoyées aux fournisseurs. Un clic sur un
+             fournisseur ci-dessus ne garde que les siennes ; le type et le
+             statut se trient ici. Les ruptures restent dans leur écran. -->
+        <div class="sup-dem">
+          <div class="browse-bar sup-dem-bar">
+            <h3 class="sup-dem-h">Demandes aux fournisseurs <small id="sup-dem-qui"></small></h3>
+            <div class="filters" id="sup-dem-statut">
+              <button class="chip" data-dstatut="PENDING" aria-pressed="true">En attente</button>
+              <button class="chip" data-dstatut="" aria-pressed="false">Toutes</button>
+              <button class="chip" data-dstatut="ACKNOWLEDGED" aria-pressed="false">Faites</button>
+              <button class="chip" data-dstatut="REFUSED" aria-pressed="false">Refusées</button>
+            </div>
+            <span class="browse-count" id="sup-dem-count"></span>
+          </div>
+          <div class="filters sup-dem-types" id="sup-dem-types" role="group" aria-label="Type de demande"></div>
+          <div id="sup-dem-rows"></div>
+        </div>
       </section>
 
       <section class="browse" id="view-team" hidden aria-label="Équipe">
