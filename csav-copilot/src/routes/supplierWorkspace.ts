@@ -52,6 +52,7 @@ interface Workspace {
   vendors: string[];
   skuPrefixes: string[];
   isDefault: boolean;
+  joursCommande: string;
 }
 
 /** Vérifie le jeton et l'accorde au fournisseur en base. */
@@ -77,6 +78,7 @@ async function authorize(
       vendors: true,
       skuPrefixes: true,
       isDefault: true,
+      joursCommande: true,
     },
   });
 
@@ -95,6 +97,7 @@ async function authorize(
     vendors: supplier.vendors,
     skuPrefixes: supplier.skuPrefixes,
     isDefault: supplier.isDefault,
+    joursCommande: supplier.joursCommande,
   };
 }
 
@@ -152,7 +155,7 @@ async function allowedOrderIds(workspace: Workspace): Promise<string[] | null> {
 async function otherSupplierRules(workspace: Workspace): Promise<RoutingRules[]> {
   return prisma.supplier.findMany({
     where: { merchantId: workspace.merchantId, active: true, id: { not: workspace.supplierId } },
-    select: { id: true, vendors: true, skuPrefixes: true, isDefault: true },
+    select: { id: true, vendors: true, skuPrefixes: true, isDefault: true, joursCommande: true },
   });
 }
 

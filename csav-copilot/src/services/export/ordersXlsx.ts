@@ -51,9 +51,20 @@ async function fetchImage(url: string): Promise<Buffer | null> {
   }
 }
 
-/** Adresse du client sur plusieurs lignes, telle qu'elle sert à l'expédition. */
-function customerBlock(order: OrderSummary): string {
+/**
+ * Adresse du client sur plusieurs lignes, telle qu'elle sert à l'expédition.
+ *
+ * Le texte exact de Shopify, ligne pour ligne — nom, société, rues, ville,
+ * région, pays en toutes lettres — puis le téléphone, comme dans la commande.
+ * Pas d'e-mail : l'atelier n'écrit pas au client. La recomposition plus bas
+ * ne sert qu'à une commande lue sans ce texte.
+ */
+export function customerBlock(order: OrderSummary): string {
   const address = order.shippingAddress;
+
+  if (address?.formatted?.length) {
+    return [...address.formatted, address.phone ?? ''].filter(Boolean).join('\n');
+  }
 
   return [
     order.customer?.displayName ?? address?.name ?? '',
@@ -62,7 +73,6 @@ function customerBlock(order: OrderSummary): string {
       .filter(Boolean)
       .join(', '),
     address?.phone ?? '',
-    order.customer?.email ?? '',
   ]
     .filter(Boolean)
     .join('\n');

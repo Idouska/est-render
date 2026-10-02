@@ -2058,6 +2058,17 @@ contact@runningupscale.com"></textarea>
               <input type="checkbox" id="sup-f-default" />
               <span>Atelier par défaut — reçoit les commandes qu'aucune règle ne réclame</span>
             </label>
+
+            <!-- Deux agents qui se partagent le travail un jour sur deux :
+                 chacun ne reçoit que les commandes de ses jours. -->
+            <label for="sup-f-jours">Commandes qu'il prend</label>
+            <select id="sup-f-jours">
+              <option value="TOUS">Tous les jours</option>
+              <option value="PAIRS">Jours pairs du mois (2, 4, 6…)</option>
+              <option value="IMPAIRS">Jours impairs du mois (1, 3, 5…)</option>
+            </select>
+            <small>Selon le jour où le client a passé la commande, heure de Paris. Deux ateliers
+              « par défaut » sont possibles : un pour les jours pairs, un pour les impairs.</small>
           </div>
           <div class="field">
             <label for="sup-f-email">Email de contact</label>

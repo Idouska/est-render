@@ -619,6 +619,11 @@ model Supplier {
   /// se choisit dans l'espace même ; celle-ci, le marchand la fixe.
   langue String @default("fr")
 
+  /// Les commandes qu'il prend selon le jour du mois où elles ont été
+  /// passées (heure de Paris) : « TOUS », « PAIRS » ou « IMPAIRS ». Deux
+  /// agents qui se partagent le travail un jour sur deux.
+  joursCommande String @default("TOUS")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

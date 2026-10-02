@@ -35,6 +35,13 @@ export interface ShippingAddress {
   province: string | null;
   country: string | null;
   phone: string | null;
+  /**
+   * L'adresse telle que Shopify l'écrit, ligne par ligne : nom, société,
+   * rue, ville, région et pays en toutes lettres, dans l'ordre du pays.
+   * C'est elle qui part sur l'étiquette : la recomposer, c'est risquer de
+   * perdre une ligne. Absente pour l'adresse de facturation.
+   */
+  formatted?: string[] | null;
 }
 
 export interface OrderSummary {
@@ -192,6 +199,8 @@ const ORDER_FIELDS = /* GraphQL */ `
       provinceCode
       countryCodeV2
       phone
+      # Le texte exact de Shopify, pour le fichier de l'atelier.
+      formatted(withName: true, withCompany: true)
     }
     # L'adresse de facturation : celle qui a payé, pas celle qui reçoit.
     #
@@ -223,6 +232,7 @@ interface RawAddress {
   provinceCode: string | null;
   countryCodeV2: string | null;
   phone: string | null;
+  formatted?: string[] | null;
 }
 
 interface RawOrder {
@@ -359,6 +369,7 @@ function adresse(brute: RawAddress | null): ShippingAddress | null {
     province: brute.provinceCode,
     country: brute.countryCodeV2,
     phone: brute.phone,
+    ...(brute.formatted ? { formatted: brute.formatted } : {}),
   };
 }
 

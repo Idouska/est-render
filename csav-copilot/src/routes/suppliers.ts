@@ -30,6 +30,8 @@ const supplierBody = z.object({
   isDefault: z.boolean().optional(),
   /** Langue de ses mails. */
   langue: z.enum(LANGUES_ATELIER).optional(),
+  /** Les commandes qu'il prend : tous les jours, ou un jour sur deux. */
+  joursCommande: z.enum(['TOUS', 'PAIRS', 'IMPAIRS']).optional(),
 });
 
 /**
@@ -107,6 +109,7 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
         contactName: supplier.contactName,
         phone: supplier.phone,
         langue: supplier.langue,
+        joursCommande: supplier.joursCommande,
         active: supplier.active,
         ordersAccess: supplier.ordersAccess,
         vendors: supplier.vendors,
@@ -142,6 +145,7 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
         vendors: true,
         skuPrefixes: true,
         isDefault: true,
+        joursCommande: true,
       },
     });
     if (suppliers.length === 0) return reply.send({ suppliers: [] });

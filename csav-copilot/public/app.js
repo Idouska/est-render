@@ -5564,6 +5564,11 @@ function renderSuppliers() {
           ...(supplier.vendors ?? []).map((vendor) => `<span class="tag tag-order">${esc(vendor)}</span>`),
           ...(supplier.skuPrefixes ?? []).map((prefix) => `<span class="tag tag-order mono">${esc(prefix)}*</span>`),
           ...(supplier.isDefault ? ['<span class="tag tone-ok">Atelier par défaut</span>'] : []),
+          ...(supplier.joursCommande === 'PAIRS'
+            ? ['<span class="tag tone-wait">Jours pairs</span>']
+            : supplier.joursCommande === 'IMPAIRS'
+              ? ['<span class="tag tone-wait">Jours impairs</span>']
+              : []),
         ];
 
         const waiting = (stats.pendingChanges ?? 0) + (stats.openEscalations ?? 0);
@@ -5777,6 +5782,7 @@ function openSupplierForm(id) {
   $('sup-f-vendors').value = (supplier?.vendors ?? []).join(', ');
   $('sup-f-skus').value = (supplier?.skuPrefixes ?? []).join(', ');
   $('sup-f-default').checked = supplier?.isDefault ?? false;
+  $('sup-f-jours').value = supplier?.joursCommande ?? 'TOUS';
   describeSupplierAccess();
   $('sup-f-link').hidden = !supplier;
   $('sup-f-link').dataset.supplier = supplier?.id ?? '';
@@ -6268,6 +6274,7 @@ $('sup-f-save').addEventListener('click', async () => {
     vendors: splitList($('sup-f-vendors').value),
     skuPrefixes: splitList($('sup-f-skus').value),
     isDefault: $('sup-f-default').checked,
+    joursCommande: $('sup-f-jours').value,
   };
 
   if (!payload.name || !payload.contactEmail) {
@@ -13322,12 +13329,44 @@ setInterval(() => {
 }, 5000);
 
 // Au retour sur l'onglet après une absence : ce qui est affiché a toutes les
-// chances d'être périmé.
+// chances d'être périmé — à coup sûr si un mail est arrivé entre-temps.
 document.addEventListener('visibilitychange', () => {
   if (document.hidden || !state.me || !$('auto-refresh').checked) return;
-  if (Date.now() - (state.lastRefresh ?? 0) < 30000) return;
+  if (!state.nouveauEnAttente && Date.now() - (state.lastRefresh ?? 0) < 30000) return;
+  state.nouveauEnAttente = false;
   void refreshCurrent({ silent: true });
 });
+
+/*
+ * L'arrivée d'un mail, annoncée par le serveur.
+ *
+ * Le worker prévient dès qu'un mail entre ou qu'un ticket est traité : la
+ * file se relit dans la seconde au lieu d'attendre son tour de vingt
+ * secondes, qui reste en secours si la connexion tombe. Plusieurs annonces
+ * rapprochées ne font qu'une relecture. Onglet caché : on note, et on relit
+ * au retour.
+ */
+let relectureAnnoncee = null;
+
+function ecouterEvenements() {
+  if (!('EventSource' in window) || state.flux) return;
+  state.flux = new EventSource('/api/evenements');
+  state.flux.addEventListener('tickets', () => {
+    clearTimeout(relectureAnnoncee);
+    relectureAnnoncee = setTimeout(() => {
+      if (document.hidden || !$('auto-refresh').checked) {
+        state.nouveauEnAttente = true;
+        return;
+      }
+      // Les pastilles du menu suivent, même hors de l'écran SAV.
+      changesCountAt = 0;
+      void refreshChangesCount();
+      if (state.view !== 'tickets') return;
+      dernierTour = Date.now();
+      void refreshCurrent({ silent: true });
+    }, 400);
+  });
+}
 
 /*
  * Le clavier, sur la file.
@@ -13516,6 +13555,9 @@ async function boot() {
 
   $('gate').hidden = true;
   $('app').hidden = false;
+
+  // Les mails arrivés pendant qu'on regarde : annoncés par le serveur.
+  ecouterEvenements();
 
   // Sans attendre : les couleurs enrichissent l'affichage, elles ne le
   // conditionnent pas. Un Gmail lent ne doit pas retarder l'ouverture.
