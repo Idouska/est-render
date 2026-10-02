@@ -9474,6 +9474,8 @@ html, body { overflow-x: clip; }
 .envoi-match { border-left: 3px solid var(--accent); }
 .envoi-paires { display: flex; flex-direction: column; gap: 2px; font-size: 13px; flex: 1; min-width: 0; }
 .envoi-paire small { color: var(--ink-mute); }
+/* Où est la paire : l'agence (et son pays), ou chez le marchand. */
+.envoi-lieu { margin-top: 2px; font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
 .envoi-acts { display: flex; gap: 6px; flex-shrink: 0; }
 .envoi-dest { font-size: 13px; color: var(--ink-mute); flex-shrink: 0; }
 .envoi-sans { color: var(--bad, #b42318); }
@@ -9589,3 +9591,8 @@ html, body { overflow-x: clip; }
   .ptr, .ptr-fleche { transition: none; }
   .ptr-charge .ptr-fleche { animation: none; }
 }
+
+/* Stock : le bouton d'ajout manuel, au-dessus des pays. */
+.ret-stock-barre { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 4px 0 14px; }
+.ret-stock-barre small { color: var(--ink-mute); }
+#stk-modal .pickwrap { width: 100%; }

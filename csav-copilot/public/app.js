@@ -8733,8 +8733,9 @@ function renderReturns() {
 }
 
 function renderReturnCases(box) {
+  // Une paire ajoutée à la main est du stock, pas un dossier de retour.
   const items = state.returns.cases.filter(
-    (item) => !['CLOSED', 'UNUSABLE'].includes(item.status),
+    (item) => item.origine !== 'MANUEL' && !['CLOSED', 'UNUSABLE'].includes(item.status),
   );
   const silentSince = Date.now() - 3 * 24 * 60 * 60 * 1000;
 
@@ -8973,8 +8974,9 @@ function renderReturnStock(box) {
 
   const parPays = new Map();
   for (const item of stock) {
-    const pays = item.agency?.country ?? item.country ?? '—';
-    const agence = item.agency?.name ?? 'Sans agence';
+    // Sans agence, une paire ajoutée à la main est chez le marchand.
+    const pays = item.agency?.country ?? (item.origine === 'MANUEL' ? 'MAISON' : (item.country ?? '—'));
+    const agence = item.agency?.name ?? (item.origine === 'MANUEL' ? 'Chez vous' : 'Sans agence');
     if (!parPays.has(pays)) parPays.set(pays, new Map());
     const parAgence = parPays.get(pays);
     parAgence.set(agence, [...(parAgence.get(agence) ?? []), item]);
@@ -8983,19 +8985,23 @@ function renderReturnStock(box) {
   const sections = [...parPays.entries()]
     .map(
       ([pays, parAgence]) => `<section class="ret-pays">
-        <h3>${esc(nomPays(pays))} <span class="count">${[...parAgence.values()].flat().length}</span></h3>
+        <h3>${esc(pays === 'MAISON' ? 'Chez vous' : nomPays(pays))} <span class="count">${[...parAgence.values()].flat().length}</span></h3>
         ${[...parAgence.entries()]
           .map(
-            ([agence, items]) => `<h4>${esc(agence)}</h4>
+            ([agence, items]) => `${pays === 'MAISON' ? '' : `<h4>${esc(agence)}</h4>`}
               <div class="ret-grid">${items
                 .map(
                   (item) => `<div class="ret-card">
                     <b>${esc(item.productTitle)}</b>
                     <small>${esc([item.variantTitle, item.sku].filter(Boolean).join(' · '))}</small>
-                    <small>retour ${esc(item.orderName ?? '—')} · ${esc(RETURN_REASONS[item.reason] ?? '')} · en stock depuis ${joursDepuis(
-                      item.restockedAt ?? item.updatedAt,
-                    )} j</small>
-                    <button class="btn btn-small btn-danger" data-ret-defect="${esc(item.id)}">Défectueux — sortir du stock</button>
+                    <small>${
+                      item.origine === 'MANUEL'
+                        ? `ajout manuel${item.note ? ` · ${esc(item.note)}` : ''}`
+                        : `retour ${esc(item.orderName ?? '—')} · ${esc(RETURN_REASONS[item.reason] ?? '')}`
+                    } · en stock depuis ${joursDepuis(item.restockedAt ?? item.updatedAt)} j</small>
+                    <button class="btn btn-small btn-danger" data-ret-defect="${esc(item.id)}">${
+                      item.origine === 'MANUEL' ? 'Retirer du stock' : 'Défectueux — sortir du stock'
+                    }</button>
                   </div>`,
                 )
                 .join('')}</div>`,
@@ -9048,13 +9054,164 @@ function renderReturnStock(box) {
     : '';
 
   box.innerHTML =
+    `<div class="ret-stock-barre">
+      <button class="btn btn-small btn-primary" type="button" id="stk-ouvrir">＋ Ajouter au stock</button>
+      <small>Fin de série, paire d'exposition… : des paires qui ne viennent pas d'un retour.</small>
+    </div>` +
     (stock.length
       ? sections
       : `<p class="empty" style="padding:20px">
           Rien en stock. Les retours contrôlés et passés « En stock » arrivent ici, rangés
-          par pays et par agence, prêts au réemploi.
+          par pays et par agence, prêts au réemploi — avec les paires ajoutées à la main.
         </p>`) + confieesMarkup;
+  $('stk-ouvrir')?.addEventListener('click', () => void ouvrirAjoutStock());
 }
+
+/* ==========================================================================
+   AJOUTER AU STOCK, À LA MAIN
+
+   Le modèle se choisit dans le catalogue Shopify, la déclinaison dans ses
+   variantes : écrits à la main, ils ne correspondraient jamais à une
+   commande, et la paire dormirait sur l'étagère.
+   ========================================================================== */
+
+const ajoutStock = { produit: null, declinaisons: [], minuteur: null };
+
+async function ouvrirAjoutStock() {
+  ajoutStock.produit = null;
+  ajoutStock.declinaisons = [];
+  $('stk-produit').value = '';
+  $('stk-decli').innerHTML = '<option value="">Choisissez d’abord le modèle</option>';
+  $('stk-decli').disabled = true;
+  $('stk-qte').value = '1';
+  $('stk-note').value = '';
+  $('stk-save').disabled = true;
+  await ensureReturnAgencies();
+  $('stk-agence').innerHTML =
+    '<option value="">Chez moi</option>' +
+    state.returns.agencies
+      .map((agence) => `<option value="${esc(agence.id)}">${esc(agence.name)} (${esc(agence.country)})</option>`)
+      .join('');
+  $('stk-modal').hidden = false;
+  $('stk-modal').classList.add('open');
+  $('stk-produit').focus();
+}
+
+function fermerAjoutStock() {
+  document.querySelectorAll('#stk-modal .pickbox').forEach((boite) => boite.remove());
+  $('stk-modal').hidden = true;
+  $('stk-modal').classList.remove('open');
+}
+
+async function chercherModeleStock() {
+  const champ = $('stk-produit');
+  document.querySelectorAll('#stk-modal .pickbox').forEach((boite) => boite.remove());
+  const terme = champ.value.trim();
+  if (terme.length < 2) return;
+  const boite = document.createElement('div');
+  boite.className = 'pickbox';
+  boite.innerHTML = '<div class="pick-empty">Recherche…</div>';
+  champ.parentElement.append(boite);
+  try {
+    const { options } = await api(`/api/variant-options?${new URLSearchParams({ scope: 'PRODUCT', q: terme })}`);
+    boite.innerHTML = options.length
+      ? options
+          .map(
+            (option) => `<button type="button" class="pick-item" data-stk-produit="${esc(option.value)}">
+              ${option.image ? `<img src="${esc(option.image)}" alt="" loading="lazy" />` : ''}
+              <span>${esc(option.value)}</span>
+            </button>`,
+          )
+          .join('')
+      : '<div class="pick-empty">Aucun modèle trouvé dans le catalogue.</div>';
+  } catch (error) {
+    boite.innerHTML = `<div class="pick-empty">${esc(error.message)}</div>`;
+  }
+}
+
+async function choisirModeleStock(produit) {
+  ajoutStock.produit = produit;
+  $('stk-produit').value = produit;
+  document.querySelectorAll('#stk-modal .pickbox').forEach((boite) => boite.remove());
+  const choix = $('stk-decli');
+  choix.disabled = true;
+  choix.innerHTML = '<option value="">Chargement…</option>';
+  try {
+    const { declinaisons } = await api(`/api/returns/declinaisons?${new URLSearchParams({ produit })}`);
+    ajoutStock.declinaisons = declinaisons;
+    choix.innerHTML = declinaisons.length
+      ? declinaisons
+          .map(
+            (ligne, rang) =>
+              `<option value="${rang}">${esc(ligne.declinaison ?? 'Modèle unique')}${ligne.sku ? ` · ${esc(ligne.sku)}` : ''}</option>`,
+          )
+          .join('')
+      : '<option value="">Aucune déclinaison</option>';
+    choix.disabled = declinaisons.length === 0;
+  } catch (error) {
+    choix.innerHTML = `<option value="">${esc(error.message)}</option>`;
+  }
+  majAjoutStock();
+}
+
+function majAjoutStock() {
+  const quantite = Number($('stk-qte').value);
+  $('stk-save').disabled = !(
+    ajoutStock.produit &&
+    ajoutStock.declinaisons.length &&
+    $('stk-decli').value !== '' &&
+    Number.isInteger(quantite) &&
+    quantite >= 1 &&
+    quantite <= 50
+  );
+}
+
+$('stk-produit')?.addEventListener('input', () => {
+  // Retaper le modèle annule le choix : la déclinaison doit suivre.
+  ajoutStock.produit = null;
+  ajoutStock.declinaisons = [];
+  $('stk-decli').disabled = true;
+  majAjoutStock();
+  clearTimeout(ajoutStock.minuteur);
+  ajoutStock.minuteur = setTimeout(() => void chercherModeleStock(), 250);
+});
+$('stk-modal')?.addEventListener('click', (event) => {
+  const choix = event.target.closest('[data-stk-produit]');
+  if (choix) return void choisirModeleStock(choix.dataset.stkProduit);
+  if (event.target === event.currentTarget) fermerAjoutStock();
+});
+$('stk-decli')?.addEventListener('change', majAjoutStock);
+$('stk-qte')?.addEventListener('input', majAjoutStock);
+$('stk-cancel')?.addEventListener('click', fermerAjoutStock);
+$('stk-save')?.addEventListener('click', async () => {
+  const ligne = ajoutStock.declinaisons[Number($('stk-decli').value)];
+  if (!ajoutStock.produit || !ligne) return;
+  const bouton = $('stk-save');
+  bouton.disabled = true;
+  try {
+    const resultat = await api('/api/returns/stock', {
+      method: 'POST',
+      body: JSON.stringify({
+        productTitle: ajoutStock.produit,
+        variantTitle: ligne.declinaison,
+        sku: ligne.sku,
+        quantite: Number($('stk-qte').value),
+        agencyId: $('stk-agence').value || null,
+        note: $('stk-note').value.trim() || null,
+      }),
+    });
+    fermerAjoutStock();
+    toast(
+      `${resultat.ajoutees} paire${resultat.ajoutees > 1 ? 's' : ''} ajoutée${resultat.ajoutees > 1 ? 's' : ''} au stock${
+        resultat.agence ? ` de l’agence ${resultat.agence}` : ''
+      }.`,
+    );
+    await loadReturns();
+  } catch (error) {
+    bouton.disabled = false;
+    toast(error.message, true);
+  }
+});
 
 function renderReturnAgencies(box) {
   const country = state.returns.country;
@@ -15913,15 +16070,24 @@ function renderEnvoi() {
                   }</span>`,
                 )
                 .join('')}
+              <span class="envoi-lieu">${
+                c.agence
+                  ? `📍 ${esc(c.agence.nom ?? 'Agence')}${c.agence.pays ? ` (${esc(c.agence.pays)})` : ''}${
+                      c.voisin ? ' <span class="tag tone-wait">pays voisin</span>' : ''
+                    }`
+                  : '📍 Chez vous'
+              }</span>
             </div>
             <div class="envoi-acts">
-              <button class="btn btn-small btn-primary" data-envoi-reserver="${esc(c.commandeId)}">Je l’expédie moi-même</button>
+              <button class="btn btn-small btn-primary" data-envoi-reserver="${esc(c.commandeId)}">${
+                c.agence ? 'L’agence l’expédie' : 'Je l’expédie moi-même'
+              }</button>
               <button class="btn btn-small" data-envoi-laisser="${esc(c.commandeId)}">Laisser au fournisseur</button>
             </div>
           </div>`;
         })
         .join('')
-    : '<p class="empty">Aucune commande ne correspond à une paire de votre stock retours.</p>';
+    : '<p class="empty">Aucune commande ne correspond à une paire de votre stock (agences comprises).</p>';
 
   // Ce qui partira
   const partiront = d.commandes;
@@ -16024,7 +16190,7 @@ $('view-envoi')?.addEventListener('click', async (event) => {
     if (!correspondance || !commande) return;
     reserver.disabled = true;
     try {
-      await api('/api/returns/reemploi', {
+      const reserve = await api('/api/returns/reemploi', {
         method: 'POST',
         body: JSON.stringify({
           orderId: id,
@@ -16032,7 +16198,11 @@ $('view-envoi')?.addEventListener('click', async (event) => {
           returnIds: correspondance.paires.map((paire) => paire.returnId),
         }),
       });
-      toast(`${commande.name} réservée à votre stock : elle ne partira pas au fournisseur.`);
+      toast(
+        reserve.agence
+          ? `${commande.name} confiée à l’agence ${reserve.agence.name} : elle ne partira pas au fournisseur.`
+          : `${commande.name} réservée à votre stock : elle ne partira pas au fournisseur.`,
+      );
       await loadEnvoi();
     } catch (error) {
       reserver.disabled = false;

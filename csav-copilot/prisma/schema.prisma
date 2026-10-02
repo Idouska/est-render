@@ -1076,6 +1076,12 @@ model ReturnCase {
   /// Entrée au stock : les paires les plus anciennes partent en premier.
   restockedAt DateTime?
 
+  /// D'où vient la paire : « RETOUR » d'un client, ou « MANUEL » — ajoutée
+  /// au stock à la main (fin de série, paire d'exposition…). Une paire
+  /// manuelle sert les commandes comme les autres, mais n'est pas un retour :
+  /// elle ne compte ni dans les dossiers ni dans les statistiques de retours.
+  origine String @default("RETOUR")
+
   /// Sortie du stock pour défaut : quand, et pourquoi — le dossier garde la
   /// trace de ce qu'on n'a pas pu réemployer.
   unusableAt   DateTime?

@@ -2340,6 +2340,48 @@ contact@runningupscale.com"></textarea>
       </div>
     </div>
 
+    <!-- Ajouter des paires au stock à la main : fin de série, paire
+         d'exposition… Le modèle et la déclinaison viennent du catalogue,
+         sinon la paire ne correspondrait jamais à une commande. -->
+    <div class="backdrop" id="stk-modal" role="dialog" aria-modal="true" aria-labelledby="stk-title" hidden>
+      <div class="modal">
+        <div class="modal-head">
+          <h2 id="stk-title">Ajouter au stock</h2>
+          <p>Des paires qui ne viennent pas d'un retour client. Elles serviront les commandes et les échanges comme les autres.</p>
+        </div>
+        <div class="modal-body">
+          <div class="field">
+            <label for="stk-produit">Modèle</label>
+            <span class="pickwrap">
+              <input id="stk-produit" type="text" placeholder="Tapez le nom du modèle…" autocomplete="off" />
+            </span>
+          </div>
+          <div class="field-duo">
+            <div class="field">
+              <label for="stk-decli">Taille / déclinaison</label>
+              <select id="stk-decli" disabled><option value="">Choisissez d'abord le modèle</option></select>
+            </div>
+            <div class="field">
+              <label for="stk-qte">Quantité</label>
+              <input id="stk-qte" type="number" min="1" max="50" value="1" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="stk-agence">Rangées</label>
+            <select id="stk-agence"><option value="">Chez moi</option></select>
+          </div>
+          <div class="field">
+            <label for="stk-note">Note (facultatif)</label>
+            <textarea id="stk-note" rows="2" placeholder="Ex. : fin de série, paire d'exposition…"></textarea>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn" id="stk-cancel">Annuler</button>
+          <button class="btn btn-primary" id="stk-save" disabled>Ajouter au stock</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Relevé mensuel d'un atelier : pour vérifier sa facture. Les totaux
          en tête, une ligne par commande, et le même relevé en Excel. -->
     <div class="backdrop" id="releve-modal" role="dialog" aria-modal="true" aria-labelledby="releve-title" hidden>
