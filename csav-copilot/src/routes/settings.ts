@@ -16,6 +16,7 @@ import { ingestMerchantInbox } from "../services/tickets/ingest.ts";
 import { ShopifyScopeError } from "../services/shopify/client.ts";
 import { fetchShopPolicies, policiesToPlaybook } from "../services/shopify/policies.ts";
 import { decodePhoto, photoSchema } from "./parcels.ts";
+import { peutModifier } from "../services/gmail/modifier.ts";
 
 /**
  * Boîtes dont l'import tourne, pour ne pas le lancer deux fois et pour que
@@ -143,6 +144,7 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
             label: true,
             isDefault: true,
             watchExpiration: true,
+            scopes: true,
             createdAt: true,
             // Débrancher emporte les conversations de la boîte. L'écran ne
             // peut pas le dire honnêtement sans savoir combien.
@@ -215,6 +217,8 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
               mailbox.watchExpiration && mailbox.watchExpiration > new Date(),
             ),
             ticketCount: mailbox._count.tickets,
+            // Corbeille et libellés reportés dans Gmail : seulement avec gmail.modify.
+            gmailModifie: peutModifier(mailbox.scopes),
           })),
         },
       },

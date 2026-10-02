@@ -4073,11 +4073,27 @@ function renderBulk() {
   });
 }
 
+/** Ce que Gmail a fait de la suppression ou des libellés, dit à l'agent. */
+const MOTS_GMAIL = {
+  suppression: {
+    fait: 'Message supprimé, et mis à la corbeille de Gmail.',
+    'sans-fil': 'Message supprimé.',
+    simule: 'Message supprimé (mode test : Gmail n’a pas été touché).',
+    'sans-droit': 'Message supprimé de l’outil. Il reste dans Gmail : reconnectez la boîte pour autoriser la corbeille.',
+    echec: 'Message supprimé de l’outil, mais Gmail a refusé la mise à la corbeille.',
+  },
+  libelle: {
+    simule: 'Libellé changé dans l’outil (mode test : Gmail n’a pas été touché).',
+    'sans-droit': 'Libellé changé dans l’outil seulement : reconnectez la boîte pour le reporter dans Gmail.',
+    echec: 'Libellé changé dans l’outil, mais Gmail a refusé de le reporter.',
+  },
+};
+
 const BULK_CONFIRM = {
   delete:
     'Supprimer définitivement %n message(s) ?\n\n' +
-    'Fils, brouillons et pièces jointes partent avec eux. ' +
-    'Les mails restent dans votre boîte Gmail. Irréversible.',
+    'Fils, brouillons et pièces jointes partent avec eux, et les conversations ' +
+    'vont à la corbeille de Gmail (récupérables 30 jours depuis Gmail).',
 };
 
 async function runBulk(action, extra, button) {
@@ -4177,8 +4193,8 @@ function formatBytes(size) {
  *
  * Un libellé posé par Gmail décrit ce que le marchand a déjà décidé ; encore
  * faut-il pouvoir le corriger quand l'automatisme s'est trompé, sans rouvrir
- * Gmail. Le changement reste dans le SAV : les autorisations Google accordées
- * ne permettent pas de repeindre la boîte, et c'est délibéré.
+ * Gmail. Le changement est reporté dans Gmail quand la boîte a accordé
+ * l'autorisation de le faire ; sinon il reste dans le SAV, et on le dit.
  */
 function renderTicketLabels(ticket) {
   const bar = $('d-labels');
@@ -4324,6 +4340,9 @@ function renderTicketLabels(ticket) {
         });
         ticket.labels = result.labels;
         renderTicketLabels(ticket);
+        if (result.gmail && result.gmail !== 'fait' && result.gmail !== 'sans-fil') {
+          toast(MOTS_GMAIL.libelle[result.gmail] ?? MOTS_GMAIL.libelle.echec, result.gmail === 'echec');
+        }
         await loadQueue();
       } catch (error) {
         toast(error.message, true);
@@ -4335,16 +4354,16 @@ function renderTicketLabels(ticket) {
     if (
       !confirm(
         `Supprimer définitivement « ${ticket.subject ?? '(sans objet)'} » ?\n\n` +
-          'Le fil, les brouillons et les pièces jointes partent avec lui. ' +
-          'Le mail reste dans votre boîte Gmail. Irréversible.',
+          'Le fil, les brouillons et les pièces jointes partent avec lui, et la ' +
+          'conversation va à la corbeille de Gmail (récupérable 30 jours depuis Gmail).',
       )
     ) {
       return;
     }
 
     try {
-      await api(`/api/tickets/${ticket.id}`, { method: 'DELETE' });
-      toast('Message supprimé.');
+      const resultat = await api(`/api/tickets/${ticket.id}`, { method: 'DELETE' });
+      toast(MOTS_GMAIL.suppression[resultat.gmail] ?? 'Message supprimé.', resultat.gmail === 'echec');
       state.currentId = null;
       bar.hidden = true;
       await loadQueue();
@@ -11766,6 +11785,11 @@ function renderSettings() {
               mailbox.watchActive
                 ? `écoute active jusqu’au ${fullDate(mailbox.watchExpiration)}`
                 : '<b class="set-alert">écoute expirée</b> — reconnectez cette boîte'
+            }</div>
+            <div class="mbx-state">${
+              mailbox.gmailModifie
+                ? 'corbeille et libellés reportés dans Gmail'
+                : '<b class="set-alert">corbeille et libellés : à activer</b> — <a href="/auth/google">reconnectez cette boîte</a> et acceptez la nouvelle autorisation'
             }</div>
             <div class="mbx-acts">
               <input type="text" data-mbx-label="${esc(mailbox.id)}"

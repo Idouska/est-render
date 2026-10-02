@@ -23,6 +23,7 @@ import { MESSAGES_ENVOI } from '../services/envoi/uneSeuleFois.ts';
 import { translateToFrench } from '../services/ai/translate.ts';
 import { retardFournisseurs } from '../services/suppliers/retard.ts';
 import { fenetresJour } from '../services/tickets/fenetresJour.ts';
+import { mettreALaCorbeille, reporterLibelles } from '../services/gmail/modifier.ts';
 
 const TICKET_STATUSES = [
   'NEW',
@@ -588,9 +589,15 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
 
       case 'delete': {
         // Avant l'effacement : la cascade emporte les lignes Draft, et avec
-        // elles le seul lien vers les brouillons Gmail.
+        // elles le seul lien vers les brouillons Gmail — et vers les fils.
         for (const id of ids) await discardPendingDrafts(merchantId, id).catch(() => {});
+        const fils = await prisma.ticket.findMany({ where: scope, select: { gmailThreadId: true, mailboxId: true } });
         affected = (await prisma.ticket.deleteMany({ where: scope })).count;
+        // Les fils à la corbeille de Gmail, en arrière-plan : sur cinq cents
+        // messages, les appels dépasseraient le délai de la requête.
+        void (async () => {
+          for (const fil of fils) await mettreALaCorbeille(merchantId, fil);
+        })();
         break;
       }
 
@@ -662,19 +669,29 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
          */
         const targets = await prisma.ticket.findMany({
           where: scope,
-          select: { id: true, labels: true },
+          select: { id: true, labels: true, gmailThreadId: true, mailboxId: true },
         });
+        const nouveaux = new Map(
+          targets.map((target) => [
+            target.id,
+            action === 'label-add'
+              ? [...new Set([...target.labels, label!])]
+              : target.labels.filter((name) => name !== label),
+          ]),
+        );
 
         await prisma.$transaction(
-          targets.map((target) => {
-            const labels =
-              action === 'label-add'
-                ? [...new Set([...target.labels, label!])]
-                : target.labels.filter((name) => name !== label);
-
-            return prisma.ticket.update({ where: { id: target.id }, data: { labels } });
-          }),
+          targets.map((target) =>
+            prisma.ticket.update({ where: { id: target.id }, data: { labels: nouveaux.get(target.id)! } }),
+          ),
         );
+
+        // Reporté dans Gmail en arrière-plan, comme la corbeille.
+        void (async () => {
+          for (const target of targets) {
+            await reporterLibelles(merchantId, target, target.labels, nouveaux.get(target.id)!);
+          }
+        })();
 
         affected = targets.length;
         break;
@@ -813,8 +830,9 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
    * compteurs et polluent la recherche. Réservé à `configure` : c'est
    * irréversible, un agent n'a pas à pouvoir faire disparaître un échange.
    *
-   * Rien n'est touché dans Gmail : le mail reste dans la boîte du marchand.
-   * Supprimer ici veut dire « sortir du SAV », pas « détruire le courrier ».
+   * Dans Gmail, le fil part à la corbeille (si la boîte a accordé
+   * `gmail.modify`) : supprimé ici, il ne revient pas par la boîte, et une
+   * erreur se rattrape pendant trente jours depuis la corbeille.
    */
   app.delete<{ Params: { id: string } }>(
     '/api/tickets/:id',
@@ -824,9 +842,13 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
 
       const ticket = await prisma.ticket.findFirst({
         where: { id: request.params.id, merchantId },
-        select: { id: true, subject: true, customerEmail: true },
+        select: { id: true, subject: true, customerEmail: true, gmailThreadId: true, mailboxId: true },
       });
       if (!ticket) return reply.code(404).send({ error: 'Message introuvable' });
+
+      // Le fil à la corbeille de Gmail d'abord — récupérable trente jours.
+      // Un refus de Gmail n'empêche pas de le retirer de l'outil : l'écran le dira.
+      const gmail = await mettreALaCorbeille(merchantId, ticket);
 
       // Avant l'effacement en base : après, la ligne Draft (et son identifiant
       // Gmail) disparaît en cascade et le brouillon Gmail devient orphelin.
@@ -841,23 +863,21 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
         action: 'ticket.deleted',
         targetType: 'Ticket',
         targetId: ticket.id,
-        metadata: { subject: ticket.subject, customerEmail: ticket.customerEmail },
+        metadata: { subject: ticket.subject, customerEmail: ticket.customerEmail, gmail },
         ipAddress: request.ip,
       });
 
-      return reply.send({ deleted: true });
+      return reply.send({ deleted: true, gmail });
     },
   );
 
   /**
    * Change les libellés d'un message.
    *
-   * Les libellés viennent de Gmail, mais le classement se fait ici : les
-   * autorisations Google accordées sont en lecture, composition et envoi —
-   * pas en modification d'étiquettes. Reclasser depuis le dashboard ne
-   * repeint donc pas la boîte du marchand, et c'est le bon compromis :
-   * demander l'accès en écriture à toute la messagerie pour déplacer une
-   * étiquette serait hors de proportion.
+   * Les libellés viennent de Gmail, et y retournent : avec `gmail.modify`,
+   * ajouter ou retirer une étiquette ici le fait aussi dans la boîte (un
+   * libellé nouveau y est créé). Sans cette autorisation, le classement
+   * reste dans l'outil, comme avant.
    */
   app.put<{ Params: { id: string } }>(
     '/api/tickets/:id/labels',
@@ -875,12 +895,18 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
       // identiques sur la ligne.
       const labels = [...new Set(parsed.data.labels)];
 
-      const updated = await prisma.ticket.updateMany({
+      const avant = await prisma.ticket.findFirst({
+        where: { id: request.params.id, merchantId },
+        select: { labels: true, gmailThreadId: true, mailboxId: true },
+      });
+      if (!avant) return reply.code(404).send({ error: 'Message introuvable' });
+
+      await prisma.ticket.updateMany({
         where: { id: request.params.id, merchantId },
         data: { labels },
       });
 
-      if (updated.count === 0) return reply.code(404).send({ error: 'Message introuvable' });
+      const gmail = await reporterLibelles(merchantId, avant, avant.labels, labels);
 
       await recordAudit({
         merchantId,
@@ -889,11 +915,11 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
         action: 'ticket.labels_changed',
         targetType: 'Ticket',
         targetId: request.params.id,
-        metadata: { labels },
+        metadata: { labels, gmail },
         ipAddress: request.ip,
       });
 
-      return reply.send({ labels });
+      return reply.send({ labels, gmail });
     },
   );
 

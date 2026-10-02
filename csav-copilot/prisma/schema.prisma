@@ -205,6 +205,12 @@ model GmailConnection {
   lastHistoryId   String?
   watchExpiration DateTime? // le watch Gmail expire après 7 jours, à renouveler
 
+  /// Les autorisations accordées par Google à la connexion. Avec
+  /// `gmail.modify`, une suppression met le fil à la corbeille de Gmail et
+  /// un libellé changé ici l'est aussi là-bas ; sans, l'outil n'agit que
+  /// chez lui. Nul pour une boîte connectée avant ce champ.
+  scopes String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

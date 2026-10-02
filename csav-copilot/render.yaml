@@ -87,7 +87,7 @@ services:
       - key: GOOGLE_CLIENT_SECRET
         sync: false
       - key: GOOGLE_SCOPES
-        value: https://www.googleapis.com/auth/gmail.readonly,https://www.googleapis.com/auth/gmail.compose,https://www.googleapis.com/auth/gmail.send
+        value: https://www.googleapis.com/auth/gmail.readonly,https://www.googleapis.com/auth/gmail.compose,https://www.googleapis.com/auth/gmail.send,https://www.googleapis.com/auth/gmail.modify
       - key: GOOGLE_PUBSUB_TOPIC
         sync: false
       - key: GOOGLE_PUBSUB_SERVICE_ACCOUNT
@@ -175,7 +175,7 @@ services:
           type: web
           envVarKey: GOOGLE_CLIENT_SECRET
       - key: GOOGLE_SCOPES
-        value: https://www.googleapis.com/auth/gmail.readonly,https://www.googleapis.com/auth/gmail.compose,https://www.googleapis.com/auth/gmail.send
+        value: https://www.googleapis.com/auth/gmail.readonly,https://www.googleapis.com/auth/gmail.compose,https://www.googleapis.com/auth/gmail.send,https://www.googleapis.com/auth/gmail.modify
       - key: GOOGLE_PUBSUB_TOPIC
         fromService:
           name: csav-api
@@ -267,7 +267,7 @@ services:
           type: web
           envVarKey: GOOGLE_CLIENT_SECRET
       - key: GOOGLE_SCOPES
-        value: https://www.googleapis.com/auth/gmail.readonly,https://www.googleapis.com/auth/gmail.compose,https://www.googleapis.com/auth/gmail.send
+        value: https://www.googleapis.com/auth/gmail.readonly,https://www.googleapis.com/auth/gmail.compose,https://www.googleapis.com/auth/gmail.send,https://www.googleapis.com/auth/gmail.modify
       - key: GOOGLE_PUBSUB_TOPIC
         fromService:
           name: csav-api
