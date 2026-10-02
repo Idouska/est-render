@@ -1,0 +1,158 @@
+/* Portant de maillots — hero 3D My Footify. Tout est préfixé .mfp pour ne rien casser dans le thème. */
+.mfp {
+  --mfp-bg: #f5f5f1;
+  --mfp-ink: #20211f;
+  --mfp-muted: #62645d; /* 5,6:1 sur le fond crème */
+  --mfp-line: #d4d4cc;
+  --mfp-accent: #aa3527;
+  --mfp-ease: cubic-bezier(.2, .75, .2, 1);
+  background: var(--mfp-bg);
+  color: var(--mfp-ink);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+.mfp *, .mfp *::before, .mfp *::after { box-sizing: border-box; }
+.mfp button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.mfp button:disabled { cursor: not-allowed; }
+.mfp a { color: inherit; text-decoration: none; }
+.mfp button:focus-visible, .mfp a:focus-visible, .mfp__canvas:focus-visible { outline: 2px solid var(--mfp-accent); outline-offset: 4px; }
+.mfp [hidden] { display: none !important; }
+
+.mfp__inner { max-width: 1600px; margin: auto; padding: 40px 5% 25px; }
+.mfp__head { display: flex; justify-content: space-between; align-items: start; gap: 20px; }
+.mfp__eyebrow { margin: 0 0 10px; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; display: flex; align-items: center; gap: 9px; }
+.mfp__eyebrow::before { content: ''; width: 8px; height: 8px; background: var(--mfp-accent); }
+.mfp__title { margin: 0; font-size: 29px; line-height: 1.25; letter-spacing: -1.3px; font-weight: 500; color: inherit; }
+.mfp__edition { display: flex; flex-direction: column; gap: 7px; font-size: 12px; text-align: right; color: var(--mfp-muted); padding-top: 3px; }
+.mfp__edition span:first-child { color: var(--mfp-ink); }
+
+.mfp__stage { height: 430px; position: relative; margin-top: 20px; isolation: isolate; touch-action: pan-y; }
+.mfp__rack { position: absolute; inset: 0; z-index: 2; }
+.mfp__canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: pan-y; }
+.mfp__canvas:active { cursor: grabbing; }
+.mfp__stage.is-selected .mfp__canvas { cursor: default; }
+.mfp__loading { position: absolute; inset: 50% 0 auto; text-align: center; font-size: 13px; color: var(--mfp-muted); z-index: 10; }
+.mfp__loading span { animation: mfp-dots 1.2s steps(4) infinite; display: inline-block; overflow: hidden; vertical-align: bottom; width: 1em; }
+.mfp__close { position: absolute; top: 0; right: 0; z-index: 20; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; padding: 8px 0; }
+.mfp__side { position: absolute; top: 50%; z-index: 20; transform: translateY(-50%); display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; border: 1px solid #b9bbb1 !important; background: rgba(255, 255, 255, .6) !important; transition: background .2s, color .2s; }
+.mfp__side--prev svg { transform: scaleX(-1); }
+.mfp__side:hover { background: var(--mfp-ink) !important; color: var(--mfp-bg); }
+.mfp__side--prev { left: 22%; }
+.mfp__side--next { right: 22%; }
+
+/* Sous le portant : le nom du maillot, et le lien vers sa fiche. */
+.mfp__caption { display: flex; flex-direction: column; align-items: center; gap: 6px; min-height: 92px; margin-top: 6px; text-align: center; }
+.mfp__price { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.mfp__caption p.is-hint { font-style: normal; font-size: 13px; color: var(--mfp-muted); }
+.mfp__caption p { margin: 0; min-height: 1.3em; font-size: 15px; font-style: italic; }
+/* Le bouton reprend celui des fiches produit (« Choisis ta taille ») : orange plein, texte noir. */
+.mfp { --mfp-orange: #ff6600; }
+.mfp .mfp__more { margin-top: 8px; padding: 14px 34px; border: 0 !important; border-radius: 10px; background: var(--mfp-orange); color: #111 !important; font-family: var(--font-heading-family, inherit); font-weight: 700; font-size: 17px; letter-spacing: .5px; text-transform: uppercase; transition: filter .2s; }
+.mfp .mfp__more:hover { background: var(--mfp-orange); color: #111; filter: brightness(1.08); }
+
+/* Boutons permanents sous le portant (aux couleurs du site). */
+.mfp__actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 18px; }
+.mfp__cta { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 0 28px; border-radius: 6px; background: #ff6600; color: #fff !important; font-size: 15px; font-weight: 600; transition: background .2s, transform .2s; }
+.mfp__cta:hover { background: #e65c00; }
+.mfp__cta--ghost { background: transparent; color: var(--mfp-ink) !important; border: 1px solid var(--mfp-ink); }
+.mfp__cta--ghost:hover { background: var(--mfp-ink); color: var(--mfp-bg) !important; }
+
+/* Hero : comme la référence, le portant occupe toute la largeur. Au-dessus, une ligne
+   compacte : titre à gauche, boutons à droite. Tout tient dans le premier écran. */
+.mfp--hero .mfp__inner { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "head actions" "body body"; column-gap: 40px; padding-top: 28px; padding-bottom: 20px; }
+.mfp--hero .mfp__head { grid-area: head; align-self: end; }
+.mfp--hero .mfp__edition { display: none; }
+.mfp--hero .mfp__actions { grid-area: actions; align-self: end; justify-content: flex-end; margin-top: 0; }
+.mfp--hero [data-mfp-body] { grid-area: body; min-width: 0; }
+.mfp--hero .mfp__stage { height: clamp(380px, calc(100svh - 430px), 540px); margin-top: 12px; }
+.mfp--hero .mfp__title { font-size: clamp(32px, 3.2vw, 50px); line-height: 1.12; letter-spacing: -1px; padding-top: .08em; }
+/* Sous les maillots, la scène garde de la place pour le maillot choisi : on y remonte la légende. */
+.mfp--hero .mfp__caption { position: relative; z-index: 3; margin-top: -64px; }
+.mfp--hero [data-mfp-body] { position: relative; }
+.mfp--hero .mfp__stage.is-selected ~ .mfp__caption { position: absolute; z-index: 25; right: 0; top: 50%; transform: translateY(-50%); width: min(300px, 22%); margin: 0; min-height: 0; align-items: flex-start; text-align: left; }
+.mfp--hero .mfp__stage.is-selected ~ .mfp__caption [data-name] { font-size: 18px; line-height: 1.35; }
+.mfp--hero .mfp__stage.is-selected ~ .mfp__caption .mfp__price { font-size: 18px; color: var(--mfp-ink); }
+.mfp__sub { margin: 10px 0 0; max-width: 60ch; font-size: 15px; line-height: 1.5; color: var(--mfp-muted); }
+
+/* Vue choisie : Face / Dos et « glisse pour tourner », en haut à gauche du portant (face à « Fermer »). */
+.mfp__view { position: absolute; top: 0; left: 0; z-index: 20; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.mfp__turn { padding-left: 12px; font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--mfp-muted); }
+.mfp__faces { display: flex; gap: 4px; }
+.mfp__faces button { min-width: 64px; min-height: 44px; padding: 0 12px; font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--mfp-muted); border-bottom: 1px solid transparent !important; transition: color .2s, border-color .2s; }
+.mfp__faces button[aria-pressed="true"] { color: var(--mfp-ink); border-bottom-color: var(--mfp-ink) !important; }
+.mfp__faces button:hover { color: var(--mfp-ink); }
+
+/* Le son de la penderie : un seul bouton, en bas à droite du portant. */
+.mfp__sound { position: absolute; right: 0; bottom: 6px; z-index: 20; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; color: var(--mfp-muted); transition: color .2s, background .2s; }
+.mfp__sound:hover { color: var(--mfp-ink); }
+.mfp__sound .mfp__mute { display: none; }
+.mfp__sound.is-muted .mfp__waves { display: none; }
+.mfp__sound.is-muted .mfp__mute { display: inline; }
+
+/* Ambiance « penderie » : pièce sombre, le caisson en noyer éclairé par la réglette LED est dessiné en 3D. */
+.mfp--penderie { --mfp-muted: #b4aa9c; --mfp-line: rgba(243, 238, 230, .16); background: radial-gradient(120% 80% at 50% 0%, #1c1713 0%, #100e0c 62%); }
+.mfp--penderie .mfp__side { border-color: rgba(243, 238, 230, .32) !important; background: rgba(16, 14, 12, .55) !important; color: var(--mfp-ink); }
+.mfp--penderie .mfp__side:hover { background: var(--mfp-ink) !important; color: var(--mfp-bg); }
+.mfp--penderie .mfp__more { border-color: rgba(243, 238, 230, .4); }
+.mfp--penderie .mfp__cta--ghost { border-color: rgba(243, 238, 230, .55); }
+.mfp--penderie .mfp__flat img { mix-blend-mode: normal; }
+
+/* Ambiance « galerie » : minimaliste. Noir mat, un halo de lumière douce au-dessus du portant,
+   rien d'autre que les maillots. */
+.mfp--galerie { --mfp-muted: #b9b6b1; --mfp-line: rgba(240, 237, 232, .18); background: radial-gradient(75% 65% at 50% 40%, #4a4a4f 0%, #36363a 55%, #2c2c30 100%) !important; }
+.mfp--galerie .mfp__side { border-color: rgba(240, 237, 232, .26) !important; background: rgba(11, 11, 12, .5) !important; color: var(--mfp-ink); }
+.mfp--galerie .mfp__side:hover { background: var(--mfp-ink) !important; color: var(--mfp-bg); }
+.mfp--galerie .mfp__more { border-color: rgba(240, 237, 232, .36); }
+.mfp--galerie .mfp__cta--ghost { border-color: rgba(240, 237, 232, .5); }
+.mfp--galerie .mfp__flat img { mix-blend-mode: normal; }
+/* Typographie sobre : nom en capitales espacées, prix discret. */
+.mfp--galerie .mfp__caption p, .mfp--penderie .mfp__caption p { font-style: normal; }
+.mfp--galerie .mfp__caption [data-name]:not(.is-hint) { font-size: 13px; letter-spacing: 2px; text-transform: uppercase; }
+.mfp__caption [data-name]:not(.is-hint) { color: var(--mfp-orange); font-weight: 600; }
+.mfp--galerie .mfp__price { font-weight: 500; color: var(--mfp-muted); }
+
+/* Sans WebGL, ou si le script ne se charge pas : une simple rangée de maillots. */
+[data-mfp-fallback] { display: none; }
+.mfp--flat [data-mfp-fallback] { display: flex; }
+.mfp--flat .mfp__stage { display: none; }
+.mfp__flat { list-style: none; margin: 20px 0 0; padding: 0 0 20px; gap: 16px; overflow-x: auto; scroll-snap-type: x mandatory; }
+.mfp__flat li { flex: 0 0 220px; scroll-snap-align: start; }
+.mfp__flat img { width: 100%; height: auto; aspect-ratio: 1; object-fit: contain; mix-blend-mode: multiply; }
+.mfp__empty { margin: 40px 0; font-size: 14px; color: var(--mfp-muted); }
+.mfp__flat span { display: block; font-size: 13px; margin-top: 6px; }
+.mfp--flat .mfp__caption { display: none; }
+
+@keyframes mfp-dots { from { width: 0; } to { width: 1em; } }
+
+@media (min-height: 900px) and (min-width: 800px) {
+  .mfp__stage { height: 500px; margin-top: 25px; }
+}
+@media (max-width: 800px) {
+  .mfp__inner { padding: 32px 5% 20px; }
+  .mfp--hero .mfp__inner { display: flex; flex-direction: column; padding-top: 18px; padding-bottom: 22px; }
+  .mfp--hero [data-mfp-body] { order: 2; }
+  .mfp--hero .mfp__actions { order: 3; }
+  .mfp--hero .mfp__title { font-size: 30px; line-height: 1.16; }
+  .mfp--hero .mfp__eyebrow { margin-bottom: 6px; }
+  .mfp__sub { margin-top: 8px; font-size: 14px; }
+  .mfp--hero .mfp__sub { display: none; }
+  .mfp--hero .mfp__stage { flex: none; height: 350px; min-height: 0; margin-top: 4px; }
+  .mfp--hero .mfp__caption { min-height: 64px; margin-top: -72px; }
+  /* Sur mobile, le maillot choisi laisse la place à ses infos juste dessous. */
+  .mfp--hero .mfp__stage.is-selected ~ .mfp__caption { position: relative; transform: none; top: auto; right: auto; width: auto; margin-top: -6px; align-items: center; text-align: center; }
+  .mfp__actions, .mfp--hero .mfp__actions { flex-direction: column; align-items: stretch; align-self: stretch; margin-top: 8px; }
+  .mfp__title { font-size: 25px; }
+  .mfp__edition { font-size: 11px; }
+  /* Le portant file jusqu'aux bords de l'écran. */
+  .mfp__stage { height: 390px; margin-inline: calc(50% - 50vw); }
+  .mfp__close { right: 5vw; }
+  .mfp__view { left: 5vw; }
+  .mfp__turn { display: none; } /* sur mobile, le crochet du maillot passerait dessus */
+
+  .mfp__side--prev { left: 4vw; }
+  .mfp__side--next { right: 4vw; }
+  .mfp__caption p { font-size: 13px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mfp *, .mfp *::before, .mfp *::after { animation: none !important; transition: none !important; }
+}
