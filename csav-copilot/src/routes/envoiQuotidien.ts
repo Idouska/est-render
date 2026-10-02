@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { recordAudit } from '../lib/audit.ts';
 import { prisma } from '../lib/prisma.ts';
 import { requirePermission, requireSession } from '../plugins/auth.ts';
+import { lotsRecents } from '../services/envoi/lots.ts';
 import { envoyerAuxFournisseurs, etatDuJour } from '../services/envoi/quotidien.ts';
 import { ShopifyError } from '../services/shopify/client.ts';
 
@@ -19,7 +20,7 @@ export async function envoiQuotidienRoutes(app: FastifyInstance): Promise<void> 
   app.get('/api/envoi-du-jour', async (request, reply) => {
     const { merchantId } = request.session;
 
-    const [etat, envois] = await Promise.all([
+    const [etat, envois, lots] = await Promise.all([
       etatDuJour(merchantId).catch((error: unknown) => {
         if (error instanceof ShopifyError) return null;
         throw error;
@@ -39,12 +40,15 @@ export async function envoiQuotidienRoutes(app: FastifyInstance): Promise<void> 
           supplier: { select: { name: true } },
         },
       }),
+      // Ce que l'atelier a fait de chaque lot : sans lui écrire, on voit où
+      // en est chaque commande.
+      lotsRecents({ merchantId }),
     ]);
 
     if (!etat) {
-      return reply.code(502).send({ error: 'Commandes Shopify indisponibles pour le moment.', envois });
+      return reply.code(502).send({ error: 'Commandes Shopify indisponibles pour le moment.', envois, lots });
     }
-    return reply.send({ ...etat, envois });
+    return reply.send({ ...etat, envois, lots });
   });
 
   app.post(

@@ -9504,3 +9504,9 @@ html, body { overflow-x: clip; }
 /* Un libellé long (« Annulation/Remboursement ») passe à la ligne au lieu
    d'être coupé net par la barre. */
 .nav-item .nav-label { white-space: normal; line-height: 1.25; }
+
+/* Avancement d'un lot chez l'atelier, sous sa ligne d'historique. */
+.envoi-lot { flex-basis: 100%; margin-top: 4px; }
+.envoi-lot summary { display: flex; gap: 6px; flex-wrap: wrap; cursor: pointer; }
+.envoi-lot-ligne { display: flex; align-items: baseline; gap: 10px; padding: 6px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.envoi-lot-ligne small { color: var(--ink-mute); flex: 1; min-width: 0; }

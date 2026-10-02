@@ -15508,6 +15508,35 @@ const lignesTexte = (lignes) =>
     .map((ligne) => `${ligne.quantite > 1 ? `${ligne.quantite} × ` : ''}${[ligne.titre, ligne.declinaison].filter(Boolean).join(' · ')}`)
     .join(', ');
 
+const STATUTS_LOT = {
+  A_PREPARER: { label: 'À préparer', tone: 'bad' },
+  EN_PRODUCTION: { label: 'En production', tone: 'wait' },
+  EXPEDIEE: { label: 'Expédiée', tone: 'ok' },
+};
+
+/*
+ * Où en est le lot chez l'atelier, sans lui écrire : trois chiffres, et le
+ * détail par commande à la demande. « Expédiée » vient de ses colis saisis.
+ */
+function avancementDuLot(lot) {
+  const { A_PREPARER: a, EN_PRODUCTION: p, EXPEDIEE: e } = lot.compte;
+  return `<details class="envoi-lot">
+    <summary><span class="tag tone-bad">${a} à préparer</span>
+      <span class="tag tone-wait">${p} en production</span>
+      <span class="tag tone-ok">${e} expédiée(s)</span></summary>
+    ${lot.commandes
+      .map(
+        (commande) => `<div class="envoi-lot-ligne">
+          <b>${esc(commande.orderName)}</b>
+          <small>${esc(commande.articles ?? '')}</small>
+          <span class="tag tone-${STATUTS_LOT[commande.statut].tone}">${STATUTS_LOT[commande.statut].label}</span>
+          ${commande.suivis.length ? `<span class="mono">${esc(commande.suivis.join(' · '))}</span>` : ''}
+        </div>`,
+      )
+      .join('')}
+  </details>`;
+}
+
 async function loadEnvoi() {
   $('envoi-list').innerHTML = '<p class="empty">Lecture des commandes…</p>';
   try {
@@ -15604,11 +15633,13 @@ function renderEnvoi() {
     )
     .join('');
 
-  // Historique
+  // Historique, avec ce que l'atelier a fait de chaque lot depuis.
+  const lots = new Map((d.lots ?? []).map((lot) => [lot.id, lot]));
   $('envoi-hist').innerHTML = d.envois?.length
     ? d.envois
-        .map(
-          (envoi) => `<div class="envoi-row envoi-hist-row">
+        .map((envoi) => {
+          const lot = lots.get(envoi.id);
+          return `<div class="envoi-row envoi-hist-row">
             <span>${esc(dateTime(envoi.createdAt))}</span>
             <b>${esc(envoi.supplier?.name ?? '')}</b>
             <span>${envoi.combien} commande(s)</span>
@@ -15617,8 +15648,9 @@ function renderEnvoi() {
             }</span>
             <span class="envoi-mode">${envoi.mode === 'AUTO' ? 'automatique' : 'manuel'}</span>
             ${envoi.erreur ? `<small class="envoi-err">${esc(envoi.erreur)}</small>` : ''}
-          </div>`,
-        )
+            ${lot ? avancementDuLot(lot) : ''}
+          </div>`;
+        })
         .join('')
     : '<p class="empty">Aucun envoi pour l’instant.</p>';
 

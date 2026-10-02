@@ -1,6 +1,7 @@
 import { logger } from '../../lib/logger.ts';
 import { prisma } from '../../lib/prisma.ts';
 import { ordersToXlsx } from '../export/ordersXlsx.ts';
+import { resumeArticles } from './statutLot.ts';
 import { sendPlainEmail } from '../gmail/send.ts';
 import { ENVOI_SIMULE } from '../modeTest.ts';
 import {
@@ -353,6 +354,7 @@ export async function envoyerAuxFournisseurs(params: {
         envoiId: envoi.id,
         shopifyOrderId: commande.id,
         orderName: commande.name,
+        articles: resumeArticles(commande.lignes),
       })),
       skipDuplicates: true,
     });

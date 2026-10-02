@@ -1189,6 +1189,12 @@ model EnvoiCommande {
   envoiId        String
   shopifyOrderId String
   orderName      String
+  /// Les articles, tels qu'ils sont partis dans le fichier : « 2 × Nike Mind
+  /// 001 · 45 ». Gardés ici pour suivre le lot sans réinterroger Shopify.
+  articles       String?   @db.Text
+  /// L'atelier a lancé la commande. « Expédiée » ne se stocke pas : ce sont
+  /// ses colis qui le disent.
+  enProductionLe DateTime?
 
   envoi EnvoiFournisseur @relation(fields: [envoiId], references: [id], onDelete: Cascade)
 

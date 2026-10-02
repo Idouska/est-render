@@ -1139,6 +1139,7 @@ const VIEWS = {
   home: loadHome,
   orders: () => {},
   tracking: loadParcels,
+  lots: loadLots,
   catalog: loadCatalog,
   tickets: loadTickets,
 };
@@ -1154,11 +1155,11 @@ const VIEWS = {
  */
 const ECRANS = {
   home: ['home'],
-  orders: ['orders', 'tracking'],
+  orders: ['orders', 'tracking', 'lots'],
   catalog: ['catalog'],
   tickets: ['tickets'],
 };
-const TOUTES = ['home', 'orders', 'tracking', 'catalog', 'tickets'];
+const TOUTES = ['home', 'orders', 'tracking', 'lots', 'catalog', 'tickets'];
 
 function setView(view) {
   state.view = view;
@@ -2873,6 +2874,144 @@ function resumeDe(html) {
   const commande = boite.querySelector('.upd-head .tag-order')?.textContent?.trim();
   if (commande) return t('rup.order').replace('{name}', commande);
   return boite.querySelector('.upd-head b')?.textContent?.trim() ?? '';
+}
+
+/* ==========================================================================
+   LOTS REÇUS — le fichier du jour, suivi commande par commande
+
+   Le marchand envoie chaque matin ses commandes en fichier. L'atelier les
+   retrouve ici, avec trois états : à préparer, en production, expédiée. Il
+   lance une commande — ou tout le lot — d'un bouton ; « expédiée » vient de
+   lui-même dès qu'un colis est saisi, comme d'habitude.
+   ========================================================================== */
+
+async function loadLots() {
+  const rows = $('lots-rows');
+  rows.innerHTML = `<p class="empty">${esc(t('tk.loading'))}</p>`;
+  try {
+    const data = await api(`/api/workspace/${supplierId}/lots`);
+    state.lots = data.lots ?? [];
+  } catch {
+    rows.innerHTML = `<p class="empty">${esc(t('lots.error'))}</p>`;
+    return;
+  }
+  renderLots();
+}
+
+function renderLots() {
+  const rows = $('lots-rows');
+  const lots = state.lots ?? [];
+  if (lots.length === 0) {
+    rows.innerHTML = emptyState(t('lots.empty'));
+    return;
+  }
+
+  rows.innerHTML = lots
+    .map((lot, rang) => {
+      const total = lot.commandes.length;
+      const aLancer = lot.commandes.filter((commande) => commande.statut === 'A_PREPARER');
+      const jour = new Date(lot.envoyeLe).toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' });
+      // Le lot le plus récent s'ouvre seul : c'est celui du jour.
+      return `<details class="lot"${rang === 0 ? ' open' : ''}>
+        <summary class="lot-head">
+          <b>${esc(t('lots.of', { date: jour }))}</b>
+          <span class="lot-compte">${esc(
+            t('lots.summary', { a: lot.compte.A_PREPARER, p: lot.compte.EN_PRODUCTION, e: lot.compte.EXPEDIEE }),
+          )}</span>
+          ${progressBar(lot.compte.EXPEDIEE, total, t('lots.shipped', { n: lot.compte.EXPEDIEE, total }))}
+        </summary>
+        ${
+          aLancer.length
+            ? `<p class="lot-tout"><button class="btn btn-small btn-primary" type="button"
+                 data-lot-tout="${esc(aLancer.map((commande) => commande.shopifyOrderId).join(','))}">${esc(
+                 t('lots.allProd', { n: aLancer.length }),
+               )}</button></p>`
+            : ''
+        }
+        ${lot.commandes.map(ligneDuLot).join('')}
+      </details>`;
+    })
+    .join('');
+
+  rows.querySelectorAll('[data-lot-prod]').forEach((bouton) =>
+    bouton.addEventListener('click', () => void lancerProduction([bouton.dataset.lotProd], true, bouton)),
+  );
+  rows.querySelectorAll('[data-lot-annuler]').forEach((bouton) =>
+    bouton.addEventListener('click', () => void lancerProduction([bouton.dataset.lotAnnuler], false, bouton)),
+  );
+  rows.querySelectorAll('[data-lot-tout]').forEach((bouton) =>
+    bouton.addEventListener('click', () => void lancerProduction(bouton.dataset.lotTout.split(','), true, bouton)),
+  );
+  rows.querySelectorAll('[data-lot-colis]').forEach((bouton) =>
+    bouton.addEventListener('click', () => saisirColisDuLot(bouton.dataset.lotColis)),
+  );
+}
+
+/** Une commande du lot : ce qui part, où elle en est, et le geste suivant. */
+function ligneDuLot(commande) {
+  const geste = {
+    A_PREPARER: `<button class="btn btn-small" type="button" data-lot-prod="${esc(commande.shopifyOrderId)}">${esc(
+      t('lots.prod'),
+    )}</button>`,
+    // Une commande lancée par erreur se reprend : le marchand lirait sinon
+    // « en production » sur une paire qui n'a jamais été commencée.
+    EN_PRODUCTION: `<button class="btn btn-small btn-ghost" type="button" data-lot-annuler="${esc(
+      commande.shopifyOrderId,
+    )}">${esc(t('lots.undo'))}</button>`,
+    EXPEDIEE: '',
+  }[commande.statut];
+
+  return `<div class="lot-ligne lot-s-${esc(commande.statut)}">
+    <div class="lot-quoi">
+      <b>${esc(commande.orderName)}</b>
+      <small>${esc(commande.articles ?? '')}</small>
+      ${
+        commande.suivis.length
+          ? `<small class="mono">${esc(commande.suivis.join(' · '))}</small>`
+          : ''
+      }
+    </div>
+    <span class="pill lot-pill">${esc(t(`lots.s.${commande.statut}`))}</span>
+    <div class="lot-gestes">
+      ${geste}
+      ${
+        commande.statut === 'EXPEDIEE'
+          ? ''
+          : `<button class="btn btn-small btn-primary" type="button" data-lot-colis="${esc(commande.orderName)}">${esc(
+              t('lots.parcel'),
+            )}</button>`
+      }
+    </div>
+  </div>`;
+}
+
+async function lancerProduction(ids, enProduction, bouton) {
+  bouton.disabled = true;
+  try {
+    await api(`/api/workspace/${supplierId}/lots/production`, {
+      method: 'POST',
+      body: { shopifyOrderIds: ids, enProduction },
+    });
+    toast(t('lots.done'));
+    await loadLots();
+  } catch (error) {
+    bouton.disabled = false;
+    toast(messageServeur(error, 'lots.error'), true);
+  }
+}
+
+/*
+ * Saisir le colis d'une commande du lot.
+ *
+ * Pas de second formulaire de colis : la commande s'ouvre dans « À préparer »,
+ * retrouvée par son numéro, avec la saisie habituelle — photo, transporteur,
+ * plusieurs colis. Le statut passe à « expédiée » de lui-même.
+ */
+function saisirColisDuLot(numero) {
+  state.sous = { ...(state.sous ?? {}), orders: 'orders' };
+  setView('orders');
+  $('ws-cmd-q').value = numero;
+  void chercherCommande(numero);
 }
 
 // Tout est déclaré : l'atelier arrive sur « Aujourd'hui ».

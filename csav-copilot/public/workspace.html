@@ -93,6 +93,7 @@
         <div class="ws-sous" id="ws-sous-cmd" hidden>
           <button type="button" data-sous="orders" aria-pressed="true" data-t="sous.toPrepare">À préparer</button>
           <button type="button" data-sous="tracking" data-t="sous.parcels">Colis enregistrés</button>
+          <button type="button" data-sous="lots" data-t="sous.lots">Lots reçus</button>
         </div>
 
         <!-- ============================================ AUJOURD'HUI ====== -->
@@ -270,6 +271,16 @@
         </section>
 
         <!-- ============================================= SUIVI =========== -->
+        <!-- ============================================ LOTS REÇUS ======= -->
+        <!-- Chaque fichier du jour envoyé par le marchand, commande par
+             commande : à préparer, en production, expédiée. -->
+        <section id="view-lots" hidden>
+          <header class="wshead">
+            <h1 data-t="lots.title">Lots reçus</h1>
+          </header>
+          <div id="lots-rows"></div>
+        </section>
+
         <section id="view-tracking" hidden>
           <header class="wshead">
             <h1 data-t="tracking.title">Colis enregistrés</h1>
