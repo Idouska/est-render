@@ -1140,6 +1140,11 @@
           <label class="envoi-heure" id="envoi-heure-wrap" hidden>
             à <select id="envoi-heure" aria-label="Heure de l’envoi automatique"></select>
           </label>
+          <!-- Le délai laissé à l'atelier pour expédier : au-delà, la commande
+               passe en retard, et un rappel unique lui part. -->
+          <label class="envoi-heure">
+            Retard après <select id="envoi-delai" aria-label="Jours avant retard"></select>
+          </label>
           <span class="browse-count" id="envoi-periode"></span>
           <button class="btn btn-primary btn-small" id="envoi-go" disabled>Envoyer au fournisseur</button>
         </div>

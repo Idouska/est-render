@@ -86,6 +86,9 @@ model Merchant {
   /// Posé à la première ouverture de l'écran, sinon tout l'historique
   /// apparaîtrait comme « à envoyer ».
   envoiDepuis DateTime?
+  /// Jours laissés à l'atelier pour expédier une commande de son lot. Au-delà,
+  /// elle est « en retard » : un rappel lui part, et elle passe en rouge ici.
+  lotDelaiJours Int @default(2)
 
   /// Gabarit de lien de suivi, `{tracking}` remplacé par le numéro. Vide, on
   /// utilise le lien fourni par Shopify — qui manque chez certains
@@ -1195,6 +1198,9 @@ model EnvoiCommande {
   /// L'atelier a lancé la commande. « Expédiée » ne se stocke pas : ce sont
   /// ses colis qui le disent.
   enProductionLe DateTime?
+  /// Rappel de retard envoyé à l'atelier. Un seul : au-delà, c'est au
+  /// marchand de décrocher son téléphone, pas à l'outil d'insister.
+  rappeleLe      DateTime?
 
   envoi EnvoiFournisseur @relation(fields: [envoiId], references: [id], onDelete: Cascade)
 

@@ -1933,3 +1933,4 @@ input:focus, select:focus, textarea:focus {
   .lot-gestes { width: 100%; }
   .lot-gestes .btn { flex: 1; min-height: var(--tap); }
 }
+.lot-retard { background: var(--bad-soft); color: var(--bad); }

@@ -1,3 +1,4 @@
+import { compterRetards } from '../services/envoi/lots.ts';
 import { repartirDeclinaison } from '../services/shopify/declinaison.ts';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
@@ -156,6 +157,8 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
     const counts: Record<string, number> = {};
 
     counts.tracking = await prisma.parcel.count({ where: { merchantId } });
+    // Commandes de lot que l'atelier n'a pas expédiées dans le délai : rouge.
+    counts.envoi = await compterRetards(merchantId);
 
     try {
       const client = await getShopifyClient(merchantId);
