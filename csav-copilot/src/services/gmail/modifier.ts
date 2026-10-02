@@ -117,3 +117,32 @@ export async function reporterLibelles(
     return 'echec';
   }
 }
+
+/**
+ * Lu ou non lu, dans Gmail aussi.
+ *
+ * Ouvrir un message ici le disait lu ici seulement : Gmail gardait son
+ * libellé `UNREAD`, et les deux compteurs de non-lus divergeaient chaque fois
+ * que l'équipe travaillait dans l'outil. L'inverse marchait déjà — lire dans
+ * Gmail éteint le message ici, par la relève.
+ */
+export async function marquerLu(
+  merchantId: string,
+  ticket: { gmailThreadId: string; mailboxId: string | null },
+  lu: boolean,
+): Promise<IssueGmail> {
+  try {
+    const pret = await preparer(merchantId, ticket.mailboxId, ticket.gmailThreadId);
+    if (pret.issue) return pret.issue;
+    await pret.gmail.users.threads.modify({
+      userId: 'me',
+      id: ticket.gmailThreadId,
+      requestBody: lu ? { removeLabelIds: ['UNREAD'] } : { addLabelIds: ['UNREAD'] },
+    });
+    return 'fait';
+  } catch (error) {
+    if ((error as { code?: number }).code === 404) return 'sans-fil';
+    logger.warn({ err: error, merchantId, threadId: ticket.gmailThreadId }, 'Lu / non lu non reporté dans Gmail');
+    return 'echec';
+  }
+}

@@ -23,7 +23,7 @@ import { MESSAGES_ENVOI } from '../services/envoi/uneSeuleFois.ts';
 import { translateToFrench } from '../services/ai/translate.ts';
 import { retardFournisseurs } from '../services/suppliers/retard.ts';
 import { fenetresJour } from '../services/tickets/fenetresJour.ts';
-import { mettreALaCorbeille, reporterLibelles } from '../services/gmail/modifier.ts';
+import { marquerLu, mettreALaCorbeille, reporterLibelles } from '../services/gmail/modifier.ts';
 
 const TICKET_STATUSES = [
   'NEW',
@@ -230,6 +230,15 @@ async function listMerchantLabels(merchantIds: string[]): Promise<string[]> {
   `;
 
   return rows.map((row) => row.label);
+}
+
+/** Lu / non lu reporté dans Gmail, en arrière-plan : cinq cents fils dépasseraient le délai de la requête. */
+async function reporterLecture(
+  merchantId: string,
+  fils: ReadonlyArray<{ gmailThreadId: string; mailboxId: string | null }>,
+  lu: boolean,
+): Promise<void> {
+  for (const fil of fils) await marquerLu(merchantId, fil, lu);
 }
 
 export async function ticketRoutes(app: FastifyInstance): Promise<void> {
@@ -612,27 +621,35 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
         * dit lu resterait lu ici quoi qu'on clique, puisque `NON_LU` demande
         * les deux. Ce champ n'est donc plus seulement le reflet du libellé
         * Gmail — c'est « ce fil est à lire », que la source soit Gmail ou
-        * l'équipe. L'outil n'ayant que `gmail.readonly`, rien de tout cela ne
-        * remonte chez Google : lire le message DANS Gmail l'éteindra, ici
-        * comme là-bas, ce qui est exactement ce qu'on attend.
+        * l'équipe. Avec `gmail.modify`, le geste est aussi reporté dans Gmail
+        * (libellé `UNREAD`) : les deux compteurs de non-lus restent alignés.
+        * Sans cette autorisation, il reste ici ; lire le message DANS Gmail
+        * l'éteint de toute façon des deux côtés.
         */
       case 'read': {
+        const fils = await prisma.ticket.findMany({ where: scope, select: { gmailThreadId: true, mailboxId: true } });
+        // La date d'ouverture n'est posée qu'une fois — elle dit la PREMIÈRE
+        // lecture —, mais le fil devient lu partout.
         affected = (
           await prisma.ticket.updateMany({
             where: { ...scope, openedAt: null },
             data: { openedAt: new Date() },
           })
         ).count;
+        await prisma.ticket.updateMany({ where: scope, data: { gmailUnread: false } });
+        void reporterLecture(merchantId, fils, true);
         break;
       }
 
       case 'unread': {
+        const fils = await prisma.ticket.findMany({ where: scope, select: { gmailThreadId: true, mailboxId: true } });
         affected = (
           await prisma.ticket.updateMany({
             where: scope,
             data: { openedAt: null, gmailUnread: true },
           })
         ).count;
+        void reporterLecture(merchantId, fils, false);
         break;
       }
 
@@ -1166,14 +1183,19 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
       // chez elle serait prendre une décision à sa place.
       const ticket = await prisma.ticket.findFirst({
         where: { id: request.params.id, merchantId },
-        select: { id: true, openedAt: true },
+        select: { id: true, openedAt: true, gmailThreadId: true, mailboxId: true },
       });
       if (!ticket) return reply.code(404).send({ error: 'Ticket introuvable' });
 
       if (ticket.openedAt !== null) return reply.send({ openedAt: ticket.openedAt });
 
       const openedAt = new Date();
-      await prisma.ticket.update({ where: { id: ticket.id }, data: { openedAt } });
+      await prisma.ticket.update({ where: { id: ticket.id }, data: { openedAt, gmailUnread: false } });
+
+      // Lu ici, lu dans Gmail : sans quoi les deux compteurs divergent. En
+      // arrière-plan — ouvrir un message ne doit pas attendre Google. Une
+      // seule fois par message : à la première ouverture.
+      void marquerLu(merchantId, ticket, true);
 
       // Pas de journal d'audit : ouvrir un message n'est pas une action sur le
       // dossier, et une ligne par consultation noierait les gestes qui
