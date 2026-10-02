@@ -15,6 +15,16 @@ export function heureAtelier(date: Date): number {
   );
 }
 
+/** Le jour de l'atelier, « AAAA-MM-JJ » : deux dates du même jour se comparent ainsi. */
+export function jourAtelier(date: Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: FUSEAU_ATELIER,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
+
 export function rappelDuRetard(contexte: {
   merchantName: string;
   delaiJours: number;

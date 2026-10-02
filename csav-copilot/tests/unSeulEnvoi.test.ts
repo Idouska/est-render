@@ -34,7 +34,6 @@ process.env.GOOGLE_PUBSUB_TOPIC ??= 'projects/p/topics/t';
 process.env.GOOGLE_PUBSUB_SERVICE_ACCOUNT ??= 'sa@p.iam.gserviceaccount.com';
 
 const { envoyerBrouillon } = await import('../src/services/tickets/envoyerBrouillon.ts');
-const { sendEscalation } = await import('../src/services/suppliers/escalate.ts');
 const { BAIL_ENVOI_MS } = await import('../src/services/envoi/uneSeuleFois.ts');
 
 const lire = (chemin: string) =>
@@ -247,90 +246,6 @@ test('le brouillon d’une autre boutique n’est ni lu ni pris', async () => {
   assert.equal(s.envois.length, 0);
 });
 
-/* ---------------------------------------- la notification fournisseur --- */
-
-function sceneEscalade(escalade: Ligne = {}) {
-  const ligne = {
-    id: 'e1', merchantId: 'm1', ticketId: 't1', status: 'DRAFTING', reason: 'OTHER',
-    note: null, notifiedAt: null, sendStartedAt: null,
-    supplier: { name: 'Atelier', contactEmail: 'atelier@example.com' },
-    ticket: { orderName: '#1001' },
-    ...escalade,
-  };
-  const envois: string[] = [];
-  let echecs = 0;
-
-  const deps = {
-    prisma: {
-      supplierEscalation: table([ligne]),
-      ticket: table([{ id: 't1', status: 'NEW' }]),
-      merchant: table([{ id: 'm1', name: 'Boutique', brandName: null, shopDomain: 'b.myshopify.com', emailSignature: null }]),
-      $transaction: (operations: Promise<unknown>[]) => Promise.all(operations),
-    },
-    sendPlainEmail: async (params: { to: string }) => {
-      if (echecs > 0) {
-        echecs -= 1;
-        throw new Error('Gmail indisponible');
-      }
-      await pause(30);
-      envois.push(params.to);
-      return { gmailMessageId: null, fromEmail: 'sav@boutique.test' };
-    },
-    recordAudit: async () => {},
-  };
-
-  const envoyer = () =>
-    sendEscalation({ merchantId: 'm1', escalationId: 'e1', userId: 'u1' }, deps as never);
-
-  return { ligne, envois, envoyer, prisma: deps.prisma, echouerUneFois: () => (echecs = 1) };
-}
-
-test('escalade : deux clics à la fois, le fournisseur n’est notifié qu’une fois', async () => {
-  const s = sceneEscalade();
-  const issues = await Promise.all([s.envoyer(), s.envoyer()]);
-
-  assert.deepEqual(issues.sort(), ['en-cours', 'envoye']);
-  assert.deepEqual(s.envois, ['atelier@example.com']);
-  assert.equal(s.ligne.status, 'OPEN');
-  assert.equal(s.ligne.sendStartedAt, null);
-  assert.equal(await s.envoyer(), 'deja-envoye');
-  assert.equal(s.envois.length, 1);
-});
-
-test('escalade : Gmail refuse, la place est rendue et le nouvel essai part', async () => {
-  const s = sceneEscalade();
-  s.echouerUneFois();
-
-  await assert.rejects(s.envoyer(), /Gmail indisponible/);
-  assert.equal(s.ligne.status, 'DRAFTING');
-  assert.equal(s.ligne.sendStartedAt, null);
-
-  assert.equal(await s.envoyer(), 'envoye');
-  assert.equal(s.envois.length, 1);
-});
-
-test('escalade : la lecture a vu DRAFTING, l’autre envoi a fini depuis — rien ne repart', async () => {
-  const s = sceneEscalade({ status: 'OPEN' });
-  // La lecture du service date d'avant la fin de l'autre envoi.
-  const lire = s.prisma.supplierEscalation.findFirstOrThrow.bind(s.prisma.supplierEscalation);
-  let premiere = true;
-  s.prisma.supplierEscalation.findFirstOrThrow = async (args) => {
-    const ligne = await lire(args);
-    if (!premiere) return ligne;
-    premiere = false;
-    return { ...ligne, status: 'DRAFTING' };
-  };
-
-  assert.equal(await s.envoyer(), 'deja-envoye');
-  assert.equal(s.envois.length, 0);
-});
-
-test('escalade : une notification interrompue attend la fin du bail', async () => {
-  const s = sceneEscalade({ sendStartedAt: new Date(Date.now() - 5_000) });
-  assert.equal(await s.envoyer(), 'en-cours');
-  assert.equal(s.envois.length, 0);
-});
-
 /* ------------------------------------------- aucune autre porte de sortie */
 
 const sansCommentaires = (code: string) =>
@@ -344,9 +259,6 @@ test('les routes passent par les services verrouillés, et disent 409 au perdant
   assert.match(tickets, /await envoyerBrouillon\(/);
   assert.match(tickets, /issue !== 'envoye'\) return reply\.code\(409\)/);
 
-  const fournisseurs = sansCommentaires(lire('src/routes/suppliers.ts'));
-  assert.match(fournisseurs, /const issue = await sendEscalation\(/);
-  assert.match(fournisseurs, /issue === 'en-cours'\) return reply\.code\(409\)/);
 });
 
 /* -------------------------------------------------- le bouton, à l'écran */
@@ -448,4 +360,11 @@ test('aucun écran du marchand n’envoie plus de texte libre au fournisseur', (
   assert.doesNotMatch(app, /function (sendEscalation|envoyerEscalade)\(/);
   assert.doesNotMatch(app, /\/api\/escalations\/\$\{[^}]+\}\/send/);
   assert.doesNotMatch(app, /method: 'POST'[^)]*\n?[^)]*\/api\/tickets\/\$\{[^}]+\}\/escalations/);
+
+  // Ni côté serveur : les routes d'escalade en texte libre ont disparu avec
+  // leur portail. Restent la lecture et la clôture d'un dossier.
+  const fournisseurs = sansCommentaires(lire('src/routes/suppliers.ts'));
+  assert.doesNotMatch(fournisseurs, /'\/api\/escalations\/:id\/send'|app\.post<[^>]*>\(\s*'\/api\/tickets\/:id\/escalations'/);
+  assert.doesNotMatch(fournisseurs, /'\/api\/escalations\/:id',/);
+  assert.match(fournisseurs, /'\/api\/escalations\/:id\/resolve'/);
 });

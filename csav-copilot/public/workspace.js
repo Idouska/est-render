@@ -2807,14 +2807,40 @@ function ouvrirTickets(statut, type = '') {
 async function loadHome() {
   $('home-tuiles').innerHTML = `<p class="empty">${esc(t('tk.loading'))}</p>`;
   await state.chargementCommandes?.catch?.(() => {});
-  const items = await chargerTickets();
+  const [items, lots] = await Promise.all([
+    chargerTickets(),
+    api(`/api/workspace/${supplierId}/lots`)
+      .then((data) => data.lots ?? [])
+      .catch(() => []),
+  ]);
 
   const compte = (filtre) => items.filter(filtre).length;
   const aRepondre = compte((item) => item.statut === 'A_REPONDRE');
-  const aPreparer = (state.orders ?? []).filter((order) => !orderIsDone(order)).length;
+
+  /*
+   * « À préparer » se lit dans ses lots : c'est la liste exacte de ce qu'on
+   * lui a envoyé, et le même chiffre que l'onglet « Lots reçus ». Les
+   * commandes de la période ne servent qu'à l'atelier qui ne reçoit pas de
+   * fichier — elles comptaient aussi ce qu'il avait déjà lancé.
+   */
+  const commandesDesLots = lots.flatMap((lot) => lot.commandes);
+  const parLots = commandesDesLots.length > 0;
+  if (parLots) state.lots = lots;
+  const aPreparer = parLots
+    ? commandesDesLots.filter((commande) => commande.statut === 'A_PREPARER').length
+    : (state.orders ?? []).filter((order) => !orderIsDone(order)).length;
   const tuiles = [
     { n: aRepondre, cle: 'home.toAnswer', chaud: true, aller: () => ouvrirTickets('A_REPONDRE') },
-    { n: aPreparer, cle: 'home.toPrepare', chaud: false, aller: () => setView('orders') },
+    {
+      n: aPreparer,
+      cle: 'home.toPrepare',
+      // Une commande en retard, et la tuile le dit avant qu'on l'ouvre.
+      chaud: commandesDesLots.some((commande) => commande.enRetard),
+      aller: () => {
+        if (parLots) state.sous = { ...(state.sous ?? {}), orders: 'lots' };
+        setView('orders');
+      },
+    },
     {
       n: compte((item) => item.type === 'RUPTURE' && item.statut !== 'CLOS'),
       cle: 'home.ruptures',

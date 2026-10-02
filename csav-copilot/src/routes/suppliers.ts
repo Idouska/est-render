@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { env } from '../config/env.ts';
 import { recordAudit } from '../lib/audit.ts';
@@ -6,9 +6,9 @@ import { signSupplierWorkspaceToken } from '../lib/supplierToken.ts';
 import { prisma } from '../lib/prisma.ts';
 import { requirePermission, requireSession } from '../plugins/auth.ts';
 import { enTete } from '../services/suppliers/demande.ts';
+import { TITRES_DEMANDE, estUrgente } from '../services/suppliers/urgence.ts';
 import { fiabiliteDesFournisseurs } from '../services/suppliers/fiabiliteDonnees.ts';
-import { createEscalation, resolveEscalation, sendEscalation } from '../services/suppliers/escalate.ts';
-import { MESSAGES_ENVOI } from '../services/envoi/uneSeuleFois.ts';
+import { resolveEscalation } from '../services/suppliers/escalate.ts';
 import { sendPlainEmail } from '../services/gmail/send.ts';
 import { getShopifyClient } from '../services/shopify/client.ts';
 import { listOrders } from '../services/shopify/orders.ts';
@@ -28,6 +28,52 @@ const supplierBody = z.object({
   isDefault: z.boolean().optional(),
 });
 
+/**
+ * Le mail d'une demande urgente.
+ *
+ * L'envoi ne bloque pas la demande : si la boîte Gmail refuse, elle existe
+ * quand même et s'affiche dans l'atelier — perdre le mail est ennuyeux,
+ * perdre la demande laisserait partir le colis. Le récapitulatif du lendemain
+ * rattrape un mail qui n'est pas parti.
+ */
+async function mailUrgent(
+  alert: {
+    id: string;
+    merchantId: string;
+    kind: string;
+    orderName: string | null;
+    beforeValue: string | null;
+    afterValue: string | null;
+    message: string;
+  },
+  to: string,
+  log: FastifyBaseLogger,
+): Promise<boolean> {
+  try {
+    await sendPlainEmail({
+      merchantId: alert.merchantId,
+      to,
+      subject: `URGENT — ${TITRES_DEMANDE[alert.kind]}${alert.orderName ? ` · ${alert.orderName}` : ''}`,
+      body: [
+        // Le changement en premier, avant toute phrase : c'est ce qu'on lit
+        // sur l'écran verrouillé d'un téléphone.
+        enTete(alert.kind, alert.beforeValue, alert.afterValue),
+        alert.orderName ? `Commande : ${alert.orderName}` : null,
+        alert.message.trim() || null,
+        '',
+        'Ouvrez votre espace de travail, rubrique « Tickets », pour répondre d’un bouton.',
+      ]
+        .filter((line) => line !== null)
+        .join('\n'),
+    });
+    await prisma.supplierAlert.update({ where: { id: alert.id }, data: { emailedAt: new Date() } });
+    return true;
+  } catch (error) {
+    log.error({ err: error, alertId: alert.id }, 'Demande urgente non envoyée');
+    return false;
+  }
+}
+
 /** Les motifs d'une demande à l'atelier : un par bouton de la fenêtre. */
 const alertKind = z.enum([
   'ADDRESS',
@@ -43,14 +89,7 @@ const alertKind = z.enum([
   'OTHER',
 ]);
 
-const escalationBody = z.object({
-  reason: z.enum(['OUT_OF_STOCK', 'INCORRECT_ADDRESS', 'MISSING_ITEM', 'OTHER']),
-  note: z.string().max(2000).optional(),
-  // Destinataire choisi par l'agent. Absent, le service route d'après le motif.
-  supplierId: z.string().min(1).optional(),
-});
-
-/** Routes côté marchand : configurer le fournisseur, escalader un ticket. */
+/** Routes côté marchand : configurer le fournisseur, lui faire une demande. */
 export async function supplierRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', requireSession);
 
@@ -582,6 +621,17 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
         });
       }
 
+      // Devenue urgente sans avoir eu de mail (« Autre » corrigé en « Ne pas
+      // expédier ») : elle part maintenant, pas au récapitulatif de demain.
+      const corrigee = await prisma.supplierAlert.findFirst({
+        where: { id: request.params.id, merchantId },
+        include: { supplier: { select: { contactEmail: true, active: true } } },
+      });
+      const emailed =
+        corrigee && corrigee.supplier.active && !corrigee.emailedAt && estUrgente(corrigee.kind)
+          ? await mailUrgent(corrigee, corrigee.supplier.contactEmail, request.log)
+          : false;
+
       await recordAudit({
         merchantId,
         actorType: 'USER',
@@ -589,22 +639,22 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
         action: 'supplier.change_edited',
         targetType: 'SupplierAlert',
         targetId: request.params.id,
-        metadata: parsed.data,
+        metadata: { ...parsed.data, emailed },
         ipAddress: request.ip,
       });
 
-      return reply.send({ updated: true });
+      return reply.send({ updated: true, emailed });
     },
   );
 
   /**
-   * Alerte urgente vers un fournisseur.
+   * Demande à un fournisseur.
    *
    * L'atelier est le canal du quotidien : il l'ouvre le matin, il y trouve ses
    * commandes. Mais « cette adresse est fausse, n'expédie pas » ne peut pas
-   * attendre demain matin — le colis sera parti. L'alerte part donc par mail,
-   * qui arrive sur son téléphone, et s'affiche en tête de son atelier jusqu'à
-   * ce qu'il l'ouvre.
+   * attendre demain matin — le colis sera parti. Une demande urgente part donc
+   * aussi par mail, qui arrive sur son téléphone ; les autres attendent le
+   * récapitulatif du matin. Toutes s'affichent dans son atelier dès l'envoi.
    *
    * Elle est consignée en base et non seulement envoyée : un mail tombé dans
    * les indésirables ne laisse aucune trace, et personne ne pourrait dire si
@@ -674,58 +724,17 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
         },
       });
 
-      const titles = {
-        ADDRESS: 'Adresse à corriger',
-        PHONE: 'Téléphone à corriger',
-        PRODUCT: 'Modèle à changer',
-        SIZE: 'Taille à changer',
-        COLOR: 'Couleur à changer',
-        HOLD: 'Ne pas expédier',
-        CANCEL: 'Commande annulée',
-        MISSING_ITEM: 'Article manquant',
-        DELAY: 'Date d’expédition demandée',
-        TRACKING: 'Point sur le colis',
-        OTHER: 'Message urgent',
-      } as const;
-
-      const subject = `URGENT — ${titles[parsed.data.kind]}${
-        parsed.data.orderName ? ` · ${parsed.data.orderName}` : ''
-      }`;
-
       /*
-       * L'envoi ne bloque pas l'alerte.
+       * Seules les demandes qui changent le colis partent sur-le-champ.
        *
-       * Si la boîte Gmail refuse, l'alerte existe quand même et s'affichera
-       * dans l'atelier : perdre le mail est ennuyeux, perdre l'alerte
-       * laisserait partir le colis.
+       * Les autres — un point sur un colis, un article manquant, une date —
+       * attendent le récapitulatif de 9 h chez l'atelier : dix mails par jour,
+       * et au dixième il ne lit plus les urgents non plus. Elles s'affichent
+       * dans son atelier dès maintenant.
        */
-      let emailed = false;
-      try {
-        await sendPlainEmail({
-          merchantId,
-          to: supplier.contactEmail,
-          subject,
-          body: [
-            // Le changement en premier, avant toute phrase : c'est ce qu'on
-            // lit sur l'écran verrouillé d'un téléphone.
-            enTete(parsed.data.kind, parsed.data.beforeValue, parsed.data.afterValue),
-            parsed.data.orderName ? `Commande : ${parsed.data.orderName}` : null,
-            parsed.data.message.trim() || null,
-            '',
-            'Ouvrez votre espace de travail, rubrique « Tickets », pour répondre ' +
-              'd’un bouton.',
-          ]
-            .filter((line) => line !== null)
-            .join('\n'),
-        });
-        emailed = true;
-        await prisma.supplierAlert.update({
-          where: { id: alert.id },
-          data: { emailedAt: new Date() },
-        });
-      } catch (error) {
-        request.log.error({ err: error, supplierId: supplier.id }, 'Alerte fournisseur non envoyée');
-      }
+      const differe = !estUrgente(parsed.data.kind);
+
+      const emailed = differe ? false : await mailUrgent(alert, supplier.contactEmail, request.log);
 
       await recordAudit({
         merchantId,
@@ -734,11 +743,11 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
         action: 'supplier.alerted',
         targetType: 'Supplier',
         targetId: supplier.id,
-        metadata: { kind: parsed.data.kind, orderName: parsed.data.orderName, emailed },
+        metadata: { kind: parsed.data.kind, orderName: parsed.data.orderName, emailed, differe },
         ipAddress: request.ip,
       });
 
-      return reply.send({ alert, emailed });
+      return reply.send({ alert, emailed, differe });
     },
   );
 
@@ -761,89 +770,6 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
     });
 
     return reply.send({ escalations });
-  });
-
-  app.post<{ Params: { id: string } }>(
-    '/api/tickets/:id/escalations',
-    { preHandler: requirePermission('escalate') },
-    async (request, reply) => {
-    const parsed = escalationBody.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'Requête invalide', details: parsed.error.issues });
-    }
-
-    const { merchantId, userId } = request.session;
-
-    try {
-      const { escalation } = await createEscalation({
-        merchantId,
-        ticketId: request.params.id,
-        reason: parsed.data.reason,
-        note: parsed.data.note,
-        supplierId: parsed.data.supplierId ?? null,
-        userId,
-      });
-      return reply.send({ escalation });
-    } catch (error) {
-      if (error instanceof Error && error.name === 'SupplierNotConfiguredError') {
-        return reply.code(409).send({
-          error: 'Configurez un fournisseur avant de pouvoir escalader un ticket.',
-        });
-      }
-      throw error;
-    }
-  });
-
-  // Édition du brouillon avant envoi — même geste que pour un brouillon client.
-  app.patch<{ Params: { id: string }; Body: { body?: string } }>(
-    '/api/escalations/:id',
-    async (request, reply) => {
-      const { merchantId } = request.session;
-      const body = z.string().min(1).safeParse(request.body?.body);
-      if (!body.success) return reply.code(400).send({ error: 'Corps du message requis' });
-
-      const escalation = await prisma.supplierEscalation.findFirst({
-        where: { id: request.params.id, merchantId },
-        include: { messages: { orderBy: { createdAt: 'desc' }, take: 1 } },
-      });
-      if (!escalation) return reply.code(404).send({ error: 'Escalade introuvable' });
-      if (escalation.status !== 'DRAFTING') {
-        return reply.code(409).send({ error: 'Cette escalade a déjà été envoyée' });
-      }
-
-      const lastMessage = escalation.messages[0];
-      if (!lastMessage) return reply.code(500).send({ error: 'Message introuvable' });
-
-      const updated = await prisma.supplierMessage.update({
-        where: { id: lastMessage.id },
-        data: { body: body.data, authorType: 'HUMAN' },
-      });
-
-      return reply.send({ message: updated });
-    },
-  );
-
-  app.post<{ Params: { id: string } }>(
-    '/api/escalations/:id/send',
-    { preHandler: requirePermission('escalate') },
-    async (request, reply) => {
-    const { merchantId, userId } = request.session;
-
-    const escalation = await prisma.supplierEscalation.findFirst({
-      where: { id: request.params.id, merchantId },
-      select: { id: true, status: true },
-    });
-    if (!escalation) return reply.code(404).send({ error: 'Escalade introuvable' });
-    if (escalation.status !== 'DRAFTING') {
-      return reply.code(409).send({ error: 'Escalade déjà envoyée' });
-    }
-
-    // La vérification ci-dessus répond vite au cas courant ; c'est le service
-    // qui départage deux envois simultanés (voir envoi/uneSeuleFois).
-    const issue = await sendEscalation({ merchantId, escalationId: escalation.id, userId });
-    if (issue === 'deja-envoye') return reply.code(409).send({ error: 'Escalade déjà envoyée' });
-    if (issue === 'en-cours') return reply.code(409).send({ error: MESSAGES_ENVOI['en-cours'] });
-    return reply.send({ ok: true });
   });
 
   app.post<{ Params: { id: string } }>(

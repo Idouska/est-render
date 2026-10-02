@@ -610,6 +610,11 @@ model Supplier {
   /// deux ateliers par défaut prépareraient deux fois le même colis.
   isDefault Boolean @default(false)
 
+  /// Dernier récapitulatif du matin : un seul par jour de l'atelier, même
+  /// quand il n'y avait rien à dire — une demande posée l'après-midi attend
+  /// le lendemain au lieu de déclencher un mail à elle seule.
+  recapLe DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -757,6 +762,11 @@ model RuptureSubstitution {
   accepte   Boolean?
   note      String?   @db.Text
   reponduLe DateTime?
+
+  /// Annoncée dans le récapitulatif du matin ; puis rappelée une fois, si
+  /// l'atelier n'a toujours pas répondu le lendemain.
+  avisLe   DateTime?
+  rappelLe DateTime?
 
   createdAt DateTime @default(now())
 

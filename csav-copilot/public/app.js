@@ -5812,6 +5812,14 @@ function closeAlertModal() {
  */
 const KINDS_WITH_SWAP = new Set(['SIZE', 'COLOR', 'PRODUCT', 'ADDRESS', 'PHONE']);
 
+/**
+ * Les demandes qui partent par mail sur-le-champ — copie de
+ * `src/services/suppliers/urgence.ts`, comparée par les tests. Les autres
+ * attendent le récapitulatif de 9 h chez l'atelier : sans mail tout de
+ * suite, elles ne sont pas « en échec ».
+ */
+const KINDS_URGENTS = new Set(['HOLD', 'CANCEL', 'ADDRESS', 'PHONE', 'SIZE', 'COLOR', 'PRODUCT']);
+
 /*
  * Valeurs actuelles de la commande, par nature de changement.
  *
@@ -5925,6 +5933,12 @@ function setAlertKind(kind) {
       if (bouton.dataset.kind === 'ADDRESS') bouton.textContent = 'Adresse';
     });
   }
+
+  // Dit avant l'envoi ce qui partira, et quand : sans ça, « pas de mail »
+  // se lirait comme une panne.
+  $('alert-envoi').textContent = KINDS_URGENTS.has(kind)
+    ? 'Urgent : un mail court part tout de suite, et la demande s’affiche dans son atelier, rubrique Tickets, où il répond d’un bouton.'
+    : 'La demande s’affiche tout de suite dans son atelier, rubrique Tickets, où il répond d’un bouton. Par mail, elle part dans son récapitulatif de 9 h (heure de Chine).';
 
   const single = KINDS_SINGLE[kind];
   $('alert-single-field').hidden = !single;
@@ -6155,11 +6169,15 @@ $('alert-send')?.addEventListener('click', async () => {
     // utile, à condition de ne pas croire que le fournisseur l'a reçue.
     toast(
       result.updated
-        ? 'Demande corrigée — l’atelier voit la nouvelle version.'
+        ? result.emailed
+          ? 'Demande corrigée et devenue urgente — partie par mail.'
+          : 'Demande corrigée — l’atelier voit la nouvelle version.'
         : result.emailed
           ? 'Demande envoyée par mail et affichée dans son atelier.'
-          : 'Demande affichée dans son atelier — le mail n’a pas pu partir.',
-      !result.updated && !result.emailed,
+          : result.differe
+            ? 'Demande affichée dans son atelier — elle partira dans son récapitulatif de 9 h (heure de Chine).'
+            : 'Demande affichée dans son atelier — le mail n’a pas pu partir.',
+      !result.updated && !result.emailed && !result.differe,
     );
 
     // L'écran d'où l'on vient se rafraîchit : le mail pour montrer la
@@ -10336,7 +10354,15 @@ function renderDemandes(rows, compteur, shown) {
                   )}</span>`
                 : ''
             }
-            ${change.emailedAt ? '' : '<span class="set-alert">· mail non parti</span>'}
+            ${
+              change.emailedAt
+                ? ''
+                : KINDS_URGENTS.has(change.kind)
+                  ? '<span class="set-alert">· mail non parti</span>'
+                  : change.status === 'PENDING'
+                    ? '<span>· au récap de 9 h (Chine)</span>'
+                    : ''
+            }
           </div>
           ${
             change.supplierNote
@@ -15163,12 +15189,9 @@ $('subst-send')?.addEventListener('click', async () => {
       }),
     });
     fermerFenetreSubstitution();
-    toast(
-      resultat.avertiPar === 'email'
-        ? `${resultat.creees} modèle(s) envoyé(s) à ${resultat.atelier}, qui est prévenu.`
-        : `${resultat.creees} modèle(s) posé(s) pour ${resultat.atelier} — l’avis par mail n’est pas parti.`,
-      resultat.avertiPar === null,
-    );
+    // Visibles dans son atelier tout de suite ; annoncés dans le
+    // récapitulatif du matin plutôt que par un mail de plus.
+    toast(`${resultat.creees} modèle(s) proposé(s) à ${resultat.atelier} — visibles dans son atelier, annoncés dans son récapitulatif de 9 h.`);
     if (fenetreSubst.depuisTicket) {
       prefetched.delete(d.ticketId);
       await selectTicket(d.ticketId);
@@ -15956,7 +15979,16 @@ $('upd-send')?.addEventListener('click', async () => {
       }),
     });
     fermerUpdate();
-    toast(result.emailed ? 'Demande envoyée au fournisseur.' : 'Demande affichée dans son atelier — le mail n’a pas pu partir.', !result.emailed);
+    // Un point sur un colis n'est pas urgent : il part dans le récapitulatif
+    // du matin, et s'affiche dans son atelier dès maintenant.
+    toast(
+      result.emailed
+        ? 'Demande envoyée au fournisseur.'
+        : result.differe
+          ? 'Demande affichée dans son atelier — elle partira dans son récapitulatif de 9 h (heure de Chine).'
+          : 'Demande affichée dans son atelier — le mail n’a pas pu partir.',
+      !result.emailed && !result.differe,
+    );
     if (state.currentId) {
       prefetched.delete(state.currentId);
       await selectTicket(state.currentId);

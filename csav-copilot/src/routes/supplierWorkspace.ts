@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { env } from '../config/env.ts';
 import { recordAudit } from '../lib/audit.ts';
 import { prisma } from '../lib/prisma.ts';
-import { signSupplierToken } from '../lib/supplierToken.ts';
 import { lignesArticle, lireArticle } from '../services/suppliers/signalement.ts';
 import {
   LIGNES_MAX,
@@ -1561,16 +1560,13 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
    *   préparateur ne sait pas si le marchand l'a lue, ni s'il doit continuer
    *   d'attendre ou emballer le reste. Le statut du ticket répond à ça.
    *
-   *   CE QUE LE MARCHAND LUI DEMANDE. Les escalades de rupture arrivent par
-   *   mail, avec un lien signé. Un mail se perd, se classe, se lit sur un
+   *   CE QUE LE MARCHAND LUI DEMANDE. Les ruptures lui sont annoncées par
+   *   mail, dans le récapitulatif du matin. Un mail se perd, se classe, se lit sur un
    *   téléphone à sept heures du matin. Les retrouver ici, dans l'écran qu'il
    *   ouvre chaque jour, évite qu'une demande dorme faute d'avoir été revue.
    *
-   * Le lien de réponse est reforgé côté serveur plutôt que stocké : c'est le
-   * même jeton que celui du mail, portant la même escalade, et le jeton
-   * d'atelier prouve déjà que le demandeur est bien ce fournisseur. Aucun
-   * accès nouveau n'est ouvert — seulement un second chemin vers une porte
-   * qu'il possède.
+   * Il y répond ici, d'un bouton par modèle proposé : plus de lien vers une
+   * page de réponse en texte libre.
    */
   app.get<{ Params: { id: string }; Querystring: { token?: string } }>(
     '/api/workspace/:id/ruptures',
@@ -1671,10 +1667,6 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
                 : demande.status === 'ANSWERED'
                   ? 'traite'
                   : 'cree',
-            lien: `${env.APP_URL}/supplier/${demande.id}?token=${signSupplierToken({
-              escalationId: demande.id,
-              merchantId: workspace.merchantId,
-            })}`,
           })),
         signalements,
       });

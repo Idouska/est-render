@@ -16,6 +16,7 @@ import { ingestMerchantInbox } from './services/tickets/ingest.ts';
 import { processTicket } from './services/tickets/process.ts';
 import { passageAutomatique } from './services/envoi/quotidien.ts';
 import { relancerLotsEnRetard } from './services/envoi/relances.ts';
+import { envoyerRecapitulatifs } from './services/suppliers/recap.ts';
 
 /*
  * La relance d'une relève restée bredouille.
@@ -83,6 +84,8 @@ const envoiWorker = new Worker(
     // Même rythme pour les rappels de retard : ils ne partent qu'une fois
     // par commande, et seulement aux heures de l'atelier.
     await relancerLotsEnRetard();
+    // Et le récapitulatif du matin : un par atelier et par jour, à 9 h chez lui.
+    await envoyerRecapitulatifs();
   },
   { connection, concurrency: 1 },
 );

@@ -1,8 +1,6 @@
 import { env } from '../../config/env.ts';
-import { logger } from '../../lib/logger.ts';
 import { prisma } from '../../lib/prisma.ts';
 import { signSupplierWorkspaceToken } from '../../lib/supplierToken.ts';
-import { sendPlainEmail } from '../gmail/send.ts';
 import { fournisseurDuFil } from '../suppliers/signalement.ts';
 
 /**
@@ -19,8 +17,8 @@ import { fournisseurDuFil } from '../suppliers/signalement.ts';
  *
  * L'e-mail ne disparaît pas pour autant : l'atelier n'a ni compte ni mot de
  * passe, et un ticket posé dans un outil qu'il n'ouvre pas ce jour-là
- * dormirait. Mais il ne porte plus l'échange — seulement l'avis, et le lien
- * vers son atelier.
+ * dormirait. Mais il ne porte plus l'échange — seulement une ligne du
+ * récapitulatif du matin, et le lien vers son atelier.
  */
 
 export interface PropositionEntrante {
@@ -76,39 +74,6 @@ export async function lienAtelier(merchantId: string, supplierId: string): Promi
 }
 
 /**
- * L'avis envoyé à l'atelier : court, et qui renvoie à son atelier.
- *
- * Pas le contenu de la proposition. Le détail — modèle, taille, stock — vit
- * dans l'atelier, où il se répond en un clic ; le recopier ici inviterait à
- * répondre par mail, ce qu'on vient précisément de quitter.
- */
-export function avisSubstitution(contexte: {
-  merchantName: string;
-  orderName: string | null;
-  combien: number;
-  lien: string;
-  signature?: string | null;
-}): { subject: string; body: string } {
-  const commande = contexte.orderName ? ` ${contexte.orderName}` : '';
-  const modeles =
-    contexte.combien > 1 ? `${contexte.combien} modèles de remplacement` : 'un modèle de remplacement';
-
-  return {
-    subject: `Rupture${commande} : ${modeles} à valider`,
-    body: [
-      'Bonjour,',
-      '',
-      `Nous vous proposons ${modeles} pour la commande${commande || ' concernée'}.`,
-      'Tout est dans votre atelier : le modèle en rupture, les remplacements possibles, et un bouton pour dire ce que vous pouvez envoyer.',
-      '',
-      contexte.lien,
-      '',
-      contexte.signature?.trim() || contexte.merchantName,
-    ].join('\n'),
-  };
-}
-
-/**
  * Le dossier de rupture qu'une proposition suppose.
  *
  * Proposer un remplacement depuis la fenêtre « Contacter le fournisseur » est
@@ -116,8 +81,8 @@ export function avisSubstitution(contexte: {
  * Sans escalade, la console Ruptures et l'atelier ne verraient pas le dossier.
  *
  * Un signalement de l'atelier en a déjà un — son ticket — et une escalade
- * restée en brouillon passe en « envoyée » : l'avis de substitution est le
- * message qu'elle attendait.
+ * restée en brouillon passe en « envoyée » : la proposition est le message
+ * qu'elle attendait.
  */
 export async function ouvrirDossierRupture(params: {
   merchantId: string;
@@ -168,18 +133,18 @@ export async function ouvrirDossierRupture(params: {
 }
 
 /**
- * Propose des modèles de remplacement, et prévient l'atelier.
+ * Propose des modèles de remplacement à l'atelier.
  *
- * L'e-mail part APRÈS l'écriture : une panne d'envoi ne doit pas perdre des
- * propositions déjà choisies, et l'atelier les trouvera de toute façon en
- * ouvrant son lien habituel.
+ * Pas de mail sur-le-champ : les propositions s'affichent dans son atelier
+ * dès maintenant, et le récapitulatif du matin les lui annonce — avec le
+ * reste de la journée, plutôt qu'un mail de plus parmi dix.
  */
 export async function proposerSubstitutions(params: {
   merchantId: string;
   ticketId: string;
   supplierId: string;
   propositions: readonly PropositionEntrante[];
-}): Promise<{ creees: number; avertiPar: 'email' | null }> {
+}): Promise<{ creees: number; avertiPar: 'recap' }> {
   const { merchantId, ticketId, supplierId } = params;
 
   await prisma.ruptureSubstitution.createMany({
@@ -196,46 +161,5 @@ export async function proposerSubstitutions(params: {
     })),
   });
 
-  const [merchant, ticket, supplier, lien] = await Promise.all([
-    prisma.merchant.findUniqueOrThrow({
-      where: { id: merchantId },
-      select: { name: true, brandName: true, shopDomain: true, emailSignature: true },
-    }),
-    prisma.ticket.findFirstOrThrow({
-      where: { id: ticketId, merchantId },
-      select: { orderName: true },
-    }),
-    prisma.supplier.findFirstOrThrow({
-      where: { id: supplierId, merchantId },
-      select: { contactEmail: true },
-    }),
-    lienAtelier(merchantId, supplierId),
-  ]);
-
-  if (!lien) return { creees: params.propositions.length, avertiPar: null };
-
-  const nom = merchant.brandName || merchant.name || merchant.shopDomain;
-  const avis = avisSubstitution({
-    merchantName: nom,
-    orderName: ticket.orderName,
-    combien: params.propositions.length,
-    lien,
-    signature: merchant.emailSignature,
-  });
-
-  try {
-    await sendPlainEmail({
-      merchantId,
-      to: supplier.contactEmail,
-      fromName: nom,
-      subject: avis.subject,
-      body: avis.body,
-    });
-    return { creees: params.propositions.length, avertiPar: 'email' };
-  } catch (error) {
-    // L'avis a échoué, les propositions sont posées : l'atelier les verra en
-    // ouvrant son lien, et le marchand est prévenu que le mail n'est pas parti.
-    logger.warn({ err: error, merchantId, supplierId }, 'Avis de substitution non envoyé');
-    return { creees: params.propositions.length, avertiPar: null };
-  }
+  return { creees: params.propositions.length, avertiPar: 'recap' };
 }

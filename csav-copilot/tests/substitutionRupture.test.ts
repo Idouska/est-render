@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
-import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 import { LANGS, STRINGS } from '../public/workspace.i18n.js';
+import { ligneRupture } from '../src/services/suppliers/recapTexte.ts';
 
 /*
  * Le remplacement proposé à l'atelier.
@@ -18,7 +18,8 @@ import { LANGS, STRINGS } from '../public/workspace.i18n.js';
  *
  * 1. L'AVIS NE PORTE PAS LA PROPOSITION. S'il recopiait le modèle et sa
  *    taille, l'atelier répondrait par mail — et on aurait déplacé le problème
- *    au lieu de le résoudre.
+ *    au lieu de le résoudre. (L'avis est désormais une ligne du récapitulatif
+ *    du matin.)
  *
  * 2. PERSONNE N'ÉCRIT CHEZ UN AUTRE. L'identifiant d'atelier arrive dans le
  *    corps de la requête ; cru sur parole, il enverrait la proposition chez
@@ -30,21 +31,6 @@ import { LANGS, STRINGS } from '../public/workspace.i18n.js';
  *    dans la liste.
  */
 
-process.env.ENCRYPTION_KEY ??= randomBytes(32).toString('base64');
-process.env.APP_URL ??= 'https://example.test';
-process.env.DATABASE_URL ??= 'postgresql://u:p@localhost:5432/db';
-process.env.REDIS_URL ??= 'redis://localhost:6379';
-process.env.SHOPIFY_API_KEY ??= 'key';
-process.env.SHOPIFY_API_SECRET ??= 'secret';
-process.env.SHOPIFY_SCOPES ??= 'read_orders';
-process.env.GOOGLE_CLIENT_ID ??= 'client';
-process.env.GOOGLE_CLIENT_SECRET ??= 'secret';
-process.env.GOOGLE_SCOPES ??= 'https://www.googleapis.com/auth/gmail.readonly';
-process.env.GOOGLE_PUBSUB_TOPIC ??= 'projects/p/topics/t';
-process.env.GOOGLE_PUBSUB_SERVICE_ACCOUNT ??= 'sa@p.iam.gserviceaccount.com';
-
-const { avisSubstitution } = await import('../src/services/ruptures/substitution.ts');
-
 const lire = (chemin: string) =>
   readFileSync(fileURLToPath(new URL(`../${chemin}`, import.meta.url)), 'utf8');
 const sansCommentaires = (code: string) =>
@@ -52,30 +38,19 @@ const sansCommentaires = (code: string) =>
 
 /* ---- 1. l'avis ---- */
 
-test('l’avis renvoie à l’atelier, et ne recopie pas la proposition', () => {
-  const avis = avisSubstitution({
-    merchantName: 'Running Upscale',
-    orderName: '#14674',
-    combien: 2,
-    lien: 'https://example.test/fournisseur/a1?token=xyz',
-    signature: null,
-  });
-
-  assert.match(avis.subject, /#14674/, 'le numéro de commande, pas un identifiant interne');
-  assert.match(avis.subject, /2 modèles/);
-  assert.match(avis.body, /https:\/\/example\.test\/fournisseur\/a1\?token=xyz/, 'le lien vers son atelier');
-  assert.match(avis.body, /Running Upscale/, 'signé, sinon le mail part en indésirables');
+test('l’avis du récapitulatif nomme la commande, et ne recopie pas la proposition', () => {
+  const ligne = ligneRupture({ orderName: '#14674', combien: 2 });
+  assert.equal(ligne, '- #14674 — Rupture : 2 modèles de remplacement à valider');
 
   // Rien du détail : le recopier inviterait à répondre par mail, ce qu'on
   // vient précisément de quitter.
   for (const fuite of [/taille/i, /référence/i, /\bsku\b/i]) {
-    assert.ok(!fuite.test(avis.body), `le détail ne doit pas figurer dans l’avis : ${fuite}`);
+    assert.ok(!fuite.test(ligne), `le détail ne doit pas figurer dans l’avis : ${fuite}`);
   }
 });
 
 test('un seul modèle se dit au singulier', () => {
-  const avis = avisSubstitution({ merchantName: 'M', orderName: null, combien: 1, lien: 'https://x' });
-  assert.match(avis.subject, /un modèle de remplacement/);
+  assert.match(ligneRupture({ orderName: null, combien: 1 }), /un modèle de remplacement/);
 });
 
 /* ---- 2. qui peut écrire, et chez qui ---- */

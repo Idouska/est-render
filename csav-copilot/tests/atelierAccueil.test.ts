@@ -40,6 +40,15 @@ test('chaque chiffre de l’accueil ouvre la liste déjà filtrée', () => {
   assert.match(accueil, /\.sort\(\(a, b\) => new Date\(a\.date\)\.getTime\(\) - new Date\(b\.date\)\.getTime\(\)\)/);
 });
 
+test('« à préparer » se lit dans ses lots, et mène à l’onglet des lots', () => {
+  const accueil = js.slice(js.indexOf('async function loadHome'), js.indexOf('function resumeDe('));
+  assert.match(accueil, /api\(`\/api\/workspace\/\$\{supplierId\}\/lots`\)/);
+  assert.match(accueil, /\.filter\(\(commande\) => commande\.statut === 'A_PREPARER'\)\.length/);
+  assert.match(accueil, /if \(parLots\) state\.sous = \{ \.\.\.\(state\.sous \?\? \{\}\), orders: 'lots' \};/);
+  // Sans fichier du jour, les commandes de la période, comme avant.
+  assert.match(accueil, /: \(state\.orders \?\? \[\]\)\.filter\(\(order\) => !orderIsDone\(order\)\)\.length;/);
+});
+
 test('une seule liste, ouverte sur « À répondre », les plus anciennes d’abord', () => {
   assert.match(js, /state\.tk = \{ statut: 'A_REPONDRE', type: '', items: \[\], erreurs: \[\] \};/);
   assert.match(html, /data-tstatut="A_REPONDRE" aria-pressed="true"/);
