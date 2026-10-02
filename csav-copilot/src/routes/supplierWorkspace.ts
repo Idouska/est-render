@@ -411,6 +411,108 @@ async function enregistrerColis(
   return { parcel, shopify };
 }
 
+/*
+ * Ce que l'atelier a signalé, vu depuis l'atelier.
+ *
+ * Ses propres signalements sont reconnus au fil : `supplier:<id>:<cmd>:<MOTIF>`.
+ * C'est la clé que pose la route de signalement, et elle isole à la fois le
+ * fournisseur et le motif — un atelier ne voit jamais ceux d'un autre.
+ *
+ * Seules les ruptures étaient relues : un téléphone faux ou un article abîmé,
+ * une fois signalés, disparaissaient de l'écran de l'atelier, qui ne savait
+ * plus si le marchand les avait vus.
+ */
+async function signalementsDeLAtelier(
+  workspace: { merchantId: string; supplierId: string },
+  options: { seulementRuptures: boolean },
+) {
+  const tickets = await prisma.ticket.findMany({
+    where: {
+      merchantId: workspace.merchantId,
+      gmailThreadId: { startsWith: `supplier:${workspace.supplierId}:` },
+      ...(options.seulementRuptures ? { AND: { gmailThreadId: { endsWith: ':STOCK' } } } : {}),
+    },
+    orderBy: { lastMessageAt: 'desc' },
+    take: 60,
+    select: {
+      id: true,
+      gmailThreadId: true,
+      orderName: true,
+      status: true,
+      lastMessageAt: true,
+      createdAt: true,
+      messages: {
+        where: { direction: 'INBOUND' },
+        orderBy: { receivedAt: 'asc' },
+        take: 1,
+        select: { bodyText: true },
+      },
+    },
+  });
+  if (tickets.length === 0) return [];
+
+  const ids = tickets.map((ticket) => ticket.id);
+  const [reponses, substitutions] = await Promise.all([
+    /*
+     * La dernière réponse partie vers le client, pour chaque signalement.
+     *
+     * C'est ce qui sépare « créé » de « traité » : un signalement est traité
+     * quand le marchand a répondu au client depuis — la même règle que dans
+     * sa propre page, pour que les deux écrans montrent la même couleur sur
+     * le même dossier. Le fournisseur ne voit que la couleur, jamais le
+     * contenu de la réponse : elle appartient au client.
+     */
+    prisma.message.groupBy({
+      by: ['ticketId'],
+      where: { merchantId: workspace.merchantId, ticketId: { in: ids }, direction: 'OUTBOUND' },
+      _max: { receivedAt: true },
+    }),
+    prisma.ruptureSubstitution.findMany({
+      where: { merchantId: workspace.merchantId, supplierId: workspace.supplierId, ticketId: { in: ids } },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        ticketId: true,
+        productTitle: true,
+        variantTitle: true,
+        sku: true,
+        image: true,
+        inventory: true,
+        libre: true,
+        accepte: true,
+        note: true,
+        reponduLe: true,
+      },
+    }),
+  ]);
+  const reponduLe = new Map(reponses.map((ligne) => [ligne.ticketId, ligne._max.receivedAt]));
+  const parTicket = new Map<string, typeof substitutions>();
+  for (const proposition of substitutions) {
+    parTicket.set(proposition.ticketId, [...(parTicket.get(proposition.ticketId) ?? []), proposition]);
+  }
+
+  return tickets.map((ticket) => {
+    const clos = ticket.status === 'CLOSED' || ticket.status === 'AUTO_SENT';
+    const repondu = reponduLe.get(ticket.id) ?? null;
+    return {
+      id: ticket.id,
+      orderName: ticket.orderName,
+      // Le motif est le dernier segment du fil : PHONE, ADDRESS, STOCK…
+      motif: ticket.gmailThreadId.split(':').pop() ?? 'OTHER',
+      /* Deux états seulement, parce que c'est tout ce que l'atelier peut en
+         faire : le marchand a repris le dossier, ou pas encore. Lui servir les
+         sept statuts internes du SAV ne l'aiderait pas à décider s'il emballe
+         ou s'il attend. */
+      traite: clos,
+      phase: clos ? 'classe' : repondu !== null && repondu > ticket.createdAt ? 'traite' : 'cree',
+      detail: ticket.messages[0]?.bodyText ?? null,
+      article: lireArticle(ticket.messages[0]?.bodyText),
+      substitutions: parTicket.get(ticket.id) ?? [],
+      signaleLe: ticket.createdAt,
+    };
+  });
+}
+
 export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<void> {
   app.get<{ Params: { id: string } }>('/fournisseur/:id', async (request, reply) =>
     // Servi par le plugin statique, qui pose `no-cache` : sans lui, l'atelier
@@ -1493,57 +1595,9 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
             },
           },
         }),
-        /*
-         * Ses propres signalements, reconnus au fil : `supplier:<id>:<cmd>:STOCK`.
-         * C'est la clé que pose la route de signalement, et elle isole à la
-         * fois le fournisseur et le motif — un atelier ne voit jamais les
-         * signalements d'un autre.
-         */
-        prisma.ticket.findMany({
-          where: {
-            merchantId: workspace.merchantId,
-            gmailThreadId: { startsWith: `supplier:${workspace.supplierId}:` },
-            AND: { gmailThreadId: { endsWith: ':STOCK' } },
-          },
-          orderBy: { lastMessageAt: 'desc' },
-          take: 60,
-          select: {
-            id: true,
-            orderName: true,
-            status: true,
-            lastMessageAt: true,
-            createdAt: true,
-            messages: {
-              where: { direction: 'INBOUND' },
-              orderBy: { receivedAt: 'asc' },
-              take: 1,
-              select: { bodyText: true },
-            },
-          },
-        }),
+        signalementsDeLAtelier(workspace, { seulementRuptures: true }),
       ]);
 
-      /*
-       * La dernière réponse partie vers le client, pour chaque signalement.
-       *
-       * C'est ce qui sépare « créé » de « traité » : un signalement est traité
-       * quand le marchand a répondu au client depuis — la même règle que dans
-       * sa propre page, pour que les deux écrans montrent la même couleur sur
-       * le même dossier. Le fournisseur ne voit que la couleur, jamais le
-       * contenu de la réponse : elle appartient au client.
-       */
-      const reponses = signalements.length
-        ? await prisma.message.groupBy({
-            by: ['ticketId'],
-            where: {
-              merchantId: workspace.merchantId,
-              ticketId: { in: signalements.map((ticket) => ticket.id) },
-              direction: 'OUTBOUND',
-            },
-            _max: { receivedAt: true },
-          })
-        : [];
-      const reponduLe = new Map(reponses.map((ligne) => [ligne.ticketId, ligne._max.receivedAt]));
 
       /*
        * Les modèles de remplacement proposés par le marchand.
@@ -1552,12 +1606,7 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
        * mettre la 44 ? » dans un message, l'atelier voit le modèle en rupture
        * face aux remplacements possibles, et répond d'un bouton.
        */
-      const ticketsConcernes = [
-        ...new Set([
-          ...demandes.map((demande) => demande.ticket.id),
-          ...signalements.map((ticket) => ticket.id),
-        ]),
-      ];
+      const ticketsConcernes = [...new Set(demandes.map((demande) => demande.ticket.id))];
       const substitutions = ticketsConcernes.length
         ? await prisma.ruptureSubstitution.findMany({
             where: {
@@ -1616,27 +1665,23 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
               merchantId: workspace.merchantId,
             })}`,
           })),
-        signalements: signalements.map((ticket) => ({
-          id: ticket.id,
-          orderName: ticket.orderName,
-          /* Deux états seulement, parce que c'est tout ce que l'atelier peut
-             en faire : le marchand a repris le dossier, ou pas encore. Lui
-             servir les sept statuts internes du SAV ne l'aiderait pas à
-             décider s'il emballe ou s'il attend. */
-          traite: ticket.status === 'CLOSED' || ticket.status === 'AUTO_SENT',
-          phase:
-            ticket.status === 'CLOSED' || ticket.status === 'AUTO_SENT'
-              ? 'classe'
-              : (reponduLe.get(ticket.id) ?? null) !== null &&
-                  reponduLe.get(ticket.id)! > ticket.createdAt
-                ? 'traite'
-                : 'cree',
-          detail: ticket.messages[0]?.bodyText ?? null,
-          article: lireArticle(ticket.messages[0]?.bodyText),
-          substitutions: parTicket.get(ticket.id) ?? [],
-          signaleLe: ticket.createdAt,
-        })),
+        signalements,
       });
+    },
+  );
+
+  /**
+   * Tous les signalements de l'atelier, quel que soit le motif.
+   *
+   * Pas de garde de fonctionnalité : signaler un problème existe pour toutes
+   * les boutiques, et l'atelier doit pouvoir relire ce qu'il a envoyé.
+   */
+  app.get<{ Params: { id: string }; Querystring: { token?: string } }>(
+    '/api/workspace/:id/signalements',
+    async (request, reply) => {
+      const workspace = await authorize(request, reply);
+      if (!workspace) return;
+      return reply.send({ signalements: await signalementsDeLAtelier(workspace, { seulementRuptures: false }) });
     },
   );
 
@@ -1970,6 +2015,7 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
           exchangeTrackingNumber: true,
           exchangeCarrier: true,
           exchangeShippedAt: true,
+          updatedAt: true,
         },
       });
 
@@ -2007,6 +2053,8 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
         suivi: dossier.exchangeTrackingNumber,
         transporteur: dossier.exchangeCarrier,
         expedieLe: dossier.exchangeShippedAt,
+        // Depuis quand l'échange attend : la liste des tickets trie par âge.
+        depuis: dossier.updatedAt,
         adresse: dossier.orderName ? (adresses.get(dossier.orderName) ?? null) : null,
       });
 

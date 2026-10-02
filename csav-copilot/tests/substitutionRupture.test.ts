@@ -188,17 +188,23 @@ test('le formulaire s’en sert', () => {
 
 const html = lire('public/workspace.html');
 
-test('trois entrées de menu, pas six', () => {
+test('quatre entrées de menu, et l’accueil d’abord', () => {
   const entrees = [...html.matchAll(/data-view="(\w+)"/g)].map((m) => m[1]!);
-  assert.deepEqual(entrees, ['orders', 'catalog', 'tickets']);
+  assert.deepEqual(entrees, ['home', 'orders', 'catalog', 'tickets']);
+  assert.match(workspace, /view: 'home',/);
 });
 
 test('le contenu n’a pas disparu : il a changé de place', () => {
-  for (const section of ['orders', 'tracking', 'catalog', 'ruptures', 'echanges', 'updates']) {
-    assert.match(html, new RegExp(`id="view-${section}"`), `l’écran ${section} existe toujours`);
+  for (const section of ['home', 'orders', 'tracking', 'catalog', 'tickets']) {
+    assert.match(html, new RegExp(`id="view-${section}"`), `l’écran ${section} existe`);
   }
   assert.match(workspace, /orders: \['orders', 'tracking'\]/);
-  assert.match(workspace, /tickets: \['ruptures', 'updates', 'echanges'\]/);
+  assert.match(workspace, /tickets: \['tickets'\]/);
+  // Changements, ruptures, signalements et échanges : tous dans la liste unique.
+  const chargement = workspace.slice(workspace.indexOf('async function chargerTickets'));
+  for (const carte of ['carteUpdate(update)', 'carteRupture(demande', 'carteRupture(signalement', 'echangeMarkup(echange']) {
+    assert.ok(chargement.includes(carte), carte);
+  }
 });
 
 test('une seule pastille, alimentée par les trois comptes', () => {

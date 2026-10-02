@@ -37,8 +37,10 @@ test('la clé de fil s’écrit et se relit de la même façon', () => {
     'la forme de la clé a changé côté écriture',
   );
 
-  // Lecture, dans la page des ruptures : même préfixe, motif STOCK.
-  const page = routes.slice(routes.indexOf("'/api/workspace/:id/ruptures'"));
+  // Lecture, dans `signalementsDeLAtelier` : même préfixe ; la page des
+  // ruptures ne garde que le motif STOCK.
+  const page = routes.slice(routes.indexOf('async function signalementsDeLAtelier('));
+  assert.match(routes, /signalementsDeLAtelier\(workspace, \{ seulementRuptures: true \}\)/);
   assert.match(
     page,
     /startsWith: `supplier:\$\{workspace\.supplierId\}:`/,
@@ -113,10 +115,10 @@ test('la page se recharge quand la langue change', () => {
   const js = lire('public/workspace.js');
   assert.match(
     js,
-    /if \(state\.view !== 'orders'\) setView\(state\.view\);/,
+    /if \(pret && state\.view !== 'orders'\) setView\(state\.view\);/,
     'applyLang doit relancer la vue courante',
   );
-  assert.match(js, /ruptures: loadRuptures,/, 'et la vue doit être dans la table des chargeurs');
+  assert.match(js, /tickets: loadTickets,/, 'et la vue doit être dans la table des chargeurs');
 });
 
 test('la pastille s’éteint quand la liste échoue', () => {
@@ -124,8 +126,7 @@ test('la pastille s’éteint quand la liste échoue', () => {
   // indisponible » affirme le contraire de la page — et c'est le chiffre
   // qu'on croit.
   const js = lire('public/workspace.js');
-  const bloc = js.slice(js.indexOf('async function loadRuptures'));
-  const attrape = bloc.slice(bloc.indexOf('} catch'), bloc.indexOf('return;'));
-
-  assert.match(attrape, /setRuptureBadge\(0\)/);
+  const bloc = js.slice(js.indexOf('async function chargerTickets'));
+  assert.match(bloc, /api\(`\/api\/workspace\/\$\{supplierId\}\/ruptures`\)\.catch\(\(\) => null\)/);
+  assert.match(bloc, /if \(!ruptures\) setRuptureBadge\(0\);/);
 });

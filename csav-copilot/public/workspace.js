@@ -18,7 +18,7 @@ const state = {
   orders: [],
   issueOrder: null,
   lang: pickLang(supplierId),
-  view: 'orders',
+  view: 'home',
   filter: 'left',
   /**
    * Commande ouverte en plein écran, ou `null` pour la liste.
@@ -82,6 +82,15 @@ let locale = LOCALES[state.lang];
  * langue d'origine si le dictionnaire venait à manquer, et une chaîne se
  * retrouve dans le fichier où elle s'affiche.
  */
+/*
+ * Le script est-il entièrement chargé ?
+ *
+ * `applyLang` s'exécute une première fois au démarrage, avant que la table
+ * des écrans soit déclarée plus bas : y changer d'écran à ce moment lèverait
+ * une erreur. L'écran d'arrivée s'ouvre donc à la fin du fichier.
+ */
+let pret = false;
+
 function applyLang(lang) {
   state.lang = lang;
   t = translator(lang);
@@ -102,7 +111,7 @@ function applyLang(lang) {
   // `data-t`, leur texte est écrit au moment du rendu.
   if (state.orders.length) renderOrders();
   if (state.catalog) renderCatalog();
-  if (state.view !== 'orders') setView(state.view);
+  if (pret && state.view !== 'orders') setView(state.view);
   void loadAlerts();
 }
 
@@ -1127,12 +1136,11 @@ setInterval(rafraichirPastilles, 120000);
    ========================================================================== */
 
 const VIEWS = {
+  home: loadHome,
   orders: () => {},
   tracking: loadParcels,
   catalog: loadCatalog,
-  updates: loadUpdates,
-  ruptures: loadRuptures,
-  echanges: loadEchanges,
+  tickets: loadTickets,
 };
 
 /*
@@ -1145,11 +1153,12 @@ const VIEWS = {
  * en permanence ce qui se choisit en un clic, à l'intérieur.
  */
 const ECRANS = {
+  home: ['home'],
   orders: ['orders', 'tracking'],
   catalog: ['catalog'],
-  tickets: ['ruptures', 'updates', 'echanges'],
+  tickets: ['tickets'],
 };
-const TOUTES = ['orders', 'tracking', 'catalog', 'updates', 'ruptures', 'echanges'];
+const TOUTES = ['home', 'orders', 'tracking', 'catalog', 'tickets'];
 
 function setView(view) {
   state.view = view;
@@ -1162,8 +1171,7 @@ function setView(view) {
   }
 
   $('ws-sous-cmd').hidden = view !== 'orders';
-  $('ws-sous-tickets').hidden = view !== 'tickets';
-  for (const barre of ['ws-sous-cmd', 'ws-sous-tickets']) {
+  for (const barre of ['ws-sous-cmd']) {
     $(barre)?.querySelectorAll('[data-sous]').forEach((bouton) => {
       bouton.setAttribute('aria-pressed', String(bouton.dataset.sous === courant));
     });
@@ -1570,101 +1578,68 @@ $('catalog-q')?.addEventListener('input', () => renderCatalog());
  * colis est déjà parti, le dire évite au marchand d'annoncer au client un
  * changement qui n'aura pas lieu.
  */
-async function loadUpdates() {
-  const rows = $('updates-rows');
-
-  let data;
-  try {
-    data = await api(`/api/workspace/${supplierId}/updates`);
-  } catch (error) {
-    rows.innerHTML = `<p class="empty">${esc(error.message)}</p>`;
-    return;
-  }
-
-  state.updates = data.updates ?? [];
-  setBadge(data.pending ?? 0);
-
+/** La carte d'une demande de changement : ce qui est demandé, et deux boutons. */
+function carteUpdate(update) {
   const STATUS = {
     PENDING: { cls: 'wait', label: t('updates.pending') },
     ACKNOWLEDGED: { cls: 'ok', label: t('updates.accepted') },
     REFUSED: { cls: 'bad', label: t('updates.refused') },
   };
+    const status = STATUS[update.status] ?? STATUS.PENDING;
 
-  rows.innerHTML =
-    state.updates
-      .map((update) => {
-        const status = STATUS[update.status] ?? STATUS.PENDING;
+    return `<div class="upd upd-${status.cls}" data-upd="${esc(update.id)}">
+      <div class="upd-head">
+        <b>${esc(kindLabel(update.kind))}</b>
+        ${update.orderName ? `<span class="tag tag-order">${esc(update.orderName)}</span>` : ''}
+        <span class="tag tone-${status.cls}">${esc(status.label)}</span>
+        <span class="upd-when">${new Date(update.createdAt).toLocaleDateString(locale)}</span>
+      </div>
 
-        return `<div class="upd upd-${status.cls}" data-upd="${esc(update.id)}">
-          <div class="upd-head">
-            <b>${esc(kindLabel(update.kind))}</b>
-            ${update.orderName ? `<span class="tag tag-order">${esc(update.orderName)}</span>` : ''}
-            <span class="tag tone-${status.cls}">${esc(status.label)}</span>
-            <span class="upd-when">${new Date(update.createdAt).toLocaleDateString(locale)}</span>
-          </div>
+      ${
+        update.kind === 'TRACKING' && update.beforeValue
+          ? `<div class="upd-swap">
+               <span class="upd-label">${esc(t('updates.parcels'))}</span>
+               <span class="upd-after">${esc(update.beforeValue)}</span>
+             </div>`
+          : update.kind === 'MISSING_ITEM' && update.beforeValue
+          ? `<div class="upd-swap">
+               <span class="upd-label">${esc(t('updates.missing'))}</span>
+               <span class="upd-after">${esc(update.beforeValue)}</span>
+             </div>`
+          : update.kind === 'DELAY' && update.afterValue
+          ? `<div class="upd-swap">
+               <span class="upd-label">${esc(t('updates.shipBy'))}</span>
+               <span class="upd-after">${esc(
+                 /^\d{4}-\d{2}-\d{2}$/.test(update.afterValue)
+                   ? new Date(`${update.afterValue}T12:00:00`).toLocaleDateString(locale)
+                   : update.afterValue,
+               )}</span>
+             </div>`
+          : update.afterValue
+          ? `<div class="upd-swap">
+               <span class="upd-before">${esc(update.beforeValue ?? '—')}</span>
+               <span class="upd-arrow" aria-hidden="true">→</span>
+               <span class="upd-after">${esc(update.afterValue)}</span>
+             </div>`
+          : ''
+      }
 
-          ${
-            update.kind === 'TRACKING' && update.beforeValue
-              ? `<div class="upd-swap">
-                   <span class="upd-label">${esc(t('updates.parcels'))}</span>
-                   <span class="upd-after">${esc(update.beforeValue)}</span>
-                 </div>`
-              : update.kind === 'MISSING_ITEM' && update.beforeValue
-              ? `<div class="upd-swap">
-                   <span class="upd-label">${esc(t('updates.missing'))}</span>
-                   <span class="upd-after">${esc(update.beforeValue)}</span>
-                 </div>`
-              : update.kind === 'DELAY' && update.afterValue
-              ? `<div class="upd-swap">
-                   <span class="upd-label">${esc(t('updates.shipBy'))}</span>
-                   <span class="upd-after">${esc(
-                     /^\d{4}-\d{2}-\d{2}$/.test(update.afterValue)
-                       ? new Date(`${update.afterValue}T12:00:00`).toLocaleDateString(locale)
-                       : update.afterValue,
-                   )}</span>
-                 </div>`
-              : update.afterValue
-              ? `<div class="upd-swap">
-                   <span class="upd-before">${esc(update.beforeValue ?? '—')}</span>
-                   <span class="upd-arrow" aria-hidden="true">→</span>
-                   <span class="upd-after">${esc(update.afterValue)}</span>
-                 </div>`
-              : ''
-          }
+      ${update.message ? `<p class="upd-msg">${esc(update.message)}</p>` : ''}
+      ${update.supplierNote ? `<p class="upd-note">« ${esc(update.supplierNote)} »</p>` : ''}
 
-          ${update.message ? `<p class="upd-msg">${esc(update.message)}</p>` : ''}
-          ${update.supplierNote ? `<p class="upd-note">« ${esc(update.supplierNote)} »</p>` : ''}
-
-          ${
-            update.status === 'PENDING'
-              ? `<div class="upd-acts">
-                   <button class="btn btn-small btn-primary" data-accept="${esc(update.id)}">
-                     ${esc(t('updates.accept'))}
-                   </button>
-                   <button class="btn btn-small" data-refuse="${esc(update.id)}">
-                     ${esc(t('updates.refuse'))}
-                   </button>
-                 </div>`
-              : ''
-          }
-        </div>`;
-      })
-      .join('') || `<p class="empty">${esc(t('updates.empty'))}</p>`;
-
-  rows.querySelectorAll('[data-accept]').forEach((button) =>
-    button.addEventListener('click', () => respond(button.dataset.accept, 'ACKNOWLEDGED')),
-  );
-
-  rows.querySelectorAll('[data-refuse]').forEach((button) =>
-    button.addEventListener('click', () => {
-      // Un refus sans motif oblige le marchand à redemander : on exige le mot
-      // qui manque, ici et pas dans un second aller-retour.
-      const note = prompt(t('updates.why'));
-      if (note === null) return;
-      if (!note.trim()) return toast(t('updates.needWhy'), true);
-      respond(button.dataset.refuse, 'REFUSED', note.trim());
-    }),
-  );
+      ${
+        update.status === 'PENDING'
+          ? `<div class="upd-acts">
+               <button class="btn btn-small btn-primary" data-accept="${esc(update.id)}">
+                 ${esc(t('updates.accept'))}
+               </button>
+               <button class="btn btn-small" data-refuse="${esc(update.id)}">
+                 ${esc(t('updates.refuse'))}
+               </button>
+             </div>`
+          : ''
+      }
+    </div>`;
 }
 
 /*
@@ -1733,15 +1708,12 @@ function majPastilleTickets() {
     badge.textContent = String(total);
   }
 
-  for (const [cle, id] of [
-    ['ruptures', 'ws-n-rup'],
-    ['updates', 'ws-n-upd'],
-    ['echanges', 'ws-n-ech'],
-  ]) {
-    const compteur = $(id);
-    if (!compteur) continue;
-    compteur.hidden = attentes[cle] === 0;
-    compteur.textContent = String(attentes[cle]);
+  // Le même total sur le filtre « À répondre » de la liste : les deux
+  // chiffres disent la même chose, ils doivent être égaux.
+  const compteur = $('tk-n-rep');
+  if (compteur) {
+    compteur.hidden = total === 0;
+    compteur.textContent = String(total);
   }
 }
 
@@ -1778,7 +1750,7 @@ async function respond(id, status, note = null) {
       body: { status, note },
     });
     toast(t('updates.sent'));
-    await Promise.all([loadUpdates(), loadAlerts()]);
+    await Promise.all([loadTickets(), loadAlerts()]);
   } catch (error) {
     toast(error.message, true);
   }
@@ -1790,9 +1762,12 @@ $('ws-more')?.addEventListener('click', () => {
   $('ws-more').setAttribute('aria-expanded', String(!drawer.hidden));
 });
 
-$('ws-reload').addEventListener('click', load);
+$('ws-reload').addEventListener('click', () => {
+  state.chargementCommandes = load();
+});
 
-load();
+// L'accueil compte les commandes à préparer : il attend cette lecture-là.
+state.chargementCommandes = load();
 
 
 /* ------------------------------------------- chercher une commande -- */
@@ -1852,45 +1827,6 @@ $('ws-cmd-q')?.addEventListener('input', (event) => {
  * manquant envoyait l'information dans le vide : rien ne revenait, et il
  * fallait choisir entre attendre et emballer sans savoir.
  */
-async function loadRuptures() {
-  const demandes = $('rup-demandes');
-  const signalements = $('rup-signalements');
-
-  let data;
-  try {
-    data = await api(`/api/workspace/${supplierId}/ruptures`);
-  } catch {
-    /* La pastille s'éteint avec la liste. La laisser à sa valeur d'avant la
-       ferait affirmer « une demande vous attend » pendant que l'écran dit
-       qu'il n'a rien pu lire — et c'est le chiffre qu'on croit, pas le
-       message. On ne sait plus : on ne prétend rien. */
-    setRuptureBadge(0);
-    // Le message d'erreur du serveur est en français : ici on parle la langue
-    // de l'atelier, quitte à en dire un peu moins.
-    demandes.innerHTML = `<p class="empty">${esc(t('rup.error'))}
-      <button class="btn btn-small" type="button" id="rup-retry">${esc(t('rup.retry'))}</button></p>`;
-    signalements.innerHTML = '';
-    $('rup-retry')?.addEventListener('click', () => void loadRuptures());
-    return;
-  }
-
-  const attente = (data.demandes ?? []).filter((demande) => demande.statut === 'OPEN');
-  setRuptureBadge(attente.length);
-
-  demandes.innerHTML =
-    (data.demandes ?? [])
-      .map((demande) => carteRupture(demande, demande.phase ?? 'cree', demande.envoyeLe, true))
-      .join('') || `<p class="empty">${esc(t('rup.askedEmpty'))}</p>`;
-
-  signalements.innerHTML =
-    (data.signalements ?? [])
-      .map((signalement) =>
-        carteRupture(signalement, signalement.phase ?? 'cree', signalement.signaleLe, false),
-      )
-      .join('') || `<p class="empty">${esc(t('rup.mineEmpty'))}</p>`;
-
-  cablerSubstitutions();
-}
 
 /*
  * La carte d'une rupture : le modèle manquant, et ce qu'on propose à la place.
@@ -2002,7 +1938,7 @@ function cablerSubstitutions() {
     ['data-sub-oui', true],
     ['data-sub-non', false],
   ]) {
-    document.querySelectorAll(`#view-ruptures [${attribut}]`).forEach((bouton) =>
+    document.querySelectorAll(`#tk-rows [${attribut}]`).forEach((bouton) =>
       bouton.addEventListener('click', () => {
         const id = bouton.getAttribute(attribut);
         void repondreSubstitution(id, accepte, bouton);
@@ -2023,7 +1959,7 @@ async function repondreSubstitution(id, accepte, bouton) {
       body: { accepte },
     });
     toast(t(accepte ? 'rup.sentYes' : 'rup.sentNo'));
-    await loadRuptures();
+    await loadTickets();
   } catch (error) {
     ligne?.querySelectorAll('button').forEach((autre) => {
       autre.disabled = false;
@@ -2049,14 +1985,21 @@ async function rafraichirPastilleRuptures() {
   if (state.fonctionnalites?.rupturesAtelier === false) return setRuptureBadge(0);
   try {
     const data = await api(`/api/workspace/${supplierId}/ruptures`);
-    setRuptureBadge((data.demandes ?? []).filter((demande) => demande.statut === 'OPEN').length);
+    // Même règle que la liste des tickets : la pastille et le filtre
+    // « À répondre » doivent toujours dire le même chiffre.
+    setRuptureBadge(
+      [
+        ...(data.demandes ?? []).map((demande) => statutRupture(demande, true)),
+        ...(data.signalements ?? []).map((signalement) => statutRupture(signalement, false)),
+      ].filter((statut) => statut === 'A_REPONDRE').length,
+    );
   } catch {
     setRuptureBadge(0);
   }
 }
 
-/* La pastille ne compte que ce qui attend une réponse de l'atelier. Y ajouter
-   ses propres signalements lui reprocherait le travail qu'il a déjà fait. */
+/* La pastille ne compte que ce qui attend une réponse de l'atelier : un
+   signalement n'y entre que si le marchand y a proposé un remplacement. */
 function setRuptureBadge(nombre) {
   attentes.ruptures = nombre;
   majPastilleTickets();
@@ -2133,50 +2076,6 @@ function adresseTexte(adresse) {
     .join('\n');
 }
 
-async function loadEchanges() {
-  const aEnvoyer = $('ech-rows');
-  const faits = $('ech-faits');
-
-  let data;
-  try {
-    data = await api(`/api/workspace/${supplierId}/echanges`);
-  } catch {
-    // Comme les ruptures : la pastille s'éteint avec la liste, pour ne pas
-    // affirmer un chiffre qu'on n'a pas pu relire.
-    setEchangeBadge(0);
-    aEnvoyer.innerHTML = `<p class="empty">${esc(t('ech.error'))}</p>`;
-    faits.innerHTML = '';
-    return;
-  }
-
-  setEchangeBadge((data.aEnvoyer ?? []).length);
-  $('ws-ech-adresses').hidden = !data.adressesIndisponibles;
-
-  aEnvoyer.innerHTML =
-    (data.aEnvoyer ?? []).map((echange) => echangeMarkup(echange, false)).join('') ||
-    `<p class="empty">${esc(t('ech.none'))}</p>`;
-  faits.innerHTML =
-    (data.envoyes ?? []).map((echange) => echangeMarkup(echange, true)).join('') ||
-    `<p class="empty">${esc(t('ech.noneSent'))}</p>`;
-
-  for (const formulaire of document.querySelectorAll('#view-echanges .ech-form')) {
-    formulaire.addEventListener('submit', (event) => {
-      event.preventDefault();
-      void envoyerEchange(formulaire);
-    });
-  }
-
-  for (const bouton of document.querySelectorAll('#view-echanges [data-copier]')) {
-    bouton.addEventListener('click', async () => {
-      try {
-        await navigator.clipboard.writeText(bouton.dataset.copier);
-        toast(t('ech.copied'));
-      } catch {
-        toast(t('ech.copyFail'), true);
-      }
-    });
-  }
-}
 
 /*
  * Le numéro d'un échange.
@@ -2204,7 +2103,7 @@ async function envoyerEchange(formulaire) {
       body: { caseId, trackingNumber: suivi, carrier: transporteur },
     });
     toast(t('ech.saved'));
-    await loadEchanges();
+    await loadTickets();
   } catch (erreur) {
     toast(messageServeur(erreur, 'ech.err'), true);
   } finally {
@@ -2295,13 +2194,9 @@ function appliquerFonctionnalites() {
   $('ws-modes').hidden = !masse;
   if (!masse && state.mode === 'masse') setMode('manuel');
 
-  document.querySelectorAll('[data-view="ruptures"]').forEach((bouton) => {
-    bouton.hidden = !ruptures;
-  });
-  if (!ruptures) {
-    setRuptureBadge(0);
-    if (state.view === 'ruptures') setView('orders');
-  }
+  // Les ruptures éteintes ne sont plus demandées : la liste des tickets et
+  // l'accueil les omettent, et leur part de la pastille tombe à zéro.
+  if (!ruptures) setRuptureBadge(0);
 }
 
 /** Un fichier choisi suit la même lecture qu'un fichier déposé. */
@@ -2669,3 +2564,317 @@ $('ws-orders').addEventListener('keydown', (event) => {
   event.preventDefault();
   bouton.click();
 });
+
+
+/* ==========================================================================
+   TICKETS — une seule liste
+
+   Tout ce qui passe entre l'atelier et le marchand, dans une liste : les
+   demandes de changement, les ruptures, les échanges à expédier, et ce que
+   l'atelier a lui-même signalé. Elle s'ouvre sur « À répondre », les plus
+   anciennes d'abord : c'est la question du matin.
+   ========================================================================== */
+
+/** Une rupture vue depuis l'atelier : à lui de répondre, au marchand, ou close. */
+function statutRupture(dossier, estDemande) {
+  if (dossier.phase === 'classe') return 'CLOS';
+  const propositions = dossier.substitutions ?? [];
+  // Un remplacement proposé sans réponse : c'est à l'atelier.
+  if (propositions.some((proposition) => !proposition.reponduLe)) return 'A_REPONDRE';
+  // Tout est répondu : la suite appartient au marchand.
+  if (propositions.length) return 'ATTENTE';
+  if (estDemande) return dossier.phase === 'cree' ? 'A_REPONDRE' : 'ATTENTE';
+  return dossier.phase === 'traite' ? 'CLOS' : 'ATTENTE';
+}
+
+state.tk = { statut: 'A_REPONDRE', type: '', items: [], erreurs: [] };
+
+/** Âge lisible : « aujourd'hui », « 3 j ». Rouge au-delà de deux jours. */
+function age(date) {
+  const jours = Math.floor((Date.now() - new Date(date).getTime()) / 86_400_000);
+  return { texte: jours <= 0 ? t('tk.today') : t('tk.days', { n: jours }), vieux: jours >= 2 };
+}
+
+async function chargerTickets() {
+  // Les réglages de la boutique arrivent avec la liste des commandes.
+  await state.chargementCommandes?.catch?.(() => {});
+  const avecRuptures = state.fonctionnalites?.rupturesAtelier !== false;
+
+  const [updates, ruptures, signalements, echanges] = await Promise.all([
+    api(`/api/workspace/${supplierId}/updates`).catch(() => null),
+    avecRuptures ? api(`/api/workspace/${supplierId}/ruptures`).catch(() => null) : { demandes: [] },
+    api(`/api/workspace/${supplierId}/signalements`).catch(() => null),
+    api(`/api/workspace/${supplierId}/echanges`).catch(() => null),
+  ]);
+
+  const items = [];
+  for (const update of updates?.updates ?? []) {
+    items.push({
+      type: `UPD:${update.kind}`,
+      libelle: kindLabel(update.kind),
+      statut: update.status === 'PENDING' ? 'A_REPONDRE' : 'CLOS',
+      date: update.createdAt,
+      html: carteUpdate(update),
+    });
+  }
+  for (const demande of ruptures?.demandes ?? []) {
+    items.push({
+      type: 'RUPTURE',
+      libelle: t('tk.type.rupture'),
+      statut: statutRupture(demande, true),
+      date: demande.envoyeLe,
+      html: carteRupture(demande, demande.phase ?? 'cree', demande.envoyeLe, true),
+    });
+  }
+  for (const signalement of signalements?.signalements ?? []) {
+    // Ruptures éteintes : leurs signalements aussi.
+    if (!avecRuptures && signalement.motif === 'STOCK') continue;
+    items.push({
+      type: 'SIGNAL',
+      libelle: `${t('tk.type.signal')} · ${t(`issue.kind.${signalement.motif}`)}`,
+      statut: statutRupture(signalement, false),
+      date: signalement.signaleLe,
+      html: carteRupture(signalement, signalement.phase ?? 'cree', signalement.signaleLe, false),
+    });
+  }
+  for (const [liste, faite] of [
+    [echanges?.aEnvoyer ?? [], false],
+    [echanges?.envoyes ?? [], true],
+  ]) {
+    for (const echange of liste) {
+      items.push({
+        type: 'ECHANGE',
+        libelle: t('tk.type.echange'),
+        statut: faite ? 'CLOS' : 'A_REPONDRE',
+        date: echange.expedieLe ?? echange.depuis,
+        html: echangeMarkup(echange, faite),
+      });
+    }
+  }
+
+  /* Chaque source qui n'a pas répondu éteint sa part de la pastille : un
+     chiffre qu'on n'a pas pu relire est un chiffre inventé. */
+  setBadge(updates ? (updates.pending ?? 0) : 0);
+  if (!ruptures) setRuptureBadge(0);
+  else
+    setRuptureBadge(
+      items.filter((item) => ['RUPTURE', 'SIGNAL'].includes(item.type) && item.statut === 'A_REPONDRE').length,
+    );
+  setEchangeBadge(echanges ? (echanges.aEnvoyer ?? []).length : 0);
+
+  state.tk.items = items;
+  state.tk.erreurs = [
+    [updates, 'tk.src.updates'],
+    [ruptures, 'tk.src.ruptures'],
+    [signalements, 'tk.src.signal'],
+    [echanges, 'tk.src.echanges'],
+  ]
+    .filter(([donnees]) => !donnees)
+    .map(([, cle]) => t(cle));
+  $('ws-ech-adresses').hidden = !echanges?.adressesIndisponibles;
+  return items;
+}
+
+async function loadTickets() {
+  $('tk-rows').innerHTML = `<p class="empty">${esc(t('tk.loading'))}</p>`;
+  await chargerTickets();
+  renderTickets();
+}
+
+function renderTickets() {
+  const { statut, type, items, erreurs } = state.tk;
+
+  document.querySelectorAll('#tk-statuts [data-tstatut]').forEach((bouton) =>
+    bouton.setAttribute('aria-pressed', String(bouton.dataset.tstatut === statut)),
+  );
+  const enAttente = items.filter((item) => item.statut === 'ATTENTE').length;
+  $('tk-n-att').hidden = enAttente === 0;
+  $('tk-n-att').textContent = String(enAttente);
+
+  // Les types proposés sont ceux qui existent : un bouton qui ne trie rien
+  // n'apprend qu'à ne plus cliquer.
+  const types = new Map(items.map((item) => [item.type, item.type === 'SIGNAL' ? t('tk.type.signal') : item.libelle]));
+  $('tk-types').innerHTML = [
+    `<button type="button" data-ttype="" aria-pressed="${!type}">${esc(t('tk.allTypes'))}</button>`,
+    ...[...types].map(
+      ([cle, libelle]) =>
+        `<button type="button" data-ttype="${esc(cle)}" aria-pressed="${type === cle}">${esc(libelle)}</button>`,
+    ),
+  ].join('');
+
+  const visibles = items
+    .filter((item) => (!statut || item.statut === statut) && (!type || item.type === type))
+    // Ce qui attend une réponse : le plus ancien d'abord. Le reste : le plus récent.
+    .sort((a, b) =>
+      statut === 'A_REPONDRE'
+        ? new Date(a.date).getTime() - new Date(b.date).getTime()
+        : new Date(b.date).getTime() - new Date(a.date).getTime(),
+    );
+
+  const alerte = erreurs.length
+    ? `<p class="ws-note">${esc(t('tk.partial', { quoi: erreurs.join(', ') }))}</p>`
+    : '';
+
+  $('tk-rows').innerHTML =
+    alerte +
+    (visibles
+      .map((item) => {
+        const { texte, vieux } = age(item.date);
+        return `<div class="tk-item">
+          <div class="tk-meta">
+            ${
+              // Une demande de changement porte déjà son type en titre de carte.
+              item.type.startsWith('UPD:') ? '' : `<span class="tk-type">${esc(item.libelle)}</span>`
+            }
+            <span class="tk-age${vieux && item.statut === 'A_REPONDRE' ? ' tk-vieux' : ''}">${esc(texte)}</span>
+          </div>
+          ${item.html}
+        </div>`;
+      })
+      .join('') || `<p class="empty">${esc(t(`tk.empty.${statut || 'ALL'}`))}</p>`);
+
+  cablerTickets();
+}
+
+/** Les boutons des cartes : mêmes gestes qu'avant, dans la liste unique. */
+function cablerTickets() {
+  const racine = $('tk-rows');
+
+  racine.querySelectorAll('[data-accept]').forEach((button) =>
+    button.addEventListener('click', () => respond(button.dataset.accept, 'ACKNOWLEDGED')),
+  );
+  racine.querySelectorAll('[data-refuse]').forEach((button) =>
+    button.addEventListener('click', () => {
+      // Un refus sans motif oblige le marchand à redemander : on exige le mot
+      // qui manque, ici et pas dans un second aller-retour.
+      const note = prompt(t('updates.why'));
+      if (note === null) return;
+      if (!note.trim()) return toast(t('updates.needWhy'), true);
+      respond(button.dataset.refuse, 'REFUSED', note.trim());
+    }),
+  );
+
+  cablerSubstitutions();
+
+  for (const formulaire of racine.querySelectorAll('.ech-form')) {
+    formulaire.addEventListener('submit', (event) => {
+      event.preventDefault();
+      void envoyerEchange(formulaire);
+    });
+  }
+  for (const bouton of racine.querySelectorAll('[data-copier]')) {
+    bouton.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(bouton.dataset.copier);
+        toast(t('ech.copied'));
+      } catch {
+        toast(t('ech.copyFail'), true);
+      }
+    });
+  }
+}
+
+$('tk-statuts')?.addEventListener('click', (event) => {
+  const bouton = event.target.closest('[data-tstatut]');
+  if (!bouton) return;
+  state.tk.statut = bouton.dataset.tstatut;
+  renderTickets();
+});
+
+$('tk-types')?.addEventListener('click', (event) => {
+  const bouton = event.target.closest('[data-ttype]');
+  if (!bouton) return;
+  state.tk.type = bouton.dataset.ttype;
+  renderTickets();
+});
+
+/** Ouvrir la liste sur un filtre : depuis l'accueil, un chiffre mène à ses lignes. */
+function ouvrirTickets(statut, type = '') {
+  state.tk.statut = statut;
+  state.tk.type = type;
+  setView('tickets');
+}
+
+/* ==========================================================================
+   AUJOURD'HUI — l'écran d'arrivée
+
+   Ce que le marchand attend de l'atelier, en chiffres qui mènent aux lignes.
+   Il arrivait sur « Commandes », ou sur un onglet de tickets souvent vide
+   pendant qu'une demande l'attendait dans l'onglet d'à côté.
+   ========================================================================== */
+
+async function loadHome() {
+  $('home-tuiles').innerHTML = `<p class="empty">${esc(t('tk.loading'))}</p>`;
+  await state.chargementCommandes?.catch?.(() => {});
+  const items = await chargerTickets();
+
+  const compte = (filtre) => items.filter(filtre).length;
+  const aRepondre = compte((item) => item.statut === 'A_REPONDRE');
+  const aPreparer = (state.orders ?? []).filter((order) => !orderIsDone(order)).length;
+  const tuiles = [
+    { n: aRepondre, cle: 'home.toAnswer', chaud: true, aller: () => ouvrirTickets('A_REPONDRE') },
+    { n: aPreparer, cle: 'home.toPrepare', chaud: false, aller: () => setView('orders') },
+    {
+      n: compte((item) => item.type === 'RUPTURE' && item.statut !== 'CLOS'),
+      cle: 'home.ruptures',
+      chaud: false,
+      aller: () => ouvrirTickets('', 'RUPTURE'),
+    },
+    {
+      n: compte((item) => item.type === 'ECHANGE' && item.statut === 'A_REPONDRE'),
+      cle: 'home.exchanges',
+      chaud: true,
+      aller: () => ouvrirTickets('A_REPONDRE', 'ECHANGE'),
+    },
+    { n: compte((item) => item.statut === 'ATTENTE'), cle: 'home.waiting', chaud: false, aller: () => ouvrirTickets('ATTENTE') },
+  ];
+
+  $('home-tuiles').innerHTML = tuiles
+    .map(
+      (tuile, rang) => `<button type="button" class="home-tuile${tuile.chaud && tuile.n > 0 ? ' home-chaud' : ''}" data-tuile="${rang}">
+        <b>${tuile.n}</b><span>${esc(t(tuile.cle))}</span>
+      </button>`,
+    )
+    .join('');
+  $('home-tuiles')
+    .querySelectorAll('[data-tuile]')
+    .forEach((bouton) => bouton.addEventListener('click', () => tuiles[Number(bouton.dataset.tuile)].aller()));
+
+  const anciennes = items
+    .filter((item) => item.statut === 'A_REPONDRE')
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    .slice(0, 5);
+
+  $('home-liste').innerHTML = anciennes.length
+    ? anciennes
+        .map((item) => {
+          const { texte, vieux } = age(item.date);
+          return `<button type="button" class="home-ligne" data-home-type="${esc(item.type)}">
+            <span class="tk-type">${esc(item.libelle)}</span>
+            <span class="home-quoi">${esc(resumeDe(item.html))}</span>
+            <span class="tk-age${vieux ? ' tk-vieux' : ''}">${esc(texte)}</span>
+          </button>`;
+        })
+        .join('')
+    : `<p class="empty home-rien">${esc(t('home.allClear'))}</p>`;
+  $('home-liste')
+    .querySelectorAll('[data-home-type]')
+    .forEach((ligne) => ligne.addEventListener('click', () => ouvrirTickets('A_REPONDRE', ligne.dataset.homeType)));
+}
+
+/**
+ * La commande d'une carte, pour une ligne de l'accueil. Le type est déjà
+ * écrit à côté : le répéter (« Article manquant · Article manquant ») ne dit
+ * pas de quelle commande il s'agit.
+ */
+function resumeDe(html) {
+  const boite = document.createElement('div');
+  boite.innerHTML = html;
+  const commande = boite.querySelector('.upd-head .tag-order')?.textContent?.trim();
+  if (commande) return t('rup.order').replace('{name}', commande);
+  return boite.querySelector('.upd-head b')?.textContent?.trim() ?? '';
+}
+
+// Tout est déclaré : l'atelier arrive sur « Aujourd'hui ».
+pret = true;
+setView(state.view);
