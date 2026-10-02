@@ -73,7 +73,7 @@ const GROUPS = [
   {
     id: 'shopify',
     title: 'Application Shopify',
-    help: "Identifiants de votre app publique dans Shopify Partners. Ils servent à l'installation des boutiques et à vérifier la signature des webhooks.",
+    help: "Identifiants de l'appli Shopify par défaut, dans Shopify Partners : elle sert aux boutiques qui n'ont pas leur propre appli (section « Boutiques Shopify »), à l'installation comme à la vérification des webhooks.",
     check: 'shopify',
     fields: [
       { key: 'SHOPIFY_API_KEY', label: 'Clé API (client ID)' },
@@ -207,6 +207,113 @@ async function load() {
   void loadSupervision();
   void loadFonctionnalites();
   void loadNouveautes();
+  void loadApplis();
+}
+
+/* ------------------------------------------------ applis Shopify par boutique */
+
+/*
+ * Brancher une nouvelle boutique.
+ *
+ * Une appli en distribution personnalisée ne s'installe que sur la boutique
+ * pour laquelle son lien a été créé. Chaque boutique a donc la sienne : on
+ * la crée dans le Partner Dashboard avec les deux adresses affichées ici, on
+ * colle son Client ID et son secret, puis on ouvre le lien d'installation.
+ * Le secret ne se relit jamais.
+ */
+async function loadApplis() {
+  try {
+    const { applis, adresses } = await api('/api/admin/applis-shopify');
+    renderApplis(applis ?? [], adresses);
+  } catch (error) {
+    $('applis-body').innerHTML = `<p class="empty">${esc(error.message)}</p>`;
+  }
+}
+
+function renderApplis(applis, adresses) {
+  const installation = (domaine) => `/auth/shopify?shop=${encodeURIComponent(domaine)}`;
+  $('applis-body').innerHTML = `
+    <ol class="set-help applis-etapes">
+      <li>Dans le Partner Dashboard, créez une appli pour la boutique (distribution personnalisée,
+        son domaine <code>…myshopify.com</code>).</li>
+      <li>Dans sa configuration, recopiez ces deux adresses :<br />
+        URL de l'appli : <code>${esc(adresses.appUrl)}</code><br />
+        URL de redirection autorisée : <code>${esc(adresses.redirectUrl)}</code></li>
+      <li>Collez ci-dessous son Client ID et son secret, puis ouvrez « Installer ».</li>
+    </ol>
+    ${
+      applis.length
+        ? `<div class="fx-wrap"><table class="fx">
+            <thead><tr><th>Boutique</th><th>Client ID</th><th>État</th><th></th></tr></thead>
+            <tbody>${applis
+              .map(
+                (appli) => `<tr>
+                  <td><b>${esc(appli.shopDomain)}</b></td>
+                  <td class="admin-print">${esc(appli.clientId)}</td>
+                  <td>${appli.installee ? 'Installée' : '<b>À installer</b>'}</td>
+                  <td>
+                    <a class="btn btn-small${appli.installee ? '' : ' btn-primary'}" href="${installation(appli.shopDomain)}">${
+                      appli.installee ? 'Réinstaller' : 'Installer'
+                    }</a>
+                    <button class="btn btn-small" data-appli-suppr="${esc(appli.id)}">Retirer</button>
+                  </td>
+                </tr>`,
+              )
+              .join('')}</tbody>
+          </table></div>`
+        : '<p class="empty">Aucune appli par boutique : toutes passent par l’appli de la plateforme.</p>'
+    }
+    <div class="applis-form">
+      <div class="field admin-field">
+        <label for="appli-domaine">Domaine de la boutique</label>
+        <input type="text" id="appli-domaine" placeholder="ma-boutique.myshopify.com" autocomplete="off" />
+      </div>
+      <div class="field admin-field">
+        <label for="appli-client">Client ID</label>
+        <input type="text" id="appli-client" autocomplete="off" />
+      </div>
+      <div class="field admin-field">
+        <label for="appli-secret">Client secret</label>
+        <input type="password" id="appli-secret" autocomplete="new-password" />
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary" id="appli-ajouter">Enregistrer l’appli</button>
+      </div>
+    </div>`;
+
+  $('appli-ajouter').addEventListener('click', () => void ajouterAppli());
+  $('applis-body')
+    .querySelectorAll('[data-appli-suppr]')
+    .forEach((bouton) => bouton.addEventListener('click', () => void retirerAppli(bouton.dataset.appliSuppr)));
+}
+
+async function ajouterAppli() {
+  const corps = {
+    shopDomain: $('appli-domaine').value.trim(),
+    clientId: $('appli-client').value.trim(),
+    clientSecret: $('appli-secret').value.trim(),
+  };
+  if (!corps.shopDomain || !corps.clientId || !corps.clientSecret) {
+    return toast('Domaine, Client ID et secret sont nécessaires.', true);
+  }
+  try {
+    await api('/api/admin/applis-shopify', { method: 'PUT', body: JSON.stringify(corps) });
+    toast('Appli enregistrée — cliquez « Installer » pour brancher la boutique.');
+    await loadApplis();
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+async function retirerAppli(id) {
+  if (!confirm('Retirer cette appli ? La boutique repassera par l’appli de la plateforme.')) return;
+  try {
+    await api(`/api/admin/applis-shopify/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    toast('Appli retirée.');
+    await loadApplis();
+  } catch (error) {
+    toast(error.message, true);
+  }
 }
 
 /* -------------------------------------------------------- fonctionnalités */

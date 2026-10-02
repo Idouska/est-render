@@ -1221,3 +1221,21 @@ model EnvoiCommande {
   @@unique([merchantId, shopifyOrderId])
   @@index([envoiId])
 }
+
+/// Une appli Shopify propre à une boutique.
+///
+/// Une appli en distribution personnalisée ne s'installe que sur une seule
+/// boutique : pour en brancher autant qu'on veut sans revue de l'App Store, on
+/// crée une appli par boutique dans le Partner Dashboard et on en garde ici
+/// les identifiants. Sans ligne pour une boutique, c'est l'appli de la
+/// plateforme (`SHOPIFY_API_KEY` / `SHOPIFY_API_SECRET`) qui sert, comme avant.
+model ShopifyApp {
+  id              String   @id @default(cuid())
+  /// « boutique.myshopify.com », en minuscules.
+  shopDomain      String   @unique
+  clientId        String
+  /// Chiffré au repos ; ne ressort jamais de l'API.
+  clientSecretEnc String   @db.Text
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}

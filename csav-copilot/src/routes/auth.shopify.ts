@@ -6,7 +6,8 @@ import { encryptSecret, hmacSha256Hex, safeEqual } from '../lib/crypto.ts';
 import { logger } from '../lib/logger.ts';
 import { prisma } from '../lib/prisma.ts';
 import { SESSION_COOKIE, signSession, verifySession } from '../lib/session.ts';
-import { requireCredential } from '../services/platform/credentials.ts';
+import { MissingCredentialError } from '../services/platform/credentials.ts';
+import { appliPourBoutique, estDomaineShopify } from '../services/shopify/applis.ts';
 
 const STATE_COOKIE = 'csav_shopify_state';
 const LINK_COOKIE = 'csav_shopify_link';
@@ -37,23 +38,16 @@ function readLink(token: string | undefined): { organizationId: string; email: s
   }
 }
 
-/** Seuls les domaines *.myshopify.com sont acceptés (anti-redirect arbitraire). */
-function isValidShopDomain(shop: string): boolean {
-  return /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/i.test(shop);
-}
+const isValidShopDomain = estDomaineShopify;
 
 /**
  * Vérifie le HMAC du callback OAuth Shopify : tous les paramètres sauf `hmac`,
- * triés par clé, concaténés en query string.
+ * triés par clé, concaténés en query string. Avec le secret de l'appli de
+ * CETTE boutique : chacune peut avoir la sienne.
  */
-async function verifyShopifyHmac(query: Record<string, string>): Promise<boolean> {
+async function verifyShopifyHmac(query: Record<string, string>, secret: string): Promise<boolean> {
   const { hmac, ...rest } = query;
   if (!hmac) return false;
-
-  const secret = await requireCredential(
-    'SHOPIFY_API_SECRET',
-    'Nécessaire pour vérifier la signature des callbacks Shopify.',
-  );
 
   const message = Object.keys(rest)
     .sort()
@@ -106,10 +100,20 @@ export async function shopifyAuthRoutes(app: FastifyInstance): Promise<void> {
       }
     }
 
-    const clientId = await requireCredential(
-      'SHOPIFY_API_KEY',
-      'Nécessaire pour lancer l’installation d’une boutique.',
-    );
+    // L'appli de cette boutique si elle en a une, celle de la plateforme sinon.
+    let clientId: string;
+    try {
+      ({ clientId } = await appliPourBoutique(shop));
+    } catch (error) {
+      if (!(error instanceof MissingCredentialError)) throw error;
+      // Ni appli propre, ni appli par défaut : dire quoi faire plutôt qu'une 500.
+      return reply
+        .code(409)
+        .type('text/plain; charset=utf-8')
+        .send(
+          `Aucune appli Shopify pour ${shop}. Créez-la dans le Partner Dashboard, puis ajoutez-la dans la console /admin, section « Boutiques Shopify ».`,
+        );
+    }
 
     const url = new URL(`https://${shop}/admin/oauth/authorize`);
     url.searchParams.set('client_id', clientId);
@@ -135,7 +139,8 @@ export async function shopifyAuthRoutes(app: FastifyInstance): Promise<void> {
         return reply.code(400).send({ error: 'State OAuth invalide' });
       }
 
-      if (!(await verifyShopifyHmac(request.query))) {
+      const appli = await appliPourBoutique(shop);
+      if (!(await verifyShopifyHmac(request.query, appli.clientSecret))) {
         return reply.code(400).send({ error: 'Signature HMAC invalide' });
       }
 
@@ -145,11 +150,8 @@ export async function shopifyAuthRoutes(app: FastifyInstance): Promise<void> {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          client_id: await requireCredential('SHOPIFY_API_KEY', 'Nécessaire pour l’échange de token.'),
-          client_secret: await requireCredential(
-            'SHOPIFY_API_SECRET',
-            'Nécessaire pour l’échange de token.',
-          ),
+          client_id: appli.clientId,
+          client_secret: appli.clientSecret,
           code,
         }),
       });
@@ -216,7 +218,7 @@ export async function shopifyAuthRoutes(app: FastifyInstance): Promise<void> {
         actorType: 'USER',
         actorId: user.id,
         action: 'shopify.connected',
-        metadata: { scopes: scope },
+        metadata: { scopes: scope, appli: appli.source },
         ipAddress: request.ip,
       });
 
