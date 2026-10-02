@@ -128,11 +128,25 @@ test('la pastille de l’atelier ne compte que ce qui attend SA réponse', () =>
   // Ses propres signalements en attente chez le marchand n'y figurent pas :
   // il ne peut rien faire pour les éteindre, et une pastille qu'on ne peut pas
   // éteindre cesse d'être regardée.
+  // Un signalement n'y entre que si le marchand y a proposé un remplacement
+  // resté sans réponse : là, c'est bien à l'atelier de répondre.
   const releve = atelier.slice(atelier.indexOf('async function rafraichirPastilleRuptures'));
   const corps = releve.slice(0, releve.indexOf('\n}'));
+  assert.match(corps, /statutRupture\(demande, true\)/);
+  assert.match(corps, /statutRupture\(signalement, false\)/);
+  assert.match(corps, /statut === 'A_REPONDRE'/);
 
-  assert.match(corps, /demande\.statut === 'OPEN'/);
-  assert.equal(/signalements/.test(corps), false);
+  const source = atelier.slice(
+    atelier.indexOf('function statutRupture('),
+    atelier.indexOf('\n}\n', atelier.indexOf('function statutRupture(')) + 2,
+  );
+  const statut = new Function(`${source} return statutRupture;`)() as (d: unknown, demande: boolean) => string;
+  const repondue = { reponduLe: '2026-10-01' };
+  assert.equal(statut({ phase: 'cree', substitutions: [] }, false), 'ATTENTE', 'mon signalement attend le marchand');
+  assert.equal(statut({ phase: 'cree', substitutions: [{ reponduLe: null }] }, false), 'A_REPONDRE');
+  assert.equal(statut({ phase: 'cree', substitutions: [] }, true), 'A_REPONDRE', 'une demande du marchand');
+  assert.equal(statut({ phase: 'cree', substitutions: [repondue] }, true), 'ATTENTE', 'tout est répondu');
+  assert.equal(statut({ phase: 'classe', substitutions: [{ reponduLe: null }] }, true), 'CLOS');
 });
 
 test('la pastille de l’atelier s’éteint quand la relève échoue', () => {

@@ -97,8 +97,10 @@ test('sans traitement en masse, le choix des modes disparaît et le mode repasse
   );
 
   assert.equal(elements['ws-modes']!.hidden, true);
-  assert.deepEqual(boutonsRuptures.map((b) => b.hidden), [true, true]);
-  assert.deepEqual(appels, ['mode:manuel', 'pastille:0', 'vue:orders']);
+  // Les ruptures ne sont plus un onglet à masquer : la liste des tickets ne
+  // les demande plus, et leur part de la pastille tombe à zéro.
+  assert.deepEqual(boutonsRuptures.map((b) => b.hidden), [false, false]);
+  assert.deepEqual(appels, ['mode:manuel', 'pastille:0']);
 });
 
 test('sans traitement en masse, une feuille glissée ne bascule plus rien', () => {

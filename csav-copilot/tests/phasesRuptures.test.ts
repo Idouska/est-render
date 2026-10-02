@@ -153,10 +153,12 @@ test('l’atelier applique la même règle au même dossier', () => {
   // construit pas de dossier — mais il doit en appliquer la règle : clos →
   // classé, réponse au client postérieure au signalement → traité.
   const route = sansCommentaires(lire('src/routes/supplierWorkspace.ts'));
-  const page = route.slice(route.indexOf("'/api/workspace/:id/ruptures'"));
+  // La règle vit dans `signalementsDeLAtelier`, que lisent la page des
+  // ruptures et la liste des tickets de l'atelier.
+  const page = route.slice(route.indexOf('async function signalementsDeLAtelier('));
 
-  assert.match(page, /ticket\.status === 'CLOSED' \|\| ticket\.status === 'AUTO_SENT'\s*\?\s*'classe'/);
-  assert.match(page, /reponduLe\.get\(ticket\.id\)! > ticket\.createdAt/);
+  assert.match(page, /const clos = ticket\.status === 'CLOSED' \|\| ticket\.status === 'AUTO_SENT';/);
+  assert.match(page, /phase: clos \? 'classe' : repondu !== null && repondu > ticket\.createdAt \? 'traite' : 'cree'/);
   assert.match(page, /direction: 'OUTBOUND'/);
 
   const css = sansCommentaires(lire('public/workspace.css'));

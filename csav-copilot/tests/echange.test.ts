@@ -238,7 +238,9 @@ test('l’atelier lit ses échanges dans sa langue', () => {
     ...[...js.matchAll(/\bt\('(ech\.[\w.]+)'/g)].map((m) => m[1]!),
     ...[...html.matchAll(/data-t="((?:ech|nav)\.[\w.]+)"/g)].map((m) => m[1]!),
   ]);
-  assert.ok(appelees.size >= 15, 'le vocabulaire des échanges manque');
+  // Les titres de l'ancien onglet « Échanges » sont partis avec lui : les
+  // échanges vivent dans la liste unique des tickets.
+  assert.ok(appelees.size >= 12, 'le vocabulaire des échanges manque');
 
   for (const { code } of LANGS) {
     const table = (STRINGS as Record<string, Record<string, string>>)[code]!;
@@ -247,12 +249,11 @@ test('l’atelier lit ses échanges dans sa langue', () => {
 });
 
 test('la section des échanges existe des deux côtés', () => {
-  assert.match(lire('public/workspace.html'), /id="view-echanges"/);
-  // Les échanges ne sont plus une entrée de menu : le menu de l'atelier avait
-  // trois boîtes de réception pour la même question, elles sont regroupées
-  // sous « Tickets » et se choisissent à l'intérieur.
-  assert.match(lire('public/workspace.html'), /data-sous="echanges"/);
-  assert.match(lire('public/workspace.js'), /tickets: \['ruptures', 'updates', 'echanges'\]/);
+  // Les échanges ne sont plus un onglet : ils sont une ligne de la liste
+  // unique des tickets, de type « Échange », à expédier ou expédiés.
+  const atelier = lire('public/workspace.js');
+  assert.match(atelier, /api\(`\/api\/workspace\/\$\{supplierId\}\/echanges`\)/);
+  assert.match(atelier, /type: 'ECHANGE',[\s\S]*?html: echangeMarkup\(echange, faite\)/);
   assert.match(lire('public/agence.html'), /id="ag-sec-echanges"/);
   assert.match(lire('public/agence.js'), /ag-sec-echanges'\)\.hidden = echanges\.length === 0/);
 });

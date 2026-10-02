@@ -693,12 +693,7 @@ input:focus, select:focus, textarea:focus {
   margin-bottom: 14px;
 }
 /* Le seul geste de création de la barre : à droite, à part des filtres. */
-.ws-sous .ws-new {
-  margin-left: auto;
-  background: var(--brand);
-  border-color: var(--brand);
-  color: #fff;
-}
+.tk-head .ws-new { flex-shrink: 0; }
 .issue-find-res { margin: 6px 0 0; font-size: 13px; color: var(--ink-mute); }
 .issue-find-res:empty { display: none; }
 .ws-sous button {
@@ -1819,3 +1814,73 @@ input:focus, select:focus, textarea:focus {
 }
 
 .ag-gate { max-width: 520px; margin: 15vh auto; padding: 22px; text-align: center; color: var(--ink); font-size: 15px; }
+
+
+/* ---------------------------------------------------- tickets : une liste
+   Le statut d'abord (ce qu'il faut en faire), le type ensuite. Chaque ligne
+   porte son type et son âge au-dessus de la carte : une demande de trois
+   jours se repère sans lire les dates. */
+.tk-types { margin-top: -6px; }
+.tk-types button { font-size: 13px; padding: 6px 12px; }
+.ws-sous-n.tk-n-calme { background: var(--ink-mute); }
+.tk-item { margin-bottom: 14px; }
+.tk-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 2px 5px;
+  font-size: 12.5px;
+}
+.tk-type { font-weight: 650; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.04em; font-size: 11.5px; }
+.tk-age { color: var(--ink-mute); margin-left: auto; }
+.tk-age.tk-vieux { color: var(--bad); font-weight: 650; }
+.tk-item .upd { margin-bottom: 0; }
+
+/* ------------------------------------------------- aujourd'hui : l'accueil
+   Des chiffres qui sont des boutons : chacun ouvre la liste déjà filtrée. */
+.home-tuiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 10px;
+  margin-bottom: 26px;
+}
+.home-tuile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 16px 16px 14px;
+  min-height: var(--tap);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--card);
+  box-shadow: var(--shadow);
+  font: inherit;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.home-tuile b { font-size: 30px; font-weight: 700; line-height: 1.1; }
+.home-tuile span { font-size: 13.5px; color: var(--ink-soft); }
+.home-tuile:hover { border-color: var(--brand); }
+.home-tuile.home-chaud { border-color: var(--bad); background: var(--bad-soft); }
+.home-tuile.home-chaud b { color: var(--bad); }
+.home-ligne {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  width: 100%;
+  min-height: var(--tap);
+  padding: 12px 14px;
+  margin-bottom: 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--card);
+  font: inherit;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.home-ligne:hover { border-color: var(--brand); }
+.home-quoi { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-rien { padding: 18px; text-align: center; border: 1px dashed var(--line); border-radius: var(--r); background: var(--card); }

@@ -31,7 +31,16 @@
           </span>
         </div>
 
-        <button type="button" data-view="orders" aria-current="true">
+        <!-- L'écran d'arrivée : ce qu'on attend de l'atelier aujourd'hui. -->
+        <button type="button" data-view="home" aria-current="true">
+          <svg viewBox="0 0 20 20" aria-hidden="true">
+            <path d="M3.5 9.5 10 4l6.5 5.5" />
+            <path d="M5.5 8v8h9V8" />
+          </svg>
+          <span data-t="nav.home">Aujourd'hui</span>
+        </button>
+
+        <button type="button" data-view="orders">
           <svg viewBox="0 0 20 20" aria-hidden="true">
             <rect x="3" y="4.5" width="14" height="11" rx="2" />
             <path d="M3 8.5h14M8 8.5v7" />
@@ -86,7 +95,17 @@
           <button type="button" data-sous="tracking" data-t="sous.parcels">Colis enregistrés</button>
         </div>
 
-        <section id="view-orders">
+        <!-- ============================================ AUJOURD'HUI ====== -->
+        <section id="view-home">
+          <header class="wshead">
+            <h1 data-t="home.title">Aujourd'hui</h1>
+          </header>
+          <div class="home-tuiles" id="home-tuiles"></div>
+          <h2 class="ws-sub" data-t="home.oldest">Les plus anciennes à répondre</h2>
+          <div id="home-liste"></div>
+        </section>
+
+        <section id="view-orders" hidden>
           <header class="wshead">
             <h1 id="ws-title" data-t="head.title">Commandes à préparer</h1>
             <div class="wshead-acts">
@@ -280,61 +299,35 @@
           <div id="catalog-rows"></div>
         </section>
 
-        <!-- ============================================= RUPTURES ======== -->
-        <!-- Sous-navigation des tickets : le tri par type, à l'intérieur. -->
-        <div class="ws-sous" id="ws-sous-tickets" hidden>
-          <button type="button" data-sous="ruptures" aria-pressed="true">
-            <span data-t="nav.ruptures">Ruptures</span><b class="ws-sous-n" id="ws-n-rup" hidden>0</b>
-          </button>
-          <button type="button" data-sous="updates">
-            <span data-t="nav.updates">Changements</span><b class="ws-sous-n" id="ws-n-upd" hidden>0</b>
-          </button>
-          <button type="button" data-sous="echanges">
-            <span data-t="nav.exchanges">Échanges</span><b class="ws-sous-n" id="ws-n-ech" hidden>0</b>
-          </button>
-          <!-- Ouvrir un ticket sans passer par la liste des commandes : on
-               le retrouve par son numéro, dans la fenêtre de signalement. -->
-          <button type="button" class="ws-new" id="ws-new-ticket" data-t="ticket.new">＋ Nouveau ticket</button>
-        </div>
-
-        <section id="view-ruptures" hidden>
-          <header class="wshead">
-            <h1 data-t="rup.title">Ruptures de stock</h1>
+        <!-- ============================================== TICKETS ======== -->
+        <!-- Une seule liste pour tout ce qui passe entre l'atelier et le
+             marchand : ses demandes (changements, ruptures, échanges) et ce
+             que l'atelier a signalé. Triée par ce qu'il faut en faire, puis
+             par type — au lieu de trois onglets à ouvrir un par un. -->
+        <section id="view-tickets" hidden>
+          <header class="wshead tk-head">
+            <h1 data-t="tk.title">Tickets</h1>
+            <!-- Ouvrir un ticket sans passer par la liste des commandes : on
+                 le retrouve par son numéro, dans la fenêtre de signalement. -->
+            <button type="button" class="btn btn-primary ws-new" id="ws-new-ticket" data-t="ticket.new">＋ Nouveau ticket</button>
           </header>
 
-          <!-- Ce que le marchand attend de l'atelier passe AVANT ce que
-               l'atelier a déjà dit : l'un demande un geste, l'autre informe. -->
-          <h2 class="ws-sub" data-t="rup.asked">Demandes du marchand</h2>
-          <div id="rup-demandes"></div>
+          <div class="ws-sous" id="tk-statuts" role="group">
+            <button type="button" data-tstatut="A_REPONDRE" aria-pressed="true">
+              <span data-t="tk.toAnswer">À répondre</span><b class="ws-sous-n" id="tk-n-rep" hidden>0</b>
+            </button>
+            <button type="button" data-tstatut="ATTENTE">
+              <span data-t="tk.waiting">En attente du marchand</span><b class="ws-sous-n tk-n-calme" id="tk-n-att" hidden>0</b>
+            </button>
+            <button type="button" data-tstatut="CLOS"><span data-t="tk.closed">Clos</span></button>
+            <button type="button" data-tstatut=""><span data-t="tk.all">Tout</span></button>
+          </div>
+          <div class="ws-sous tk-types" id="tk-types" role="group"></div>
 
-          <h2 class="ws-sub" data-t="rup.mine">Ce que j'ai signalé</h2>
-          <div id="rup-signalements"></div>
-        </section>
-
-        <!-- ============================================== ÉCHANGES ======= -->
-        <!-- Un client renvoie une paire et en veut une autre. Quand aucune
-             agence n'a la paire voulue en stock, c'est l'atelier qui l'envoie.
-             Il n'y a pas de commande à expédier : le marchand prévient
-             lui-même son client avec le numéro saisi ici. -->
-        <section id="view-echanges" hidden>
-          <header class="wshead">
-            <h1 data-t="ech.title">Échanges à envoyer</h1>
-          </header>
           <p class="ws-note" id="ws-ech-adresses" hidden data-t="ech.addressDown">
             Adresses indisponibles pour le moment : rafraîchissez dans un instant.
           </p>
-          <div id="ech-rows"></div>
-
-          <h2 class="ws-sub" data-t="ech.sent">Envoyés — 30 derniers jours</h2>
-          <div id="ech-faits"></div>
-        </section>
-
-        <!-- =========================================== CHANGEMENTS ======= -->
-        <section id="view-updates" hidden>
-          <header class="wshead">
-            <h1 data-t="updates.title">Demandes de changement</h1>
-          </header>
-          <div id="updates-rows"></div>
+          <div id="tk-rows"></div>
         </section>
       </main>
     </div>
