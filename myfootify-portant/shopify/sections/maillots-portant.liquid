@@ -113,13 +113,17 @@
         {%- liquid
           assign front_url = ''
           assign back_url = ''
-          if product.metafields.custom.portant_face != blank
+          if product.metafields.custom.portant_face_det != blank
+            assign front_url = product.metafields.custom.portant_face_det.value | image_url: width: 1200
+          elsif product.metafields.custom.portant_face != blank
             assign front_url = product.metafields.custom.portant_face.value | image_url: width: 1200
           elsif product.featured_media != blank
             assign front_url = product.featured_media | image_url: width: 1200
           endif
 
-          if product.metafields.custom.portant_dos != blank
+          if product.metafields.custom.portant_dos_det != blank
+            assign back_url = product.metafields.custom.portant_dos_det.value | image_url: width: 1200
+          elsif product.metafields.custom.portant_dos != blank
             assign back_url = product.metafields.custom.portant_dos.value | image_url: width: 1200
           else
             for media in product.media
@@ -159,7 +163,9 @@
       {%- for product in shoes_source limit: section.settings.shoes_limit -%}
         {%- liquid
           assign shoe_front = ''
-          if product.metafields.custom.portant_face != blank
+          if product.metafields.custom.portant_face_det != blank
+            assign shoe_front = product.metafields.custom.portant_face_det.value | image_url: width: 900
+          elsif product.metafields.custom.portant_face != blank
             assign shoe_front = product.metafields.custom.portant_face.value | image_url: width: 900
           elsif product.featured_media != blank
             assign shoe_front = product.featured_media | image_url: width: 900
@@ -330,7 +336,7 @@
     },
     {
       "type": "paragraph",
-      "content": "Face : la photo principale du produit, sur fond blanc ou uni. Dos : la photo dont le texte alternatif contient « vue de dos », « dos du maillot » ou « vue arrière »."
+      "content": "Détourage : les métachamps custom.portant_face_det / portant_dos_det (images détourées, posées automatiquement) passent avant tout. Face : la photo principale du produit, sur fond blanc ou uni. Dos : la photo dont le texte alternatif contient « vue de dos », « dos du maillot » ou « vue arrière »."
     },
     {
       "type": "header",
