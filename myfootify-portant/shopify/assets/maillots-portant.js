@@ -901,7 +901,8 @@ export class Rail {
     this.host = host;
     this.penderie = options.ambiance === 'penderie';
     this.galerie = options.ambiance === 'galerie';
-    this.dark = this.penderie || this.galerie; // pièce sombre : mêmes lumières, mêmes reflets
+    this.vestiaire = options.ambiance === 'vestiaire';
+    this.dark = this.penderie || this.galerie || this.vestiaire; // pièce sombre : mêmes lumières, mêmes reflets
     this.sound = options.sound || null;
     this.count = count;
     this.callbacks = callbacks;
@@ -1004,6 +1005,8 @@ export class Rail {
     this.bar.rotation.z = Math.PI / 2;
     this.bar.position.y = RAIL_Y;
     this.bar.castShadow = true;
+    // Vestiaire : une tringle en chêne clair à la place du métal.
+    if (this.vestiaire) this.bar.material = new THREE.MeshStandardMaterial({ map: woodTexture({ base: '#9a7a52', dark: '#6b4e2d', light: '#c4a478', vertical: false, veins: 120 }), roughness: 0.7, metalness: 0 });
     this.scene.add(this.bar);
     // Fixations murales, comme dans un vestiaire : une platine vissée au mur et
     // un bras qui vient tenir la barre.
@@ -1027,8 +1030,8 @@ export class Rail {
         plate.add(screw);
       }
       plate.castShadow = arm.castShadow = true;
-      if (this.galerie) {
-        // Galerie : la barre est suspendue au plafond par une tige fine, et finie par un embout.
+      if (this.galerie || this.vestiaire) {
+        // Galerie et vestiaire : la barre est suspendue au plafond par une tige fine, et finie par un embout.
         const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.011, 4, 12), chrome);
         rod.position.set(0, 2, 0);
         const cap = new THREE.Mesh(new THREE.SphereGeometry(0.036, 20, 14), chrome);
@@ -1044,7 +1047,8 @@ export class Rail {
     });
 
     if (this.penderie) this.buildPenderie();
-    if (this.galerie) {
+    if (this.vestiaire) this.buildBench();
+    if (this.galerie || this.vestiaire) {
       // Une lumière douce qui tombe d'en haut, hors champ : le haut des maillots est plus lumineux.
       this.leds = [0, 1, 2, 3].map(() => {
         const l = new THREE.PointLight(0xfff1e2, 1.35, 0, 0.7);
@@ -1333,6 +1337,36 @@ void main() {
   }
 
   /*
+   * Vestiaire épuré : pas de meuble, juste un banc en chêne clair qui flotte
+   * devant les maillots, sur deux pieds fins en métal noir, assorti à la
+   * tringle. Les chaussures s'y posent.
+   */
+  buildBench() {
+    const oak = new THREE.MeshStandardMaterial({
+      map: woodTexture({ base: '#9a7a52', dark: '#6b4e2d', light: '#c4a478', vertical: false, veins: 110 }),
+      roughness: 0.55,
+      metalness: 0,
+    });
+    const BT = -1.56; // hauteur d'assise
+    this.benchTop = BT;
+    const bench = new THREE.Group();
+    this.benchSlab = new THREE.Mesh(new THREE.BoxGeometry(1, 0.07, 0.52), oak);
+    this.benchSlab.position.y = BT - 0.035;
+    this.benchSlab.castShadow = this.benchSlab.receiveShadow = true;
+    bench.add(this.benchSlab);
+    const steel = new THREE.MeshStandardMaterial({ color: 0x232426, metalness: 0.85, roughness: 0.4 });
+    this.benchLegs = [-1, 1].map(() => {
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, BT - 0.07 + 2.0, 14), steel);
+      leg.position.y = (BT - 0.07 - 2.0) / 2;
+      leg.castShadow = true;
+      bench.add(leg);
+      return leg;
+    });
+    bench.position.z = 1.05;
+    this.scene.add(bench);
+  }
+
+  /*
    * La penderie : un caisson en noyer (fond, étagère, côtés, socle), une
    * réglette LED sous l'étagère et une rangée de petites sources chaudes qui
    * éclairent les maillots par le haut. Tout est à l'échelle 1 et étiré par
@@ -1391,7 +1425,12 @@ void main() {
   }
 
   layoutPenderie(length) {
-    if (this.galerie) {
+    if (this.benchSlab) {
+      this.benchSlab.scale.x = length - 0.7;
+      this.benchLegs[0].position.x = -(length - 0.7) * 0.38;
+      this.benchLegs[1].position.x = (length - 0.7) * 0.38;
+    }
+    if (this.galerie || this.vestiaire) {
       this.leds.forEach((l, k) => { l.position.x = (k / (this.leds.length - 1) - 0.5) * (length - 1.2); });
       for (const end of this.ends) end.position.x = Math.sign(end.position.x) * (length / 2 - 0.25); // tiges un peu rentrées
       return;
@@ -1446,7 +1485,7 @@ void main() {
     const span = (this.count - 1) * SPACING;
     this.fits = span + 2.4 <= this.camera.right * 2;
     // Dans la penderie, le caisson laisse la place aux voisins qui s'écartent au survol.
-    const room = this.dark ? span + 2 * SPREAD + 1.3 : span + 2.7;
+    const room = this.vestiaire ? Math.max(span + 1.4, this.benchSpan + 1.6) : this.dark ? span + 2 * SPREAD + 1.3 : span + 2.7;
     const length = this.fits && !this.mobile ? Math.min(room, this.camera.right * 1.9) : this.camera.right * 2.4;
     this.bar.scale.y = length;
     this.ends[0].position.x = -length / 2;
