@@ -949,7 +949,8 @@ export class Rail {
     this.camera = new THREE.OrthographicCamera(-6, 6, 2.4, -2.4, 0.1, 80);
     // En galerie, le fond noir ne renvoie rien : les maillots ont besoin de plus de lumière pour rester
     // fidèles (un maillot blanc doit rester blanc, pas gris).
-    this.scene.add(new THREE.AmbientLight(this.dark ? 0xfff6ee : 0xffffff, this.galerie ? 1.45 : this.dark ? 0.85 : 1.7));
+    this.ambient = new THREE.AmbientLight(this.dark ? 0xfff6ee : 0xffffff, this.galerie || this.vestiaire ? 1.45 : this.dark ? 0.85 : 1.7);
+    this.scene.add(this.ambient);
     const key = new THREE.DirectionalLight(0xfffcf5, this.dark ? 0.7 : 2.1);
     if (this.dark) key.position.set(0, 7, 5); // d'en haut : les ombres tombent sur le fond de la penderie
     else key.position.set(-3, 7, 6);
@@ -966,7 +967,8 @@ export class Rail {
     if (this.dark) {
       fill.intensity = 0.3;
       // Un peu de lumière neutre de face : les couleurs des maillots restent fidèles.
-      const front = new THREE.DirectionalLight(0xf6f4f1, this.galerie ? 1.15 : 0.8);
+      const front = new THREE.DirectionalLight(0xf6f4f1, this.galerie || this.vestiaire ? 1.15 : 0.8);
+      this.frontLight = front;
       front.position.set(0, 0.6, 8);
       this.scene.add(front);
     }
@@ -1557,6 +1559,11 @@ void main() {
     this.leds.forEach((l, k) => { l.position.x = (k / (this.leds.length - 1) - 0.5) * (W - 1.2); });
   }
 
+  // « Éclairage » : la pièce s'éclaire un peu plus, en douceur (brief : 300-500 ms).
+  setLight(on) {
+    this.lightOn = !!on;
+  }
+
   setHover(index) {
     if (this.hover === index) return;
     this.hover = index;
@@ -1612,6 +1619,14 @@ void main() {
 
     const ease = 1 - Math.exp(-dt * 8);
     const chosen = this.selected >= 0;
+    if (this.vestiaire) {
+      if (!this.lightBase) this.lightBase = { amb: this.ambient.intensity, front: this.frontLight?.intensity || 0, led: this.leds?.[0]?.intensity || 0 };
+      this.lightBoost = THREE.MathUtils.lerp(this.lightBoost || 0, this.lightOn ? 1 : 0, reducedMotion.matches ? 1 : 1 - Math.exp(-dt * 7));
+      const b = this.lightBoost;
+      this.ambient.intensity = this.lightBase.amb * (1 + 0.28 * b);
+      if (this.frontLight) this.frontLight.intensity = this.lightBase.front * (1 + 0.45 * b);
+      if (this.leds) for (const l of this.leds) l.intensity = this.lightBase.led * (1 + 0.6 * b);
+    }
     let speed = 0, ticks = 0;
     this.items.forEach((item, i) => {
       if (!item) return;
@@ -1769,8 +1784,9 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const ARROW = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 // Tant qu'aucun maillot n'est survolé : dire qu'on peut jouer avec le portant.
 const HINT = matchMedia('(hover: hover)').matches
-  ? 'Clique sur un maillot pour le voir de près · fais-le glisser pour le changer de place'
-  : 'Touche un maillot pour le voir de près · maintiens-le pour le déplacer';
+  ? 'Fais glisser pour explorer les maillots'
+  : 'Glisse pour explorer';
+const BULB = '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M9.5 18h5M10 21h4M12 3a6 6 0 0 0-3.4 10.9c.7.5 1.1 1.3 1.2 2.1h4.4c.1-.8.5-1.6 1.2-2.1A6 6 0 0 0 12 3z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const pad = (n) => String(n).padStart(2, '0');
 const SPEAKER = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path class="mfp__waves" d="M15.5 9a4.5 4.5 0 0 1 0 6M18 6.5a8 8 0 0 1 0 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path class="mfp__mute" d="M16 9.5l5 5M21 9.5l-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
 function mount(root) {
@@ -1790,6 +1806,7 @@ function mount(root) {
       <div class="mfp__rack" data-rack></div>
       <div class="mfp__loading" data-loading>On accroche les maillots<span>…</span></div>
       <button class="mfp__close" type="button" data-close aria-label="Retour au portant" hidden>Fermer</button>
+      <button class="mfp__lightbtn" type="button" data-light aria-pressed="false" hidden>${BULB}<span>Éclairage</span></button>
       <button class="mfp__side mfp__side--prev" type="button" data-prev aria-label="Maillot précédent" hidden>${ARROW}</button>
       <button class="mfp__side mfp__side--next" type="button" data-next aria-label="Maillot suivant" hidden>${ARROW}</button>
       <div class="mfp__view" data-faces hidden>
@@ -1848,6 +1865,15 @@ function mount(root) {
     return;
   }
   root.portant = rail;
+  if (rail.vestiaire) {
+    const lightBtn = $('[data-light]');
+    lightBtn.hidden = false;
+    lightBtn.addEventListener('click', () => {
+      const on = lightBtn.getAttribute('aria-pressed') !== 'true';
+      lightBtn.setAttribute('aria-pressed', String(on));
+      rail.setLight(on);
+    });
+  }
 
   // Le centre d'abord, puis vers les bords : le portant se remplit sous les yeux.
   const order = products.map((_, i) => i).sort((a, b) => Math.abs(rail.slotOf(a) - rail.slotOf(focused)) - Math.abs(rail.slotOf(b) - rail.slotOf(focused)));

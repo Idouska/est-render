@@ -169,3 +169,65 @@
 
 /* Texte réservé aux lecteurs d'écran. */
 .mfp__sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+/* ------------------------------------------------------------------ */
+/* Hero « vestiaire » premium : texte à gauche (≈ 30 %), vestiaire à   */
+/* droite ; décor en couches CSS derrière le canvas ; bouton Éclairage. */
+/* ------------------------------------------------------------------ */
+.mfp--vestiaire { position: relative; }
+.mfp--vestiaire .mfp__inner { position: relative; z-index: 1; }
+.mfp--vestiaire.mfp--hero .mfp__inner { display: grid; grid-template-columns: minmax(300px, 31%) 1fr; grid-template-areas: "head body" "actions body"; column-gap: clamp(28px, 4vw, 64px); align-items: start; padding-top: 34px; }
+.mfp--vestiaire.mfp--hero .mfp__head { grid-area: head; align-self: center; display: block; }
+.mfp--vestiaire.mfp--hero .mfp__actions { grid-area: actions; align-self: start; justify-content: flex-start; flex-direction: column; align-items: stretch; max-width: 320px; margin-top: 18px; }
+.mfp--vestiaire.mfp--hero [data-mfp-body] { grid-area: body; }
+.mfp--vestiaire.mfp--hero .mfp__edition { display: none; }
+.mfp--vestiaire.mfp--hero .mfp__title { font-family: var(--font-heading-family, inherit); text-transform: uppercase; font-weight: 800; font-size: clamp(34px, 3.6vw, 56px); line-height: 1.08; letter-spacing: -0.5px; }
+.mfp__accent { color: var(--mfp-orange); display: block; }
+.mfp--vestiaire.mfp--hero .mfp__sub { max-width: 34ch; color: var(--mfp-muted); }
+.mfp--vestiaire.mfp--hero .mfp__stage { height: clamp(430px, calc(100svh - 300px), 600px); margin-top: 0; }
+.mfp--vestiaire.mfp--hero .mfp__caption { margin-top: -56px; }
+.mfp--vestiaire.mfp--hero .mfp__stage.is-selected ~ .mfp__caption { margin-top: 0; }
+
+/* Le décor : tunnel à gauche, spots chauds au-dessus de la tringle, sol
+   légèrement réfléchissant. Purement décoratif (aria-hidden), zéro script. */
+.mfp__room { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.mfp__room i { position: absolute; display: block; }
+.mfp__room-tunnel { inset: 0 68% 0 0; background:
+  radial-gradient(42% 58% at 12% 34%, rgba(255, 214, 170, .07), transparent 70%),
+  repeating-linear-gradient(90deg, transparent 0 56px, rgba(255, 236, 214, .045) 56px 59px);
+}
+.mfp__room-spots { inset: 0 0 30% 30%; background:
+  radial-gradient(18% 52% at 42% 0%, rgba(255, 196, 128, .19), transparent 75%),
+  radial-gradient(18% 52% at 60% 0%, rgba(255, 196, 128, .17), transparent 75%),
+  radial-gradient(18% 52% at 78% 0%, rgba(255, 196, 128, .19), transparent 75%),
+  linear-gradient(180deg, rgba(255, 183, 110, .10), transparent 26%);
+}
+.mfp__room-floor { left: 0; right: 0; bottom: 0; height: 17%; background: linear-gradient(180deg, transparent, rgba(0, 0, 0, .35)); }
+.mfp__room-floor::after { content: ''; position: absolute; left: 20%; right: 6%; top: 0; height: 100%; background: radial-gradient(60% 90% at 60% 0%, rgba(255, 220, 185, .05), transparent 70%); }
+/* Le logo mural : intégré au mur de gauche, en relief discret, jamais criard. */
+.mfp__room-logo { left: 1.6%; top: 50%; transform: translateY(-50%) perspective(700px) rotateY(16deg); opacity: .14; filter: grayscale(.4) sepia(.25) brightness(1.2); }
+.mfp__room-logo img { width: clamp(60px, 7vw, 110px); height: auto; display: block; }
+.mfp__room-logo span { writing-mode: vertical-rl; font-family: var(--font-heading-family, inherit); font-weight: 800; text-transform: uppercase; letter-spacing: 6px; font-size: clamp(26px, 3vw, 44px); color: #cfc4b4; text-shadow: 1px 1px 0 rgba(0, 0, 0, .55), -1px -1px 0 rgba(255, 245, 230, .12); }
+
+/* Bouton Éclairage : une pastille sobre, en haut à gauche de la scène. */
+.mfp__lightbtn { position: absolute; top: 0; left: 0; z-index: 20; display: inline-flex; gap: 7px; align-items: center; font-size: 11px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--mfp-muted); padding: 9px 14px; border: 1px solid var(--mfp-line) !important; border-radius: 30px; transition: color .3s, border-color .3s; }
+.mfp__lightbtn[aria-pressed="true"] { color: var(--mfp-ink); border-color: rgba(255, 196, 128, .55) !important; }
+.mfp__lightbtn[aria-pressed="true"] svg { color: var(--mfp-orange); }
+.mfp__stage.is-selected .mfp__lightbtn { display: none; }
+
+/* L'indication de drag : souris et flèches discrètes devant le texte. */
+.mfp--vestiaire .mfp__caption p.is-hint { font-size: 12px; letter-spacing: 1px; opacity: .75; }
+.mfp--vestiaire .mfp__caption p.is-hint::before { content: ''; display: inline-block; vertical-align: -3px; width: 34px; height: 15px; margin-right: 9px; background: no-repeat center / contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 46 20'%3E%3Cpath d='M2 10h8m-8 0 3-3m-3 3 3 3M44 10h-8m8 0-3-3m3 3-3 3' fill='none' stroke='%23b9b6b1' stroke-width='1.6' stroke-linecap='round'/%3E%3Crect x='18' y='2' width='10' height='16' rx='5' fill='none' stroke='%23b9b6b1' stroke-width='1.5'/%3E%3Cpath d='M23 5.5v3' stroke='%23b9b6b1' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E"); }
+
+@media (max-width: 990px) {
+  .mfp--vestiaire.mfp--hero .mfp__inner { display: flex; flex-direction: column; align-items: stretch; }
+  .mfp--vestiaire.mfp--hero [data-mfp-body] { align-self: stretch; width: 100%; }
+  .mfp--vestiaire.mfp--hero [data-mfp-body] { order: 2; }
+  .mfp--vestiaire.mfp--hero .mfp__actions { order: 3; max-width: none; margin-top: 4px; }
+  .mfp--vestiaire.mfp--hero .mfp__stage { height: 370px; }
+  .mfp--vestiaire.mfp--hero .mfp__caption { margin-top: -36px; min-height: 48px; }
+  .mfp__lightbtn { left: 5vw; }
+  .mfp__room i.mfp__room-logo { display: none; } /* plus fort que « .mfp__room i » */
+  .mfp__room-tunnel { inset: 0 55% 55% 0; }
+  .mfp__room-spots { inset: 0 0 35% 0; }
+}

@@ -41,13 +41,25 @@
   data-ambiance="{{ section.settings.ambiance | default: 'claire' }}"
   style="--mfp-bg: {{ section.settings.background }}; --mfp-ink: {{ section.settings.text }}; --mfp-accent: {{ section.settings.accent }};"
 >
+  {%- if section.settings.ambiance == 'vestiaire' -%}
+    <div class="mfp__room" aria-hidden="true">
+      <i class="mfp__room-tunnel"></i>
+      <i class="mfp__room-spots"></i>
+      <i class="mfp__room-floor"></i>
+      {%- if section.settings.wall_logo != blank -%}
+        <i class="mfp__room-logo">{{ section.settings.wall_logo | image_url: width: 220 | image_tag: loading: 'lazy', alt: '' }}</i>
+      {%- elsif section.settings.wall_text != blank -%}
+        <i class="mfp__room-logo"><span>{{ section.settings.wall_text | escape }}</span></i>
+      {%- endif -%}
+    </div>
+  {%- endif -%}
   <div class="mfp__inner">
     <header class="mfp__head">
       <div class="mfp__intro">
         {%- if section.settings.eyebrow != blank -%}
           <p class="mfp__eyebrow">{{ section.settings.eyebrow | escape }}</p>
         {%- endif -%}
-        <{{ titre_tag }} class="mfp__title">{{ section.settings.heading | escape }}</{{ titre_tag }}>
+        <{{ titre_tag }} class="mfp__title">{{ section.settings.heading | escape }}{%- if section.settings.heading_accent != blank -%}<span class="mfp__accent">{{ section.settings.heading_accent | escape }}</span>{%- endif -%}</{{ titre_tag }}>
         {%- if section.settings.subheading != blank -%}
           <p class="mfp__sub">{{ section.settings.subheading | escape }}</p>
         {%- endif -%}
@@ -205,6 +217,24 @@
       "type": "text",
       "id": "eyebrow",
       "label": "Sur-titre"
+    },
+    {
+      "type": "text",
+      "id": "heading_accent",
+      "label": "Deuxième ligne du titre (en orange)",
+      "info": "Par exemple « le vestiaire. » — laissée vide, le titre reste sur une ligne."
+    },
+    {
+      "type": "image_picker",
+      "id": "wall_logo",
+      "label": "Logo mural (ambiance vestiaire)",
+      "info": "Intégré en relief discret sur le mur de gauche. Sans image, le texte ci-dessous est gravé à la place."
+    },
+    {
+      "type": "text",
+      "id": "wall_text",
+      "label": "Texte mural (si pas de logo)",
+      "default": "MyFootify"
     },
     {
       "type": "text",
