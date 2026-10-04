@@ -903,6 +903,7 @@ export class Rail {
     this.penderie = options.ambiance === 'penderie';
     this.galerie = options.ambiance === 'galerie';
     this.vestiaire = options.ambiance === 'vestiaire';
+    this.photo = !!options.photo; // fond photoréaliste : boiseries plus sombres pour se fondre dans l'image
     this.dark = this.penderie || this.galerie || this.vestiaire; // pièce sombre : mêmes lumières, mêmes reflets
     this.sound = options.sound || null;
     this.total = count;
@@ -1017,7 +1018,7 @@ export class Rail {
     this.bar.position.y = RAIL_Y;
     this.bar.castShadow = true;
     // Vestiaire : une tringle en chêne clair à la place du métal.
-    if (this.vestiaire) this.bar.material = new THREE.MeshStandardMaterial({ map: woodTexture({ base: '#9a7a52', dark: '#6b4e2d', light: '#c4a478', vertical: false, veins: 120 }), roughness: 0.7, metalness: 0 });
+    if (this.vestiaire) this.bar.material = new THREE.MeshStandardMaterial({ map: woodTexture(this.photo ? { base: '#4a3420', dark: '#2a1c10', light: '#6b4e2d', vertical: false, veins: 120 } : { base: '#9a7a52', dark: '#6b4e2d', light: '#c4a478', vertical: false, veins: 120 }), roughness: 0.7, metalness: 0 });
     this.scene.add(this.bar);
     // Fixations murales, comme dans un vestiaire : une platine vissée au mur et
     // un bras qui vient tenir la barre.
@@ -1455,7 +1456,7 @@ void main() {
    */
   buildBench() {
     const oak = new THREE.MeshStandardMaterial({
-      map: woodTexture({ base: '#9a7a52', dark: '#6b4e2d', light: '#c4a478', vertical: false, veins: 110 }),
+      map: woodTexture(this.photo ? { base: '#4a3420', dark: '#2a1c10', light: '#6b4e2d', vertical: false, veins: 110 } : { base: '#9a7a52', dark: '#6b4e2d', light: '#c4a478', vertical: false, veins: 110 }),
       roughness: 0.55,
       metalness: 0,
     });
@@ -1858,7 +1859,7 @@ function mount(root) {
         caption();
       },
       onCarry: (i, on) => { $('[data-name]').textContent = on ? products[i].title : ''; if (!on) caption(); },
-    }, { ambiance: root.dataset.ambiance, order: savedOrder?.barre, benchOrder: savedOrder?.banc, jerseys: jerseysCount });
+    }, { ambiance: root.dataset.ambiance, photo: root.classList.contains('mfp--photo'), order: savedOrder?.barre, benchOrder: savedOrder?.banc, jerseys: jerseysCount });
   } catch (error) {
     console.error(error);
     fallback();

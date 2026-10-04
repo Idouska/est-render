@@ -35,7 +35,17 @@
 {%- endif -%}
 
 <div
-  class="mfp{% if hero %} mfp--hero{% endif %} mfp--{{ section.settings.ambiance | default: 'claire' }}"
+  {%- liquid
+    assign room_photo_url = ''
+    if section.settings.ambiance == 'vestiaire' and section.settings.room_photo_on
+      if section.settings.room_photo != blank
+        assign room_photo_url = section.settings.room_photo | image_url: width: 2000
+      else
+        assign room_photo_url = 'vestiaire-fond.jpg' | asset_url
+      endif
+    endif
+  -%}
+  class="mfp{% if hero %} mfp--hero{% endif %} mfp--{{ section.settings.ambiance | default: 'claire' }}{% if room_photo_url != blank %} mfp--photo{% endif %}"
   id="mfp-{{ section.id }}"
   data-mfp
   data-ambiance="{{ section.settings.ambiance | default: 'claire' }}"
@@ -43,6 +53,9 @@
 >
   {%- if section.settings.ambiance == 'vestiaire' -%}
     <div class="mfp__room" aria-hidden="true">
+      {%- if room_photo_url != blank -%}
+        <i class="mfp__room-photo" style="background-image: url('{{ room_photo_url }}')"></i>
+      {%- endif -%}
       <i class="mfp__room-tunnel"></i>
       <i class="mfp__room-spots"></i>
       <i class="mfp__room-floor"></i>
@@ -229,6 +242,19 @@
       "id": "heading_accent",
       "label": "Deuxième ligne du titre (en orange)",
       "info": "Par exemple « le vestiaire. » — laissée vide, le titre reste sur une ligne."
+    },
+    {
+      "type": "checkbox",
+      "id": "room_photo_on",
+      "label": "Fond photoréaliste (ambiance vestiaire)",
+      "default": true,
+      "info": "Photo du vestiaire vide derrière les maillots. Décochée, le décor reste en dégradés CSS."
+    },
+    {
+      "type": "image_picker",
+      "id": "room_photo",
+      "label": "Photo du vestiaire",
+      "info": "Laissez vide pour utiliser l'image fournie (vestiaire-fond.jpg)."
     },
     {
       "type": "image_picker",

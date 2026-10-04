@@ -231,3 +231,21 @@
   .mfp__room-tunnel { inset: 0 55% 55% 0; }
   .mfp__room-spots { inset: 0 0 35% 0; }
 }
+
+/* ------------------------------------------------------------------ */
+/* Fond photoréaliste : la photo du vestiaire vide remplace les        */
+/* dégradés CSS ; les produits 3D (canvas transparent) pendent devant. */
+/* ------------------------------------------------------------------ */
+.mfp--photo { background: #17120d !important; }
+.mfp__room-photo { inset: 0; background-size: cover; background-position: center; }
+.mfp--photo .mfp__room-tunnel,
+.mfp--photo .mfp__room-spots,
+.mfp--photo .mfp__room-floor { display: none; }
+/* Le logo mural se pose sur le mur nu de la photo, un peu plus présent. */
+.mfp--photo .mfp__room-logo { opacity: .34; left: 2.2%; }
+/* Un léger voile sous le texte pour garder le contraste sur la photo. */
+.mfp--photo .mfp__inner::before { content: ''; position: absolute; top: -20px; bottom: 0; left: -8%; width: 52%; background: radial-gradient(60% 55% at 40% 45%, rgba(10, 8, 6, .55), transparent 72%); pointer-events: none; z-index: -1; }
+.mfp--photo.mfp--hero .mfp__inner { position: relative; }
+@media (max-width: 990px) {
+  .mfp--photo .mfp__inner::before { inset: 0 -5vw; }
+}
