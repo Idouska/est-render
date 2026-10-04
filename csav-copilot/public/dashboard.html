@@ -1564,352 +1564,309 @@
         <div id="canned-list"></div>
       </section>
 
-      <section class="browse" id="view-settings" hidden aria-label="Réglages">
-        <div class="set-grid">
-          <div class="panel">
-            <div class="panel-head">
-              <span class="panel-title">Apparence</span>
-            </div>
-            <div class="card-body set-group">
-              <p class="set-help">
-                Couleur d'accent et palettes de l'interface — propre à cet appareil.
-              </p>
-              <button class="btn" id="open-palettes" type="button">Choisir les couleurs</button>
-            </div>
+      <!-- ======================================================= RÉGLAGES ==
+           À la manière des Réglages d'un Mac : les catégories à gauche, une
+           seule à la fois à droite, en groupes de lignes — le nom du réglage
+           à gauche, ce sur quoi on agit à droite, une phrase sous le groupe.
+           Rien à enregistrer : chaque changement part tout de suite. -->
+      <section class="browse reg" id="view-settings" hidden aria-label="Réglages">
+        <nav class="reg-nav" aria-label="Catégories de réglages">
+          <label class="reg-recherche">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+            <span class="sr-only">Rechercher un réglage</span>
+            <input type="search" id="reg-q" placeholder="Rechercher" autocomplete="off" />
+          </label>
+          <div class="reg-nav-groupe">
+            <button type="button" class="reg-cat" data-reg="boutique" data-mots="nom logo enseigne signature delai reponse suivi colis lien">
+              <span class="reg-ico c-gris"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v9h16v-9"></path><path d="M3 10l2-6h14l2 6"></path><path d="M9 19v-5h6v5"></path></svg></span>Boutique
+            </button>
+            <button type="button" class="reg-cat" data-reg="apparence" data-mots="theme sombre clair couleur accent palette horloges fond bandeau">
+              <span class="reg-ico c-bleu"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"></circle><path d="M12 4a8 8 0 0 1 0 16z" class="plein"></path></svg></span>Apparence
+            </button>
           </div>
-
-          <div class="panel">
-            <div class="panel-head"><span class="panel-title">Connexions</span></div>
-            <div class="card-body set-group">
-              <div class="set-conn" id="set-shopify"></div>
-              <div class="set-conn" id="set-gmail"></div>
-              <!-- Ce que ce navigateur exécute vraiment, et ce qu'a fait la
-                   dernière relève. Deux lignes qui évitent de chercher une
-                   correction là où elle n'est pas encore déployée. -->
-              <p class="set-help" id="set-build"></p>
-            </div>
+          <div class="reg-nav-groupe">
+            <button type="button" class="reg-cat" data-reg="connexions" data-mots="shopify gmail boite mail libelles ia version releve brouillons">
+              <span class="reg-ico c-vert"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1"></path><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"></path></svg></span>Connexions
+            </button>
+            <button type="button" class="reg-cat" data-reg="assistant" data-mots="ia intelligence regles politiques playbook reponses automatiques seuil confiance">
+              <span class="reg-ico c-violet"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"></path></svg></span>Assistant
+            </button>
           </div>
-
-          <div class="panel">
-            <div class="panel-head">
-              <span class="panel-title">Voir en tant que</span>
-              <p class="set-help">
-                Ouvrez l'outil avec les droits d'un autre rôle pour constater ce qu'il
-                voit avant de lui confier la boutique. La restriction est appliquée par
-                le serveur, pas seulement masquée : ce que l'écran interdit est
-                réellement refusé.
-              </p>
-            </div>
-            <div class="card-body set-group">
-              <div class="seg" id="as-role">
-                <button type="button" data-as="" aria-pressed="true">Ma vue</button>
-                <button type="button" data-as="SUPERVISOR">Superviseur</button>
-                <button type="button" data-as="AGENT">Agent</button>
-                <button type="button" data-as="VIEWER">Observateur</button>
-                <button type="button" data-as="SUPPLIER">Fournisseur</button>
-              </div>
-              <p class="set-help" id="as-note"></p>
-
-              <!-- Le fournisseur n'a pas de rôle : il n'a pas de compte. Sa
-                   « vue » est son atelier, ouvert par son propre lien signé —
-                   la seule façon de voir exactement son écran plutôt qu'une
-                   imitation qui divergera. -->
-              <div class="field" id="as-supplier-box" hidden>
-                <label for="as-supplier-pick">Ouvrir l'atelier de</label>
-                <select id="as-supplier-pick"></select>
-                <small>
-                  Le fournisseur n'a pas de compte : il travaille sur un lien permanent,
-                  depuis son téléphone. Son atelier s'ouvre dans un nouvel onglet, avec
-                  exactement ce qu'il voit — ni plus, ni moins.
-                </small>
-                <button class="btn btn-small btn-primary" id="as-supplier">Ouvrir son atelier</button>
-              </div>
-            </div>
+          <div class="reg-nav-groupe">
+            <button type="button" class="reg-cat" data-reg="test" data-mots="mode test effacer essai simulation">
+              <span class="reg-ico c-orange"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6"></path><path d="M10 3v6l-5 9a2 2 0 0 0 1.7 3h10.6a2 2 0 0 0 1.7-3l-5-9V3"></path></svg></span>Mode test
+            </button>
+            <button type="button" class="reg-cat" data-reg="acces" data-mots="voir en tant que role agent superviseur observateur fournisseur atelier droits">
+              <span class="reg-ico c-indigo"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"></path></svg></span>Voir en tant que
+            </button>
+            <button type="button" class="reg-cat" data-reg="donnees" data-mots="donnees conservation rgpd mails purge">
+              <span class="reg-ico c-rouge"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"></path></svg></span>Données
+            </button>
           </div>
+          <p class="reg-aucun" id="reg-aucun" hidden>Aucun réglage ne correspond.</p>
+        </nav>
 
-          <div class="panel">
-            <div class="panel-head"><span class="panel-title">Identité</span></div>
-            <div class="card-body set-group">
-              <div class="brand-edit">
+        <div class="reg-main">
+          <header class="reg-tete">
+            <div>
+              <h2 id="reg-titre">Boutique</h2>
+              <p id="reg-sous"></p>
+            </div>
+            <span class="reg-pastille" id="reg-test-pastille" hidden>Mode test actif</span>
+          </header>
+
+          <!-- ------------------------------------------------- Boutique -->
+          <div class="reg-volet" data-volet="boutique">
+            <section>
+              <div class="reg-groupe reg-profil">
                 <span class="brand-preview" id="set-logo-preview">
                   <img id="set-logo-img" alt="" hidden />
                   <b id="set-logo-initials">SA</b>
                 </span>
-
-                <div class="brand-edit-fields">
-                  <label for="set-brand">Nom affiché</label>
+                <div class="reg-profil-nom">
+                  <label for="set-brand" class="sr-only">Nom affiché</label>
                   <input type="text" id="set-brand" placeholder="Votre enseigne" />
+                  <span>Affiché en haut de la barre latérale</span>
+                </div>
+                <div class="reg-profil-acts">
+                  <label class="reg-bouton">
+                    Changer le logo
+                    <input type="file" id="set-logo-file" accept="image/*" hidden />
+                  </label>
+                  <button type="button" class="reg-lien reg-danger" id="set-logo-clear" hidden>Retirer</button>
+                </div>
+              </div>
+              <details class="reg-replie">
+                <summary>Utiliser plutôt l’adresse d’une image</summary>
+                <div class="reg-groupe">
+                  <label class="reg-ligne">
+                    <span>Adresse du logo</span>
+                    <input type="text" id="set-logo" placeholder="https://…/logo.png" />
+                  </label>
+                </div>
+              </details>
+            </section>
 
-                  <div class="brand-edit-acts">
-                    <label class="btn btn-small">
-                      Choisir une image
-                      <input type="file" id="set-logo-file" accept="image/*" hidden />
-                    </label>
-                    <button class="btn btn-small btn-danger" id="set-logo-clear" hidden>
-                      Retirer
-                    </button>
+            <section>
+              <div class="reg-groupe">
+                <label class="reg-ligne">
+                  <span>Délai de réponse visé</span>
+                  <select id="set-sla">
+                    <option value="4">4 heures</option>
+                    <option value="8">8 heures</option>
+                    <option value="24">24 heures</option>
+                    <option value="48">48 heures</option>
+                    <option value="72">72 heures</option>
+                  </select>
+                </label>
+              </div>
+              <p class="reg-note">Un message sans réponse après ce délai passe en retard dans la file.</p>
+            </section>
+
+            <section>
+              <h3 class="reg-titre-groupe"><label for="set-signature">Signature des mails</label></h3>
+              <div class="reg-groupe">
+                <div class="reg-bloc">
+                  <textarea id="set-signature" rows="3" placeholder="Prénom
+Boutique
+adresse@exemple.com"></textarea>
+                </div>
+              </div>
+              <p class="reg-note">Ajoutée au bas de chaque mail envoyé, aux clients comme aux ateliers.</p>
+            </section>
+
+            <section>
+              <h3 class="reg-titre-groupe">Suivi des colis</h3>
+              <div class="reg-groupe">
+                <label class="reg-ligne">
+                  <span>Lien de suivi</span>
+                  <input type="text" id="set-tracking" placeholder="Lien du transporteur" />
+                </label>
+              </div>
+              <p class="reg-note">Facultatif. Écrivez <code>{tracking}</code> là où doit aller le numéro du colis.</p>
+            </section>
+          </div>
+
+          <!-- ------------------------------------------------ Apparence -->
+          <div class="reg-volet" data-volet="apparence" hidden>
+            <section>
+              <div class="reg-groupe">
+                <div class="reg-ligne">
+                  <span>Thème</span>
+                  <div class="reg-seg" id="theme-seg" role="group" aria-label="Thème">
+                    <button type="button" data-theme-choix="light" aria-pressed="true">Clair</button>
+                    <button type="button" data-theme-choix="dark" aria-pressed="false">Sombre</button>
+                    <button type="button" data-theme-choix="auto" aria-pressed="false">Automatique</button>
+                  </div>
+                </div>
+                <div class="reg-ligne">
+                  <span>Couleur d’accent</span>
+                  <div class="swatches" id="palette-swatches" role="group" aria-label="Couleur d’accent"></div>
+                </div>
+                <div class="reg-ligne">
+                  <span>Horloges</span>
+                  <div class="reg-seg" id="clock-seg" role="group" aria-label="Horloges">
+                    <button type="button" data-clockstyle="analog" aria-pressed="true">Aiguilles</button>
+                    <button type="button" data-clockstyle="digital" aria-pressed="false">Numérique</button>
                   </div>
                 </div>
               </div>
+              <p class="reg-note">« Automatique » suit le réglage de votre ordinateur, y compris la bascule du soir.</p>
+            </section>
 
-              <small>
-                L'image est redimensionnée à 256 px et hébergée par l'application.
-                Carrée de préférence — c'est ce qui s'affiche en haut de la barre latérale.
-              </small>
-
-              <details class="brand-url">
-                <summary>Utiliser plutôt une adresse d'image</summary>
-                <div class="field" style="margin-top: 8px">
-                  <label for="set-logo">Adresse du logo</label>
-                  <input type="text" id="set-logo" placeholder="https://…/logo.png" />
-                  <small>Servira si aucune image n'est téléversée ci-dessus.</small>
+            <section>
+              <h3 class="reg-titre-groupe">Fond du bandeau</h3>
+              <div class="reg-groupe">
+                <div class="reg-ligne">
+                  <span>Teinte</span>
+                  <span class="teinte-row">
+                    <input type="color" id="topbg-color" aria-label="Nuancier" />
+                    <input type="text" id="topbg-hex" inputmode="text" spellcheck="false"
+                      autocomplete="off" maxlength="7" placeholder="#eef2ff"
+                      aria-label="Code hexadécimal" />
+                    <button type="button" class="reg-lien" id="topbg-reset">Par défaut</button>
+                  </span>
                 </div>
-              </details>
-
-              <div class="actions">
-                <button class="btn btn-primary" id="set-brand-apply">Appliquer</button>
-                <span class="hint" id="set-brand-note"></span>
-              </div>
-            </div>
-          </div>
-
-          <div class="panel">
-            <div class="panel-head"><span class="panel-title">Suivi des colis</span></div>
-            <div class="card-body set-group">
-              <div class="field">
-                <label for="set-tracking">Gabarit de lien de suivi</label>
-                <input
-                  type="text"
-                  id="set-tracking"
-                  placeholder="https://t.17track.net/fr#nums={tracking}"
-                />
-                <small>
-                  <code>{tracking}</code> est remplacé par le numéro. Laissez vide pour
-                  utiliser le lien fourni par le transporteur via Shopify — qui manque
-                  chez certains.
-                </small>
-              </div>
-            </div>
-          </div>
-
-          <div class="panel">
-            <div class="panel-head">
-              <span class="panel-title">Intelligence artificielle</span>
-              <p class="set-help">
-                C'est elle qui classe les demandes, résume le message du client et
-                propose la réponse. Sans elle, les messages entrent mais restent bruts.
-              </p>
-            </div>
-            <div class="card-body set-group">
-              <button class="btn btn-small" id="ai-test">Tester la connexion</button>
-              <div class="mbx-diag" id="ai-test-state"></div>
-            </div>
-          </div>
-
-          <div class="panel">
-            <div class="panel-head">
-              <span class="panel-title">Libellés Gmail</span>
-              <p class="set-help">
-                Vos étiquettes deviennent des filtres sur la file. Elles se posent
-                sur les messages déjà présents sans rien réingérer.
-              </p>
-            </div>
-            <div class="card-body set-group">
-              <button class="btn btn-small" id="labels-sync">Poser les libellés sur les messages</button>
-              <div class="mbx-diag" id="labels-sync-state"></div>
-            </div>
-          </div>
-
-          <div class="panel">
-            <div class="panel-head"><span class="panel-title">Règles de la boutique</span></div>
-            <div class="card-body set-group">
-              <div class="field">
-                <label for="set-playbook">Ce que l'IA a le droit d'affirmer</label>
-                <textarea id="set-playbook" rows="9" placeholder="Délais d'expédition : 2 à 5 jours ouvrés vers la France, 7 à 12 jours hors UE.
-Retours : 30 jours après réception, article non porté, frais à la charge du client.
-Échange de taille : gratuit une fois, sous 30 jours.
-Remboursement : sous 5 jours ouvrés après réception du retour.
-Douane : les frais éventuels sont à la charge du destinataire hors UE."></textarea>
-                <small>
-                  Écrivez vos règles en clair, une par ligne. Elles sont données à l'IA
-                  comme source d'autorité : sans elles, elle ne peut que rester vague,
-                  puisqu'il lui est interdit d'inventer un délai ou une condition.
-                </small>
-                <div class="field-acts">
-                  <button type="button" class="btn btn-small" id="set-policies">
-                    Reprendre les politiques de la boutique
-                  </button>
-                  <small>
-                    Récupère vos pages Livraison, Retours et CGV depuis Shopify. Ce que
-                    l'IA affirme est alors exactement ce que le client lit sur le site.
-                  </small>
+                <div class="reg-bloc">
+                  <div class="teinte-apercu" id="topbg-apercu" aria-hidden="true">
+                    <b>SAV client</b><span>20 En attente de vous</span><span>115 Brouillons prêts</span>
+                  </div>
+                  <span class="teinte-ratio" id="topbg-ratio" aria-live="polite"></span>
                 </div>
               </div>
-              <div class="field">
-                <label for="set-signature">Signature des mails</label>
-                <textarea id="set-signature" rows="4" placeholder="Rachid
-Running Upscale
-contact@runningupscale.com"></textarea>
-                <small>
-                  Apposée au bas des messages qui partent de l'outil — vers vos
-                  fournisseurs comme vers vos clients. Un mail de service sans
-                  signature se lit comme une notification de robot, et les
-                  messageries le classent souvent comme telle.
-                </small>
-              </div>
-              <div class="field">
-                <label for="set-sla">Délai de première réponse visé</label>
-                <select id="set-sla">
-                  <option value="4">4 heures</option>
-                  <option value="8">8 heures</option>
-                  <option value="24">24 heures</option>
-                  <option value="48">48 heures</option>
-                  <option value="72">72 heures</option>
-                </select>
-                <small>Fixe l'échéance de chaque message. Passée l'échéance, il apparaît en retard.</small>
-              </div>
-            </div>
+              <p class="reg-note">Ces choix restent sur cet appareil : vos collègues gardent les leurs.</p>
+            </section>
           </div>
 
-          <div class="panel" id="panel-test">
-            <div class="panel-head"><span class="panel-title">Mode test</span></div>
-            <div class="card-body set-group">
-              <label class="confirm">
-                <input type="checkbox" id="set-testmode" />
-                <span>
-                  <b>Activer le mode test.</b> L'outil fonctionne normalement, mais rien
-                  ne sort : aucune expédition ni aucun remboursement chez Shopify, aucun
-                  e-mail aux clients ni aux fournisseurs. S'applique tout de suite, à
-                  tout le compte et à ses ateliers. Seuls les liens de connexion de
-                  l'équipe continuent de partir.
-                </span>
-              </label>
-              <div>
-                <button class="btn" id="test-effacer" type="button">Effacer les données de test</button>
-                <small class="set-help">Supprime les colis et remboursements créés pendant le mode test. Les données réelles ne sont pas touchées.</small>
+          <!-- ----------------------------------------------- Connexions -->
+          <div class="reg-volet" data-volet="connexions" hidden>
+            <section>
+              <h3 class="reg-titre-groupe">Comptes</h3>
+              <div class="reg-groupe">
+                <div class="set-conn" id="set-shopify"></div>
+                <div class="set-conn" id="set-gmail"></div>
               </div>
-            </div>
-          </div>
+            </section>
 
-          <div class="panel">
-            <div class="panel-head"><span class="panel-title">Réponses automatiques</span></div>
-            <div class="card-body set-group">
-              <label class="confirm">
-                <input type="checkbox" id="set-autosend" />
-                <span>
-                  <b>Envoyer sans relecture</b> les réponses dont la confiance dépasse le
-                  seuil ci-dessous.
-                </span>
-              </label>
-              <p class="set-help set-alert" id="set-autosend-warn">
-                Pas encore actif : quel que soit ce réglage, toute réponse reste un
-                brouillon à valider. L'envoi sans relecture demande des garde-fous
-                — plafond quotidien, motifs autorisés, jamais sur un litige — qui
-                ne sont pas en place.
-              </p>
-              <div class="field">
-                <label for="set-threshold">Seuil de confiance</label>
-                <input type="range" id="set-threshold" min="0.5" max="1" step="0.01" />
-                <small>
-                  À <b id="set-threshold-echo">—</b>. Plus le seuil est haut, moins de
-                  réponses partent seules.
-                </small>
-              </div>
-            </div>
-          </div>
-
-          <div class="panel">
-            <div class="panel-head"><span class="panel-title">Conservation des données</span></div>
-            <div class="card-body set-group">
-              <div class="field">
-                <label for="set-retention">Durée de conservation des mails ingérés</label>
-                <select id="set-retention">
-                  <option value="30">30 jours</option>
-                  <option value="90">90 jours</option>
-                  <option value="180">6 mois</option>
-                  <option value="365">1 an</option>
-                  <option value="730">2 ans</option>
-                  <option value="1095">3 ans</option>
-                </select>
-                <small>
-                  Passé ce délai, les messages et leurs pièces sont purgés
-                  automatiquement. Base légale RGPD — voir la politique de
-                  confidentialité.
-                </small>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="set-bar">
-          <span class="hint" id="set-dirty">Aucune modification en attente.</span>
-          <button class="btn btn-primary" id="set-save">Enregistrer les réglages</button>
-        </div>
-      </section>
-
-      <section class="browse" id="view-palettes" hidden aria-label="Palettes">
-        <div class="set-grid">
-          <div class="panel">
-            <div class="panel-head"><span class="panel-title">Couleur d'accent</span></div>
-            <div class="card-body set-group">
-              <p class="set-help">
-                Le choix est propre à vous et reste sur cet appareil — vos collègues
-                gardent le leur. L'accent ne code aucune information : l'état d'un
-                ticket ou d'un paiement garde ses couleurs quoi que vous choisissiez.
-              </p>
-              <div class="swatches" id="palette-swatches"></div>
-            </div>
-          </div>
-
-          <div class="panel">
-            <div class="panel-head"><span class="panel-title">Fond de la zone haute</span></div>
-            <div class="card-body set-group">
-              <p class="set-help">
-                Le bandeau qui porte le titre, les chiffres et les filtres. Choisissez
-                une teinte au nuancier ou saisissez son code hexadécimal — les deux
-                champs se suivent. Le texte s'adapte tout seul : sur un fond sombre il
-                passe en clair, et le contraste mesuré s'affiche pour que vous sachiez
-                si votre couleur reste lisible.
-              </p>
-              <div class="teinte-row">
-                <input type="color" id="topbg-color" aria-label="Nuancier" />
-                <input type="text" id="topbg-hex" inputmode="text" spellcheck="false"
-                  autocomplete="off" maxlength="7" placeholder="#eef2ff"
-                  aria-label="Code hexadécimal" />
-                <span class="teinte-ratio" id="topbg-ratio" aria-live="polite"></span>
-                <button class="btn btn-small" id="topbg-reset" type="button">Par défaut</button>
-              </div>
-              <div class="teinte-apercu" id="topbg-apercu" aria-hidden="true">
-                <b>SAV client</b><span>20 En attente de vous</span><span>115 Brouillons prêts</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="panel">
-            <div class="panel-head"><span class="panel-title">Thème</span></div>
-            <div class="card-body set-group">
-              <div class="seg" id="theme-seg" style="max-width: 260px">
-                <button data-theme="light" aria-pressed="true">Clair</button>
-                <button data-theme="dark" aria-pressed="false">Sombre</button>
-                <button data-theme="auto" aria-pressed="false">Système</button>
-              </div>
-              <p class="set-help">
-                « Système » suit le réglage de votre ordinateur, y compris s'il bascule
-                automatiquement le soir.
-              </p>
-              <div class="field">
-                <label>Horloges des fuseaux</label>
-                <div class="seg" id="clock-seg" style="max-width: 260px">
-                  <button data-clockstyle="analog" aria-pressed="true">Aiguilles</button>
-                  <button data-clockstyle="digital" aria-pressed="false">Numérique</button>
+            <section>
+              <h3 class="reg-titre-groupe">Vérifications</h3>
+              <div class="reg-groupe">
+                <div class="reg-ligne">
+                  <span>Assistant IA<small>Classe, résume et prépare les réponses</small></span>
+                  <button type="button" class="reg-bouton" id="ai-test">Tester</button>
                 </div>
-                <small>
-                  Aiguilles : cadrans de montre, lecture d'un coup d'œil. Numérique :
-                  chiffres lumineux, façon montre connectée.
-                </small>
+                <div class="reg-sortie mbx-diag" id="ai-test-state"></div>
+                <div class="reg-ligne">
+                  <span>Libellés Gmail<small>Vos libellés deviennent des filtres de la file</small></span>
+                  <button type="button" class="reg-bouton" id="labels-sync">Appliquer</button>
+                </div>
+                <div class="reg-sortie mbx-diag" id="labels-sync-state"></div>
               </div>
-            </div>
+              <p class="reg-note" id="set-build"></p>
+            </section>
           </div>
+
+          <!-- ------------------------------------------------ Assistant -->
+          <div class="reg-volet" data-volet="assistant" hidden>
+            <section>
+              <h3 class="reg-titre-groupe"><label for="set-playbook">Règles de la boutique</label></h3>
+              <div class="reg-groupe">
+                <div class="reg-bloc">
+                  <textarea id="set-playbook" rows="8" placeholder="Livraison : 2 à 5 jours ouvrés en France.
+Retours : 30 jours après réception, article non porté.
+Échange de taille : gratuit une fois.
+Remboursement : sous 5 jours ouvrés après réception du retour."></textarea>
+                </div>
+                <button type="button" class="reg-ligne-action" id="set-policies">Reprendre les politiques de Shopify</button>
+              </div>
+              <p class="reg-note">Une règle par ligne. L’assistant n’affirme rien qui n’y figure pas.</p>
+            </section>
+
+            <section>
+              <h3 class="reg-titre-groupe">Réponses automatiques</h3>
+              <div class="reg-groupe">
+                <label class="reg-ligne">
+                  <span>Envoyer sans relecture</span>
+                  <input type="checkbox" class="reg-switch" role="switch" id="set-autosend" />
+                </label>
+                <label class="reg-ligne">
+                  <span>Seuil de confiance</span>
+                  <span class="reg-curseur">
+                    <input type="range" id="set-threshold" min="0.5" max="1" step="0.01" />
+                    <b id="set-threshold-echo">—</b>
+                  </span>
+                </label>
+              </div>
+              <p class="reg-note" id="set-autosend-warn">Pas encore actif : chaque réponse reste un brouillon à valider, quel que soit ce réglage.</p>
+            </section>
+          </div>
+
+          <!-- ------------------------------------------------ Mode test -->
+          <div class="reg-volet" data-volet="test" hidden>
+            <section>
+              <div class="reg-groupe">
+                <label class="reg-ligne">
+                  <span>Mode test</span>
+                  <input type="checkbox" class="reg-switch" role="switch" id="set-testmode" />
+                </label>
+              </div>
+              <p class="reg-note">L’outil fonctionne normalement, mais rien ne sort : ni expédition ni remboursement chez Shopify, ni mail aux clients ou aux ateliers. Seuls les liens de connexion de l’équipe partent encore.</p>
+            </section>
+            <section>
+              <div class="reg-groupe">
+                <button type="button" class="reg-ligne-action reg-danger" id="test-effacer">Effacer les données de test…</button>
+              </div>
+              <p class="reg-note">Supprime les colis et remboursements créés en mode test. Les vraies données ne sont pas touchées.</p>
+            </section>
+          </div>
+
+          <!-- ---------------------------------------- Voir en tant que -->
+          <div class="reg-volet" data-volet="acces" hidden>
+            <section>
+              <div class="reg-groupe">
+                <div class="reg-ligne reg-ligne-haute">
+                  <span>Voir l’outil comme</span>
+                  <div class="reg-seg" id="as-role" role="group" aria-label="Rôle">
+                    <button type="button" data-as="" aria-pressed="true">Moi</button>
+                    <button type="button" data-as="SUPERVISOR">Superviseur</button>
+                    <button type="button" data-as="AGENT">Agent</button>
+                    <button type="button" data-as="VIEWER">Observateur</button>
+                    <button type="button" data-as="SUPPLIER">Fournisseur</button>
+                  </div>
+                </div>
+                <div class="reg-ligne" id="as-supplier-box" hidden>
+                  <label for="as-supplier-pick">Ouvrir l’atelier de</label>
+                  <span class="reg-paire">
+                    <select id="as-supplier-pick"></select>
+                    <button type="button" class="reg-bouton reg-plein" id="as-supplier">Ouvrir</button>
+                  </span>
+                </div>
+              </div>
+              <p class="reg-note"><span id="as-note"></span> Les droits du rôle choisi sont vraiment appliqués : ce qui est masqué est aussi refusé. L’atelier, lui, s’ouvre dans un nouvel onglet, exactement comme il le voit.</p>
+            </section>
+          </div>
+
+          <!-- -------------------------------------------------- Données -->
+          <div class="reg-volet" data-volet="donnees" hidden>
+            <section>
+              <div class="reg-groupe">
+                <label class="reg-ligne">
+                  <span>Conserver les mails</span>
+                  <select id="set-retention">
+                    <option value="30">30 jours</option>
+                    <option value="90">90 jours</option>
+                    <option value="180">6 mois</option>
+                    <option value="365">1 an</option>
+                    <option value="730">2 ans</option>
+                    <option value="1095">3 ans</option>
+                  </select>
+                </label>
+              </div>
+              <p class="reg-note">Passé ce délai, les messages et leurs pièces jointes sont supprimés automatiquement (RGPD).</p>
+            </section>
+          </div>
+
+          <p class="reg-etat" id="set-dirty" aria-live="polite">Chaque changement est enregistré tout de suite.</p>
         </div>
       </section>
         </div>

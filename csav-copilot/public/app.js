@@ -2070,6 +2070,7 @@ function renderComposeSignatureBadge(signature) {
 
   $('compose-sig-set')?.addEventListener('click', () => {
     if (!closeCompose()) return;
+    voletReglages = 'boutique';
     setView('settings');
   });
 }
@@ -9837,7 +9838,6 @@ function renderBuildInfo() {
   });
 }
 
-$('open-palettes')?.addEventListener('click', () => setView('palettes'));
 
 $('ret-tabs').addEventListener('click', (event) => {
   const tab = event.target.closest('[data-rtab]');
@@ -10755,9 +10755,6 @@ const VIEW_META = {
   disputes: { icon: 'shield', label: 'Litiges Shopify', group: 'Finance', title: 'Litiges Shopify' },
   team: { icon: 'users', label: 'Équipe & rôles', group: 'Plateforme', title: 'Équipe & rôles' },
   canned: { icon: 'inbox', label: 'Réponses types', group: 'Plateforme', title: 'Réponses types' },
-  // Absent de la navigation : l'apparence est un réglage, pas un écran de
-  // travail — on y accède depuis Réglages.
-  palettes: { icon: 'swatch', label: 'Palettes', group: 'Plateforme', title: 'Apparence', hidden: true },
   settings: { icon: 'gear', label: 'Réglages', group: 'Plateforme', title: 'Réglages' },
 };
 
@@ -11334,12 +11331,15 @@ const VIEW_LOADERS = {
   team: () => loadTeam(),
   stats: () => loadStats(),
   couts: () => loadCouts(),
-  palettes: () => {
+  canned: () => loadCanned(),
+  settings: () => {
+    // L'apparence est une catégorie des Réglages : elle se peint à l'entrée,
+    // sans attendre la réponse du serveur, puisqu'elle vit dans le navigateur.
     renderPalettes();
     renderTopBg();
+    montrerVoletReglages(voletReglages);
+    void openSettings();
   },
-  canned: () => loadCanned(),
-  settings: () => openSettings(),
 };
 
 function setView(view) {
@@ -11646,9 +11646,9 @@ function renderPalettes() {
   const theme = localStorage.getItem('csav.theme') ?? 'auto';
 
   $('palette-swatches').innerHTML = PALETTES.map(
-    ([key, label, hex]) => `<button class="swatch" data-accent="${key}" aria-pressed="${
+    ([key, label, hex]) => `<button type="button" class="swatch" data-accent="${key}" aria-pressed="${
       key === accent
-    }"><i style="background:${hex}"></i>${esc(label)}</button>`,
+    }" aria-label="${esc(label)}" title="${esc(label)}"><i style="background:${hex}"></i></button>`,
   ).join('');
 
   $('palette-swatches')
@@ -11665,9 +11665,9 @@ function renderPalettes() {
   $('theme-seg')
     .querySelectorAll('button')
     .forEach((button) => {
-      button.setAttribute('aria-pressed', String(button.dataset.theme === theme));
+      button.setAttribute('aria-pressed', String(button.dataset.themeChoix === theme));
       button.onclick = () => {
-        localStorage.setItem('csav.theme', button.dataset.theme);
+        localStorage.setItem('csav.theme', button.dataset.themeChoix);
         applyAppearance();
         renderPalettes();
       };
@@ -12381,7 +12381,7 @@ function renderConnection(el, { label, connected, simulated, detail, actions, st
       <span class="conn-pill"><span class="dot ${dot}"></span> ${esc(label)} ${esc(status)}</span>
       <span class="set-conn-actions">${actions}</span>
     </div>
-    <p class="set-conn-detail">${detail}</p>`;
+    <div class="set-conn-detail">${detail}</div>`;
 }
 
 /*
@@ -12486,6 +12486,8 @@ function renderSettings() {
                 ? 'corbeille et libellés reportés dans Gmail'
                 : '<b class="set-alert">corbeille et libellés : à activer</b> — <a href="/auth/google">reconnectez cette boîte</a> et acceptez la nouvelle autorisation'
             }</div>
+            <details class="reg-replie mbx-gerer">
+            <summary>Gérer cette boîte</summary>
             <div class="mbx-acts">
               <input type="text" data-mbx-label="${esc(mailbox.id)}"
                 placeholder="Nom d’usage (ex. SAV)" value="${esc(mailbox.label ?? '')}" />
@@ -12521,6 +12523,7 @@ function renderSettings() {
                 mailbox.id,
               )}">Débrancher</button>
             </div>
+            </details>
             <div class="mbx-learn" data-mbx-learn-state="${esc(mailbox.id)}"></div>
             <div class="mbx-diag" data-mbx-diag-state="${esc(mailbox.id)}"></div>
           </div>`,
@@ -12531,11 +12534,14 @@ function renderSettings() {
   // Emplacement du bandeau des messages orphelins. Rempli après coup : leur
   // nombre demande un comptage que la page des connexions n'a pas à attendre.
   const gmailBlock = `${gmailDetail}<div class="mbx-orphans" id="mbx-orphans" hidden></div>
-    <div class="mbx-acts" style="margin-top:8px">
+    <details class="reg-replie mbx-gerer">
+    <summary>Brouillons de l’IA dans Gmail</summary>
+    <div class="mbx-acts">
       <button class="btn btn-small" id="btn-drafts-cleanup">Nettoyer les brouillons (tickets clos)</button>
       <button class="btn btn-small btn-danger" id="btn-drafts-purge-all">Supprimer tous les brouillons IA</button>
       <span class="mbx-diag" id="drafts-cleanup-state"></span>
-    </div>`;
+    </div>
+    </details>`;
 
   renderConnection($('set-gmail'), {
     label: boxes.length > 1 ? 'Boîtes mail' : 'Boîte mail',
@@ -12814,6 +12820,7 @@ function renderSettings() {
   $('set-tracking').value = merchant.trackingUrlTemplate ?? '';
   $('set-autosend').checked = merchant.autoSendEnabled;
   $('set-testmode').checked = Boolean(merchant.testMode);
+  $('reg-test-pastille').hidden = !merchant.testMode;
   $('set-threshold').value = merchant.autoSendThreshold;
   $('set-threshold-echo').textContent = `${Math.round(merchant.autoSendThreshold * 100)} %`;
   $('set-retention').value = String(merchant.retentionDays);
@@ -12826,8 +12833,59 @@ async function openSettings() {
   renderBuildInfo();
 }
 
-/* Repère de modification : sans lui, on ne sait pas si l'on a déjà enregistré,
-   et l'on quitte l'écran en perdant sa saisie. */
+/*
+ * Les catégories des Réglages, une seule visible à la fois.
+ *
+ * La page empilait treize cartes sur une colonne : on cherchait le mode test
+ * entre la conservation des mails et l'identité. Une catégorie se choisit à
+ * gauche, comme sur un Mac ; la recherche filtre ces catégories par les mots
+ * de leurs réglages (« sombre », « gmail », « rgpd »).
+ */
+const VOLETS_REGLAGES = {
+  boutique: ['Boutique', 'Ce que vos clients et vos ateliers voient de vous.'],
+  apparence: ['Apparence', 'Couleurs et thème de votre écran.'],
+  connexions: ['Connexions', 'Shopify, Gmail et l’assistant.'],
+  assistant: ['Assistant', 'Ce que l’assistant peut affirmer et envoyer.'],
+  test: ['Mode test', 'Essayer l’outil sans rien envoyer.'],
+  acces: ['Voir en tant que', 'Vérifier ce que voit chaque rôle.'],
+  donnees: ['Données', 'Combien de temps l’outil garde vos mails.'],
+};
+let voletReglages = 'boutique';
+
+function montrerVoletReglages(nom) {
+  if (!VOLETS_REGLAGES[nom]) nom = 'boutique';
+  voletReglages = nom;
+  document.querySelectorAll('#view-settings .reg-volet').forEach((volet) => {
+    volet.hidden = volet.dataset.volet !== nom;
+  });
+  document.querySelectorAll('#view-settings .reg-cat').forEach((bouton) => {
+    if (bouton.dataset.reg === nom) bouton.setAttribute('aria-current', 'page');
+    else bouton.removeAttribute('aria-current');
+  });
+  const [titre, sous] = VOLETS_REGLAGES[nom];
+  $('reg-titre').textContent = titre;
+  $('reg-sous').textContent = sous;
+}
+
+document.querySelectorAll('#view-settings .reg-cat').forEach((bouton) =>
+  bouton.addEventListener('click', () => montrerVoletReglages(bouton.dataset.reg)),
+);
+
+$('reg-q').addEventListener('input', (event) => {
+  const sansAccent = (texte) => texte.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const terme = sansAccent(event.target.value.trim());
+  let premiere = null;
+  document.querySelectorAll('#view-settings .reg-cat').forEach((bouton) => {
+    const trouve = !terme || sansAccent(`${bouton.textContent} ${bouton.dataset.mots}`).includes(terme);
+    bouton.hidden = !trouve;
+    if (trouve && !premiere) premiere = bouton.dataset.reg;
+  });
+  $('reg-aucun').hidden = Boolean(premiere);
+  // La catégorie affichée suit la recherche : taper « gmail » montre Connexions.
+  if (terme && premiere) montrerVoletReglages(premiere);
+});
+
+/* Les champs enregistrés ensemble, par la sauvegarde automatique ci-dessous. */
 const SETTINGS_FIELDS = [
   'set-brand',
   'set-logo',
@@ -12850,6 +12908,7 @@ $('set-testmode').addEventListener('change', async (event) => {
   try {
     await api('/api/settings', { method: 'PATCH', body: JSON.stringify({ testMode: actif }) });
     $('test-notice').hidden = !actif;
+    $('reg-test-pastille').hidden = !actif;
     toast(actif ? 'Mode test activé : rien ne sortira.' : 'Mode test désactivé : les actions sont de nouveau réelles.');
   } catch (error) {
     event.target.checked = !actif;
@@ -12869,14 +12928,74 @@ $('test-effacer').addEventListener('click', async () => {
   }
 });
 
-function markSettingsDirty() {
-  $('set-dirty').textContent = 'Modifications non enregistrées.';
-  $('set-dirty').classList.add('dirty');
+/*
+ * Sauvegarde automatique, comme les Réglages d'un Mac.
+ *
+ * Un champ texte s'enregistre quand on s'arrête de taper ; un menu, une case
+ * ou un curseur, dès qu'on le lâche. Plus de bouton « Enregistrer » : on ne
+ * quitte plus l'écran en perdant sa saisie parce qu'on l'avait oublié. Les
+ * envois s'enchaînent l'un après l'autre, le dernier état gagne toujours.
+ */
+let minuterieReglages;
+let envoiReglages = Promise.resolve();
+
+function etatReglages(texte, erreur = false) {
+  const ligne = $('set-dirty');
+  ligne.textContent = texte;
+  ligne.classList.toggle('reg-etat-erreur', erreur);
+}
+
+function planifierReglages(delai) {
+  clearTimeout(minuterieReglages);
+  etatReglages('Enregistrement…');
+  minuterieReglages = setTimeout(() => void enregistrerReglages(), delai);
+}
+
+function enregistrerReglages(extra = {}) {
+  clearTimeout(minuterieReglages);
+  envoiReglages = envoiReglages.then(async () => {
+    try {
+      const { merchant } = await api('/api/settings', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          brandName: $('set-brand').value.trim() || null,
+          playbook: $('set-playbook').value.trim() || null,
+          emailSignature: $('set-signature').value.trim() || null,
+          slaHours: Number($('set-sla').value),
+          logoUrl: $('set-logo').value.trim() || null,
+          trackingUrlTemplate: $('set-tracking').value.trim() || null,
+          autoSendEnabled: $('set-autosend').checked,
+          autoSendThreshold: Number($('set-threshold').value),
+          retentionDays: Number($('set-retention').value),
+          ...extra,
+        }),
+      });
+
+      // La barre latérale et l'indicateur « envoi automatique » affichent ces
+      // valeurs : les rafraîchir évite un écran qui se contredit.
+      Object.assign(state.me.merchant, merchant);
+      if (state.settings) Object.assign(state.settings.merchant, merchant);
+      renderMe();
+      if ('logo' in extra) renderLogoPreview(merchant);
+      void Promise.all([loadMetrics(), loadAudit()]).catch(() => undefined);
+      etatReglages('Enregistré.');
+    } catch (error) {
+      etatReglages(`Non enregistré : ${error.message}`, true);
+      toast(error.message, true);
+    }
+  });
+  return envoiReglages;
 }
 
 for (const id of SETTINGS_FIELDS) {
-  $(id).addEventListener('input', markSettingsDirty);
-  $(id).addEventListener('change', markSettingsDirty);
+  const champ = $(id);
+  const ecrit = champ.tagName === 'TEXTAREA' || champ.type === 'text';
+  // Pendant la frappe on attend une pause ; un choix fait s'enregistre aussitôt.
+  // Une adresse, elle, attend qu'on quitte le champ : à moitié tapée, le
+  // serveur la refuserait et l'écran crierait à l'erreur à chaque pause.
+  const adresse = id === 'set-logo' || id === 'set-tracking';
+  if (ecrit && !adresse) champ.addEventListener('input', () => planifierReglages(900));
+  champ.addEventListener('change', () => planifierReglages(ecrit ? 0 : 150));
 }
 
 /**
@@ -12911,9 +13030,9 @@ $('set-policies').addEventListener('click', async () => {
     }
 
     $('set-playbook').value = playbook;
-    markSettingsDirty();
+    await enregistrerReglages();
     toast(
-      `${sections} politique${sections > 1 ? 's' : ''} reprise${sections > 1 ? 's' : ''} — relisez, puis enregistrez.`,
+      `${sections} politique${sections > 1 ? 's' : ''} reprise${sections > 1 ? 's' : ''} et enregistrée${sections > 1 ? 's' : ''} — relisez-les.`,
     );
   } catch (error) {
     toast(error.message, true);
@@ -12924,37 +13043,6 @@ $('set-policies').addEventListener('click', async () => {
 
 $('set-threshold').addEventListener('input', (event) => {
   $('set-threshold-echo').textContent = `${Math.round(Number(event.target.value) * 100)} %`;
-});
-
-$('set-save').addEventListener('click', async () => {
-  try {
-    const { merchant } = await api('/api/settings', {
-      method: 'PATCH',
-      body: JSON.stringify({
-        brandName: $('set-brand').value.trim() || null,
-        playbook: $('set-playbook').value.trim() || null,
-        emailSignature: $('set-signature').value.trim() || null,
-        slaHours: Number($('set-sla').value),
-        logoUrl: $('set-logo').value.trim() || null,
-        trackingUrlTemplate: $('set-tracking').value.trim() || null,
-        autoSendEnabled: $('set-autosend').checked,
-        autoSendThreshold: Number($('set-threshold').value),
-        retentionDays: Number($('set-retention').value),
-      }),
-    });
-
-    // La barre haute et l'indicateur « envoi automatique » affichent ces
-    // valeurs : les rafraîchir évite un écran qui se contredit.
-    Object.assign(state.me.merchant, merchant);
-    renderMe();
-    await Promise.all([loadMetrics(), loadAudit()]);
-
-    $('set-dirty').textContent = 'Réglages enregistrés.';
-    $('set-dirty').classList.remove('dirty');
-    toast('Réglages enregistrés.');
-  } catch (error) {
-    toast(error.message, true);
-  }
 });
 
 async function loadEscalations(ticketId) {
@@ -13785,54 +13873,20 @@ $('set-logo-file').addEventListener('change', async (event) => {
 
   try {
     pendingLogo = await shrinkLogo(file);
-    renderLogoPreview(state.settings?.merchant, pendingLogo);
-    $('set-brand-note').textContent = 'Image prête — cliquez sur Appliquer.';
   } catch {
     toast('Image illisible — essayez un PNG ou un JPEG.', true);
+    return;
   }
+  renderLogoPreview(state.settings?.merchant, pendingLogo);
+  await enregistrerReglages({ logo: pendingLogo });
+  pendingLogo = undefined;
+  event.target.value = '';
 });
 
-$('set-logo-clear').addEventListener('click', () => {
-  pendingLogo = null;
+$('set-logo-clear').addEventListener('click', async () => {
+  $('set-logo').value = '';
   renderLogoPreview({ ...state.settings?.merchant, hasLogo: false, logoUrl: null });
-  $('set-brand-note').textContent = 'Logo retiré — cliquez sur Appliquer.';
-});
-
-/**
- * Enregistre l'identité seule.
- *
- * Séparé du bouton général : changer un logo est un geste isolé, avec un
- * résultat qu'on veut voir tout de suite en haut de la barre latérale.
- */
-$('set-brand-apply').addEventListener('click', async () => {
-  $('set-brand-apply').disabled = true;
-
-  try {
-    const body = {
-      brandName: $('set-brand').value.trim() || null,
-      logoUrl: $('set-logo').value.trim() || null,
-    };
-
-    if (pendingLogo !== undefined) body.logo = pendingLogo;
-
-    const { merchant } = await api('/api/settings', {
-      method: 'PATCH',
-      body: JSON.stringify(body),
-    });
-
-    pendingLogo = undefined;
-    state.me.merchant = { ...state.me.merchant, ...merchant };
-    renderMe();
-    renderLogoPreview(merchant);
-
-    $('set-brand-note').textContent = 'Identité mise à jour.';
-    toast('Identité mise à jour.');
-    await openSettings();
-  } catch (error) {
-    toast(error.message, true);
-  } finally {
-    $('set-brand-apply').disabled = false;
-  }
+  await enregistrerReglages({ logo: null });
 });
 
 /* ------------------------------------------------------- rafraîchissement */
@@ -14899,7 +14953,7 @@ function buildCommands() {
         // en mode « Système », c'est ce qu'on voit qu'on veut inverser.
         const dark = document.documentElement.getAttribute('data-theme') === 'dark';
         $('theme-seg')
-          ?.querySelector(`[data-theme="${dark ? 'light' : 'dark'}"]`)
+          ?.querySelector(`[data-theme-choix="${dark ? 'light' : 'dark'}"]`)
           ?.click();
       },
     },
