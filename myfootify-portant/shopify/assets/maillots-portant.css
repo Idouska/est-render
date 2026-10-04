@@ -111,6 +111,16 @@
 .mfp__caption [data-name]:not(.is-hint) { color: var(--mfp-orange); font-weight: 600; }
 .mfp--galerie .mfp__price { font-weight: 500; color: var(--mfp-muted); }
 
+/* Ambiance « vestiaire » : la pièce du site (anthracite), une tringle en chêne,
+   un banc flottant et les chaussures. Même texte clair que la galerie. */
+.mfp--vestiaire { --mfp-bg: #313135; --mfp-ink: #f0ede8; --mfp-muted: #b9b6b1; --mfp-line: rgba(240, 237, 232, .18); background: radial-gradient(75% 65% at 50% 40%, #4a4a4f 0%, #36363a 55%, #2c2c30 100%) !important; }
+.mfp--vestiaire .mfp__side { border-color: rgba(240, 237, 232, .26) !important; background: rgba(44, 44, 48, .5) !important; color: var(--mfp-ink); }
+.mfp--vestiaire .mfp__side:hover { background: var(--mfp-ink) !important; color: var(--mfp-bg); }
+.mfp--vestiaire .mfp__flat img { mix-blend-mode: normal; }
+.mfp--vestiaire .mfp__caption p { font-style: normal; }
+.mfp--vestiaire .mfp__caption [data-name]:not(.is-hint) { font-size: 13px; letter-spacing: 2px; text-transform: uppercase; }
+.mfp--vestiaire .mfp__price { font-weight: 500; color: var(--mfp-muted); }
+
 /* Sans WebGL, ou si le script ne se charge pas : une simple rangée de maillots. */
 [data-mfp-fallback] { display: none; }
 .mfp--flat [data-mfp-fallback] { display: flex; }
@@ -156,3 +166,6 @@
 @media (prefers-reduced-motion: reduce) {
   .mfp *, .mfp *::before, .mfp *::after { animation: none !important; transition: none !important; }
 }
+
+/* Texte réservé aux lecteurs d'écran. */
+.mfp__sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }

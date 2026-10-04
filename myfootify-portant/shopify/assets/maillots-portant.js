@@ -21,6 +21,7 @@ const SHIRT_H = 2.62; // hauteur d'un maillot, en unités de scène
 const SHIRT_MAX_W = 2.9;
 const COLLAR_Y = -0.33; // le haut du col, sous la barre, là où arrive la tige du cintre
 const STEP = 1 / 60; // pas d'intégration des ressorts
+const BENCH_SPACING = 1.3; // écart entre deux chaussures sur le banc
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 
 /* ------------------------------------------------------------------------ */
@@ -904,15 +905,23 @@ export class Rail {
     this.vestiaire = options.ambiance === 'vestiaire';
     this.dark = this.penderie || this.galerie || this.vestiaire; // pièce sombre : mêmes lumières, mêmes reflets
     this.sound = options.sound || null;
-    this.count = count;
+    this.total = count;
+    // Les premiers produits pendent sur la barre ; les suivants (chaussures) vivent sur le banc.
+    this.count = Number.isInteger(options.jerseys) ? options.jerseys : count;
     this.callbacks = callbacks;
     this.items = [];
     this.meshes = [];
     this.moving = true;
     this.selected = -1;
-    this.focus = Math.floor((count - 1) / 2);
+    this.focus = Math.floor((this.count - 1) / 2);
     // L'ordre sur la barre, de gauche à droite (indices des produits). Le client peut le changer.
-    this.order = Array.isArray(options.order) && options.order.length === count ? options.order.slice() : [...Array(count).keys()];
+    this.order = Array.isArray(options.order) && options.order.length === this.count ? options.order.slice() : [...Array(this.count).keys()];
+    // L'ordre sur le banc, même principe.
+    this.benchOrder = [];
+    for (let i = this.count; i < this.total; i++) this.benchOrder.push(i);
+    const saved = options.benchOrder;
+    if (Array.isArray(saved) && saved.length === this.benchOrder.length && saved.every((v) => v >= this.count && v < this.total)) this.benchOrder = saved.slice();
+    this.benchSpan = this.benchOrder.length ? (this.benchOrder.length - 1) * BENCH_SPACING + 1.2 : 0;
     this.carry = null; // le maillot qu'on tient en main pendant un déplacement
     this.hover = -1;
     this.offset = 0;
@@ -1124,7 +1133,14 @@ void main() {
   }
 
   slotOf(index) {
-    return this.order.indexOf(index);
+    return index >= this.count ? this.benchOrder.indexOf(index) : this.order.indexOf(index);
+  }
+
+  // Le décalage du banc : il suit le défilement de la barre, pour que tout le vestiaire bouge ensemble.
+  benchShift() {
+    const c0 = (this.count - 1) / 2;
+    const c = this.carry && !this.carry.bench ? this.carry.center : this.mobile || !this.fits ? this.slotOf(this.focus) : c0;
+    return (c0 - c) * SPACING;
   }
 
   /*
@@ -1208,7 +1224,7 @@ void main() {
     if (!item) return;
     // Le portant est figé pendant qu'on tient un maillot : il ne défile que si la main approche d'un bord.
     const center = this.mobile || !this.fits ? this.slotOf(this.focus) : (this.count - 1) / 2;
-    this.carry = { index, grab: this.worldX(clientX) - item.pivot.position.x, x: item.pivot.position.x, edgeAt: 0, center };
+    this.carry = { index, bench: !!item.bench, grab: this.worldX(clientX) - item.pivot.position.x, x: item.pivot.position.x, edgeAt: 0, center };
     this.setHover(-1);
     this.renderer.domElement.style.cursor = 'grabbing';
     this.host.classList.add('is-carrying');
@@ -1218,6 +1234,20 @@ void main() {
   moveCarry(clientX) {
     const c = this.carry;
     if (!c) return;
+    if (c.bench) {
+      // Une chaussure glisse le long du banc ; ses voisines se réordonnent.
+      const bHalf = ((this.benchSlab ? this.benchSlab.scale.x : 6) / 2) - 0.45;
+      c.x = THREE.MathUtils.clamp(this.worldX(clientX) - c.grab, -bHalf, bHalf);
+      const n = this.benchOrder.length;
+      const slot = THREE.MathUtils.clamp(Math.round((c.x - this.benchShift()) / BENCH_SPACING + (n - 1) / 2), 0, n - 1);
+      const from = this.benchOrder.indexOf(c.index);
+      if (slot !== from) {
+        this.benchOrder.splice(from, 1);
+        this.benchOrder.splice(slot, 0, c.index);
+        this.sound?.tick(0.6);
+      }
+      return;
+    }
     const half = (this.bar.scale.y || 6) / 2 - 0.3;
     c.x = THREE.MathUtils.clamp(this.worldX(clientX) - c.grab, -half, half);
     // Portant plus large que l'écran (mobile) : près d'un bord, il défile sous la main.
@@ -1244,15 +1274,16 @@ void main() {
     if (!c) return;
     this.carry = null;
     // La vue reste où elle était : le maillot central est celui qui occupe maintenant la place du centre.
-    if (this.mobile || !this.fits) this.focus = this.order[Math.round(c.center)];
+    if (!c.bench && (this.mobile || !this.fits)) this.focus = this.order[Math.round(c.center)];
     this.renderer.domElement.style.cursor = 'grab';
     this.host.classList.remove('is-carrying');
     this.callbacks.onCarry?.(c.index, false);
-    this.callbacks.onReorder?.(this.order.slice(), c.index);
+    this.callbacks.onReorder?.(c.bench ? this.benchOrder.slice() : this.order.slice(), c.index);
   }
 
   // Clavier : décaler un maillot d'une place (Maj + flèche).
   nudge(index, delta) {
+    if (index >= this.count) return false;
     const from = this.slotOf(index), to = from + delta;
     if (from < 0 || to < 0 || to >= this.count) return false;
     this.order.splice(from, 1);
@@ -1308,8 +1339,87 @@ void main() {
     this.items[index] = { pivot, shirt, uniforms, vx: 0, va: 0, sway: 0, vs: 0, lag: 0, vl: 0, tw: 0, vt: 0, odo: 0 };
   }
 
+  // Une chaussure : posée sur le banc, sans cintre, mise à l'échelle de l'assise.
+  addShoe(index, jersey) {
+    const front = new THREE.MeshLambertMaterial({ map: jersey.frontMap, alphaMap: jersey.alphaMap, alphaTest: 0.5, alphaToCoverage: true });
+    const back = new THREE.MeshLambertMaterial({ map: jersey.backMap, alphaMap: jersey.alphaMap, alphaTest: 0.5, alphaToCoverage: true });
+    if (this.dark) {
+      for (const [m, map] of [[front, jersey.frontMap], [back, jersey.backMap]]) {
+        m.emissive = new THREE.Color(0x3a3a3a);
+        m.emissiveMap = map;
+      }
+    }
+    const mesh = new THREE.Mesh(jersey.geometry, [front, back]);
+    mesh.castShadow = true;
+    mesh.userData.index = index;
+    this.meshes.push(mesh);
+    mesh.geometry.computeBoundingBox();
+    const bb = mesh.geometry.boundingBox;
+    const scale = Math.min(1.15 / (bb.max.x - bb.min.x), 0.72 / (bb.max.y - bb.min.y));
+    const shirt = new THREE.Group(); // même nom que pour un maillot : le reste du code n'y voit que du feu
+    shirt.add(mesh);
+    mesh.position.set(-(bb.min.x + bb.max.x) / 2, -bb.min.y, 0); // centrée, la semelle à l'origine
+    shirt.scale.setScalar(scale);
+    const pivot = new THREE.Group();
+    pivot.add(shirt);
+    const baseY = (this.benchTop ?? -1.56) + 0.005;
+    pivot.position.set(this.targetX(index), baseY, 1.07);
+    pivot.rotation.y = 0.12;
+    this.scene.add(pivot);
+    this.items[index] = { pivot, shirt, bench: true, baseY, vx: 0, vy: 0, va: 0 };
+  }
+
+  /*
+   * La vie d'une chaussure sur le banc : posée, elle se soulève avec un petit
+   * rebond au survol, suit la main quand on la déplace (les voisines
+   * s'écartent), et vient au premier plan quand elle est choisie.
+   */
+  stepShoe(item, i, dt, ease, chosen) {
+    const active = chosen ? i === this.selected : i === this.hover;
+    const carried = this.carry && this.carry.bench && this.carry.index === i;
+    let x = this.targetX(i) + (this.selected < 0 ? this.offset : 0);
+    let y = item.baseY, z = 1.07, yaw = 0.12, scale = 1;
+    if (chosen) {
+      if (active) {
+        y = -0.35; z = 1.5; yaw = this.turn; scale = 2.1;
+        const roomX = Math.max(0, this.camera.right - 1.5);
+        x = THREE.MathUtils.clamp(0, -roomX, roomX);
+      } else z = 0.95; // les autres restent sur le banc, dans le fond flou
+    } else if (carried) {
+      y = item.baseY + 0.18; z = 1.25; yaw = 0.32; scale = 1.06;
+    } else if (this.hover === i) {
+      y = item.baseY + 0.12; z = 1.2; yaw = 0.4; scale = 1.14;
+    } else if (this.hover >= 0 && this.items[this.hover]?.bench) {
+      x += this.slotOf(i) < this.slotOf(this.hover) ? -0.3 : 0.3;
+    }
+    if (carried && dt > 0) {
+      item.vx += (THREE.MathUtils.clamp((this.carry.x - item.pivot.position.x) / dt, -14, 14) - item.vx) * 0.5;
+      item.pivot.position.x = this.carry.x;
+    }
+    for (let left = dt; left > 1e-6; left -= STEP) {
+      const step = Math.min(left, STEP);
+      if (!carried) {
+        item.vx += ((x - item.pivot.position.x) * 56 - item.vx * 11) * step;
+        item.pivot.position.x += item.vx * step;
+      }
+      // raideur forte, amortissement doux : le petit rebond quand elle se pose ou se soulève
+      item.vy += ((y - item.pivot.position.y) * 70 - item.vy * 9) * step;
+      item.pivot.position.y += item.vy * step;
+      item.va += ((yaw - item.pivot.rotation.y) * 58 - item.va * 12) * step;
+      item.pivot.rotation.y += item.va * step;
+    }
+    // elle penche dans le sens de sa course, comme ramassée à la main
+    item.pivot.rotation.z = THREE.MathUtils.clamp(-item.vx * 0.03, -0.12, 0.12);
+    item.pivot.position.z = THREE.MathUtils.lerp(item.pivot.position.z, z, ease);
+    item.pivot.scale.setScalar(THREE.MathUtils.lerp(item.pivot.scale.x, scale, ease));
+  }
+
   targetX(index) {
-    const center = this.carry ? this.carry.center : this.mobile || !this.fits ? this.slotOf(this.focus) : (this.count - 1) / 2;
+    if (index >= this.count) {
+      const n = Math.max(1, this.benchOrder.length);
+      return (this.slotOf(index) - (n - 1) / 2) * BENCH_SPACING + this.benchShift();
+    }
+    const center = this.carry && !this.carry.bench ? this.carry.center : this.mobile || !this.fits ? this.slotOf(this.focus) : (this.count - 1) / 2;
     return (this.slotOf(index) - center) * SPACING;
   }
 
@@ -1505,6 +1615,7 @@ void main() {
     let speed = 0, ticks = 0;
     this.items.forEach((item, i) => {
       if (!item) return;
+      if (item.bench) return this.stepShoe(item, i, dt, ease, chosen);
       let x = this.targetX(i) + this.offset, angle = ANGLE, z = 0, scale = 1;
       const active = chosen ? i === this.selected : i === this.hover;
       const carried = !chosen && this.carry && this.carry.index === i;
@@ -1525,7 +1636,8 @@ void main() {
         // Les voisins s'écartent autour de la place visée.
         const at = this.slotOf(this.carry.index);
         if (Math.abs(this.slotOf(i) - at) === 1) x += this.slotOf(i) < at ? -SPREAD * 0.4 : SPREAD * 0.4;
-      } else if (this.hover >= 0) {
+      } else if (this.hover >= 0 && !this.items[this.hover]?.bench) {
+        // Les maillots ne s'écartent qu'entre eux : survoler une chaussure ne bouge pas la barre.
         if (active) { angle = 0; z = 0.9; scale = 1.22; }
         else x += this.slotOf(i) < this.slotOf(this.hover) ? -SPREAD : SPREAD;
       }
@@ -1666,6 +1778,9 @@ function mount(root) {
   const script = root.querySelector('[data-mfp-products]');
   const products = (script ? JSON.parse(script.textContent) : []).filter((p) => p && p.front);
   for (const p of products) p.price = decode(p.price);
+  // Les maillots d'abord (la barre), les chaussures ensuite (le banc).
+  products.sort((a, b) => (a.kind === 'chaussure' ? 1 : 0) - (b.kind === 'chaussure' ? 1 : 0));
+  const jerseysCount = products.filter((p) => p.kind !== 'chaussure').length || products.length;
   const body = root.querySelector('[data-mfp-body]');
   if (!products.length || !body) return;
   root.classList.remove('mfp--flat');
@@ -1701,14 +1816,15 @@ function mount(root) {
   let savedOrder = null;
   try {
     const raw = JSON.parse(sessionStorage.getItem(ORDER_KEY) || 'null');
-    if (Array.isArray(raw) && raw.length === products.length && [...raw].sort((a, b) => a - b).every((v, k) => v === k)) savedOrder = raw;
+    const fine = (arr, lo, hi) => Array.isArray(arr) && arr.length === hi - lo && [...arr].sort((a, b) => a - b).every((v, k) => v === lo + k);
+    if (raw && fine(raw.barre, 0, jerseysCount) && fine(raw.banc, jerseysCount, products.length)) savedOrder = raw;
   } catch {}
   const announce = document.createElement('p');
-  announce.className = 'visually-hidden';
+  announce.className = 'mfp__sr';
   announce.setAttribute('aria-live', 'polite');
   root.append(announce);
 
-  let selected = -1, focused = (savedOrder || products.map((_, k) => k))[Math.floor((products.length - 1) / 2)], hovered = -1, loaded = 0;
+  let selected = -1, focused = (savedOrder?.barre || [...Array(jerseysCount).keys()])[Math.floor((jerseysCount - 1) / 2)] ?? 0, hovered = -1, loaded = 0;
   const moving = !reducedMotion.matches;
 
   let rail;
@@ -1716,16 +1832,16 @@ function mount(root) {
     rail = new Rail($('[data-rack]'), products.length, {
       onSelect: (i) => select(i),
       onHover: (i) => { hovered = i; caption(); },
-      onBrowse: (delta) => { focused = Math.max(0, Math.min(products.length - 1, focused + delta)); hovered = -1; sync(); caption(); },
+      onBrowse: (delta) => { focused = Math.max(0, Math.min(jerseysCount - 1, focused + delta)); hovered = -1; sync(); caption(); },
       onTurn: (turn) => faces(turn),
       onReorder: (order, moved) => {
         focused = rail.focus;
-        try { sessionStorage.setItem(ORDER_KEY, JSON.stringify(order)); } catch {}
-        announce.textContent = products[moved].title + ' : place ' + (order.indexOf(moved) + 1) + ' sur ' + products.length;
+        try { sessionStorage.setItem(ORDER_KEY, JSON.stringify({ barre: rail.order, banc: rail.benchOrder })); } catch {}
+        announce.textContent = products[moved].title + ' : place ' + (order.indexOf(moved) + 1) + ' sur ' + order.length;
         caption();
       },
       onCarry: (i, on) => { $('[data-name]').textContent = on ? products[i].title : ''; if (!on) caption(); },
-    }, { ambiance: root.dataset.ambiance, order: savedOrder });
+    }, { ambiance: root.dataset.ambiance, order: savedOrder?.barre, benchOrder: savedOrder?.banc, jerseys: jerseysCount });
   } catch (error) {
     console.error(error);
     fallback();
@@ -1741,7 +1857,8 @@ function mount(root) {
         try {
           const jersey = await buildJersey(products[i].front, products[i].back, rail.anisotropy);
           if (!root.portant) return;
-          rail.add(i, jersey);
+          if (products[i].kind === 'chaussure') rail.addShoe(i, jersey);
+          else rail.add(i, jersey);
           loaded++;
           $('[data-loading]').hidden = true;
         } catch (error) {
@@ -1768,8 +1885,12 @@ function mount(root) {
     if (p) price.textContent = p.price || '';
     const more = $('[data-more]');
     more.hidden = selected < 0;
-    if (p) more.href = p.url;
-    $('[data-faces]').hidden = selected < 0;
+    if (p) {
+      more.href = p.url;
+      more.textContent = p.kind === 'chaussure' ? 'Voir le modèle' : 'Voir le maillot';
+    }
+    // Pas de photo du dos pour une chaussure : les boutons Face / Dos n'ont pas de sens.
+    $('[data-faces]').hidden = selected < 0 || products[selected]?.kind === 'chaussure';
   }
 
   // Face / Dos : le bouton actif suit l'angle réel (aussi quand on tourne au doigt).
@@ -1801,12 +1922,14 @@ function mount(root) {
     return was;
   }
 
-  // Précédent / suivant : dans l'ordre de la barre, celui que le client a peut-être changé.
+  // Précédent / suivant : l'ordre visuel du vestiaire (la barre puis le banc), tel que le client l'a peut-être changé.
   function shift(delta) {
-    const n = products.length;
-    const i = rail.order[(rail.slotOf(selected >= 0 ? selected : focused) + delta + n) % n];
+    const visual = rail.order.concat(rail.benchOrder);
+    const at = visual.indexOf(selected >= 0 ? selected : focused);
+    const i = visual[(at + delta + visual.length) % visual.length];
     if (selected >= 0) select(i);
-    else { focused = hovered = i; sync(); caption(); }
+    else if (i < jerseysCount) { focused = hovered = i; sync(); caption(); }
+    else { hovered = i; sync(); caption(); }
   }
 
   // Sans WebGL : une simple rangée de maillots.

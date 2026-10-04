@@ -15,6 +15,10 @@
   if source == blank
     assign source = section.settings.collection.products
   endif
+  assign shoes_source = section.settings.shoes_products
+  if shoes_source == blank
+    assign shoes_source = section.settings.shoes_collection.products
+  endif
 -%}
 
 {%- liquid
@@ -138,6 +142,31 @@
         }
         {%- unless forloop.last -%},{%- endunless -%}
       {%- endfor -%}
+      {%- comment -%} Les chaussures, posées sur le banc (ambiance vestiaire). {%- endcomment -%}
+      {%- assign shoe_count = 0 -%}
+      {%- for product in shoes_source limit: section.settings.shoes_limit -%}
+        {%- liquid
+          assign shoe_front = ''
+          if product.metafields.custom.portant_face != blank
+            assign shoe_front = product.metafields.custom.portant_face.value | image_url: width: 900
+          elsif product.featured_media != blank
+            assign shoe_front = product.featured_media | image_url: width: 900
+          endif
+        -%}
+        {%- if shoe_front != blank -%}
+          {%- if shoe_count > 0 or source != blank -%},{%- endif -%}
+          {%- assign shoe_count = shoe_count | plus: 1 -%}
+          {
+            "kind": "chaussure",
+            "title": {{ product.title | json }},
+            "type": {{ product.type | json }},
+            "url": {{ product.url | json }},
+            "price": {{ product.price | money | json }},
+            "front": {{ shoe_front | json }},
+            "back": null
+          }
+        {%- endif -%}
+      {%- endfor -%}
     ]
   </script>
 
@@ -237,6 +266,30 @@
       "info": "Si des maillots sont choisis ici, ils remplacent la collection."
     },
     {
+      "type": "header",
+      "content": "Chaussures sur le banc (ambiance vestiaire)"
+    },
+    {
+      "type": "collection",
+      "id": "shoes_collection",
+      "label": "Collection de chaussures"
+    },
+    {
+      "type": "product_list",
+      "id": "shoes_products",
+      "label": "Ou les chaussures, une par une",
+      "limit": 8
+    },
+    {
+      "type": "range",
+      "id": "shoes_limit",
+      "min": 2,
+      "max": 8,
+      "step": 1,
+      "label": "Nombre de chaussures sur le banc",
+      "default": 5
+    },
+    {
       "type": "range",
       "id": "limit",
       "min": 3,
@@ -260,7 +313,8 @@
       "options": [
         { "value": "claire", "label": "Claire (portant sur fond uni)" },
         { "value": "galerie", "label": "Galerie minimaliste (fond noir, barre suspendue)" },
-        { "value": "penderie", "label": "Penderie sombre éclairée (LED)" }
+        { "value": "penderie", "label": "Penderie sombre éclairée (LED)" },
+        { "value": "vestiaire", "label": "Vestiaire (tringle en chêne, banc et chaussures)" }
       ],
       "default": "claire",
       "info": "Penderie : caisson en noyer, réglette LED, maillots éclairés par le haut. Pensez à un fond sombre et un texte clair ci-dessous."
