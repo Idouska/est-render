@@ -4,6 +4,7 @@ import cookie from '@fastify/cookie';
 import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyError } from 'fastify';
 import { devMode, env } from './config/env.ts';
+import { estIndexable, lienCanonique, NE_PAS_INDEXER, robotsTxt, sitemapXml } from './lib/indexation.ts';
 import { logger } from './lib/logger.ts';
 import { prisma } from './lib/prisma.ts';
 import { googleAuthRoutes } from './routes/auth.google.ts';
@@ -45,6 +46,11 @@ export async function buildServer() {
   const app = Fastify({ loggerInstance: logger, trustProxy: true });
 
   await app.register(cookie);
+
+  // Privé par défaut, pages, API et fichiers compris — voir lib/indexation.ts.
+  app.addHook('onRequest', async (request, reply) => {
+    if (!estIndexable(request.url)) reply.header('X-Robots-Tag', NE_PAS_INDEXER);
+  });
 
   // Le corps brut est nécessaire pour vérifier le HMAC des webhooks Shopify :
   // toute re-sérialisation JSON change les octets et casse la signature.
@@ -162,8 +168,17 @@ export async function buildServer() {
   // n'est pas passé par l'installation Shopify.
   app.get('/login', async (request, reply) => reply.type('text/html').sendFile('login.html'));
 
-  app.get('/privacy', async (request, reply) => reply.type('text/html').sendFile('privacy.html'));
-  app.get('/terms', async (request, reply) => reply.type('text/html').sendFile('terms.html'));
+  app.get('/privacy', async (request, reply) =>
+    reply.header('Link', lienCanonique(env.APP_URL, '/privacy')).type('text/html').sendFile('privacy.html'),
+  );
+  app.get('/terms', async (request, reply) =>
+    reply.header('Link', lienCanonique(env.APP_URL, '/terms')).type('text/html').sendFile('terms.html'),
+  );
+
+  app.get('/robots.txt', async (request, reply) => reply.type('text/plain').send(robotsTxt(env.APP_URL)));
+  app.get('/sitemap.xml', async (request, reply) =>
+    reply.type('application/xml').send(sitemapXml(env.APP_URL)),
+  );
 
   await app.register(shopifyAuthRoutes);
   await app.register(googleAuthRoutes);
