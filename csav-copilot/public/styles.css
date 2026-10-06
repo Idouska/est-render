@@ -2229,27 +2229,6 @@ body.ws-resizing { cursor: col-resize; user-select: none; }
 .tl-step span { font-size: 11.5px; color: var(--ink-mute); }
 .tl-step .when { float: right; font-family: var(--font-mono); }
 
-/* Barre d'enregistrement des réglages.
-
-   Le bouton vivait au pied d'une seule carte alors qu'il enregistre tout
-   l'écran : rien n'indiquait que modifier l'enseigne puis cliquer sous
-   « Conservation des données » était le geste attendu. */
-.set-bar {
-  position: sticky;
-  bottom: 0;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 13px;
-  padding: 11px 14px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
-  box-shadow: var(--shadow-pop);
-}
-
-.set-bar .btn { margin-left: auto; }
-.set-bar .hint.dirty { color: var(--warn-ink); font-weight: 600; }
 
 /* ------------------------------------------------------ identité de marque --- */
 
@@ -2738,77 +2717,6 @@ textarea:focus-visible {
    RÉGLAGES
    ========================================================================== */
 
-/* Chaque réglage occupe la largeur : l'intitulé et son explication à gauche,
-   les commandes à droite. C'est la disposition des pages de configuration qui
-   tiennent la route — on lit ce dont il s'agit avant de toucher au réglage,
-   et rien ne se retrouve à l'étroit parce qu'un voisin était plus grand. */
-#view-settings .panel {
-  display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
-  align-items: start;
-}
-
-#view-settings .panel-head {
-  display: block;
-  border-bottom: 0;
-  border-right: 1px solid var(--line-soft);
-  padding: 17px 18px;
-  align-self: stretch;
-}
-
-/* Le titre reprend un corps lisible. En capitales de 11 px, six rubriques de
-   nature très différente avaient rigoureusement le même poids visuel. */
-#view-settings .panel-title {
-  font-size: 14.5px;
-  font-weight: 620;
-  letter-spacing: -0.012em;
-  text-transform: none;
-  color: var(--ink);
-}
-
-#view-settings .card-body { padding: 17px 18px; }
-
-/* Les explications quittent le corps du réglage pour rejoindre son intitulé :
-   le côté droit ne contient plus que ce sur quoi on agit. */
-#view-settings .set-help {
-  margin: 6px 0 0;
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: var(--ink-mute);
-}
-
-/* Plus de carte dans la carte. Un encadré gris à l'intérieur d'un panneau
-   encadré, c'est deux bordures et deux fonds pour une seule information. */
-.set-conn {
-  border: 0;
-  background: none;
-  padding: 0;
-}
-
-.set-conn + .set-conn {
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px solid var(--line-soft);
-}
-
-/* Les champs prennent la largeur disponible : les valeurs longues — gabarit
-   de suivi, adresse de boîte — étaient coupées en plein milieu. */
-#view-settings input[type="text"],
-#view-settings input[type="url"],
-#view-settings select,
-#view-settings textarea { width: 100%; }
-
-#view-settings .field label {
-  font-size: 12.5px;
-  font-weight: 600;
-  letter-spacing: 0;
-  text-transform: none;
-  color: var(--ink);
-}
-
-/* La barre d'enregistrement flotte au-dessus du contenu : sans cette réserve,
-   elle masquait la fin du dernier réglage. */
-#view-settings { padding-bottom: 76px; }
 
 /* ------------------------------------------------- vue simulée (rôle) --- */
 
@@ -2841,31 +2749,6 @@ textarea:focus-visible {
 
 .asbar .btn { margin-left: auto; }
 
-/* Le sélecteur de rôle garde sa largeur naturelle. En grille pleine largeur,
-   quatre boutons s'étalaient sur 550 px avec 80 px de vide entre chaque mot :
-   on ne lisait plus un choix, on lisait une barre de navigation. */
-#view-settings .seg {
-  display: inline-grid;
-  grid-auto-columns: max-content;
-  justify-self: start;
-}
-
-/* Les intitulés de l'identité rejoignent la casse des autres réglages. Trois
-   styles de label sur la même page — capitales espacées ici, phrase là — donne
-   l'impression de deux écrans cousus ensemble. */
-#view-settings .brand-edit-fields label,
-#view-settings .set-group > label {
-  font-size: 12.5px;
-  font-weight: 600;
-  letter-spacing: 0;
-  text-transform: none;
-  color: var(--ink);
-}
-
-/* Un logo se change seul et se voit tout de suite ; le reste des réglages part
-   d'un seul enregistrement. Deux boutons qui disent tous deux « enregistrer »
-   sans dire quoi obligeaient à cliquer pour comprendre. */
-#set-brand-apply::after { content: ' le logo et le nom'; font-weight: 400; }
 
 /* Zone d'écriture d'une escalade fournisseur : sans hauteur propre, le message
    se rédigeait dans deux lignes visibles. */
@@ -8332,11 +8215,6 @@ html, body { overflow-x: clip; }
 
   /* Une modale plein écran : centrée, elle laissait le clavier virtuel
      recouvrir le champ en cours de saisie. */
-  /* La barre d'enregistrement passe en colonne : sur une seule ligne, le
-     libellé se coupait en deux et le bouton débordait de la carte. */
-  .set-bar { flex-direction: column; align-items: stretch; gap: 8px; }
-  .set-bar .btn { margin-left: 0; width: 100%; justify-content: center; }
-
   /* Le message flottant se posait par-dessus cette barre collante, masquant
      précisément le bouton qu'il commente. */
   .toast { bottom: 96px; }
@@ -8404,14 +8282,6 @@ html, body { overflow-x: clip; }
   .brief-ask { font-size: 15px; }
 }
 
-@media (max-width: 900px) {
-  #view-settings .panel { grid-template-columns: minmax(0, 1fr); }
-  #view-settings .panel-head {
-    border-right: 0;
-    border-bottom: 1px solid var(--line-soft);
-    padding-bottom: 13px;
-  }
-}
 
 @media (max-width: 700px) {
   .asbar .btn { margin-left: 0; width: 100%; justify-content: center; }
@@ -8885,13 +8755,9 @@ html, body { overflow-x: clip; }
    À 360 px, la dernière option des rôles sortait de l'écran de quatre-vingts
    pixels — et comme un ancêtre la coupait, elle n'était pas seulement hors
    champ : elle était inatteignable, sans défilement pour aller la chercher.
-   Sous 700 px les boutons passent à la ligne.
-
-   `#view-settings .seg` est repris nommément : la règle d'origine porte cet
-   identifiant, et une classe seule ne l'aurait pas emporté. */
+   Sous 700 px les boutons passent à la ligne. */
 @media (max-width: 700px) {
-  .seg,
-  #view-settings .seg {
+  .seg {
     display: flex;
     flex-wrap: wrap;
     max-width: none !important;
@@ -9801,4 +9667,298 @@ html, body { overflow-x: clip; }
 }
 @media (prefers-reduced-motion: reduce) {
   #couts-graphe { transition: none; }
+}
+
+/* ============================================================ réglages ===
+
+   À la manière des Réglages d'un Mac : les catégories dans une colonne, une
+   seule ouverte à droite, en groupes de lignes blanches — le nom du réglage
+   à gauche, ce sur quoi on agit à droite, une phrase grise sous le groupe.
+   Rien à enregistrer : la ligne du bas dit que c'est fait. */
+#view-settings.reg { flex-direction: row; flex-wrap: wrap; align-items: flex-start; gap: 22px; }
+
+.reg-nav {
+  flex: 1 1 210px;
+  max-width: 250px;
+  position: sticky;
+  top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 12px 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--e1);
+}
+.reg-recherche {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 9px;
+  background: var(--inset);
+  color: var(--ink-mute);
+}
+.reg-recherche svg { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.reg-recherche input { flex: 1; min-width: 0; padding: 0; border: 0; background: transparent; font: inherit; font-size: 13.5px; color: var(--ink); outline: none; }
+.reg-nav-groupe { display: flex; flex-direction: column; gap: 1px; }
+.reg-cat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 36px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.reg-cat:hover { background: var(--inset); }
+.reg-cat[aria-current="page"] { background: var(--accent); color: var(--on-accent); font-weight: 560; }
+.reg-ico { width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center; flex: none; }
+.reg-ico svg { width: 15px; height: 15px; fill: none; stroke: #ffffff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.reg-ico .plein { fill: #ffffff; }
+/* Une teinte par catégorie, comme les pictogrammes des Réglages : toutes
+   assez sombres pour que le trait blanc tienne 4,4:1 au moins. */
+.c-gris { background: #636366; }
+.c-bleu { background: #0a66d6; }
+.c-vert { background: #248a3d; }
+.c-violet { background: #8944c4; }
+.c-orange { background: #c25400; }
+.c-indigo { background: #3a3a8c; }
+.c-rouge { background: #b3261e; }
+.reg-aucun { margin: 0; padding: 0 8px; font-size: 12.5px; color: var(--ink-mute); }
+
+.reg-main { flex: 999 1 520px; min-width: 0; max-width: 720px; display: flex; flex-direction: column; gap: 26px; padding: 4px 2px 40px; }
+.reg-tete { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.reg-tete h2 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.02em; color: var(--ink); }
+.reg-tete p { margin: 3px 0 0; font-size: 13.5px; color: var(--ink-mute); }
+.reg-pastille {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  background: var(--warn-soft);
+  color: var(--warn-ink);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.reg-pastille::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); }
+
+.reg-volet { display: flex; flex-direction: column; gap: 26px; }
+.reg-titre-groupe { margin: 0 0 6px; padding: 0 14px; font-size: 12.5px; font-weight: 500; color: var(--ink-mute); }
+.reg-titre-groupe label { font: inherit; color: inherit; }
+.reg-groupe { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.reg-groupe:not(.reg-profil) > * + * { border-top: 1px solid var(--line-soft); }
+.reg-note { margin: 6px 0 0; padding: 0 14px; font-size: 12px; line-height: 1.5; color: var(--ink-mute); }
+.reg-note code { font-family: var(--font-mono); font-size: 11.5px; }
+
+.reg-ligne {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 46px;
+  padding: 7px 14px;
+  font-size: 14px;
+  color: var(--ink);
+}
+.reg-ligne-haute { flex-wrap: wrap; }
+.reg-ligne small { display: block; font-size: 12px; color: var(--ink-mute); }
+.reg-ligne > input[type="text"] {
+  flex: 1;
+  min-width: 0;
+  max-width: 340px;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  text-align: right;
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink-soft);
+  outline: none;
+}
+.reg-ligne > input[type="text"]:focus { color: var(--ink); }
+.reg-ligne > select,
+.reg-paire select {
+  max-width: 60%;
+  padding: 4px 2px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink-soft);
+  text-align: right;
+  cursor: pointer;
+}
+.reg-paire { display: flex; align-items: center; gap: 10px; }
+.reg-bloc { padding: 10px 14px; }
+.reg-bloc textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  resize: vertical;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ink);
+  outline: none;
+}
+.reg-sortie { padding: 0 14px 10px; font-size: 12.5px; }
+.reg-sortie:empty { display: none; }
+
+.reg-ligne-action {
+  display: block;
+  width: 100%;
+  min-height: 46px;
+  padding: 0 14px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  font-size: 14px;
+  color: var(--accent-ink);
+  cursor: pointer;
+}
+.reg-ligne-action:hover { background: var(--inset); }
+.reg-ligne-action:disabled { opacity: 0.55; cursor: progress; }
+.reg .reg-danger { color: var(--crit-ink); }
+.reg-bouton {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--inset);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.reg-bouton:hover { background: color-mix(in srgb, var(--ink) 9%, var(--inset)); }
+.reg-bouton:disabled { opacity: 0.55; cursor: progress; }
+.reg-bouton.reg-plein { background: var(--accent); color: var(--on-accent); }
+.reg-lien { padding: 4px 2px; border: 0; background: none; font: inherit; font-size: 13.5px; color: var(--accent-ink); cursor: pointer; }
+
+/* Le contrôle segmenté des Réglages : une piste grise, le choix en blanc. */
+.reg-seg { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 2px; border-radius: 9px; background: var(--inset); }
+.reg-seg button {
+  min-height: 30px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.reg-seg button[aria-pressed="true"] { background: var(--surface); font-weight: 600; box-shadow: 0 1px 3px rgb(0 0 0 / 14%); }
+
+/* L'interrupteur : une vraie case à cocher, dessinée en bascule. */
+.reg-switch {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  flex: none;
+  width: 46px;
+  height: 28px;
+  margin: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 20%, var(--surface));
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+.reg-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 25%);
+  transition: transform 0.2s ease;
+}
+.reg-switch:checked { background: #34c759; }
+.reg-switch:checked::after { transform: translateX(18px); }
+
+.reg-curseur { display: flex; align-items: center; gap: 12px; flex: 1; max-width: 320px; }
+.reg-curseur input { flex: 1; min-width: 0; accent-color: var(--accent); }
+.reg-curseur b { width: 44px; text-align: right; font-weight: 500; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+
+/* La boutique en tête, comme la fiche du compte en haut des Réglages. */
+.reg-profil { display: flex; align-items: center; gap: 14px; padding: 14px; flex-wrap: wrap; }
+.reg-profil .brand-preview { width: 58px; height: 58px; border-radius: 14px; border: 0; }
+.reg-profil-nom { flex: 1 1 180px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.reg-profil-nom input {
+  width: 100%;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--ink);
+  outline: none;
+}
+.reg-profil-nom input:focus { box-shadow: 0 1px 0 var(--accent); }
+.reg-profil-nom span { font-size: 12.5px; color: var(--ink-mute); }
+.reg-profil-acts { display: flex; align-items: center; gap: 8px; }
+
+.reg-replie { margin-top: 8px; }
+.reg-replie > summary { padding: 0 14px; font-size: 12.5px; color: var(--accent-ink); cursor: pointer; list-style: none; }
+.reg-replie > summary::-webkit-details-marker { display: none; }
+.reg-replie[open] > summary { margin-bottom: 8px; }
+
+/* Les comptes : une ligne par connexion, les gestes repliés sous « Gérer ». */
+#view-settings .set-conn { margin: 0; padding: 12px 14px; border: 0; background: none; }
+#view-settings .mbx-gerer { margin-top: 6px; }
+#view-settings .mbx-gerer > summary { padding: 0; }
+
+#view-settings .swatches { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+#view-settings .swatch { width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; background: none; display: grid; place-items: center; }
+#view-settings .swatch i { width: 22px; height: 22px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 10%); }
+#view-settings .swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--ink); }
+
+/* Les champs des Réglages ne sont pas des creux : le texte se pose dans la
+   ligne. Le groupe qui contient le champ actif s'éclaire de l'accent. */
+#view-settings .reg-ligne > input[type="text"],
+#view-settings .reg-ligne > select,
+#view-settings .reg-paire select,
+#view-settings .reg-bloc textarea,
+#view-settings .reg-profil-nom input,
+#view-settings .reg-recherche input { box-shadow: none; }
+#view-settings .reg-ligne > input[type="text"]:focus-visible,
+#view-settings .reg-profil-nom input:focus-visible { box-shadow: 0 1px 0 var(--accent); }
+.reg-groupe:focus-within { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+
+.reg-etat { margin: 0; font-size: 12px; color: var(--ink-mute); }
+.reg-etat.reg-etat-erreur { color: var(--crit-ink); font-weight: 600; }
+
+/* Au doigt : la recherche, puis les catégories en pastilles qui passent à la
+   ligne, et la catégorie ouverte dessous. */
+@media (max-width: 760px) {
+  .reg-nav { flex-basis: 100%; max-width: none; position: static; }
+  .reg-nav-groupe { flex-direction: row; flex-wrap: wrap; gap: 6px; }
+  .reg-cat { width: auto; background: var(--inset); padding-right: 12px; }
+  .reg-main { flex-basis: 100%; }
+  .reg-ligne { flex-wrap: wrap; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reg-switch, .reg-switch::after { transition: none; }
 }
