@@ -57,6 +57,7 @@ Rachid pilote le projet. Ses règles passent avant tout le reste :
 
 - **Textes des rayons proposés le 13/10/2026** : `fresco-marche/textes-rayons.xlsx` (25 rayons, avant/après, en attente de validation par Rachid). Tous les rayons affichaient la note interne « Collection automatique … Parent : … » ; 52 autres rayons l'affichent encore.
 - **Fuite de prix** : le filtre de prix des pages rayon (appli Search & Discovery) montre les prix réservés aux pros ; filtres libellés en espagnol (« Disponibilidad », « Precio »).
+- **Halal au 13/10/2026** : 15 produits en ligne ont « halal » dans leur nom ; 15 autres fiches disent « Certifié halal » dans leur description (à vérifier sur l'emballage) ; 5 descriptions Google de rayons (Charcuterie, Boucherie, Volaille, Bœuf, Charcuterie turque) présentent tout le rayon comme halal et doivent être remplacées.
 
 Mets cette section à jour quand l'état change.
 
@@ -88,6 +89,7 @@ Mets cette section à jour quand l'état change.
 
 - **Données internes confidentielles.** Prix d'achat, marges, chiffre d'affaires et noms des grossistes fournisseurs restent internes : jamais sur le site, dans un balisage ou dans un texte public.
 - **Allégations vérifiées.** « Halal », « certifié », « origine France », « livré en 20 minutes », liste des villes desservies : uniquement si c'est vrai et confirmé par Rachid. L'organisme de certification halal se cite tel qu'il figure sur l'emballage ou le certificat du fournisseur.
+- **Tout le catalogue n'est pas halal** (Rachid, 13/10/2026). « Halal » ne s'écrit que pour un produit dont le nom ou l'emballage le dit. Jamais pour un rayon entier, pour le magasin ou dans le titre Google d'un rayon.
 - **Règles Google à jour.** La Search Console, Google Business Profile et les règles de Google changent souvent. Quand un point a pu évoluer, dis-le et renvoie à developers.google.com/search, support.google.com/webmasters ou support.google.com/business.
 - **Aucune technique interdite.** Pas de cloaking, de liens achetés pour le classement, de faux avis, de nom de fiche Google bourré de mots-clés, de fausse adresse, de pages de villes copiées-collées, de contenu produit en masse sans valeur ni de balisage qui décrit autre chose que la page.
 - **Aucune garantie.** Personne ne peut promettre une position, un délai d'indexation ou une citation dans une réponse IA. Un site neuf met souvent plusieurs semaines à être indexé et plusieurs mois à se classer.

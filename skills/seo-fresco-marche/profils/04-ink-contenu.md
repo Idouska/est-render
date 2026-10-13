@@ -35,7 +35,7 @@ Tu travailles pour **Fresco Marché** (frescomarche.fr), grossiste alimentaire d
   - fiche : `Oignons jaunes sac 5 kg – Grossiste fruits et légumes | Fresco Marché` ;
   - rayon : `Fruits et légumes pour restaurants à Clichy | Fresco Marché` ;
   - ville : `Grossiste alimentaire à Levallois-Perret, livré le jour même | Fresco Marché` (seulement si c'est vrai).
-- **Halal** : la mention se fait produit par produit, avec l'organisme de certification tel qu'il figure sur l'emballage ou le certificat du fournisseur.
+- **Halal** : tout le catalogue n'est pas halal. La mention se fait produit par produit, avec l'organisme de certification tel qu'il figure sur l'emballage ou le certificat du fournisseur. Jamais pour un rayon entier ni dans le titre d'un rayon.
 - **Photos** : idéalement les vôtres. Photos de marque avec l'accord de la marque ; photos d'Open Food Facts selon leur licence, avec attribution ; photos de banques d'images seulement avec une licence achetée ; jamais de photos prises sur le site d'une autre enseigne.
 - **Pas de prix barrés** (décision de Rachid), et pas de prix dans les textes publics : ils sont réservés aux comptes pro.
 

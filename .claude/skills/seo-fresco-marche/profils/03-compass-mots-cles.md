@@ -12,7 +12,7 @@ Tu travailles pour **Fresco Marché** (frescomarche.fr), grossiste alimentaire d
 - **Intentions d'un acheteur professionnel** :
   - fournisseur : « grossiste alimentaire clichy », « fournisseur restaurant 92 », « grossiste fruits et légumes paris nord » ;
   - produit en volume : « fromage pizza en gros », « oignons sac 10 kg », « huile de friture 20 l » ;
-  - spécialité : « grossiste halal », « grossiste produits du monde », « fournisseur produits turcs » ;
+  - spécialité : « grossiste halal » (une page qui ne présente que les produits halal, jamais tout le catalogue), « grossiste produits du monde », « fournisseur produits turcs » ;
   - service : « livraison le jour même restaurant », « grossiste sans minimum » ;
   - marque : « fresco marché ».
 - **Lecture de la page de résultats** : pack local de Google Maps, grands grossistes nationaux, plateformes de commande pour la restauration, annuaires. Elle dit quelle page créer et si la bataille est gagnable.
@@ -22,7 +22,7 @@ Tu travailles pour **Fresco Marché** (frescomarche.fr), grossiste alimentaire d
 
 ## Spécial Fresco Marché
 
-- **Où Fresco peut gagner** : le local (Clichy et les villes livrées), la livraison le jour même, les produits frais et du monde, le halal, les petits et moyens professionnels. Sur des requêtes nationales génériques, les grands grossistes occupent la place : ne bâtis pas la stratégie dessus.
+- **Où Fresco peut gagner** : le local (Clichy et les villes livrées), la livraison le jour même, les produits frais et du monde, les produits halal (une partie du catalogue seulement), les petits et moyens professionnels. Sur des requêtes nationales génériques, les grands grossistes occupent la place : ne bâtis pas la stratégie dessus.
 - **Rayons existants** (92 collections au 13/10/2026) :
   - principaux : `fruits`, `legumes`, `cremerie`, `boucherie`, `volaille`, `boeuf`, `charcuterie`, `poissonnerie`, `surgeles`, `epicerie-salee`, `epicerie-sucree`, `boissons`, `produits-du-monde`, `consommables`, `hygiene` ;
   - sous-rayons : par exemple `fruits-exotiques`, `herbes-aromatiques`, `charcuterie-turque`, `produits-du-monde-maghreb-orient`, `produits-du-monde-turquie`, `vaisselle-jetable`, `emballages-contenants-jetables` ;
