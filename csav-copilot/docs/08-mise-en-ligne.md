@@ -495,52 +495,92 @@ L'adresse `csav-api.onrender.com` fonctionne, mais elle dit « prestataire
 technique » à un fournisseur ou à un agent, et elle est impossible à dicter au
 téléphone. Un sous-domaine de la boutique règle les deux.
 
+### Pourquoi un sous-domaine, et pas `runningupscale.com/sav`
+
+`runningupscale.com` et `www.runningupscale.com` pointent sur Shopify : c'est
+Shopify qui sert **toutes** les pages du domaine, et il ne laisse pas confier
+un chemin (`/sav`) à un autre serveur. Le proxy d'appli de Shopify
+(`/apps/…`) existe, mais il retire les cookies : impossible d'y garder une
+session ouverte. Et l'outil est construit pour vivre à la racine de son
+adresse. Le sous-domaine, lui, ne touche ni à Shopify ni au code : une ligne
+DNS suffit. `runningupscale.com/sav` devient ensuite un raccourci (étape 4).
+
 Le domaine est déclaré dans `render.yaml` (`services[csav-api].domains`) et non
 posé à la main dans l'interface : un domaine cliqué disparaît au prochain
 environnement recréé depuis ce fichier, et personne ne se souvient de le
 remettre.
 
-### 1. L'enregistrement DNS
+### 1. L'enregistrement DNS, chez o2switch
 
-Chez le gestionnaire DNS de `runningupscale.com` — dans l'admin Shopify si le
-domaine y est géré (**Paramètres → Domaines**), chez le registrar sinon :
+Les DNS de `runningupscale.com` sont chez **o2switch** (serveurs
+`ns1.o2switch.net`), pas chez Shopify. cPanel o2switch → **Zone Editor**
+(Éditeur de zone) → `runningupscale.com` → **+ CNAME** :
 
 | Type | Nom | Valeur |
 |---|---|---|
 | CNAME | `sav` | `csav-api.onrender.com` |
 
+**Ne touchez à rien d'autre** dans la zone : l'enregistrement `A` de la racine
+et le CNAME `www` font marcher la boutique.
+
 Un CNAME et non un A : l'adresse IP de Render change sans prévenir, le nom
 d'hôte non.
 
-Render détecte l'enregistrement en quelques minutes et demande seul le
-certificat TLS. Tant qu'il n'est pas émis, le navigateur affiche un
-avertissement de sécurité — c'est attendu, pas une panne.
+### 2. Le domaine côté Render
 
-### 2. Ce qu'il faut basculer *ensuite*, dans cet ordre
+Si le Blueprint est synchronisé, le domaine apparaît seul dans Render →
+`csav-api` → **Settings → Custom Domains**. Sinon, **Add Custom Domain** →
+`sav.runningupscale.com`. Render vérifie l'enregistrement (quelques minutes,
+parfois quelques heures) puis émet seul le certificat TLS. Tant qu'il n'est pas
+émis, le navigateur affiche un avertissement de sécurité — c'est attendu, pas
+une panne. Attendez la coche verte avant l'étape suivante.
 
-`APP_URL` sert à fabriquer trois choses qui vivent hors de l'application : les
-adresses de retour OAuth, l'URL du webhook Pub/Sub, et les liens de travail
-transmis aux fournisseurs. La changer sans prévenir les tiers concernés coupe
-les connexions.
+### 3. Ce qu'il faut basculer *ensuite*, dans cet ordre
+
+`APP_URL` fabrique quatre choses qui vivent hors de l'application : les
+adresses de retour OAuth (Google, Shopify), l'audience des notifications
+Gmail, et les liens de travail transmis aux ateliers et aux agences. La changer
+sans prévenir les tiers concernés coupe les connexions. Toujours **ajouter** la
+nouvelle adresse à côté de l'ancienne, jamais remplacer : l'ancienne doit
+rester valable le temps de la bascule.
 
 1. **Google Cloud Console** → identifiants OAuth → ajouter l'URI de redirection
-   `https://sav.runningupscale.com/auth/google/callback`. **Ajouter**, pas
-   remplacer : l'ancienne doit rester le temps de la bascule.
-2. **Shopify Partners** → l'application → URL de l'app et URLs de redirection
-   autorisées, même logique d'ajout.
+   `https://sav.runningupscale.com/auth/google/callback`. Si Google le
+   réclame, ajoutez aussi `runningupscale.com` aux **domaines autorisés** de
+   l'écran de consentement ; la preuve de propriété se fait par un
+   enregistrement `TXT` dans la même zone o2switch.
+2. **Chaque appli Shopify** — il y en a une par boutique (voir
+   `docs/13-ajouter-une-boutique.md`) → **Configuration** :
+   - URL de l'appli : `https://sav.runningupscale.com/auth/shopify`
+   - URL de redirection autorisée : ajouter
+     `https://sav.runningupscale.com/auth/shopify/callback`
+
+   Publiez la nouvelle version de chaque appli pour que la configuration
+   s'applique.
 3. **Render** → service `csav-api` → `APP_URL` =
    `https://sav.runningupscale.com`. Le worker et le cron la recopient
    automatiquement (`fromService`), rien à faire de leur côté.
-4. Reconnecter Gmail une fois : le watch Pub/Sub porte l'ancienne adresse de
-   webhook jusqu'à son renouvellement.
+4. **Google Cloud → Pub/Sub** → la souscription push → **Modifier** :
+   - Endpoint URL : `https://sav.runningupscale.com/webhooks/gmail`
+   - Audience : `https://sav.runningupscale.com/webhooks/gmail`
+
+   À faire **juste après** l'étape 3 : l'application refuse en 401 toute
+   notification dont l'audience n'est pas `APP_URL` + `/webhooks/gmail`. Entre
+   les deux, Pub/Sub garde les notifications refusées et les rejoue, et un
+   écran de l'outil ouvert relève Gmail toutes les minutes : rien ne se perd,
+   l'arrivée est seulement moins instantanée quelques minutes.
+5. **Vérifier** : console `/admin` → **Tester la connexion** sur chaque groupe ;
+   Réglages → Connexions → **Relever maintenant**. Un mail de test envoyé à la
+   boîte doit apparaître dans la file en quelques secondes.
 
 L'adresse `onrender.com` continue de répondre après la bascule, et c'est
-voulu : les liens de travail déjà transmis aux fournisseurs la portent en dur.
-Les couper au moment précis où l'on gagne une jolie URL serait un mauvais
-échange.
+voulu : les liens de travail déjà transmis aux ateliers et aux agences la
+portent en dur. Les couper au moment précis où l'on gagne une jolie URL serait
+un mauvais échange.
 
-### 3. Et `runningupscale.com/resolv` ?
+### 4. Et `runningupscale.com/sav` ?
 
-Une redirection d'URL Shopify (**Boutique en ligne → Navigation → Redirections
-d'URL**) accepte une cible externe : `/resolv` → `https://sav.runningupscale.com`.
-Elle reste utile après la bascule — c'est l'adresse qu'on retient de tête.
+Une redirection d'URL Shopify (admin Shopify → **Boutique en ligne →
+Navigation → Redirections d'URL**) accepte une cible externe :
+`/sav` → `https://sav.runningupscale.com`. C'est l'adresse qu'on retient de
+tête ; une fois arrivé, la barre d'adresse affiche le sous-domaine.
