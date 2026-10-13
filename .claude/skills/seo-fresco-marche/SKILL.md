@@ -52,7 +52,8 @@ Rachid pilote le projet. Ses règles passent avant tout le reste :
 - **Search Console** : propriété Domaine `frescomarche.fr`. Sitemap index envoyé le 16/09/2026, lu le 04/10/2026, 705 pages découvertes. Au 09/10/2026 : 28 pages indexées, 689 non indexées, dont 682 « Détectée, actuellement non indexée ».
 - **Diagnostic du 13/10/2026** : l'accueil n'a aucun lien vers un produit ni vers un rayon, et le catalogue n'expose que 28 liens produits dans son HTML. Google ne connaît donc les autres fiches que par le sitemap. S'y ajoutent des fiches presque vides et des pages de livraison quasi identiques.
 
-- **Correctif préparé le 13/10/2026** (à installer par Rachid sur une copie du thème) : sections `fm-rayons-liens` (liens vers les rayons dans le pied de page) et `fm-rayon-produit` (fil d'Ariane et produits du même rayon en liens HTML). Fichiers et guide dans `fresco-marche/` à la racine du dépôt.
+- **Correctif installé le 13/10/2026 sur une copie non publiée** : thème « FM.V1 + liens SEO (13/10) » (id `208548069701`), avec « Nos rayons » avant le pied de page (`fm-rayons-liens`) et « Dans le rayon … » sur les fiches (`fm-meme-rayon`, écrit le 23/09). À publier par Rachid, puis demandes d'indexation des rayons. Détails dans `fresco-marche/README.md`.
+- **Accès au thème** : le CLI Shopify (`shopify theme …`, connexion par code dans le navigateur) fonctionne depuis une session cloud. Il faut un pseudo-terminal (`script`) et un faux `xdg-open`. Après un `theme duplicate`, vérifie que `config/settings_schema.json` n'est pas vide sur la copie.
 
 Mets cette section à jour quand l'état change.
 

@@ -1,0 +1,155 @@
+{%- comment -%}
+  « Dans le même rayon » : quelques fiches du rayon le plus précis du produit, écrites dans le
+  HTML servi pour que Google les suive (l'ancien bloc Dawn se chargeait en JavaScript).
+
+  On affiche les produits qui SUIVENT celui-ci dans son sous-rayon (le plus précis), en repartant
+  du début en fin de liste : chaque fiche est reliée par celles qui la précèdent, donc Google
+  parcourt tout le sous-rayon depuis n'importe quelle fiche. Les 2 dernières places viennent du
+  rayon parent (le plus large) : elles font le pont d'un sous-rayon à l'autre. Mesuré par
+  simulation le 23/09/2026 : 572 fiches sur 585 atteignables depuis l'accueil (330 avec le seul
+  sous-rayon) ; les 13 manquantes sont les boissons, un rayon sans lien d'entrée.
+
+  Aucun prix ici : seulement l'image et le nom, pour ne rien exposer aux visiteurs non validés.
+{%- endcomment -%}
+{%- liquid
+  assign limite = section.settings.limite | default: 8
+  assign exclus = section.settings.exclus | default: '' | remove: ' ' | split: ','
+
+  comment
+    Sous-rayon = la plus petite collection non technique (TVA, mises en avant exclues) ;
+    parent = la plus grande. Les deux sont souvent emboîtées : Épices dans Épicerie.
+  endcomment
+  assign rayon = nil
+  assign parent = nil
+  assign petite = 100000
+  assign grande = 0
+  for c in product.collections
+    if exclus contains c.handle or c.products_count < 2
+      continue
+    endif
+    if c.products_count < petite
+      assign rayon = c
+      assign petite = c.products_count
+    endif
+    if c.products_count > grande
+      assign parent = c
+      assign grande = c.products_count
+    endif
+  endfor
+  assign quota_rayon = limite
+  if parent and parent.id != rayon.id
+    assign quota_rayon = limite | minus: 2
+  endif
+  assign deja = ',' | append: product.id | append: ','
+  assign affiches = 0
+-%}
+
+{%- if rayon -%}
+  <style>
+    .fm-meme-rayon { padding-top: 28px; padding-bottom: 36px; }
+    .fm-meme-rayon__tete { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; margin-bottom: 16px; }
+    .fm-meme-rayon__titre { margin: 0; }
+    .fm-meme-rayon__catalogue { font-weight: 600; text-decoration: none; color: rgb(var(--color-foreground)); }
+    .fm-meme-rayon__catalogue:hover { text-decoration: underline; }
+    .fm-meme-rayon__liste { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
+    @media screen and (min-width: 750px) { .fm-meme-rayon__liste { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; } }
+    .fm-meme-rayon__lien { display: flex; flex-direction: column; gap: 8px; height: 100%; color: rgb(var(--color-foreground)); text-decoration: none; }
+    .fm-meme-rayon__image { display: block; aspect-ratio: 1 / 1; overflow: hidden; border-radius: 12px; background: rgba(var(--color-foreground), 0.04); }
+    .fm-meme-rayon__image img { width: 100%; height: 100%; object-fit: contain; }
+    .fm-meme-rayon__nom { font-size: 14px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .fm-meme-rayon__lien:hover .fm-meme-rayon__nom { text-decoration: underline; }
+  </style>
+
+  <section class="fm-meme-rayon page-width" aria-labelledby="fm-meme-rayon-{{ section.id }}">
+    <div class="fm-meme-rayon__tete">
+      <h2 id="fm-meme-rayon-{{ section.id }}" class="fm-meme-rayon__titre h2">{{ section.settings.titre | default: 'Dans le rayon' }} {{ parent.title | default: rayon.title | escape }}</h2>
+      <a class="fm-meme-rayon__catalogue" href="/pages/catalogue">Commander depuis le catalogue &rarr;</a>
+    </div>
+
+    <ul class="fm-meme-rayon__liste" role="list">
+      {%- comment -%} Sous-rayon d'abord, puis complément depuis le rayon parent, sans doublon. {%- endcomment -%}
+      {%- paginate rayon.products by 250 -%}
+        {%- liquid
+          assign position = -1
+          for p in rayon.products
+            if p.id == product.id
+              assign position = forloop.index0
+              break
+            endif
+          endfor
+        -%}
+        {%- for p in rayon.products -%}
+          {%- if affiches >= quota_rayon -%}{%- break -%}{%- endif -%}
+          {%- if forloop.index0 > position -%}
+            {%- assign cle = ',' | append: p.id | append: ',' -%}
+          {%- unless deja contains cle -%}
+            {%- render 'fm-meme-rayon-carte', p: p -%}
+            {%- assign deja = deja | append: p.id | append: ',' -%}
+            {%- assign affiches = affiches | plus: 1 -%}
+          {%- endunless -%}
+          {%- endif -%}
+        {%- endfor -%}
+        {%- for p in rayon.products -%}
+          {%- if affiches >= quota_rayon or forloop.index0 >= position -%}{%- break -%}{%- endif -%}
+          {%- assign cle = ',' | append: p.id | append: ',' -%}
+          {%- unless deja contains cle -%}
+            {%- render 'fm-meme-rayon-carte', p: p -%}
+            {%- assign deja = deja | append: p.id | append: ',' -%}
+            {%- assign affiches = affiches | plus: 1 -%}
+          {%- endunless -%}
+        {%- endfor -%}
+      {%- endpaginate -%}
+      {%- if quota_rayon < limite -%}
+      {%- paginate parent.products by 250 -%}
+        {%- liquid
+          assign position = -1
+          for p in parent.products
+            if p.id == product.id
+              assign position = forloop.index0
+              break
+            endif
+          endfor
+        -%}
+        {%- for p in parent.products -%}
+          {%- if affiches >= limite -%}{%- break -%}{%- endif -%}
+          {%- if forloop.index0 > position -%}
+            {%- assign cle = ',' | append: p.id | append: ',' -%}
+          {%- unless deja contains cle -%}
+            {%- render 'fm-meme-rayon-carte', p: p -%}
+            {%- assign deja = deja | append: p.id | append: ',' -%}
+            {%- assign affiches = affiches | plus: 1 -%}
+          {%- endunless -%}
+          {%- endif -%}
+        {%- endfor -%}
+        {%- for p in parent.products -%}
+          {%- if affiches >= limite or forloop.index0 >= position -%}{%- break -%}{%- endif -%}
+          {%- assign cle = ',' | append: p.id | append: ',' -%}
+          {%- unless deja contains cle -%}
+            {%- render 'fm-meme-rayon-carte', p: p -%}
+            {%- assign deja = deja | append: p.id | append: ',' -%}
+            {%- assign affiches = affiches | plus: 1 -%}
+          {%- endunless -%}
+        {%- endfor -%}
+      {%- endpaginate -%}
+      {%- endif -%}
+    </ul>
+  </section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "FM – Même rayon",
+  "tag": "div",
+  "settings": [
+    { "type": "text", "id": "titre", "label": "Début du titre (suivi du nom du rayon)", "default": "Dans le rayon" },
+    { "type": "range", "id": "limite", "label": "Nombre de produits", "min": 4, "max": 12, "step": 4, "default": 8 },
+    {
+      "type": "textarea",
+      "id": "exclus",
+      "label": "Collections à ne jamais prendre comme rayon",
+      "info": "Identifiants séparés par des virgules : collections techniques (TVA) et mises en avant.",
+      "default": "tva-5-5,tva-5-5-manuelle,tva-10,tva-10-derogation,tva-20,tva-a-classer,nouveaux-produits,bons-plans,meilleures-ventes,arrivages-rungis"
+    }
+  ]
+}
+{% endschema %}

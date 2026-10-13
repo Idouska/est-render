@@ -1,0 +1,11 @@
+{%- comment -%} Carte du bloc « Dans le même rayon » : image et nom seulement, jamais de prix. {%- endcomment -%}
+<li>
+  <a class="fm-meme-rayon__lien" href="{{ p.url }}">
+    <span class="fm-meme-rayon__image">
+      {%- if p.featured_image -%}
+        {{ p.featured_image | image_url: width: 400 | image_tag: loading: 'lazy', widths: '200, 300, 400', sizes: '(min-width: 750px) 22vw, 45vw', alt: p.featured_image.alt | default: p.title }}
+      {%- endif -%}
+    </span>
+    <span class="fm-meme-rayon__nom">{{ p.title | escape }}</span>
+  </a>
+</li>

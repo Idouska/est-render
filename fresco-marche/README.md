@@ -1,38 +1,40 @@
 # Fresco Marché : liens vers les rayons et les fiches
 
-Google ne trouvait presque aucun lien vers les fiches produit et les rayons de frescomarche.fr : 682 pages restaient « Détectée, actuellement non indexée ». Ces deux sections ajoutent ces liens, sans modifier aucun fichier existant du thème.
+Google ne trouvait presque aucun lien vers les fiches produit et les rayons de frescomarche.fr : 682 pages restaient « Détectée, actuellement non indexée » (Search Console, 09/10/2026).
 
-## Avant / après
+## Ce qui est installé (13/10/2026)
 
-| Où | Avant | Après |
+Sur une **copie** du thème en ligne, non publiée : **« FM.V1 + liens SEO (13/10) »** (id `208548069701`), créée avec le CLI Shopify à partir de « FM.V1 - 09/26 + recherche mobile ». Le thème en ligne n'a pas été modifié.
+
+| Fichier | Rôle |
+|---|---|
+| `sections/fm-rayons-liens.liquid` | « Nos rayons » au-dessus du pied de page : liens vers les rayons principaux, rayons vides masqués |
+| `sections/fm-meme-rayon.liquid` + `snippets/fm-meme-rayon-carte.liquid` | Sur chaque fiche : « Dans le rayon … », 8 fiches du même rayon en liens HTML, sans prix. Section écrite le 23/09/2026 (thème « TEST SEO même rayon »), reprise telle quelle |
+| `templates/product.json` | Ajoute la section « même rayon » sous la fiche |
+| `sections/footer-group.json` | Ajoute « Nos rayons » avant le pied de page |
+
+Rien d'autre n'a changé : le catalogue pro, l'accueil, le menu et le pied de page existant sont identiques.
+
+## Avant / après (mesuré sur l'aperçu, comme Googlebot)
+
+| Page | Avant | Après |
 |---|---|---|
-| Pied de page (toutes les pages) | Aucun lien vers les rayons | « Nos rayons » : liens vers Fruits, Légumes, Crémerie, Boucherie, Volaille, Charcuterie, Poissonnerie, Surgelés, Épicerie salée, Épicerie sucrée, Boissons, Produits du monde, Arrivages Rungis, Consommables, Hygiène |
-| Fiche produit | Aucun lien vers son rayon ; les produits similaires se chargent en JavaScript, que Google ne suit pas | Fil d'Ariane « Accueil › Fruits › Banane » et 8 produits du même rayon en liens HTML, sans prix |
-| Pages rayon | Déjà bonnes : 16 produits par page et pagination | Inchangées |
-| Catalogue pro, accueil, menu | — | Inchangés |
+| Accueil | 0 lien vers un rayon | 13 liens vers les rayons |
+| Fiche produit (banane, kiwi, oignon rouge, crémerie, épicerie…) | 0 à 2 liens vers d'autres fiches | 9 liens vers d'autres fiches du même rayon |
+| Pages rayon | 16 produits par page et pagination | Inchangées, et maintenant reliées depuis toutes les pages |
 
-Un rayon vide n'apparaît pas dans le pied de page.
+Captures mobiles dans `captures/`. Les deux sections passent `theme-check` (l'outil de vérification de Shopify) sans erreur, et aucune erreur Liquid n'apparaît sur l'aperçu.
 
-## Installation (10 minutes)
+Incident corrigé pendant l'installation : après la duplication, le fichier `config/settings_schema.json` de la copie était vide. Il a été restauré à l'identique depuis le thème en ligne, et vérifié.
 
-1. **Copie du thème.** Admin Shopify › Boutique en ligne › Thèmes › thème en ligne › ⋯ › **Dupliquer**.
-2. **Ajouter les fichiers.** Sur la copie › ⋯ › **Modifier le code** › dossier `sections` › **Ajouter une section** :
-   - nom `fm-rayons-liens`, puis remplace tout le contenu par `theme/sections/fm-rayons-liens.liquid` ;
-   - nom `fm-rayon-produit`, puis remplace tout le contenu par `theme/sections/fm-rayon-produit.liquid`.
-3. **Placer les sections.** Sur la copie › **Personnaliser** :
-   - **Pied de page** › Ajouter une section › « FM - Liens rayons » ;
-   - **Produits** (modèle par défaut) › Ajouter une section › « FM - Rayon du produit », juste sous la fiche.
-   - Pour avoir le fil d'Ariane en haut de la fiche : ajoute une deuxième « FM - Rayon du produit » au-dessus de la fiche, décoche « Du même rayon » dans celle du haut et « Fil d'Ariane » dans celle du bas.
-   - Si le bloc « produits similaires » actuel fait doublon, il peut être masqué.
-4. **Vérifier l'aperçu** sur trois fiches (un fruit, un produit de crémerie, un produit du monde) et sur mobile.
-5. **Publier** la copie.
+## Publier
+
+1. Aperçu : https://frescomarche.fr/?preview_theme_id=208548069701 (vérifier une fiche et le bas de l'accueil).
+2. Admin Shopify › Boutique en ligne › Thèmes › « FM.V1 + liens SEO (13/10) » › **Publier**.
+3. Si le thème en ligne a été modifié entre-temps, ces changements ne sont pas dans la copie : il faut les refaire, ou recréer la copie.
 
 ## Après la publication : Search Console
 
-1. **Inspection de l'URL** › `https://frescomarche.fr/collections/fruits` › **Demander l'indexation**. Même chose pour `legumes`, `cremerie`, `boucherie`, `epicerie-salee`, `boissons`, `produits-du-monde`, `surgeles`, `charcuterie`, `arrivages-rungis`. Environ dix par jour (quota de Google).
-2. **Vérifier que Google voit les liens** : Inspection de l'URL › `https://frescomarche.fr/products/banane-fraiche` › **Tester l'URL en direct** › Afficher la page explorée › HTML : on doit y trouver `/collections/fruits` et des liens `/products/`.
+1. **Inspection de l'URL** › `https://frescomarche.fr/collections/fruits` › **Demander l'indexation**. Même chose pour `legumes`, `cremerie`, `boucherie`, `epicerie-salee`, `epicerie-sucree`, `boissons`, `produits-du-monde`, `surgeles`, `charcuterie`. Environ dix par jour (quota de Google).
+2. **Vérifier que Google voit les liens** : Inspection de l'URL › `https://frescomarche.fr/products/banane-fraiche` › **Tester l'URL en direct** › Afficher la page explorée › HTML : on doit y trouver `fm-meme-rayon` et `/collections/fruits`.
 3. **Suivre** chaque semaine Pages › « Dans l'index » (doit monter) et « Détectée, actuellement non indexée » (doit baisser). Compter 2 à 6 semaines ; Google ne garantit aucun délai.
-
-## Contrôle qualité
-
-Les deux sections passent `theme-check` (l'outil de vérification de Shopify) sans erreur ni avertissement.
