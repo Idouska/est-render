@@ -55,6 +55,9 @@ Rachid pilote le projet. Ses règles passent avant tout le reste :
 - **Correctif installé le 13/10/2026 sur une copie non publiée** : thème « FM.V1 + liens SEO (13/10) » (id `208548069701`), avec « Nos rayons » avant le pied de page (`fm-rayons-liens`) et « Dans le rayon … » sur les fiches (`fm-meme-rayon`, écrit le 23/09). À publier par Rachid, puis demandes d'indexation des rayons. Détails dans `fresco-marche/README.md`.
 - **Accès au thème** : le CLI Shopify (`shopify theme …`, connexion par code dans le navigateur) fonctionne depuis une session cloud. Il faut un pseudo-terminal (`script`) et un faux `xdg-open`. Après un `theme duplicate`, vérifie que `config/settings_schema.json` n'est pas vide sur la copie.
 
+- **Textes des rayons proposés le 13/10/2026** : `fresco-marche/textes-rayons.xlsx` (25 rayons, avant/après, en attente de validation par Rachid). Tous les rayons affichaient la note interne « Collection automatique … Parent : … » ; 52 autres rayons l'affichent encore.
+- **Fuite de prix** : le filtre de prix des pages rayon (appli Search & Discovery) montre les prix réservés aux pros ; filtres libellés en espagnol (« Disponibilidad », « Precio »).
+
 Mets cette section à jour quand l'état change.
 
 ## Routage
