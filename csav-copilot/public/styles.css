@@ -10073,3 +10073,492 @@ html, body { overflow-x: clip; }
 @media (prefers-reduced-motion: reduce) {
   .reg-switch, .reg-switch::after { transition: none; }
 }
+
+/* ========================================================= aspect Mac ===
+
+   Le reste de l'outil rejoint les Réglages : les mêmes pièces que sur un
+   Mac, partout. Une colonne grise où la page ouverte se remplit de l'accent ;
+   des boutons blancs cernés d'un filet ; des menus à double flèche ; des
+   cartes à coins doux ; des intitulés en casse normale plutôt qu'en petites
+   capitales espacées. Chaque écran garde son organisation : cette couche ne
+   change que l'habit des pièces communes, et seulement avec les jetons de
+   l'application, pour que le thème sombre et les palettes suivent seuls. */
+
+/* Le Mac écrit en SF Pro, que le système choisit lui-même à la bonne taille
+   (« Text » sous 20 points, « Display » au-dessus). Le nommer en « Display »
+   forçait la version des titres jusque dans les petits textes. */
+:root {
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", system-ui, "Segoe UI",
+    Roboto, "Helvetica Neue", sans-serif;
+  /* Le filet des contrôles, celui des Réglages : un demi-pixel d'encre et une
+     ombre courte, ce qui fait un bouton qu'on devine en relief. */
+  --mac-filet: 0 0 0 0.5px color-mix(in srgb, var(--ink) 25%, transparent), 0 1px 1.5px rgb(0 0 0 / 12%);
+  --mac-halo: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
+  --mac-colonne: color-mix(in srgb, var(--inset) 70%, var(--surface));
+}
+
+/* Pas de lueur colorée derrière l'écran : un Mac pose ses fenêtres sur un
+   fond neutre. */
+body::before { display: none; }
+
+/* ------------------------------------------------------------ colonne --- */
+
+.side {
+  background: var(--mac-colonne);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.side-search {
+  height: 30px;
+  padding: 0 9px;
+  gap: 6px;
+  border: 0;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+}
+.side-search svg { width: 14px; height: 14px; }
+.side-search kbd { border: 0; background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.side-search input { box-shadow: none; }
+
+/* La pastille de la boutique, comme l'avatar du compte en tête des
+   Réglages. `.brand span` (0-1-1) pesait plus que `.brand-mark` (0-1-0) et
+   lui imposait le corps, le gris et la chasse fixe du nom de domaine : les
+   initiales tombaient, minuscules, dans le coin du carré. */
+.brand .brand-mark {
+  display: grid;
+  place-items: center;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--on-accent);
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 18%);
+  background-image: none;
+  background-color: var(--accent);
+}
+
+/* Les intitulés de groupe : en casse normale, gras et gris, comme les
+   sections de la barre latérale du Finder. */
+.nav-title {
+  margin: 10px 8px 3px;
+  padding: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-mute);
+}
+
+.nav-item {
+  min-height: 28px;
+  padding: 4px 8px;
+  border-radius: 7px;
+  font-size: 13px;
+  color: var(--ink);
+}
+.nav-item svg { color: var(--accent-ink); opacity: 1; }
+.nav-item:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); color: var(--ink); }
+
+/* La page ouverte se remplit de l'accent, en entier : plus de repère
+   accroché au bord ni de dégradé. */
+.nav-item[aria-current="true"],
+.nav-item[aria-current="true"]:hover {
+  background: var(--accent);
+  background-image: none;
+  color: var(--on-accent);
+  font-weight: 600;
+}
+.nav-item[aria-current="true"] svg { color: currentColor; }
+.nav-item[aria-current="true"]::before { display: none; }
+.nav-item[aria-current="true"] .tally:not(.tally-hot) {
+  background: rgb(255 255 255 / 24%);
+  color: var(--on-accent);
+  box-shadow: none;
+}
+
+/* Les compteurs : une capsule sans contour. */
+.nav-item .tally { box-shadow: none; }
+
+/* ---------------------------------------------------------- barre haute --- */
+
+/* Le titre de la fenêtre, sans le trait de couleur qui le soulignait. */
+.head h1::after { display: none; }
+.head h1 { font-weight: 700; letter-spacing: -0.01em; }
+.crumb { font-size: 11px; letter-spacing: 0; text-transform: none; }
+
+/* La recherche : un champ gris sans bordure, comme celui d'une barre
+   d'outils. Le fond est un mélange opaque, pour rester lisible sur le
+   bandeau de couleur. */
+.head-search {
+  height: 30px;
+  padding: 0 10px;
+  gap: 6px;
+  border: 0;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ink) 6%, var(--surface));
+  box-shadow: none;
+}
+.head-search:hover { background: color-mix(in srgb, var(--ink) 9%, var(--surface)); }
+.head-search kbd { border: 0; background: color-mix(in srgb, var(--ink) 8%, transparent); }
+
+/* L'actualisation automatique devient un petit interrupteur. */
+.auto-toggle input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  flex: none;
+  width: 26px;
+  height: 15px;
+  margin: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 18%, transparent);
+  cursor: pointer;
+  transition: background-color 0.18s var(--ease);
+}
+.auto-toggle input[type="checkbox"]::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 25%);
+  transition: transform 0.18s var(--ease);
+}
+.auto-toggle input[type="checkbox"]:checked { background: var(--accent); }
+.auto-toggle input[type="checkbox"]:checked::after { transform: translateX(11px); }
+.auto-toggle input[type="checkbox"]:focus-visible { outline: none; box-shadow: var(--mac-halo); }
+
+/* -------------------------------------------------------------- boutons --- */
+
+/* Le bouton poussoir du Mac : blanc, cerné d'un filet, sans décollement au
+   survol. Il s'assombrit d'un cheveu quand on appuie, c'est tout. */
+.btn,
+.btn:not(.btn-primary):not(.btn-danger) {
+  min-height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: var(--mac-filet);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 500;
+  justify-content: center;
+  line-height: 1.2;
+}
+.btn:hover:not(:disabled),
+.btn:not(.btn-primary):not(.btn-danger):hover:not(:disabled) {
+  transform: none;
+  background: color-mix(in srgb, var(--ink) 4%, var(--surface));
+  box-shadow: var(--mac-filet);
+}
+.btn:active:not(:disabled),
+.btn:not(.btn-primary):not(.btn-danger):active:not(:disabled) {
+  transform: none;
+  filter: none;
+  background: color-mix(in srgb, var(--ink) 9%, var(--surface));
+}
+
+/* Le bouton par défaut : l'accent, à plat, et une ombre grise courte. */
+.btn-primary {
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+  box-shadow: 0 0 0 0.5px color-mix(in srgb, var(--accent) 60%, #000000), 0 1px 1.5px rgb(0 0 0 / 18%);
+}
+.btn-primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 90%, #ffffff);
+  filter: none;
+  box-shadow: 0 0 0 0.5px color-mix(in srgb, var(--accent) 60%, #000000), 0 1px 1.5px rgb(0 0 0 / 18%);
+}
+.btn-primary:active:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 88%, #000000);
+  box-shadow: 0 0 0 0.5px color-mix(in srgb, var(--accent) 60%, #000000);
+}
+
+/* Le geste destructeur reste un bouton ordinaire, écrit en rouge : c'est le
+   mot qui avertit, pas une bordure. */
+.btn-danger {
+  background: var(--surface);
+  color: var(--crit-ink);
+}
+.btn-danger:hover:not(:disabled) { background: var(--crit-soft); }
+
+.btn-small { min-height: 24px; padding: 0 9px; font-size: 12px; }
+.btn:focus-visible { outline: none; box-shadow: var(--mac-filet), var(--mac-halo); }
+
+/* Les gestes du ticket : les mêmes boutons, en grande taille. */
+.actbtn {
+  min-height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--surface);
+  box-shadow: var(--mac-filet);
+  font-weight: 500;
+}
+.actbtn:hover:not(:disabled) {
+  transform: none;
+  background: color-mix(in srgb, var(--ink) 4%, var(--surface));
+  box-shadow: var(--mac-filet);
+}
+.actbtn:active:not(:disabled) { background: color-mix(in srgb, var(--ink) 9%, var(--surface)); }
+.actbtn.on,
+.actbtn.on:hover:not(:disabled) {
+  background: var(--accent);
+  background-image: none;
+  color: var(--on-accent);
+  font-weight: 600;
+  box-shadow: 0 0 0 0.5px color-mix(in srgb, var(--accent) 60%, #000000), 0 1px 1.5px rgb(0 0 0 / 18%);
+}
+.actbtn.on:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 90%, #ffffff); }
+.actbtn:focus-visible { outline: none; box-shadow: var(--mac-filet), var(--mac-halo); }
+
+/* La barre haute garde ses boutons plus bas que le titre. */
+.head .head-tools .btn { height: auto; min-height: 26px; padding: 0 10px; font-size: 12.5px; }
+
+/* --------------------------------------------------- contrôle segmenté --- */
+
+/* Une piste grise, le choix posé en blanc : la même pièce que dans les
+   Réglages, pour tous les « ceci ou cela » de l'outil. */
+.seg,
+.seg2 {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 0;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  overflow: visible;
+}
+.seg { display: inline-grid; }
+.seg button,
+.seg2 button {
+  min-height: 24px;
+  height: auto;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.seg2 button + button { border-left: 0; }
+.seg button[aria-pressed="true"],
+.seg2 button[aria-pressed='true'] {
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: 0 1px 2.5px rgb(0 0 0 / 16%);
+}
+
+/* ------------------------------------------------------------- menus --- */
+
+/* Les menus locaux du Mac : un bouton blanc et une double flèche. Écrit
+   `:root select`, ce sélecteur passe devant les habits que chaque écran avait
+   cousus à ses menus, sans toucher à leur largeur ni à leur corps de texte —
+   au téléphone, un menu de fenêtre garde ses 16 px. */
+:root select:not([multiple]) {
+  appearance: none;
+  -webkit-appearance: none;
+  min-height: 26px;
+  padding: 0 28px 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background-color: var(--surface);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 9 12' fill='none' stroke='%238a8a90' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1.5 4.5L4.5 1.5l3 3'/%3E%3Cpath d='M1.5 7.5l3 3 3-3'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 9px center;
+  background-size: 9px 12px;
+  box-shadow: var(--mac-filet);
+  color: var(--ink);
+  cursor: pointer;
+}
+:root select:not([multiple]):hover:not(:disabled) { background-color: color-mix(in srgb, var(--ink) 4%, var(--surface)); }
+:root select:not([multiple]):focus-visible { outline: none; box-shadow: var(--mac-filet), var(--mac-halo); }
+:root select:not([multiple]):disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* Le tri de la file porte déjà sa pastille et sa flèche : son menu reste nu
+   à l'intérieur, et c'est la pastille qui prend l'habit du bouton. */
+:root .qsort select:not([multiple]) {
+  min-height: 0;
+  padding: 0;
+  background: none;
+  box-shadow: none;
+}
+.qsort {
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: var(--mac-filet);
+}
+.qsort:has(select:focus-visible) { box-shadow: var(--mac-filet), var(--mac-halo); }
+
+/* ------------------------------------------------------------- champs --- */
+
+/* Un champ du Mac : à plat, cerné d'un filet, et un halo d'accent quand il a
+   la main. Plus de creux intérieur. */
+input[type="text"],
+input[type="email"],
+input[type="search"],
+input[type="password"],
+input[type="number"],
+input[type="url"],
+input[type="tel"],
+textarea { box-shadow: none; }
+[data-theme="dark"] input[type="text"],
+[data-theme="dark"] input[type="email"],
+[data-theme="dark"] input[type="search"],
+[data-theme="dark"] textarea { box-shadow: none; }
+
+input:focus-visible,
+textarea:focus-visible {
+  border-color: var(--accent);
+  box-shadow: var(--mac-halo);
+}
+
+.field label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-soft);
+}
+.field input[type="text"],
+.field input[type="email"],
+.field input[type="password"],
+.field input[type="number"],
+.field input[type="url"],
+.field textarea {
+  border-radius: 6px;
+}
+.field input[type="text"],
+.field input[type="email"],
+.field input[type="password"],
+.field input[type="number"],
+.field input[type="url"] { padding: 6px 9px; }
+
+/* Cases et curseurs à la couleur de l'accent, comme tout ce qu'on coche. */
+input[type="checkbox"],
+input[type="radio"],
+input[type="range"],
+progress { accent-color: var(--accent); }
+
+/* ------------------------------------------------------------- cartes --- */
+
+/* Des plans à coins doux, cernés d'un filet, sans ombre : le fond gris fait
+   le reste. */
+.panel,
+.card,
+.kpi {
+  border-radius: 10px;
+  border-color: var(--line);
+  box-shadow: none;
+}
+
+.panel-head { padding: 11px 14px; }
+
+/* Les titres de carte : en casse normale, gras et noirs, comme un titre de
+   groupe des Réglages. */
+.panel-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
+}
+.rail-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
+}
+
+/* Les intitulés d'indicateur, en casse normale. */
+.kpi-label,
+.kpis-slim .kpi-label {
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.ov-kpis .kpi-label { font-size: 12px; font-weight: 600; }
+
+/* Les autres petites capitales de l'outil — titres de colonne, de bloc,
+   d'adresse — passent à la même casse. Le texte source est déjà écrit en
+   casse normale : seule la transformation tombe. */
+.qbar-selects label,
+.reasoning > span:first-child,
+.subst-h,
+.sheet-stat span,
+.sheet-group > h3,
+.brand-edit-fields label,
+.qpop-head,
+.ret-pays h4,
+.adr-title,
+.compose-tools-label,
+.rup-panel h3,
+.ret-titre,
+.envoi-h,
+.supc-fiab-t,
+.ordv-fact span,
+.dsp-count span,
+.compose-subject > span {
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* ----------------------------------------------------------- tableaux --- */
+
+/* Les en-têtes de colonne d'un tableau du Finder : petits, gris, en casse
+   normale. */
+.grid th,
+.qtable thead th,
+.fx th {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-mute);
+}
+.grid tbody tr:hover,
+.grid-row:hover td { background: color-mix(in srgb, var(--ink) 4%, transparent); }
+
+@media (max-width: 760px) {
+  .grid td::before { letter-spacing: 0; text-transform: none; }
+}
+
+/* ------------------------------------------------------------ fenêtres --- */
+
+/* Une feuille du Mac : coins de 12 px, ombre longue, pas de traits entre
+   l'en-tête, le corps et les boutons. */
+.modal {
+  border: 0;
+  border-radius: 12px;
+  box-shadow: 0 0 0 0.5px color-mix(in srgb, var(--ink) 22%, transparent), 0 22px 60px -12px rgb(0 0 0 / 35%), 0 2px 8px rgb(0 0 0 / 10%);
+}
+.modal-head { padding: 18px 20px 6px; border-bottom: 0; }
+.modal-head h2 { font-size: 15px; font-weight: 700; letter-spacing: -0.005em; }
+.modal-body { padding: 12px 20px 16px; }
+.modal-foot { padding: 12px 20px 16px; border-top: 0; background: transparent; }
+
+.backdrop { background: rgb(0 0 0 / 32%); }
+
+/* -------------------------------------------------------------- puces --- */
+
+/* Une puce choisie se remplit de l'accent, à plat, sans dégradé. */
+.chip[aria-pressed="true"] { background: var(--accent); background-image: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .auto-toggle input[type="checkbox"],
+  .auto-toggle input[type="checkbox"]::after { transition: none; }
+}
