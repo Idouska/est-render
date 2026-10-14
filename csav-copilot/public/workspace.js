@@ -63,7 +63,33 @@ function lastCarrier() {
   return localStorage.getItem(CARRIER_KEY) ?? '';
 }
 function rememberCarrier(value) {
-  if (value) localStorage.setItem(CARRIER_KEY, value);
+  if (!value) return;
+  localStorage.setItem(CARRIER_KEY, value);
+  try {
+    localStorage.setItem(
+      CARRIERS_KEY,
+      JSON.stringify([value, ...recentCarriers().filter((nom) => nom !== value)].slice(0, 4)),
+    );
+  } catch {
+    // Stockage plein ou refusé : la liste repart du dernier transporteur.
+  }
+}
+
+/*
+ * Les transporteurs de cet atelier, le dernier en tête : quatre au plus,
+ * proposés en un clic sous le champ. Ce sont les siens, pas une liste
+ * devinée — un atelier n'en utilise que deux ou trois.
+ */
+const CARRIERS_KEY = `ws.carriers.${supplierId}`;
+function recentCarriers() {
+  let liste = [];
+  try {
+    const lue = JSON.parse(localStorage.getItem(CARRIERS_KEY) ?? '[]');
+    if (Array.isArray(lue)) liste = lue.filter((nom) => typeof nom === 'string' && nom);
+  } catch {
+    liste = [];
+  }
+  return [...new Set([lastCarrier(), ...liste].filter(Boolean))].slice(0, 4);
 }
 
 /*
@@ -362,6 +388,7 @@ function parcelCard(order, index, total, saved) {
     </div>
     <input type="text" data-field="carrier" list="ws-carriers" autocomplete="off"
       placeholder="${esc(t('parcel.carrier'))}" value="${esc(saved?.carrier ?? lastCarrier())}" />
+    ${carrierChips(saved?.carrier ?? lastCarrier())}
     ${
       saved?.hasPhoto
         ? `<img class="pk-thumb" src="${photoUrl(saved.id)}" alt="${esc(
@@ -383,6 +410,18 @@ function parcelCard(order, index, total, saved) {
         : ''
     }
   </div>`;
+}
+
+/** Les transporteurs récents, en un clic : le champ reste pour les autres. */
+function carrierChips(choisi) {
+  const recents = recentCarriers();
+  if (recents.length === 0) return '';
+  return `<div class="pk-carriers" role="group" aria-label="${esc(t('parcel.recentCarriers'))}">${recents
+    .map(
+      (nom) =>
+        `<button type="button" class="pk-carrier" data-carrier="${esc(nom)}" aria-pressed="${String(nom === choisi)}">${esc(nom)}</button>`,
+    )
+    .join('')}</div>`;
 }
 
 /** Barre de progression : part remplie, et le compte en toutes lettres. */
@@ -425,6 +464,24 @@ function shownOrders() {
   );
 }
 
+/*
+ * Sur un grand écran, la file et la commande choisie tiennent côte à côte,
+ * comme dans Mail : on voit où l'on en est sans quitter la commande qu'on
+ * tient. En dessous, le guichet reste plein écran, une commande à la fois.
+ */
+const enColonnes = window.matchMedia('(min-width: 1180px)');
+enColonnes.addEventListener('change', () => {
+  if (state.view === 'orders' && state.mode !== 'masse') renderOrders();
+});
+
+/** Le chiffre de la colonne : ce qu'il reste à préparer, comme l'accueil. */
+function majCompteCommandes(n) {
+  const pastille = $('ws-orders-count');
+  if (!pastille) return;
+  pastille.hidden = !n;
+  pastille.textContent = String(n);
+}
+
 function renderOrders() {
   const finished = state.orders.filter(orderIsDone).length;
   const left = state.orders.length - finished;
@@ -432,6 +489,9 @@ function renderOrders() {
   $('count-left').textContent = String(left);
   $('count-all').textContent = String(state.orders.length);
   $('ws-sort')?.setAttribute('aria-pressed', String(state.sort === 'model'));
+  // Sans fichier du jour, la colonne compte les commandes de la période ;
+  // avec, c'est l'accueil qui pose le chiffre de ses lots.
+  if (!state.lots?.length) majCompteCommandes(left);
 
   // Avancement de la journée, en tête : entre deux colis on ne se demande pas
   // combien il y en a, on se demande où l'on en est.
@@ -448,6 +508,7 @@ function renderOrders() {
   }
 
   const shown = shownOrders();
+  const colonnes = enColonnes.matches;
 
   // Le guichet ne survit pas à un rafraîchissement qui a retiré sa commande
   // de la période : on retombe sur la liste plutôt que sur un écran vide.
@@ -455,11 +516,18 @@ function renderOrders() {
     state.focus = null;
   }
 
-  // Plein écran veut dire plein écran : au guichet, la période, les chips et
-  // la progression du jour disparaissent — on y revient par « Liste ».
-  document.body.classList.toggle('ws-focus', Boolean(state.focus));
+  // En colonnes, une commande est toujours ouverte : la première qui reste.
+  if (colonnes && !state.focus && shown.length) {
+    state.focus = (shown.find((order) => !orderIsDone(order)) ?? shown[0]).id;
+  }
 
-  if (state.focus) {
+  // Plein écran veut dire plein écran : au guichet, la période, les chips et
+  // la progression du jour disparaissent — on y revient par « Liste ». En
+  // colonnes, tout reste : la file est là, à gauche.
+  document.body.classList.toggle('ws-focus', Boolean(state.focus) && !colonnes);
+  document.body.classList.toggle('ws-colonnes', colonnes);
+
+  if (state.focus && !colonnes) {
     renderFocus(shown);
     return;
   }
@@ -483,17 +551,18 @@ function renderOrders() {
    * quatre-vingt-treize formulaires dépliés n'est pas une liste, c'est un
    * couloir dans lequel on se perd.
    */
-  $('ws-orders').innerHTML = shown
+  const liste = shown
     .map((order) => {
       const address = order.shippingAddress ?? {};
       const item = order.lineItems?.[0];
       const done = orderIsDone(order);
       const total = parcelTotal(order);
       const phoneShort = (address.phone ?? '').replace(/\D/g, '').length < 9;
+      const choisie = colonnes && order.id === state.focus;
 
-      return `<button type="button" class="rowo${done ? ' rowo-done' : ''}" data-open="${esc(
+      return `<button type="button" class="rowo${done ? ' rowo-done' : ''}${choisie ? ' rowo-on' : ''}" data-open="${esc(
         order.id,
-      )}">
+      )}"${choisie ? ' aria-current="true"' : ''}>
         ${
           item?.image
             ? `<img class="rowo-photo" src="${esc(item.image)}" alt="" loading="lazy" />`
@@ -518,6 +587,17 @@ function renderOrders() {
       </button>`;
     })
     .join('');
+
+  if (!colonnes) {
+    $('ws-orders').innerHTML = liste;
+    return;
+  }
+
+  $('ws-orders').innerHTML = `<div class="ws-split">
+    <div class="ws-file">${liste}</div>
+    <div class="ws-guichet">${focusMarkup(shown)}</div>
+  </div>`;
+  cablerFocus();
 }
 
 /**
@@ -529,6 +609,23 @@ function renderOrders() {
  * une seule commande, celle qu'on tient dans les mains.
  */
 function renderFocus(shown) {
+  $('ws-orders').innerHTML = focusMarkup(shown);
+  cablerFocus();
+
+  // Le guichet s'ouvre en haut de la commande, pas là où la liste en était.
+  $('ws-orders').scrollIntoView({ block: 'start' });
+}
+
+/** L'historique se charge à l'ouverture seulement. */
+function cablerFocus() {
+  $('ws-orders')
+    .querySelector('[data-hist]')
+    ?.addEventListener('toggle', (event) => {
+      if (event.currentTarget.open) void chargerHistorique(event.currentTarget);
+    });
+}
+
+function focusMarkup(shown) {
   const order = state.orders.find((candidate) => candidate.id === state.focus);
   // La commande peut avoir quitté la file visible (filtrée « À préparer » et
   // tout juste finie) : la position se lit alors dans la liste complète.
@@ -543,7 +640,7 @@ function renderFocus(shown) {
   const total = parcelTotal(order);
   const done = orderDone(order, total);
 
-  $('ws-orders').innerHTML = `
+  return `
     <div class="focus-bar">
       <button type="button" class="btn btn-small" data-back="1">← ${esc(t('focus.back'))}</button>
       <span class="focus-pos">${at + 1} / ${list.length}</span>
@@ -632,15 +729,6 @@ function renderFocus(shown) {
         <div class="ord-hist-list"></div>
       </details>
     </article>`;
-
-  $('ws-orders')
-    .querySelector('[data-hist]')
-    ?.addEventListener('toggle', (event) => {
-      if (event.currentTarget.open) void chargerHistorique(event.currentTarget);
-    });
-
-  // Le guichet s'ouvre en haut de la commande, pas là où la liste en était.
-  $('ws-orders').scrollIntoView({ block: 'start' });
 }
 
 /*
@@ -841,6 +929,16 @@ $('ws-orders').addEventListener('click', async (event) => {
       state.focus = target.id;
       renderOrders();
     }
+    return;
+  }
+
+  const carrier = event.target.closest('[data-carrier]');
+  if (carrier) {
+    const card = carrier.closest('.pk');
+    card.querySelector('[data-field="carrier"]').value = carrier.dataset.carrier;
+    card.querySelectorAll('[data-carrier]').forEach((bouton) =>
+      bouton.setAttribute('aria-pressed', String(bouton === carrier)),
+    );
     return;
   }
 
@@ -2874,7 +2972,48 @@ function ouvrirTickets(statut, type = '') {
    pendant qu'une demande l'attendait dans l'onglet d'à côté.
    ========================================================================== */
 
+/*
+ * Les pictogrammes de l'accueil, au trait, en blanc sur leur pastille de
+ * couleur : la teinte dit la nature de la demande avant qu'on lise.
+ */
+const PICTOS = {
+  bulle: '<path d="M3.5 4.5h13v9h-8l-5 3.5z" />',
+  alerte: '<path d="M10 3 17.5 16.5h-15z" /><path d="M10 8.5v3.5M10 14.3v.2" />',
+  echange: '<path d="M5 6.5h11l-2.5-2.5M15 13.5H4l2.5 2.5" />',
+  horloge: '<circle cx="10" cy="10" r="6.8" /><path d="M10 6.2V10l2.6 1.7" />',
+  modif: '<path d="M4 16l1-3.6L13.2 4.2a1.6 1.6 0 0 1 2.3 0l.3.3a1.6 1.6 0 0 1 0 2.3L7.6 15z" />',
+  drapeau: '<path d="M5 17V3.5M5 4h9l-2 3.5 2 3.5H5" />',
+  colis: '<path d="M10 2.5 16.5 6v8L10 17.5 3.5 14V6z" /><path d="M3.5 6 10 9.5 16.5 6M10 9.5v8" />',
+  fleche: '<path d="m7.5 4.5 5.5 5.5-5.5 5.5" />',
+  depot: '<path d="M10 13V3.5M6 7.5l4-4 4 4M3.5 16.5h13" />',
+  coche: '<path d="m4.5 10.5 3.5 3.5 7.5-8" />',
+};
+const picto = (nom) => `<svg viewBox="0 0 20 20" aria-hidden="true">${PICTOS[nom] ?? ''}</svg>`;
+
+/** La teinte et le pictogramme d'un ticket, d'après son type. */
+function allureDuTicket(type) {
+  if (type === 'RUPTURE') return ['t-orange', 'alerte'];
+  if (type === 'ECHANGE') return ['t-vert', 'echange'];
+  if (type === 'SIGNAL') return ['t-violet', 'drapeau'];
+  return ['t-bleu', 'modif'];
+}
+
+/** « Aujourd'hui », « Hier », sinon le jour en clair. */
+function jourDuLot(iso) {
+  const date = new Date(iso);
+  const hier = new Date();
+  hier.setDate(hier.getDate() - 1);
+  if (date.toDateString() === new Date().toDateString()) return t('home.today');
+  if (date.toDateString() === hier.toDateString()) return t('home.yesterday');
+  return date.toLocaleDateString(locale, { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
+const premiereMajuscule = (texte) => texte.charAt(0).toLocaleUpperCase(locale) + texte.slice(1);
+
 async function loadHome() {
+  $('home-date').textContent = premiereMajuscule(
+    new Date().toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' }),
+  );
   $('home-tuiles').innerHTML = `<p class="empty">${esc(t('tk.loading'))}</p>`;
   await state.chargementCommandes?.catch?.(() => {});
   const [items, lots] = await Promise.all([
@@ -2899,37 +3038,129 @@ async function loadHome() {
   const aPreparer = parLots
     ? commandesDesLots.filter((commande) => commande.statut === 'A_PREPARER').length
     : (state.orders ?? []).filter((order) => !orderIsDone(order)).length;
+  const total = parLots ? commandesDesLots.length : (state.orders ?? []).length;
+  const expediees = total - aPreparer;
+  const enRetard = commandesDesLots.filter((commande) => commande.enRetard).length;
+  majCompteCommandes(aPreparer);
+
+  // Les commandes en retard, avant tout le reste.
+  $('home-retard').hidden = enRetard === 0;
+  $('home-retard').innerHTML = enRetard
+    ? `<span class="home-ico t-rouge" aria-hidden="true">${picto('horloge')}</span>
+       <span class="home-retard-txt">${esc(t(enRetard > 1 ? 'home.late' : 'home.lateOne', { n: enRetard }))}</span>
+       <button type="button" class="home-lien" id="home-retard-voir">${esc(t('home.seeLate'))}</button>`
+    : '';
+  $('home-retard-voir')?.addEventListener('click', () => {
+    if (parLots) state.sous = { ...(state.sous ?? {}), orders: 'lots' };
+    setView('orders');
+  });
+
+  /*
+   * Le travail du jour, en grand : ce qu'il reste, ce qui est parti, et par
+   * où commencer. À côté, les modèles à emballer : quinze paires du même
+   * article se préparent d'affilée.
+   */
+  const parModele = new Map();
+  for (const order of (state.orders ?? []).filter((candidate) => !orderIsDone(candidate))) {
+    const article = order.lineItems?.[0];
+    if (!article?.title) continue;
+    const deja = parModele.get(article.title) ?? { titre: article.title, image: article.image ?? null, n: 0 };
+    deja.n += 1;
+    parModele.set(article.title, deja);
+  }
+  const modeles = [...parModele.values()].sort((a, b) => b.n - a.n).slice(0, 4);
+  const plusGros = modeles[0]?.n ?? 1;
+  const pct = total ? Math.round((expediees / total) * 100) : 0;
+
+  $('home-hero').innerHTML = `
+    <div class="hero-main">
+      <span class="hero-titre" id="home-hero-t"><span class="home-ico t-orange" aria-hidden="true">${picto('colis')}</span>${esc(
+        t('home.toPrepareTitle'),
+      )}</span>
+      ${
+        aPreparer > 0
+          ? `<span class="hero-chiffre"><b>${aPreparer}</b> ${esc(t(aPreparer > 1 ? 'home.orders' : 'home.order'))}</span>`
+          : `<span class="hero-fini"><span class="hero-coche" aria-hidden="true">${picto('coche')}</span>${esc(t('home.allShipped'))}</span>`
+      }
+      ${
+        total
+          ? `<div class="hero-avance">
+              <span class="hero-barre" aria-hidden="true"><i style="width:${pct}%"></i></span>
+              <span class="hero-legende"><b>${esc(t('home.progress', { done: expediees, total }))}</b>${
+                parLots ? ` · ${esc(t('home.lastLot', { heure: shortMoment(lots[0].envoyeLe) }))}` : ''
+              }</span>
+            </div>`
+          : ''
+      }
+      <div class="hero-gestes">
+        <button type="button" class="btn btn-primary hero-go" id="home-go">${esc(t(aPreparer ? 'home.start' : 'home.seeOrders'))}${picto('fleche')}</button>
+        <button type="button" class="btn hero-fichier" id="home-fichier">${picto('depot')}${esc(t('home.bulk'))}</button>
+      </div>
+    </div>
+    ${
+      modeles.length
+        ? `<div class="hero-modeles">
+            <span class="hero-sous">${esc(t('home.models'))}</span>
+            ${modeles
+              .map(
+                (modele) => `<div class="hero-modele">
+                  ${
+                    modele.image
+                      ? `<img class="hero-photo" src="${esc(modele.image)}" alt="" loading="lazy" />`
+                      : '<span class="hero-photo" aria-hidden="true"></span>'
+                  }
+                  <span class="hero-modele-txt">
+                    <span class="hero-modele-l"><span>${esc(modele.titre)}</span><b>${modele.n}</b></span>
+                    <span class="hero-modele-barre" aria-hidden="true"><i style="width:${Math.round((modele.n / plusGros) * 100)}%"></i></span>
+                  </span>
+                </div>`,
+              )
+              .join('')}
+          </div>`
+        : ''
+    }`;
+  $('home-go').addEventListener('click', () => {
+    state.sous = { ...(state.sous ?? {}), orders: 'orders' };
+    setView('orders');
+  });
+  $('home-fichier').addEventListener('click', () => {
+    state.sous = { ...(state.sous ?? {}), orders: 'orders' };
+    setView('orders');
+    setMode('masse');
+  });
+
+  // Ce que le marchand attend, en quatre chiffres : chacun ouvre la liste
+  // déjà filtrée. Zéro se lit en gris, sans gras.
   const tuiles = [
-    { n: aRepondre, cle: 'home.toAnswer', chaud: true, aller: () => ouvrirTickets('A_REPONDRE') },
-    {
-      n: aPreparer,
-      cle: 'home.toPrepare',
-      // Une commande en retard, et la tuile le dit avant qu'on l'ouvre.
-      chaud: commandesDesLots.some((commande) => commande.enRetard),
-      aller: () => {
-        if (parLots) state.sous = { ...(state.sous ?? {}), orders: 'lots' };
-        setView('orders');
-      },
-    },
+    { n: aRepondre, cle: 'home.toAnswer', teinte: 't-rouge', picto: 'bulle', aller: () => ouvrirTickets('A_REPONDRE') },
     {
       n: compte((item) => item.type === 'RUPTURE' && item.statut !== 'CLOS'),
       cle: 'home.ruptures',
-      chaud: false,
+      teinte: 't-orange',
+      picto: 'alerte',
       aller: () => ouvrirTickets('', 'RUPTURE'),
     },
     {
       n: compte((item) => item.type === 'ECHANGE' && item.statut === 'A_REPONDRE'),
       cle: 'home.exchanges',
-      chaud: true,
+      teinte: 't-vert',
+      picto: 'echange',
       aller: () => ouvrirTickets('A_REPONDRE', 'ECHANGE'),
     },
-    { n: compte((item) => item.statut === 'ATTENTE'), cle: 'home.waiting', chaud: false, aller: () => ouvrirTickets('ATTENTE') },
+    {
+      n: compte((item) => item.statut === 'ATTENTE'),
+      cle: 'home.waiting',
+      teinte: 't-gris',
+      picto: 'horloge',
+      aller: () => ouvrirTickets('ATTENTE'),
+    },
   ];
 
   $('home-tuiles').innerHTML = tuiles
     .map(
-      (tuile, rang) => `<button type="button" class="home-tuile${tuile.chaud && tuile.n > 0 ? ' home-chaud' : ''}" data-tuile="${rang}">
-        <b>${tuile.n}</b><span>${esc(t(tuile.cle))}</span>
+      (tuile, rang) => `<button type="button" class="home-tuile${tuile.n === 0 ? ' home-nul' : ''}" data-tuile="${rang}">
+        <span class="home-tuile-haut"><span class="home-ico ${tuile.teinte}" aria-hidden="true">${picto(tuile.picto)}</span><b>${tuile.n}</b></span>
+        <span>${esc(t(tuile.cle))}</span>
       </button>`,
     )
     .join('');
@@ -2943,20 +3174,68 @@ async function loadHome() {
     .slice(0, 5);
 
   $('home-liste').innerHTML = anciennes.length
-    ? anciennes
+    ? `<div class="home-groupe">${anciennes
         .map((item) => {
           const { texte, vieux } = age(item.date);
+          const [teinte, nom] = allureDuTicket(item.type);
           return `<button type="button" class="home-ligne" data-home-type="${esc(item.type)}">
-            <span class="tk-type">${esc(item.libelle)}</span>
-            <span class="home-quoi">${esc(resumeDe(item.html))}</span>
+            <span class="home-ico ${teinte}" aria-hidden="true">${picto(nom)}</span>
+            <span class="home-ligne-txt">
+              <span class="tk-type">${esc(item.libelle)}</span>
+              <span class="home-quoi">${esc(resumeDe(item.html))}</span>
+            </span>
             <span class="tk-age${vieux ? ' tk-vieux' : ''}">${esc(texte)}</span>
+            <span class="home-chevron" aria-hidden="true">${picto('fleche')}</span>
           </button>`;
         })
-        .join('')
-    : `<p class="empty home-rien">${esc(t('home.allClear'))}</p>`;
+        .join('')}</div>`
+    : `<div class="home-groupe home-rien">
+        <span class="hero-coche" aria-hidden="true">${picto('coche')}</span>
+        <p>${esc(t('home.allClear'))}</p>
+      </div>`;
   $('home-liste')
     .querySelectorAll('[data-home-type]')
     .forEach((ligne) => ligne.addEventListener('click', () => ouvrirTickets('A_REPONDRE', ligne.dataset.homeType)));
+  $('home-tous').onclick = () => ouvrirTickets('A_REPONDRE');
+
+  // Les fichiers du marchand, trois au plus : où en est chacun.
+  $('home-col-lots').hidden = !parLots;
+  $('home-lots').innerHTML = parLots
+    ? `<div class="home-groupe">${lots
+        .slice(0, 3)
+        .map((lot) => {
+          const totalLot = lot.commandes.length;
+          const fini = lot.compte.A_PREPARER === 0;
+          return `<button type="button" class="home-lot" data-home-lot="1">
+            <span class="home-lot-l">
+              <b>${esc(jourDuLot(lot.envoyeLe))}</b>
+              <span class="home-lot-heure">${esc(
+                new Date(lot.envoyeLe).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }),
+              )}</span>
+              ${
+                lot.compte.RETARD
+                  ? `<span class="pill lot-retard">${esc(t('home.lotLate', { n: lot.compte.RETARD }))}</span>`
+                  : fini
+                    ? `<span class="pill home-lot-fini">${esc(t('home.lotDone'))}</span>`
+                    : ''
+              }
+            </span>
+            <span class="hero-barre" aria-hidden="true"><i style="width:${
+              totalLot ? Math.round((lot.compte.EXPEDIEE / totalLot) * 100) : 0
+            }%"></i></span>
+            <span class="home-lot-resume">${esc(t('lots.summary', { a: lot.compte.A_PREPARER, e: lot.compte.EXPEDIEE }))}</span>
+          </button>`;
+        })
+        .join('')}</div>`
+    : '';
+  $('home-lots')
+    .querySelectorAll('[data-home-lot]')
+    .forEach((bouton) =>
+      bouton.addEventListener('click', () => {
+        state.sous = { ...(state.sous ?? {}), orders: 'lots' };
+        setView('orders');
+      }),
+    );
 }
 
 /**

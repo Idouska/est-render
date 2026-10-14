@@ -1942,3 +1942,593 @@ input:focus, select:focus, textarea:focus {
 .ord-hist time { color: var(--ink-mute); font-variant-numeric: tabular-nums; }
 .ord-hist .hist-colis span { color: var(--ok-ink); }
 .ord-hist .hist-demande span { font-weight: 600; }
+
+/* ==========================================================================
+   ESPACE FOURNISSEUR, FAÇON APPLE
+
+   La maquette validée : une colonne grise à pictogrammes de couleur, comme
+   les Réglages du Mac ; un accueil qui met le travail du jour en grand ; et,
+   sur grand écran, la file des commandes à gauche et la commande choisie à
+   droite, comme Mail. Tout est rangé sous `.wsapp` : le portail des agences
+   partage cette feuille et garde son allure.
+   ========================================================================== */
+
+/* Le bleu du Mac, dans sa nuance qui porte du blanc (5,57:1) et s'écrit sur
+   son fond pâle (4,9:1). Les fenêtres et le toast sont frères de `.wsapp`. */
+.wsapp,
+.wsapp ~ .modal-wrap,
+.wsapp ~ .toast {
+  --brand: #0066cc;
+  --brand-soft: #e8f1fb;
+  --colonne: #ececf0;
+  --piste: rgb(20 22 42 / 7%);
+  --bouton-filet: 0 0 0 0.5px rgb(0 0 0 / 22%), 0 1px 1.5px rgb(0 0 0 / 10%);
+}
+.wsapp .btn-primary:hover { background: #0058b0; }
+
+/* Les teintes des pictogrammes : un léger dégradé, assez sombre en bas pour
+   que le trait blanc tienne. */
+.wsapp .t-bleu { background: linear-gradient(180deg, #4b9bff, #0a63d8); }
+.wsapp .t-orange { background: linear-gradient(180deg, #ff9a3c, #c25400); }
+.wsapp .t-vert { background: linear-gradient(180deg, #43c463, #1f8a3a); }
+.wsapp .t-violet { background: linear-gradient(180deg, #a76ae8, #7a3bc4); }
+.wsapp .t-rouge { background: linear-gradient(180deg, #ff6b5e, #c5221f); }
+.wsapp .t-gris { background: linear-gradient(180deg, #8e8e93, #545458); }
+
+/* ------------------------------------------------------------ la colonne */
+
+.wsapp .wsnav {
+  gap: 2px;
+  padding: 18px 10px;
+  background: var(--colonne);
+  border-right-color: #dcdce2;
+}
+.wsapp .wsnav-brand { padding: 2px 6px 16px; }
+.wsapp .wsnav-mark {
+  width: 34px;
+  height: 34px;
+  background: linear-gradient(180deg, #4b9bff, #0a63d8);
+  box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 15%);
+}
+.wsapp .wsnav .wsnav-mark svg { width: 19px; height: 19px; stroke: #fff; stroke-width: 1.8; }
+.wsapp .wsnav-brand b { font-size: 13.5px; font-weight: 700; }
+/* Le gris atténué tombe à 4,4:1 sur la colonne : le nom de l'atelier prend
+   l'encre douce. */
+.wsapp .wsnav-brand small { color: var(--ink-soft); }
+
+.wsapp .wsnav > button {
+  gap: 9px;
+  min-height: 32px;
+  padding: 0 8px 0 6px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.wsapp .wsnav > button:hover { background: rgb(20 22 42 / 6%); }
+.wsapp .wsnav > button[aria-current='true'] { background: var(--brand); color: #fff; font-weight: 600; }
+.wsapp .wsnav-tuile {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 6px;
+}
+.wsapp .wsnav .wsnav-tuile svg { width: 14px; height: 14px; stroke: #fff; stroke-width: 1.8; }
+.wsapp .wsnav-compte {
+  margin-left: auto;
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgb(20 22 42 / 8%);
+  color: var(--ink-soft);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+}
+.wsapp .wsnav > button[aria-current='true'] .wsnav-compte { background: rgb(255 255 255 / 25%); color: #fff; }
+.wsapp .wsnav-badge { padding: 0 6px; line-height: 18px; }
+
+/* La langue en contrôle segmenté, sur toute la largeur de la colonne. */
+.wsapp .wsnav-foot { padding: 14px 6px 0; }
+.wsapp .ws-lang {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--piste);
+}
+.wsapp .ws-lang button {
+  flex: 1;
+  min-height: 26px;
+  padding: 0 8px;
+  border-radius: 6px;
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.wsapp .ws-lang button + button { border-left: 0; }
+.wsapp .ws-lang button[aria-pressed='true'] {
+  background: #fff;
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: 0 1px 2.5px rgb(0 0 0 / 16%);
+}
+
+/* --------------------------------------------------------- l'en-tête */
+
+.wsapp .wsmain { max-width: 1180px; }
+.wsapp .wshead h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+
+/* Les contrôles du Mac : boutons plus bas sur ordinateur, segments gris à
+   pastille blanche. Le téléphone garde ses grandes cibles. */
+@media (min-width: 881px) {
+  .wsapp .btn { min-height: 36px; padding: 0 14px; border-radius: 9px; font-size: 14px; }
+  .wsapp .btn-small { min-height: 32px; padding: 0 12px; font-size: 13.5px; }
+  .wsapp .btn:not(.btn-primary):not(.btn-ghost) { border-color: transparent; box-shadow: var(--bouton-filet); }
+  .wsapp .ico { width: 34px; height: 34px; border: 0; border-radius: 9px; box-shadow: var(--bouton-filet); }
+}
+
+.wsapp .seg,
+.wsapp .ws-sous,
+.wsapp .chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 2px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--piste);
+}
+.wsapp .seg button,
+.wsapp .ws-sous button,
+.wsapp .chips button {
+  flex: none;
+  min-height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 500;
+}
+.wsapp .seg button + button { border-left: 0; }
+.wsapp .seg button[aria-pressed='true'],
+.wsapp .ws-sous button[aria-pressed='true'],
+.wsapp .chips button[aria-pressed='true'] {
+  background: #fff;
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: 0 1px 2.5px rgb(0 0 0 / 16%);
+}
+.wsapp .chips button b { background: rgb(20 22 42 / 8%); color: var(--ink-soft); }
+.wsapp .chips button[aria-pressed='true'] b { background: var(--brand-soft); color: var(--brand); }
+.wsapp .ws-sous button[aria-pressed='true'] .ws-sous-n { background: var(--bad); }
+/* « Par modèle » réordonne sans filtrer : il se pose à part, en interrupteur. */
+.wsapp .chips .chip-sort {
+  margin-left: 0;
+  border-style: none;
+  color: var(--ink-soft);
+}
+.wsapp .chips .chip-sort[aria-pressed='true'] { color: var(--brand); }
+
+/* Les deux modes de traitement, en contrôle segmenté : le mot dit le geste,
+   la petite ligne dit comment. */
+.wsapp .ws-modes {
+  display: inline-grid;
+  grid-auto-flow: column;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 10px;
+  background: var(--piste);
+}
+.wsapp .ws-modes button {
+  min-height: 46px;
+  gap: 10px;
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  box-shadow: none;
+}
+.wsapp .ws-modes button:hover { border-color: transparent; background: rgb(255 255 255 / 45%); }
+.wsapp .ws-modes button[aria-selected='true'] {
+  background: #fff;
+  border-color: transparent;
+  box-shadow: 0 1px 2.5px rgb(0 0 0 / 16%);
+}
+.wsapp .ws-modes svg { width: 22px; height: 22px; }
+.wsapp .ws-mode-txt b { font-size: 14px; }
+.wsapp .ws-mode-txt small { font-size: 12px; }
+
+.wsapp .ws-progress-bar { background: rgb(20 22 42 / 8%); }
+.wsapp .ws-progress-bar > i { background: var(--ok); }
+
+.wsapp .ws-search-wrap { border: 0; border-radius: 9px; background: var(--piste); }
+.wsapp .ws-search-wrap input { background: transparent; border: 0; }
+
+.wsapp .empty { border: 0; border-radius: 14px; box-shadow: 0 0 0 1px var(--line); }
+
+/* ----------------------------------------------------------- l'accueil */
+
+.wsapp #view-home { display: flex; flex-direction: column; gap: 20px; }
+.wsapp .home-tete { flex-direction: column; align-items: flex-start; gap: 2px; margin: 0; }
+.wsapp .home-tete h1 { flex: none; }
+.wsapp .home-date { font-size: 13.5px; font-weight: 600; color: var(--ink-soft); }
+
+.wsapp .home-ico {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 8px;
+}
+.wsapp .home-ico svg,
+.wsapp .hero-coche svg,
+.wsapp .hero-gestes svg,
+.wsapp .home-chevron svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.wsapp .home-lien {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--brand);
+  cursor: pointer;
+}
+.wsapp .home-lien:hover { text-decoration: underline; }
+
+.wsapp .home-retard {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  border-radius: 12px;
+  background: var(--bad-soft);
+  font-size: 14px;
+}
+.wsapp .home-retard-txt { flex: 1; min-width: 0; }
+.wsapp .home-retard .home-lien { color: var(--bad); }
+
+/* Le travail du jour, en grand. */
+.wsapp .home-hero {
+  display: flex;
+  flex-wrap: wrap;
+  background: var(--card);
+  border-radius: 16px;
+  box-shadow: 0 0 0 1px var(--line), 0 1px 3px rgb(20 22 42 / 4%);
+  overflow: hidden;
+}
+.wsapp .hero-main { flex: 3 1 380px; min-width: 0; padding: 22px 24px; display: flex; flex-direction: column; gap: 14px; }
+.wsapp .hero-titre { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; color: var(--ink-soft); }
+.wsapp .hero-titre .home-ico { width: 24px; height: 24px; border-radius: 6px; }
+.wsapp .hero-titre .home-ico svg { width: 14px; height: 14px; }
+.wsapp .hero-chiffre { font-size: 18px; font-weight: 600; }
+.wsapp .hero-chiffre b {
+  margin-right: 4px;
+  font-size: 54px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.wsapp .hero-fini { display: flex; align-items: center; gap: 12px; font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
+.wsapp .hero-coche {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--ok);
+}
+.wsapp .hero-coche svg { width: 24px; height: 24px; stroke-width: 2.4; }
+.wsapp .hero-avance { display: flex; flex-direction: column; gap: 7px; max-width: 520px; }
+.wsapp .hero-barre { display: block; height: 8px; border-radius: 999px; background: rgb(20 22 42 / 8%); overflow: hidden; }
+.wsapp .hero-barre i { display: block; height: 100%; border-radius: 999px; background: var(--ok); }
+.wsapp .hero-legende { font-size: 13.5px; color: var(--ink-soft); }
+.wsapp .hero-legende b { color: var(--ink); font-weight: 600; }
+.wsapp .hero-gestes { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+.wsapp .hero-gestes .btn { gap: 8px; }
+.wsapp .hero-gestes svg { width: 15px; height: 15px; stroke: currentColor; stroke-width: 2; }
+.wsapp .hero-go svg { order: 2; stroke-width: 2.4; }
+
+.wsapp .hero-modeles {
+  flex: 2 1 280px;
+  min-width: 0;
+  padding: 22px 24px;
+  border-left: 1px solid var(--line-soft);
+  background: #fafafc;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.wsapp .hero-sous { font-size: 13.5px; font-weight: 600; color: var(--ink-soft); }
+.wsapp .hero-modele { display: flex; align-items: center; gap: 10px; }
+.wsapp .hero-photo {
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--line-soft);
+  object-fit: cover;
+}
+.wsapp .hero-modele-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.wsapp .hero-modele-l { display: flex; align-items: baseline; gap: 8px; font-size: 14px; }
+.wsapp .hero-modele-l span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wsapp .hero-modele-l b { font-variant-numeric: tabular-nums; }
+.wsapp .hero-modele-barre { display: block; height: 4px; border-radius: 999px; background: rgb(20 22 42 / 8%); overflow: hidden; }
+.wsapp .hero-modele-barre i { display: block; height: 100%; border-radius: 999px; background: var(--brand); }
+
+/* Les quatre chiffres : zéro se lit en gris, sans gras. */
+.wsapp .home-tuiles { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 0; }
+.wsapp .home-tuile {
+  gap: 10px;
+  padding: 14px 16px;
+  border: 0;
+  border-radius: 14px;
+  box-shadow: 0 0 0 1px var(--line);
+}
+.wsapp .home-tuile:hover { border-color: transparent; box-shadow: 0 0 0 1px var(--line), 0 2px 8px rgb(20 22 42 / 8%); }
+.wsapp .home-tuile-haut { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+.wsapp .home-tuile b { font-size: 26px; line-height: 1; font-variant-numeric: tabular-nums; }
+.wsapp .home-tuile > span:last-child { font-size: 13.5px; font-weight: 500; color: var(--ink-soft); }
+.wsapp .home-tuile.home-nul b { font-weight: 400; color: var(--ink-mute); }
+
+.wsapp .home-cols { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
+.wsapp .home-col { flex: 3 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.wsapp .home-col-lots { flex: 2 1 300px; }
+.wsapp .home-h { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; padding: 0 4px; }
+.wsapp .home-h h2 { font-size: 17px; font-weight: 700; }
+.wsapp .home-h > span { font-size: 13px; color: var(--ink-mute); }
+.wsapp .home-h .home-lien { margin-left: auto; }
+
+.wsapp .home-groupe {
+  background: var(--card);
+  border-radius: 14px;
+  box-shadow: 0 0 0 1px var(--line);
+  overflow: hidden;
+}
+.wsapp .home-ligne,
+.wsapp .home-lot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 62px;
+  margin: 0;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  font: inherit;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.wsapp .home-ligne:hover,
+.wsapp .home-lot:hover { border-color: transparent; background: var(--paper); }
+/* Les filets s'arrêtent au texte, comme dans les Réglages. */
+.wsapp .home-ligne + .home-ligne {
+  background-image: linear-gradient(var(--line-soft), var(--line-soft));
+  background-size: calc(100% - 56px) 1px;
+  background-position: 56px 0;
+  background-repeat: no-repeat;
+}
+.wsapp .home-ligne-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.wsapp .home-ligne .tk-type { font-size: 13.5px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--ink); }
+.wsapp .home-quoi { font-size: 12.5px; font-weight: 400; color: var(--ink-soft); }
+.wsapp .home-ligne .tk-age { margin-left: 0; font-size: 12.5px; white-space: nowrap; }
+.wsapp .home-chevron svg { width: 12px; height: 12px; stroke: var(--ink-mute); stroke-width: 2.4; }
+.wsapp .home-rien {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 28px 20px;
+  border: 0;
+  text-align: center;
+  color: var(--ink-soft);
+}
+.wsapp .home-rien .hero-coche { width: 40px; height: 40px; background: var(--ok-soft); }
+.wsapp .home-rien .hero-coche svg { width: 20px; height: 20px; stroke: var(--ok-ink); }
+
+.wsapp .home-lot { flex-direction: column; align-items: stretch; gap: 7px; min-height: 0; padding: 13px 16px; }
+.wsapp .home-lot + .home-lot { border-top: 1px solid var(--line-soft); }
+.wsapp .home-lot-l { display: flex; align-items: baseline; gap: 8px; }
+.wsapp .home-lot-heure { margin-right: auto; font-size: 12.5px; color: var(--ink-mute); }
+.wsapp .home-lot .hero-barre { height: 6px; }
+.wsapp .home-lot-resume { font-size: 12.5px; color: var(--ink-soft); }
+.wsapp .home-lot .pill { letter-spacing: 0; text-transform: none; font-size: 11.5px; }
+.wsapp .home-lot-fini { background: var(--ok-soft); color: var(--ok-ink); }
+
+/* ---------------------------------------------------------- les commandes */
+
+/* La file : des lignes de Mail, la choisie remplie de bleu. */
+.wsapp .rowo {
+  margin: 0;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  box-shadow: none;
+}
+.wsapp #ws-orders > .rowo,
+.wsapp .ws-file {
+  background: var(--card);
+}
+.wsapp #ws-orders > .rowo:first-child { border-radius: 14px 14px 0 0; }
+.wsapp #ws-orders > .rowo + .rowo { border-radius: 0; box-shadow: 0 -1px 0 var(--line-soft); }
+.wsapp #ws-orders > .rowo:last-child { border-radius: 0 0 14px 14px; }
+.wsapp .rowo:hover { background: var(--paper); }
+.wsapp .rowo-done { background: none; }
+.wsapp .rowo-done .rowo-photo { opacity: 0.55; }
+.wsapp .rowo-photo { width: 42px; height: 42px; border-radius: 9px; }
+.wsapp .rowo-state.ok {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--ok-soft);
+  font-size: 12px;
+}
+.wsapp .rowo-on,
+.wsapp .rowo-on:hover { background: var(--brand); color: #fff; }
+.wsapp .rowo-on .rowo-top span,
+.wsapp .rowo-on .rowo-main small,
+.wsapp .rowo-on .rowo-state,
+.wsapp .rowo-on .rowo-warn { color: #fff; }
+.wsapp .rowo-on .rowo-car { stroke: #fff; }
+
+/* Grand écran : la file à gauche, la commande choisie à droite. */
+.wsapp .ws-split { display: grid; grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); gap: 18px; align-items: start; }
+.wsapp .ws-file {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 14px;
+  box-shadow: 0 0 0 1px var(--line);
+}
+/* En colonnes, la file est déjà là : pas de « Liste » pour y revenir. */
+.ws-colonnes .wsapp [data-back] { display: none; }
+.wsapp .ws-guichet .focus-bar { position: static; padding: 0 0 4px; background: none; }
+
+/* La commande choisie : l'adresse en carte, en grand — c'est elle qu'on
+   recopie sur l'étiquette. */
+.wsapp .ord {
+  border: 0;
+  border-radius: 16px;
+  box-shadow: 0 0 0 1px var(--line);
+  padding: 18px 20px 16px;
+}
+.wsapp .ord-done { box-shadow: 0 0 0 1px var(--line); }
+.wsapp .ord-no { font-size: 20px; }
+.wsapp .pill { letter-spacing: 0; text-transform: none; font-size: 12px; }
+.wsapp .ord-label { letter-spacing: 0; text-transform: none; font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
+.wsapp .ord-focus .ord-who {
+  padding: 14px 16px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--paper);
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+.wsapp .ord-focus .ord-who b { font-size: 18px; letter-spacing: -0.01em; }
+.wsapp .ord-phone { border: 0; background: var(--card); box-shadow: var(--bouton-filet); }
+.wsapp .ord-phone.missing { box-shadow: 0 0 0 1px var(--bad); }
+
+/* Le colis : la paire en photo, le numéro en gros, le transporteur en un clic. */
+.wsapp .pk { border: 0; border-radius: 12px; background: var(--paper); padding: 14px; }
+.wsapp .pk.done { background: var(--ok-soft); }
+.wsapp .pk-head { letter-spacing: 0; text-transform: none; font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
+.wsapp .pk-photo { width: 64px; height: 64px; border-radius: 12px; }
+.wsapp .pk-item-text b { font-size: 16px; }
+.wsapp .pk-track input {
+  min-height: 48px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 17px;
+  letter-spacing: 0.02em;
+}
+.wsapp .pk-scan { border: 0; box-shadow: var(--bouton-filet); }
+.wsapp .pk-carriers { display: flex; flex-wrap: wrap; gap: 6px; margin: -2px 0 10px; }
+.wsapp .pk-carrier {
+  min-height: 32px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--card);
+  box-shadow: var(--bouton-filet);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.wsapp .pk-carrier[aria-pressed='true'] { background: var(--brand); box-shadow: none; color: #fff; font-weight: 600; }
+
+.wsapp .ord-report { border: 0; box-shadow: var(--bouton-filet); color: var(--bad); }
+.wsapp .ord-report:hover { background: var(--bad-soft); }
+
+/* En masse : les trois étapes en cartes numérotées, le dépôt en grand. */
+.wsapp .bulk-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.wsapp .bulk-steps li {
+  padding: 16px;
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: 0 0 0 1px var(--line);
+}
+.wsapp .bulk-num { width: 26px; height: 26px; }
+.wsapp .bulk-paste textarea { border: 2px dashed var(--line); border-radius: 18px; min-height: 200px; }
+
+/* ----------------------------------------------------------- le téléphone */
+
+@media (max-width: 880px) {
+  /* Les onglets d'iOS : un pictogramme au trait, bleu quand il est choisi. */
+  .wsapp .wsnav {
+    padding: 4px 4px calc(4px + env(safe-area-inset-bottom));
+    /* Pas de flou d'arrière-plan : il ferait de la barre le repère du choix
+       de langue, fixé en haut de l'écran, qui tomberait dans les onglets. */
+    background: rgb(249 249 251 / 97%);
+    border-top-color: #dcdce2;
+  }
+  .wsapp .wsnav > button,
+  .wsapp .wsnav > button:hover {
+    min-height: 52px;
+    gap: 2px;
+    padding: 4px 2px;
+    border-radius: 0;
+    background: none;
+    color: var(--ink-mute);
+    font-size: 10.5px;
+    font-weight: 600;
+  }
+  .wsapp .wsnav > button[aria-current='true'] { background: none; color: var(--brand); }
+  .wsapp .wsnav .wsnav-tuile { width: 26px; height: 26px; background: none; }
+  .wsapp .wsnav .wsnav-tuile svg { width: 24px; height: 24px; stroke: currentColor; stroke-width: 1.6; }
+  .wsapp .wsnav-compte { display: none; }
+  .wsapp .wsnav-foot { padding: 0; }
+  .wsapp .ws-lang { background: rgb(242 242 247 / 96%); box-shadow: var(--shadow); }
+  .wsapp .ws-lang button { flex: none; min-height: 30px; white-space: nowrap; }
+  .wsapp .ws-sous button { padding: 0 8px; font-size: 13px; }
+
+  .wsapp .wshead h1 { font-size: 26px; }
+  .wsapp .home-tete { padding-top: 40px; }
+  .wsapp .hero-main,
+  .wsapp .hero-modeles { padding: 18px; }
+  .wsapp .hero-modeles { border-left: 0; border-top: 1px solid var(--line-soft); }
+  .wsapp .hero-chiffre b { font-size: 46px; }
+  .wsapp .hero-gestes .btn { flex: 1 1 100%; min-height: 48px; }
+  .wsapp .home-tuiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .wsapp .ws-modes { display: grid; grid-template-columns: 1fr 1fr; }
+  .wsapp .seg,
+  .wsapp .ws-sous,
+  .wsapp .chips { display: flex; }
+  .wsapp .seg button,
+  .wsapp .ws-sous button { flex: 1; min-height: 38px; }
+  .wsapp .pk-carrier { min-height: 40px; padding: 0 16px; font-size: 14.5px; }
+}

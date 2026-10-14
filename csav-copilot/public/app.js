@@ -5678,9 +5678,9 @@ function renderSuppliers() {
 
           <div class="supc-acts">
             <button class="btn btn-small btn-primary" data-sup-link="${esc(supplier.id)}">
-              Copier le lien atelier
+              Copier le lien de l’espace
             </button>
-            <button class="btn btn-small" data-sup-open="${esc(supplier.id)}">Ouvrir l'atelier</button>
+            <button class="btn btn-small" data-sup-open="${esc(supplier.id)}">Ouvrir l’espace fournisseur</button>
             <button class="btn btn-small" data-sup-releve="${esc(supplier.id)}">Relevé du mois</button>
             ${
               waiting > 0
@@ -5716,7 +5716,7 @@ function renderSuppliers() {
             window.open(url, '_blank', 'noopener');
           } else {
             await navigator.clipboard.writeText(url);
-            toast('Lien atelier copié — transmettez-le au fournisseur.');
+            toast('Lien de l’espace fournisseur copié — transmettez-le au fournisseur.');
           }
         } catch (error) {
           toast(error.message, true);
@@ -6022,8 +6022,8 @@ function setAlertKind(kind) {
   // Dit avant l'envoi ce qui partira, et quand : sans ça, « pas de mail »
   // se lirait comme une panne.
   $('alert-envoi').textContent = KINDS_URGENTS.has(kind)
-    ? 'Urgent : un mail court part tout de suite, et la demande s’affiche dans son atelier, rubrique Tickets, où il répond d’un bouton.'
-    : 'La demande s’affiche tout de suite dans son atelier, rubrique Tickets, où il répond d’un bouton. Par mail, elle part dans son récapitulatif de 9 h (heure de Chine).';
+    ? 'Urgent : un mail court part tout de suite, et la demande s’affiche dans son espace fournisseur, rubrique Tickets, où il répond d’un bouton.'
+    : 'La demande s’affiche tout de suite dans son espace fournisseur, rubrique Tickets, où il répond d’un bouton. Par mail, elle part dans son récapitulatif de 9 h (heure de Chine).';
 
   const single = KINDS_SINGLE[kind];
   $('alert-single-field').hidden = !single;
@@ -6258,10 +6258,10 @@ $('alert-send')?.addEventListener('click', async () => {
           ? 'Demande corrigée et devenue urgente — partie par mail.'
           : 'Demande corrigée — l’atelier voit la nouvelle version.'
         : result.emailed
-          ? 'Demande envoyée par mail et affichée dans son atelier.'
+          ? 'Demande envoyée par mail et affichée dans son espace fournisseur.'
           : result.differe
-            ? 'Demande affichée dans son atelier — elle partira dans son récapitulatif de 9 h (heure de Chine).'
-            : 'Demande affichée dans son atelier — le mail n’a pas pu partir.',
+            ? 'Demande affichée dans son espace fournisseur — elle partira dans son récapitulatif de 9 h (heure de Chine).'
+            : 'Demande affichée dans son espace fournisseur — le mail n’a pas pu partir.',
       !result.updated && !result.emailed && !result.differe,
     );
 
@@ -11352,7 +11352,7 @@ function renderDemandes(rows, compteur, shown, statut) {
       // entière est cliquable, et les deux gestes n'ont rien à voir.
       event.stopPropagation();
 
-      if (!confirm('Annuler cette demande ? Elle disparaît aussi de l’atelier du fournisseur.')) {
+      if (!confirm('Annuler cette demande ? Elle disparaît aussi de l’espace du fournisseur.')) {
         return;
       }
 
@@ -16318,7 +16318,7 @@ $('subst-send')?.addEventListener('click', async () => {
     fermerFenetreSubstitution();
     // Visibles dans son atelier tout de suite ; annoncés dans le
     // récapitulatif du matin plutôt que par un mail de plus.
-    toast(`${resultat.creees} modèle(s) proposé(s) à ${resultat.atelier} — visibles dans son atelier, annoncés dans son récapitulatif de 9 h.`);
+    toast(`${resultat.creees} modèle(s) proposé(s) à ${resultat.atelier} — visibles dans son espace fournisseur, annoncés dans son récapitulatif de 9 h.`);
     if (fenetreSubst.depuisTicket) {
       prefetched.delete(d.ticketId);
       await selectTicket(d.ticketId);
@@ -17232,8 +17232,8 @@ $('upd-send')?.addEventListener('click', async () => {
       result.emailed
         ? 'Demande envoyée au fournisseur.'
         : result.differe
-          ? 'Demande affichée dans son atelier — elle partira dans son récapitulatif de 9 h (heure de Chine).'
-          : 'Demande affichée dans son atelier — le mail n’a pas pu partir.',
+          ? 'Demande affichée dans son espace fournisseur — elle partira dans son récapitulatif de 9 h (heure de Chine).'
+          : 'Demande affichée dans son espace fournisseur — le mail n’a pas pu partir.',
       !result.emailed && !result.differe,
     );
     if (state.currentId) {
