@@ -9119,6 +9119,7 @@ const ICONS = {
   users:
     '<circle cx="6" cy="6" r="2.4"/><path d="M2 13.2c0-2.2 1.8-3.6 4-3.6s4 1.4 4 3.6"/><path d="M10.6 4.2a2.4 2.4 0 0 1 0 4.3M11.6 9.9c1.5.4 2.6 1.6 2.6 3.3"/>',
   box: '<path d="M8 2 14 5v6l-6 3-6-3V5z"/><path d="m2 5 6 3 6-3M8 8v6"/>',
+  alerte: '<path d="M8 2.2 14.3 13.3H1.7z"/><path d="M8 6.6v3M8 11.6v.1"/>',
   truck:
     '<path d="M1.5 4.5h8v6h-8z"/><path d="M9.5 7h3l2 2v1.5h-5z"/><circle cx="4.5" cy="12" r="1.4"/><circle cx="11.5" cy="12" r="1.4"/>',
   pin: '<path d="M8 14s5-4.5 5-8A5 5 0 0 0 3 6c0 3.5 5 8 5 8z"/><circle cx="8" cy="6" r="1.8"/>',
@@ -16702,33 +16703,54 @@ const lignesTexte = (lignes) =>
     .map((ligne) => `${ligne.quantite > 1 ? `${ligne.quantite} × ` : ''}${[ligne.titre, ligne.declinaison].filter(Boolean).join(' · ')}`)
     .join(', ');
 
+// Le rouge est réservé au retard : « À préparer » est l'état normal d'une
+// commande au lendemain de l'envoi, pas une alerte.
 const STATUTS_LOT = {
-  A_PREPARER: { label: 'À préparer', tone: 'bad' },
+  A_PREPARER: { label: 'À préparer', tone: 'mute' },
   EXPEDIEE: { label: 'Expédiée', tone: 'ok' },
 };
 
 /*
- * Où en est le lot chez l'atelier, sans lui écrire : deux chiffres, et le
- * détail par commande à la demande. « Expédiée » vient de ses colis saisis.
+ * Où en est le lot chez l'atelier, sans lui écrire : une barre de ce qui est
+ * parti, et le détail par commande à la demande. « Expédiée » vient de ses
+ * colis saisis. Le détail s'ouvre seul quand une commande est en retard.
  */
 function avancementDuLot(lot) {
-  const { A_PREPARER: a, EXPEDIEE: e } = lot.compte;
-  return `<details class="envoi-lot"${lot.compte.RETARD ? ' open' : ''}>
-    <summary>${lot.compte.RETARD ? `<span class="tag tone-bad envoi-retard">${lot.compte.RETARD} en retard</span>` : ''}
-      <span class="tag tone-bad">${a} à préparer</span>
-      <span class="tag tone-ok">${e} expédiée(s)</span></summary>
+  const { EXPEDIEE: expediees, RETARD: retards } = lot.compte;
+  const total = lot.commandes.length;
+  return `<details class="envoi-lot"${retards ? ' open' : ''}>
+    <summary>
+      <span class="el-barre" aria-hidden="true"><i style="width:${total ? Math.round((expediees / total) * 100) : 0}%"></i></span>
+      <span class="el-resume">${esc(nombreDe(expediees, 'expédiée', 'expédiées'))} sur ${total}${
+        retards ? ` <span class="tag tone-bad envoi-retard">${retards} en retard</span>` : ''
+      }</span>
+    </summary>
     ${lot.commandes
       .map(
         (commande) => `<div class="envoi-lot-ligne">
           <b>${esc(commande.orderName)}</b>
-          <small>${esc(commande.articles ?? '')}</small>
-          <span class="tag tone-${STATUTS_LOT[commande.statut].tone}">${STATUTS_LOT[commande.statut].label}</span>
-          ${commande.enRetard ? `<span class="tag tone-bad envoi-retard">En retard · ${commande.joursDepuis} j</span>` : ''}
-          ${commande.suivis.length ? `<span class="mono">${esc(commande.suivis.join(' · '))}</span>` : ''}
+          <span class="ell-txt"><small>${esc(commande.articles ?? '')}</small>${
+            commande.suivis.length ? `<span class="mono">${esc(commande.suivis.join(' · '))}</span>` : ''
+          }</span>
+          ${commande.enRetard ? `<span class="tag tone-bad envoi-retard">En retard · ${commande.joursDepuis} j</span>` : `<span class="tag tone-${STATUTS_LOT[commande.statut].tone}">${STATUTS_LOT[commande.statut].label}</span>`}
         </div>`,
       )
       .join('')}
   </details>`;
+}
+
+/** Les commandes qui partiront, rangées par atelier ; les orphelines en dernier. */
+function commandesParFournisseur(commandes) {
+  const groupes = new Map();
+  for (const commande of commandes) {
+    const cle = commande.fournisseur?.id ?? '';
+    if (!groupes.has(cle)) groupes.set(cle, { fournisseur: commande.fournisseur, commandes: [] });
+    groupes.get(cle).commandes.push(commande);
+  }
+  return [...groupes.values()].sort((a, b) => {
+    if (!a.fournisseur || !b.fournisseur) return a.fournisseur ? -1 : b.fournisseur ? 1 : 0;
+    return a.fournisseur.name.localeCompare(b.fournisseur.name, 'fr');
+  });
 }
 
 async function loadEnvoi() {
@@ -16748,10 +16770,12 @@ function renderEnvoi() {
   if (!d) return;
 
   const auto = d.reglage.mode === 'AUTO';
+  const delaiJours = d.reglage.delaiJours ?? 2;
   document.querySelectorAll('[data-envoi-mode]').forEach((bouton) =>
     bouton.setAttribute('aria-pressed', String(bouton.dataset.envoiMode === d.reglage.mode)),
   );
   $('envoi-heure-wrap').hidden = !auto;
+  $('envoi-manuel-note').hidden = auto;
   const heure = $('envoi-heure');
   if (!heure.options.length) {
     heure.innerHTML = Array.from({ length: 24 }, (_, h) => `<option value="${h}">${String(h).padStart(2, '0')} h</option>`).join('');
@@ -16761,69 +16785,108 @@ function renderEnvoi() {
   if (!delai.options.length) {
     delai.innerHTML = [1, 2, 3, 4, 5, 7, 10, 14].map((n) => `<option value="${n}">${n} j</option>`).join('');
   }
-  delai.value = String(d.reglage.delaiJours ?? 2);
+  delai.value = String(delaiJours);
 
   const jour = new Date(new Date(d.jusqua).getTime() - 1).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
   const depuis = new Date(d.depuis).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
-  $('envoi-periode').textContent = `Commandes jusqu’au ${jour} (depuis le ${depuis})`;
+  $('envoi-periode').textContent = `Jusqu’au ${jour} · depuis le ${depuis}`;
 
   const parId = new Map(d.commandes.map((commande) => [commande.id, commande]));
   const aTrancher = d.correspondances.filter((c) => !state.envoi.laissees.has(c.commandeId));
+  const enStock = new Set(aTrancher.map((c) => c.commandeId));
+  const partiront = d.commandes;
+  const groupes = commandesParFournisseur(partiront);
+  const envoyables = partiront.filter((commande) => commande.fournisseur).length;
+  const sans = partiront.length - envoyables;
+  const retards = (d.lots ?? []).reduce((total, lot) => total + (lot.compte.RETARD ?? 0), 0);
 
-  // Correspondances avec le stock
+  // La journée en quatre chiffres : zéro se lit en gris, sans gras.
+  const ateliers = groupes.filter((g) => g.fournisseur).map((g) => `${g.fournisseur.name} ${g.commandes.length}`);
+  $('envoi-kpis').innerHTML = [
+    [
+      'À trancher',
+      aTrancher.length,
+      aTrancher.length > 1 ? 'peuvent partir de votre stock' : aTrancher.length ? 'peut partir de votre stock' : 'aucune paire ne correspond',
+      'bleu',
+      'box',
+    ],
+    ['Au fournisseur', envoyables, ateliers.length ? ateliers.join(' · ') : 'rien à envoyer', 'indigo', 'truck'],
+    ['Sans fournisseur', sans, sans ? 'ne partira pas' : 'tout est rattaché', 'orange', 'alerte'],
+    ['En retard chez l’atelier', retards, `toujours à préparer après ${delaiJours} j`, 'rouge', 'clock'],
+  ]
+    .map(
+      ([label, n, note, teinte, icone]) => `<div class="ek">
+        <span class="kpi-ico c-${teinte}" aria-hidden="true">${ico(icone)}</span>
+        <span class="ek-txt">
+          <span class="ek-label">${esc(label)}</span>
+          <b class="ek-v${n ? '' : ' ek-nul'}">${n}</b>
+          <span class="ek-note">${esc(note)}</span>
+        </span>
+      </div>`,
+    )
+    .join('');
+
+  // Les paires du stock : une carte par commande, la décision en bas.
   $('envoi-n-match').textContent = aTrancher.length ? `${aTrancher.length}` : '';
   $('envoi-matches').innerHTML = aTrancher.length
     ? aTrancher
         .map((c) => {
           const commande = parId.get(c.commandeId);
-          return `<div class="envoi-row envoi-match">
-            <div class="envoi-cmd">
-              <b>${esc(commande?.name ?? '')}</b>
-              <span>${esc(commande?.client ?? '')}</span>
-              <small>${esc(lignesTexte(commande?.lignes ?? []))}</small>
+          const client = commande?.client ?? '';
+          return `<article class="envoi-carte" aria-label="${esc(commande?.name ?? '')}">
+            <div class="ec-cmd">
+              <span class="ec-av" aria-hidden="true" style="background:${avatarTint(client || commande?.name)}">${esc(initials(client || '?'))}</span>
+              <span class="ec-txt">
+                <span><b>${esc(commande?.name ?? '')}</b>${client ? ` · ${esc(client)}` : ''}</span>
+                <small>Commandé : ${esc(lignesTexte(commande?.lignes ?? []))}</small>
+              </span>
             </div>
-            <div class="envoi-paires">
-              ${c.paires
+            <div class="ec-paire">
+              <span class="ec-ico" aria-hidden="true">${ico('box')}</span>
+              <span class="ec-txt">${c.paires
                 .map(
-                  (paire) => `<span class="envoi-paire">${esc([paire.titre, paire.declinaison].filter(Boolean).join(' · '))}${
-                    paire.retourDe ? ` <small>retour de ${esc(paire.retourDe)}</small>` : ''
-                  }</span>`,
+                  (paire) => `<span>${esc([paire.titre, paire.declinaison].filter(Boolean).join(' · '))}</span>${
+                    paire.retourDe ? `<small>Retour de ${esc(paire.retourDe)}</small>` : ''
+                  }`,
                 )
-                .join('')}
-              <span class="envoi-lieu">${
-                c.agence
-                  ? `📍 ${esc(c.agence.nom ?? 'Agence')}${c.agence.pays ? ` (${esc(c.agence.pays)})` : ''}${
-                      c.voisin ? ' <span class="tag tone-wait">pays voisin</span>' : ''
-                    }`
-                  : '📍 Chez vous'
-              }</span>
+                .join('')}</span>
+              <span class="envoi-lieu">${ico('pin')}${
+                c.agence ? `${esc(c.agence.nom ?? 'Agence')}${c.agence.pays ? ` (${esc(c.agence.pays)})` : ''}` : 'Chez vous'
+              }${c.voisin ? ' <span class="tag tone-mute">pays voisin</span>' : ''}</span>
             </div>
             <div class="envoi-acts">
-              <button class="btn btn-small btn-primary" data-envoi-reserver="${esc(c.commandeId)}">${
+              <button class="btn btn-small" type="button" data-envoi-laisser="${esc(c.commandeId)}">Laisser au fournisseur</button>
+              <button class="btn btn-small btn-primary" type="button" data-envoi-reserver="${esc(c.commandeId)}">${
                 c.agence ? 'L’agence l’expédie' : 'Je l’expédie moi-même'
               }</button>
-              <button class="btn btn-small" data-envoi-laisser="${esc(c.commandeId)}">Laisser au fournisseur</button>
             </div>
-          </div>`;
+          </article>`;
         })
         .join('')
-    : '<p class="empty">Aucune commande ne correspond à une paire de votre stock (agences comprises).</p>';
+    : '<p class="empty">Aucune commande ne correspond à une paire de votre stock, agences comprises.</p>';
 
-  // Ce qui partira
-  const partiront = d.commandes;
+  // Ce qui partira, atelier par atelier. Une commande que le stock pourrait
+  // servir le dit : non tranchée, elle part avec les autres.
   $('envoi-n-list').textContent = partiront.length ? `${partiront.length}` : '';
   $('envoi-list').innerHTML = partiront.length
-    ? partiront
+    ? groupes
         .map(
-          (commande) => `<div class="envoi-row">
-            <div class="envoi-cmd">
-              <b>${esc(commande.name)}</b>
-              <span>${esc(commande.client ?? '')}</span>
-              <small>${esc(lignesTexte(commande.lignes))}</small>
-            </div>
-            <span class="envoi-dest${commande.fournisseur ? '' : ' envoi-sans'}">${esc(
-              commande.fournisseur?.name ?? 'Aucun fournisseur — ne partira pas',
-            )}</span>
+          (groupe) => `<div class="envoi-groupe${groupe.fournisseur ? '' : ' envoi-sans'}">
+            <div class="eg-tete">${groupe.fournisseur ? '' : ico('alerte')}<b>${esc(
+              groupe.fournisseur?.name ?? 'Sans fournisseur, ne partira pas',
+            )}</b><span>${esc(nombreDe(groupe.commandes.length, 'commande', 'commandes'))}</span>${
+              groupe.fournisseur ? '' : '<button class="envoi-lien" type="button" data-envoi-fournisseurs>Régler dans Fournisseurs</button>'
+            }</div>
+            <div class="eg-lignes">${groupe.commandes
+              .map(
+                (commande) => `<div class="envoi-ligne">
+                  <b class="el-nom">${esc(commande.name)}</b>
+                  <span class="el-client">${esc(commande.client ?? '')}</span>
+                  <span class="el-articles">${esc(lignesTexte(commande.lignes))}</span>
+                  ${enStock.has(commande.id) ? `<span class="el-stock">${ico('box')}aussi en stock</span>` : ''}
+                </div>`,
+              )
+              .join('')}</div>
           </div>`,
         )
         .join('')
@@ -16832,58 +16895,67 @@ function renderEnvoi() {
   // Réservées au stock
   $('envoi-res-bloc').hidden = d.reservees.length === 0;
   $('envoi-n-res').textContent = d.reservees.length ? `${d.reservees.length}` : '';
-  $('envoi-reservees').innerHTML = d.reservees
-    .map(
-      (commande) => `<div class="envoi-row">
-        <div class="envoi-cmd"><b>${esc(commande.name)}</b><small>${esc(commande.paires.join(', '))}</small></div>
-        <button class="btn btn-small" data-envoi-liberer="${esc(commande.id)}" data-nom="${esc(commande.name)}">Rendre au fournisseur</button>
-      </div>`,
-    )
-    .join('');
+  $('envoi-reservees').innerHTML = d.reservees.length
+    ? `<div class="eg-lignes">${d.reservees
+        .map(
+          (commande) => `<div class="envoi-ligne envoi-res">
+            <span class="el-txt"><b>${esc(commande.name)}</b><small>${esc(commande.paires.join(', '))}</small></span>
+            <button class="btn btn-small" type="button" data-envoi-liberer="${esc(commande.id)}" data-nom="${esc(commande.name)}">Rendre au fournisseur</button>
+          </div>`,
+        )
+        .join('')}</div>`
+    : '';
 
   // Historique, avec ce que l'atelier a fait de chaque lot depuis.
   const lots = new Map((d.lots ?? []).map((lot) => [lot.id, lot]));
   $('envoi-hist').innerHTML = d.envois?.length
-    ? d.envois
+    ? `<div class="eg-lignes">${d.envois
         .map((envoi) => {
           const lot = lots.get(envoi.id);
-          return `<div class="envoi-row envoi-hist-row">
-            <span>${esc(dateTime(envoi.createdAt))}</span>
-            <b>${esc(envoi.supplier?.name ?? '')}</b>
-            <span>${envoi.combien} commande(s)</span>
-            <span class="tag tone-${envoi.emailedAt ? (envoi.simule ? 'mute' : 'ok') : 'bad'}">${
-              envoi.emailedAt ? (envoi.simule ? 'Simulé (mode test)' : 'Envoyé') : 'Échec'
+          return `<div class="envoi-hist-row">
+            <div class="eh-tete">
+              <b>${esc(envoi.supplier?.name ?? '')}</b>
+              <span class="tag tone-${envoi.emailedAt ? (envoi.simule ? 'mute' : 'ok') : 'bad'}">${
+                envoi.emailedAt ? (envoi.simule ? 'Simulé (mode test)' : 'Envoyé') : 'Échec'
+              }</span>
+            </div>
+            <span class="eh-detail">${esc(dateTime(envoi.createdAt))} · ${esc(nombreDe(envoi.combien, 'commande', 'commandes'))} · ${
+              envoi.mode === 'AUTO' ? 'automatique' : 'manuel'
             }</span>
-            <span class="envoi-mode">${envoi.mode === 'AUTO' ? 'automatique' : 'manuel'}</span>
             ${envoi.erreur ? `<small class="envoi-err">${esc(envoi.erreur)}</small>` : ''}
             ${lot ? avancementDuLot(lot) : ''}
           </div>`;
         })
-        .join('')
+        .join('')}</div>`
     : '<p class="empty">Aucun envoi pour l’instant.</p>';
+  $('envoi-pied').textContent = `« Expédiée » vient des numéros de suivi que l’atelier saisit. Une commande encore à préparer ${nombreDe(
+    delaiJours,
+    'jour',
+    'jours',
+  )} après l’envoi passe en retard, et un rappel unique lui part.`;
 
-  const envoyables = partiront.filter((commande) => commande.fournisseur).length;
   $('envoi-go').disabled = envoyables === 0 || !canI('escalate');
-  $('envoi-go').textContent = envoyables
-    ? `Envoyer au fournisseur (${envoyables})`
-    : 'Envoyer au fournisseur';
+  $('envoi-go').textContent = envoyables ? `Envoyer au fournisseur (${envoyables})` : 'Envoyer au fournisseur';
 
-  const sans = partiront.length - envoyables;
-  const retards = (d.lots ?? []).reduce((total, lot) => total + (lot.compte.RETARD ?? 0), 0);
   // La pastille du menu suit l'écran tout de suite : le compte serveur est
   // mis en cache cinq minutes, et un délai qu'on vient de changer le périme.
   if ((state.navCounts?.envoi ?? 0) !== retards) {
     state.navCounts = { ...state.navCounts, envoi: retards };
     renderNav();
   }
+  // Les commandes sans fournisseur ont leur groupe en rouge, et son lien :
+  // le bandeau ne garde que ce qui n'a pas d'autre place.
   const notes = [
     retards
-      ? `${retards} commande(s) en retard chez l’atelier : non expédiées ${d.reglage.delaiJours ?? 2} jours après l’envoi. Détail sous « Derniers envois ».`
+      ? `${nombreDe(retards, 'commande en retard', 'commandes en retard')} chez l’atelier : toujours à préparer ${nombreDe(
+          delaiJours,
+          'jour',
+          'jours',
+        )} après l’envoi. Le détail est sous « Derniers envois ».`
       : null,
     d.tronque ? 'Plus de mille commandes sur la période : seules les mille premières sont affichées.' : null,
-    sans ? `${sans} commande(s) ne correspondent à aucun fournisseur : réglez les marques ou le fournisseur par défaut dans l’écran Fournisseurs.` : null,
     auto && aTrancher.length
-      ? `Envoi automatique à ${String(d.reglage.heure).padStart(2, '0')} h : les correspondances non tranchées d’ici là partiront au fournisseur.`
+      ? `Envoi automatique à ${String(d.reglage.heure).padStart(2, '0')} h : les paires en stock que vous n’avez pas tranchées d’ici là partiront au fournisseur.`
       : null,
   ].filter(Boolean);
   $('envoi-notice').hidden = notes.length === 0;
@@ -16895,6 +16967,10 @@ $('view-envoi')?.addEventListener('click', async (event) => {
   const laisser = event.target.closest('[data-envoi-laisser]');
   const liberer = event.target.closest('[data-envoi-liberer]');
   const d = state.envoi.donnees;
+  if (event.target.closest('[data-envoi-fournisseurs]')) {
+    setView('suppliers');
+    return;
+  }
   if (!d) return;
 
   if (laisser) {
@@ -16947,22 +17023,46 @@ $('view-envoi')?.addEventListener('click', async (event) => {
   }
 });
 
-$('envoi-go')?.addEventListener('click', async () => {
+/*
+ * L'envoi demande confirmation dans une feuille : à qui part quoi, et ce que
+ * le stock aurait pu servir. La boîte du navigateur ne savait dire qu'un total.
+ */
+function ouvrirEnvoiFournisseur() {
   const d = state.envoi.donnees;
   if (!d) return;
-  const envoyables = d.commandes.filter((commande) => commande.fournisseur).length;
+  const groupes = commandesParFournisseur(d.commandes.filter((commande) => commande.fournisseur));
+  const envoyables = groupes.reduce((total, groupe) => total + groupe.commandes.length, 0);
+  if (!envoyables) return;
   const nonTranchees = d.correspondances.filter((c) => !state.envoi.laissees.has(c.commandeId)).length;
 
-  const question = [
-    `Envoyer ${envoyables} commande(s) au fournisseur ?`,
-    nonTranchees ? `${nonTranchees} pourraient partir de votre stock retours : elles partiront au fournisseur.` : null,
-  ]
-    .filter(Boolean)
-    .join('\n\n');
-  if (!confirm(question)) return;
+  $('envoi-m-titre').textContent = `Envoyer ${nombreDe(envoyables, 'commande', 'commandes')} au fournisseur ?`;
+  $('envoi-m-lignes').innerHTML = groupes
+    .map(
+      (groupe) => `<li><span>${esc(groupe.fournisseur.name)}</span><span>${esc(
+        nombreDe(groupe.commandes.length, 'commande', 'commandes'),
+      )}</span></li>`,
+    )
+    .join('');
+  $('envoi-m-avert').hidden = nonTranchees === 0;
+  $('envoi-m-avert').textContent =
+    nonTranchees > 1
+      ? `${nonTranchees} d’entre elles pourraient partir de votre stock retours : si vous envoyez maintenant, elles partiront au fournisseur.`
+      : 'Une d’entre elles pourrait partir de votre stock retours : si vous envoyez maintenant, elle partira au fournisseur.';
+  $('envoi-modal').hidden = false;
+  $('envoi-modal').classList.add('open');
+  $('envoi-m-annuler').focus();
+}
 
-  const bouton = $('envoi-go');
+function fermerEnvoiFournisseur() {
+  $('envoi-modal').hidden = true;
+  $('envoi-modal').classList.remove('open');
+  $('envoi-go').focus();
+}
+
+async function envoyerAuFournisseur() {
+  const bouton = $('envoi-m-envoyer');
   bouton.disabled = true;
+  $('envoi-go').disabled = true;
   try {
     const { resultats } = await api('/api/envoi-du-jour/envoyer', { method: 'POST', body: '{}' });
     const ratees = resultats.filter((resultat) => !resultat.parti);
@@ -16975,11 +17075,21 @@ $('envoi-go')?.addEventListener('click', async () => {
       ratees.length > 0,
     );
     state.envoi.laissees.clear();
+    fermerEnvoiFournisseur();
     await loadEnvoi();
   } catch (error) {
     toast(error.message, true);
+    $('envoi-go').disabled = false;
+  } finally {
     bouton.disabled = false;
   }
+}
+
+$('envoi-go')?.addEventListener('click', ouvrirEnvoiFournisseur);
+$('envoi-m-annuler')?.addEventListener('click', fermerEnvoiFournisseur);
+$('envoi-m-envoyer')?.addEventListener('click', () => void envoyerAuFournisseur());
+$('envoi-modal')?.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') fermerEnvoiFournisseur();
 });
 
 async function enregistrerReglageEnvoi(mode, heure, delaiJours = Number($('envoi-delai').value || 2)) {
