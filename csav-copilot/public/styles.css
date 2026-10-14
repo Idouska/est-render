@@ -10642,9 +10642,13 @@ progress { accent-color: var(--accent); }
 
 /* Les dossiers : un contrôle segmenté, la piste grise et le dossier ouvert
    posé en blanc. */
+/* Une seule rangée, toujours : un contrôle segmenté qui passe à la ligne se
+   lit comme cassé. Avec une vraie boîte — 5 885 en réception, 495 brouillons —
+   « Archivés » tombait seul sur une seconde ligne. Les segments se resserrent
+   d'abord ; sous trois cents pixels, c'est le texte qui s'abrège. */
 #view-tickets .folders {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 2px;
   max-width: 460px;
   margin: 6px 12px 8px;
@@ -10654,17 +10658,24 @@ progress { accent-color: var(--accent); }
   background: color-mix(in srgb, var(--ink) 8%, transparent);
 }
 #view-tickets .folder {
+  display: block;
   flex: 1 1 auto;
-  justify-content: center;
+  min-width: 0;
+  height: 24px;
   min-height: 24px;
   margin: 0;
-  padding: 0 6px;
+  padding: 0 5px;
+  overflow: hidden;
   border: 0;
   border-radius: 6px;
   background: transparent;
   color: var(--ink);
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 500;
+  line-height: 24px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 #view-tickets .folder:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); }
 #view-tickets .folder[aria-pressed="true"] {
@@ -10673,7 +10684,7 @@ progress { accent-color: var(--accent); }
   font-weight: 600;
   box-shadow: 0 1px 2.5px rgb(0 0 0 / 16%);
 }
-#view-tickets .folder-n { color: var(--ink-mute); font-weight: 400; }
+#view-tickets .folder-n { margin-left: 3px; color: var(--ink-mute); font-weight: 400; }
 
 #view-tickets .queue-list { padding: 2px 6px 10px; gap: 0; }
 

@@ -80,3 +80,13 @@ test('les boutons de la réponse : l’envoi en haut à droite, les gestes engag
   assert.ok(ordre('#btn-send') < saut, "l'envoi reste sur la première rangée");
   assert.ok(saut < ordre('#btn-refund'), 'Rembourser passe sous la rangée de l’envoi');
 });
+
+test('les dossiers tiennent sur une rangée, même avec une vraie boîte', () => {
+  // Vu en production : « Réception 5885 · Brouillons 495 » repoussait
+  // « Archivés » seul sur une seconde ligne, sous le contrôle segmenté.
+  const piste = css.match(/#view-tickets \.folders\s*\{([^}]*)\}/)?.[1] ?? '';
+  assert.match(piste, /flex-wrap:\s*nowrap/);
+  const segment = css.match(/#view-tickets \.folder\s*\{([^}]*)\}/)?.[1] ?? '';
+  assert.match(segment, /min-width:\s*0/);
+  assert.match(segment, /text-overflow:\s*ellipsis/);
+});
