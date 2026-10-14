@@ -11391,3 +11391,222 @@ progress { accent-color: var(--accent); }
   #view-overview .ov-quand { width: auto; flex-direction: row; gap: 8px; margin-left: auto; }
   #view-overview .ov-go { display: none; }
 }
+
+/* ============================================= Coûts SAV, façon Apple ===
+
+   La maquette validée : le mois choisi dans un sélecteur de date, son coût
+   en grand avec sa composition, les douze mois, puis le détail du calcul en
+   groupes de lignes. Le graphe lui-même ne change pas — ses couleurs sont
+   validées et figées par les tests ; seul son cadre suit les Réglages. */
+
+#view-couts { gap: 24px; }
+
+/* ----------------------------------------------- sélecteur de mois --- */
+
+#view-couts .couts-bar { padding: 0; background: transparent; border: 0; box-shadow: none; gap: 12px; }
+#view-couts .couts-mois {
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+}
+#view-couts .couts-pas {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+#view-couts .couts-pas svg { width: 14px; height: 14px; }
+#view-couts .couts-pas:hover:not(:disabled) { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+#view-couts .couts-pas:disabled { opacity: 0.35; cursor: default; }
+#view-couts .couts-mois-nom {
+  min-width: 150px;
+  height: 26px;
+  padding: 0 12px;
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: 0 1px 2.5px rgb(0 0 0 / 16%);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 26px;
+}
+#view-couts #couts-reglages { margin-left: auto; }
+
+/* ------------------------------------------------- le mois en grand --- */
+
+#view-couts .couts-hero {
+  display: flex;
+  flex-wrap: wrap;
+  background: var(--surface);
+  border-radius: 12px;
+  box-shadow: 0 0 0 1px var(--line);
+  overflow: hidden;
+}
+#view-couts .ch-principal {
+  flex: 2 1 440px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 20px 20px;
+}
+#view-couts .ch-titre { font-size: 13px; color: var(--ink-mute); }
+#view-couts .ch-titre::first-letter { text-transform: uppercase; }
+#view-couts .ch-chiffre { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 14px; }
+#view-couts .ch-total {
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+#view-couts .ch-ecart { font-size: 13px; font-weight: 600; color: var(--ink-mute); }
+#view-couts .ch-ecart.kd-bad { color: var(--crit-ink); }
+#view-couts .ch-ecart.kd-ok { color: var(--ok-ink); }
+/* La composition : trois segments séparés de deux pixels, sur une piste. */
+#view-couts .ch-barre {
+  display: flex;
+  gap: 2px;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+}
+#view-couts .ch-barre i { display: block; height: 100%; }
+#view-couts .ch-postes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+#view-couts .ch-postes li,
+#view-couts .ch-stat { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+#view-couts .ch-nom { display: flex; align-items: center; font-size: 12px; color: var(--ink-mute); }
+#view-couts .ch-postes b { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+#view-couts .ch-note { font-size: 12px; color: var(--ink-mute); }
+#view-couts .ch-cote {
+  flex: 1 1 260px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--line-soft);
+}
+#view-couts .ch-stat { flex: 1; padding: 18px 20px; }
+#view-couts .ch-stat + .ch-stat { border-top: 1px solid var(--line-soft); }
+#view-couts .ch-stat b { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* ------------------------------------------ titres et groupes blancs --- */
+
+#view-couts .panel {
+  display: flex;
+  flex-direction: column;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+#view-couts .panel-head { gap: 8px 12px; padding: 0 4px 8px; border: 0; }
+#view-couts .panel-title { font-size: 15px; font-weight: 700; }
+#view-couts .couts-12 .card-body,
+#view-couts #couts-motifs,
+#view-couts #couts-modeles {
+  margin: 0;
+  background: var(--surface);
+  border-radius: 12px;
+  box-shadow: 0 0 0 1px var(--line);
+  overflow: hidden;
+}
+#view-couts .couts-12 .card-body { padding: 14px 16px 12px; }
+/* La ligne « 12 mois » n'a qu'un trait, au-dessus : l'en-tête de ligne en
+   gardait un second, sous sa seule cellule. */
+#view-couts .couts-table tfoot th { border-bottom: 0; }
+
+#view-couts .couts-duo { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
+#view-couts .couts-calcul { flex: 3 1 520px; min-width: 0; }
+#view-couts .couts-origine { flex: 2 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 22px; }
+
+/* ------------------------------------------------ détail du calcul --- */
+
+#view-couts #couts-detail { display: flex; flex-direction: column; gap: 18px; }
+#view-couts .cd-groupe { display: flex; flex-direction: column; gap: 7px; }
+#view-couts .cd-tete { display: flex; align-items: center; padding: 0 4px; font-size: 13px; font-weight: 700; }
+#view-couts .cd-tete > span:not(.cg-cle) { flex: 1; }
+#view-couts .cd-tete b { font-variant-numeric: tabular-nums; }
+#view-couts .cd-lignes {
+  background: var(--surface);
+  border-radius: 10px;
+  box-shadow: 0 0 0 1px var(--line);
+  overflow: hidden;
+}
+#view-couts .cd-ligne {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-sizing: border-box;
+  min-height: 40px;
+  /* Au téléphone, un libellé passe sur deux lignes : la ligne s'agrandit
+     sans coller au filet. */
+  padding: 9px 14px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+#view-couts .cd-ligne + .cd-ligne {
+  background-image: linear-gradient(var(--line-soft), var(--line-soft));
+  background-size: calc(100% - 14px) 1px;
+  background-position: 14px 0;
+  background-repeat: no-repeat;
+}
+#view-couts .cd-nom { flex: 1; min-width: 0; }
+#view-couts .cd-calc { width: 110px; text-align: right; color: var(--ink-mute); font-variant-numeric: tabular-nums; }
+#view-couts .cd-mt { width: 90px; text-align: right; font-variant-numeric: tabular-nums; }
+#view-couts .cd-moins { color: var(--ok-ink); }
+#view-couts .cd-net { min-height: 44px; background-color: var(--sunk); font-weight: 700; }
+#view-couts .cd-note { margin: 0; padding: 0 4px; }
+
+/* ------------------------------------------- d'où viennent les retours --- */
+
+#view-couts #couts-motifs { padding: 0 14px; }
+#view-couts #couts-motifs .ibar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  row-gap: 6px;
+  margin: 0;
+  padding: 10px 0;
+}
+#view-couts #couts-motifs .ibar + .ibar { border-top: 1px solid var(--line-soft); }
+#view-couts #couts-motifs .ibar-label { font-size: 13px; color: var(--ink); }
+#view-couts #couts-motifs .ibar-track { grid-row: 2; grid-column: 1 / -1; border-radius: 999px; }
+#view-couts #couts-motifs .ibar-fill { border-radius: 999px; }
+#view-couts #couts-motifs .ibar-count { grid-row: 1; grid-column: 2; font-family: var(--font-ui); font-size: 13px; font-weight: 600; }
+#view-couts #couts-motifs > .empty,
+#view-couts .cm-vide { padding: 14px; }
+
+#view-couts .cm-liste { margin: 0; padding: 0; list-style: none; }
+#view-couts .cm-liste li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 6px 14px;
+  font-size: 13px;
+}
+#view-couts .cm-liste li + li { box-shadow: inset 0 1px 0 var(--line-soft); }
+#view-couts .cm-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+#view-couts .cm-txt b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#view-couts .cm-txt span { font-size: 12px; color: var(--ink-mute); }
+#view-couts .cm-n { flex: none; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 600px) {
+  #view-couts .ch-cote { border-left: 0; border-top: 1px solid var(--line-soft); }
+  #view-couts .ch-total { font-size: 34px; }
+  #view-couts .cd-calc { width: auto; }
+  #view-couts .cd-mt { width: auto; min-width: 70px; }
+}
