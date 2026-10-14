@@ -472,6 +472,8 @@ function shownOrders() {
 const enColonnes = window.matchMedia('(min-width: 1180px)');
 enColonnes.addEventListener('change', () => {
   if (state.view === 'orders' && state.mode !== 'masse') renderOrders();
+  if (state.view === 'tickets') renderTickets();
+  if (state.view === 'catalog' && state.catalog) renderCatalog();
 });
 
 /** Le chiffre de la colonne : ce qu'il reste à préparer, comme l'accueil. */
@@ -1331,6 +1333,9 @@ const TOUTES = ['home', 'orders', 'tracking', 'lots', 'catalog', 'tickets'];
 
 function setView(view) {
   state.view = view;
+  // Toucher l'onglet ramène à sa liste, comme sur iPhone.
+  if (view === 'tickets' && state.tk) state.tk.ouvert = null;
+  if (view === 'catalog' && !enColonnes.matches) state.catalogFocus = null;
   const sections = ECRANS[view] ?? [view];
   const courant = sections.length > 1 ? (state.sous?.[view] ?? sections[0]) : sections[0];
 
@@ -1599,116 +1604,168 @@ async function loadCatalog() {
   }
 }
 
+/** Épuisé : vendu à zéro. Un stock non suivi (`null`) n'est pas un stock vide. */
+const estEpuise = (item) => item.totalInventory === 0;
+
 function renderCatalog(error) {
   const rows = $('catalog-rows');
+  const tout = state.catalog ?? [];
+  const colonnes = enColonnes.matches;
 
-  if (state.catalogFocus) {
+  if (state.catalogFocus && !colonnes) {
     renderProductSheet();
     return;
   }
+  $('view-catalog').classList.remove('cat-plein');
+
+  // Le résumé, les filtres et la recherche n'ont de sens qu'avec des modèles.
+  const paires = tout.reduce((somme, item) => somme + Math.max(0, item.totalInventory ?? 0), 0);
+  $('catalog-resume').textContent = tout.length ? t('catalog.summary', { n: tout.length, p: paires }) : '';
+  $('catalog-search').hidden = tout.length === 0;
+  $('catalog-outils').hidden = tout.length === 0;
+
+  const epuises = tout.filter(estEpuise).length;
+  const dispo = state.catalogDispo ?? 'tous';
+  $('catalog-dispo').setAttribute('aria-label', t('catalog.availability'));
+  $('catalog-dispo')
+    .querySelectorAll('[data-dispo]')
+    .forEach((bouton) => {
+      const n = { tous: tout.length, stock: tout.length - epuises, epuise: epuises }[bouton.dataset.dispo];
+      bouton.textContent = `${t(`catalog.dispo.${bouton.dataset.dispo}`)} ${n}`;
+      bouton.setAttribute('aria-pressed', String(bouton.dataset.dispo === dispo));
+    });
+
+  const marques = [...new Set(tout.map((item) => item.vendor).filter(Boolean))].sort((a, b) => a.localeCompare(b, locale));
+  const marque = marques.includes(state.catalogMarque) ? state.catalogMarque : '';
+  $('catalog-marque-choix').hidden = marques.length < 2;
+  $('catalog-marque').innerHTML = [
+    `<option value="">${esc(t('catalog.allBrands'))}</option>`,
+    ...marques.map((nom) => `<option value="${esc(nom)}"${nom === marque ? ' selected' : ''}>${esc(nom)}</option>`),
+  ].join('');
 
   // Le champ de recherche filtre sur place : cent produits sont déjà là, une
   // requête par frappe n'apporterait que l'attente.
   const needle = ($('catalog-q')?.value ?? '').trim().toLowerCase();
-  const items = (state.catalog ?? []).filter(
+  const items = tout.filter(
     (item) =>
-      !needle ||
-      item.title.toLowerCase().includes(needle) ||
-      (item.vendor ?? '').toLowerCase().includes(needle),
+      (!needle || item.title.toLowerCase().includes(needle) || (item.vendor ?? '').toLowerCase().includes(needle)) &&
+      (!marque || item.vendor === marque) &&
+      (dispo === 'tous' || (dispo === 'epuise' ? estEpuise(item) : !estEpuise(item))),
   );
 
-  $('catalog-search').hidden = (state.catalog ?? []).length === 0;
-
-  rows.innerHTML = items.length
-    ? `<div class="cat-grid">${items
-        .map(
-          (item) => `<button type="button" class="catc" data-product="${esc(item.id)}">
-            ${
-              item.image
-                ? `<img class="catc-photo" src="${esc(item.image)}" alt="" loading="lazy" />`
-                : '<span class="catc-photo catc-photo-none" aria-hidden="true"></span>'
-            }
-            <span class="catc-main">
-              <b>${esc(item.title)}</b>
-              <small>${esc(t('catalog.variants', { n: item.variantCount ?? 0 }))}${
-                item.totalInventory != null && item.totalInventory > 0
-                  ? ` · ${esc(t('catalog.stock', { n: item.totalInventory }))}`
-                  : ''
-              }</small>
-            </span>
-          </button>`,
-        )
-        .join('')}</div>`
-    : `<p class="empty">${esc(
-        error ?? (needle ? t('catalog.noMatch') : t('catalog.empty')),
-      )}</p>`;
-}
-
-/**
- * La fiche d'un produit : ses déclinaisons, une par ligne.
- *
- * L'atelier vient vérifier une taille et une référence, pas contempler le
- * modèle : la liste dit pour chaque déclinaison son SKU, son stock, et
- * « épuisé » quand Shopify la déclare invendable — c'est le mot qui évite un
- * ticket de rupture découvert au moment d'emballer.
- */
-async function renderProductSheet() {
-  const rows = $('catalog-rows');
-  $('catalog-search').hidden = true;
-
-  const back = `<div class="focus-bar">
-    <button type="button" class="btn btn-small" data-cat-back="1">← ${esc(
-      t('catalog.back'),
-    )}</button>
-  </div>`;
-
-  const cached = state.catalogSheets?.[state.catalogFocus];
-  if (!cached) {
-    rows.innerHTML = `${back}<p class="empty">…</p>`;
-    try {
-      const numeric = state.catalogFocus.split('/').pop();
-      const { product } = await api(`/api/workspace/${supplierId}/catalog/${numeric}`);
-      (state.catalogSheets ??= {})[state.catalogFocus] = product;
-    } catch (error) {
-      rows.innerHTML = `${back}<p class="empty">${esc(error.message)}</p>`;
-      return;
-    }
-    // L'utilisateur a pu quitter la fiche pendant le chargement.
-    if (state.catalogFocus) renderProductSheet();
+  if (items.length === 0) {
+    rows.innerHTML = `<p class="empty">${esc(error ?? (tout.length ? t('catalog.noMatch') : t('catalog.empty')))}</p>`;
     return;
   }
 
-  const product = cached;
-  rows.innerHTML = `${back}
-    <div class="sheet">
-      <div class="sheet-head">
+  // En colonnes, un modèle est toujours ouvert à droite : le premier, d'abord.
+  if (colonnes && !items.some((item) => item.id === state.catalogFocus)) {
+    state.catalogFocus = items[0].id;
+    state.catalogCouleur = null;
+    state.catalogTaille = null;
+  }
+
+  const grille = `<div class="cat-grid">${items
+    .map(
+      (item) => `<button type="button" class="catc${estEpuise(item) ? ' catc-epuise' : ''}" data-product="${esc(item.id)}"${
+        colonnes && item.id === state.catalogFocus ? ' aria-current="true"' : ''
+      }>
         ${
-          product.image
-            ? `<img class="sheet-photo" src="${esc(product.image)}" alt="" />`
-            : '<span class="sheet-photo catc-photo-none" aria-hidden="true"></span>'
+          item.image
+            ? `<img class="catc-photo" src="${esc(item.image)}" alt="" loading="lazy" />`
+            : '<span class="catc-photo catc-photo-none" aria-hidden="true"></span>'
         }
-        <div>
-          <h2>${esc(product.title)}</h2>
-          <small>${esc(product.vendor ?? '')}</small>
-        </div>
-      </div>
+        <span class="catc-main">
+          <b>${esc(item.title)}</b>
+          <small>${esc([item.vendor, t('catalog.variants', { n: item.variantCount ?? 0 })].filter(Boolean).join(' · '))}</small>
+          ${
+            estEpuise(item)
+              ? `<span class="pill catc-out">${esc(t('catalog.soldOutTag'))}</span>`
+              : item.totalInventory > 0
+                ? `<small class="catc-stock">${esc(t('catalog.stock', { n: item.totalInventory }))}</small>`
+                : ''
+          }
+        </span>
+      </button>`,
+    )
+    .join('')}</div>`;
+
+  if (!colonnes) {
+    rows.innerHTML = grille;
+    return;
+  }
+
+  rows.innerHTML = `<div class="cat-split">${grille}<aside class="cat-fiche" aria-live="polite">${ficheDuModele()}</aside></div>`;
+}
+
+/** La fiche du modèle ouvert, ou son chargement. */
+function ficheDuModele() {
+  const product = state.catalogSheets?.[state.catalogFocus];
+  if (product) return ficheMarkup(product);
+  void chargerFiche(state.catalogFocus);
+  return `<p class="empty">${esc(t('tk.loading'))}</p>`;
+}
+
+async function chargerFiche(id) {
+  if (!id || state.catalogChargement === id) return;
+  state.catalogChargement = id;
+  try {
+    const numeric = id.split('/').pop();
+    const { product } = await api(`/api/workspace/${supplierId}/catalog/${numeric}`);
+    (state.catalogSheets ??= {})[id] = product;
+  } catch (error) {
+    if (state.catalogFocus === id) {
+      const zone = document.querySelector('.cat-fiche') ?? $('catalog-rows');
+      zone.innerHTML = `<p class="empty">${esc(error.message)}</p>`;
+    }
+    return;
+  } finally {
+    state.catalogChargement = null;
+  }
+  // L'atelier a pu changer de modèle pendant le chargement.
+  if (state.catalogFocus === id) renderCatalog();
+}
+
+/*
+ * La fiche d'un modèle : la couleur, puis la taille.
+ *
+ * La question de l'atelier est « la 44 existe-t-elle, sous quelle référence,
+ * avec quel stock » : les tailles d'une couleur tiennent sur une grille, chacune
+ * avec son stock, et la taille choisie donne sa référence. Quand Shopify ne
+ * nomme pas ses déclinaisons « Couleur / Taille », la fiche retombe sur la
+ * liste simple.
+ */
+function ficheMarkup(product) {
+  const variantes = product.variants.map((variant) => ({ ...variant, ...repartirDeclinaison(variant.title) }));
+  const parTaille = variantes.every((variant) => variant.taille);
+  const stockDe = (variant) => (variant.availableForSale ? variant.inventoryQuantity : 0);
+  const total = variantes.reduce((somme, variant) => somme + Math.max(0, stockDe(variant) ?? 0), 0);
+
+  const tete = (image, resume) => `
+    ${
+      image
+        ? `<img class="sheet-photo" src="${esc(image)}" alt="" />`
+        : '<span class="sheet-photo catc-photo-none" aria-hidden="true"></span>'
+    }
+    <div class="fiche-titre">
+      <h2>${esc(product.title)}</h2>
+      <small>${esc([product.vendor, resume].filter(Boolean).join(' · '))}</small>
+    </div>`;
+
+  if (!parTaille) {
+    return `<div class="sheet">
+      <div class="sheet-head">${tete(product.image, t('catalog.stock', { n: total }))}</div>
       <div class="sheet-vars">
-        ${product.variants
+        ${variantes
           .map(
             (variant) => `<div class="varr${variant.availableForSale ? '' : ' out'}">
-              ${
-                variant.image
-                  ? `<img class="varr-photo" src="${esc(variant.image)}" alt="" loading="lazy" />`
-                  : ''
-              }
+              ${variant.image ? `<img class="varr-photo" src="${esc(variant.image)}" alt="" loading="lazy" />` : ''}
               <b class="varr-title">${esc(variant.title ?? '—')}</b>
               <span class="varr-sku mono">${esc(variant.sku ?? '')}</span>
               ${
                 variant.availableForSale
                   ? variant.inventoryQuantity != null && variant.inventoryQuantity > 0
-                    ? `<span class="varr-stock">${esc(
-                        t('catalog.stock', { n: variant.inventoryQuantity }),
-                      )}</span>`
+                    ? `<span class="varr-stock">${esc(t('catalog.stock', { n: variant.inventoryQuantity }))}</span>`
                     : ''
                   : `<span class="varr-out">${esc(t('catalog.out'))}</span>`
               }
@@ -1717,12 +1774,106 @@ async function renderProductSheet() {
           .join('')}
       </div>
     </div>`;
+  }
+
+  const couleurs = [...new Set(variantes.map((variant) => variant.couleur || '—'))];
+  const couleur = couleurs.includes(state.catalogCouleur) ? state.catalogCouleur : couleurs[0];
+  const deLaCouleur = variantes.filter((variant) => (variant.couleur || '—') === couleur);
+  const choisie =
+    deLaCouleur.find((variant) => variant.taille === state.catalogTaille) ??
+    deLaCouleur.find((variant) => (stockDe(variant) ?? 1) > 0) ??
+    deLaCouleur[0];
+  const tailles = variantes.map((variant) => parseFloat(variant.taille.replace(',', '.'))).filter(Number.isFinite);
+  const etendue = tailles.length ? `${Math.min(...tailles)}–${Math.max(...tailles)}` : '';
+  const stockTexte = (stock) =>
+    stock === null || stock === undefined
+      ? ''
+      : stock <= 0
+        ? t('catalog.out')
+        : stock <= 2
+          ? t(stock > 1 ? 'catalog.left' : 'catalog.leftOne', { n: stock })
+          : t('catalog.stock', { n: stock });
+
+  return `<div class="sheet fiche">
+    <div class="sheet-head">${tete(
+      deLaCouleur.find((variant) => variant.image)?.image ?? product.image,
+      [t(couleurs.length > 1 ? 'catalog.colors' : 'catalog.colorsOne', { n: couleurs.length }), etendue, t('catalog.stock', { n: total })]
+        .filter(Boolean)
+        .join(' · '),
+    )}</div>
+    ${
+      couleurs.length > 1
+        ? `<div class="fiche-bloc">
+            <span class="fiche-t">${esc(t('catalog.color'))}</span>
+            <div class="seg fiche-couleurs" role="group" aria-label="${esc(t('catalog.color'))}">${couleurs
+              .map(
+                (nom) =>
+                  `<button type="button" data-cat-couleur="${esc(nom)}" aria-pressed="${String(nom === couleur)}">${esc(nom)}</button>`,
+              )
+              .join('')}</div>
+          </div>`
+        : ''
+    }
+    <div class="fiche-bloc">
+      <span class="fiche-t">${esc(t('catalog.sizes'))}</span>
+      <div class="fiche-tailles" role="group" aria-label="${esc(t('catalog.sizes'))}">${deLaCouleur
+        .map((variant) => {
+          const stock = stockDe(variant);
+          const etat = stock === 0 ? ' fiche-vide' : stock !== null && stock <= 2 ? ' fiche-peu' : '';
+          return `<button type="button" class="fiche-taille${etat}" data-cat-taille="${esc(variant.taille)}" aria-pressed="${String(
+            variant === choisie,
+          )}"><b>${esc(variant.taille)}</b><span>${esc(stockTexte(stock))}</span></button>`;
+        })
+        .join('')}</div>
+    </div>
+    <dl class="fiche-ref">
+      <div><dt>${esc(t('catalog.ref'))}</dt><dd class="mono">${esc(choisie.sku || '—')}</dd></div>
+      <div><dt>${esc(t('catalog.stockLabel'))}</dt><dd class="${stockDe(choisie) === 0 ? 'fiche-ref-vide' : ''}">${esc(
+        stockTexte(stockDe(choisie)) || '—',
+      )}</dd></div>
+    </dl>
+  </div>`;
+}
+
+/** Sur téléphone : la fiche plein écran, et « Catalogue » pour revenir. */
+async function renderProductSheet() {
+  const rows = $('catalog-rows');
+  $('view-catalog').classList.add('cat-plein');
+
+  const back = `<div class="focus-bar">
+    <button type="button" class="tk-retour" data-cat-back="1">${picto('retour')}${esc(t('catalog.back'))}</button>
+  </div>`;
+
+  const cached = state.catalogSheets?.[state.catalogFocus];
+  if (!cached) {
+    rows.innerHTML = `${back}<p class="empty">…</p>`;
+    await chargerFiche(state.catalogFocus);
+    return;
+  }
+  rows.innerHTML = `${back}${ficheMarkup(cached)}`;
 }
 
 $('catalog-rows').addEventListener('click', (event) => {
   const open = event.target.closest('[data-product]');
   if (open) {
+    if (open.dataset.product !== state.catalogFocus) {
+      state.catalogCouleur = null;
+      state.catalogTaille = null;
+    }
     state.catalogFocus = open.dataset.product;
+    renderCatalog();
+    return;
+  }
+  const couleur = event.target.closest('[data-cat-couleur]');
+  if (couleur) {
+    state.catalogCouleur = couleur.dataset.catCouleur;
+    state.catalogTaille = null;
+    renderCatalog();
+    return;
+  }
+  const taille = event.target.closest('[data-cat-taille]');
+  if (taille) {
+    state.catalogTaille = taille.dataset.catTaille;
     renderCatalog();
     return;
   }
@@ -1733,6 +1884,16 @@ $('catalog-rows').addEventListener('click', (event) => {
 });
 
 $('catalog-q')?.addEventListener('input', () => renderCatalog());
+$('catalog-dispo')?.addEventListener('click', (event) => {
+  const bouton = event.target.closest('[data-dispo]');
+  if (!bouton) return;
+  state.catalogDispo = bouton.dataset.dispo;
+  renderCatalog();
+});
+$('catalog-marque')?.addEventListener('change', (event) => {
+  state.catalogMarque = event.target.value;
+  renderCatalog();
+});
 
 /* ------------------------------------------------------- changements ----- */
 
@@ -2779,6 +2940,7 @@ async function chargerTickets() {
   const items = [];
   for (const update of updates?.updates ?? []) {
     items.push({
+      id: `upd:${update.id}`,
       type: `UPD:${update.kind}`,
       libelle: kindLabel(update.kind),
       statut: update.status === 'PENDING' ? 'A_REPONDRE' : 'CLOS',
@@ -2788,6 +2950,7 @@ async function chargerTickets() {
   }
   for (const demande of ruptures?.demandes ?? []) {
     items.push({
+      id: `rup:${demande.id}`,
       type: 'RUPTURE',
       libelle: t('tk.type.rupture'),
       statut: statutRupture(demande, true),
@@ -2799,6 +2962,7 @@ async function chargerTickets() {
     // Ruptures éteintes : leurs signalements aussi.
     if (!avecRuptures && signalement.motif === 'STOCK') continue;
     items.push({
+      id: `sig:${signalement.id}`,
       type: 'SIGNAL',
       libelle: `${t('tk.type.signal')} · ${t(`issue.kind.${signalement.motif}`)}`,
       statut: statutRupture(signalement, false),
@@ -2812,6 +2976,7 @@ async function chargerTickets() {
   ]) {
     for (const echange of liste) {
       items.push({
+        id: `ech:${echange.id}`,
         type: 'ECHANGE',
         libelle: t('tk.type.echange'),
         statut: faite ? 'CLOS' : 'A_REPONDRE',
@@ -2863,13 +3028,14 @@ function renderTickets() {
   // Les types proposés sont ceux qui existent : un bouton qui ne trie rien
   // n'apprend qu'à ne plus cliquer.
   const types = new Map(items.map((item) => [item.type, item.type === 'SIGNAL' ? t('tk.type.signal') : item.libelle]));
-  $('tk-types').innerHTML = [
-    `<button type="button" data-ttype="" aria-pressed="${!type}">${esc(t('tk.allTypes'))}</button>`,
-    ...[...types].map(
-      ([cle, libelle]) =>
-        `<button type="button" data-ttype="${esc(cle)}" aria-pressed="${type === cle}">${esc(libelle)}</button>`,
-    ),
-  ].join('');
+  $('tk-types').innerHTML = `<label class="tk-type-choix">${esc(t('tk.typeLabel'))}
+    <select data-ttype-select>${[
+      `<option value=""${type ? '' : ' selected'}>${esc(t('tk.allTypes'))}</option>`,
+      ...[...types].map(
+        ([cle, libelle]) => `<option value="${esc(cle)}"${type === cle ? ' selected' : ''}>${esc(libelle)}</option>`,
+      ),
+    ].join('')}</select>
+  </label>`;
 
   const visibles = items
     .filter((item) => (!statut || item.statut === statut) && (!type || item.type === type))
@@ -2884,25 +3050,65 @@ function renderTickets() {
     ? `<p class="ws-note">${esc(t('tk.partial', { quoi: erreurs.join(', ') }))}</p>`
     : '';
 
-  $('tk-rows').innerHTML =
-    alerte +
-    (visibles
-      .map((item) => {
-        const { texte, vieux } = age(item.date);
-        return `<div class="tk-item">
-          <div class="tk-meta">
-            ${
-              // Une demande de changement porte déjà son type en titre de carte.
-              item.type.startsWith('UPD:') ? '' : `<span class="tk-type">${esc(item.libelle)}</span>`
-            }
-            <span class="tk-age${vieux && item.statut === 'A_REPONDRE' ? ' tk-vieux' : ''}">${esc(texte)}</span>
-          </div>
-          ${item.html}
-        </div>`;
-      })
-      .join('') || `<p class="empty">${esc(t(`tk.empty.${statut || 'ALL'}`))}</p>`);
+  // Sur téléphone, un ticket ouvert prend tout l'écran ; s'il a quitté la
+  // liste — on vient d'y répondre —, on revient à la liste.
+  const ouvert = enColonnes.matches ? null : visibles.find((item) => item.id === state.tk.ouvert);
+  if (!ouvert) state.tk.ouvert = null;
+  $('view-tickets').classList.toggle('tk-plein', Boolean(ouvert));
+
+  if (ouvert) {
+    $('tk-rows').innerHTML = `<div class="focus-bar">
+        <button type="button" class="tk-retour" data-tk-retour="1">${picto('retour')}${esc(t('tk.title'))}</button>
+      </div>
+      <div class="tk-detail">${enteteDeTicket(ouvert)}${ouvert.html}</div>`;
+  } else if (enColonnes.matches && visibles.length) {
+    // Le ticket ouvert reste ouvert ; s'il a quitté la liste — on vient d'y
+    // répondre —, le suivant prend sa place, comme dans Mail.
+    const choisi = visibles.find((item) => item.id === state.tk.choisi) ?? visibles[0];
+    state.tk.choisi = choisi.id;
+    $('tk-rows').innerHTML = `${alerte}<div class="tk-split">
+      <div class="tk-file">${visibles.map((item) => ligneDeTicket(item, item.id === choisi.id)).join('')}</div>
+      <div class="tk-detail">${enteteDeTicket(choisi)}${choisi.html}</div>
+    </div>`;
+  } else {
+    // En dessous : la liste seule, et le ticket s'ouvre au toucher.
+    $('tk-rows').innerHTML =
+      alerte +
+      (visibles.length
+        ? `<div class="tk-file">${visibles.map((item) => ligneDeTicket(item, false)).join('')}</div>`
+        : `<p class="empty">${esc(t(`tk.empty.${statut || 'ALL'}`))}</p>`);
+  }
 
   cablerTickets();
+}
+
+/** Une ligne de la liste : le type en couleur, la commande, l'âge. */
+function ligneDeTicket(item, courant) {
+  const { texte, vieux } = age(item.date);
+  const [teinte, nom] = allureDuTicket(item.type);
+  return `<button type="button" class="tk-ligne" data-tk="${esc(item.id)}"${courant ? ' aria-current="true"' : ''}>
+    <span class="home-ico ${teinte}" aria-hidden="true">${picto(nom)}</span>
+    <span class="tk-ligne-txt">
+      <span class="tk-ligne-l"><b>${esc(item.libelle)}</b><span class="tk-age${
+        vieux && item.statut === 'A_REPONDRE' ? ' tk-vieux' : ''
+      }">${esc(texte)}</span></span>
+      <span class="tk-ligne-quoi">${esc(resumeDe(item.html))}</span>
+    </span>
+  </button>`;
+}
+
+/** L'en-tête du ticket ouvert : son type, sa commande, son statut. */
+function enteteDeTicket(item) {
+  const [teinte, nom] = allureDuTicket(item.type);
+  const STATUTS = { A_REPONDRE: 'tk.toAnswer', ATTENTE: 'tk.waiting', CLOS: 'tk.closed' };
+  return `<div class="tk-entete">
+    <span class="home-ico ${teinte}" aria-hidden="true">${picto(nom)}</span>
+    <span class="tk-entete-txt">
+      <b>${esc(item.libelle)}</b>
+      <span>${esc([resumeDe(item.html), age(item.date).texte].filter(Boolean).join(' · '))}</span>
+    </span>
+    <span class="tk-statut tk-s-${esc(item.statut)}">${esc(t(STATUTS[item.statut] ?? 'tk.all'))}</span>
+  </div>`;
 }
 
 /** Les boutons des cartes : mêmes gestes qu'avant, dans la liste unique. */
@@ -2914,12 +3120,46 @@ function cablerTickets() {
   );
   racine.querySelectorAll('[data-refuse]').forEach((button) =>
     button.addEventListener('click', () => {
-      // Un refus sans motif oblige le marchand à redemander : on exige le mot
-      // qui manque, ici et pas dans un second aller-retour.
-      const note = prompt(t('updates.why'));
-      if (note === null) return;
-      if (!note.trim()) return toast(t('updates.needWhy'), true);
-      respond(button.dataset.refuse, 'REFUSED', note.trim());
+      const carte = button.closest('.upd');
+      const ouvert = carte.querySelector('.upd-raison');
+      if (ouvert) {
+        ouvert.remove();
+        button.setAttribute('aria-expanded', 'false');
+        return;
+      }
+      // Le motif s'écrit sur place, sous les boutons : la boîte du navigateur
+      // coupait la carte qu'on était en train de lire.
+      button.setAttribute('aria-expanded', 'true');
+      button.closest('.upd-acts').insertAdjacentHTML(
+        'afterend',
+        `<form class="upd-raison">
+          <label><span>${esc(t('updates.whyLabel'))}</span>
+            <textarea rows="3" placeholder="${esc(t('updates.why'))}"></textarea></label>
+          <div class="upd-raison-acts">
+            <button type="button" class="btn btn-small" data-raison-annuler="1">${esc(t('issue.cancel'))}</button>
+            <button type="submit" class="btn btn-small btn-primary">${esc(t('issue.send'))}</button>
+          </div>
+        </form>`,
+      );
+      const formulaire = carte.querySelector('.upd-raison');
+      const champ = formulaire.querySelector('textarea');
+      champ.focus();
+      formulaire.querySelector('[data-raison-annuler]').addEventListener('click', () => {
+        formulaire.remove();
+        button.setAttribute('aria-expanded', 'false');
+        button.focus();
+      });
+      formulaire.addEventListener('submit', (event) => {
+        event.preventDefault();
+        // Un refus sans motif oblige le marchand à redemander : on exige le mot
+        // qui manque, ici et pas dans un second aller-retour.
+        if (!champ.value.trim()) {
+          toast(t('updates.needWhy'), true);
+          champ.focus();
+          return;
+        }
+        void respond(button.dataset.refuse, 'REFUSED', champ.value.trim());
+      });
     }),
   );
 
@@ -2950,10 +3190,26 @@ $('tk-statuts')?.addEventListener('click', (event) => {
   renderTickets();
 });
 
-$('tk-types')?.addEventListener('click', (event) => {
-  const bouton = event.target.closest('[data-ttype]');
-  if (!bouton) return;
-  state.tk.type = bouton.dataset.ttype;
+$('tk-types')?.addEventListener('change', (event) => {
+  const menu = event.target.closest('[data-ttype-select]');
+  if (!menu) return;
+  state.tk.type = menu.value;
+  renderTickets();
+});
+
+$('tk-rows')?.addEventListener('click', (event) => {
+  if (event.target.closest('[data-tk-retour]')) {
+    state.tk.ouvert = null;
+    renderTickets();
+    return;
+  }
+  const ligne = event.target.closest('[data-tk]');
+  if (!ligne) return;
+  state.tk.choisi = ligne.dataset.tk;
+  if (!enColonnes.matches) {
+    state.tk.ouvert = ligne.dataset.tk;
+    window.scrollTo(0, 0);
+  }
   renderTickets();
 });
 
@@ -2987,6 +3243,7 @@ const PICTOS = {
   fleche: '<path d="m7.5 4.5 5.5 5.5-5.5 5.5" />',
   depot: '<path d="M10 13V3.5M6 7.5l4-4 4 4M3.5 16.5h13" />',
   coche: '<path d="m4.5 10.5 3.5 3.5 7.5-8" />',
+  retour: '<path d="m12.5 4 -6 6 6 6" />',
 };
 const picto = (nom) => `<svg viewBox="0 0 20 20" aria-hidden="true">${PICTOS[nom] ?? ''}</svg>`;
 

@@ -321,16 +321,32 @@
 
         <!-- =========================================== CATALOGUE ========= -->
         <section id="view-catalog" hidden>
-          <header class="wshead">
-            <h1 data-t="catalog.title">Catalogue</h1>
+          <header class="wshead cat-tete">
+            <div class="cat-titre">
+              <h1 data-t="catalog.title">Catalogue</h1>
+              <span class="cat-resume" id="catalog-resume"></span>
+            </div>
+            <label class="ws-search-wrap" id="catalog-search" hidden>
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <circle cx="9" cy="9" r="5.6" /><path d="m13.2 13.2 3.4 3.4" />
+              </svg>
+              <input type="search" id="catalog-q" data-tph="catalog.search"
+                placeholder="Modèle ou marque" />
+            </label>
           </header>
-          <label class="ws-search-wrap" id="catalog-search" hidden>
-            <svg viewBox="0 0 20 20" aria-hidden="true">
-              <circle cx="9" cy="9" r="5.6" /><path d="m13.2 13.2 3.4 3.4" />
-            </svg>
-            <input type="search" id="catalog-q" data-tph="catalog.search"
-              placeholder="Modèle ou marque" />
-          </label>
+          <!-- Disponibilité et marque : deux questions qu'on se pose avant de
+               chercher un modèle. Le menu des marques n'apparaît qu'à deux. -->
+          <div class="cat-outils" id="catalog-outils" hidden>
+            <div class="seg" id="catalog-dispo" role="group">
+              <button type="button" data-dispo="tous" aria-pressed="true"></button>
+              <button type="button" data-dispo="stock" aria-pressed="false"></button>
+              <button type="button" data-dispo="epuise" aria-pressed="false"></button>
+            </div>
+            <label class="tk-type-choix" id="catalog-marque-choix" hidden>
+              <span data-t="catalog.brand">Marque</span>
+              <select id="catalog-marque"></select>
+            </label>
+          </div>
           <div id="catalog-rows"></div>
         </section>
 
@@ -352,7 +368,7 @@
               <span data-t="tk.toAnswer">À répondre</span><b class="ws-sous-n" id="tk-n-rep" hidden>0</b>
             </button>
             <button type="button" data-tstatut="ATTENTE">
-              <span data-t="tk.waiting">En attente du marchand</span><b class="ws-sous-n tk-n-calme" id="tk-n-att" hidden>0</b>
+              <span class="tk-long" data-t="tk.waiting">En attente du marchand</span><span class="tk-court" data-t="tk.waitingShort">En attente</span><b class="ws-sous-n tk-n-calme" id="tk-n-att" hidden>0</b>
             </button>
             <button type="button" data-tstatut="CLOS"><span data-t="tk.closed">Clos</span></button>
             <button type="button" data-tstatut=""><span data-t="tk.all">Tout</span></button>
