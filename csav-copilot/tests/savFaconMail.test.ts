@@ -81,6 +81,16 @@ test('les boutons de la réponse : l’envoi en haut à droite, les gestes engag
   assert.ok(saut < ordre('#btn-refund'), 'Rembourser passe sous la rangée de l’envoi');
 });
 
+test('un titre qui ne se coupe pas garde sa place dans l’en-tête', () => {
+  // Vu sur « Modification — demandes au fournisseur » : le titre, interdit de
+  // passer à la ligne, débordait de son bloc et glissait sous la recherche.
+  const bloc = css.match(/@media \(min-width: 761px\) \{\s*\.head h1 \{ flex: none; white-space: nowrap; \}([\s\S]*?)\n\}/)?.[1] ?? '';
+  // En grille, le plancher ne compte que le titre : le sous-titre s'abrège.
+  assert.match(bloc, /\.head \.head-main \{[^}]*grid-template-columns: auto minmax\(0, 1fr\);[^}]*min-width: min-content;/);
+  assert.match(bloc, /\.head \.head-main > h1 \{ min-width: max-content; \}/);
+  assert.match(bloc, /\.head \.head-conn \{ overflow: hidden; \}/);
+});
+
 test('les dossiers tiennent sur une rangée, même avec une vraie boîte', () => {
   // Vu en production : « Réception 5885 · Brouillons 495 » repoussait
   // « Archivés » seul sur une seconde ligne, sous le contrôle segmenté.

@@ -10631,6 +10631,23 @@ progress { accent-color: var(--accent); }
    qui attend. */
 @media (min-width: 761px) {
   .head h1 { flex: none; white-space: nowrap; }
+  /* Un titre qui ne se coupe pas doit avoir sa place : sans plancher, le bloc
+     du titre rétrécissait sous lui, et « Modification — demandes au
+     fournisseur » passait sous la recherche. En grille, le plancher ne compte
+     que le titre : la colonne du sous-titre descend jusqu'à zéro, et c'est
+     lui qui s'abrège le premier, avant la recherche et les connexions. */
+  .head .head-main {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    min-width: min-content;
+  }
+  /* Le titre masque son débordement : sans cette largeur imposée, la grille
+     le laissait se réduire et l'abrégeait à son tour. */
+  .head .head-main > h1 { min-width: max-content; }
+  /* Quand le titre prend la place, les pastilles de connexion se rognent
+     au lieu de glisser sous « Rafraîchir ». */
+  .head .head-conn { overflow: hidden; }
 }
 
 /* -------------------------------------------------------------- la file --- */
