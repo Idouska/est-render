@@ -1109,22 +1109,33 @@
            perdues — mois par mois. Le mois choisi gouverne les tuiles et le
            détail ; le graphe garde ses douze mois. -->
       <section class="browse couts" id="view-couts" hidden aria-label="Coûts du SAV">
+        <!-- Le mois, comme un sélecteur de date du Mac : une piste grise, le
+             mois posé en blanc entre ses deux flèches. -->
         <div class="stats-bar couts-bar">
           <div class="couts-mois" role="group" aria-label="Mois affiché">
-            <button class="btn btn-small" id="couts-prec" type="button" aria-label="Mois précédent">‹</button>
+            <button class="couts-pas" id="couts-prec" type="button" aria-label="Mois précédent">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" /></svg>
+            </button>
             <span class="couts-mois-nom" id="couts-mois-nom" aria-live="polite"></span>
-            <button class="btn btn-small" id="couts-suiv" type="button" aria-label="Mois suivant">›</button>
+            <button class="couts-pas" id="couts-suiv" type="button" aria-label="Mois suivant">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" /></svg>
+            </button>
           </div>
-          <button class="btn" id="couts-reglages" type="button">Mes coûts unitaires</button>
+          <button class="btn" id="couts-reglages" type="button">Mes coûts unitaires…</button>
         </div>
 
         <div class="notice notice-warn" id="couts-vide" hidden></div>
 
-        <div class="kpis couts-tuiles" id="couts-tuiles"></div>
+        <!-- Le chiffre du mois en grand, sa composition en une barre, et ce
+             qui le relativise à côté : le net après réemploi, le coût par
+             commande. -->
+        <section class="couts-hero" id="couts-tuiles" aria-label="Le mois en un coup d’œil"></section>
 
-        <div class="panel">
+        <section class="panel couts-12" aria-labelledby="couts-graphe-t">
           <div class="panel-head">
-            <span class="panel-title" id="couts-graphe-t">Coût du SAV, 12 derniers mois</span>
+            <span class="panel-title" id="couts-graphe-t">12 derniers mois</span>
             <span class="hint" id="couts-annee"></span>
             <div class="seg couts-vue" role="group" aria-label="Affichage du graphe">
               <button type="button" data-vue="graphe" aria-pressed="true">Graphique</button>
@@ -1135,21 +1146,25 @@
             <div id="couts-graphe"><p class="empty">Chargement…</p></div>
             <div class="table-wrap couts-table" id="couts-table" hidden></div>
           </div>
-        </div>
+        </section>
 
-        <div class="stats-duo">
-          <div class="panel">
+        <div class="couts-duo">
+          <section class="panel couts-calcul" aria-labelledby="couts-detail-t">
             <div class="panel-head">
-              <span class="panel-title">Détail du calcul</span>
+              <span class="panel-title" id="couts-detail-t">Détail du calcul</span>
               <span class="hint" id="couts-detail-mois"></span>
             </div>
-            <div class="card-body" id="couts-detail"></div>
-          </div>
-          <div class="panel">
-            <div class="panel-head"><span class="panel-title">Motifs de retour</span></div>
-            <div class="card-body" id="couts-motifs"></div>
-            <div class="panel-head couts-sous-tete"><span class="panel-title">Modèles les plus retournés</span></div>
-            <div class="card-body" id="couts-modeles"></div>
+            <div id="couts-detail"></div>
+          </section>
+          <div class="couts-origine">
+            <section class="panel" aria-labelledby="couts-motifs-t">
+              <div class="panel-head"><span class="panel-title" id="couts-motifs-t">Motifs de retour</span></div>
+              <div class="card-body" id="couts-motifs"></div>
+            </section>
+            <section class="panel" aria-labelledby="couts-modeles-t">
+              <div class="panel-head"><span class="panel-title" id="couts-modeles-t">Modèles les plus retournés</span></div>
+              <div id="couts-modeles"></div>
+            </section>
           </div>
         </div>
         <div class="cg-tip" id="couts-tip" role="tooltip" hidden></div>

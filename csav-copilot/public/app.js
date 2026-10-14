@@ -7934,56 +7934,78 @@ function renderCoutsTuiles() {
                 : 'Shopify ne montre que les 60 derniers jours',
         };
 
-  const tuiles = [
+  /*
+   * Le mois en un coup d'œil, à la manière d'un résumé du Mac : le coût en
+   * grand, sa composition en une barre, chaque poste dessous ; à côté, ce qui
+   * le relativise — le net après réemploi, le coût par commande. Six cartes au
+   * même rang obligeaient à lire les six pour trouver le total.
+   */
+  const postes = [
     {
-      label: 'Coût du SAV',
-      valeur: argent(m.total),
-      note: enCours ? 'mois en cours' : nombreDe(v.retours, 'retour demandé', 'retours demandés'),
-      delta,
-    },
-    {
-      label: 'Retours',
-      poste: 1,
-      valeur: argent(m.retours),
+      n: 1,
+      nom: 'Retours',
+      valeur: m.retours,
       note: `${nombreDe(v.bons, 'bon', 'bons')} · ${nombreDe(v.recues, 'paire reçue', 'paires reçues')}`,
     },
     {
-      label: 'Renvois et échanges',
-      poste: 2,
-      valeur: argent(m.renvois),
+      n: 2,
+      nom: 'Renvois et échanges',
+      valeur: m.renvois,
       note: `${nombreDe(v.colisAgence + v.colisAtelier, 'colis', 'colis')} · ${nombreDe(v.echangesAtelier, 'paire neuve', 'paires neuves')}`,
     },
     {
-      label: 'Paires perdues',
-      poste: 3,
-      valeur: argent(m.perdues),
+      n: 3,
+      nom: 'Paires perdues',
+      valeur: m.perdues,
       note: nombreDe(v.perdues, 'paire inutilisable', 'paires inutilisables'),
     },
-    {
-      label: 'Économie du réemploi',
-      valeur: argent(m.economie),
-      note: `${nombreDe(v.reemployees, 'paire réemployée', 'paires réemployées')}${
-        couts.donnees.renseignes ? ` · net ${euros(m.net)}` : ''
-      }`,
-    },
-    { label: 'Coût par commande', ...parCommande },
   ];
+  // La barre ne se dessine que sur un total chiffré : sans coûts unitaires,
+  // trois segments à zéro ne diraient rien.
+  const barre =
+    couts.donnees.renseignes && m.total > 0
+      ? `<div class="ch-barre" aria-hidden="true">${postes
+          .map((poste) => `<i class="cg-s${poste.n}" style="width:${((poste.valeur / m.total) * 100).toFixed(1)}%"></i>`)
+          .join('')}</div>`
+      : '';
+  const ecart = enCours
+    ? '<span class="ch-ecart">Mois en cours : les chiffres bougent encore.</span>'
+    : delta
+      ? `<span class="ch-ecart${delta.ton ? ` kd-${delta.ton}` : ''}">${esc(delta.texte)} par rapport à ${esc(
+          nomDuMois(avant.mois).split(' ')[0],
+        )}</span>`
+      : '';
 
-  $('couts-tuiles').innerHTML = tuiles
-    .map(
-      (tuile) => `<div class="kpi">
-        <span class="kpi-label">${
-          tuile.poste ? `<span class="cg-cle cg-s${tuile.poste}" aria-hidden="true"></span>` : ''
-        }${esc(tuile.label)}</span>
-        <span class="kpi-value">${esc(tuile.valeur)}${
-          tuile.delta
-            ? `<span class="kpi-delta${tuile.delta.ton ? ` kd-${tuile.delta.ton}` : ''}">${esc(tuile.delta.texte)} <small>vs ${esc(tuile.delta.vs)}</small></span>`
-            : ''
-        }</span>
-        <span class="kpi-note">${esc(tuile.note)}</span>
-      </div>`,
-    )
-    .join('');
+  $('couts-tuiles').innerHTML = `<div class="ch-principal">
+      <span class="ch-titre">Coût du SAV en ${esc(nomDuMois(mois))} · ${esc(
+        nombreDe(v.retours, 'retour demandé', 'retours demandés'),
+      )}</span>
+      <div class="ch-chiffre"><span class="ch-total">${esc(argent(m.total))}</span>${ecart}</div>
+      ${barre}
+      <ul class="ch-postes">${postes
+        .map(
+          (poste) => `<li>
+            <span class="ch-nom"><span class="cg-cle cg-s${poste.n}" aria-hidden="true"></span>${esc(poste.nom)}</span>
+            <b>${esc(argent(poste.valeur))}</b>
+            <span class="ch-note">${esc(poste.note)}</span>
+          </li>`,
+        )
+        .join('')}</ul>
+    </div>
+    <div class="ch-cote">
+      <div class="ch-stat">
+        <span class="ch-nom">Net, après réemploi</span>
+        <b>${esc(argent(m.net))}</b>
+        <span class="ch-note">${
+          couts.donnees.renseignes ? `${esc(euros(m.economie))} économisés · ` : ''
+        }${esc(nombreDe(v.reemployees, 'paire réemployée', 'paires réemployées'))}</span>
+      </div>
+      <div class="ch-stat">
+        <span class="ch-nom">Coût par commande</span>
+        <b>${esc(parCommande.valeur)}</b>
+        <span class="ch-note">${esc(parCommande.note)}</span>
+      </div>
+    </div>`;
 }
 
 function renderCoutsGraphe() {
@@ -8148,42 +8170,46 @@ function renderCoutsDetail() {
   const { couts: prix, renseignes } = couts.donnees;
   $('couts-detail-mois').textContent = nomDuMois(mois);
 
-  const ligne = (libelle, nombre, euro) => `<tr>
-      <td>${esc(libelle)}</td>
-      <td class="num mono">${nombre}</td>
-      <td class="num mono">${renseignes ? `× ${esc(euros(Math.round(euro * 100)))}` : '—'}</td>
-      <td class="num mono">${renseignes ? esc(euros(nombre * Math.round(euro * 100))) : '—'}</td>
-    </tr>`;
-  const poste = (n, nom, total, lignes) => `<tbody>
-      <tr class="cd-poste">
-        <th scope="rowgroup" colspan="3"><span class="cg-cle cg-s${n}" aria-hidden="true"></span>${esc(nom)}</th>
-        <td class="num mono"><b>${esc(euros(total))}</b></td>
-      </tr>${lignes}</tbody>`;
+  /*
+   * Le calcul en groupes de lignes, comme les Réglages : un groupe par poste,
+   * son total au-dessus, chaque geste dessous avec « nombre × prix » et son
+   * montant. Sans coûts unitaires, le nombre reste et le reste se tait.
+   */
+  const somme = (centimes) => (renseignes ? euros(centimes) : '—');
+  const ligne = (libelle, nombre, euro, { moins = false } = {}) => `<div class="cd-ligne">
+      <span class="cd-nom">${esc(libelle)}</span>
+      <span class="cd-calc">${renseignes ? `${nombre} × ${esc(euros(Math.round(euro * 100)))}` : nombre}</span>
+      <span class="cd-mt${moins && renseignes ? ' cd-moins' : ''}">${
+        renseignes ? `${moins ? '− ' : ''}${esc(euros(nombre * Math.round(euro * 100)))}` : '—'
+      }</span>
+    </div>`;
+  const poste = (n, nom, total, lignes) => `<div class="cd-groupe">
+      <div class="cd-tete"><span class="cg-cle cg-s${n}" aria-hidden="true"></span><span>${esc(nom)}</span><b>${esc(
+        somme(total),
+      )}</b></div>
+      <div class="cd-lignes">${lignes}</div>
+    </div>`;
 
-  $('couts-detail').innerHTML = `<div class="table-wrap cd-wrap"><table class="grid cd">
-      <caption class="sr-only">Détail du calcul de ${esc(nomDuMois(mois))}</caption>
-      <thead><tr><th>Geste</th><th class="num">Nombre</th><th class="num">Prix</th><th class="num">Montant</th></tr></thead>
-      ${poste(
-        1,
-        'Retours',
-        m.retours,
-        ligne('Bons de retour fournis', v.bons, prix.bonRetour) + ligne('Paires reçues en agence', v.recues, prix.fraisAgence),
-      )}
-      ${poste(
-        2,
-        'Renvois et échanges',
-        m.renvois,
-        ligne('Colis envoyés par une agence', v.colisAgence, prix.colisAgence) +
-          ligne('Colis d’échange envoyés par l’atelier', v.colisAtelier, prix.colisAtelier) +
-          ligne('Paires neuves pour un échange', v.echangesAtelier, prix.prixPaire),
-      )}
-      ${poste(3, 'Paires perdues', m.perdues, ligne('Paires inutilisables', v.perdues, prix.prixPaire))}
-      <tbody>
-        <tr class="cd-total"><th scope="row" colspan="3">Coût du SAV</th><td class="num mono"><b>${esc(euros(m.total))}</b></td></tr>
-        ${ligne('Économie : paires de retour réemployées', v.reemployees, prix.prixPaire)}
-        <tr class="cd-total"><th scope="row" colspan="3">Coût net, après réemploi</th><td class="num mono"><b>${esc(euros(m.net))}</b></td></tr>
-      </tbody>
-    </table></div>
+  $('couts-detail').innerHTML = `${poste(
+    1,
+    'Retours',
+    m.retours,
+    ligne('Bons de retour fournis', v.bons, prix.bonRetour) + ligne('Paires reçues en agence', v.recues, prix.fraisAgence),
+  )}
+    ${poste(
+      2,
+      'Renvois et échanges',
+      m.renvois,
+      ligne('Colis envoyés par une agence', v.colisAgence, prix.colisAgence) +
+        ligne('Colis d’échange envoyés par l’atelier', v.colisAtelier, prix.colisAtelier) +
+        ligne('Paires neuves pour un échange', v.echangesAtelier, prix.prixPaire),
+    )}
+    ${poste(3, 'Paires perdues', m.perdues, ligne('Paires inutilisables', v.perdues, prix.prixPaire))}
+    <div class="cd-lignes cd-totaux">
+      <div class="cd-ligne"><span class="cd-nom">Coût du SAV</span><b class="cd-mt">${esc(somme(m.total))}</b></div>
+      ${ligne('Paires de retour réemployées', v.reemployees, prix.prixPaire, { moins: true })}
+      <div class="cd-ligne cd-net"><b class="cd-nom">Coût net, après réemploi</b><b class="cd-mt">${esc(somme(m.net))}</b></div>
+    </div>
     <p class="set-help cd-note">Un colis se compte une fois, même avec deux paires dedans ; un bon, une fois par commande.
       Ce mois-ci : ${nombreDe(v.renvois, 'paire du stock partie', 'paires du stock parties')} sur une commande,
       ${nombreDe(v.echangesStock, 'échange servi', 'échanges servis')} par le stock. Remboursements et temps de l’équipe non compris.</p>`;
@@ -8194,7 +8220,7 @@ function renderCoutsMotifs() {
   const total = Object.values(motifs).reduce((somme, n) => somme + n, 0);
   if (total === 0) {
     $('couts-motifs').innerHTML = '<p class="empty">Aucun retour demandé ce mois-ci.</p>';
-    $('couts-modeles').innerHTML = '<p class="empty">—</p>';
+    $('couts-modeles').innerHTML = '<p class="empty cm-vide">Aucun modèle retourné ce mois-ci.</p>';
     return;
   }
 
@@ -8209,18 +8235,18 @@ function renderCoutsMotifs() {
     )
     .join('');
 
-  $('couts-modeles').innerHTML = `<div class="table-wrap cd-wrap"><table class="grid cd">
-      <thead><tr><th>Modèle</th><th class="num">Retours</th><th>Motif principal</th></tr></thead>
-      <tbody>${modeles
-        .map(
-          (modele) => `<tr>
-            <td>${esc(modele.titre)}</td>
-            <td class="num mono">${modele.retours}</td>
-            <td>${esc(RETURN_REASONS[modele.motif] ?? modele.motif)}</td>
-          </tr>`,
-        )
-        .join('')}</tbody>
-    </table></div>`;
+  // Une liste plutôt qu'un tableau à trois colonnes : le modèle, son motif
+  // principal dessous, le nombre à droite.
+  $('couts-modeles').innerHTML = `<ul class="cm-liste">${modeles
+    .map(
+      (modele) => `<li>
+        <span class="cm-txt"><b>${esc(modele.titre)}</b><span>Surtout : ${esc(
+          (RETURN_REASONS[modele.motif] ?? modele.motif).toLowerCase(),
+        )}</span></span>
+        <span class="cm-n">${esc(nombreDe(modele.retours, 'retour', 'retours'))}</span>
+      </li>`,
+    )
+    .join('')}</ul>`;
 }
 
 function decalerMoisCouts(pas) {
