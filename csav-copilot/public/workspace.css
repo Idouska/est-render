@@ -2532,3 +2532,252 @@ input:focus, select:focus, textarea:focus {
   .wsapp .ws-sous button { flex: 1; min-height: 38px; }
   .wsapp .pk-carrier { min-height: 40px; padding: 0 16px; font-size: 14.5px; }
 }
+
+/* ------------------------------------------------------- les tickets */
+
+/* Le type dans un menu, à côté des statuts : une seule rangée de filtres. */
+.wsapp .ws-sous.tk-types { padding: 0; background: none; margin-top: 0; }
+.wsapp .tk-type-choix { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: var(--ink-soft); }
+.wsapp .tk-type-choix select {
+  width: auto;
+  min-height: 30px;
+  padding: 0 28px 0 10px;
+  border: 0;
+  border-radius: 8px;
+  box-shadow: var(--bouton-filet);
+  font-size: 13.5px;
+}
+
+/* Grand écran : la liste à gauche, le ticket ouvert à droite. */
+.wsapp .tk-split { display: grid; grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); gap: 18px; align-items: start; }
+.wsapp .tk-file {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: 0 0 0 1px var(--line);
+}
+.wsapp .tk-ligne {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  font: inherit;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.wsapp .tk-ligne:hover { background: var(--paper); }
+.wsapp .tk-ligne[aria-current='true'] { background: var(--brand); color: #fff; }
+.wsapp .tk-ligne .home-ico { width: 32px; height: 32px; }
+.wsapp .tk-ligne[aria-current='true'] .home-ico { box-shadow: 0 0 0 1.5px rgb(255 255 255 / 70%); }
+.wsapp .tk-ligne-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.wsapp .tk-ligne-l { display: flex; align-items: baseline; gap: 8px; }
+.wsapp .tk-ligne-l b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; font-weight: 600; }
+.wsapp .tk-ligne .tk-age { margin-left: 0; font-size: 12px; white-space: nowrap; }
+.wsapp .tk-ligne-quoi { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; color: var(--ink-soft); }
+.wsapp .tk-ligne[aria-current='true'] .tk-age,
+.wsapp .tk-ligne[aria-current='true'] .tk-ligne-quoi { color: #fff; }
+
+.wsapp .tk-entete { display: flex; align-items: center; gap: 14px; padding: 2px 4px 14px; }
+.wsapp .tk-entete .home-ico { width: 44px; height: 44px; border-radius: 11px; }
+.wsapp .tk-entete .home-ico svg { width: 22px; height: 22px; }
+.wsapp .tk-entete-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.wsapp .tk-entete-txt b { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+.wsapp .tk-entete-txt span { font-size: 13px; color: var(--ink-soft); }
+.wsapp .tk-statut { padding: 3px 11px; border-radius: 999px; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.wsapp .tk-s-A_REPONDRE { background: var(--bad-soft); color: var(--bad); }
+.wsapp .tk-s-ATTENTE { background: var(--warn-soft); color: var(--warn-ink); }
+.wsapp .tk-s-CLOS { background: var(--ok-soft); color: var(--ok-ink); }
+/* L'en-tête dit déjà le type, la commande et le statut. */
+.wsapp .tk-detail .upd-head { display: none; }
+
+/* Les cartes : blanches, sans liseré ; c'est la pastille qui dit l'état. */
+.wsapp .upd {
+  margin-bottom: 12px;
+  padding: 16px 18px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--card);
+  box-shadow: 0 0 0 1px var(--line);
+}
+.wsapp .upd-wait { background: var(--card); }
+.wsapp .upd-head .pill { letter-spacing: 0; text-transform: none; }
+.wsapp .upd.rup-p-cree .upd-head .pill { background: var(--bad-soft); color: var(--bad); }
+.wsapp .upd.rup-p-traite .upd-head .pill { background: var(--warn-soft); color: var(--warn-ink); }
+.wsapp .upd.rup-p-classe .upd-head .pill { background: var(--ok-soft); color: var(--ok-ink); }
+
+/* Avant, barré ; après, en grand : on lit le changement d'un coup d'œil. */
+.wsapp .upd-swap {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin: 4px 0 14px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--paper);
+  font-size: 19px;
+}
+.wsapp .upd-before { font-size: 15px; font-weight: 500; }
+.wsapp .upd-arrow { display: inline-block; transform: rotate(90deg); font-size: 15px; }
+.wsapp .upd-after { color: var(--ink); }
+/* Le mot du marchand, dans une bulle. */
+.wsapp .upd-msg {
+  align-self: flex-start;
+  max-width: 560px;
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border-radius: 4px 16px 16px 16px;
+  background: var(--paper);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.wsapp .upd-acts { gap: 10px; }
+.wsapp .upd-acts .btn { flex: 0 1 auto; }
+.wsapp .upd-raison { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; padding: 14px; border-radius: 12px; background: var(--paper); }
+.wsapp .upd-raison label { display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; font-weight: 600; }
+.wsapp .upd-raison textarea { min-height: 80px; border: 0; box-shadow: 0 0 0 1px var(--line); font-size: 15px; font-weight: 400; }
+.wsapp .upd-raison-acts { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* La rupture : la fiche du modèle en lignes, les remplacements en dessous. */
+.wsapp .rup-bloc-t { letter-spacing: 0; text-transform: none; font-size: 13px; font-weight: 600; color: var(--ink-soft); }
+.wsapp .rup-champs { grid-template-columns: 1fr auto; gap: 0; border-radius: 12px; background: var(--paper); overflow: hidden; }
+.wsapp .rup-champs dt,
+.wsapp .rup-champs dd { display: flex; align-items: center; min-height: 40px; padding: 0 14px; font-size: 14px; }
+.wsapp .rup-champs dt:not(:first-of-type),
+.wsapp .rup-champs dt:not(:first-of-type) + dd { border-top: 1px solid var(--line-soft); }
+.wsapp .rup-champs dd { justify-content: flex-end; }
+.wsapp .rup-sub { padding: 12px 14px; border: 0; border-radius: 12px; background: var(--paper); }
+.wsapp .rup-sub img,
+.wsapp .rup-sub-vide { width: 52px; height: 52px; border-radius: 10px; }
+/* Sans photo, la vignette reste une case : sur le fond gris, elle disparaissait. */
+.wsapp .rup-sub-vide { background: var(--card); box-shadow: inset 0 0 0 1px var(--line); }
+.wsapp .rup-sub-oui { background: var(--ok-soft); }
+
+/* L'échange : l'adresse en carte, le numéro en gros. */
+.wsapp .ech-adresse { padding: 14px 16px; border-radius: 12px; font-size: 15px; line-height: 1.45; }
+/* « Adresse du client » est un intitulé, pas un message : pas de bulle. */
+.wsapp .ech .upd-msg { margin: 0 0 6px; padding: 0; border-radius: 0; background: none; font-size: 13px; color: var(--ink-soft); }
+.wsapp .ech .upd-msg b { font-weight: 600; }
+.wsapp .ech-form { flex-direction: column; align-items: stretch; }
+.wsapp .ech-form input { flex: none; min-height: 44px; border: 0; border-radius: 10px; box-shadow: 0 0 0 1px var(--line); font-size: 15px; }
+.wsapp .ech-form input.mono { font-size: 16px; }
+.wsapp .ech-form .btn { align-self: flex-start; }
+
+/* ---------------------------------------------------- le catalogue */
+
+.wsapp .cat-tete { align-items: flex-end; flex-wrap: wrap; gap: 10px 16px; }
+.wsapp .cat-titre { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.wsapp .cat-resume { font-size: 13.5px; color: var(--ink-soft); }
+.wsapp .cat-tete .ws-search-wrap { width: 300px; max-width: 100%; margin: 0; }
+.wsapp .cat-outils { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; margin-bottom: 16px; }
+.wsapp .cat-outils .seg { margin: 0; }
+
+.wsapp .cat-grid { grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 14px; }
+.wsapp .catc {
+  border: 0;
+  border-radius: 14px;
+  box-shadow: 0 0 0 1px var(--line);
+}
+.wsapp .catc:hover { box-shadow: 0 0 0 1px var(--line), 0 2px 8px rgb(20 22 42 / 8%); }
+.wsapp .catc[aria-current='true'] { box-shadow: 0 0 0 2px var(--brand); }
+.wsapp .catc-photo { aspect-ratio: 4 / 3; border-bottom: 0; }
+.wsapp .catc-epuise .catc-photo { opacity: 0.55; }
+.wsapp .catc-main { padding: 10px 12px 12px; }
+.wsapp .catc-main b { font-size: 14px; font-weight: 600; }
+.wsapp .catc-main small { font-size: 12.5px; color: var(--ink-soft); }
+.wsapp .catc-stock { color: var(--ink) !important; }
+.wsapp .catc-out { align-self: flex-start; margin-top: 3px; background: var(--bad-soft); color: var(--bad); }
+
+/* Grand écran : la grille, et la fiche du modèle ouvert à côté. */
+.wsapp .cat-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 380px); gap: 20px; align-items: start; }
+.wsapp .cat-fiche { position: sticky; top: 16px; }
+
+.wsapp .sheet { border: 0; border-radius: 16px; box-shadow: 0 0 0 1px var(--line); }
+.wsapp .fiche .sheet-head { flex-direction: column; align-items: stretch; gap: 12px; padding: 0 0 4px; border: 0; }
+.wsapp .fiche .sheet-photo {
+  width: 100%;
+  height: 200px;
+  border: 0;
+  border-radius: 0;
+}
+.wsapp .fiche-titre { padding: 4px 18px 0; }
+.wsapp .fiche-titre h2 { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+.wsapp .fiche-titre small { font-size: 13px; color: var(--ink-soft); }
+.wsapp .fiche-bloc { display: flex; flex-direction: column; gap: 7px; padding: 10px 18px 0; }
+.wsapp .fiche-t { font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
+.wsapp .fiche-couleurs { display: flex; flex-wrap: wrap; }
+.wsapp .fiche-couleurs button { flex: 1; }
+.wsapp .fiche-tailles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.wsapp .fiche-taille {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 7px 4px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--card);
+  box-shadow: inset 0 0 0 1px var(--line);
+  font: inherit;
+  color: var(--ink);
+  cursor: pointer;
+}
+.wsapp .fiche-taille b { font-size: 16px; }
+.wsapp .fiche-taille span { font-size: 11.5px; font-weight: 600; color: var(--ok-ink); }
+.wsapp .fiche-taille.fiche-peu span { color: var(--warn-ink); }
+.wsapp .fiche-taille.fiche-vide { background: var(--paper); box-shadow: none; color: var(--ink-mute); }
+.wsapp .fiche-taille.fiche-vide b { text-decoration: line-through; }
+.wsapp .fiche-taille.fiche-vide span { color: var(--ink-mute); }
+.wsapp .fiche-taille[aria-pressed='true'] { background: var(--brand); box-shadow: none; color: #fff; }
+.wsapp .fiche-taille[aria-pressed='true'] span { color: #fff; }
+.wsapp .fiche-taille[aria-pressed='true'] b { text-decoration: none; }
+.wsapp .fiche-ref { margin: 14px 18px 18px; border-radius: 12px; background: var(--paper); overflow: hidden; }
+.wsapp .fiche-ref div { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 14px; }
+.wsapp .fiche-ref div + div { border-top: 1px solid var(--line-soft); }
+.wsapp .fiche-ref dt { flex: 1; font-size: 13.5px; color: var(--ink-soft); }
+.wsapp .fiche-ref dd { margin: 0; font-size: 14px; font-weight: 600; }
+.wsapp .fiche-ref dd.mono { font-size: 13px; }
+.wsapp .fiche-ref .fiche-ref-vide { color: var(--bad); }
+
+/* « En attente du marchand » ne tient pas sur un téléphone. */
+.wsapp .tk-court { display: none; }
+
+/* Le bouton retour d'un ticket ouvert en plein écran. */
+.wsapp .tk-retour {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 44px;
+  padding: 0 8px 0 0;
+  border: 0;
+  background: transparent;
+  color: var(--brand);
+  font: inherit;
+  font-size: 17px;
+  cursor: pointer;
+}
+.wsapp .tk-retour svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.wsapp .tk-plein > .wshead,
+.wsapp .tk-plein > #tk-statuts,
+.wsapp .tk-plein > #tk-types,
+.wsapp .cat-plein > .wshead,
+.wsapp .cat-plein > .cat-outils { display: none; }
+
+@media (max-width: 880px) {
+  .wsapp .tk-type-choix select { min-height: 38px; }
+  .wsapp .upd-acts .btn { flex: 1; min-height: 46px; }
+  .wsapp .cat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .wsapp .cat-tete .ws-search-wrap { width: 100%; }
+  .wsapp .fiche-taille { min-height: 52px; }
+  .wsapp .tk-long { display: none; }
+  .wsapp .tk-court { display: inline; }
+  .wsapp #tk-statuts button,
+  .wsapp #catalog-dispo button { white-space: nowrap; }
+}
