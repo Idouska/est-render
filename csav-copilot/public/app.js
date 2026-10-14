@@ -807,6 +807,35 @@ async function loadMetrics() {
   $('kpi-failed').textContent = String(failed);
   $('kpi-failed').classList.toggle('set-alert', failed > 0);
   $('kpi-failed-note').textContent = failed > 0 ? 'à relancer' : 'tout est passé';
+
+  /*
+   * Les chiffres quittent leur bandeau, comme dans Mail.
+   *
+   * Ce qui attend un geste monte sous le titre de l'écran ; la vitesse de
+   * réponse et ce que l'IA n'a pas compris descendent dans la barre d'état,
+   * à côté des raccourcis. Cinq cartes en tête de file occupaient une ligne
+   * entière pour des nombres qu'on lit d'un coup d'œil et ne travaille pas.
+   */
+  const brouillons = counts.DRAFT_READY ?? 0;
+  state.sousSav = `${metrics.pending ?? 0} en attente de vous · ${brouillons} brouillon${
+    brouillons > 1 ? 's' : ''
+  } prêt${brouillons > 1 ? 's' : ''}`;
+  if (state.view === 'tickets') afficherSousSav();
+
+  const etat = $('kb-kpis');
+  if (etat) {
+    etat.innerHTML = `<span>1re réponse : ${esc($('kpi-delay').textContent)}</span><span>Automatisation : ${esc(
+      $('kpi-rate').textContent,
+    )}</span><span${failed > 0 ? ' class="kb-alerte"' : ''}>Non compris par l'IA : ${failed}</span>`;
+  }
+}
+
+/** Le sous-titre de l'écran SAV : ce qui attend, écrit sous le titre. */
+function afficherSousSav() {
+  const sous = $('view-sub');
+  if (!sous || !state.sousSav) return;
+  sous.textContent = state.sousSav;
+  sous.hidden = false;
 }
 
 /**
@@ -1217,11 +1246,17 @@ async function loadQueue({ append = false } = {}) {
             </span>
 
             <span class="queue-line2">
-              <span class="qdot st-${ticket.status}" title="${label}"></span>
               <span class="queue-subject">${esc(ticketTitle(ticket))}</span>
-              <span class="queue-ord">${
-                ticket.orderName ? esc(ticket.orderName) : ''
-              }</span>
+              ${
+                // Le numéro n'est répété que s'il manque au titre : avec une
+                // intention, `ticketTitle` l'y écrit déjà.
+                ticket.orderName && !ticket.intent
+                  ? `<span class="queue-ord">${esc(ticket.orderName)}</span>`
+                  : ''
+              }
+              <!-- L'état en mots, comme une étiquette de Mail : un point de
+                   couleur ne se lisait qu'au survol, par son infobulle. -->
+              <span class="qstat st-${ticket.status}">${esc(label)}</span>
               ${
                 who
                   ? `<span class="who-dot" title="${esc(who.name ?? who.email)}">${initials(
@@ -3107,11 +3142,13 @@ function renderTicketMeta(ticket, order) {
   }
   facts.push(['clock', `ouvert depuis ${ageInDays(ticket.createdAt)} j`]);
 
+  const nom = ticket.customerName ?? ticket.customerEmail;
   $('d-meta').innerHTML =
     `<span class="tm-who">
-       <button class="linkish" id="d-who">${esc(
-         ticket.customerName ?? ticket.customerEmail,
-       )}</button>
+       <span class="tm-av" aria-hidden="true" style="background:${avatarTint(nom)}">${esc(
+         initials(nom),
+       )}</span>
+       <button class="linkish" id="d-who">${esc(nom)}</button>
        <code>${esc(ticket.customerEmail)}</code>
        ${
          ticket.intent
@@ -11383,16 +11420,15 @@ function setView(view) {
     sous.textContent = meta.sous ?? '';
     sous.hidden = !meta.sous;
   }
+  // Sur l'écran SAV, le sous-titre dit ce qui attend : voir `loadMetrics`.
+  if (view === 'tickets') afficherSousSav();
   $('crumb').innerHTML = `${ico(meta.icon)} ${esc(meta.group)}`;
 
-  // Les indicateurs et les filtres décrivent la file : les laisser ailleurs
-  // ferait croire qu'ils décrivent l'écran affiché — la barre de filtres est
-  // apparue au-dessus des Réglages, où elle ne veut rien dire.
-  $('kpis').hidden = view !== 'tickets';
-  // Bandeau mince sur l'écran SAV : quatre cartes hautes repoussaient la file
-  // sous la ligne de flottaison, alors que ces chiffres se consultent d'un
-  // coup d'œil et ne se travaillent pas.
-  $('kpis').classList.toggle('kpis-slim', view === 'tickets');
+  // Les filtres décrivent la file : les laisser ailleurs ferait croire qu'ils
+  // décrivent l'écran affiché — la barre de filtres est apparue au-dessus des
+  // Réglages, où elle ne veut rien dire. Le bandeau d'indicateurs, lui, ne
+  // s'affiche plus nulle part : ses chiffres vivent sous le titre et dans la
+  // barre d'état de la file (`loadMetrics`).
 
   // Défilement par colonne : la file, le détail et le rail bougent chacun de
   // leur côté, et la page ne défile plus. Réservé à cet écran — les autres se
