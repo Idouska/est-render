@@ -6872,7 +6872,14 @@ function renderOvKpis(metrics, counts) {
       // `bon` dit ce qu'une hausse signifie. Traiter plus est bon ; recevoir
       // plus est de la demande, ni bon ni mauvais — le colorer reprocherait à
       // l'équipe le succès de la boutique.
-      ton: bon === null ? null : (valeur.direction === 'hausse') === bon ? 'ok' : 'bad',
+      // Autant qu'hier n'est ni bien ni mal : « = » restait rouge sur
+      // « Traités », comme une baisse.
+      ton:
+        bon === null || valeur.direction === 'egal'
+          ? null
+          : (valeur.direction === 'hausse') === bon
+            ? 'ok'
+            : 'bad',
       aide: ecartAide(nom, actuel, veille, hier?.minutesEcoulees),
     };
   };
@@ -6885,26 +6892,31 @@ function renderOvKpis(metrics, counts) {
       ovNombre(metrics?.pending),
       metrics ? `${counts.NEEDS_REVIEW ?? 0} à valider` : 'compteur indisponible',
       null,
+      'bleu',
     ],
     [
-      'inbox',
+      'bolt',
       'Brouillons prêts',
       '',
       ovCompte(metrics, counts, 'DRAFT_READY'),
       'relecture puis envoi',
       null,
+      'violet',
     ],
     // La fenêtre est dans l'intitulé, pas dans la note : « 2 h 06 » suivi de
     // « sur 30 jours » se lisait comme un commentaire, alors que c'est ce qui
     // définit la mesure.
-    ['clock', '1re réponse moyenne', '30 j', delai, 'du message à la réponse', null],
+    // « Moyenne » passe dans la note : l'intitulé entier ne tenait plus dans
+    // une case de la bande, et c'est la fenêtre qu'il coupait.
+    ['clock', '1re réponse', '30 j', delai, 'en moyenne', null, 'orange'],
     [
-      'bolt',
+      'truck',
       'Chez le fournisseur',
       '',
       ovCompte(metrics, counts, 'AWAITING_SUPPLIER'),
       'en attente de réponse',
       null,
+      'indigo',
     ],
     [
       'inbox',
@@ -6914,6 +6926,7 @@ function renderOvKpis(metrics, counts) {
       'nouveaux messages',
       // Aucun ton : plus d'arrivées, c'est de l'activité, pas une contre-performance.
       ecart(metrics?.recus, hier?.recus, 'Messages reçus', null),
+      'vert',
     ],
     [
       'shield',
@@ -6922,13 +6935,16 @@ function renderOvKpis(metrics, counts) {
       ovNombre(metrics?.today),
       'depuis ce matin',
       ecart(metrics?.today, hier?.traites, 'Messages traités', true),
+      'gris',
     ],
   ];
 
   $('ov-kpis').innerHTML = cartes
     .map(
-      ([ico, label, periode, valeur, note, delta]) => `<div class="kpi">
-        <span class="kpi-ico" data-ico="${esc(ico)}" aria-hidden="true"></span>
+      // La teinte du pictogramme, comme les catégories des Réglages : six
+      // chiffres au même rang se retrouvent par leur couleur.
+      ([ico, label, periode, valeur, note, delta, teinte]) => `<div class="kpi">
+        <span class="kpi-ico c-${teinte}" data-ico="${esc(ico)}" aria-hidden="true"></span>
         <span class="kpi-body">
           <span class="kpi-label">${esc(label)}${
             periode ? `<span class="kpi-per"> · ${esc(periode)}</span>` : ''
@@ -6999,58 +7015,62 @@ function renderOvPriorite() {
     9,
   )} plus pressants sont affichés.`;
 
+  /*
+   * Des lignes à la manière de Mail, et non plus un tableau : l'avatar, le
+   * nom et la commande, l'objet dessous, puis l'état, l'échéance et
+   * l'ancienneté. Chaque ligne est un vrai bouton — le clavier l'ouvre sans
+   * gestionnaire à part, ce que la ligne de tableau `role="button"` devait
+   * réimplémenter.
+   */
   $('ov-prio-rows').innerHTML = lignes.length
     ? lignes
         .map(
-          ({ t, e }) => `<tr tabindex="0" role="button" data-ov-id="${esc(t.id)}"
+          ({ t, e }) => `<li><button class="ov-ligne" type="button" data-ov-id="${esc(t.id)}"
             aria-label="Ouvrir le message de ${esc(t.customerName ?? t.customerEmail)}">
-            <td>
-              <span class="ov-cli">
-                <span class="ov-av" aria-hidden="true"
-                  style="background:${esc(avatarTint(t.customerName ?? t.customerEmail))}">${esc(
-                    initials(t.customerName ?? t.customerEmail),
-                  )}</span>
+            <span class="ov-av" aria-hidden="true"
+              style="background:${esc(avatarTint(t.customerName ?? t.customerEmail))}">${esc(
+                initials(t.customerName ?? t.customerEmail),
+              )}</span>
+            <span class="ov-txt">
+              <span class="ov-l1">
                 <span class="ov-who" title="${esc(t.customerName ?? t.customerEmail)}">${esc(
                   t.customerName ?? t.customerEmail,
                 )}</span>
+                ${t.orderName ? `<span class="ov-cmd">${esc(t.orderName)}</span>` : ''}
               </span>
-            </td>
-            <td class="ov-age sub">${esc(relativeTime(t.lastMessageAt))}</td>
-            <td class="ov-subj" title="${esc(t.subject ?? '(sans objet)')}">${esc(
-              t.subject ?? '(sans objet)',
-            )}</td>
-            <td><span class="tag tag-status st-${esc(t.status)}">${esc(
+              <span class="ov-subj" title="${esc(t.subject ?? '(sans objet)')}">${esc(
+                t.subject ?? '(sans objet)',
+              )}</span>
+            </span>
+            <span class="tag tag-status st-${esc(t.status)}">${esc(
               STATUS_LABELS[t.status] ?? t.status,
-            )}</span></td>
-            <td class="mono sub">${esc(t.orderName ?? '—')}</td>
-            <td><span class="ovdue ovdue-${e.ton}">${esc(e.label)}</span></td>
-            <td class="ov-go" aria-hidden="true">›</td>
-          </tr>`,
+            )}</span>
+            <span class="ov-quand">
+              <span class="ov-age">${esc(relativeTime(t.lastMessageAt))}</span>
+              ${
+                // L'échéance n'est dite que si elle existe : un tiret par ligne
+                // ferait une colonne de vide.
+                t.dueAt ? `<span class="ovdue ovdue-${e.ton}">${esc(e.label)}</span>` : ''
+              }
+            </span>
+            <span class="ov-go" aria-hidden="true">›</span>
+          </button></li>`,
         )
         .join('')
-    : `<tr><td colspan="7" class="empty" style="padding:18px 14px">${
+    : `<li class="empty ov-vide">${
         state.queueLoaded
           ? 'Rien en attente.'
           : 'File non chargée : ouvrez « SAV client » ou rafraîchissez.'
-      }</td></tr>`;
+      }</li>`;
 
-  // Une ligne s'ouvre au clic et à l'entrée : la table se parcourt au clavier
-  // comme la file.
   $('ov-prio-rows')
     .querySelectorAll('[data-ov-id]')
-    .forEach((row) => {
-      const ouvrir = async () => {
+    .forEach((ligne) =>
+      ligne.addEventListener('click', async () => {
         setView('tickets');
-        await selectTicket(row.dataset.ovId);
-      };
-      row.addEventListener('click', ouvrir);
-      row.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          void ouvrir();
-        }
-      });
-    });
+        await selectTicket(ligne.dataset.ovId);
+      }),
+    );
 }
 
 /* ---- ce qu'on surveille ---- */
@@ -7087,7 +7107,7 @@ function renderOvPriorite() {
  * filtre de file donnerait une liste vide. Les deux s'excluent — `filtre`
  * l'emporte s'il est là — pour qu'un clic n'ait jamais deux destinations.
  */
-function ovStatLigne({ label, valeur, ton, filtre, vue, periode, aide, ico: nomIco }) {
+function ovStatLigne({ label, valeur, ton, filtre, vue, periode, aide, ico: nomIco, teinte }) {
   const cliquable = Boolean(filtre || vue);
   const balise = cliquable ? 'button' : 'div';
   const cible = filtre
@@ -7098,7 +7118,11 @@ function ovStatLigne({ label, valeur, ton, filtre, vue, periode, aide, ico: nomI
   return `<li><${balise} class="statrow${cliquable ? ' statrow-go' : ''}"${
     cliquable ? ` type="button"${cible}` : ''
   }>
-    ${nomIco ? `<span class="statrow-ico" aria-hidden="true">${ico(nomIco)}</span>` : ''}
+    ${
+      nomIco
+        ? `<span class="statrow-ico${teinte ? ` c-${teinte}` : ''}" aria-hidden="true">${ico(nomIco)}</span>`
+        : ''
+    }
     <span class="statrow-l">${esc(label)}${
       periode ? `<span class="statrow-p"> · ${esc(periode)}</span>` : ''
     }</span>
@@ -7108,7 +7132,11 @@ function ovStatLigne({ label, valeur, ton, filtre, vue, periode, aide, ico: nomI
              title="${esc(aide)}">i</span>`
         : ''
     }
-    <b class="statrow-v${ton ? ` sv-${ton}` : ''}">${esc(valeur)}</b>
+    <b class="statrow-v${ton ? ` sv-${ton}` : ''}${
+      // Zéro ou « non mesuré » se lisent en gris : le gras est réservé à ce
+      // qui réclame un geste.
+      valeur === '0' || valeur === '—' ? ' sv-nul' : ''
+    }">${esc(valeur)}</b>
     ${cliquable ? '<span class="statrow-x" aria-hidden="true">›</span>' : ''}
   </${balise}></li>`;
 }
@@ -7183,6 +7211,7 @@ function renderOvRisques(metrics, counts) {
     {
       label: 'SLA dépassé',
       ico: 'clock',
+      teinte: 'rouge',
       valeur: deLaFile(horsDelai),
       ton: tonSiChargee(horsDelai, 'bad'),
       filtre: { sort: 'due' },
@@ -7191,6 +7220,7 @@ function renderOvRisques(metrics, counts) {
     {
       label: 'Sans réponse > 24 h',
       ico: 'clock',
+      teinte: 'orange',
       valeur: deLaFile(plusVieuxQue(24)),
       ton: tonSiChargee(plusVieuxQue(24), 'warn'),
       filtre: { urgent: true },
@@ -7198,16 +7228,18 @@ function renderOvRisques(metrics, counts) {
     {
       label: 'Sans réponse > 48 h',
       ico: 'clock',
+      teinte: 'rouge',
       valeur: deLaFile(plusVieuxQue(48)),
       ton: tonSiChargee(plusVieuxQue(48), 'bad'),
       filtre: { urgent: true },
     },
-    { label: 'Litiges ouverts', valeur: deLaFile(litiges), filtre: { intent: 'DISPUTE' }, ico: 'shield' },
+    { label: 'Litiges ouverts', valeur: deLaFile(litiges), filtre: { intent: 'DISPUTE' }, ico: 'shield', teinte: 'rouge' },
     {
       label: 'Chez le fournisseur',
       valeur: ovCompte(metrics, counts, 'AWAITING_SUPPLIER'),
       filtre: { status: 'AWAITING_SUPPLIER' },
       ico: 'truck',
+      teinte: 'indigo',
       aide: 'Messages en attente d’un atelier. Ils ne sont pas en retard pour autant : la ligne suivante dit lesquels le sont.',
     },
     {
@@ -7221,6 +7253,7 @@ function renderOvRisques(metrics, counts) {
       label: 'Fournisseurs sans réponse',
       periode: '> 24 h',
       ico: 'truck',
+      teinte: 'indigo',
       // Pas de `?? 0` : quand les indicateurs n'ont pas répondu, on ne sait
       // pas, et « 0 » se lirait « tout va bien » — le contraire d'un silence.
       valeur: retard ? String(retard.requests) : '—',
@@ -7237,6 +7270,7 @@ function renderOvRisques(metrics, counts) {
       ton: metrics?.failed > 0 ? 'bad' : null,
       filtre: { status: 'FAILED' },
       ico: 'bolt',
+      teinte: 'violet',
       aide: 'Messages que la classification n’a pas su traiter : ils attendent une reprise à la main.',
     },
   ];
@@ -11422,6 +11456,11 @@ function setView(view) {
   }
   // Sur l'écran SAV, le sous-titre dit ce qui attend : voir `loadMetrics`.
   if (view === 'tickets') afficherSousSav();
+  // Sur la vue d'ensemble, il commence par la date : c'est un état du jour.
+  if (view === 'overview' && sous) {
+    const jour = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+    sous.textContent = `${jour.charAt(0).toUpperCase()}${jour.slice(1)} · ${meta.sous.charAt(0).toLowerCase()}${meta.sous.slice(1)}`;
+  }
   $('crumb').innerHTML = `${ico(meta.icon)} ${esc(meta.group)}`;
 
   // Les filtres décrivent la file : les laisser ailleurs ferait croire qu'ils

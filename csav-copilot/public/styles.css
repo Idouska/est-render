@@ -11120,3 +11120,263 @@ progress { accent-color: var(--accent); }
   }
   #view-tickets .tm-facts { padding-left: 0; }
 }
+
+/* ======================================== Vue d'ensemble, façon Apple ===
+
+   La maquette validée : les six chiffres du jour dans une seule bande, puis
+   trois rangées — ce qui attend et ce qui alerte, la semaine et de quoi on
+   parle, ce qui s'est passé et comment l'équipe tient. Chaque bloc porte son
+   titre au-dessus et son contenu dans un groupe blanc, comme les Réglages.
+   Tout est rangé sous `#view-overview` : l'écran Statistiques partage
+   `.ibar`, `.tr-*` et `.statrow`, et ne doit pas bouger avec celui-ci. */
+
+#view-overview {
+  gap: 24px;
+  /* Les deux séries de la tendance : validées pour les daltoniens et pour le
+     contraste, en clair comme en sombre (voir la note du test). Elles suivent
+     la série, pas l'accent : changer de palette ne doit pas repeindre
+     « reçus » en « traités ». */
+  --serie-recu: #0071e3;
+  --serie-traite: #c86400;
+}
+[data-theme="dark"] #view-overview {
+  --serie-recu: #0a84ff;
+  --serie-traite: #d97706;
+}
+
+/* Les teintes des pictogrammes, celles des catégories des Réglages, plus le
+   rouge de ce qui presse. */
+#view-overview .c-bleu { background: linear-gradient(180deg, #4b9bff, #0a63d8); }
+#view-overview .c-vert { background: linear-gradient(180deg, #43c463, #1f8a3a); }
+#view-overview .c-violet { background: linear-gradient(180deg, #a76ae8, #7a3bc4); }
+#view-overview .c-orange { background: linear-gradient(180deg, #ff9a3c, #c25400); }
+#view-overview .c-indigo { background: linear-gradient(180deg, #6a6ee8, #3a3eb0); }
+#view-overview .c-gris { background: linear-gradient(180deg, #8e8e93, #545458); }
+#view-overview .c-rouge { background: linear-gradient(180deg, #ff6b5e, #c5221f); }
+
+/* ---------------------------------------------------- les six chiffres --- */
+
+/* Une seule bande, six cases séparées par des filets : un coup d'œil, pas
+   six cartes. Les filets sont des ombres intérieures, décalées d'un pixel
+   pour que la bordure du groupe les recouvre au bord. */
+#view-overview .ov-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0;
+  background: var(--surface);
+  border-radius: 12px;
+  box-shadow: 0 0 0 1px var(--line);
+  overflow: hidden;
+}
+#view-overview .ov-kpis .kpi {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 7px;
+  row-gap: 6px;
+  margin: -1px 0 0 -1px;
+  padding: 14px 16px 15px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: inset 1px 0 0 var(--line-soft), inset 0 1px 0 var(--line-soft);
+}
+#view-overview .ov-kpis .kpi-body { display: contents; }
+#view-overview .ov-kpis .kpi-ico {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  color: #ffffff;
+}
+#view-overview .ov-kpis .kpi-ico svg { width: 12px; height: 12px; }
+#view-overview .ov-kpis .kpi-label { font-size: 12px; font-weight: 500; color: var(--ink-mute); }
+#view-overview .ov-kpis .kpi-value {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+#view-overview .ov-kpis .kpi-note { grid-column: 1 / -1; margin: 0; font-size: 12px; }
+
+/* ------------------------------------------------------------ rangées --- */
+
+#view-overview .ov-rangee { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
+#view-overview .ov-large { flex: 2 1 520px; min-width: 0; }
+#view-overview .ov-etroit { flex: 1 1 300px; min-width: 0; }
+#view-overview .ov-pile { display: flex; flex-direction: column; gap: 20px; }
+
+/* Le titre au-dessus, le contenu dans un groupe blanc. */
+#view-overview .panel {
+  display: flex;
+  flex-direction: column;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+#view-overview .panel-head { gap: 8px; padding: 0 4px 8px; border: 0; }
+#view-overview .panel-title { font-size: 15px; font-weight: 700; }
+#view-overview .pill-count { background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink-soft); }
+#view-overview .ov-lien {
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--accent-ink);
+  cursor: pointer;
+}
+#view-overview .ov-lien:hover { text-decoration: underline; }
+#view-overview :is(.ov-prio-liste, .statlist, .ov-fil, #ov-trend, #ov-intents) {
+  margin: 0;
+  background: var(--surface);
+  border-radius: 12px;
+  box-shadow: 0 0 0 1px var(--line);
+  overflow: hidden;
+}
+#view-overview .ov-note { margin: 7px 0 0; padding: 0 4px; font-size: 12px; color: var(--ink-mute); }
+
+/* -------------------------------------------------- à traiter d'abord --- */
+
+/* Des lignes de Mail : l'avatar, le nom et la commande, l'objet dessous,
+   puis l'état et l'ancienneté. */
+#view-overview .ov-prio-liste { list-style: none; padding: 0; }
+#view-overview .ov-ligne {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 14px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  cursor: pointer;
+}
+#view-overview .ov-prio-liste li + li .ov-ligne {
+  background-image: linear-gradient(var(--line-soft), var(--line-soft));
+  background-size: calc(100% - 58px) 1px;
+  background-position: 58px 0;
+  background-repeat: no-repeat;
+}
+#view-overview .ov-ligne:hover { background-color: color-mix(in srgb, var(--ink) 4%, transparent); }
+#view-overview .ov-ligne:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+#view-overview .ov-av { width: 32px; height: 32px; font-size: 11.5px; }
+#view-overview .ov-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+#view-overview .ov-l1 { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+#view-overview .ov-who { font-size: 13px; font-weight: 600; }
+#view-overview .ov-cmd { flex: none; font-size: 12px; color: var(--ink-mute); font-variant-numeric: tabular-nums; }
+#view-overview .ov-subj {
+  width: auto;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  color: var(--ink-mute);
+}
+#view-overview .ov-ligne .tag { flex: none; }
+#view-overview .ov-quand {
+  flex: none;
+  width: 88px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--ink-mute);
+}
+#view-overview .ov-go { width: auto; font-size: 17px; opacity: 0.55; }
+#view-overview .ov-vide { padding: 16px 14px; }
+
+/* ----------------------------------------- alertes, performance, IA --- */
+
+#view-overview .statlist { padding: 0; }
+#view-overview .statrow { align-items: center; gap: 10px; min-height: 40px; padding: 0 14px; }
+#view-overview .statlist li + li .statrow {
+  background-image: linear-gradient(var(--line-soft), var(--line-soft));
+  background-size: calc(100% - 14px) 1px;
+  background-position: 14px 0;
+  background-repeat: no-repeat;
+}
+#view-overview #ov-risk li + li .statrow { background-size: calc(100% - 48px) 1px; background-position: 48px 0; }
+#view-overview .statrow-go:hover { background-color: color-mix(in srgb, var(--ink) 4%, transparent); }
+#view-overview .statrow-ico {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  color: #ffffff;
+}
+#view-overview .statrow-ico svg { width: 14px; height: 14px; }
+#view-overview .statrow-v { font-size: 13px; font-weight: 700; color: var(--ink); }
+#view-overview .statrow-v.sv-bad { color: var(--crit-ink); }
+#view-overview .statrow-v.sv-warn { color: var(--warn-ink); }
+#view-overview .statrow-v.sv-nul { font-weight: 400; color: var(--ink-mute); }
+#view-overview .statrow-x { font-size: 17px; opacity: 0.55; }
+
+/* ---------------------------------------------------------- tendance --- */
+
+#view-overview #ov-trend { padding: 14px 16px 12px; }
+#view-overview .tr-bars { gap: 2px; height: 140px; }
+#view-overview .tr-bars i { flex: 0 1 14px; border-radius: 4px 4px 0 0; }
+#view-overview .tr-recu,
+#view-overview .ov-key-recu::before { background: var(--serie-recu); }
+#view-overview .tr-traite,
+#view-overview .ov-key-traite::before { background: var(--serie-traite); }
+#view-overview .ov-key::before { border-radius: 3px; }
+
+/* ------------------------------------------------- types de demandes --- */
+
+/* Une seule teinte : le nom de chaque motif est écrit, la couleur n'a pas à
+   le redire. La longueur porte la part. */
+#view-overview #ov-intents { padding: 0 14px; }
+/* Le motif et sa part sur une ligne, la barre dessous sur toute la largeur :
+   en trois colonnes, la part et son volume passaient sur deux lignes. */
+#view-overview #ov-intents .ibar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  row-gap: 6px;
+  margin: 0;
+  padding: 10px 0;
+}
+#view-overview #ov-intents .ibar-track { grid-row: 2; grid-column: 1 / -1; }
+#view-overview #ov-intents .ibar-count { grid-row: 1; grid-column: 2; }
+#view-overview #ov-intents .ibar + .ibar { border-top: 1px solid var(--line-soft); }
+#view-overview #ov-intents .ibar-label { font-size: 13px; color: var(--ink); }
+#view-overview #ov-intents .ibar-fill { background: var(--accent); }
+#view-overview #ov-intents .ibar-count { font-family: var(--font-ui); font-size: 13px; font-weight: 600; }
+
+/* --------------------------------------------------- dernières actions --- */
+
+#view-overview .ov-fil { max-height: none; padding: 0; }
+#view-overview .ov-fil li {
+  align-items: center;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 0;
+  font-size: 13px;
+}
+#view-overview .ov-fil li + li { box-shadow: inset 0 1px 0 var(--line-soft); }
+#view-overview .ov-fil time { width: 38px; font-family: var(--font-ui); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 760px) {
+  /* Au téléphone, le sous-titre passe sous le titre au lieu de le couper. */
+  .head .head-main { flex-wrap: wrap; row-gap: 0; }
+  .head h1 { white-space: nowrap; }
+  .head .view-sub { flex-basis: 100%; }
+}
+
+@media (max-width: 600px) {
+  /* Au téléphone, l'état et l'ancienneté passent sous l'objet plutôt que de
+     l'écraser. */
+  #view-overview .ov-ligne { flex-wrap: wrap; row-gap: 6px; }
+  #view-overview .ov-txt { flex-basis: calc(100% - 44px); }
+  #view-overview .ov-ligne .tag { margin-left: 44px; }
+  #view-overview .ov-quand { width: auto; flex-direction: row; gap: 8px; margin-left: auto; }
+  #view-overview .ov-go { display: none; }
+}
