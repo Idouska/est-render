@@ -495,15 +495,15 @@ L'adresse `csav-api.onrender.com` fonctionne, mais elle dit « prestataire
 technique » à un fournisseur ou à un agent, et elle est impossible à dicter au
 téléphone. Un sous-domaine de la boutique règle les deux.
 
-### Pourquoi un sous-domaine, et pas `runningupscale.com/sav`
+### Pourquoi un sous-domaine, et pas `runningupscale.com/esav`
 
 `runningupscale.com` et `www.runningupscale.com` pointent sur Shopify : c'est
 Shopify qui sert **toutes** les pages du domaine, et il ne laisse pas confier
-un chemin (`/sav`) à un autre serveur. Le proxy d'appli de Shopify
+un chemin (`/esav`) à un autre serveur. Le proxy d'appli de Shopify
 (`/apps/…`) existe, mais il retire les cookies : impossible d'y garder une
 session ouverte. Et l'outil est construit pour vivre à la racine de son
 adresse. Le sous-domaine, lui, ne touche ni à Shopify ni au code : une ligne
-DNS suffit. `runningupscale.com/sav` devient ensuite un raccourci (étape 4).
+DNS suffit. `runningupscale.com/esav` devient ensuite un raccourci (étape 4).
 
 Le domaine est déclaré dans `render.yaml` (`services[csav-api].domains`) et non
 posé à la main dans l'interface : un domaine cliqué disparaît au prochain
@@ -578,9 +578,9 @@ voulu : les liens de travail déjà transmis aux ateliers et aux agences la
 portent en dur. Les couper au moment précis où l'on gagne une jolie URL serait
 un mauvais échange.
 
-### 4. Et `runningupscale.com/sav` ?
+### 4. Et `runningupscale.com/esav` ?
 
 Une redirection d'URL Shopify (admin Shopify → **Boutique en ligne →
 Navigation → Redirections d'URL**) accepte une cible externe :
-`/sav` → `https://sav.runningupscale.com`. C'est l'adresse qu'on retient de
+`/esav` → `https://sav.runningupscale.com`. C'est l'adresse qu'on retient de
 tête ; une fois arrivé, la barre d'adresse affiche le sous-domaine.
