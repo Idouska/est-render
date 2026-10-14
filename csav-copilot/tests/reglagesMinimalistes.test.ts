@@ -18,7 +18,7 @@ const page = lire('public/dashboard.html');
 const app = lire('public/app.js');
 
 test('sept catégories, chacune avec son volet', () => {
-  const categories = [...page.matchAll(/class="reg-cat" data-reg="(\w+)"/g)].map((m) => m[1]);
+  const categories = [...page.matchAll(/class="reg-cat[^"]*" data-reg="(\w+)"/g)].map((m) => m[1]);
   assert.deepEqual(categories, ['boutique', 'apparence', 'connexions', 'assistant', 'test', 'acces', 'donnees']);
   for (const nom of categories) {
     assert.match(page, new RegExp(`class="reg-volet" data-volet="${nom}"`));
@@ -42,4 +42,22 @@ test('plus de bouton Enregistrer : la saisie part toute seule', () => {
   // Le logo s'enregistre dès qu'il est choisi ou retiré.
   assert.match(app, /await enregistrerReglages\(\{ logo: pendingLogo \}\);/);
   assert.match(app, /await enregistrerReglages\(\{ logo: null \}\);/);
+});
+
+test('façon Réglages Système : la boutique en tête, une carte d’introduction par catégorie', () => {
+  // La boutique tient la place du compte, avec son logo et son nom.
+  assert.match(page, /class="reg-cat reg-compte" data-reg="boutique"/);
+  assert.match(page, /<img id="reg-compte-img" alt="" hidden \/><b id="reg-compte-initiales">/);
+  assert.match(app, /\['reg-compte-img', 'reg-compte-initiales'\],/);
+  // Chaque catégorie s'ouvre sur sa carte : la boutique avec son logo, les
+  // autres avec leur icône.
+  for (const nom of ['boutique', 'connexions', 'assistant', 'test', 'acces', 'donnees']) {
+    const debut = page.indexOf(`data-volet="${nom}"`);
+    assert.ok(page.slice(debut, debut + 400).includes('class="reg-hero"'), nom);
+  }
+  // L'apparence se choisit sur trois vignettes, et les comptes ont leur icône.
+  assert.match(page, /<span class="reg-vignette reg-vignette-sombre" aria-hidden="true">/);
+  assert.match(app, /ico: 'shopify',/);
+  assert.match(app, /ico: 'gmail',/);
+  assert.match(page, /Données et confidentialité/);
 });
