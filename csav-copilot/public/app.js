@@ -11172,7 +11172,7 @@ function renderChangesScreen() {
   const shown = state.changesRows.filter(
     (change) => KINDS_MODIFICATION.has(change.kind) && (!filter || change.status === filter),
   );
-  renderDemandes($('changes-rows'), $('changes-count'), shown);
+  renderDemandes($('changes-rows'), $('changes-count'), shown, filter);
   if (state.view === 'suppliers') renderDemandesFournisseur();
 }
 
@@ -11181,7 +11181,11 @@ function renderChangesScreen() {
  * « Modification » (les trois motifs de modification) et « Fournisseur »
  * (toutes, triées par fournisseur et par type).
  */
-function renderDemandes(rows, compteur, shown) {
+/**
+ * Les demandes au fournisseur, en cartes. `statut` est le filtre de statut de
+ * l'écran appelant : il choisit le message de la liste vide.
+ */
+function renderDemandes(rows, compteur, shown, statut) {
   if (!rows) return;
   if (compteur) {
     compteur.textContent = shown.length ? `${shown.length} demande${shown.length > 1 ? 's' : ''}` : '';
@@ -11272,7 +11276,7 @@ function renderDemandes(rows, compteur, shown) {
       })
       .join('') ||
     `<p class="empty" style="padding:14px">${
-      filter === 'PENDING'
+      statut === 'PENDING'
         ? 'Aucune demande en attente — les fournisseurs sont à jour.'
         : 'Aucune demande.'
     }</p>`;
@@ -17276,7 +17280,7 @@ function renderDemandesFournisseur() {
       (!filtre.type || change.kind === filtre.type) &&
       (!filtre.statut || change.status === filtre.statut),
   );
-  renderDemandes($('sup-dem-rows'), $('sup-dem-count'), shown);
+  renderDemandes($('sup-dem-rows'), $('sup-dem-count'), shown, filtre.statut);
 }
 
 async function chargerDemandesFournisseur() {
