@@ -1197,21 +1197,24 @@
            Les commandes de la veille, contrôlées contre le stock retours
            avant de partir en fichier chez le fournisseur. -->
       <section class="browse envoi" id="view-envoi" hidden aria-label="Commandes du jour">
+        <!-- Les réglages de l'envoi à gauche, le seul geste qui engage à droite. -->
         <div class="browse-bar envoi-bar">
-          <div class="filters" id="envoi-modes" role="group" aria-label="Mode d’envoi">
-            <button class="chip" data-envoi-mode="MANUEL" aria-pressed="false">Manuel</button>
-            <button class="chip" data-envoi-mode="AUTO" aria-pressed="false">Automatique</button>
+          <div class="seg envoi-modes" id="envoi-modes" role="group" aria-label="Mode d’envoi">
+            <button type="button" data-envoi-mode="MANUEL" aria-pressed="false">Manuel</button>
+            <button type="button" data-envoi-mode="AUTO" aria-pressed="false">Automatique</button>
           </div>
           <label class="envoi-heure" id="envoi-heure-wrap" hidden>
-            à <select id="envoi-heure" aria-label="Heure de l’envoi automatique"></select>
+            chaque jour à <select id="envoi-heure" aria-label="Heure de l’envoi automatique"></select>
           </label>
+          <span class="envoi-note-mode" id="envoi-manuel-note">Rien ne part sans votre clic.</span>
+          <span class="envoi-sep" aria-hidden="true"></span>
           <!-- Le délai laissé à l'atelier pour expédier : au-delà, la commande
                passe en retard, et un rappel unique lui part. -->
           <label class="envoi-heure">
-            Retard après <select id="envoi-delai" aria-label="Jours avant retard"></select>
+            En retard après <select id="envoi-delai" aria-label="Jours avant retard"></select>
           </label>
           <span class="browse-count" id="envoi-periode"></span>
-          <button class="btn btn-primary btn-small" id="envoi-go" disabled>Envoyer au fournisseur</button>
+          <button class="btn btn-primary btn-small" id="envoi-go" type="button" disabled>Envoyer au fournisseur</button>
         </div>
 
         <div class="notice notice-warn" id="envoi-notice" hidden>
@@ -1219,26 +1222,36 @@
           <div id="envoi-notice-txt"></div>
         </div>
 
-        <div class="envoi-bloc">
-          <h3 class="envoi-h">Dans votre stock retours <small id="envoi-n-match"></small></h3>
-          <p class="envoi-aide">Ces commandes peuvent partir de chez vous, avec une paire retournée
-            déjà contrôlée. Réservée, la paire est à vous d’expédier, et la commande sort du fichier.</p>
-          <div id="envoi-matches"></div>
-        </div>
+        <!-- La journée en quatre chiffres. -->
+        <section class="envoi-kpis" id="envoi-kpis" aria-label="La journée en un coup d’œil"></section>
 
-        <div class="envoi-bloc">
-          <h3 class="envoi-h">Partiront au fournisseur <small id="envoi-n-list"></small></h3>
-          <div id="envoi-list"></div>
-        </div>
+        <div class="envoi-cols">
+          <!-- Ce qu'on tranche, puis ce qui part : l'ordre du geste. -->
+          <div class="envoi-gauche">
+            <div class="envoi-bloc">
+              <h3 class="envoi-h">Dans votre stock retours <small id="envoi-n-match"></small></h3>
+              <p class="envoi-aide">Ces commandes peuvent partir de chez vous, avec une paire retournée
+                déjà contrôlée. Réservée, la paire est à vous d’expédier, et la commande sort du fichier.</p>
+              <div id="envoi-matches"></div>
+            </div>
 
-        <div class="envoi-bloc" id="envoi-res-bloc" hidden>
-          <h3 class="envoi-h">Vous les expédiez <small id="envoi-n-res"></small></h3>
-          <div id="envoi-reservees"></div>
-        </div>
+            <div class="envoi-bloc">
+              <h3 class="envoi-h">Partiront au fournisseur <small id="envoi-n-list"></small></h3>
+              <div id="envoi-list"></div>
+            </div>
 
-        <div class="envoi-bloc">
-          <h3 class="envoi-h">Derniers envois</h3>
-          <div id="envoi-hist"></div>
+            <div class="envoi-bloc" id="envoi-res-bloc" hidden>
+              <h3 class="envoi-h">Vous les expédiez <small id="envoi-n-res"></small></h3>
+              <div id="envoi-reservees"></div>
+            </div>
+          </div>
+
+          <!-- Ce que l'atelier a fait des envois passés. -->
+          <div class="envoi-bloc envoi-droite">
+            <h3 class="envoi-h">Derniers envois</h3>
+            <div id="envoi-hist"></div>
+            <p class="envoi-aide envoi-pied" id="envoi-pied"></p>
+          </div>
         </div>
       </section>
 
@@ -2470,6 +2483,25 @@ Remboursement : sous 5 jours ouvrés après réception du retour."></textarea>
         <div class="modal-foot">
           <button class="btn" id="cu-annuler" type="button">Annuler</button>
           <button class="btn btn-primary" id="cu-enregistrer" type="button">Enregistrer</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- L'envoi au fournisseur : une feuille plutôt que la boîte du
+         navigateur, pour dire à qui part quoi avant de cliquer. -->
+    <div class="backdrop" id="envoi-modal" role="dialog" aria-modal="true" aria-labelledby="envoi-m-titre" hidden>
+      <div class="modal envoi-feuille">
+        <div class="modal-head">
+          <h2 id="envoi-m-titre">Envoyer au fournisseur ?</h2>
+          <p>Chaque atelier reçoit le fichier de ses commandes par mail.</p>
+        </div>
+        <div class="modal-body">
+          <ul class="envoi-m-lignes" id="envoi-m-lignes"></ul>
+          <p class="envoi-m-avert" id="envoi-m-avert" hidden></p>
+        </div>
+        <div class="modal-foot">
+          <button class="btn" id="envoi-m-annuler" type="button">Annuler</button>
+          <button class="btn btn-primary" id="envoi-m-envoyer" type="button">Envoyer</button>
         </div>
       </div>
     </div>

@@ -169,5 +169,6 @@ test('l’écran dit où est la paire et qui l’expédie', () => {
   assert.match(service, /pays: order\.shippingAddress\?\.country \?\? null,/);
   const app = readFileSync(fileURLToPath(new URL('../public/app.js', import.meta.url)), 'utf8');
   assert.match(app, /c\.agence \? 'L’agence l’expédie' : 'Je l’expédie moi-même'/);
-  assert.match(app, /'📍 Chez vous'/);
+  // Le lieu porte le pictogramme de l'outil, plus un emoji.
+  assert.match(app, /<span class="envoi-lieu">\$\{ico\('pin'\)\}\$\{\s*c\.agence \? [\s\S]*? : 'Chez vous'\s*\}/);
 });
