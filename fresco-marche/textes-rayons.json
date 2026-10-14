@@ -1,0 +1,381 @@
+{
+  "valide_par": "Rachid",
+  "date_validation": "2026-10-14",
+  "rayons": [
+    {
+      "handle": "fruits",
+      "id": "gid://shopify/Collection/690565906757",
+      "titre_rayon": "Fruits",
+      "descriptionHtml": "<p>Fruits frais et fruits secs pour les professionnels de la restauration : bananes, agrumes, pommes, poires, melons, fruits rouges et fruits exotiques selon la saison, mais aussi dattes, amandes, noix de cajou et pistaches. En vrac, à la pièce ou en filet, pour cuisines, snacks, pâtisseries et épiceries. Commande en ligne réservée aux professionnels, livraison depuis notre dépôt de Clichy.</p>",
+      "seo": {
+        "title": "Grossiste fruits frais et secs à Clichy | Fresco Marché",
+        "description": "Fruits frais et secs pour professionnels : agrumes, pommes, melons, fruits exotiques, dattes, amandes… En vrac, pièce ou filet. Commande pro à Clichy."
+      },
+      "avant": {
+        "description": "Collection automatique Fruits pour le catalogue professionnel Frescomarche. Parent : Catalogue Frescomarche.",
+        "title": "Fruits – Fresco Marché",
+        "meta": "Fruits frais sélectionnés pour les professionnels : ananas, bananes, avocats, cerises, agrumes... Livraison rapide et qualité garantie par Fresco Marché."
+      }
+    },
+    {
+      "handle": "legumes",
+      "id": "gid://shopify/Collection/690565939525",
+      "titre_rayon": "Légumes",
+      "descriptionHtml": "<p>Légumes frais pour les cuisines professionnelles : pommes de terre (dont spéciales frites en 2,5 kg), oignons en filet de 1 à 5 kg, tomates, poivrons, courgettes, salades, herbes fraîches en botte et légumes du monde comme l'igname, le manioc, le gombo ou la patate douce. En vrac ou conditionnés. Commande en ligne réservée aux professionnels, livraison depuis notre dépôt de Clichy.</p>",
+      "seo": {
+        "title": "Grossiste légumes frais à Clichy (92) | Fresco Marché",
+        "description": "Légumes frais pour restaurants et snacks : pommes de terre, oignons en filet, tomates, poivrons, salades, herbes en botte. Vrac ou filet, commande pro."
+      },
+      "avant": {
+        "description": "Collection automatique Légumes pour le catalogue professionnel Frescomarche. Parent : Catalogue Frescomarche.",
+        "title": "Légumes – Fresco Marché",
+        "meta": "Légumes frais pour la restauration : ail, aubergines, artichauts, courgettes, poivrons... Approvisionnez votre cuisine professionnelle avec Fresco Marché."
+      }
+    },
+    {
+      "handle": "cremerie",
+      "id": "gid://shopify/Collection/690654249285",
+      "titre_rayon": "Crémerie",
+      "descriptionHtml": "<p>Crémerie pour la restauration : lait en brique ou en pack, beurre, crème fleurette et crème fraîche, fromages pour pizzas et sandwichs (mozzarella, cube spécial pizza, cheddar et emmental râpés, feta, burrata), fromages en portions et en tranches, yaourts, ayran et kéfir. Marques nationales et Belle France. Commande en ligne réservée aux professionnels, livraison depuis notre dépôt de Clichy.</p>",
+      "seo": {
+        "title": "Crémerie et fromages pour professionnels | Fresco Marché",
+        "description": "Lait, beurre, crème, mozzarella, fromage pizza, cheddar râpé, feta, ayran, kéfir… La crémerie des restaurants et snacks, en commande pro à Clichy."
+      },
+      "avant": {
+        "description": "Collection automatique Crémerie pour le catalogue professionnel Frescomarche. Parent : Catalogue Frescomarche.",
+        "title": "Crémerie – Fresco Marché",
+        "meta": "Produits laitiers et crèmerie pour professionnels : laits, crèmes, fromages, boissons végétales... Un rayon complet livré par Fresco Marché."
+      }
+    },
+    {
+      "handle": "epicerie-salee",
+      "id": "gid://shopify/Collection/690654806341",
+      "titre_rayon": "Épicerie salée",
+      "descriptionHtml": "<p>Épicerie salée pour les cuisines professionnelles : épices et mélanges Samia (cumin, curcuma, épices pour kebab, tajine ou couscous), couscous et semoules, riz en sacs jusqu'à 5 kg, concentré de tomate Tamek, conserves, bouillons, pains durum, chips et cornichons. L'essentiel du garde-manger des restaurants, snacks et traiteurs. Commande en ligne réservée aux professionnels, livraison depuis notre dépôt de Clichy.</p>",
+      "seo": {
+        "title": "Épicerie salée pour restaurants et snacks | Fresco Marché",
+        "description": "Épices Samia, couscous, semoule, riz 5 kg, concentré de tomate Tamek, conserves, bouillons, durums… L'épicerie salée des restaurants et snacks, commande pro."
+      },
+      "avant": {
+        "description": "Collection automatique Épicerie salée pour le catalogue professionnel Frescomarche. Parent : Catalogue Frescomarche.",
+        "title": "Épicerie salée – Fresco Marché",
+        "meta": "Épicerie salée pour professionnels : conserves, pain de mie, chips, concentré de tomates, couscous... L'essentiel du garde-manger Fresco Marché."
+      }
+    },
+    {
+      "handle": "charcuterie",
+      "id": "gid://shopify/Collection/690654576965",
+      "titre_rayon": "Charcuterie",
+      "descriptionHtml": "<p>Charcuterie halal de volaille et de bœuf pour sandwichs, pizzas et plats : délices de poulet et de dinde, bacon et lardons de volaille, chorizo, saucisson, salami, ainsi que les spécialités turques sucuk et pastirma. Isla Délice, Çesnili, Sibel et d'autres marques. Commande en ligne réservée aux professionnels, livraison depuis notre dépôt de Clichy.</p>",
+      "seo": {
+        "title": "Charcuterie halal de volaille et bœuf | Fresco Marché",
+        "description": "Charcuterie halal : délices de poulet et dinde, bacon de dinde, chorizo, saucisson, sucuk, pastirma… Pour restaurants et snacks, en commande pro à Clichy."
+      },
+      "avant": {
+        "description": "Collection automatique Charcuterie pour le catalogue professionnel Frescomarche. Parent : Catalogue Frescomarche.",
+        "title": "Charcuterie – Fresco Marché",
+        "meta": "Charcuterie halal en tranches pour professionnels : blanc de poulet fumé, chorizo, pastirma, délices de dinde et de poulet. Livrée par Fresco Marché."
+      }
+    },
+    {
+      "handle": "boucherie",
+      "id": "gid://shopify/Collection/690654347589",
+      "titre_rayon": "Boucherie",
+      "descriptionHtml": "<p>Viandes halal pour la restauration rapide : viande de kebab de poulet Hünkar en 800 g, lamelles de kebab bœuf-volaille Hünkar, steaks hachés 100 % pur bœuf et burgers de bœuf Biladi en 800 g, allumettes de poulet et dés de dinde, délices de volaille en tranches. Détail par espèce dans les rayons Volaille et Bœuf. Commande en ligne réservée aux professionnels, livraison depuis notre dépôt de Clichy.</p>",
+      "seo": {
+        "title": "Viande halal : kebab, burgers, steaks hachés | Fresco Marché",
+        "description": "Viande halal pour snacks et restaurants : kebab de poulet Hünkar, lamelles bœuf-volaille, steaks hachés et burgers Biladi 800 g… Commande pro à Clichy."
+      },
+      "avant": {
+        "description": "Collection automatique Boucherie pour le catalogue professionnel Frescomarche. Parent : Catalogue Frescomarche.",
+        "title": "Boucherie – Fresco Marché",
+        "meta": "Viandes et volailles pour la restauration : burgers, kebabs, chicken wings, cordons bleus... Produits surgelés halal sélectionnés par Fresco Marché."
+      }
+    },
+    {
+      "handle": "volaille",
+      "id": "gid://shopify/Collection/690654380357",
+      "titre_rayon": "Volaille",
+      "descriptionHtml": "<p>Volaille halal pour snacks et restaurants : viande de kebab de poulet Hünkar en 800 g, allumettes de poulet et dés de dinde, délices et tranchés de poulet et de dinde pour les sandwichs. Commande en ligne réservée aux professionnels, livraison depuis notre dépôt de Clichy.</p>",
+      "seo": {
+        "title": "Volaille halal : kebab, poulet, dinde | Fresco Marché",
+        "description": "Volaille halal : kebab de poulet Hünkar, allumettes de poulet, dés de dinde, délices de dinde et de poulet… Pour snacks et restaurants, commande pro à Clichy."
+      },
+      "avant": {
+        "description": "Collection automatique Volaille pour le catalogue professionnel Frescomarche. Parent : Boucherie.",
+        "title": "Volaille – Fresco Marché",
+        "meta": "Volaille et poulet pour professionnels : chicken wings, kebabs, cordons bleus, nuggets... Surgelés halal, livrés par Fresco Marché."
+      }
+    },
+    {
+      "handle": "boeuf",
+      "id": "gid://shopify/Collection/690654413125",
+      "titre_rayon": "Bœuf",
+      "descriptionHtml": "<p>Bœuf halal pour burgers et kebabs : steaks hachés 100 % pur bœuf, burgers de bœuf nature ou à l'oignon Biladi en 800 g et lamelles de kebab bœuf et volaille Hünkar. Surgelés, prêts à cuisiner pour la restauration rapide. Commande en ligne réservée aux professionnels, livraison depuis notre dépôt de Clichy.</p>",
+      "seo": {
+        "title": "Steaks hachés et burgers de bœuf halal | Fresco Marché",
+        "description": "Bœuf halal surgelé : steaks hachés 100 % pur bœuf, burgers Biladi nature ou à l'oignon 800 g, lamelles de kebab Hünkar. Pour snacks, commande pro à Clichy."
+      },
+      "avant": {
+        "description": "Collection automatique Bœuf pour le catalogue professionnel Frescomarche. Parent : Boucherie.",
+        "title": "Bœuf – Fresco Marché",
+        "meta": "Bœuf haché et burgers pour la restauration : steaks hachés et burgers à l'oignon, surgelés halal. Qualité Fresco Marché pour les professionnels."
+      }
+    },
+    {
+      "handle": "surgeles",
+      "id": "gid://shopify/Collection/690654773573",
+      "titre_rayon": "Surgelés",
+      "descriptionHtml": "<p>Surgelés pour la restauration : frites en 1 kg et 2,5 kg, viandes halal (kebab, steaks hachés, burgers de bœuf), légumes surgelés (haricots verts, chou-fleur, persil), crêpes feuilletées msemen et meloui, künefe et tartes Almondy pour les desserts. Commande en ligne réservée aux professionnels, livraison depuis notre dépôt de Clichy.</p>",
+      "seo": {
+        "title": "Surgelés pour pros : frites, kebab, msemen | Fresco Marché",
+        "description": "Frites 2,5 kg, kebab, steaks hachés, burgers, légumes surgelés, msemen, meloui, künefe, tartes Almondy… Les surgelés des snacks et restaurants, commande pro."
+      },
+      "avant": {
+        "description": "Collection automatique Surgelés pour le catalogue professionnel Frescomarche. Parent : Catalogue Frescomarche.",
+        "title": "Surgelés – Fresco Marché",
+        "meta": "Produits surgelés pour professionnels : viandes, légumes, crêpes et accompagnements prêts à cuisiner. Un large choix livré par Fresco Marché."
+      }
+    },
+    {
+      "handle": "boissons",
+      "id": "gid://shopify/Collection/690655789381",
+      "titre_rayon": "Boissons",
+      "descriptionHtml": "<p>Boissons pour votre carte : sodas en 1,5 L (Coca-Cola, Orangina, Boga, Selecto, limonade), thé glacé, mini Coca-Cola en 20 cl, eaux de source et minérales en pack. Pour restaurants, snacks et épiceries. Commande en ligne réservée aux professionnels, livraison depuis notre dépôt de Clichy.</p>",
+      "seo": {
+        "title": "Boissons pour restaurants et snacks | Fresco Marché",
+        "description": "Coca-Cola, Orangina, Boga, Selecto, Lipton Ice Tea, Cristaline, Hépar… Sodas et eaux en bouteilles et packs pour restaurants et snacks, en commande pro."
+      },
+      "avant": {
+        "description": "Collection automatique Boissons pour le catalogue professionnel Frescomarche. Parent : Catalogue Frescomarche.",
+        "title": "Boissons – Fresco Marché",
+        "meta": "Boissons pour professionnels : sodas, jus, eaux, boissons énergisantes et bubble tea... Un large choix pour votre établissement, chez Fresco Marché."
+      }
+    },
+    {
+      "handle": "epicerie-sucree",
+      "id": "gid://shopify/Collection/690655428933",
+      "titre_rayon": "Épicerie sucrée",
+      "descriptionHtml": "<p>Épicerie sucrée pour la pâtisserie et le service : sucres, levures, arômes fleur d'oranger et rose, miels, pâtes à tartiner, pâte d'arachide, cafés, thés verts et infusions, biscuits et muesli. Pour restaurants, salons de thé, traiteurs et épiceries. Commande en ligne réservée aux professionnels, livraison depuis notre dépôt de Clichy.</p>",
+      "seo": {
+        "title": "Sucre, café, thé et miel pour professionnels | Fresco Marché",
+        "description": "Sucre, levures, arôme fleur d'oranger, miel, pâte à tartiner, café, thé vert, biscuits… L'épicerie sucrée des restaurants et salons de thé, en commande pro."
+      },
+      "avant": {
+        "description": "Collection automatique Épicerie sucrée pour le catalogue professionnel Frescomarche. Parent : Catalogue Frescomarche.",
+        "title": "Épicerie sucrée – Fresco Marché",
+        "meta": "Épicerie sucrée pour professionnels : cafés, biscuits, desserts et douceurs sélectionnés pour compléter votre offre. Fresco Marché, grossiste alimentaire."
+      }
+    },
+    {
+      "handle": "produits-du-monde",
+      "id": "gid://shopify/Collection/690566070597",
+      "titre_rayon": "Produits du monde",
+      "descriptionHtml": "<p>Produits du monde pour une carte authentique : couscous, semoules, feuilles de brick et meloui du Maghreb ; concentré de tomate Tamek, sucuk, pastirma et fromage Erzurum de Turquie ; igname, manioc, gombo et pâte d'arachide d'Afrique et des Antilles ; burrata, mozzarella et parmesan d'Europe du Sud. Commande en ligne réservée aux professionnels, livraison depuis notre dépôt de Clichy.</p>",
+      "seo": {
+        "title": "Produits du monde pour restaurants et snacks | Fresco Marché",
+        "description": "Couscous, semoule, feuilles de brick, Tamek, sucuk, pastirma, igname, manioc, burrata… Les produits du Maghreb, de Turquie et d'Afrique pour les pros."
+      },
+      "avant": {
+        "description": "Collection automatique Produits du monde pour le catalogue professionnel Frescomarche. Parent : Catalogue Frescomarche.",
+        "title": "Produits du monde – Fresco Marché",
+        "meta": "Produits du monde pour une cuisine authentique : épicerie d'Asie, d'Afrique, du Maghreb et de Turquie, sélectionnée pour les professionnels."
+      }
+    },
+    {
+      "handle": "produits-du-monde-maghreb-orient",
+      "id": "gid://shopify/Collection/690653724997",
+      "titre_rayon": "Maghreb / Orient",
+      "descriptionHtml": "<p>Épicerie du Maghreb et d'Orient : couscous fin et moyen Dari, semoules Renard, feuilles de brick, crêpes meloui, sardines à la harissa, sauce Alger, arôme fleur d'oranger, huile d'olive Oued Souss, lait fermenté et pain libanais. Pour restaurants, snacks et traiteurs. Commande en ligne réservée aux professionnels, livraison depuis notre dépôt de Clichy.</p>",
+      "seo": {
+        "title": "Produits du Maghreb et d'Orient pour pros | Fresco Marché",
+        "description": "Couscous Dari, semoule Renard, feuilles de brick, meloui, sauce Alger, huile d'olive Oued Souss, pain libanais… L'épicerie orientale des pros, à Clichy."
+      },
+      "avant": {
+        "description": "Collection automatique Maghreb / Orient pour le catalogue professionnel Frescomarche. Parent : Produits du monde.",
+        "title": "Maghreb / Orient – Fresco Marché",
+        "meta": "Épicerie du Maghreb et d'Orient pour les professionnels : semoule, épices, condiments et spécialités sélectionnées par Fresco Marché."
+      }
+    },
+    {
+      "handle": "produits-du-monde-turquie",
+      "id": "gid://shopify/Collection/690653757765",
+      "titre_rayon": "Turquie",
+      "descriptionHtml": "<p>Produits turcs pour kebabs, durums et mezzés : concentré de tomate Tamek, galettes durum de 30 cm, viande de kebab de poulet Hünkar, sucuk, pastirma de Kayseri, fromage traditionnel Erzurum et yaourt à la grecque en 1 kg. Commande en ligne réservée aux professionnels, livraison depuis notre dépôt de Clichy.</p>",
+      "seo": {
+        "title": "Produits turcs pour snacks et kebabs | Fresco Marché",
+        "description": "Tamek, galettes durum 30 cm, viande de kebab Hünkar, sucuk, pastirma de Kayseri, fromage Erzurum… Les produits turcs des snacks, en commande pro à Clichy."
+      },
+      "avant": {
+        "description": "Collection automatique Turquie pour le catalogue professionnel Frescomarche. Parent : Produits du monde.",
+        "title": "Turquie – Fresco Marché",
+        "meta": "Produits turcs pour la restauration : charcuterie, fromages et épicerie authentique sélectionnés par Fresco Marché pour les professionnels."
+      }
+    },
+    {
+      "handle": "produits-du-monde-afrique",
+      "id": "gid://shopify/Collection/690653692229",
+      "titre_rayon": "Afrique",
+      "descriptionHtml": "<p>Produits d'Afrique et des Antilles : igname, manioc, gombo, banane plantain, piment antillais et pâtes d'arachide Tantie pour le mafé et les sauces. Pour restaurants et traiteurs africains et antillais. Commande en ligne réservée aux professionnels, livraison depuis notre dépôt de Clichy.</p>",
+      "seo": {
+        "title": "Produits africains et antillais pour pros | Fresco Marché",
+        "description": "Igname, manioc, gombo, banane plantain, piment antillais, pâte d'arachide Tantie… Les produits d'Afrique et des Antilles pour les pros, commande à Clichy."
+      },
+      "avant": {
+        "description": "Collection automatique Afrique pour le catalogue professionnel Frescomarche. Parent : Produits du monde.",
+        "title": "Afrique – Fresco Marché",
+        "meta": "Spécialités et épicerie d'Afrique pour diversifier votre carte : ingrédients authentiques sélectionnés pour les professionnels par Fresco Marché."
+      }
+    },
+    {
+      "handle": "produits-du-monde-europe-du-sud",
+      "id": "gid://shopify/Collection/695691870533",
+      "titre_rayon": "Europe du Sud",
+      "descriptionHtml": "<p>Spécialités d'Italie, de Grèce et d'Espagne : burrata, mozzarella buffala en billes, mozzarella en boule ou en tranches, parmesan affiné 24 mois, mascarpone, feta grecque tranchée et magdalenas. Pour pizzerias, restaurants et traiteurs. Commande en ligne réservée aux professionnels, livraison depuis notre dépôt de Clichy.</p>",
+      "seo": {
+        "title": "Burrata, mozzarella, parmesan pour pizzerias | Fresco Marché",
+        "description": "Burrata, mozzarella buffala, parmesan 24 mois, mascarpone, feta… Les spécialités d'Italie et de Grèce pour pizzerias et restaurants, en commande pro."
+      },
+      "avant": {
+        "description": "",
+        "title": "Europe du Sud – Fresco Marché",
+        "meta": "Frescomarché Pro accompagne les pros de Clichy et alentours : produits frais, épicerie, crèmerie, surgelés, hygiène, maison et essentiels à prix pro."
+      }
+    },
+    {
+      "handle": "fruits-exotiques",
+      "id": "gid://shopify/Collection/690566005061",
+      "titre_rayon": "Fruits exotiques",
+      "descriptionHtml": "<p>Fruits exotiques pour desserts, jus et cocktails : mangues (dont la mangue avion), ananas, papaye, kiwis vert et jaune, noix de coco et coco à boire, avocat, pomelos, anone, aloe vera et pastèque selon la saison. Commande en ligne réservée aux professionnels, livraison depuis notre dépôt de Clichy.</p>",
+      "seo": {
+        "title": "Fruits exotiques frais pour professionnels | Fresco Marché",
+        "description": "Mangue avion, ananas, papaye, kiwi jaune, noix de coco, coco à boire, avocat, pomelos… Les fruits exotiques des restaurants et snacks, en commande pro."
+      },
+      "avant": {
+        "description": "<p>Mangues, ananas, papayes, fruits du dragon, litchis, fruits de la passion, goyaves et plus. Sélection exotique arrivée de Rungis.</p>",
+        "title": "Fruits exotiques – Fresco Marché",
+        "meta": "Fruits exotiques frais pour professionnels : ananas, mangue, goyave, kiwi, noix de coco... Une sélection dépaysante livrée par Fresco Marché."
+      }
+    },
+    {
+      "handle": "herbes-aromatiques",
+      "id": "gid://shopify/Collection/690565972293",
+      "titre_rayon": "Herbes aromatiques",
+      "descriptionHtml": "<p>Herbes fraîches en botte pour vos cuisines : persil plat et frisé, coriandre, menthe fraîche, basilic, aneth et thym, ainsi que du persil coupé surgelé en 250 g. Commande en ligne réservée aux professionnels, livraison depuis notre dépôt de Clichy.</p>",
+      "seo": {
+        "title": "Persil, coriandre, menthe en botte pour pros | Fresco Marché",
+        "description": "Persil plat et frisé, coriandre, menthe fraîche, basilic, aneth, thym, persil surgelé… Les herbes aromatiques des cuisines pro, en commande à Clichy."
+      },
+      "avant": {
+        "description": "Collection automatique Herbes aromatiques pour le catalogue professionnel Frescomarche. Parent : Légumes.",
+        "title": "Herbes aromatiques – Fresco Marché",
+        "meta": "Herbes aromatiques fraîches pour professionnels : basilic, coriandre, menthe, persil, thym. L'indispensable des cuisines, livré frais par Fresco Marché."
+      }
+    },
+    {
+      "handle": "legumes-exotiques",
+      "id": "gid://shopify/Collection/690566037829",
+      "titre_rayon": "Légumes exotiques",
+      "descriptionHtml": "<p>Légumes exotiques : chayotte, gombo et manioc, pour les cuisines africaines, antillaises et créoles. L'igname, la patate douce et la banane plantain sont dans les rayons Légumes et Afrique. Commande en ligne réservée aux professionnels, livraison depuis notre dépôt de Clichy.</p>",
+      "seo": {
+        "title": "Chayotte, gombo, manioc : légumes exotiques | Fresco Marché",
+        "description": "Chayotte, gombo et manioc pour les cuisines africaines, antillaises et créoles, en vrac pour les professionnels. Commande en ligne, livraison depuis Clichy."
+      },
+      "avant": {
+        "description": "<p>Ignames, patates douces, gombos, aubergines asiatiques, piments frais, racines exotiques. Légumes du monde pour une cuisine authentique.</p>",
+        "title": "Légumes exotiques – Fresco Marché",
+        "meta": "Légumes exotiques pour diversifier votre carte : saveurs d'ailleurs sélectionnées pour les professionnels de la restauration par Fresco Marché."
+      }
+    },
+    {
+      "handle": "fromage",
+      "id": "gid://shopify/Collection/694003728709",
+      "titre_rayon": "Fromage",
+      "descriptionHtml": "<p>Fromages pour pizzas, burgers, sandwichs et plateaux : mozzarella buffala, cheddar, emmental et comté râpés, tranches pour croque-monsieur, maasdam, mimolette et Leerdammer, chèvre, bleu d'Auvergne, fromages fondus et à tartiner, fromage blanc et fromage frais en 500 g et 1 kg. Commande en ligne réservée aux professionnels, livraison depuis notre dépôt de Clichy.</p>",
+      "seo": {
+        "title": "Fromages pour pizzas, burgers et snacks | Fresco Marché",
+        "description": "Mozzarella, cheddar et emmental râpés, tranches pour croque et burger, chèvre, bleu, fromages fondus… Les fromages des restaurants et snacks, commande pro."
+      },
+      "avant": {
+        "description": "",
+        "title": "Fromage – Fresco Marché",
+        "meta": "Fromages pour professionnels : chèvre, comté, mozzarella, gouda, fromages fondus et râpés... Un large choix sélectionné par Fresco Marché."
+      }
+    },
+    {
+      "handle": "lait-beurre-creme",
+      "id": "gid://shopify/Collection/690654314821",
+      "titre_rayon": "Lait beurre crème",
+      "descriptionHtml": "<p>Lait, beurre et crème pour la cuisine et la pâtisserie : lait demi-écrémé et entier en brique ou en pack de 6, lait sans lactose, beurre doux et demi-sel, crème fleurette 30 %, crème fraîche, crème légère UHT, ainsi qu'ayran, kéfir et lait fermenté. Commande en ligne réservée aux professionnels, livraison depuis notre dépôt de Clichy.</p>",
+      "seo": {
+        "title": "Lait, beurre et crème pour professionnels | Fresco Marché",
+        "description": "Lait demi-écrémé en pack, beurre doux et demi-sel, crème fleurette 30 %, crème fraîche, ayran, kéfir… L'essentiel laitier des cuisines pro, commande à Clichy."
+      },
+      "avant": {
+        "description": "Collection automatique Lait beurre crème pour le catalogue professionnel Frescomarche. Parent : Crémerie.",
+        "title": "Lait beurre crème – Fresco Marché",
+        "meta": "Lait, beurre et crème pour professionnels : laits demi-écrémés, crèmes fraîches, beurres fins... L'essentiel laitier livré par Fresco Marché."
+      }
+    },
+    {
+      "handle": "oeufs",
+      "id": "gid://shopify/Collection/690654282053",
+      "titre_rayon": "Oeufs",
+      "descriptionHtml": "<p>Œufs frais en boîte de 12 et en plateau de 30, pour la cuisine, la pâtisserie et le petit-déjeuner. Commande en ligne réservée aux professionnels, livraison depuis notre dépôt de Clichy.</p>",
+      "seo": {
+        "title": "Œufs frais en plateau de 30 pour pros | Fresco Marché",
+        "description": "Œufs frais moyens en boîte de 12 et œufs bruns en plateau de 30 pour restaurants, boulangeries et snacks. Commande en ligne pro, livraison depuis Clichy."
+      },
+      "avant": {
+        "description": "Collection automatique Oeufs pour le catalogue professionnel Frescomarche. Parent : Crémerie.",
+        "title": "Oeufs – Fresco Marché",
+        "meta": "Œufs frais et bio en boîte, sélectionnés pour la restauration professionnelle. Qualité et fraîcheur garanties par Fresco Marché."
+      }
+    },
+    {
+      "handle": "charcuterie-turque",
+      "id": "gid://shopify/Collection/690654708037",
+      "titre_rayon": "Charcuterie turque",
+      "descriptionHtml": "<p>Charcuterie turque halal pour sandwichs, pides et petits-déjeuners : sucuk en tranches, pastirma de Kayseri et pastirma sans çemen Isla Délice, salamis aux épices ou aux piments, salami volaille-bœuf au poivre Çesnili et saucisses bœuf-poulet Sibel. Commande en ligne réservée aux professionnels, livraison depuis notre dépôt de Clichy.</p>",
+      "seo": {
+        "title": "Sucuk et pastirma halal : charcuterie turque | Fresco Marché",
+        "description": "Sucuk en tranches, pastirma de Kayseri, salamis aux épices, saucisses bœuf-poulet Sibel… La charcuterie turque halal des snacks, en commande pro à Clichy."
+      },
+      "avant": {
+        "description": "Collection automatique Charcuterie turque pour le catalogue professionnel Frescomarche. Parent : Charcuterie.",
+        "title": "Charcuterie turque – Fresco Marché",
+        "meta": "Spécialités de charcuterie turque : sucuk, pastirma et délices halal pour diversifier votre carte. Fresco Marché, grossiste alimentaire pro."
+      }
+    },
+    {
+      "handle": "consommables",
+      "id": "gid://shopify/Collection/690655920453",
+      "titre_rayon": "Consommables",
+      "descriptionHtml": "<p>Ustensiles et petit matériel de cuisine : couteaux, éplucheurs, râpes, zesteurs, pinces, spatules, fouets, roulettes à pizza, poches à douille, saladiers, passoires, planches à découper, boîtes de conservation et sacs de congélation. Pour équiper restaurants, snacks et laboratoires. Commande en ligne réservée aux professionnels, livraison depuis notre dépôt de Clichy.</p>",
+      "seo": {
+        "title": "Ustensiles de cuisine pour professionnels | Fresco Marché",
+        "description": "Couteaux, éplucheurs, râpes, roulettes à pizza, poches à douille, passoires, planches à découper, sacs de congélation… Le petit matériel des cuisines pro."
+      },
+      "avant": {
+        "description": "Collection automatique Consommables pour le catalogue professionnel Frescomarche. Parent : Catalogue Frescomarche.",
+        "title": "Consommables – Fresco Marché",
+        "meta": "Consommables et petit équipement pour professionnels : vaisselle, accessoires de cuisine, contenants... L'essentiel opérationnel chez Fresco Marché."
+      }
+    },
+    {
+      "handle": "hygiene",
+      "id": "gid://shopify/Collection/690566103365",
+      "titre_rayon": "Hygiène",
+      "descriptionHtml": "<p>Hygiène et entretien pour votre établissement : liquides vaisselle, éponges et tampons à récurer, nettoyants sols et multi-surfaces, dégraissant, anticalcaire, javel, lessives, papier toilette, mouchoirs, savon pour les mains et sacs poubelle. Commande en ligne réservée aux professionnels, livraison depuis notre dépôt de Clichy.</p>",
+      "seo": {
+        "title": "Produits d'entretien et d'hygiène pour pros | Fresco Marché",
+        "description": "Liquide vaisselle, éponges, nettoyant sol, dégraissant, javel, lessive, papier toilette, sacs poubelle… L'entretien des restaurants et snacks, commande pro."
+      },
+      "avant": {
+        "description": "Collection automatique Hygiène pour le catalogue professionnel Frescomarche. Parent : Catalogue Frescomarche.",
+        "title": "Hygiène – Fresco Marché",
+        "meta": "Produits d'hygiène et d'entretien pour professionnels : lessives, eau de javel, essuie-tout... L'essentiel du nettoyage livré par Fresco Marché."
+      }
+    }
+  ]
+}
