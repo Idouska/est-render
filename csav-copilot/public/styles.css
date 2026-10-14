@@ -9671,135 +9671,206 @@ html, body { overflow-x: clip; }
 
 /* ============================================================ réglages ===
 
-   À la manière des Réglages d'un Mac : les catégories dans une colonne, une
-   seule ouverte à droite, en groupes de lignes blanches — le nom du réglage
-   à gauche, ce sur quoi on agit à droite, une phrase grise sous le groupe.
-   Rien à enregistrer : la ligne du bas dit que c'est fait. */
-#view-settings.reg { flex-direction: row; flex-wrap: wrap; align-items: flex-start; gap: 22px; }
-
-.reg-nav {
-  flex: 1 1 210px;
-  max-width: 250px;
-  position: sticky;
-  top: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 12px 10px;
+   À la manière des Réglages Système du Mac : la boutique en tête de la
+   colonne, comme le compte ; à droite une barre de titre, une carte
+   d'introduction par catégorie, puis des groupes de lignes — le nom du
+   réglage à gauche, ce sur quoi on agit à droite, une phrase grise sous le
+   groupe. Rien à enregistrer : la ligne du bas dit que c'est fait. Toutes les
+   couleurs sont des jetons de l'application : le thème sombre suit seul. */
+#view-settings.reg {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 0;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
-  box-shadow: var(--e1);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+/* ------------------------------------------------------------ colonne --- */
+.reg-nav {
+  flex: 1 1 230px;
+  max-width: 270px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 10px;
+  background: color-mix(in srgb, var(--inset) 70%, var(--surface));
+  border-right: 1px solid var(--line);
 }
 .reg-recherche {
   display: flex;
   align-items: center;
-  gap: 7px;
-  height: 34px;
-  padding: 0 10px;
-  border-radius: 9px;
-  background: var(--inset);
+  gap: 6px;
+  height: 30px;
+  padding: 0 9px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
   color: var(--ink-mute);
 }
-.reg-recherche svg { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
-.reg-recherche input { flex: 1; min-width: 0; padding: 0; border: 0; background: transparent; font: inherit; font-size: 13.5px; color: var(--ink); outline: none; }
+.reg-recherche svg { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+.reg-recherche input { flex: 1; min-width: 0; padding: 0; border: 0; background: transparent; font: inherit; font-size: 13px; color: var(--ink); outline: none; }
 .reg-nav-groupe { display: flex; flex-direction: column; gap: 1px; }
 .reg-cat {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 9px;
   width: 100%;
-  min-height: 36px;
-  padding: 5px 8px;
+  min-height: 34px;
+  padding: 4px 8px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 7px;
   background: transparent;
   font: inherit;
-  font-size: 13.5px;
+  font-size: 13px;
   color: var(--ink);
   text-align: left;
   cursor: pointer;
 }
-.reg-cat:hover { background: var(--inset); }
-.reg-cat[aria-current="page"] { background: var(--accent); color: var(--on-accent); font-weight: 560; }
-.reg-ico { width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center; flex: none; }
-.reg-ico svg { width: 15px; height: 15px; fill: none; stroke: #ffffff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.reg-ico .plein { fill: #ffffff; }
-/* Une teinte par catégorie, comme les pictogrammes des Réglages : toutes
-   assez sombres pour que le trait blanc tienne 4,4:1 au moins. */
-.c-gris { background: #636366; }
-.c-bleu { background: #0a66d6; }
-.c-vert { background: #248a3d; }
-.c-violet { background: #8944c4; }
-.c-orange { background: #c25400; }
-.c-indigo { background: #3a3a8c; }
-.c-rouge { background: #b3261e; }
-.reg-aucun { margin: 0; padding: 0 8px; font-size: 12.5px; color: var(--ink-mute); }
+.reg-cat:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.reg-cat[aria-current="page"] { background: var(--accent); color: var(--on-accent); font-weight: 600; }
 
-.reg-main { flex: 999 1 520px; min-width: 0; max-width: 720px; display: flex; flex-direction: column; gap: 26px; padding: 4px 2px 40px; }
-.reg-tete { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.reg-tete h2 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.02em; color: var(--ink); }
-.reg-tete p { margin: 3px 0 0; font-size: 13.5px; color: var(--ink-mute); }
+/* La boutique, comme le compte en tête des Réglages. */
+.reg-compte { gap: 10px; padding: 7px 8px; border-radius: 10px; }
+.reg-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  flex: none;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 18%);
+}
+.reg-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.reg-avatar img:not([hidden]) + b { display: none; }
+.reg-compte-texte { display: flex; flex-direction: column; min-width: 0; }
+.reg-compte-texte b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reg-compte-texte small { font-size: 11.5px; color: var(--ink-mute); }
+.reg-compte[aria-current="page"] .reg-compte-texte small { color: color-mix(in srgb, var(--on-accent) 85%, transparent); }
+
+.reg-ico { width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; flex: none; }
+.reg-ico svg { width: 14px; height: 14px; fill: none; stroke: #ffffff; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.reg-ico .plein { fill: #ffffff; stroke: none; }
+.reg-ico-moyen { width: 28px; height: 28px; border-radius: 7px; }
+.reg-ico-moyen svg { width: 16px; height: 16px; }
+.reg-ico-grand { width: 60px; height: 60px; border-radius: 14px; }
+.reg-ico-grand svg { width: 30px; height: 30px; stroke-width: 2; }
+/* Une teinte par catégorie, comme les pictogrammes des Réglages : un léger
+   dégradé vertical, assez sombre en bas pour que le trait blanc tienne. */
+.c-bleu { background: linear-gradient(180deg, #4b9bff, #0a63d8); }
+.c-vert { background: linear-gradient(180deg, #43c463, #1f8a3a); }
+.c-violet { background: linear-gradient(180deg, #a76ae8, #7a3bc4); }
+.c-orange { background: linear-gradient(180deg, #ff9a3c, #c25400); }
+.c-indigo { background: linear-gradient(180deg, #6a6ee8, #3a3eb0); }
+.c-gris { background: linear-gradient(180deg, #8e8e93, #545458); }
+.c-shopify { background: linear-gradient(180deg, #7ab55c, #3f7a28); }
+.c-gmail { background: linear-gradient(180deg, #ff6b5e, #c5221f); }
+.reg-aucun { margin: 0; padding: 0 8px; font-size: 12px; color: var(--ink-mute); }
+
+/* ------------------------------------------------------------ contenu --- */
+.reg-main { flex: 999 1 520px; min-width: 0; display: flex; flex-direction: column; background: var(--ground); }
+.reg-barre {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 52px;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface) 60%, var(--ground));
+}
+.reg-barre h2 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: 0; color: var(--ink); }
 .reg-pastille {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 11px;
+  padding: 3px 10px;
   border-radius: 999px;
   background: var(--warn-soft);
   color: var(--warn-ink);
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
 }
-.reg-pastille::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); }
+.reg-pastille::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--warn); }
+.reg-colonne {
+  width: 100%;
+  max-width: 660px;
+  margin: 0 auto;
+  box-sizing: border-box;
+  padding: 24px 24px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.reg-volet { display: flex; flex-direction: column; gap: 22px; }
 
-.reg-volet { display: flex; flex-direction: column; gap: 26px; }
-.reg-titre-groupe { margin: 0 0 6px; padding: 0 14px; font-size: 12.5px; font-weight: 500; color: var(--ink-mute); }
+/* La carte d'introduction : l'icône, le nom, ce qu'on y règle. */
+.reg-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 22px 24px 20px;
+  text-align: center;
+  background: var(--surface);
+  border-radius: 12px;
+  box-shadow: 0 0 0 1px var(--line);
+}
+.reg-hero h3 { margin: 4px 0 0; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; color: var(--ink); }
+.reg-hero p { margin: 0; max-width: 430px; font-size: 13px; line-height: 1.45; color: var(--ink-mute); }
+.reg-hero p:empty { display: none; }
+.reg .reg-hero-logo { width: 64px; height: 64px; border-radius: 50%; border: 0; font-size: 22px; }
+
+/* ------------------------------------------------------------ groupes --- */
+.reg-titre-groupe { margin: 0 0 7px; padding: 0 4px; font-size: 13px; font-weight: 700; color: var(--ink); }
 .reg-titre-groupe label { font: inherit; color: inherit; }
-.reg-groupe { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
-.reg-groupe:not(.reg-profil) > * + * { border-top: 1px solid var(--line-soft); }
-.reg-note { margin: 6px 0 0; padding: 0 14px; font-size: 12px; line-height: 1.5; color: var(--ink-mute); }
+.reg-groupe { background: var(--surface); border-radius: 10px; box-shadow: 0 0 0 1px var(--line); overflow: hidden; }
+/* Le trait entre deux lignes part du texte, pas du bord : c'est lui qui
+   fait lire le groupe comme une seule pièce. */
+.reg-groupe > * + * {
+  background-image: linear-gradient(var(--line-soft), var(--line-soft));
+  background-size: calc(100% - 14px) 1px;
+  background-position: 14px 0;
+  background-repeat: no-repeat;
+}
+.reg-note { margin: 7px 0 0; padding: 0 4px; font-size: 12px; line-height: 1.5; color: var(--ink-mute); }
 .reg-note code { font-family: var(--font-mono); font-size: 11.5px; }
+.reg-droite { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
 
 .reg-ligne {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  min-height: 46px;
+  min-height: 44px;
   padding: 7px 14px;
-  font-size: 14px;
+  font-size: 13px;
   color: var(--ink);
 }
 .reg-ligne-haute { flex-wrap: wrap; }
-.reg-ligne small { display: block; font-size: 12px; color: var(--ink-mute); }
+.reg-ligne small { display: block; margin-top: 1px; font-size: 11.5px; color: var(--ink-mute); }
 .reg-ligne > input[type="text"] {
   flex: 1;
   min-width: 0;
-  max-width: 340px;
-  padding: 4px 0;
+  max-width: 320px;
+  padding: 3px 0;
   border: 0;
   background: transparent;
   text-align: right;
   font: inherit;
-  font-size: 14px;
+  font-size: 13px;
   color: var(--ink-soft);
   outline: none;
 }
 .reg-ligne > input[type="text"]:focus { color: var(--ink); }
-.reg-ligne > select,
-.reg-paire select {
-  max-width: 60%;
-  padding: 4px 2px;
-  border: 0;
-  background: transparent;
-  font: inherit;
-  font-size: 14px;
-  color: var(--ink-soft);
-  text-align: right;
-  cursor: pointer;
-}
-.reg-paire { display: flex; align-items: center; gap: 10px; }
+.reg-paire { display: flex; align-items: center; gap: 8px; }
 .reg-bloc { padding: 10px 14px; }
 .reg-bloc textarea {
   width: 100%;
@@ -9809,7 +9880,7 @@ html, body { overflow-x: clip; }
   background: transparent;
   resize: vertical;
   font: inherit;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.55;
   color: var(--ink);
   outline: none;
@@ -9817,68 +9888,114 @@ html, body { overflow-x: clip; }
 .reg-sortie { padding: 0 14px 10px; font-size: 12.5px; }
 .reg-sortie:empty { display: none; }
 
-.reg-ligne-action {
-  display: block;
-  width: 100%;
-  min-height: 46px;
-  padding: 0 14px;
+/* Les menus : un bouton à double flèche, comme les menus locaux du Mac. */
+.reg-ligne > select,
+.reg-paire select {
+  appearance: none;
+  -webkit-appearance: none;
+  max-width: 60%;
+  min-height: 26px;
+  padding: 0 28px 0 10px;
   border: 0;
-  background: transparent;
-  text-align: left;
+  border-radius: 6px;
+  background-color: var(--surface);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 9 12' fill='none' stroke='%238a8a90' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1.5 4.5L4.5 1.5l3 3'/%3E%3Cpath d='M1.5 7.5l3 3 3-3'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 9px center;
+  background-size: 9px 12px;
+  box-shadow: 0 0 0 0.5px color-mix(in srgb, var(--ink) 25%, transparent), 0 1px 1.5px rgb(0 0 0 / 12%);
   font: inherit;
-  font-size: 14px;
-  color: var(--accent-ink);
+  font-size: 13px;
+  color: var(--ink);
   cursor: pointer;
 }
-.reg-ligne-action:hover { background: var(--inset); }
-.reg-ligne-action:disabled { opacity: 0.55; cursor: progress; }
-.reg .reg-danger { color: var(--crit-ink); }
+
+/* Les boutons : blancs, bordés d'un filet et d'une ombre courte. */
 .reg-bouton {
   display: inline-flex;
   align-items: center;
-  height: 32px;
-  padding: 0 14px;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0 12px;
   border: 0;
-  border-radius: 999px;
-  background: var(--inset);
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: 0 0 0 0.5px color-mix(in srgb, var(--ink) 25%, transparent), 0 1px 1.5px rgb(0 0 0 / 12%);
   color: var(--ink);
   font: inherit;
   font-size: 13px;
-  font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
 }
-.reg-bouton:hover { background: color-mix(in srgb, var(--ink) 9%, var(--inset)); }
+.reg-bouton:hover { background: color-mix(in srgb, var(--ink) 4%, var(--surface)); }
+.reg-bouton:active { background: color-mix(in srgb, var(--ink) 9%, var(--surface)); }
 .reg-bouton:disabled { opacity: 0.55; cursor: progress; }
-.reg-bouton.reg-plein { background: var(--accent); color: var(--on-accent); }
-.reg-lien { padding: 4px 2px; border: 0; background: none; font: inherit; font-size: 13.5px; color: var(--accent-ink); cursor: pointer; }
+.reg-bouton.reg-plein { background: var(--accent); color: var(--on-accent); font-weight: 600; box-shadow: 0 1px 1.5px rgb(0 0 0 / 18%); }
+.reg .reg-danger { color: var(--crit-ink); }
 
-/* Le contrôle segmenté des Réglages : une piste grise, le choix en blanc. */
-.reg-seg { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 2px; border-radius: 9px; background: var(--inset); }
+/* Le contrôle segmenté : une piste grise, le choix en blanc. */
+.reg-seg { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 2px; border-radius: 8px; background: color-mix(in srgb, var(--ink) 8%, transparent); }
 .reg-seg button {
-  min-height: 30px;
-  padding: 0 13px;
+  min-height: 26px;
+  padding: 0 12px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 6px;
   background: transparent;
   font: inherit;
-  font-size: 13px;
+  font-size: 12.5px;
   color: var(--ink);
   cursor: pointer;
 }
-.reg-seg button[aria-pressed="true"] { background: var(--surface); font-weight: 600; box-shadow: 0 1px 3px rgb(0 0 0 / 14%); }
+.reg-seg button[aria-pressed="true"] { background: var(--surface); font-weight: 600; box-shadow: 0 1px 2.5px rgb(0 0 0 / 16%); }
+.reg-seg button[hidden] { display: none; }
 
-/* L'interrupteur : une vraie case à cocher, dessinée en bascule. */
+/* L'apparence se choisit sur trois petites fenêtres, comme sur un Mac. */
+.reg-themes { display: flex; gap: 18px; padding: 8px 0 4px; flex-wrap: wrap; }
+.reg-themes button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.reg-vignette {
+  width: 92px;
+  height: 60px;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  box-shadow: 0 0 0 1px var(--line), 0 1px 4px rgb(0 0 0 / 16%);
+}
+.reg-vignette i { display: block; }
+.reg-vignette i:first-child { width: 30%; }
+.reg-vignette i:last-child { flex: 1; }
+.reg-vignette-clair i:first-child { background: #e6e6ea; }
+.reg-vignette-clair i:last-child { background: #ffffff; }
+.reg-vignette-sombre i:first-child { background: #2c2c2e; }
+.reg-vignette-sombre i:last-child { background: #1c1c1e; }
+.reg-vignette-auto i:first-child { width: 50%; background: linear-gradient(90deg, #e6e6ea 60%, #ffffff 60%); }
+.reg-vignette-auto i:last-child { background: #1c1c1e; }
+.reg-themes button[aria-pressed="true"] .reg-vignette { box-shadow: 0 0 0 3px var(--accent), 0 1px 4px rgb(0 0 0 / 16%); }
+.reg-themes button[aria-pressed="true"] { font-weight: 600; }
+
+/* L'interrupteur : une vraie case à cocher, dessinée en bascule, à la
+   couleur d'accent comme sur le Mac. */
 .reg-switch {
   appearance: none;
   -webkit-appearance: none;
   position: relative;
   flex: none;
-  width: 46px;
-  height: 28px;
+  width: 38px;
+  height: 22px;
   margin: 0;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--ink) 20%, var(--surface));
+  background: color-mix(in srgb, var(--ink) 18%, var(--surface));
   cursor: pointer;
   transition: background 0.2s ease;
 }
@@ -9887,76 +10004,70 @@ html, body { overflow-x: clip; }
   position: absolute;
   top: 2px;
   left: 2px;
-  width: 24px;
-  height: 24px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   background: #ffffff;
-  box-shadow: 0 1px 3px rgb(0 0 0 / 25%);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 30%);
   transition: transform 0.2s ease;
 }
-.reg-switch:checked { background: #34c759; }
-.reg-switch:checked::after { transform: translateX(18px); }
+.reg-switch:checked { background: var(--accent); }
+.reg-switch:checked::after { transform: translateX(16px); }
 
-.reg-curseur { display: flex; align-items: center; gap: 12px; flex: 1; max-width: 320px; }
+.reg-curseur { display: flex; align-items: center; gap: 12px; flex: 1; max-width: 300px; }
 .reg-curseur input { flex: 1; min-width: 0; accent-color: var(--accent); }
-.reg-curseur b { width: 44px; text-align: right; font-weight: 500; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.reg-curseur b { width: 40px; text-align: right; font-weight: 500; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 
-/* La boutique en tête, comme la fiche du compte en haut des Réglages. */
-.reg-profil { display: flex; align-items: center; gap: 14px; padding: 14px; flex-wrap: wrap; }
-.reg-profil .brand-preview { width: 58px; height: 58px; border-radius: 14px; border: 0; }
-.reg-profil-nom { flex: 1 1 180px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.reg-profil-nom input {
-  width: 100%;
-  padding: 2px 0;
-  border: 0;
-  background: transparent;
-  font: inherit;
-  font-size: 17px;
-  font-weight: 600;
-  color: var(--ink);
-  outline: none;
-}
-.reg-profil-nom input:focus { box-shadow: 0 1px 0 var(--accent); }
-.reg-profil-nom span { font-size: 12.5px; color: var(--ink-mute); }
-.reg-profil-acts { display: flex; align-items: center; gap: 8px; }
-
-.reg-replie { margin-top: 8px; }
-.reg-replie > summary { padding: 0 14px; font-size: 12.5px; color: var(--accent-ink); cursor: pointer; list-style: none; }
+.reg-replie { margin-top: 10px; }
+.reg-replie > summary { padding: 0 4px; font-size: 12px; color: var(--accent-ink); cursor: pointer; list-style: none; }
 .reg-replie > summary::-webkit-details-marker { display: none; }
 .reg-replie[open] > summary { margin-bottom: 8px; }
 
-/* Les comptes : une ligne par connexion, les gestes repliés sous « Gérer ». */
-#view-settings .set-conn { margin: 0; padding: 12px 14px; border: 0; background: none; }
+/* Les comptes : une ligne par connexion, son icône, son état ; les gestes
+   avancés repliés sous « Gérer ». */
+#view-settings .set-conn { margin: 0; padding: 10px 14px; border: 0; border-radius: 0; background-color: transparent; }
+#view-settings .set-conn-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.set-conn-nom { flex: 1; min-width: 0; font-size: 13px; color: var(--ink); }
+.set-conn-nom small { display: flex; align-items: center; gap: 5px; margin-top: 1px; font-size: 11.5px; color: var(--ink-mute); }
+#view-settings .set-conn-detail { margin: 8px 0 0 38px; font-size: 12px; color: var(--ink-mute); }
 #view-settings .mbx-gerer { margin-top: 6px; }
 #view-settings .mbx-gerer > summary { padding: 0; }
 
-#view-settings .swatches { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
-#view-settings .swatch { width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; background: none; display: grid; place-items: center; }
-#view-settings .swatch i { width: 22px; height: 22px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 10%); }
-#view-settings .swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--ink); }
+#view-settings .swatches { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+#view-settings .swatch { width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%; background: none; display: grid; place-items: center; }
+#view-settings .swatch i { width: 20px; height: 20px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 12%); }
+#view-settings .swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--ink-mute); }
 
 /* Les champs des Réglages ne sont pas des creux : le texte se pose dans la
    ligne. Le groupe qui contient le champ actif s'éclaire de l'accent. */
 #view-settings .reg-ligne > input[type="text"],
-#view-settings .reg-ligne > select,
-#view-settings .reg-paire select,
 #view-settings .reg-bloc textarea,
-#view-settings .reg-profil-nom input,
 #view-settings .reg-recherche input { box-shadow: none; }
-#view-settings .reg-ligne > input[type="text"]:focus-visible,
-#view-settings .reg-profil-nom input:focus-visible { box-shadow: 0 1px 0 var(--accent); }
-.reg-groupe:focus-within { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+#view-settings .reg-ligne > input[type="text"]:focus-visible { box-shadow: 0 1px 0 var(--accent); }
+.reg-groupe:focus-within { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 55%, var(--line)); }
 
-.reg-etat { margin: 0; font-size: 12px; color: var(--ink-mute); }
+.reg-etat { margin: 0; display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-mute); }
+.reg-etat::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  flex: none;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l5 5 9-10'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l5 5 9-10'/%3E%3C/svg%3E") center / contain no-repeat;
+}
 .reg-etat.reg-etat-erreur { color: var(--crit-ink); font-weight: 600; }
+.reg-etat.reg-etat-erreur::before { display: none; }
 
-/* Au doigt : la recherche, puis les catégories en pastilles qui passent à la
-   ligne, et la catégorie ouverte dessous. */
+/* Au doigt : la colonne passe au-dessus, les catégories en pastilles qui
+   passent à la ligne, et la catégorie ouverte dessous. */
 @media (max-width: 760px) {
-  .reg-nav { flex-basis: 100%; max-width: none; position: static; }
+  .reg-nav { flex-basis: 100%; max-width: none; border-right: 0; border-bottom: 1px solid var(--line); }
   .reg-nav-groupe { flex-direction: row; flex-wrap: wrap; gap: 6px; }
-  .reg-cat { width: auto; background: var(--inset); padding-right: 12px; }
+  .reg-cat { width: auto; background: color-mix(in srgb, var(--ink) 6%, transparent); padding-right: 12px; }
+  .reg-compte { width: 100%; }
   .reg-main { flex-basis: 100%; }
+  .reg-colonne { padding: 18px 12px 32px; }
   .reg-ligne { flex-wrap: wrap; }
 }
 @media (prefers-reduced-motion: reduce) {

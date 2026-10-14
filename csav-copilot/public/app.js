@@ -12366,7 +12366,15 @@ $('customers-q').addEventListener('input', (event) => {
  * d'où les liens plutôt que des `fetch`. Seule la déconnexion Gmail est un
  * POST, parce qu'elle détruit des données.
  */
-function renderConnection(el, { label, connected, simulated, detail, actions, status: given }) {
+/* Le pictogramme de chaque compte, dans sa tuile, comme une ligne des Réglages. */
+const ICONES_CONNEXION = {
+  shopify:
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1 12H6z"></path><path d="M9 8V6a3 3 0 0 1 6 0v2"></path></svg>',
+  gmail:
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="6" width="17" height="12" rx="2"></rect><path d="M4 7l8 6 8-6"></path></svg>',
+};
+
+function renderConnection(el, { ico, label, connected, simulated, detail, actions, status: given }) {
   const dot = simulated ? 'warn' : connected ? '' : 'off';
   // L'état est fourni par l'appelant quand l'accord grammatical l'exige :
   // « Boîtes mail connecté » se lisait mal, et le pluriel dépend du nombre.
@@ -12378,7 +12386,8 @@ function renderConnection(el, { label, connected, simulated, detail, actions, st
 
   el.innerHTML = `
     <div class="set-conn-head">
-      <span class="conn-pill"><span class="dot ${dot}"></span> ${esc(label)} ${esc(status)}</span>
+      <span class="reg-ico reg-ico-moyen c-${esc(ico)}">${ICONES_CONNEXION[ico] ?? ''}</span>
+      <span class="set-conn-nom">${esc(label)}<small><span class="dot ${dot}"></span> ${esc(status)}</small></span>
       <span class="set-conn-actions">${actions}</span>
     </div>
     <div class="set-conn-detail">${detail}</div>`;
@@ -12433,6 +12442,7 @@ function renderSettings() {
   const missingScopes = connections.shopify.missingScopes ?? [];
 
   renderConnection($('set-shopify'), {
+    ico: 'shopify',
     label: 'Shopify',
     connected: connections.shopify.connected,
     simulated: connections.shopify.simulated,
@@ -12544,6 +12554,7 @@ function renderSettings() {
     </details>`;
 
   renderConnection($('set-gmail'), {
+    ico: 'gmail',
     label: boxes.length > 1 ? 'Boîtes mail' : 'Boîte mail',
     status: gmail.simulated
       ? 'simulée'
@@ -12848,7 +12859,7 @@ const VOLETS_REGLAGES = {
   assistant: ['Assistant', 'Ce que l’assistant peut affirmer et envoyer.'],
   test: ['Mode test', 'Essayer l’outil sans rien envoyer.'],
   acces: ['Voir en tant que', 'Vérifier ce que voit chaque rôle.'],
-  donnees: ['Données', 'Combien de temps l’outil garde vos mails.'],
+  donnees: ['Données et confidentialité', 'Combien de temps l’outil garde vos mails.'],
 };
 let voletReglages = 'boutique';
 
@@ -12862,9 +12873,9 @@ function montrerVoletReglages(nom) {
     if (bouton.dataset.reg === nom) bouton.setAttribute('aria-current', 'page');
     else bouton.removeAttribute('aria-current');
   });
-  const [titre, sous] = VOLETS_REGLAGES[nom];
-  $('reg-titre').textContent = titre;
-  $('reg-sous').textContent = sous;
+  // Le titre dans la barre ; la phrase d'introduction vit dans la carte de
+  // chaque catégorie.
+  $('reg-titre').textContent = VOLETS_REGLAGES[nom][0];
 }
 
 document.querySelectorAll('#view-settings .reg-cat').forEach((bouton) =>
@@ -13816,26 +13827,42 @@ function brandLogoSrc(merchant) {
 
 function renderLogoPreview(merchant, pending = null) {
   const src = pending ?? brandLogoSrc(merchant);
-  const img = $('set-logo-img');
+  const initiales = (merchant?.brandName || merchant?.name || 'SA').slice(0, 2).toUpperCase();
 
-  $('set-logo-initials').textContent = (merchant?.brandName || merchant?.name || 'SA')
-    .slice(0, 2)
-    .toUpperCase();
-
-  if (src) {
-    img.src = src;
-    img.hidden = false;
-    // Une URL cassée ne doit pas laisser un carré vide : on retombe sur les
-    // initiales, comme dans la barre latérale.
-    img.onerror = () => {
+  // Le même logo à deux endroits : la carte d'introduction de la boutique et
+  // sa fiche en tête de la colonne, comme le compte en haut des Réglages.
+  for (const [imgId, initialesId] of [
+    ['set-logo-img', 'set-logo-initials'],
+    ['reg-compte-img', 'reg-compte-initiales'],
+  ]) {
+    const img = $(imgId);
+    $(initialesId).textContent = initiales;
+    if (src) {
+      img.src = src;
+      img.hidden = false;
+      // Une URL cassée ne doit pas laisser un carré vide : on retombe sur les
+      // initiales, comme dans la barre latérale.
+      img.onerror = () => {
+        img.hidden = true;
+      };
+    } else {
       img.hidden = true;
-    };
-  } else {
-    img.hidden = true;
+    }
   }
 
+  renderNomBoutique(merchant);
   $('set-logo-clear').hidden = !(merchant?.hasLogo || pending);
 }
+
+/** Le nom de la boutique, tel qu'il sera affiché : l'enseigne saisie, sinon celui de Shopify. */
+function renderNomBoutique(merchant) {
+  const nom = $('set-brand').value.trim() || merchant?.name || merchant?.shopDomain || 'Votre boutique';
+  $('reg-compte-nom').textContent = nom;
+  $('reg-boutique-nom').textContent = nom;
+  $('reg-boutique-domaine').textContent = merchant?.shopDomain ?? '';
+}
+
+$('set-brand').addEventListener('input', () => renderNomBoutique(state.settings?.merchant));
 
 /** Réduit le logo avant l'envoi : 256 px suffisent partout où il s'affiche. */
 async function shrinkLogo(file) {

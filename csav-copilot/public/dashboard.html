@@ -1565,10 +1565,11 @@
       </section>
 
       <!-- ======================================================= RÉGLAGES ==
-           À la manière des Réglages d'un Mac : les catégories à gauche, une
-           seule à la fois à droite, en groupes de lignes — le nom du réglage
-           à gauche, ce sur quoi on agit à droite, une phrase sous le groupe.
-           Rien à enregistrer : chaque changement part tout de suite. -->
+           À la manière des Réglages Système du Mac : la boutique en tête de
+           la colonne, les catégories dessous ; à droite, une barre de titre,
+           une carte d'introduction, puis des groupes de lignes — le nom du
+           réglage à gauche, ce sur quoi on agit à droite, une phrase sous le
+           groupe. Rien à enregistrer : chaque changement part tout de suite. -->
       <section class="browse reg" id="view-settings" hidden aria-label="Réglages">
         <nav class="reg-nav" aria-label="Catégories de réglages">
           <label class="reg-recherche">
@@ -1577,10 +1578,13 @@
             <input type="search" id="reg-q" placeholder="Rechercher" autocomplete="off" />
           </label>
           <div class="reg-nav-groupe">
-            <button type="button" class="reg-cat" data-reg="boutique" data-mots="nom logo enseigne signature delai reponse suivi colis lien">
-              <span class="reg-ico c-gris"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v9h16v-9"></path><path d="M3 10l2-6h14l2 6"></path><path d="M9 19v-5h6v5"></path></svg></span>Boutique
+            <button type="button" class="reg-cat reg-compte" data-reg="boutique" data-mots="boutique nom logo enseigne signature delai reponse suivi colis lien">
+              <span class="reg-avatar" aria-hidden="true"><img id="reg-compte-img" alt="" hidden /><b id="reg-compte-initiales">SA</b></span>
+              <span class="reg-compte-texte"><b id="reg-compte-nom">Boutique</b><small>Boutique, logo et signature</small></span>
             </button>
-            <button type="button" class="reg-cat" data-reg="apparence" data-mots="theme sombre clair couleur accent palette horloges fond bandeau">
+          </div>
+          <div class="reg-nav-groupe">
+            <button type="button" class="reg-cat" data-reg="apparence" data-mots="theme sombre clair automatique couleur accent palette horloges fond bandeau">
               <span class="reg-ico c-bleu"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"></circle><path d="M12 4a8 8 0 0 1 0 16z" class="plein"></path></svg></span>Apparence
             </button>
           </div>
@@ -1589,7 +1593,7 @@
               <span class="reg-ico c-vert"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1"></path><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"></path></svg></span>Connexions
             </button>
             <button type="button" class="reg-cat" data-reg="assistant" data-mots="ia intelligence regles politiques playbook reponses automatiques seuil confiance">
-              <span class="reg-ico c-violet"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"></path></svg></span>Assistant
+              <span class="reg-ico c-violet"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" class="plein"></path></svg></span>Assistant
             </button>
           </div>
           <div class="reg-nav-groupe">
@@ -1599,56 +1603,47 @@
             <button type="button" class="reg-cat" data-reg="acces" data-mots="voir en tant que role agent superviseur observateur fournisseur atelier droits">
               <span class="reg-ico c-indigo"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"></path></svg></span>Voir en tant que
             </button>
-            <button type="button" class="reg-cat" data-reg="donnees" data-mots="donnees conservation rgpd mails purge">
-              <span class="reg-ico c-rouge"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"></path></svg></span>Données
+            <button type="button" class="reg-cat" data-reg="donnees" data-mots="donnees confidentialite conservation rgpd mails purge">
+              <span class="reg-ico c-gris"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"></path></svg></span>Données et confidentialité
             </button>
           </div>
           <p class="reg-aucun" id="reg-aucun" hidden>Aucun réglage ne correspond.</p>
         </nav>
 
         <div class="reg-main">
-          <header class="reg-tete">
-            <div>
-              <h2 id="reg-titre">Boutique</h2>
-              <p id="reg-sous"></p>
-            </div>
+          <header class="reg-barre">
+            <h2 id="reg-titre">Boutique</h2>
             <span class="reg-pastille" id="reg-test-pastille" hidden>Mode test actif</span>
           </header>
 
+          <div class="reg-colonne">
           <!-- ------------------------------------------------- Boutique -->
           <div class="reg-volet" data-volet="boutique">
-            <section>
-              <div class="reg-groupe reg-profil">
-                <span class="brand-preview" id="set-logo-preview">
-                  <img id="set-logo-img" alt="" hidden />
-                  <b id="set-logo-initials">SA</b>
-                </span>
-                <div class="reg-profil-nom">
-                  <label for="set-brand" class="sr-only">Nom affiché</label>
-                  <input type="text" id="set-brand" placeholder="Votre enseigne" />
-                  <span>Affiché en haut de la barre latérale</span>
-                </div>
-                <div class="reg-profil-acts">
-                  <label class="reg-bouton">
-                    Changer le logo
-                    <input type="file" id="set-logo-file" accept="image/*" hidden />
-                  </label>
-                  <button type="button" class="reg-lien reg-danger" id="set-logo-clear" hidden>Retirer</button>
-                </div>
-              </div>
-              <details class="reg-replie">
-                <summary>Utiliser plutôt l’adresse d’une image</summary>
-                <div class="reg-groupe">
-                  <label class="reg-ligne">
-                    <span>Adresse du logo</span>
-                    <input type="text" id="set-logo" placeholder="https://…/logo.png" />
-                  </label>
-                </div>
-              </details>
-            </section>
+            <div class="reg-hero">
+              <span class="brand-preview reg-hero-logo" id="set-logo-preview">
+                <img id="set-logo-img" alt="" hidden />
+                <b id="set-logo-initials">SA</b>
+              </span>
+              <h3 id="reg-boutique-nom">Votre boutique</h3>
+              <p id="reg-boutique-domaine"></p>
+            </div>
 
             <section>
               <div class="reg-groupe">
+                <label class="reg-ligne">
+                  <span>Nom affiché</span>
+                  <input type="text" id="set-brand" placeholder="Votre enseigne" />
+                </label>
+                <div class="reg-ligne">
+                  <span>Logo<small>Affiché en haut de la barre latérale</small></span>
+                  <span class="reg-paire">
+                    <button type="button" class="reg-bouton reg-danger" id="set-logo-clear" hidden>Retirer</button>
+                    <label class="reg-bouton">
+                      Changer…
+                      <input type="file" id="set-logo-file" accept="image/*" hidden />
+                    </label>
+                  </span>
+                </div>
                 <label class="reg-ligne">
                   <span>Délai de réponse visé</span>
                   <select id="set-sla">
@@ -1661,10 +1656,19 @@
                 </label>
               </div>
               <p class="reg-note">Un message sans réponse après ce délai passe en retard dans la file.</p>
+              <details class="reg-replie">
+                <summary>Utiliser plutôt l’adresse d’une image</summary>
+                <div class="reg-groupe">
+                  <label class="reg-ligne">
+                    <span>Adresse du logo</span>
+                    <input type="text" id="set-logo" placeholder="https://…/logo.png" />
+                  </label>
+                </div>
+              </details>
             </section>
 
             <section>
-              <h3 class="reg-titre-groupe"><label for="set-signature">Signature des mails</label></h3>
+              <h4 class="reg-titre-groupe"><label for="set-signature">Signature des mails</label></h4>
               <div class="reg-groupe">
                 <div class="reg-bloc">
                   <textarea id="set-signature" rows="3" placeholder="Prénom
@@ -1676,7 +1680,7 @@ adresse@exemple.com"></textarea>
             </section>
 
             <section>
-              <h3 class="reg-titre-groupe">Suivi des colis</h3>
+              <h4 class="reg-titre-groupe">Suivi des colis</h4>
               <div class="reg-groupe">
                 <label class="reg-ligne">
                   <span>Lien de suivi</span>
@@ -1691,12 +1695,18 @@ adresse@exemple.com"></textarea>
           <div class="reg-volet" data-volet="apparence" hidden>
             <section>
               <div class="reg-groupe">
-                <div class="reg-ligne">
-                  <span>Thème</span>
-                  <div class="reg-seg" id="theme-seg" role="group" aria-label="Thème">
-                    <button type="button" data-theme-choix="light" aria-pressed="true">Clair</button>
-                    <button type="button" data-theme-choix="dark" aria-pressed="false">Sombre</button>
-                    <button type="button" data-theme-choix="auto" aria-pressed="false">Automatique</button>
+                <div class="reg-ligne reg-ligne-haute">
+                  <span>Apparence</span>
+                  <div class="reg-themes" id="theme-seg" role="group" aria-label="Apparence">
+                    <button type="button" data-theme-choix="light" aria-pressed="true">
+                      <span class="reg-vignette reg-vignette-clair" aria-hidden="true"><i></i><i></i></span>Clair
+                    </button>
+                    <button type="button" data-theme-choix="dark" aria-pressed="false">
+                      <span class="reg-vignette reg-vignette-sombre" aria-hidden="true"><i></i><i></i></span>Sombre
+                    </button>
+                    <button type="button" data-theme-choix="auto" aria-pressed="false">
+                      <span class="reg-vignette reg-vignette-auto" aria-hidden="true"><i></i><i></i></span>Automatique
+                    </button>
                   </div>
                 </div>
                 <div class="reg-ligne">
@@ -1704,18 +1714,18 @@ adresse@exemple.com"></textarea>
                   <div class="swatches" id="palette-swatches" role="group" aria-label="Couleur d’accent"></div>
                 </div>
                 <div class="reg-ligne">
-                  <span>Horloges</span>
+                  <span>Horloges des fuseaux</span>
                   <div class="reg-seg" id="clock-seg" role="group" aria-label="Horloges">
                     <button type="button" data-clockstyle="analog" aria-pressed="true">Aiguilles</button>
                     <button type="button" data-clockstyle="digital" aria-pressed="false">Numérique</button>
                   </div>
                 </div>
               </div>
-              <p class="reg-note">« Automatique » suit le réglage de votre ordinateur, y compris la bascule du soir.</p>
+              <p class="reg-note">Ces choix restent sur cet appareil : vos collègues gardent les leurs. « Automatique » suit le réglage de votre ordinateur, y compris la bascule du soir.</p>
             </section>
 
             <section>
-              <h3 class="reg-titre-groupe">Fond du bandeau</h3>
+              <h4 class="reg-titre-groupe">Fond du bandeau</h4>
               <div class="reg-groupe">
                 <div class="reg-ligne">
                   <span>Teinte</span>
@@ -1724,7 +1734,7 @@ adresse@exemple.com"></textarea>
                     <input type="text" id="topbg-hex" inputmode="text" spellcheck="false"
                       autocomplete="off" maxlength="7" placeholder="#eef2ff"
                       aria-label="Code hexadécimal" />
-                    <button type="button" class="reg-lien" id="topbg-reset">Par défaut</button>
+                    <button type="button" class="reg-bouton" id="topbg-reset">Par défaut</button>
                   </span>
                 </div>
                 <div class="reg-bloc">
@@ -1734,14 +1744,17 @@ adresse@exemple.com"></textarea>
                   <span class="teinte-ratio" id="topbg-ratio" aria-live="polite"></span>
                 </div>
               </div>
-              <p class="reg-note">Ces choix restent sur cet appareil : vos collègues gardent les leurs.</p>
             </section>
           </div>
 
           <!-- ----------------------------------------------- Connexions -->
           <div class="reg-volet" data-volet="connexions" hidden>
+            <div class="reg-hero">
+              <span class="reg-ico reg-ico-grand c-vert"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1"></path><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"></path></svg></span>
+              <h3>Connexions</h3>
+              <p>La boutique Shopify, les boîtes Gmail et l’assistant qui rédige les réponses.</p>
+            </div>
             <section>
-              <h3 class="reg-titre-groupe">Comptes</h3>
               <div class="reg-groupe">
                 <div class="set-conn" id="set-shopify"></div>
                 <div class="set-conn" id="set-gmail"></div>
@@ -1749,7 +1762,7 @@ adresse@exemple.com"></textarea>
             </section>
 
             <section>
-              <h3 class="reg-titre-groupe">Vérifications</h3>
+              <h4 class="reg-titre-groupe">Vérifications</h4>
               <div class="reg-groupe">
                 <div class="reg-ligne">
                   <span>Assistant IA<small>Classe, résume et prépare les réponses</small></span>
@@ -1768,8 +1781,13 @@ adresse@exemple.com"></textarea>
 
           <!-- ------------------------------------------------ Assistant -->
           <div class="reg-volet" data-volet="assistant" hidden>
+            <div class="reg-hero">
+              <span class="reg-ico reg-ico-grand c-violet"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" class="plein"></path></svg></span>
+              <h3>Assistant</h3>
+              <p>Ce qu’il a le droit d’affirmer aux clients, et ce qu’il peut envoyer seul.</p>
+            </div>
             <section>
-              <h3 class="reg-titre-groupe"><label for="set-playbook">Règles de la boutique</label></h3>
+              <h4 class="reg-titre-groupe"><label for="set-playbook">Règles de la boutique</label></h4>
               <div class="reg-groupe">
                 <div class="reg-bloc">
                   <textarea id="set-playbook" rows="8" placeholder="Livraison : 2 à 5 jours ouvrés en France.
@@ -1777,13 +1795,15 @@ Retours : 30 jours après réception, article non porté.
 Échange de taille : gratuit une fois.
 Remboursement : sous 5 jours ouvrés après réception du retour."></textarea>
                 </div>
-                <button type="button" class="reg-ligne-action" id="set-policies">Reprendre les politiques de Shopify</button>
+              </div>
+              <div class="reg-droite">
+                <button type="button" class="reg-bouton" id="set-policies">Reprendre les politiques de Shopify</button>
               </div>
               <p class="reg-note">Une règle par ligne. L’assistant n’affirme rien qui n’y figure pas.</p>
             </section>
 
             <section>
-              <h3 class="reg-titre-groupe">Réponses automatiques</h3>
+              <h4 class="reg-titre-groupe">Réponses automatiques</h4>
               <div class="reg-groupe">
                 <label class="reg-ligne">
                   <span>Envoyer sans relecture</span>
@@ -1803,25 +1823,32 @@ Remboursement : sous 5 jours ouvrés après réception du retour."></textarea>
 
           <!-- ------------------------------------------------ Mode test -->
           <div class="reg-volet" data-volet="test" hidden>
+            <div class="reg-hero">
+              <span class="reg-ico reg-ico-grand c-orange"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6"></path><path d="M10 3v6l-5 9a2 2 0 0 0 1.7 3h10.6a2 2 0 0 0 1.7-3l-5-9V3"></path></svg></span>
+              <h3>Mode test</h3>
+              <p>Essayez l’outil sans risque : il fonctionne normalement, mais rien ne sort.</p>
+            </div>
             <section>
               <div class="reg-groupe">
                 <label class="reg-ligne">
-                  <span>Mode test</span>
+                  <span>Mode test<small>Ni expédition ni remboursement chez Shopify, ni mail aux clients ou aux ateliers</small></span>
                   <input type="checkbox" class="reg-switch" role="switch" id="set-testmode" />
                 </label>
               </div>
-              <p class="reg-note">L’outil fonctionne normalement, mais rien ne sort : ni expédition ni remboursement chez Shopify, ni mail aux clients ou aux ateliers. Seuls les liens de connexion de l’équipe partent encore.</p>
-            </section>
-            <section>
-              <div class="reg-groupe">
-                <button type="button" class="reg-ligne-action reg-danger" id="test-effacer">Effacer les données de test…</button>
+              <div class="reg-droite">
+                <button type="button" class="reg-bouton" id="test-effacer">Effacer les données de test…</button>
               </div>
-              <p class="reg-note">Supprime les colis et remboursements créés en mode test. Les vraies données ne sont pas touchées.</p>
+              <p class="reg-note">Seuls les liens de connexion de l’équipe partent encore. L’effacement ne touche que les colis et remboursements créés en mode test.</p>
             </section>
           </div>
 
           <!-- ---------------------------------------- Voir en tant que -->
           <div class="reg-volet" data-volet="acces" hidden>
+            <div class="reg-hero">
+              <span class="reg-ico reg-ico-grand c-indigo"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"></path></svg></span>
+              <h3>Voir en tant que</h3>
+              <p>Vérifiez ce que voit chaque rôle avant de lui confier la boutique.</p>
+            </div>
             <section>
               <div class="reg-groupe">
                 <div class="reg-ligne reg-ligne-haute">
@@ -1848,6 +1875,11 @@ Remboursement : sous 5 jours ouvrés après réception du retour."></textarea>
 
           <!-- -------------------------------------------------- Données -->
           <div class="reg-volet" data-volet="donnees" hidden>
+            <div class="reg-hero">
+              <span class="reg-ico reg-ico-grand c-gris"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"></path></svg></span>
+              <h3>Données et confidentialité</h3>
+              <p>Combien de temps l’outil garde les mails de vos clients.</p>
+            </div>
             <section>
               <div class="reg-groupe">
                 <label class="reg-ligne">
@@ -1862,11 +1894,12 @@ Remboursement : sous 5 jours ouvrés après réception du retour."></textarea>
                   </select>
                 </label>
               </div>
-              <p class="reg-note">Passé ce délai, les messages et leurs pièces jointes sont supprimés automatiquement (RGPD).</p>
+              <p class="reg-note">Passé ce délai, les messages et leurs pièces jointes sont supprimés automatiquement, comme le demande le RGPD.</p>
             </section>
           </div>
 
           <p class="reg-etat" id="set-dirty" aria-live="polite">Chaque changement est enregistré tout de suite.</p>
+          </div>
         </div>
       </section>
         </div>
