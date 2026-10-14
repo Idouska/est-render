@@ -246,7 +246,10 @@
            seize autres écrans, et Actualiser comme l'état des connexions y
            disparaîtraient avec elle. -->
       <div class="subhead">
-      <section class="kpis" id="kpis" aria-label="Indicateurs des 30 derniers jours">
+      <!-- Masqué : ses chiffres sont repris sous le titre de l'écran SAV et
+           dans la barre d'état de la file (voir `loadMetrics`). La section
+           reste, parce que c'est elle que `loadMetrics` remplit d'abord. -->
+      <section class="kpis" id="kpis" hidden aria-label="Indicateurs des 30 derniers jours">
         <div class="kpi">
           <span class="kpi-ico" data-ico="inbox" aria-hidden="true"></span>
           <span class="kpi-label">En attente de vous</span>
@@ -755,6 +758,9 @@
         <span><kbd>R</kbd> actualiser</span>
         <span><kbd>/</kbd> rechercher</span>
         <span><kbd>W</kbd> WISMO</span>
+        <!-- La vitesse de réponse et ce que l'IA n'a pas compris : des chiffres
+             qu'on lit d'un coup d'œil, à droite, comme l'état d'une fenêtre. -->
+        <span class="kb-kpis" id="kb-kpis"></span>
         <span class="kb-right" id="kb-state"></span>
       </div>
 
