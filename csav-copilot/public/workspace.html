@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#111322" />
-    <title>Atelier — commandes à préparer</title>
+    <title>Espace fournisseur — commandes à préparer</title>
     <link
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%230b5e6b'/%3E%3Cpath d='M3 5.5h10v6H3z' fill='none' stroke='%23fff' stroke-width='1.2'/%3E%3Cpath d='M3 5.8l5 3.4 5-3.4' fill='none' stroke='%23fff' stroke-width='1.2'/%3E%3C/svg%3E"
@@ -24,37 +24,41 @@
            emballe de l'autre, et le pouce n'atteint jamais le haut de l'écran. -->
       <nav class="wsnav" id="ws-nav" aria-label="Sections">
         <div class="wsnav-brand">
-          <span class="wsnav-mark" aria-hidden="true">◧</span>
+          <span class="wsnav-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9zM4 7.5l8 4.5 8-4.5M12 12v9" /></svg>
+          </span>
           <span>
-            <b data-t="head.crumb">Atelier</b>
+            <b data-t="head.crumb">Espace fournisseur</b>
             <small id="ws-supplier"></small>
           </span>
         </div>
 
         <!-- L'écran d'arrivée : ce qu'on attend de l'atelier aujourd'hui. -->
         <button type="button" data-view="home" aria-current="true">
-          <svg viewBox="0 0 20 20" aria-hidden="true">
+          <span class="wsnav-tuile t-bleu" aria-hidden="true"><svg viewBox="0 0 20 20">
             <path d="M3.5 9.5 10 4l6.5 5.5" />
             <path d="M5.5 8v8h9V8" />
-          </svg>
+          </svg></span>
           <span data-t="nav.home">Aujourd'hui</span>
         </button>
 
         <button type="button" data-view="orders">
-          <svg viewBox="0 0 20 20" aria-hidden="true">
-            <rect x="3" y="4.5" width="14" height="11" rx="2" />
-            <path d="M3 8.5h14M8 8.5v7" />
-          </svg>
+          <span class="wsnav-tuile t-orange" aria-hidden="true"><svg viewBox="0 0 20 20">
+            <path d="M10 2.5 16.5 6v8L10 17.5 3.5 14V6z" />
+            <path d="M3.5 6 10 9.5 16.5 6M10 9.5v8" />
+          </svg></span>
           <span data-t="nav.orders">Commandes</span>
+          <!-- Ce qu'il reste à préparer : le même chiffre que l'accueil. -->
+          <span class="wsnav-compte" id="ws-orders-count" hidden>0</span>
         </button>
 
         <button type="button" data-view="catalog">
-          <svg viewBox="0 0 20 20" aria-hidden="true">
+          <span class="wsnav-tuile t-violet" aria-hidden="true"><svg viewBox="0 0 20 20">
             <rect x="3" y="3.5" width="6" height="6" rx="1.4" />
             <rect x="11" y="3.5" width="6" height="6" rx="1.4" />
             <rect x="3" y="11" width="6" height="6" rx="1.4" />
             <rect x="11" y="11" width="6" height="6" rx="1.4" />
-          </svg>
+          </svg></span>
           <span data-t="nav.catalog">Catalogue</span>
         </button>
 
@@ -64,10 +68,10 @@
              « qu'attend-on de moi ? ». Le tri par type reste, mais à
              l'intérieur, où il coûte un clic au lieu d'un choix permanent. -->
         <button type="button" data-view="tickets">
-          <svg viewBox="0 0 20 20" aria-hidden="true">
+          <span class="wsnav-tuile t-vert" aria-hidden="true"><svg viewBox="0 0 20 20">
             <path d="M3 6.5h14v3a1.6 1.6 0 0 0 0 3v3H3v-3a1.6 1.6 0 0 0 0-3z" />
             <path d="M12 6.5v10" />
-          </svg>
+          </svg></span>
           <span data-t="nav.tickets">Tickets</span>
           <span class="wsnav-badge" id="ws-tickets-badge" hidden>0</span>
         </button>
@@ -98,12 +102,32 @@
 
         <!-- ============================================ AUJOURD'HUI ====== -->
         <section id="view-home">
-          <header class="wshead">
+          <header class="wshead home-tete">
+            <span class="home-date" id="home-date"></span>
             <h1 data-t="home.title">Aujourd'hui</h1>
           </header>
+          <!-- Les commandes en retard d'abord : elles existent pour
+               interrompre ce qu'on faisait. -->
+          <div class="home-retard" id="home-retard" role="status" hidden></div>
+          <section class="home-hero" id="home-hero" aria-labelledby="home-hero-t"></section>
           <div class="home-tuiles" id="home-tuiles"></div>
-          <h2 class="ws-sub" data-t="home.oldest">Les plus anciennes à répondre</h2>
-          <div id="home-liste"></div>
+          <div class="home-cols">
+            <section class="home-col" aria-labelledby="home-rep-t">
+              <div class="home-h">
+                <h2 id="home-rep-t" data-t="home.answerTitle">À répondre</h2>
+                <span data-t="home.oldestFirst">les plus anciennes d'abord</span>
+                <button type="button" class="home-lien" id="home-tous" data-t="home.allTickets">Tous les tickets</button>
+              </div>
+              <div id="home-liste"></div>
+            </section>
+            <section class="home-col home-col-lots" id="home-col-lots" aria-labelledby="home-lots-t" hidden>
+              <div class="home-h">
+                <h2 id="home-lots-t" data-t="lots.title">Lots reçus</h2>
+                <span data-t="home.lotsHint">les fichiers du marchand</span>
+              </div>
+              <div id="home-lots"></div>
+            </section>
+          </div>
         </section>
 
         <section id="view-orders" hidden>
