@@ -3,14 +3,14 @@
 //
 // À lancer sur votre ordinateur, pas sur le serveur :
 //   1. npm install -g @shopify/cli
-//   2. shopify store auth --store fresco-marche.myshopify.com --scopes read_products,write_products
+//   2. shopify store auth --store qi1fj4-ip.myshopify.com --scopes read_products,write_products
 //      (le navigateur s'ouvre : cliquez « Installer » ou « Autoriser »)
 //   3. node enregistrer-rayons.mjs            -> enregistre les 25 rayons
 //      node enregistrer-rayons.mjs --essai    -> affiche seulement ce qui serait enregistré
 
 import { execFileSync } from "node:child_process";
 
-const BOUTIQUE = "fresco-marche.myshopify.com";
+const BOUTIQUE = "qi1fj4-ip.myshopify.com"; // adresse permanente de la boutique Fresco (frescomarche.fr)
 const ESSAI = process.argv.includes("--essai");
 
 const MUTATION = `mutation EnregistrerRayon($input: CollectionInput!) {

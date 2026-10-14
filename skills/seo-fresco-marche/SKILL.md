@@ -43,7 +43,7 @@ Rachid pilote le projet. Ses règles passent avant tout le reste :
 
 ## Le site au 13/10/2026
 
-- **Shopify** plan Basic, boutique `fresco-marche.myshopify.com`. `www` et `http` redirigent vers `https://frescomarche.fr/`.
+- **Shopify** plan Basic. Adresse permanente de la boutique : `qi1fj4-ip.myshopify.com` (à utiliser pour `shopify store auth` et `store execute`) ; `fresco-marche.myshopify.com` est un alias accepté par les commandes `theme`. `www` et `http` redirigent vers `https://frescomarche.fr/`.
 - **Catalogue** : une page sur mesure, `/pages/catalogue` (section `fm-catalogue-pro.liquid`), filtrée par `?rayon=` et `&sous-categorie=`, dont le canonical pointe vers `/pages/catalogue`. Les produits s'y chargent surtout en JavaScript.
 - **Rayons** : 92 collections Shopify (`/collections/fruits`, `/collections/legumes`, `/collections/produits-du-monde`…), présentes dans le sitemap mais liées depuis aucune page.
 - **Produits** : 587 fiches publiées, prix masqués (« Tarif réservé aux professionnels »). Le prix reste lisible dans le code source de la page.
@@ -56,7 +56,7 @@ Rachid pilote le projet. Ses règles passent avant tout le reste :
 - **Accès aux données de la boutique** : `shopify store auth` (CLI) renvoie vers une adresse locale (127.0.0.1) injoignable depuis une session cloud : pour modifier produits et rayons, passer par le connecteur Shopify.
 - **Accès au thème** : le CLI Shopify (`shopify theme …`, connexion par code dans le navigateur) fonctionne depuis une session cloud. Il faut un pseudo-terminal (`script`) et un faux `xdg-open`. Après un `theme duplicate`, vérifie que `config/settings_schema.json` n'est pas vide sur la copie.
 
-- **Textes des rayons validés par Rachid le 14/10/2026, pas encore enregistrés** : `fresco-marche/textes-rayons.json` (25 rayons : `id`, `descriptionHtml`, `seo.title`, `seo.description`, et l'« avant » pour revenir en arrière). À enregistrer avec la mutation Admin `collectionUpdate` (champs `descriptionHtml` et `seo`) par le connecteur Shopify, par `node fresco-marche/enregistrer-rayons.mjs` lancé sur l'ordinateur de Rachid après `shopify store auth`, ou à la main (guide dans `fresco-marche/textes-rayons.xlsx`). Tous les rayons affichaient la note interne « Collection automatique … Parent : … » ; 52 autres rayons l'affichent encore.
+- **Textes des rayons validés par Rachid le 14/10/2026, pas encore enregistrés** : `fresco-marche/textes-rayons.json` (25 rayons : `id`, `descriptionHtml`, `seo.title`, `seo.description`, et l'« avant » pour revenir en arrière). À enregistrer avec la mutation Admin `collectionUpdate` (champs `descriptionHtml` et `seo`) par le connecteur Shopify, par `node fresco-marche/enregistrer-rayons.mjs` lancé sur l'ordinateur de Rachid après `shopify store auth --store qi1fj4-ip.myshopify.com`, ou à la main (guide dans `fresco-marche/textes-rayons.xlsx`). Tous les rayons affichaient la note interne « Collection automatique … Parent : … » ; 52 autres rayons l'affichent encore.
 - **Fuite de prix** : le filtre de prix des pages rayon (appli Search & Discovery) montre les prix réservés aux pros ; filtres libellés en espagnol (« Disponibilidad », « Precio »).
 - **Halal au 13/10/2026** : tout le catalogue est halal. 15 produits ont « halal » dans leur nom, 15 autres fiches disent « Certifié halal » dans leur description. Aucun organisme de certification n'est nommé sur le site.
 
