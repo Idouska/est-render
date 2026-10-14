@@ -976,86 +976,76 @@
 
         <div class="kpis ov-kpis" id="ov-kpis"></div>
 
-        <div class="cockpit">
-          <div class="cockpit-main">
-            <!-- Le bloc central. La file entière vit dans « SAV client » ;
-                 ici on ne montre que ce qui presse, dans l'ordre de
-                 l'échéance. -->
-            <section class="panel" aria-labelledby="ov-prio-t">
-              <div class="panel-head">
-                <span class="panel-ico" data-ico="pin" aria-hidden="true"></span><span class="panel-title" id="ov-prio-t">À traiter en priorité</span>
-                <span class="pill-count" id="ov-prio-n" hidden></span>
-                <button class="btn btn-small" id="ov-prio-all" type="button">Voir tout</button>
-              </div>
-              <div class="table-wrap ov-wrap">
-                <table class="grid ov-prio">
-                  <thead>
-                    <tr>
-                      <th scope="col">Client</th>
-                      <th scope="col">Temps</th>
-                      <th scope="col">Sujet</th>
-                      <th scope="col">Statut</th>
-                      <th scope="col">Commande</th>
-                      <th scope="col">Échéance</th>
-                      <th scope="col" aria-label="Ouvrir le message"></th>
-                    </tr>
-                  </thead>
-                  <tbody id="ov-prio-rows"></tbody>
-                </table>
-              </div>
-            </section>
+        <!-- Trois rangées, comme dans la maquette : ce qui attend et ce qui
+             alerte ; la semaine et de quoi on parle ; ce qui s'est passé et
+             comment l'équipe tient. Chaque bloc a son titre au-dessus et son
+             contenu dans un groupe blanc, à la manière des Réglages. -->
+        <div class="ov-rangee">
+          <!-- Le bloc central. La file entière vit dans « SAV client » ; ici on
+               ne montre que ce qui presse, dans l'ordre de l'échéance. -->
+          <section class="panel ov-large" aria-labelledby="ov-prio-t">
+            <div class="panel-head">
+              <span class="panel-title" id="ov-prio-t">À traiter en priorité</span>
+              <span class="pill-count" id="ov-prio-n" hidden></span>
+              <button class="ov-lien" id="ov-prio-all" type="button">Tout afficher</button>
+            </div>
+            <ul class="ov-prio-liste" id="ov-prio-rows"></ul>
+          </section>
 
-            <section class="panel" aria-labelledby="ov-act-t">
-              <div class="panel-head">
-                <span class="panel-ico" data-ico="clock" aria-hidden="true"></span><span class="panel-title" id="ov-act-t">Dernières actions</span>
-                <button class="btn btn-small" id="ov-act-all" type="button">Voir tout</button>
-              </div>
-              <ul class="journal ov-fil" id="ov-audit"></ul>
-            </section>
+          <!-- Ce qui doit alerter. Chaque ligne mène au filtre correspondant :
+               un compteur qu'on ne peut pas ouvrir ne sert qu'à inquiéter. -->
+          <section class="panel ov-etroit" aria-labelledby="ov-risk-t">
+            <div class="panel-head">
+              <span class="panel-title" id="ov-risk-t">Attention requise</span>
+            </div>
+            <ul class="statlist" id="ov-risk"></ul>
+            <p class="ov-note">Un chiffre en gras réclame un geste ; un clic ouvre la file filtrée.</p>
+          </section>
+        </div>
 
-            <section class="panel" aria-labelledby="ov-trend-t">
-              <div class="panel-head">
-                <span class="panel-ico" data-ico="chart" aria-hidden="true"></span><span class="panel-title" id="ov-trend-t">Tendance 7 jours</span>
-                <span class="ov-legend" aria-hidden="true">
-                  <span class="ov-key ov-key-recu">Reçus</span>
-                  <span class="ov-key ov-key-traite">Traités</span>
-                </span>
-              </div>
-              <div class="card-body" id="ov-trend"></div>
-            </section>
-          </div>
+        <div class="ov-rangee">
+          <section class="panel ov-large" aria-labelledby="ov-trend-t">
+            <div class="panel-head">
+              <span class="panel-title" id="ov-trend-t">Tendance 7 jours</span>
+              <span class="ov-legend" aria-hidden="true">
+                <span class="ov-key ov-key-recu">Reçus</span>
+                <span class="ov-key ov-key-traite">Traités</span>
+              </span>
+            </div>
+            <div class="card-body" id="ov-trend"></div>
+          </section>
 
-          <div class="cockpit-side">
-            <!-- Ce qui doit alerter. Chaque ligne mène au filtre
-                 correspondant : un compteur qu'on ne peut pas ouvrir ne sert
-                 qu'à inquiéter. -->
-            <section class="panel" aria-labelledby="ov-risk-t">
-              <div class="panel-head">
-                <span class="panel-ico" data-ico="shield" aria-hidden="true"></span><span class="panel-title" id="ov-risk-t">Attention requise</span>
-              </div>
-              <ul class="statlist" id="ov-risk"></ul>
-            </section>
+          <section class="panel ov-etroit" aria-labelledby="ov-int-t">
+            <div class="panel-head">
+              <span class="panel-title" id="ov-int-t">Types de demandes</span>
+            </div>
+            <div class="card-body" id="ov-intents"></div>
+          </section>
+        </div>
 
+        <div class="ov-rangee">
+          <section class="panel ov-large" aria-labelledby="ov-act-t">
+            <div class="panel-head">
+              <span class="panel-title" id="ov-act-t">Dernières actions</span>
+              <button class="ov-lien" id="ov-act-all" type="button">Journal complet</button>
+            </div>
+            <ul class="journal ov-fil" id="ov-audit"></ul>
+          </section>
+
+          <div class="ov-etroit ov-pile">
             <section class="panel" aria-labelledby="ov-perf-t">
               <div class="panel-head">
-                <span class="panel-ico" data-ico="bolt" aria-hidden="true"></span><span class="panel-title" id="ov-perf-t">Performance SAV</span>
+                <span class="panel-title" id="ov-perf-t">Performance SAV</span>
               </div>
               <ul class="statlist" id="ov-perf"></ul>
             </section>
 
             <section class="panel" aria-labelledby="ov-ia-t">
               <div class="panel-head">
-                <span class="panel-ico" data-ico="swatch" aria-hidden="true"></span><span class="panel-title" id="ov-ia-t">IA &amp; automatisation</span>
+                <span class="panel-title" id="ov-ia-t">IA et automatisation</span>
                 <span class="hint" id="ov-ia-note"></span>
               </div>
               <ul class="statlist" id="ov-ia"></ul>
-            </section>
-
-            <section class="panel" aria-labelledby="ov-int-t">
-              <div class="panel-head">
-                <span class="panel-ico" data-ico="grid" aria-hidden="true"></span><span class="panel-title" id="ov-int-t">Types de demandes</span>
-              </div>
-              <div class="card-body" id="ov-intents"></div>
             </section>
           </div>
         </div>
