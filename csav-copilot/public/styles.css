@@ -12848,3 +12848,346 @@ progress { accent-color: var(--accent); }
   margin: 0 0 14px;
   filter: drop-shadow(0 6px 12px rgb(11 95 217 / 25%));
 }
+
+/* ==========================================================================
+   BARRE DES MENUS, CENTRE DE CONTRÔLE, SPOTLIGHT
+   ==========================================================================
+
+   D'après la maquette du même nom. À droite de la barre du haut, comme la
+   barre des menus du Mac : les heures, la recherche en capsule, Actualiser,
+   la lune quand « Ne pas déranger » est allumé, et l'icône du Centre de
+   contrôle. Les panneaux sont en verre dépoli — un flou léger, une couleur
+   presque opaque si le navigateur ne floute pas. */
+
+:root {
+  --verre: rgb(246 246 248 / 90%);
+  --verre-bord: rgb(0 0 0 / 14%);
+  --tuile: rgb(255 255 255 / 66%);
+  --tuile-bord: rgb(0 0 0 / 6%);
+  --rond-off: rgb(0 0 0 / 8%);
+}
+[data-theme="dark"] {
+  --verre: rgb(36 36 40 / 90%);
+  --verre-bord: rgb(255 255 255 / 14%);
+  --tuile: rgb(255 255 255 / 10%);
+  --tuile-bord: rgb(255 255 255 / 6%);
+  --rond-off: rgb(255 255 255 / 16%);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root { --verre: rgb(246 246 248 / 98%); }
+  [data-theme="dark"] { --verre: rgb(36 36 40 / 98%); }
+}
+
+/* La recherche de la barre du haut : une capsule. */
+.head .head-search { border-radius: 15px; }
+
+.head-lune {
+  flex: none;
+  width: 24px;
+  height: 30px;
+  color: #5e5ce6;
+  display: grid;
+  place-items: center;
+}
+.head-lune[hidden] { display: none; }
+.head-lune svg { width: 15px; height: 15px; }
+
+.head-cc {
+  flex: none;
+  width: 32px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.head-cc svg { width: 18px; height: 18px; }
+.head-cc:hover,
+.head-cc[aria-expanded="true"] { background: color-mix(in srgb, var(--ink) 7%, transparent); }
+
+/* ---------------------------------------------------- Centre de contrôle --- */
+
+.cc {
+  position: fixed;
+  z-index: 96;
+  top: 56px;
+  right: 12px;
+  width: 356px;
+  box-sizing: border-box;
+  padding: 12px;
+  border-radius: 30px;
+  background: var(--verre);
+  -webkit-backdrop-filter: blur(30px) saturate(1.8);
+  backdrop-filter: blur(30px) saturate(1.8);
+  box-shadow: 0 0 0 0.5px var(--verre-bord), 0 24px 50px -16px rgb(0 0 0 / 35%);
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.cc[hidden] { display: none; }
+.cc-col { grid-column: span 2; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+
+.cc-tuile {
+  position: relative;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 58px;
+  padding: 0 10px;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 29px;
+  background: var(--tuile);
+  box-shadow: inset 0 0 0 0.5px var(--tuile-bord);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cc-large { grid-column: span 2; }
+.cc-tuile[aria-disabled="true"] { opacity: 0.55; cursor: default; }
+.cc-rond {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--rond-off);
+  color: var(--ink-mute);
+  display: grid;
+  place-items: center;
+}
+.cc-rond svg { width: 18px; height: 18px; }
+/* Allumée : le rond blanc, le symbole en couleur — comme le Wi-Fi. */
+.cc-on .cc-rond { background: #fff; color: var(--accent); }
+.cc-dnd.cc-on .cc-rond { color: #5e5ce6; }
+.cc-test.cc-on .cc-rond { color: #c46a00; }
+/* Branchement en panne : le symbole passe au rouge. */
+.cc-alerte .cc-rond { background: #fff; color: #d70015; }
+.cc-txt { min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
+.cc-txt span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Le titre passe sur deux lignes plutôt que d'être coupé — « Ne pas /
+   déranger », comme sur le Mac. */
+.cc-txt b {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.15;
+}
+.cc-txt span { font-size: 11.5px; color: var(--ink-mute); }
+/* La case de l'actualisation reste dans la tuile, invisible : c'est elle que
+   le tour automatique lit. */
+.cc-case { position: absolute; width: 1px; height: 1px; margin: 0; opacity: 0; pointer-events: none; }
+.cc-tuile:has(.cc-case:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.cc-jour {
+  grid-column: span 2;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 14px 14px 13px;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 26px;
+  background: var(--tuile);
+  box-shadow: inset 0 0 0 0.5px var(--tuile-bord);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cc-jour-tete { font-size: 11.5px; font-weight: 600; color: var(--ink-mute); }
+.cc-jour-chiffre { display: flex; flex-direction: column; }
+.cc-jour-chiffre b { font-size: 34px; font-weight: 650; line-height: 1; letter-spacing: -0.02em; }
+.cc-jour-chiffre span { font-size: 12.5px; font-weight: 600; }
+.cc-jour-pied { display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; color: var(--ink-mute); }
+
+.cc-bouton {
+  aspect-ratio: 1;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--tuile);
+  box-shadow: inset 0 0 0 0.5px var(--tuile-bord);
+  color: var(--ink);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.cc-bouton svg { width: 22px; height: 22px; }
+.cc-tourne svg { animation: spin 0.8s linear infinite; }
+
+.cc-reglages {
+  grid-column: 1 / -1;
+  justify-self: center;
+  height: 30px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 15px;
+  background: var(--tuile);
+  box-shadow: inset 0 0 0 0.5px var(--tuile-bord);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.cc :is(.cc-tuile, .cc-jour, .cc-bouton, .cc-reglages):hover { box-shadow: inset 0 0 0 0.5px var(--tuile-bord), inset 0 0 0 100px rgb(127 127 127 / 7%); }
+.cc :is(.cc-tuile, .cc-jour, .cc-bouton, .cc-reglages):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+@media (max-width: 700px) {
+  .cc { top: 8px; left: 8px; right: 8px; width: auto; }
+}
+
+/* ------------------------------------------------------------- Spotlight --- */
+
+/* Pas de voile : Spotlight flotte au-dessus de ce qu'on faisait. */
+.pal { background: transparent; padding: 14vh 20px 20px; }
+.pal-box {
+  width: min(884px, 100%);
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pal-tete { display: flex; align-items: center; gap: 10px; }
+.pal-champ {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 58px;
+  padding: 0 20px;
+  box-sizing: border-box;
+  border-radius: 29px;
+  background: var(--verre);
+  -webkit-backdrop-filter: blur(30px) saturate(1.8);
+  backdrop-filter: blur(30px) saturate(1.8);
+  box-shadow: 0 0 0 0.5px var(--verre-bord), 0 18px 40px -14px rgb(0 0 0 / 30%);
+  color: var(--ink-mute);
+  cursor: text;
+}
+.pal-champ > svg { flex: none; width: 22px; height: 22px; }
+.pal-box .pal-champ input {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  font-size: 21px;
+  color: var(--ink);
+}
+.pal-box .pal-champ input::placeholder { color: var(--ink-mute); }
+.pal-jeton {
+  flex: none;
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent-ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.pal-jeton[hidden] { display: none; }
+.pal-portees { display: flex; gap: 10px; flex: none; }
+.pal-portee {
+  width: 58px;
+  height: 58px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--verre);
+  -webkit-backdrop-filter: blur(30px) saturate(1.8);
+  backdrop-filter: blur(30px) saturate(1.8);
+  box-shadow: 0 0 0 0.5px var(--verre-bord), 0 18px 40px -14px rgb(0 0 0 / 30%);
+  color: var(--ink);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.pal-portee svg { width: 22px; height: 22px; }
+.pal-portee[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
+
+.pal-resultats {
+  width: calc(100% - 4 * 68px);
+  box-sizing: border-box;
+  padding: 8px;
+  border-radius: 24px;
+  background: var(--verre);
+  -webkit-backdrop-filter: blur(30px) saturate(1.8);
+  backdrop-filter: blur(30px) saturate(1.8);
+  box-shadow: 0 0 0 0.5px var(--verre-bord), 0 24px 50px -16px rgb(0 0 0 / 32%);
+}
+.pal-list { padding: 0; max-height: 52vh; }
+.pal-groupe { margin: 8px 10px 4px; font-size: 11.5px; font-weight: 600; color: var(--ink-mute); list-style: none; }
+.pal-item {
+  align-items: center;
+  gap: 11px;
+  min-height: 42px;
+  padding: 6px 10px;
+  border-radius: 11px;
+  font-size: 14px;
+}
+.pal-item:hover { background: none; }
+.pal-item[aria-selected='true'] { background: var(--accent); color: var(--on-accent); font-weight: inherit; }
+.pal-vignette {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 650;
+}
+.pal-vignette svg { width: 17px; height: 17px; }
+.pal-v-message,
+.pal-v-client { border-radius: 50%; background: linear-gradient(180deg, #a1a1a6, #7c7c80); }
+.pal-v-commande { background: linear-gradient(180deg, #ffb340, #e07b00); }
+.pal-v-ecran { background: linear-gradient(180deg, #4aa3ff, #0b5fd9); }
+.pal-v-action { background: linear-gradient(180deg, #6e6e73, #3a3a3c); }
+.pal-meilleur { min-height: 54px; }
+.pal-meilleur .pal-vignette { width: 40px; height: 40px; font-size: 14px; }
+.pal-meilleur .pal-txt b { font-size: 15px; }
+.pal-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.pal-txt b,
+.pal-txt small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pal-txt b { font-weight: 600; }
+.pal-item .pal-txt small { margin: 0; font-size: 12.5px; color: inherit; opacity: 0.75; }
+.pal-meta { font-size: 12px; opacity: 0; }
+.pal-item[aria-selected='true'] .pal-meta { opacity: 0.8; }
+.pal-foot {
+  margin: 6px 4px 0;
+  padding: 8px 10px 4px;
+  border-top: 1px solid var(--line-soft);
+  background: none;
+}
+
+@media (max-width: 760px) {
+  .pal { padding: 10px; }
+  .pal-tete { flex-wrap: wrap; }
+  .pal-champ { flex: 1 1 100%; }
+  .pal-portees { width: 100%; justify-content: space-between; }
+  .pal-portee { width: 52px; height: 52px; }
+  .pal-resultats { width: 100%; }
+}

@@ -170,11 +170,21 @@ let notifEffacement = null;
 const SYMBOLE_CAMION =
   'M2.5 6h11v10h-11zM13.5 9.5h4l3 3.5V16h-7M6.5 19a2 2 0 1 0 0-4a2 2 0 1 0 0 4M17 19a2 2 0 1 0 0-4a2 2 0 1 0 0 4';
 
+function nePasDeranger() {
+  try {
+    return localStorage.getItem('csav.dnd') === '1';
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Annonce une nouvelle. `annonce` : { genre ('message' | 'atelier'),
  * initiales | symbole, titre, ligne, apercu, ouvrir }.
  */
 function annoncer(annonce) {
+  // « Ne pas déranger », allumé depuis le Centre de contrôle : rien ne s'affiche.
+  if (nePasDeranger()) return;
   notifEnCours = [...notifEnCours, annonce].slice(-20);
   dessinerNotif();
   clearTimeout(notifEffacement);
@@ -575,6 +585,197 @@ document.addEventListener('keydown', (event) => {
   ouvrirCompte(false);
   $('compte-btn')?.focus();
 });
+
+/*
+ * Le Centre de contrôle, comme sur le Mac.
+ *
+ * Une icône au bout de la barre du haut ouvre des tuiles : Shopify et Gmail
+ * (branché ou en panne, comme la tuile Wi-Fi), l'envoi automatique, la
+ * journée en un coup d'œil, clair ou sombre, Actualiser, « Ne pas déranger »
+ * (qui coupe les bulles), l'actualisation automatique, le mode test. Ces
+ * réglages étaient éparpillés entre le menu du compte, les Réglages et
+ * Apparence ; on les touche plusieurs fois par jour.
+ *
+ * Les tuiles relisent l'état à chaque ouverture : un réglage changé ailleurs
+ * — dans les Réglages, par un collègue — s'y voit sans recharger.
+ */
+function ouvrirCentre(ouvrir) {
+  const panneau = $('cc');
+  if (!panneau) return;
+  panneau.hidden = !ouvrir;
+  $('cc-btn')?.setAttribute('aria-expanded', String(ouvrir));
+  if (!ouvrir) return;
+  ouvrirCompte(false);
+  if ($('clockpop')) $('clockpop').hidden = true;
+  rendreCentre();
+}
+
+function tuile(id, allumee, sous, { alerte = false, interdite = false } = {}) {
+  const el = $(id);
+  if (!el) return;
+  el.classList.toggle('cc-on', allumee);
+  el.classList.toggle('cc-alerte', alerte);
+  if (el.hasAttribute('aria-pressed')) el.setAttribute('aria-pressed', String(allumee));
+  if (interdite) el.setAttribute('aria-disabled', 'true');
+  else el.removeAttribute('aria-disabled');
+  const ligne = $(`${id}-sous`);
+  if (ligne) ligne.textContent = sous;
+}
+
+function rendreCentre() {
+  const me = state.me;
+  if (!me) return;
+  const reglable = canI('configure');
+
+  const boutique = (me.merchant?.shopDomain ?? '').replace('.myshopify.com', '');
+  tuile(
+    'cc-shopify',
+    Boolean(me.shopify?.connected || me.shopify?.simulated),
+    me.shopify?.simulated ? 'Simulé' : me.shopify?.connected ? `${boutique} · branché` : 'Non connecté',
+    { alerte: !me.shopify?.connected && !me.shopify?.simulated },
+  );
+  tuile(
+    'cc-gmail',
+    Boolean(me.gmail?.connected && me.gmail?.watchActive),
+    me.gmail?.connected
+      ? `${me.gmail.emailAddress}${me.gmail.watchActive ? '' : ' · écoute inactive'}`
+      : 'Non connecté',
+    { alerte: !me.gmail?.connected || !me.gmail?.watchActive },
+  );
+  tuile('cc-envoi', Boolean(me.merchant?.autoSendEnabled), me.merchant?.autoSendEnabled ? 'Activé' : 'Désactivé', {
+    interdite: !reglable,
+  });
+
+  const metriques = state.metrics ?? {};
+  $('cc-jour-n').textContent = String(state.pendingCount ?? '—');
+  const brouillons = metriques.tickets?.DRAFT_READY ?? 0;
+  $('cc-jour-brouillons').textContent = `${brouillons} brouillon${brouillons > 1 ? 's' : ''} prêt${brouillons > 1 ? 's' : ''}`;
+  $('cc-jour-delai').textContent = `1re réponse · ${formatDelay(metriques.firstReplySeconds)}`;
+
+  const sombre = document.documentElement.getAttribute('data-theme') === 'dark';
+  const apparence = sombre ? 'Passer en clair' : 'Passer en sombre';
+  $('cc-apparence').setAttribute('aria-label', apparence);
+  $('cc-apparence').title = apparence;
+
+  tuile('cc-dnd', nePasDeranger(), nePasDeranger() ? 'Oui · bulles coupées' : 'Non');
+  const auto = $('auto-refresh').checked;
+  $('cc-actu-sous').textContent = auto ? 'Auto · 20 s' : 'À la main';
+  $('auto-refresh').closest('.cc-tuile')?.classList.toggle('cc-on', auto);
+  tuile('cc-test', Boolean(me.merchant?.testMode), me.merchant?.testMode ? 'Rien ne sort' : 'Non', {
+    interdite: !reglable,
+  });
+}
+
+function rendreLune() {
+  const lune = $('head-lune');
+  if (lune) lune.hidden = !nePasDeranger();
+}
+
+/** Un réglage du marchand, basculé d'une tuile — le même chemin que les Réglages. */
+async function basculerReglage(cle, actif, message) {
+  if (!canI('configure')) {
+    toast('Seul un propriétaire ou un administrateur peut changer ce réglage.', true);
+    return false;
+  }
+  try {
+    await api('/api/settings', { method: 'PATCH', body: JSON.stringify({ [cle]: actif }) });
+    state.me.merchant[cle] = actif;
+    toast(message);
+    return true;
+  } catch (error) {
+    toast(error.message, true);
+    return false;
+  }
+}
+
+$('cc-btn')?.addEventListener('click', (event) => {
+  event.stopPropagation();
+  ouvrirCentre($('cc').hidden);
+});
+
+for (const id of ['cc-shopify', 'cc-gmail']) {
+  $(id)?.addEventListener('click', () => {
+    ouvrirCentre(false);
+    setView('settings');
+    document.querySelector('[data-reg="connexions"]')?.click();
+  });
+}
+
+$('cc-envoi')?.addEventListener('click', async () => {
+  const actif = !state.me?.merchant?.autoSendEnabled;
+  if (!(await basculerReglage('autoSendEnabled', actif, actif ? 'Envoi automatique activé.' : 'Envoi automatique coupé.'))) return;
+  if ($('set-autosend')) $('set-autosend').checked = actif;
+  renderMe();
+  rendreCentre();
+});
+
+$('cc-jour')?.addEventListener('click', () => {
+  ouvrirCentre(false);
+  setView('tickets');
+});
+
+$('cc-apparence')?.addEventListener('click', () => {
+  // On inverse ce qu'on voit, comme la commande de la palette.
+  const sombre = document.documentElement.getAttribute('data-theme') === 'dark';
+  $('theme-seg')?.querySelector(`[data-theme-choix="${sombre ? 'light' : 'dark'}"]`)?.click();
+  rendreCentre();
+});
+
+$('cc-actualiser')?.addEventListener('click', async () => {
+  const bouton = $('cc-actualiser');
+  bouton.classList.add('cc-tourne');
+  changesCountAt = 0;
+  try {
+    await Promise.all([refreshCurrent(), refreshChangesCount()]);
+  } finally {
+    bouton.classList.remove('cc-tourne');
+    rendreCentre();
+  }
+});
+
+$('cc-dnd')?.addEventListener('click', () => {
+  const actif = !nePasDeranger();
+  try {
+    localStorage.setItem('csav.dnd', actif ? '1' : '0');
+  } catch {
+    // Sans stockage, le réglage ne survit pas au rechargement : tant pis.
+  }
+  if (actif) fermerNotif();
+  rendreLune();
+  rendreCentre();
+});
+
+$('auto-refresh')?.addEventListener('change', () => rendreCentre());
+
+$('cc-test')?.addEventListener('click', async () => {
+  const actif = !state.me?.merchant?.testMode;
+  const message = actif
+    ? 'Mode test activé : rien ne sortira.'
+    : 'Mode test désactivé : les actions sont de nouveau réelles.';
+  if (!(await basculerReglage('testMode', actif, message))) return;
+  $('test-notice').hidden = !actif;
+  if ($('set-testmode')) $('set-testmode').checked = actif;
+  if ($('reg-test-pastille')) $('reg-test-pastille').hidden = !actif;
+  rendreCentre();
+});
+
+$('cc-reglages')?.addEventListener('click', () => {
+  ouvrirCentre(false);
+  setView('settings');
+});
+
+document.addEventListener('click', (event) => {
+  if ($('cc')?.hidden || event.target.closest('#cc, #cc-btn')) return;
+  ouvrirCentre(false);
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape' || $('cc')?.hidden) return;
+  ouvrirCentre(false);
+  $('cc-btn')?.focus();
+});
+
+rendreLune();
 
 applySideFold();
 
@@ -1120,6 +1321,7 @@ function paintKpiIcons(hote) {
 async function loadMetrics() {
   const metrics = await api('/api/metrics');
   const counts = metrics.tickets ?? {};
+  state.metrics = metrics;
 
   paintKpiIcons(document);
 
@@ -9674,7 +9876,10 @@ function toggleClockPop(force) {
 
   const show = force ?? pop.hidden;
   pop.hidden = !show;
-  if (show) renderClockPop();
+  if (show) {
+    ouvrirCentre(false);
+    renderClockPop();
+  }
 }
 
 $('clocks')?.addEventListener('click', () => toggleClockPop());
@@ -15834,16 +16039,41 @@ function buildCommands() {
   return list;
 }
 
+/*
+ * La recherche, façon Spotlight.
+ *
+ * Une capsule et quatre boutons ronds — Messages, Commandes, Clients,
+ * Actions — pour ne chercher que dans un genre. Les résultats se rangent par
+ * genre, le meilleur en tête. Les messages viennent de notre base, à la
+ * frappe ; les clients et les commandes se déduisent de ces messages, ou du
+ * texte tapé (un numéro, une adresse) — pas d'appel à Shopify par lettre.
+ * Sans rien taper : les messages récents et les écrans courants.
+ */
 let paletteItems = [];
 let paletteIndex = 0;
+let palettePortee = null;
+let paletteMessages = [];
+let paletteMinuteur = null;
+let paletteTour = 0;
+
+const PAL_PORTEES = { message: 'Messages', commande: 'Commandes', client: 'Clients', action: 'Actions' };
+const PAL_SYMBOLES = {
+  commande: 'M5 8h14l-1 12H6zM9 8V6.5a3 3 0 0 1 6 0V8',
+  ecran: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',
+  action: 'M13 3 4 14h7l-1 7 9-11h-7z',
+};
 
 function openPalette() {
   paletteItems = buildCommands();
   paletteIndex = 0;
+  palettePortee = null;
+  paletteMessages = [];
+  ouvrirCentre(false);
 
   $('pal').hidden = false;
   $('pal-input').value = '';
   $('pal-input').focus();
+  rendrePortee();
   renderPalette('');
 }
 
@@ -15868,51 +16098,258 @@ function fuzzyMatch(needle, haystack) {
   return true;
 }
 
-function renderPalette(query) {
-  const matches = paletteItems.filter((item) => fuzzyMatch(query, item.label));
+/** Ouvre un écran de liste, filtré sur le texte tapé. */
+function chercherDans(vue, terme) {
+  if (vue === 'orders') {
+    state.orders.q = terme;
+    $('orders-q').value = terme;
+    setView('orders');
+    void loadOrders({ reset: true });
+  } else if (vue === 'customers') {
+    state.customers.q = terme;
+    $('customers-q').value = terme;
+    setView('customers');
+    void loadCustomers({ reset: true });
+  } else {
+    state.queue.q = terme;
+    renderQueueTerm();
+    setView('tickets');
+    void loadQueue();
+  }
+}
 
-  // Le texte tapé ne correspond à aucune commande : c'est une recherche.
-  // La proposer plutôt qu'un « aucune commande » — la palette ne doit jamais
-  // être un cul-de-sac, et c'est le même routage que la barre latérale
-  // (numéro de commande, email, texte libre).
-  if (query && matches.length === 0) {
-    matches.push({
-      label: `Chercher « ${query} »`,
-      hint: 'Commande, client ou texte libre',
-      run: () => routeSearch(query),
-    });
+function ligneMessage(ticket) {
+  const nom = ticket.customerName ?? ticket.customerEmail ?? 'Client';
+  return {
+    genre: 'message',
+    titre: ticketTitle(ticket),
+    sous: `${nom} · ${dayOrDateTime(ticket.lastMessageAt)}`,
+    initiales: initials(nom),
+    run: () => {
+      setView('tickets');
+      void selectTicket(ticket.id);
+    },
+  };
+}
+
+function ligneEcran(vue) {
+  return { genre: 'ecran', titre: VIEW_META[vue].label, sous: 'Écran', run: () => setView(vue) };
+}
+
+/** Sans accents ni capitales : « Reglages » trouve « Réglages ». */
+function plat(texte) {
+  return String(texte ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f\u200b]/g, '')
+    .toLowerCase();
+}
+
+/** Les sections affichées pour ce texte et ce filtre : [titre, lignes][]. */
+function sectionsPalette(query) {
+  const q = query.trim();
+  const portee = palettePortee;
+  const voir = (genre) => !portee || portee === genre;
+
+  if (!q && !portee) {
+    const recents = (state.tickets ?? []).slice(0, 3).map(ligneMessage);
+    const ecrans = ['tickets', 'orders', 'customers', 'settings'].filter((v) => VIEW_META[v]).map(ligneEcran);
+    return [
+      ...(recents.length ? [['Récents', recents]] : []),
+      ['Écrans', ecrans],
+    ];
   }
 
+  const sections = [];
+
+  if (voir('message')) {
+    const lignes = paletteMessages.slice(0, portee ? 8 : 4).map(ligneMessage);
+    if (q) {
+      lignes.push({
+        genre: 'message',
+        titre: `Chercher « ${q} » dans les messages`,
+        sous: 'SAV client',
+        initiales: '…',
+        run: () => chercherDans('tickets', q),
+      });
+    }
+    if (lignes.length) sections.push(['Messages', lignes]);
+  }
+
+  if (voir('commande') && q) {
+    const lignes = [];
+    const vues = new Set();
+    if (/^#?\d{2,}$/.test(q)) {
+      const numero = q.startsWith('#') ? q : `#${q}`;
+      vues.add(numero);
+      lignes.push({ genre: 'commande', titre: `Commande ${numero}`, sous: 'Ouvrir dans Commandes', run: () => routeSearch(numero) });
+    }
+    for (const ticket of paletteMessages) {
+      if (!ticket.orderName || vues.has(ticket.orderName)) continue;
+      vues.add(ticket.orderName);
+      lignes.push({
+        genre: 'commande',
+        titre: `Commande ${ticket.orderName}`,
+        sous: ticket.customerName ?? ticket.customerEmail ?? '',
+        run: () => routeSearch(ticket.orderName),
+      });
+    }
+    if (portee === 'commande' && !lignes.length) {
+      lignes.push({ genre: 'commande', titre: `Chercher « ${q} » dans les commandes`, sous: 'Commandes', run: () => chercherDans('orders', q) });
+    }
+    if (lignes.length) sections.push(['Commandes', lignes.slice(0, portee ? 8 : 3)]);
+  }
+
+  if (voir('client') && q) {
+    const lignes = [];
+    if (q.includes('@')) {
+      lignes.push({ genre: 'client', titre: q, sous: 'Ouvrir dans Clients', initiales: initials(q), run: () => chercherDans('customers', q) });
+    }
+    const vus = new Set();
+    for (const ticket of paletteMessages) {
+      const email = ticket.customerEmail;
+      if (!email || vus.has(email) || email === q) continue;
+      vus.add(email);
+      const nom = ticket.customerName ?? email;
+      lignes.push({ genre: 'client', titre: nom, sous: email, initiales: initials(nom), run: () => chercherDans('customers', email) });
+    }
+    if (portee === 'client' && !lignes.length) {
+      lignes.push({ genre: 'client', titre: `Chercher « ${q} » dans les clients`, sous: 'Clients', initiales: '…', run: () => chercherDans('customers', q) });
+    }
+    if (lignes.length) sections.push(['Clients', lignes.slice(0, portee ? 8 : 3)]);
+  }
+
+  // Dans une recherche mêlée, les écrans et les actions se trouvent par des
+  // mots, pas par des lettres éparses : « lam » ne doit pas proposer « Mettre
+  // en veille ». Le filtre « Actions » garde la recherche souple.
+  const contient = (texte) => plat(texte).includes(plat(q));
+  if (!portee && q) {
+    const ecrans = VIEWS.filter((v) => !VIEW_META[v].hidden && contient(VIEW_META[v].label)).map(ligneEcran);
+    if (ecrans.length) sections.push(['Écrans', ecrans.slice(0, 4)]);
+  }
+
+  if (voir('action')) {
+    const actions = paletteItems
+      .filter((item) => item.hint !== 'Navigation' && (portee ? fuzzyMatch(q, `${item.label} ${item.hint}`) : contient(`${item.label} ${item.hint}`)))
+      .map((item) => ({ genre: 'action', titre: item.label, sous: item.hint, run: item.run }));
+    if (actions.length) sections.push(['Actions', actions.slice(0, portee ? 12 : 3)]);
+  }
+
+  // Le meilleur résultat en tête : le premier qui n'est pas une simple
+  // relance de recherche.
+  if (q && !portee) {
+    const meilleur = sections.flatMap(([, lignes]) => lignes).find((l) => !l.titre.startsWith('Chercher «'));
+    if (meilleur) {
+      for (const section of sections) section[1] = section[1].filter((l) => l !== meilleur);
+      return [['Meilleur résultat', [{ ...meilleur, meilleur: true }]], ...sections.filter(([, l]) => l.length)];
+    }
+  }
+  if (!sections.length && q) {
+    return [['Rechercher', [{ genre: 'action', titre: `Chercher « ${q} »`, sous: 'Commande, client ou texte libre', run: () => routeSearch(q) }]]];
+  }
+  return sections;
+}
+
+function vignettePalette(ligne) {
+  if (ligne.initiales) return esc(ligne.initiales);
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+    stroke-linejoin="round" aria-hidden="true"><path d="${PAL_SYMBOLES[ligne.genre] ?? PAL_SYMBOLES.action}" /></svg>`;
+}
+
+function renderPalette(query) {
+  const sections = sectionsPalette(query);
+  const matches = sections.flatMap(([, lignes]) => lignes);
   paletteIndex = Math.min(paletteIndex, Math.max(0, matches.length - 1));
 
+  let rang = -1;
   $('pal-list').innerHTML = matches.length
-    ? matches
+    ? sections
         .map(
-          (item, index) => `<li>
-            <button class="pal-item" data-i="${index}" aria-selected="${index === paletteIndex}">
-              <span>${esc(item.label)}</span>
-              <small>${esc(item.hint)}</small>
-            </button>
-          </li>`,
+          ([titre, lignes]) => `<li class="pal-groupe" role="presentation">${esc(titre)}</li>${lignes
+            .map((ligne) => {
+              rang += 1;
+              return `<li><button class="pal-item${ligne.meilleur ? ' pal-meilleur' : ''}" type="button"
+                data-i="${rang}" aria-selected="${rang === paletteIndex}">
+                <span class="pal-vignette pal-v-${ligne.genre}" aria-hidden="true">${vignettePalette(ligne)}</span>
+                <span class="pal-txt"><b>${esc(ligne.titre)}</b><small>${esc(ligne.sous)}</small></span>
+                <span class="pal-meta" aria-hidden="true">↵</span>
+              </button></li>`;
+            })
+            .join('')}`,
         )
         .join('')
-    : '<li class="empty" style="padding:14px">Aucune commande.</li>';
+    : '<li class="empty" style="padding:14px">Aucun résultat.</li>';
 
   $('pal-list')
     .querySelectorAll('.pal-item')
-    .forEach((button) =>
+    .forEach((button) => {
       button.addEventListener('click', () => {
         closePalette();
         matches[Number(button.dataset.i)]?.run();
-      }),
-    );
+      });
+      // Comme dans Spotlight, le survol déplace la sélection.
+      button.addEventListener('mouseenter', () => {
+        paletteIndex = Number(button.dataset.i);
+        $('pal-list')
+          .querySelectorAll('.pal-item')
+          .forEach((autre) => autre.setAttribute('aria-selected', String(autre === button)));
+      });
+    });
 
   $('pal-list')._matches = matches;
 }
 
+/** Les messages qui correspondent, cherchés en base après une courte pause de frappe. */
+function chercherMessagesPalette(query) {
+  clearTimeout(paletteMinuteur);
+  const q = query.trim();
+  if (q.length < 2) {
+    paletteMessages = [];
+    return;
+  }
+  paletteMinuteur = setTimeout(async () => {
+    const tour = ++paletteTour;
+    try {
+      const params = new URLSearchParams({ q, folder: 'all', limit: '8' });
+      if (state.allShops) params.set('scope', 'all');
+      const data = await api(`/api/tickets?${params}`);
+      // Une frappe plus récente a déjà relancé : sa réponse fait foi.
+      if (tour !== paletteTour || $('pal').hidden) return;
+      paletteMessages = data.tickets ?? [];
+      renderPalette($('pal-input').value);
+    } catch {
+      // La recherche en base est un plus : les écrans et actions restent.
+    }
+  }, 200);
+}
+
+function rendrePortee() {
+  const jeton = $('pal-jeton');
+  jeton.hidden = !palettePortee;
+  jeton.textContent = palettePortee ? `${PAL_PORTEES[palettePortee]} ✕` : '';
+  document.querySelectorAll('.pal-portee').forEach((bouton) => {
+    bouton.setAttribute('aria-pressed', String(bouton.dataset.portee === palettePortee));
+  });
+}
+
+function choisirPortee(portee) {
+  palettePortee = portee;
+  paletteIndex = 0;
+  rendrePortee();
+  renderPalette($('pal-input').value);
+  $('pal-input').focus();
+}
+
+document.querySelectorAll('.pal-portee').forEach((bouton) =>
+  bouton.addEventListener('click', () =>
+    choisirPortee(palettePortee === bouton.dataset.portee ? null : bouton.dataset.portee),
+  ),
+);
+$('pal-jeton')?.addEventListener('click', () => choisirPortee(null));
+
 $('pal-input')?.addEventListener('input', (event) => {
   paletteIndex = 0;
-  renderPalette(event.target.value.trim());
+  chercherMessagesPalette(event.target.value);
+  renderPalette(event.target.value);
 });
 
 $('pal-input')?.addEventListener('keydown', (event) => {
@@ -15921,22 +16358,32 @@ $('pal-input')?.addEventListener('keydown', (event) => {
   if (event.key === 'ArrowDown') {
     event.preventDefault();
     paletteIndex = Math.min(matches.length - 1, paletteIndex + 1);
-    renderPalette(event.target.value.trim());
+    renderPalette(event.target.value);
   } else if (event.key === 'ArrowUp') {
     event.preventDefault();
     paletteIndex = Math.max(0, paletteIndex - 1);
-    renderPalette(event.target.value.trim());
+    renderPalette(event.target.value);
   } else if (event.key === 'Enter') {
     event.preventDefault();
     closePalette();
     matches[paletteIndex]?.run();
+  } else if (event.key === 'Backspace' && !event.target.value && palettePortee) {
+    choisirPortee(null);
   } else if (event.key === 'Escape') {
-    closePalette();
+    // Comme Spotlight : Échap efface d'abord, puis ferme.
+    if (event.target.value || palettePortee) {
+      event.target.value = '';
+      paletteMessages = [];
+      choisirPortee(null);
+    } else {
+      closePalette();
+    }
   }
 });
 
+// Un clic hors de la capsule et des résultats referme la recherche.
 $('pal')?.addEventListener('click', (event) => {
-  if (event.target === $('pal')) closePalette();
+  if (!event.target.closest('.pal-tete, .pal-resultats')) closePalette();
 });
 
 /* Tout numéro de suivi de l'application ouvre la même chronologie : la

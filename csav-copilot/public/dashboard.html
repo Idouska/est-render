@@ -95,10 +95,6 @@
               </svg>
             </button>
             <div class="compte-menu" id="compte-menu" role="menu" aria-label="Compte" hidden>
-              <label class="compte-item" title="Recharge l’écran toutes les 20 à 60 secondes">
-                <input type="checkbox" id="auto-refresh" role="menuitemcheckbox" checked />
-                <span>Actualisation auto</span>
-              </label>
               <button class="compte-item" type="button" role="menuitem" data-compte-vue="settings">Réglages</button>
               <hr />
               <button class="compte-item" id="logout" type="button" role="menuitem">Se déconnecter</button>
@@ -180,6 +176,23 @@
                 <span id="refresh-label">Rafraîchir</span>
               </button>
             </div>
+            <!-- La lune ne paraît que si « Ne pas déranger » est allumé, comme
+                 dans la barre des menus du Mac. -->
+            <span class="head-lune" id="head-lune" role="img" aria-label="Ne pas déranger activé"
+              title="Ne pas déranger" hidden>
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" />
+              </svg>
+            </span>
+            <button class="head-cc" id="cc-btn" type="button" aria-label="Centre de contrôle"
+              title="Centre de contrôle" aria-haspopup="dialog" aria-expanded="false" aria-controls="cc">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+                <rect x="3" y="4" width="18" height="6.5" rx="3.25" />
+                <rect x="3" y="13.5" width="18" height="6.5" rx="3.25" />
+                <circle cx="8" cy="7.25" r="1.6" fill="currentColor" />
+                <circle cx="16" cy="16.75" r="1.6" fill="currentColor" />
+              </svg>
+            </button>
           </header>
 
       <!-- Bandeau de simulation de rôle. En haut, pleine largeur, coloré :
@@ -207,12 +220,45 @@
 
       <!-- Palette de commandes (⌘K). Placée hors des écrans : elle doit
            répondre d'où qu'on l'appelle. -->
-      <div class="pal" id="pal" hidden role="dialog" aria-modal="true" aria-label="Commandes">
+      <!-- La recherche, façon Spotlight : une capsule, quatre boutons ronds
+           pour chercher dans un seul genre, des résultats rangés. Elle cherche
+           les messages, les commandes, les clients, les écrans, et lance les
+           actions. -->
+      <div class="pal" id="pal" hidden role="dialog" aria-modal="true" aria-label="Recherche">
         <div class="pal-box">
-          <input id="pal-input" type="text" placeholder="Une commande, un écran…"
-            autocomplete="off" spellcheck="false" />
-          <ul class="pal-list" id="pal-list"></ul>
-          <div class="pal-foot"><kbd>↑</kbd><kbd>↓</kbd> parcourir · <kbd>↵</kbd> exécuter · <kbd>esc</kbd> fermer</div>
+          <div class="pal-tete">
+            <label class="pal-champ">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" aria-hidden="true">
+                <path d="M10.5 17a6.5 6.5 0 1 0 0-13a6.5 6.5 0 1 0 0 13M15.5 15.5 20 20" />
+              </svg>
+              <button class="pal-jeton" id="pal-jeton" type="button" aria-label="Retirer le filtre" hidden></button>
+              <input id="pal-input" type="text" placeholder="Rechercher un client, une commande, un écran…"
+                aria-label="Rechercher" autocomplete="off" spellcheck="false" />
+            </label>
+            <div class="pal-portees" role="group" aria-label="Chercher seulement dans">
+              <button class="pal-portee" type="button" data-portee="message" aria-pressed="false"
+                aria-label="Messages" title="Messages"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 13l3-8h12l3 8v6H3zM3 13h5l1.5 2.5h5L16 13h5" /></svg></button>
+              <button class="pal-portee" type="button" data-portee="commande" aria-pressed="false"
+                aria-label="Commandes" title="Commandes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M5 8h14l-1 12H6zM9 8V6.5a3 3 0 0 1 6 0V8" /></svg></button>
+              <button class="pal-portee" type="button" data-portee="client" aria-pressed="false"
+                aria-label="Clients" title="Clients"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M9 11a3.5 3.5 0 1 0 0-7a3.5 3.5 0 1 0 0 7M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M16 4.5a3.3 3.3 0 0 1 0 6.3M18 14.3c1.8.8 3 2.6 3 4.7" /></svg></button>
+              <button class="pal-portee" type="button" data-portee="action" aria-pressed="false"
+                aria-label="Actions" title="Actions"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M13 3 4 14h7l-1 7 9-11h-7z" /></svg></button>
+            </div>
+          </div>
+          <div class="pal-resultats">
+            <ul class="pal-list" id="pal-list"></ul>
+            <div class="pal-foot"><kbd>↑</kbd><kbd>↓</kbd> parcourir · <kbd>↵</kbd> ouvrir · <kbd>esc</kbd> fermer</div>
+          </div>
         </div>
       </div>
 
@@ -220,6 +266,62 @@
            décalage horaire et état joignable. La barre haute n'en montre que
            l'essentiel numérique. -->
       <div class="clockpop" id="clockpop" hidden></div>
+
+      <!-- Le Centre de contrôle, comme sur le Mac : ce qu'on règle souvent,
+           en tuiles. Ces réglages étaient éparpillés entre le menu du compte,
+           les Réglages et Apparence. -->
+      <div class="cc" id="cc" role="dialog" aria-label="Centre de contrôle" hidden>
+        <div class="cc-col">
+          <button class="cc-tuile" id="cc-shopify" type="button">
+            <span class="cc-rond" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h14l-1 12H6zM9 8V6.5a3 3 0 0 1 6 0V8" /></svg></span>
+            <span class="cc-txt"><b>Shopify</b><span id="cc-shopify-sous">—</span></span>
+          </button>
+          <button class="cc-tuile" id="cc-gmail" type="button">
+            <span class="cc-rond" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18v12H3zM3 7l9 6 9-6" /></svg></span>
+            <span class="cc-txt"><b>Gmail</b><span id="cc-gmail-sous">—</span></span>
+          </button>
+          <button class="cc-tuile" id="cc-envoi" type="button" aria-pressed="false">
+            <span class="cc-rond" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3L3 10.5l7 3 3 7zM10 13.5 21 3" /></svg></span>
+            <span class="cc-txt"><b>Envoi auto</b><span id="cc-envoi-sous">—</span></span>
+          </button>
+        </div>
+        <button class="cc-jour" id="cc-jour" type="button">
+          <span class="cc-jour-tete">Aujourd’hui</span>
+          <span class="cc-jour-chiffre"><b id="cc-jour-n">—</b><span>en attente de vous</span></span>
+          <span class="cc-jour-pied"><span id="cc-jour-brouillons"></span><span id="cc-jour-delai"></span></span>
+        </button>
+        <button class="cc-bouton" id="cc-apparence" type="button" aria-label="Passer en sombre" title="Passer en sombre">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <circle cx="12" cy="12" r="8.5" /><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" />
+          </svg>
+        </button>
+        <button class="cc-bouton" id="cc-actualiser" type="button" aria-label="Actualiser maintenant" title="Actualiser maintenant">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+            stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.4-5.7" /><path d="M20 4v4.5h-4.5" /></svg>
+        </button>
+        <button class="cc-tuile cc-large cc-dnd" id="cc-dnd" type="button" aria-pressed="false">
+          <span class="cc-rond" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" /></svg></span>
+          <span class="cc-txt"><b>Ne pas déranger</b><span id="cc-dnd-sous">Non</span></span>
+        </button>
+        <!-- La case reste celle que lit le tour automatique : la tuile est son
+             étiquette, cliquer la tuile coche la case. -->
+        <label class="cc-tuile cc-large" title="Recharge l’écran toutes les 20 à 60 secondes">
+          <input type="checkbox" id="auto-refresh" class="cc-case" checked />
+          <span class="cc-rond" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 0 1 13.7-5.7L20 8.5M20 4v4.5h-4.5M20 12a8 8 0 0 1-13.7 5.7L4 15.5M4 20v-4.5h4.5" /></svg></span>
+          <span class="cc-txt"><b>Actualisation</b><span id="cc-actu-sous">Auto</span></span>
+        </label>
+        <button class="cc-tuile cc-large cc-test" id="cc-test" type="button" aria-pressed="false">
+          <span class="cc-rond" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4a2 2 0 0 0 1.8-3l-5-9V3" /></svg></span>
+          <span class="cc-txt"><b>Mode test</b><span id="cc-test-sous">Non</span></span>
+        </button>
+        <button class="cc-reglages" id="cc-reglages" type="button">Réglages…</button>
+      </div>
 
       <!-- Mode test : tant qu'il est allumé, ce bandeau reste sur toutes les
            pages. Un marchand qui l'oublierait croirait ses actions réelles. -->

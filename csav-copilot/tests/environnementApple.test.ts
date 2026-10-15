@@ -42,7 +42,7 @@ test('la colonne colle au bord, le compte descend en pied', () => {
   assert.match(css, /@media \(min-width: 1081px\) \{\n  \/\*[^*]*\*\/\n  \.side \{\n    margin: calc\(-1 \* var\(--gouttiere, 8px\)\)/);
   // Le compte et son menu vivent dans la colonne, plus dans la barre du haut.
   const colonne = dashboard.slice(dashboard.indexOf('<aside class="side">'), dashboard.indexOf('</aside>'));
-  for (const id of ['compte-btn', 'me-avatar', 'me-name', 'me-role', 'compte-menu', 'auto-refresh', 'logout']) {
+  for (const id of ['compte-btn', 'me-avatar', 'me-name', 'me-role', 'compte-menu', 'logout']) {
     assert.ok(colonne.includes(`id="${id}"`), id);
   }
   const tete = dashboard.slice(dashboard.indexOf('<header class="head">'), dashboard.indexOf('</header>'));
