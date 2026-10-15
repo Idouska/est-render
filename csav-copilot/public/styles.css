@@ -12962,12 +12962,38 @@ progress { accent-color: var(--accent); }
   place-items: center;
 }
 .cc-rond svg { width: 18px; height: 18px; }
-/* Allumée : le rond blanc, le symbole en couleur — comme le Wi-Fi. */
-.cc-on .cc-rond { background: #fff; color: var(--accent); }
-.cc-dnd.cc-on .cc-rond { color: #5e5ce6; }
-.cc-test.cc-on .cc-rond { color: #c46a00; }
-/* Branchement en panne : le symbole passe au rouge. */
-.cc-alerte .cc-rond { background: #fff; color: #d70015; }
+/* Allumée, chaque tuile prend sa couleur, comme sur l'iPhone et le Mac :
+   bleu pour l'envoi, vert pour l'actualisation, indigo pour Ne pas
+   déranger, orange pour le mode test. Éteinte, elle reste grise. */
+.cc-envoi { --cc-teinte: #0a84ff; }
+.cc-actu { --cc-teinte: #34c759; }
+.cc-dnd { --cc-teinte: #5e5ce6; }
+.cc-test { --cc-teinte: #ff9500; }
+.cc-on .cc-rond { background: var(--cc-teinte, var(--accent)); color: #fff; }
+
+/* Shopify et Gmail : leurs vrais logos, sur un rond blanc. Débranchés, le
+   logo pâlit et une pastille rouge le dit. */
+.cc-marque .cc-rond,
+.cc-marque.cc-on .cc-rond {
+  position: relative;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 14%);
+}
+.cc-marque .cc-rond .marque { width: 22px; height: 22px; }
+.cc-marque:not(.cc-on) .cc-rond .marque { filter: grayscale(1); opacity: 0.6; }
+.cc-alerte .cc-rond::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ff3b30;
+  box-shadow: 0 0 0 2px var(--surface);
+}
+.cc-alerte .cc-txt span { color: #d70015; }
+[data-theme="dark"] .cc-alerte .cc-txt span { color: #ff6961; }
 .cc-txt { min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
 .cc-txt span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Le titre passe sur deux lignes plutôt que d'être coupé — « Ne pas /
@@ -13004,11 +13030,21 @@ progress { accent-color: var(--accent); }
   text-align: left;
   cursor: pointer;
 }
-.cc-jour-tete { font-size: 11.5px; font-weight: 600; color: var(--ink-mute); }
+.cc-jour-tete { display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: var(--ink-mute); }
+.cc-jour-tete img { width: 18px; height: 18px; }
 .cc-jour-chiffre { display: flex; flex-direction: column; }
-.cc-jour-chiffre b { font-size: 34px; font-weight: 650; line-height: 1; letter-spacing: -0.02em; }
+/* Le chiffre en orange quand des messages attendent, en vert quand tout est
+   fait — comme les anneaux d'Activité. */
+.cc-jour-chiffre b { font-size: 34px; font-weight: 650; line-height: 1; letter-spacing: -0.02em; color: #d9480f; }
+.cc-jour-chiffre b.cc-jour-calme { color: #248a3d; }
+[data-theme="dark"] .cc-jour-chiffre b { color: #ff9f0a; }
+[data-theme="dark"] .cc-jour-chiffre b.cc-jour-calme { color: #30d158; }
 .cc-jour-chiffre span { font-size: 12.5px; font-weight: 600; }
-.cc-jour-pied { display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; color: var(--ink-mute); }
+.cc-jour-pied { display: flex; flex-direction: column; gap: 3px; font-size: 11.5px; color: var(--ink-mute); }
+.cc-jour-ligne { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.cc-pastille { flex: none; width: 8px; height: 8px; border-radius: 50%; }
+.cc-p-vert { background: #34c759; }
+.cc-p-bleu { background: #0a84ff; }
 
 .cc-bouton {
   aspect-ratio: 1;
@@ -13023,9 +13059,16 @@ progress { accent-color: var(--accent); }
   cursor: pointer;
 }
 .cc-bouton svg { width: 22px; height: 22px; }
+/* Sombre allumé : le rond s'inverse, comme le réglage du Mac. */
+#cc-apparence[aria-pressed="true"] { background: #fff; color: #1c1c1e; }
+#cc-actualiser { color: #0a84ff; }
 .cc-tourne svg { animation: spin 0.8s linear infinite; }
 
+.cc-reglages svg { width: 14px; height: 14px; color: var(--ink-mute); }
 .cc-reglages {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   grid-column: 1 / -1;
   justify-self: center;
   height: 30px;
