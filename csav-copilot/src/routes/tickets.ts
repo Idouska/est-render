@@ -16,6 +16,7 @@ import { listVariants } from '../services/shopify/catalog.ts';
 import { getOrderById, quoteSearchValue, searchOrders } from '../services/shopify/orders.ts';
 import { QUEUE_SELECT } from './queueFields.ts';
 import { processTicket } from '../services/tickets/process.ts';
+import { signalementDuFil } from '../services/suppliers/signalement.ts';
 import { discardPendingDrafts } from '../services/tickets/discardDrafts.ts';
 import { recordOutbound } from '../services/tickets/outbound.ts';
 import { envoyerBrouillon } from '../services/tickets/envoyerBrouillon.ts';
@@ -456,10 +457,16 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
     });
 
     return reply.send({
-      tickets: tickets.map((ticket) => ({
+      tickets: tickets.map(({ gmailThreadId, ...ticket }) => ({
         ...ticket,
         /** Nombre d'échanges avec ce client, celui-ci compris. */
         threads: threadsByEmail[ticket.customerEmail] ?? 1,
+        /*
+         * Un atelier qui signale un problème n'est pas un client qui écrit.
+         * Sans ce champ, la file le titrait « Autre » au milieu du courrier,
+         * et le marchand ne le retrouvait pas.
+         */
+        signalement: signalementDuFil(gmailThreadId, ticket.customerName),
       })),
       folders: { inbox, archived, drafts, sent },
       counts: { ...counts, ALL: byStatus.reduce((sum, row) => sum + row._count, 0) },
@@ -1705,7 +1712,14 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
       },
     });
 
-    return reply.send({ ticket, order, orderError, readOnly, siblings, changes });
+    return reply.send({
+      ticket: { ...ticket, signalement: signalementDuFil(ticket.gmailThreadId, ticket.customerName) },
+      order,
+      orderError,
+      readOnly,
+      siblings,
+      changes,
+    });
   });
 
   /**

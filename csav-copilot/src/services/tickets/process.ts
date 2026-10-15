@@ -10,6 +10,7 @@ import { discardPendingDrafts } from './discardDrafts.ts';
 import { manuallyAttachedOrderId, matchColumns, matchOrder } from '../matching/orderMatcher.ts';
 import { getShopifyClient } from '../shopify/client.ts';
 import { getOrderById, type OrderSummary } from '../shopify/orders.ts';
+import { signalementDuFil } from '../suppliers/signalement.ts';
 
 /**
  * Traite un ticket de bout en bout : classification, rattachement commande,
@@ -33,6 +34,21 @@ export async function processTicket(merchantId: string, ticketId: string): Promi
 
   if (!ticket) {
     logger.warn({ merchantId, ticketId }, 'Ticket introuvable, traitement abandonné');
+    return;
+  }
+
+  /*
+   * Un signalement d'atelier n'est pas un mail de client.
+   *
+   * Le fil s'ouvre depuis l'espace fournisseur, sans client au bout : le
+   * classer, lui chercher une commande par l'adresse « fournisseur+…@local »
+   * et rédiger une réponse, c'était écrire au fournisseur comme à un client
+   * — et risquer de remplacer la commande qu'il avait citée par celle que le
+   * matcher aurait devinée. Le ticket garde son statut ; c'est le marchand
+   * qui le traite, depuis la page Fournisseur ou depuis la file.
+   */
+  if (signalementDuFil(ticket.gmailThreadId)) {
+    logger.info({ merchantId, ticketId }, 'Signalement d’atelier : pas de traitement par l’IA');
     return;
   }
 

@@ -875,6 +875,18 @@
              carnet de contacts : un chiffre dans la navigation dit qu'il y a
              quelque chose, il faut que l'écran dise quoi. -->
         <div class="sup-activity" id="sup-activity" hidden></div>
+        <!-- Ce que les ateliers ont signalé depuis leur espace : une adresse
+             incomplète, un téléphone faux, un article abîmé. Ces tickets
+             entraient dans SAV client titrés « Autre », au milieu du courrier
+             des clients ; c'est ici que le marchand les cherche. -->
+        <section class="sup-sig" id="sup-sig" hidden aria-labelledby="sup-sig-h">
+          <div class="sup-sig-bar">
+            <h3 class="sup-dem-h" id="sup-sig-h">Signalements de vos fournisseurs <small id="sup-sig-n"></small></h3>
+            <span class="sup-sig-aide">Les articles indisponibles sont dans
+              <button class="linkish" type="button" data-sig-ruptures>Ruptures de stock</button>.</span>
+          </div>
+          <div class="sup-sig-rows" id="sup-sig-rows"></div>
+        </section>
         <div class="browse-bar">
           <span class="browse-count" id="suppliers-count"></span>
           <button class="btn btn-primary" id="sup-new" style="margin-left:auto">

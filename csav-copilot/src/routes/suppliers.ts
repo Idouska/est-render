@@ -15,6 +15,31 @@ import { sendPlainEmail } from '../services/gmail/send.ts';
 import { getShopifyClient } from '../services/shopify/client.ts';
 import { listOrders } from '../services/shopify/orders.ts';
 import { ordersForSupplier } from '../services/suppliers/routing.ts';
+import {
+  PREFIXE_SIGNALEMENT,
+  fournisseurDuFil,
+  noteDuSignalement,
+  signalementDuFil,
+} from '../services/suppliers/signalement.ts';
+
+/**
+ * Les signalements d'atelier que le marchand n'a pas encore classés.
+ *
+ * Hors ruptures : un article indisponible a sa page, « Ruptures de stock »,
+ * avec ses remplacements et sa propre pastille — le compter ici aussi
+ * ferait annoncer deux fois le même dossier. Tout statut ouvert compte, et
+ * pas seulement « à valider » : un signalement que l'IA aurait repris avant
+ * ce correctif ne doit pas sortir du compte sans que personne l'ait traité.
+ */
+function signalementsOuverts(merchantId: string) {
+  return {
+    merchantId,
+    isHistorical: false,
+    gmailThreadId: { startsWith: PREFIXE_SIGNALEMENT },
+    NOT: { gmailThreadId: { endsWith: ':STOCK' } },
+    status: { notIn: ['CLOSED' as const, 'AUTO_SENT' as const] },
+  };
+}
 
 const supplierBody = z.object({
   name: z.string().min(1).max(200),
@@ -517,18 +542,12 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
       // Escalades auxquelles le fournisseur a répondu, pas encore reprises.
       prisma.supplierEscalation.count({ where: { merchantId, status: 'ANSWERED' } }),
       /*
-       * Signalements venus de l'atelier : téléphone incomplet, rupture,
-       * article abîmé. Ils entrent dans la file comme des messages, avec une
-       * adresse d'origine reconnaissable — c'est ce qui permet de les compter
-       * ici sans les confondre avec du courrier client.
+       * Signalements venus de l'atelier : téléphone incomplet, adresse,
+       * article abîmé. Comptés comme la section qui les liste, sur la même
+       * clause : une pastille qui annonce ce que l'écran ne montre pas est
+       * exactement le défaut qui a valu cette section.
        */
-      prisma.ticket.count({
-        where: {
-          merchantId,
-          status: { in: ['NEW', 'NEEDS_REVIEW'] },
-          customerEmail: { startsWith: 'fournisseur+' },
-        },
-      }),
+      prisma.ticket.count({ where: signalementsOuverts(merchantId) }),
       // Demandes auxquelles il a répondu — accord ou refus — et dont je n'ai
       // pas encore pris acte auprès du client.
       prisma.supplierAlert.count({
@@ -541,6 +560,70 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
       answered,
       issues,
       changes,
+    });
+  });
+
+  /**
+   * Ce que les ateliers ont signalé et qui attend le marchand.
+   *
+   * Un atelier qui trouve une adresse incomplète au moment d'emballer ouvre un
+   * ticket depuis son espace. Il entrait dans SAV client titré « Autre », au
+   * milieu du courrier des clients, et la page Fournisseur — où le marchand
+   * le cherche — n'en disait rien. Les plus anciens d'abord : c'est un colis
+   * qui attend sur une table.
+   */
+  app.get('/api/supplier-signalements', async (request, reply) => {
+    const { merchantId } = request.session;
+
+    const tickets = await prisma.ticket.findMany({
+      where: signalementsOuverts(merchantId),
+      orderBy: { createdAt: 'asc' },
+      take: 100,
+      select: {
+        id: true,
+        gmailThreadId: true,
+        customerName: true,
+        orderName: true,
+        shopifyOrderId: true,
+        status: true,
+        createdAt: true,
+        lastMessageAt: true,
+        messages: {
+          where: { direction: 'INBOUND' },
+          orderBy: { receivedAt: 'asc' },
+          take: 1,
+          select: { bodyText: true },
+        },
+      },
+    });
+
+    // Le nom du fournisseur vient de sa fiche : celui du ticket est figé au
+    // jour du signalement, et un atelier renommé depuis serait méconnaissable.
+    const ids = [...new Set(tickets.map((ticket) => fournisseurDuFil(ticket.gmailThreadId)).filter(Boolean))];
+    const fournisseurs = ids.length
+      ? await prisma.supplier.findMany({
+          where: { merchantId, id: { in: ids as string[] } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const nomDe = new Map(fournisseurs.map((fournisseur) => [fournisseur.id, fournisseur.name]));
+
+    return reply.send({
+      signalements: tickets.map((ticket) => {
+        const fournisseurId = fournisseurDuFil(ticket.gmailThreadId);
+        const nom = (fournisseurId && nomDe.get(fournisseurId)) || ticket.customerName;
+        return {
+          id: ticket.id,
+          ...signalementDuFil(ticket.gmailThreadId, nom)!,
+          fournisseurId,
+          orderName: ticket.orderName,
+          shopifyOrderId: ticket.shopifyOrderId,
+          status: ticket.status,
+          note: noteDuSignalement(ticket.messages[0]?.bodyText),
+          createdAt: ticket.createdAt,
+          lastMessageAt: ticket.lastMessageAt,
+        };
+      }),
     });
   });
 

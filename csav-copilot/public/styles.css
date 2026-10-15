@@ -11948,3 +11948,93 @@ progress { accent-color: var(--accent); }
   #view-envoi .envoi-res .btn { min-height: 44px; }
   #view-envoi .envoi-lot summary { min-height: 44px; }
 }
+
+/* ------------------------------------------- signalements des ateliers ---
+   Ce que les ateliers signalent depuis leur espace, sur la page Fournisseur.
+   Une rangée par signalement, comme une ligne des Réglages : le motif en
+   tuile de couleur, la commande, les mots de l'atelier, et les deux gestes. */
+
+.sup-sig { margin-bottom: 18px; }
+.sup-sig-bar { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.sup-sig-bar .sup-dem-h small {
+  display: inline-block;
+  min-width: 18px;
+  margin-left: 4px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--crit-soft);
+  color: var(--crit-ink);
+  font-size: 12px;
+  font-weight: 650;
+  text-align: center;
+}
+.sup-sig-aide { margin-left: auto; font-size: 12.5px; color: var(--ink-mute); }
+
+.sup-sig-rows {
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--e1);
+  overflow: hidden;
+}
+
+.sigc { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; }
+.sigc + .sigc { border-top: 1px solid var(--line-soft); }
+
+.sigc-ico {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.sigc-ico svg { width: 17px; height: 17px; }
+.sigc-ADDRESS { background: var(--warn-soft); color: var(--warn-ink); }
+.sigc-PHONE { background: var(--accent-soft); color: var(--accent-ink); }
+.sigc-DAMAGE { background: var(--crit-soft); color: var(--crit-ink); }
+
+.sigc-main { flex: 1; min-width: 0; }
+.sigc-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sigc-head b { font-size: 14px; font-weight: 650; }
+.sigc-when { font-size: 12px; color: var(--ink-mute); }
+.sigc-when.sigc-vieux { color: var(--crit-ink); font-weight: 600; }
+.sigc-note {
+  margin: 6px 0 0;
+  padding: 7px 11px;
+  border-radius: 4px 12px 12px 12px;
+  background: var(--line-soft);
+  font-size: 13.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.sigc-meta { margin: 6px 0 0; font-size: 12.5px; color: var(--ink-mute); }
+.sigc-meta b { color: var(--ink-soft); font-weight: 600; }
+.sigc-acts { display: flex; gap: 6px; flex: none; align-self: center; }
+
+@media (max-width: 760px) {
+  .sigc { flex-wrap: wrap; }
+  .sigc-acts { width: 100%; padding-left: 44px; }
+  .sigc-acts .btn { flex: 1 1 auto; white-space: nowrap; }
+  .sup-sig-aide { margin-left: 0; }
+}
+
+/* Dans SAV client : l'étiquette qui distingue un atelier d'un client. */
+.queue-four,
+.tp-four {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--warn-soft);
+  color: var(--warn-ink);
+  font-size: 10.5px;
+  font-weight: 650;
+  line-height: 16px;
+  white-space: nowrap;
+}
+.tp-four { border: 0; }
+.sig-acts { display: inline-flex; gap: 6px; margin-top: 9px; }

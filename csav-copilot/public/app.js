@@ -1242,6 +1242,7 @@ async function loadQueue({ append = false } = {}) {
                   : ''
               }
               <span class="queue-who">${esc(ticket.customerName ?? ticket.customerEmail)}</span>
+              ${ticket.signalement ? '<span class="queue-four">Fournisseur</span>' : ''}
               ${ageChip(ticket.lastMessageAt)}
             </span>
 
@@ -1250,7 +1251,7 @@ async function loadQueue({ append = false } = {}) {
               ${
                 // Le numéro n'est répété que s'il manque au titre : avec une
                 // intention, `ticketTitle` l'y écrit déjà.
-                ticket.orderName && !ticket.intent
+                ticket.orderName && !ticket.intent && !ticket.signalement
                   ? `<span class="queue-ord">${esc(ticket.orderName)}</span>`
                   : ''
               }
@@ -1679,11 +1680,13 @@ async function openCustomerSheet(email, displayName) {
           STATUS_LABELS[ticket.status] ?? ticket.status,
         )}</span>
         ${
-          ticket.intent
-            ? `<span class="tag in-${ticket.intent}">${esc(
-                INTENT_LABELS[ticket.intent] ?? ticket.intent,
-              )}</span>`
-            : ''
+          ticket.signalement
+            ? `<span class="tag in-OTHER">${esc(`Signalement · ${ticket.signalement.court}`)}</span>`
+            : ticket.intent
+              ? `<span class="tag in-${ticket.intent}">${esc(
+                  INTENT_LABELS[ticket.intent] ?? ticket.intent,
+                )}</span>`
+              : ''
         }
         <span class="when">${relativeTime(ticket.lastMessageAt)}</span>
       </div>`,
@@ -2038,6 +2041,14 @@ function replySubject(ticket) {
 }
 
 function openCompose(ticket) {
+  /* Un signalement fait sans adresse client connue porte l'adresse de repli
+     de l'atelier, `fournisseur+…@local`. Le mail partirait vers une adresse
+     qui n'existe pas, et l'agent croirait le client prévenu. */
+  if (String(ticket?.customerEmail ?? '').startsWith('fournisseur+')) {
+    toast('Ce signalement vient de l’atelier : écrivez au client depuis sa commande.', true);
+    return;
+  }
+
   const zone = $('compose');
   setComposeOpen(true);
 
@@ -3099,8 +3110,11 @@ async function marqueOuvert(detail, id, { automatique = false } = {}) {
  * déclenche à l'ouverture), pas de commande rattachée, et un ticket sans objet.
  */
 function ticketTitle(ticket) {
-  const intent = ticket.intent ? (INTENT_LABELS[ticket.intent] ?? ticket.intent) : null;
   const order = ticket.orderName ? ` · ${ticket.orderName}` : '';
+  // Un atelier qui signale n'est pas un client : son motif dit ce qu'il y a à
+  // faire, quand « Autre » le perdait au milieu du courrier.
+  if (ticket.signalement) return `Signalement · ${ticket.signalement.court}${order}`;
+  const intent = ticket.intent ? (INTENT_LABELS[ticket.intent] ?? ticket.intent) : null;
 
   if (intent) return `${intent}${order}`;
   // Sans intention, l'objet reste le seul repère — et dire « analyse en
@@ -3149,15 +3163,17 @@ function renderTicketMeta(ticket, order) {
          initials(nom),
        )}</span>
        <button class="linkish" id="d-who">${esc(nom)}</button>
-       <code>${esc(ticket.customerEmail)}</code>
        ${
-         ticket.intent
-           ? `<span class="tp tp-intent">${esc(
-               INTENT_LABELS[ticket.intent] ?? ticket.intent,
-             )}</span>`
-           : ''
+         // L'adresse `fournisseur+…@local` n'existe nulle part : la montrer
+         // laissait croire qu'on pouvait y répondre.
+         ticket.signalement
+           ? `<span class="tp tp-four">Fournisseur</span><span class="tp tp-intent">${esc(ticket.signalement.libelle)}</span>`
+           : `<code>${esc(ticket.customerEmail)}</code>${
+               ticket.intent
+                 ? `<span class="tp tp-intent">${esc(INTENT_LABELS[ticket.intent] ?? ticket.intent)}</span>`
+                 : ''
+             }${confidence}`
        }
-       ${confidence}
      </span>
      <span class="tm-facts">${facts
        .map(([icon, text]) => `<span class="tm-fact">${ico(icon)}${esc(text)}</span>`)
@@ -4570,6 +4586,39 @@ function renderDraft(draft, ticket) {
     return;
   }
 
+  /*
+   * Un signalement d'atelier n'appelle pas de réponse au client rédigée par
+   * l'IA : il n'y a pas de client au bout du fil. On ne lance donc pas
+   * l'analyse à l'ouverture — elle répondait au fournisseur comme à un client.
+   */
+  if (ticket.signalement) {
+    zone.hidden = true;
+    none.hidden = false;
+    $('no-draft-text').innerHTML =
+      `<b>Signalé par ${esc(ticket.signalement.fournisseur ?? 'votre atelier')} depuis son espace.</b><br>` +
+      'Corrigez la commande, puis classez le signalement : l’atelier le verra repris dans son espace.' +
+      `<br><span class="sig-acts">
+         <button class="btn btn-small btn-primary" id="d-sig-done">Traité</button>
+         <button class="btn btn-small" id="d-sig-liste">Tous les signalements</button>
+       </span>`;
+    $('d-sig-done').addEventListener('click', async (event) => {
+      event.currentTarget.disabled = true;
+      try {
+        // La même porte que le raccourci E : le ticket clos passe « Clos »
+        // dans l'espace de l'atelier.
+        await api(`/api/tickets/${ticket.id}/resolve`, { method: 'POST', body: '{}' });
+        toast('Signalement classé — l’atelier le voit comme repris.');
+        await loadQueue();
+        if (state.currentId === ticket.id) void selectTicket(ticket.id, { silent: true });
+      } catch (error) {
+        event.currentTarget.disabled = false;
+        toast(error.message, true);
+      }
+    });
+    $('d-sig-liste').addEventListener('click', () => setView('suppliers'));
+    return;
+  }
+
   if (!draft) {
     zone.hidden = true;
     none.hidden = false;
@@ -5792,7 +5841,9 @@ async function renderSupplierActivity() {
     // Le carnet de contacts reste utilisable sans ce bandeau.
   }
 
-  box.hidden = !activity || activity.total === 0;
+  // Les signalements ont leur section juste en dessous : le bandeau ne garde
+  // que ce qui n'est listé nulle part sur cet écran.
+  box.hidden = !activity || activity.answered + activity.changes === 0;
   if (box.hidden) return;
 
   const line = (count, label, view) =>
@@ -5806,7 +5857,6 @@ async function renderSupplierActivity() {
     `<span class="rail-title">Retours de vos ateliers</span>
      <div class="sup-act-row">
        ${line(activity.answered, activity.answered > 1 ? 'escalades répondues' : 'escalade répondue', 'tickets')}
-       ${line(activity.issues, activity.issues > 1 ? 'signalements d’atelier' : 'signalement d’atelier', 'tickets')}
        ${line(activity.changes, activity.changes > 1 ? 'changements à répercuter' : 'changement à répercuter', 'changes')}
      </div>`;
 
@@ -5814,6 +5864,82 @@ async function renderSupplierActivity() {
     button.addEventListener('click', () => setView(button.dataset.goto)),
   );
 }
+
+/*
+ * Les signalements des ateliers, sur la page Fournisseur.
+ *
+ * Un atelier qui trouve une adresse incomplète au moment d'emballer ouvre un
+ * ticket depuis son espace. Il entrait dans SAV client titré « Autre », au
+ * milieu du courrier des clients ; la pastille « Fournisseur » le comptait,
+ * mais la page n'en disait rien. Chaque ligne dit le motif, la commande, ce
+ * que l'atelier a écrit, et propose les deux gestes : ouvrir la conversation,
+ * ou la classer — l'atelier la voit alors « Clos » dans son espace.
+ */
+const MOTIF_ICONE = { ADDRESS: 'pin', PHONE: 'alerte', DAMAGE: 'box', STOCK: 'box', OTHER: 'alerte' };
+
+async function renderSignalementsFournisseurs() {
+  const section = $('sup-sig');
+  if (!section) return;
+
+  let signalements;
+  try {
+    ({ signalements } = await api('/api/supplier-signalements'));
+  } catch {
+    // Le carnet de contacts reste utilisable sans cette section.
+    return;
+  }
+
+  section.hidden = signalements.length === 0;
+  $('sup-sig-n').textContent = signalements.length ? String(signalements.length) : '';
+  $('sup-sig-rows').innerHTML = signalements
+    .map((sig) => {
+      const jours = ageInDays(sig.createdAt);
+      return `<article class="sigc" data-sig="${esc(sig.id)}">
+        <span class="sigc-ico sigc-${esc(sig.motif)}" aria-hidden="true">${ico(MOTIF_ICONE[sig.motif] ?? 'alerte')}</span>
+        <div class="sigc-main">
+          <div class="sigc-head">
+            <b>${esc(sig.libelle)}</b>
+            ${sig.orderName ? `<span class="tag tag-order">${esc(sig.orderName)}</span>` : ''}
+            <span class="sigc-when${jours >= 2 ? ' sigc-vieux' : ''}">${esc(
+              jours <= 0 ? 'aujourd’hui' : `depuis ${jours} j`,
+            )}</span>
+          </div>
+          ${sig.note ? `<p class="sigc-note">${esc(sig.note)}</p>` : ''}
+          <p class="sigc-meta">Signalé par <b>${esc(sig.fournisseur ?? 'l’atelier')}</b> · ${esc(dateTime(sig.createdAt))}</p>
+        </div>
+        <div class="sigc-acts">
+          <button class="btn btn-small" type="button" data-sig-open="${esc(sig.id)}">Ouvrir la conversation</button>
+          <button class="btn btn-small btn-primary" type="button" data-sig-done="${esc(sig.id)}">Traité</button>
+        </div>
+      </article>`;
+    })
+    .join('');
+}
+
+$('sup-sig')?.addEventListener('click', async (event) => {
+  if (event.target.closest('[data-sig-ruptures]')) return setView('ruptures');
+
+  const ouvrir = event.target.closest('[data-sig-open]');
+  if (ouvrir) {
+    setView('tickets');
+    void selectTicket(ouvrir.dataset.sigOpen);
+    return;
+  }
+
+  const fait = event.target.closest('[data-sig-done]');
+  if (!fait) return;
+  fait.disabled = true;
+  try {
+    await api(`/api/tickets/${fait.dataset.sigDone}/resolve`, { method: 'POST', body: '{}' });
+    toast('Signalement classé — l’atelier le voit comme repris.');
+    changesCountAt = 0;
+    void refreshChangesCount();
+    await renderSignalementsFournisseurs();
+  } catch (error) {
+    fait.disabled = false;
+    toast(error.message, true);
+  }
+});
 
 /** `id` absent : création. Sinon édition, avec la suppression proposée. */
 function openSupplierForm(id) {
@@ -11420,6 +11546,7 @@ const VIEW_LOADERS = {
   suppliers: () => {
     renderSuppliers();
     void renderSupplierActivity();
+    void renderSignalementsFournisseurs();
     void loadSupplierHub();
     void chargerDemandesFournisseur();
   },
