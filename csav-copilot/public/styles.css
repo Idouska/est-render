@@ -2353,6 +2353,13 @@ body::before {
 .modal,
 .toast {
   box-shadow: var(--e4);
+}
+/* Le toast n'en prend que l'ombre. Il avait aussi pris ce fond clair, en
+   gardant son texte clair : « Mode test activé » s'écrivait blanc sur blanc.
+   Il reste une bulle sombre, comme une notification du Mac. */
+.shop-menu,
+.sheet,
+.modal {
   background: var(--grad-raised);
 }
 
@@ -5616,7 +5623,11 @@ textarea:focus-visible {
    de suivi cède la largeur qu'il ne remplissait pas. */
 .ret-track input { width: 128px; }
 .ret-wa { padding: 4px 9px; font-size: 13px; }
-#ret-body td:last-child { display: flex; align-items: center; gap: 5px; }
+/* Une cellule de tableau reste une cellule : passée en `flex`, elle sortait
+   de la grille, et ses icônes flottaient à droite des filets de la ligne. */
+#ret-body td:last-child { white-space: nowrap; }
+#ret-body td:last-child > * { display: inline-grid; place-items: center; vertical-align: middle; }
+#ret-body td:last-child > * + * { margin-left: 5px; }
 #ret-body .ico { width: 30px; height: 30px; }
 
 /* =========================================================================
@@ -12141,3 +12152,20 @@ progress { accent-color: var(--accent); }
   #view-tickets .qpick input { width: 24px; height: 24px; }
   #view-tickets .qpick:has(input:checked)::after { top: 7.5px; left: 7px; width: 9px; height: 4.5px; }
 }
+
+/* ---------------------------------------------- retours : les dossiers clos ---
+   Ils restent au tableau, sous un intertitre, grisés : le statut se lit et se
+   change encore, pour rouvrir un dossier clos par erreur. */
+.ret-sep td {
+  padding: 14px 12px 6px;
+  border-bottom: 1px solid var(--line);
+  background: none;
+  color: var(--ink-mute);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+.ret-clos td { color: var(--ink-mute); }
+.ret-clos td :is(b, img, .ret-tag, .switch) { opacity: 0.7; }
+.ret-vide td,
+.ret-plus td { padding: 14px 12px; color: var(--ink-mute); font-size: 13px; text-align: center; }

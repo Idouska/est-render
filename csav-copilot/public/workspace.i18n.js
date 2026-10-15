@@ -38,6 +38,8 @@ export const STRINGS = {
     'head.to': 'au',
     'head.reload': 'Actualiser',
     'head.xlsx': 'Télécharger .xlsx',
+    'head.download': 'Télécharger',
+    'head.dates': 'Choisir des dates',
     'head.csv': 'CSV',
     'head.lang': 'Langue',
 
@@ -444,6 +446,8 @@ export const STRINGS = {
     'head.to': 'to',
     'head.reload': 'Refresh',
     'head.xlsx': 'Download .xlsx',
+    'head.download': 'Download',
+    'head.dates': 'Choose dates',
     'head.csv': 'CSV',
     'head.lang': 'Language',
 
@@ -850,6 +854,8 @@ export const STRINGS = {
     'head.to': '至',
     'head.reload': '刷新',
     'head.xlsx': '下载 .xlsx',
+    'head.download': '下载',
+    'head.dates': '选择日期',
     'head.csv': 'CSV',
     'head.lang': '语言',
 

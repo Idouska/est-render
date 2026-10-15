@@ -131,6 +131,11 @@ function applyLang(lang) {
   for (const node of document.querySelectorAll('[data-tph]')) {
     node.placeholder = t(node.dataset.tph);
   }
+  // L'infobulle et le nom lu d'un bouton sans texte, ou au texte abrégé.
+  for (const node of document.querySelectorAll('[data-ttl]')) {
+    node.title = t(node.dataset.ttl);
+    node.setAttribute('aria-label', node.title);
+  }
 
   renderLangPicker();
   // Les écrans construits en JavaScript se refont : ils ne portent pas de
