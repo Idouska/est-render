@@ -60,7 +60,13 @@ test('« Ne pas déranger » coupe les bulles et allume la lune', () => {
 test('verre dépoli, avec une couleur unie de secours', () => {
   assert.match(css, /\.cc \{\n  position: fixed;[\s\S]*?backdrop-filter: blur\(30px\) saturate\(1\.8\);/);
   assert.match(css, /@supports not \(\(backdrop-filter: blur\(1px\)\) or \(-webkit-backdrop-filter: blur\(1px\)\)\) \{/);
-  assert.match(css, /\.cc-on \.cc-rond \{ background: #fff; color: var\(--accent\); \}/);
+  // De la couleur : chaque réglage allumé prend sa teinte ; Shopify et Gmail
+  // gardent leur logo.
+  assert.match(css, /\.cc-on \.cc-rond \{ background: var\(--cc-teinte, var\(--accent\)\); color: #fff; \}/);
+  for (const [classe, teinte] of [['cc-envoi', '#0a84ff'], ['cc-actu', '#34c759'], ['cc-dnd', '#5e5ce6'], ['cc-test', '#ff9500']]) {
+    assert.match(css, new RegExp(`\\.${classe} \\{ --cc-teinte: ${teinte}; \\}`), classe);
+  }
+  assert.match(app, /if \(rond && !rond\.firstChild\) rond\.innerHTML = marque\(nom\);/);
 });
 
 test('Spotlight : une capsule, quatre boutons ronds, des résultats rangés', () => {
@@ -81,4 +87,15 @@ test('Spotlight : une capsule, quatre boutons ronds, des résultats rangés', ()
   // Pas de voile : Spotlight flotte au-dessus.
   assert.match(css, /\.pal \{ background: transparent; padding: 14vh 20px 20px; \}/);
   assert.match(css, /\.pal-champ \{\n  flex: 1;[\s\S]*?border-radius: 29px;/);
+});
+
+test('clair / sombre marche sans être passé par les Réglages', () => {
+  // La tuile cliquait un bouton des Réglages qui n'était câblé qu'à leur
+  // ouverture : rien ne se passait, et le panneau se refermait.
+  const bascule = corps('function basculerTheme(');
+  assert.match(bascule, /localStorage\.setItem\('csav\.theme', sombre \? 'light' : 'dark'\);/);
+  assert.match(bascule, /applyAppearance\(\);/);
+  assert.doesNotMatch(app, /\$\('theme-seg'\)\s*\?\.querySelector\(`\[data-theme-choix/);
+  // Actualiser fait au moins un tour visible, puis le dit.
+  assert.match(app, /new Promise\(\(fin\) => setTimeout\(fin, 800\)\)\]\);\n\s+toast\('Tout est à jour\.'\);/);
 });

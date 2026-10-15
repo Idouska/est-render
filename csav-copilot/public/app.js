@@ -627,6 +627,12 @@ function rendreCentre() {
   if (!me) return;
   const reglable = canI('configure');
 
+  // Les vrais logos de Shopify et Gmail, comme les pastilles de connexion.
+  for (const [id, nom] of [['cc-shopify', 'shopify'], ['cc-gmail', 'gmail']]) {
+    const rond = $(id)?.querySelector('.cc-rond');
+    if (rond && !rond.firstChild) rond.innerHTML = marque(nom);
+  }
+
   const boutique = (me.merchant?.shopDomain ?? '').replace('.myshopify.com', '');
   tuile(
     'cc-shopify',
@@ -648,6 +654,7 @@ function rendreCentre() {
 
   const metriques = state.metrics ?? {};
   $('cc-jour-n').textContent = String(state.pendingCount ?? '—');
+  $('cc-jour-n').classList.toggle('cc-jour-calme', !state.pendingCount);
   const brouillons = metriques.tickets?.DRAFT_READY ?? 0;
   $('cc-jour-brouillons').textContent = `${brouillons} brouillon${brouillons > 1 ? 's' : ''} prêt${brouillons > 1 ? 's' : ''}`;
   $('cc-jour-delai').textContent = `1re réponse · ${formatDelay(metriques.firstReplySeconds)}`;
@@ -655,6 +662,7 @@ function rendreCentre() {
   const sombre = document.documentElement.getAttribute('data-theme') === 'dark';
   const apparence = sombre ? 'Passer en clair' : 'Passer en sombre';
   $('cc-apparence').setAttribute('aria-label', apparence);
+  $('cc-apparence').setAttribute('aria-pressed', String(sombre));
   $('cc-apparence').title = apparence;
 
   tuile('cc-dnd', nePasDeranger(), nePasDeranger() ? 'Oui · bulles coupées' : 'Non');
@@ -714,19 +722,41 @@ $('cc-jour')?.addEventListener('click', () => {
   setView('tickets');
 });
 
-$('cc-apparence')?.addEventListener('click', () => {
-  // On inverse ce qu'on voit, comme la commande de la palette.
+/*
+ * Clair ou sombre, d'un geste.
+ *
+ * La tuile cliquait le bouton des Réglages — qui n'est câblé qu'une fois
+ * l'écran Réglages ouvert : avant cela, rien ne se passait, et ce clic,
+ * parti d'en dehors du panneau, le refermait au passage. Elle écrit
+ * maintenant la préférence elle-même. On inverse ce qu'on voit : en mode
+ * « Système », c'est l'apparence affichée qu'on veut changer.
+ */
+function basculerTheme() {
   const sombre = document.documentElement.getAttribute('data-theme') === 'dark';
-  $('theme-seg')?.querySelector(`[data-theme-choix="${sombre ? 'light' : 'dark'}"]`)?.click();
+  try {
+    localStorage.setItem('csav.theme', sombre ? 'light' : 'dark');
+  } catch {
+    // Sans stockage, le choix vaut pour la page ouverte.
+  }
+  applyAppearance();
+  if (state.view === 'settings') renderPalettes();
+}
+
+$('cc-apparence')?.addEventListener('click', () => {
+  basculerTheme();
   rendreCentre();
 });
 
 $('cc-actualiser')?.addEventListener('click', async () => {
   const bouton = $('cc-actualiser');
+  if (bouton.classList.contains('cc-tourne')) return;
   bouton.classList.add('cc-tourne');
   changesCountAt = 0;
   try {
-    await Promise.all([refreshCurrent(), refreshChangesCount()]);
+    // Au moins un tour complet : une mise à jour trop rapide passait pour un
+    // bouton qui ne fait rien.
+    await Promise.all([refreshCurrent(), refreshChangesCount(), new Promise((fin) => setTimeout(fin, 800))]);
+    toast('Tout est à jour.');
   } finally {
     bouton.classList.remove('cc-tourne');
     rendreCentre();
@@ -16020,14 +16050,8 @@ function buildCommands() {
     {
       label: 'Basculer clair / sombre',
       hint: 'Apparence',
-      run: () => {
-        // On lit le thème appliqué plutôt que la préférence enregistrée :
-        // en mode « Système », c'est ce qu'on voit qu'on veut inverser.
-        const dark = document.documentElement.getAttribute('data-theme') === 'dark';
-        $('theme-seg')
-          ?.querySelector(`[data-theme-choix="${dark ? 'light' : 'dark'}"]`)
-          ?.click();
-      },
+      // Le même geste que la tuile du Centre de contrôle.
+      run: () => basculerTheme(),
     },
     {
       label: 'Afficher les raccourcis',
