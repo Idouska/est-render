@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
-import type { FastifyInstance } from 'fastify';
-import { google } from 'googleapis';
+import type { FastifyInstance, FastifyReply } from 'fastify';
+import { google, type Auth } from 'googleapis';
 import { env } from '../config/env.ts';
 import { recordAudit } from '../lib/audit.ts';
 import { encryptSecret, safeEqual } from '../lib/crypto.ts';
@@ -11,6 +11,20 @@ import { createOAuthClient } from '../services/gmail/client.ts';
 import { startWatch } from '../services/gmail/watch.ts';
 
 const STATE_COOKIE = 'csav_google_state';
+
+/*
+ * Un refus ou un échec ramène dans l'outil, avec sa raison.
+ *
+ * Le retour de Google répondait par du JSON brut : une page noire, « {"error":
+ * "Autorisation Google refusée : access_denied"} », sans lien pour revenir.
+ * C'est pourtant le cas le plus courant — on clique « Annuler » ou « Retour à
+ * la sécurité » sur l'écran de Google. Le marchand retrouve maintenant ses
+ * Réglages et une phrase qui dit quoi faire (`retourGmail` dans app.js).
+ */
+type RaisonGmail = 'refuse' | 'etat' | 'jeton' | 'echec';
+
+const retourGmail = (reply: FastifyReply, raison: RaisonGmail) =>
+  reply.redirect(`/dashboard?gmail=${raison}`);
 
 export async function googleAuthRoutes(app: FastifyInstance): Promise<void> {
   app.get('/auth/google', { preHandler: requireSession }, async (request, reply) => {
@@ -47,33 +61,38 @@ export async function googleAuthRoutes(app: FastifyInstance): Promise<void> {
       const { code, state, error } = request.query;
 
       if (error) {
-        return reply.code(400).send({ error: `Autorisation Google refusée : ${error}` });
+        logger.warn({ merchantId, error }, 'Autorisation Google refusée');
+        return retourGmail(reply, 'refuse');
       }
 
+      // Un état absent ou différent : la page de Google a été ouverte trop
+      // longtemps (dix minutes), dans un autre onglet, ou le lien a été rejoué.
       const expectedState = request.cookies[STATE_COOKIE];
       if (!code || !state || !expectedState || !safeEqual(state, expectedState)) {
-        return reply.code(400).send({ error: 'State OAuth invalide' });
+        return retourGmail(reply, 'etat');
       }
 
       reply.clearCookie(STATE_COOKIE, { path: '/' });
 
       const auth = await createOAuthClient();
-      const { tokens } = await auth.getToken(code);
+      let tokens: Auth.Credentials;
+      let profile: { emailAddress?: string | null; historyId?: string | null };
+      try {
+        ({ tokens } = await auth.getToken(code));
 
-      if (!tokens.refresh_token) {
-        return reply.code(400).send({
-          error:
-            'Google n’a pas fourni de refresh token. Révoquez l’accès dans votre compte Google puis réessayez.',
-        });
+        // Sans jeton durable, la boîte se déconnecterait d'elle-même dans
+        // l'heure : Google n'en redonne qu'après qu'on lui a retiré l'accès.
+        if (!tokens.refresh_token) return retourGmail(reply, 'jeton');
+
+        auth.setCredentials(tokens);
+        ({ data: profile } = await google.gmail({ version: 'v1', auth }).users.getProfile({ userId: 'me' }));
+      } catch (err) {
+        logger.error({ merchantId, err }, 'Échange du code Google en échec');
+        return retourGmail(reply, 'echec');
       }
 
-      auth.setCredentials(tokens);
-      const { data: profile } = await google
-        .gmail({ version: 'v1', auth })
-        .users.getProfile({ userId: 'me' });
-
       if (!profile.emailAddress) {
-        return reply.code(502).send({ error: 'Adresse Gmail introuvable' });
+        return retourGmail(reply, 'echec');
       }
 
       // La première boîte connectée devient celle par défaut : sans elle, un
@@ -121,7 +140,7 @@ export async function googleAuthRoutes(app: FastifyInstance): Promise<void> {
         ipAddress: request.ip,
       });
 
-      return reply.redirect('/dashboard');
+      return reply.redirect('/dashboard?gmail=connecte');
     },
   );
 

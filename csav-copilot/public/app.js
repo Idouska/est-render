@@ -132,13 +132,13 @@ function esc(value) {
     .replace(/"/g, '&quot;');
 }
 
-function toast(message, isError = false) {
+function toast(message, isError = false, duree = 4000) {
   const el = $('toast');
   el.textContent = message;
   el.classList.toggle('error', isError);
   el.classList.add('show');
   clearTimeout(el._timer);
-  el._timer = setTimeout(() => el.classList.remove('show'), 4000);
+  el._timer = setTimeout(() => el.classList.remove('show'), duree);
 }
 
 /* ------------------------------------------------------------- bulles --- */
@@ -760,6 +760,50 @@ for (const id of ['cc-shopify', 'cc-gmail']) {
     setView('settings');
     document.querySelector('[data-reg="connexions"]')?.click();
   });
+}
+
+/*
+ * Au retour de Google.
+ *
+ * Le serveur ramène ici avec la raison d'un refus ou d'un échec, au lieu de
+ * la page noire de JSON brut qu'il affichait. Un échec ouvre Réglages ›
+ * Connexions, où se trouve le bouton pour recommencer, et dit quoi faire. Le
+ * paramètre quitte l'adresse aussitôt lu : recharger la page ne doit pas
+ * répéter le message.
+ */
+const RETOURS_GMAIL = {
+  connecte: ['Gmail est connecté.', false],
+  refuse: [
+    'Gmail n’est pas connecté : l’autorisation a été annulée sur la page de Google. ' +
+      'Cliquez sur « Connecter Gmail » et acceptez toutes les autorisations demandées.',
+    true,
+  ],
+  etat: [
+    'La page de Google est restée ouverte trop longtemps. Cliquez à nouveau sur « Connecter Gmail ».',
+    true,
+  ],
+  jeton: [
+    'Google n’a pas donné d’accès durable. Retirez l’accès de l’outil dans votre compte Google ' +
+      '(Sécurité › Applications tierces), puis reconnectez Gmail.',
+    true,
+  ],
+  echec: ['La connexion à Gmail a échoué. Réessayez dans un instant.', true],
+};
+
+function retourGmail() {
+  const adresse = new URL(location.href);
+  const raison = adresse.searchParams.get('gmail');
+  if (!raison) return;
+
+  adresse.searchParams.delete('gmail');
+  history.replaceState(null, '', `${adresse.pathname}${adresse.search}${adresse.hash}`);
+
+  const [message, echec] = RETOURS_GMAIL[raison] ?? RETOURS_GMAIL.echec;
+  if (echec) {
+    setView('settings');
+    document.querySelector('[data-reg="connexions"]')?.click();
+  }
+  toast(message, echec, echec ? 10_000 : 4000);
 }
 
 $('cc-envoi')?.addEventListener('click', async () => {
@@ -15712,6 +15756,7 @@ async function boot() {
   renderMe();
   renderClocks();
   setView('tickets');
+  retourGmail();
 
   /*
    * Relever le courrier À L'OUVERTURE, et pas seulement au premier tour.
