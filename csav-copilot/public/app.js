@@ -9576,7 +9576,9 @@ function renderClocks() {
 
   // Des `span`, pas des boutons : c'est le conteneur qui est le bouton, et un
   // bouton dans un bouton n'est pas du HTML.
-  $('clocks').innerHTML = cityTimes(now)
+  const icone = `<svg class="ckp-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></svg>`;
+  $('clocks').innerHTML = icone + cityTimes(now)
     .map(
       (c) => `<span class="ckp${c.open ? '' : ' shut'}"
         title="${esc(c.city)} — ${c.open ? 'heures ouvrées' : 'hors horaires (9 h – 18 h locales)'}">

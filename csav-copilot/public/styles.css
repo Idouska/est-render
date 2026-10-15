@@ -12550,8 +12550,11 @@ progress { accent-color: var(--accent); }
 
 /* Les heures, sur la ligne du titre : le sigle et l'heure, rien d'autre. */
 .head .clocks {
-  /* Les heures ne se rognent pas : c'est le sous-titre qui s'abrège. */
+  /* Les heures ne se rognent pas : c'est le sous-titre qui s'abrège. Le
+     plafond hérité de 46 % de l'écran tombe : au téléphone, il ne laissait
+     place qu'à deux villes. */
   flex: none;
+  max-width: none;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -12566,10 +12569,16 @@ progress { accent-color: var(--accent); }
   cursor: pointer;
 }
 .head .clocks::-webkit-scrollbar { display: none; }
-/* Au téléphone, la place manque : la bande se rétrécit et défile au doigt. */
+/* Au téléphone, la place manque sur la ligne du titre : les heures prennent
+   leur propre rangée, pleine largeur, et défilent au doigt. Rétrécies à côté
+   des boutons, elles tombaient à vingt pixels — autant dire invisibles. */
 @media (max-width: 760px) {
-  .head .clocks { flex: 1 1 0; min-width: 0; padding: 0 4px; }
+  .head { flex-wrap: wrap; }
+  .head .clocks { order: 20; flex: 1 1 100%; min-width: 0; gap: 10px; padding: 0 2px; }
 }
+/* Une petite horloge en tête de la bande : on reconnaît d'un coup d'œil ce
+   que sont ces cinq heures, et qu'on peut cliquer pour les cadrans. */
+.head .ckp-ico { flex: none; width: 14px; height: 14px; color: var(--ink-mute); align-self: center; }
 .head .clocks:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
 .head .ckp {
   display: inline-flex;
