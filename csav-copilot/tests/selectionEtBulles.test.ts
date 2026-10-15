@@ -50,7 +50,7 @@ test('l’accent est réservé au message choisi', () => {
 });
 
 test('repliée, la navigation dit le nom du bouton survolé', () => {
-  assert.match(app, /const BULLE_SIDE_CIBLES = '\.nav-item, #shop-switch, #side-fold';/);
+  assert.match(app, /const BULLE_SIDE_CIBLES = '\.nav-item, #shop-switch, #side-fold, #compte-btn';/);
   // Hors de la colonne, qui coupe ce qui dépasse.
   assert.match(app, /document\.body\.append\(bulleSide\);/);
   assert.match(app, /bulleSide\.setAttribute\('role', 'tooltip'\);/);

@@ -4,14 +4,12 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>cSAV Copilot</title>
-    <link
-      rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%230b5e6b'/%3E%3Cpath d='M3 5.5h10v6H3z' fill='none' stroke='%23fff' stroke-width='1.2'/%3E%3Cpath d='M3 5.8l5 3.4 5-3.4' fill='none' stroke='%23fff' stroke-width='1.2'/%3E%3C/svg%3E"
-    />
+    <link rel="icon" type="image/svg+xml" href="/static/logo.svg" />
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
     <div id="gate" class="gate" hidden>
+      <img class="gate-logo" src="/static/logo.svg" width="64" height="64" alt="cSAV Copilot" />
       <h1>Session expirée</h1>
       <p id="gate-text">Connectez-vous pour accéder au SAV.</p>
       <p id="gate-prod" hidden>
@@ -41,10 +39,12 @@
       <div class="app" id="app-grid">
         <div class="scrim" id="scrim" hidden></div>
         <aside class="side">
+          <!-- Le symbole de la barre latérale du Mac : un cadre et son volet. -->
           <button class="side-fold" id="side-fold" type="button" aria-label="Replier la navigation">
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"
-              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M10 4 6 8l4 4" />
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+              stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="5" width="18" height="14" rx="3" />
+              <path d="M9.5 5v14" />
             </svg>
           </button>
 
@@ -77,6 +77,33 @@
 
           <nav id="nav" aria-label="Sections"></nav>
 
+          <!-- Le compte, en pied de colonne, comme dans les apps du Mac. Il
+               quitte la barre du haut, qui ne garde que le travail du jour ;
+               son menu porte ce qu'on règle rarement : l'actualisation
+               automatique, les réglages, la déconnexion. -->
+          <div class="compte" id="compte">
+            <button class="compte-btn" id="compte-btn" type="button" aria-haspopup="menu"
+              aria-expanded="false" aria-controls="compte-menu">
+              <span class="compte-avatar" id="me-avatar" aria-hidden="true">?</span>
+              <span class="compte-txt">
+                <b id="me-name" title="">—</b>
+                <span id="me-role"></span>
+              </span>
+              <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m3.5 4.5 2.5-2.5 2.5 2.5M3.5 7.5 6 10l2.5-2.5" />
+              </svg>
+            </button>
+            <div class="compte-menu" id="compte-menu" role="menu" aria-label="Compte" hidden>
+              <label class="compte-item" title="Recharge l’écran toutes les 20 à 60 secondes">
+                <input type="checkbox" id="auto-refresh" role="menuitemcheckbox" checked />
+                <span>Actualisation auto</span>
+              </label>
+              <button class="compte-item" type="button" role="menuitem" data-compte-vue="settings">Réglages</button>
+              <hr />
+              <button class="compte-item" id="logout" type="button" role="menuitem">Se déconnecter</button>
+            </div>
+          </div>
         </aside>
 
         <div class="main">
@@ -104,6 +131,10 @@
               <h1 id="view-title">SAV client</h1>
               <p class="view-sub" id="view-sub" hidden></p>
             </div>
+            <!-- Les heures des ateliers et des clients, sur la ligne du titre,
+                 comme les horloges de la barre des menus du Mac. -->
+            <div class="clocks" id="clocks" role="button" tabindex="0"
+              title="Heures locales — cliquer pour les cadrans"></div>
             <!-- La recherche avait une fonction et pas de porte.
                  La palette ⌘K cherche déjà clients, commandes et messages,
                  mais rien à l'écran ne le disait : une commande qu'on ne voit
@@ -127,41 +158,27 @@
               <kbd>⌘K</kbd>
             </button>
 
+
             <!-- Les états de connexion et le rafraîchissement remontent
                  ici, sur la ligne du titre. Ils vivaient dans la rangée
                  d'en dessous, qu'ils obligeaient à se replier sur deux
                  lignes dès 1400 px : trois blocs de vingt pixels de haut
                  pour une information qu'on ne lit qu'en cas de doute. -->
+            <!-- Shopify et Gmail ne parlent ici qu'en cas de panne : une
+                 pastille verte qu'on voit toute la journée n'apprend rien. -->
             <div class="head-conn" id="conn"></div>
             <span class="head-sync" id="sync-note"></span>
             <div class="head-tools">
+              <!-- Le libellé reste pour les lecteurs d'écran ; à l'œil, l'icône
+                   suffit, et l'infobulle dit depuis quand c'est à jour. -->
               <button class="btn btn-small" id="refresh" type="button" title="Rafraîchir (R)">
-                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M13.5 8a5.5 5.5 0 1 1-1.7-4" />
-                  <path d="M13.5 2.5V6H10" />
+                  <path d="M20 12a8 8 0 1 1-2.4-5.7" />
+                  <path d="M20 4v4.5h-4.5" />
                 </svg>
                 <span id="refresh-label">Rafraîchir</span>
               </button>
-              <label class="auto-toggle" title="Recharge l’écran toutes les 60 secondes">
-                <input type="checkbox" id="auto-refresh" checked />
-                <span>auto</span>
-              </label>
-            </div>
-
-            <div class="head-acts">
-              <!-- Le compte remonte du pied de la navigation vers la barre
-                   haute. C'est là qu'on le cherche — et le pied d'une colonne
-                   qu'on replie n'est pas un endroit pour savoir qui on est. -->
-              <div class="me">
-                <span class="avatar" id="me-avatar">?</span>
-                <div class="me-txt">
-                  <b id="me-name" title="">—</b>
-                  <span id="me-role"></span>
-                </div>
-                <button class="btn btn-small" id="logout" title="Se déconnecter"
-                  aria-label="Se déconnecter"></button>
-              </div>
             </div>
           </header>
 
@@ -290,8 +307,6 @@
              ateliers, et le seul réglage qui change ce que l'outil fait tout
              seul. Le reste est monté d'une ligne. -->
         <div class="subhead-acts">
-          <div class="clocks" id="clocks" role="button" tabindex="0"
-            title="Heures locales — cliquer pour le détail"></div>
           <span class="autosend" id="autosend"></span>
         </div>
       </div>
@@ -1759,8 +1774,8 @@ adresse@exemple.com"></textarea>
                 <div class="reg-ligne">
                   <span>Horloges des fuseaux</span>
                   <div class="reg-seg" id="clock-seg" role="group" aria-label="Horloges">
-                    <button type="button" data-clockstyle="analog" aria-pressed="true">Aiguilles</button>
-                    <button type="button" data-clockstyle="digital" aria-pressed="false">Numérique</button>
+                    <button type="button" data-clockstyle="digital" aria-pressed="true">Chiffres</button>
+                    <button type="button" data-clockstyle="analog" aria-pressed="false">Aiguilles</button>
                   </div>
                 </div>
               </div>

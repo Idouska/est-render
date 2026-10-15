@@ -36,9 +36,11 @@ test('les intitulés sortent des petites capitales', () => {
   }
 });
 
-test('la page ouverte se remplit de l’accent, sans repère accroché au bord', () => {
-  assert.equal(derniere('.nav-item[aria-current="true"]', 'background'), 'var(--accent)');
-  assert.equal(derniere('.nav-item[aria-current="true"]', 'color'), 'var(--on-accent)');
+test('la page ouverte se surligne de gris, l’icône seule garde l’accent', () => {
+  // Comme le Finder et Mail : la colonne n'est pas un bandeau de couleur.
+  assert.equal(derniere('.nav-item[aria-current="true"]', 'background'), 'color-mix(in srgb, var(--ink) 9%, transparent)');
+  assert.equal(derniere('.nav-item[aria-current="true"]', 'color'), 'var(--ink)');
+  assert.equal(derniere('.nav-item[aria-current="true"] svg', 'color'), 'var(--accent-ink)');
   assert.equal(derniere('.nav-item[aria-current="true"]::before', 'display'), 'none');
 });
 
