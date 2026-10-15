@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { env } from '../config/env.ts';
 import { recordAudit } from '../lib/audit.ts';
 import { prisma } from '../lib/prisma.ts';
-import { lignesArticle, lireArticle } from '../services/suppliers/signalement.ts';
+import { MOTIFS_SIGNALEMENT, lignesArticle, lireArticle } from '../services/suppliers/signalement.ts';
 import {
   LIGNES_MAX,
   abimeParExcel,
@@ -1828,15 +1828,9 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
         return reply.code(400).send({ error: 'Signalement incomplet' });
       }
 
-      const KINDS = {
-        PHONE: 'Numéro de téléphone incomplet ou invalide',
-        ADDRESS: 'Adresse incomplète ou incorrecte',
-        STOCK: 'Article indisponible',
-        DAMAGE: 'Article abîmé',
-        OTHER: 'Autre problème',
-      } as const;
-
-      const subject = `${KINDS[parsed.data.kind]} — ${parsed.data.orderName ?? 'commande'}`;
+      // Les libellés vivent avec la clé du fil : c'est le même module qui
+      // relit le motif côté marchand.
+      const subject = `${MOTIFS_SIGNALEMENT[parsed.data.kind].libelle} — ${parsed.data.orderName ?? 'commande'}`;
 
       // Le fil est identifié par la commande et le motif : deux signalements
       // identiques le même jour ne créent pas deux tickets concurrents.
@@ -1872,6 +1866,9 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
           direction: 'INBOUND',
           fromEmail: `fournisseur+${workspace.supplierId}@local`,
           subject,
+          // L'extrait de la file : la note de l'atelier, comme les premiers
+          // mots d'un mail. Sans lui, la ligne n'avait pas de troisième étage.
+          snippet: parsed.data.note.replace(/\s+/g, ' ').trim().slice(0, 200),
           bodyText: [
             `Signalé par ${workspace.supplierName} depuis l'atelier.`,
             '',

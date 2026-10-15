@@ -54,6 +54,10 @@ export const QUEUE_SELECT = {
     select: { snippet: true },
   },
   failureReason: true,
+  // La clé du fil dit si c'est un atelier qui écrit, et pour quel motif :
+  // `supplier:<fournisseur>:<commande>:<motif>`. La route la remplace par un
+  // champ `signalement` lisible avant de répondre.
+  gmailThreadId: true,
   assignedToId: true,
   assignedTo: { select: { id: true, name: true, email: true } },
   mailbox: { select: { id: true, emailAddress: true, label: true } },

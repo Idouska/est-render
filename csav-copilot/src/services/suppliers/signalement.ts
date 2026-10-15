@@ -118,3 +118,58 @@ export function fournisseurDuFil(fil: string): string | null {
   const id = fil.split(':')[1];
   return id ? id : null;
 }
+
+/**
+ * Les motifs qu'un atelier peut signaler, et comment le marchand les lit.
+ *
+ * `libelle` est la phrase de l'objet du ticket ; `court` tient dans une ligne
+ * de la file, à côté du numéro de commande.
+ */
+export const MOTIFS_SIGNALEMENT = {
+  PHONE: { libelle: 'Numéro de téléphone incomplet ou invalide', court: 'Téléphone' },
+  ADDRESS: { libelle: 'Adresse incomplète ou incorrecte', court: 'Adresse' },
+  STOCK: { libelle: 'Article indisponible', court: 'Rupture' },
+  DAMAGE: { libelle: 'Article abîmé', court: 'Article abîmé' },
+  OTHER: { libelle: 'Autre problème', court: 'Autre problème' },
+} as const;
+
+export type MotifSignalement = keyof typeof MOTIFS_SIGNALEMENT;
+
+/** Le préfixe des fils ouverts par un atelier, et non par un client. */
+export const PREFIXE_SIGNALEMENT = 'supplier:';
+
+/**
+ * Ce qu'un fil dit de son signalement, ou `null` pour un mail de client.
+ *
+ * Le motif est le DERNIER segment de la clé — la commande, au milieu, est un
+ * GID qui contient lui-même des deux-points. Un motif inconnu se lit « Autre
+ * problème » plutôt que de faire passer le fil pour un mail de client.
+ */
+export function signalementDuFil(
+  fil: string | null | undefined,
+  fournisseur: string | null = null,
+): { motif: MotifSignalement; libelle: string; court: string; fournisseur: string | null } | null {
+  if (!fil?.startsWith(PREFIXE_SIGNALEMENT)) return null;
+  const dernier = fil.split(':').pop() ?? '';
+  const motif = (dernier in MOTIFS_SIGNALEMENT ? dernier : 'OTHER') as MotifSignalement;
+  return { motif, ...MOTIFS_SIGNALEMENT[motif], fournisseur };
+}
+
+/**
+ * La note de l'atelier, sans l'en-tête que la route écrit au-dessus.
+ *
+ * Le premier message vaut « Signalé par X depuis l'atelier. », puis le détail
+ * de l'article, puis la note libre. La page Fournisseur ne montre que ce que
+ * l'atelier a écrit : l'en-tête répète le nom déjà affiché, et le détail de
+ * l'article a ses propres champs.
+ */
+export function noteDuSignalement(texte: string | null | undefined): string | null {
+  if (!texte) return null;
+  const libelles = LIBELLES.map(([, libelle]) => `${libelle} : `);
+  const lignes = texte
+    .split('\n')
+    .filter((ligne, rang) => !(rang === 0 && ligne.startsWith('Signalé par ')))
+    .filter((ligne) => !libelles.some((prefixe) => ligne.startsWith(prefixe)));
+  const note = lignes.join('\n').trim();
+  return note || null;
+}
