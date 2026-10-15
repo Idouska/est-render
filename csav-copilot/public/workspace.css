@@ -2793,3 +2793,94 @@ input:focus, select:focus, textarea:focus {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+
+/* ---------------------------------------- les commandes, en quatre étages */
+
+/* Le mode test, en une ligne : il prévient sans pousser la page. */
+.wsapp .ws-test {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: fit-content;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 14px;
+  padding: 5px 12px;
+  border: 0;
+  border-radius: 999px;
+  font-size: 12.5px;
+}
+.wsapp .ws-test::before { content: ''; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); }
+.wsapp .ws-test b { margin-right: 0; font-weight: 650; }
+
+/* Étage 1 : le titre porte l'avancement ; les gestes de l'écran à droite. */
+.wsapp .cmd-tete { align-items: flex-end; flex-wrap: wrap; gap: 12px 16px; margin-bottom: 14px; }
+.wsapp .cmd-titre { flex: 1; min-width: 240px; display: flex; flex-direction: column; gap: 6px; }
+.wsapp .cmd-titre h1 { flex: none; }
+.wsapp .cmd-tete .ws-progress { margin: 0; gap: 10px; font-size: 13.5px; font-weight: 500; }
+.wsapp .cmd-tete .ws-progress-bar { flex: 0 1 180px; height: 5px; }
+.wsapp .cmd-tete .wshead-acts { align-items: center; gap: 8px; }
+/* Colis enregistrés et Lots reçus n'ont ni avancement, ni téléchargement,
+   ni période : ils gardent le titre et les onglets. */
+.wsapp .cmd-tete:not([data-onglet='orders']) .ws-progress,
+.wsapp .cmd-tete:not([data-onglet='orders']) .wshead-acts,
+.wsapp .cmd-barre:not([data-onglet='orders']) #ws-quick { display: none; }
+
+/* Étage 2 : les trois listes à gauche, la journée à droite. */
+.wsapp .cmd-barre { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 12px; margin-bottom: 14px; }
+.wsapp .cmd-barre .ws-sous { margin: 0; }
+.wsapp .cmd-barre #ws-quick { margin: 0 0 0 auto; }
+.wsapp #ws-sous-cmd .ws-sous-n { margin-left: 6px; background: var(--brand-soft); color: var(--brand); font-weight: 650; }
+.wsapp #ws-sous-cmd .ws-sous-n:empty { display: none; }
+.wsapp #ws-sous-cmd button { display: inline-flex; align-items: center; }
+
+/* Étage 3 : chercher, filtrer, ranger — et le mode, réduit à un sélecteur. */
+.wsapp .cmd-outils { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+.wsapp .cmd-outils .ws-search-wrap { flex: 1 1 240px; max-width: 380px; margin: 0; }
+.wsapp .cmd-outils .chips { margin: 0; }
+.wsapp .cmd-outils .ws-modes { margin: 0 0 0 auto; }
+.wsapp .cmd-outils .ws-modes button { min-height: 30px; padding: 0 12px; gap: 6px; }
+.wsapp .cmd-outils .ws-modes svg { width: 16px; height: 16px; }
+.wsapp .cmd-outils .ws-mode-txt small { display: none; }
+.wsapp .cmd-outils .ws-mode-txt b { font-size: 13.5px; font-weight: 500; }
+.wsapp .cmd-outils .ws-modes button[aria-selected='true'] .ws-mode-txt b { font-weight: 600; }
+
+/* Au guichet plein écran, ces étages se retirent comme l'ancien en-tête. */
+.ws-focus .wsapp .cmd-tete,
+.ws-focus .wsapp .cmd-barre,
+.ws-focus .wsapp .cmd-outils { display: none; }
+
+@media (max-width: 880px) {
+  .wsapp .cmd-tete .ws-progress-bar { flex: 1 1 auto; }
+  .wsapp .cmd-barre > *,
+  .wsapp .cmd-outils .ws-modes { width: 100%; margin-left: 0; }
+  .wsapp .cmd-barre #ws-quick { margin-left: 0; }
+  .wsapp .cmd-barre > * > button,
+  .wsapp .cmd-outils .ws-modes button { flex: 1; justify-content: center; }
+  .wsapp .cmd-outils .ws-search-wrap { flex-basis: 100%; max-width: none; }
+  .wsapp .cmd-outils .chips { flex: 1; }
+}
+@media (max-width: 880px) {
+  /* Deux moitiés égales, côte à côte : l'ancienne règle les empilait. */
+  .wsapp .cmd-outils .ws-modes { display: grid; grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
+}
+
+/* Au téléphone, les mots courts : « Colis enregistrés » passait à la ligne,
+   et la phrase du mode test courait sur trois lignes sous les langues. */
+.wsapp .ws-court { display: none; }
+@media (max-width: 880px) {
+  .wsapp .ws-long { display: none; }
+  .wsapp .ws-court { display: inline; }
+  /* Le sélecteur de langue flotte en haut à droite : la capsule s'arrête avant. */
+  .wsapp .ws-test { max-width: calc(100% - 150px); }
+
+  /* Le titre et ses trois gestes sur une ligne, l'avancement dessous. */
+  .wsapp .cmd-tete { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px 10px; }
+  .wsapp .cmd-titre { display: contents; }
+  .wsapp .cmd-titre h1 { grid-column: 1; grid-row: 1; }
+  .wsapp .cmd-tete .wshead-acts { grid-column: 2; grid-row: 1; }
+  .wsapp .cmd-tete .ws-progress { grid-column: 1 / -1; grid-row: 2; }
+  /* Télécharger en icône : son nom reste lu et en infobulle. */
+  .wsapp .ws-dl { width: 44px; min-height: 44px; padding: 0; justify-content: center; }
+  .wsapp .ws-dl span { display: none; }
+}

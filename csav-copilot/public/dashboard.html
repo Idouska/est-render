@@ -529,7 +529,12 @@
                car c'est lui qui figure dans la boîte Gmail. -->
           <div class="ticket-head">
             <div class="th-top">
-              <h1 class="thread-subject" id="d-subject">Sélectionnez un message</h1>
+              <!-- Le titre et l'heure du dernier message, sur une ligne, comme
+                   l'en-tête d'un mail. -->
+              <div class="th-titre">
+                <h1 class="thread-subject" id="d-subject">Sélectionnez un message</h1>
+                <span class="th-quand" id="d-when"></span>
+              </div>
               <!-- Naviguer sans revenir à la file : c'est le geste d'un agent
                    qui descend cent messages. Les mêmes que `j` et `k`, pour
                    qui n'a pas encore les raccourcis dans les doigts. -->
@@ -555,6 +560,9 @@
                 </span>
               </div>
             </div>
+            <!-- Les mots du client : l'objet de son mail, tel qu'il l'a écrit.
+                 Il était perdu en fin de ligne de faits, en gris. -->
+            <p class="th-objet" id="d-objet" hidden></p>
             <div class="thread-meta" id="d-meta"></div>
             <!-- Libellés du message, modifiables sur place, et suppression.
                  Reclasser en rouvrant Gmail est un aller-retour qu'on ne fait
