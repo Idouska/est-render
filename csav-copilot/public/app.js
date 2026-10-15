@@ -141,6 +141,192 @@ function toast(message, isError = false) {
   el._timer = setTimeout(() => el.classList.remove('show'), 4000);
 }
 
+/* ------------------------------------------------------------- bulles --- */
+
+/*
+ * Les bulles de notification, comme sur un Mac.
+ *
+ * Un nouveau message, une réponse de l'atelier, un signalement : une petite
+ * carte arrive en haut à droite, en fondu, et s'efface seule au bout de cinq
+ * secondes. Le survol la retient ; une croix la ferme ; un clic ouvre ce
+ * qu'elle annonce. Plusieurs nouvelles à la fois se rangent en pile, sous
+ * une seule carte — dix bulles empilées ne se liraient plus.
+ *
+ * Le toast reste pour ce qui répond à un geste (« Réponse envoyée ») : la
+ * bulle, elle, annonce ce qui arrive sans qu'on l'ait demandé.
+ */
+const BULLE_DUREE_MS = 5000;
+const bulleNotif = document.createElement('div');
+bulleNotif.className = 'notif';
+bulleNotif.id = 'notif';
+bulleNotif.setAttribute('role', 'status');
+bulleNotif.setAttribute('aria-live', 'polite');
+bulleNotif.hidden = true;
+document.body.append(bulleNotif);
+let notifEnCours = [];
+let notifMinuteur = null;
+let notifEffacement = null;
+
+const SYMBOLE_CAMION =
+  'M2.5 6h11v10h-11zM13.5 9.5h4l3 3.5V16h-7M6.5 19a2 2 0 1 0 0-4a2 2 0 1 0 0 4M17 19a2 2 0 1 0 0-4a2 2 0 1 0 0 4';
+
+/**
+ * Annonce une nouvelle. `annonce` : { genre ('message' | 'atelier'),
+ * initiales | symbole, titre, ligne, apercu, ouvrir }.
+ */
+function annoncer(annonce) {
+  notifEnCours = [...notifEnCours, annonce].slice(-20);
+  dessinerNotif();
+  clearTimeout(notifEffacement);
+  bulleNotif.hidden = false;
+  requestAnimationFrame(() => bulleNotif.classList.add('notif-visible'));
+  clearTimeout(notifMinuteur);
+  notifMinuteur = setTimeout(fermerNotif, BULLE_DUREE_MS);
+}
+
+function fermerNotif() {
+  clearTimeout(notifMinuteur);
+  bulleNotif.classList.remove('notif-visible');
+  // La sortie est plus douce que l'entrée : on laisse au fondu le temps de finir.
+  notifEffacement = setTimeout(() => {
+    bulleNotif.hidden = true;
+    notifEnCours = [];
+  }, 500);
+}
+
+/** La carte affichée : la nouvelle seule, ou la pile qui les résume. */
+function carteNotif() {
+  if (notifEnCours.length === 1) return notifEnCours[0];
+  const n = notifEnCours.length;
+  const messages = notifEnCours.every((a) => a.genre === 'message');
+  const noms = [...new Set(notifEnCours.map((a) => a.titre))];
+  const autres = noms.length - 2;
+  return {
+    genre: messages ? 'message' : 'pile',
+    initiales: String(n),
+    titre: messages ? `${n} nouveaux messages` : `${n} nouveautés`,
+    ligne: autres > 0 ? `${noms.slice(0, 2).join(', ')} et ${autres} autre${autres > 1 ? 's' : ''}` : noms.join(' et '),
+    apercu: messages ? 'Ils attendent dans la Réception.' : '',
+    ouvrir: messages ? () => setView('tickets') : notifEnCours[0].ouvrir,
+  };
+}
+
+function dessinerNotif() {
+  const a = carteNotif();
+  bulleNotif.classList.toggle('notif-pile', notifEnCours.length > 1);
+  bulleNotif.innerHTML = `
+    <button class="notif-fermer" type="button" aria-label="Fermer la notification">
+      <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.8"
+        stroke-linecap="round" aria-hidden="true"><path d="M2 2l6 6M8 2 2 8" /></svg>
+    </button>
+    <button class="notif-carte" type="button">
+      <span class="notif-avatar notif-${a.genre}" aria-hidden="true">${
+        a.symbole
+          ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round"><path d="${a.symbole}" /></svg>`
+          : esc(a.initiales)
+      }<img class="notif-app" src="/static/logo.svg" alt="" width="17" height="17" /></span>
+      <span class="notif-txt">
+        <span class="notif-tete"><b>${esc(a.titre)}</b><span>maintenant</span></span>
+        <span class="notif-ligne">${esc(a.ligne)}</span>
+        ${a.apercu ? `<span class="notif-apercu">${esc(a.apercu)}</span>` : ''}
+      </span>
+    </button>`;
+  bulleNotif.querySelector('.notif-fermer').addEventListener('click', fermerNotif);
+  bulleNotif.querySelector('.notif-carte').addEventListener('click', () => {
+    fermerNotif();
+    a.ouvrir?.();
+  });
+}
+
+// Le survol retient la bulle ; en partant, on lui laisse deux secondes et demie.
+bulleNotif.addEventListener('mouseenter', () => clearTimeout(notifMinuteur));
+bulleNotif.addEventListener('mouseleave', () => {
+  if (bulleNotif.hidden) return;
+  clearTimeout(notifMinuteur);
+  notifMinuteur = setTimeout(fermerNotif, 2500);
+});
+
+/*
+ * Ce qui est nouveau, et ce qui ne l'est pas.
+ *
+ * On retient, pour chaque message vu, l'extrait de son dernier mail REÇU.
+ * S'il change, le client a écrit : c'est une arrivée. Notre propre réponse
+ * ne change pas cet extrait — on ne s'annonce pas ce qu'on vient d'envoyer.
+ * Un message déjà lu, ou qui dort depuis plus d'un quart d'heure, n'est pas
+ * une arrivée : il a seulement glissé dans la liste.
+ *
+ * Le tout premier passage ne fait que mémoriser : au chargement, rien n'est
+ * « nouveau », tout était déjà là.
+ */
+const extraitsVus = new Map();
+let arriveesAmorcees = false;
+let dernierSignalementAnnonce = 0;
+
+function guetterArrivees(tickets, { annoncerArrivees = true } = {}) {
+  const nouveaux = [];
+  for (const ticket of tickets) {
+    const extrait = ticket.messages?.[0]?.snippet ?? '';
+    const avant = extraitsVus.get(ticket.id);
+    extraitsVus.set(ticket.id, extrait);
+    if (!arriveesAmorcees || !annoncerArrivees || avant === extrait) continue;
+    if (estLu(ticket)) continue;
+    if (Date.now() - new Date(ticket.lastMessageAt).getTime() > 15 * 60_000) continue;
+    nouveaux.push(ticket);
+  }
+  arriveesAmorcees = true;
+  // Les plus anciens d'abord : la carte du dessus est la dernière arrivée.
+  for (const ticket of nouveaux.slice(0, 6).reverse()) annoncer(annonceDuTicket(ticket));
+}
+
+function annonceDuTicket(ticket) {
+  const nom = ticket.customerName ?? ticket.customerEmail ?? 'Client';
+  const ouvrir = () => {
+    setView('tickets');
+    void selectTicket(ticket.id);
+  };
+  if (ticket.signalement) {
+    dernierSignalementAnnonce = Date.now();
+    return { genre: 'atelier', symbole: SYMBOLE_CAMION, titre: nom, ligne: ticketTitle(ticket), apercu: ticket.messages?.[0]?.snippet ?? '', ouvrir };
+  }
+  return {
+    genre: 'message',
+    initiales: initials(nom),
+    titre: nom,
+    ligne: `Nouveau message · ${ticketTitle(ticket)}`,
+    apercu: ticket.messages?.[0]?.snippet ?? '',
+    ouvrir,
+  };
+}
+
+/** Ce que l'atelier a rendu depuis le dernier tour : réponses et signalements. */
+function guetterAtelier(avant, apres) {
+  if (!avant || !apres) return;
+  const reponses = (apres.answered ?? 0) + (apres.changes ?? 0) - ((avant.answered ?? 0) + (avant.changes ?? 0));
+  if (reponses > 0) {
+    annoncer({
+      genre: 'atelier',
+      symbole: SYMBOLE_CAMION,
+      titre: 'Atelier',
+      ligne: reponses > 1 ? `${reponses} réponses de l’atelier` : 'Réponse de l’atelier',
+      apercu: 'À reprendre sur la page Fournisseur.',
+      ouvrir: () => setView('suppliers'),
+    });
+  }
+  // Un signalement déjà annoncé avec son détail, par la file, ne se répète pas.
+  const signalements = (apres.issues ?? 0) - (avant.issues ?? 0);
+  if (signalements > 0 && Date.now() - dernierSignalementAnnonce > 120_000) {
+    annoncer({
+      genre: 'atelier',
+      symbole: SYMBOLE_CAMION,
+      titre: 'Atelier',
+      ligne: signalements > 1 ? `${signalements} signalements de l’atelier` : 'Signalement de l’atelier',
+      apercu: 'Un colis attend sur une table : voyez la page Fournisseur.',
+      ouvrir: () => setView('suppliers'),
+    });
+  }
+}
+
 class ApiError extends Error {
   constructor(message, status) {
     super(message);
@@ -267,7 +453,7 @@ document.getElementById('side-fold')?.addEventListener('click', () => {
  * question ; tant qu'une bulle est ouverte, la suivante vient sans attendre,
  * pour qu'on puisse descendre la colonne en lisant.
  */
-const BULLE_SIDE_CIBLES = '.nav-item, #shop-switch, #side-fold';
+const BULLE_SIDE_CIBLES = '.nav-item, #shop-switch, #side-fold, #compte-btn';
 const bulleSide = document.createElement('div');
 bulleSide.className = 'side-bulle';
 bulleSide.id = 'side-bulle';
@@ -286,6 +472,7 @@ function nomDansLaBulle(cible) {
     return compte ? `${nom} · ${compte}` : nom;
   }
   if (cible.id === 'shop-switch') return $('merchant-name')?.textContent ?? '';
+  if (cible.id === 'compte-btn') return $('me-name')?.textContent ?? '';
   return cible.getAttribute('aria-label') ?? '';
 }
 
@@ -342,6 +529,52 @@ function proposerBulleSide(cible, { attendre = true } = {}) {
   colonne?.addEventListener('pointerdown', cacherBulleSide);
   colonne?.addEventListener('scroll', cacherBulleSide, { passive: true });
 }
+
+/*
+ * Le compte, en pied de colonne.
+ *
+ * Un clic ouvre son menu : l'actualisation automatique, les réglages, la
+ * déconnexion — ce qu'on touche une fois par jour, rangé hors de la barre du
+ * haut. Il se ferme au clic à côté, à Échap, et après un choix.
+ */
+function ouvrirCompte(ouvrir) {
+  const menu = $('compte-menu');
+  const bouton = $('compte-btn');
+  if (!menu || !bouton) return;
+  menu.hidden = !ouvrir;
+  bouton.setAttribute('aria-expanded', String(ouvrir));
+  if (!ouvrir) return;
+  cacherBulleSide();
+  // Repliée, la colonne coupe ce qui dépasse : le menu se pose à sa droite.
+  const repliee = $('app-grid')?.classList.contains('folded') && innerWidth > 1080;
+  const zone = bouton.getBoundingClientRect();
+  menu.style.left = repliee ? `${Math.round(zone.right + 8)}px` : '';
+  menu.style.bottom = repliee ? `${Math.round(innerHeight - zone.bottom)}px` : '';
+}
+
+$('compte-btn')?.addEventListener('click', (event) => {
+  event.stopPropagation();
+  ouvrirCompte($('compte-menu').hidden);
+});
+
+$('compte-menu')?.addEventListener('click', (event) => {
+  const vue = event.target.closest('[data-compte-vue]')?.dataset.compteVue;
+  if (vue) {
+    ouvrirCompte(false);
+    setView(vue);
+  }
+});
+
+document.addEventListener('click', (event) => {
+  if ($('compte-menu')?.hidden || event.target.closest('#compte')) return;
+  ouvrirCompte(false);
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape' || $('compte-menu')?.hidden) return;
+  ouvrirCompte(false);
+  $('compte-btn')?.focus();
+});
 
 applySideFold();
 
@@ -686,8 +919,10 @@ function renderMe() {
    * un téléphone. Le texte s'y efface, le logo et le point restent — ce sont
    * eux qui portent l'information. Le `title` garde la phrase entière.
    */
+  // `conn-ok` : tout va bien. En barre haute, la pastille se tait alors — on
+  // n'affiche un branchement que lorsqu'il demande un geste.
   const pastille = (nom, etat, texte) =>
-    `<span class="conn-pill" title="${esc(texte)}">${marque(nom)}<span class="dot${
+    `<span class="conn-pill${etat ? '' : ' conn-ok'}" title="${esc(texte)}">${marque(nom)}<span class="dot${
       etat ? ` ${etat}` : ''
     }"></span> <span class="conn-txt">${esc(texte)}</span></span>`;
 
@@ -1231,9 +1466,13 @@ async function loadQueue({ append = false } = {}) {
   if (!append && state.queueSignature && state.queueSignature !== signature) {
     state.picked.clear();
   }
+  // Même file qu'au tour précédent : ce qui y apparaît est une arrivée. Après
+  // un changement de dossier ou de filtre, c'est seulement ce qu'on a demandé.
+  const memeFile = !append && state.queueSignature === signature;
   state.queueSignature = signature;
 
   const data = await api(`/api/tickets?${params}`);
+  guetterArrivees(data.tickets ?? [], { annoncerArrivees: memeFile });
 
   state.queueCursor = data.nextCursor ?? null;
   state.tickets = append ? [...state.tickets, ...data.tickets] : data.tickets;
@@ -9268,9 +9507,13 @@ const CLOCKS = [
   ['Los Angeles', 'America/Los_Angeles', 'us', 'LAX'],
 ];
 
-/** Aiguilles ou chiffres — un goût, pas une vérité : mémorisé par navigateur. */
+/**
+ * Chiffres ou aiguilles — un goût, pas une vérité : mémorisé par navigateur.
+ * Les chiffres d'abord, comme le cadran de montre qui sert de modèle ; les
+ * aiguilles pour qui les a choisies.
+ */
 function clockStyle() {
-  return localStorage.getItem('csav.clocks') === 'digital' ? 'digital' : 'analog';
+  return localStorage.getItem('csav.clocks') === 'analog' ? 'analog' : 'digital';
 }
 
 /**
@@ -9309,14 +9552,14 @@ function cityTimes(now) {
 /*
  * Deux étages.
  *
- * En barre haute : des pastilles numériques — sigle, heure en chiffres nets,
- * point vert ou ambre. C'est ce qu'une barre haute sait faire : se lire en un
- * coup d'œil, sans se déchiffrer.
+ * En barre haute : le sigle et l'heure, rien d'autre — comme l'horloge de la
+ * barre des menus. Une ville hors horaires s'efface à moitié ; le point vert
+ * ou ambre disait la même chose une seconde fois.
  *
- * Au clic : un panneau où les cadrans de manufacture ont enfin la place
- * d'être beaux — grands, nommés, avec le décalage horaire et l'état
- * joignable. Le luxe en grand, l'utile en petit : à 36 px, une aiguille ne
- * fait pas la manufacture, elle fait du bruit.
+ * Au clic : cinq cadrans de montre. Les chiffres hauts et fins du cadran
+ * numérique, la date en haut, deux complications rondes en bas — le
+ * décalage, puis un soleil (joignable) ou une lune (hors horaires). Hors
+ * horaires, la montre passe en veille, comme l'écran toujours allumé.
  */
 /*
  * Les heures locales portent `role="button"` depuis toujours, sans jamais
@@ -9331,35 +9574,71 @@ $('clocks')?.addEventListener('keydown', (event) => {
 function renderClocks() {
   const now = new Date();
 
+  // Des `span`, pas des boutons : c'est le conteneur qui est le bouton, et un
+  // bouton dans un bouton n'est pas du HTML.
   $('clocks').innerHTML = cityTimes(now)
     .map(
-      (c) => `<button class="ckp${c.open ? '' : ' shut'}" type="button"
+      (c) => `<span class="ckp${c.open ? '' : ' shut'}"
         title="${esc(c.city)} — ${c.open ? 'heures ouvrées' : 'hors horaires (9 h – 18 h locales)'}">
-        <span class="ckp-dot" aria-hidden="true"></span>
         <span class="ckp-city">${esc(c.short)}</span>
         <b class="ckp-time">${c.time}</b>
-      </button>`,
+      </span>`,
     )
     .join('');
 
   if (!$('clockpop')?.hidden) renderClockPop();
 }
 
-/** Grand cadran de manufacture — le même que la barre portait, en 96 px. */
-function bigDial(c, now) {
-  const minute = now.getMinutes();
-  const hourAngle = ((c.hour % 12) + minute / 60) * 30;
-  const minuteAngle = minute * 6 + now.getSeconds() / 10;
-  const secondsOffset = -(now.getSeconds() + now.getMilliseconds() / 1000);
+const ASTRE_SOLEIL =
+  'M12 16a4 4 0 1 0 0-8a4 4 0 1 0 0 8M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4';
+const ASTRE_LUNE = 'M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z';
 
-  return `<span class="dial-zoom clock-${c.code}"><span class="dial" aria-hidden="true">
-    <i class="dial-ring"></i>
-    <i class="dial-face"></i>
-    <i class="dial-h" style="transform: rotate(${hourAngle}deg)"></i>
-    <i class="dial-m" style="transform: rotate(${minuteAngle}deg)"></i>
-    <i class="dial-s" style="animation-delay: ${secondsOffset}s"></i>
-    <i class="dial-cap"></i>
-  </span></span>`;
+/** Le décalage avec l'heure du poste, tel que la complication l'affiche. */
+function ecartHoraire(offset) {
+  return offset === 0 ? '=' : `${offset > 0 ? '+' : '−'}${Math.abs(offset)} h`;
+}
+
+/** Le cadran numérique : la date, l'heure en chiffres hauts, deux complications. */
+function cadranChiffres(c, now) {
+  const date = now
+    .toLocaleDateString('fr-FR', { timeZone: c.zone, weekday: 'short', day: 'numeric' })
+    .toUpperCase();
+  return `<span class="montre-haut"><span>${esc(c.short)}</span><span>${esc(date)}</span></span>
+    <span class="montre-heure"><span>${c.time}</span></span>
+    <span class="montre-bas">
+      <span class="montre-comp">${ecartHoraire(c.offset)}</span>
+      <span class="montre-comp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${
+          c.open ? ASTRE_SOLEIL : ASTRE_LUNE
+        }" /></svg></span>
+    </span>`;
+}
+
+/** Le cadran à aiguilles : soixante graduations, quatre chiffres, trois aiguilles. */
+function cadranAiguilles(c, now) {
+  const there = new Date(now.toLocaleString('en-US', { timeZone: c.zone }));
+  const minute = there.getMinutes();
+  const secondes = there.getSeconds() + now.getMilliseconds() / 1000;
+  const graduations = Array.from(
+    { length: 60 },
+    (_, i) => `<i class="mg${i % 5 === 0 ? ' mg5' : ''}" style="--a: ${i * 6}deg"></i>`,
+  ).join('');
+  const chiffres = [
+    ['12', 'mn-h'],
+    ['3', 'mn-d'],
+    ['6', 'mn-b'],
+    ['9', 'mn-g'],
+  ]
+    .map(([n, place]) => `<span class="mn ${place}">${n}</span>`)
+    .join('');
+  return `<span class="montre-ville">${esc(c.short)}</span>
+    <span class="montre-cadran">
+      ${graduations}${chiffres}
+      <i class="ma ma-h" style="--a: ${((c.hour % 12) + minute / 60) * 30}deg"></i>
+      <i class="ma ma-m" style="--a: ${(minute + secondes / 60) * 6}deg"></i>
+      <i class="ma ma-s" style="animation-delay: ${-secondes}s"></i>
+      <i class="ma-c"></i>
+    </span>`;
 }
 
 function renderClockPop() {
@@ -9367,22 +9646,17 @@ function renderClockPop() {
   if (!pop) return;
 
   const now = new Date();
-  const digital = clockStyle() === 'digital';
+  const aiguilles = clockStyle() === 'analog';
 
   pop.innerHTML = cityTimes(now)
     .map(
       (c) => `<div class="ckcard${c.open ? '' : ' shut'}">
-        ${
-          digital
-            ? `<div class="wface wface-big${c.open ? '' : ' shut'}">
-                 <b>${esc(c.city)}</b>
-                 <span class="wface-time">${c.time}</span>
-               </div>`
-            : bigDial(c, now)
-        }
+        <div class="montre${aiguilles ? ' montre-aig' : ''}${c.open ? '' : ' veille'}" role="img"
+          aria-label="${esc(c.city)}, ${c.time}, ${c.open ? 'joignable' : 'hors horaires'}">
+          ${aiguilles ? cadranAiguilles(c, now) : cadranChiffres(c, now)}
+        </div>
         <div class="ckcard-meta">
           <b>${esc(c.city)}</b>
-          <span class="ckcard-time">${c.time}</span>
           <span class="ckcard-sub">${
             c.offset === 0 ? 'même heure' : `${c.offset > 0 ? '+' : '−'}${Math.abs(c.offset)} h`
           } · ${c.open ? '<i class="ok">joignable</i>' : 'hors horaires'}</span>
@@ -11288,6 +11562,7 @@ async function refreshChangesCount() {
     const pending = modificationsEnAttente(demandes);
     state.changesPending = pending;
     renderUrgencesSansReponse(demandes);
+    guetterAtelier(state.supplierActivity, activity);
     state.supplierActivity = activity;
     state.navCounts = {
       ...state.navCounts,
@@ -14802,6 +15077,21 @@ document.addEventListener('visibilitychange', () => {
  */
 let relectureAnnoncee = null;
 
+/*
+ * Hors de l'écran SAV, la file ne se relit pas : on regarde seulement les
+ * dix derniers messages de la Réception, pour annoncer ceux qui arrivent.
+ */
+async function guetterHorsFile() {
+  try {
+    const params = new URLSearchParams({ folder: 'inbox', limit: '10' });
+    if (state.allShops) params.set('scope', 'all');
+    const data = await api(`/api/tickets?${params}`);
+    guetterArrivees(data.tickets ?? []);
+  } catch {
+    // Une annonce manquée ne mérite pas d'erreur à l'écran.
+  }
+}
+
 function ecouterEvenements() {
   if (!('EventSource' in window) || state.flux) return;
   state.flux = new EventSource('/api/evenements');
@@ -14815,7 +15105,10 @@ function ecouterEvenements() {
       // Les pastilles du menu suivent, même hors de l'écran SAV.
       changesCountAt = 0;
       void refreshChangesCount();
-      if (state.view !== 'tickets') return;
+      if (state.view !== 'tickets') {
+        void guetterHorsFile();
+        return;
+      }
       dernierTour = Date.now();
       void refreshCurrent({ silent: true });
     }, 400);
