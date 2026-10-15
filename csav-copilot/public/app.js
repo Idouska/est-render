@@ -12,6 +12,9 @@ const state = {
   filter: '',
   tickets: [],
   currentId: null,
+  // Le message affiché a été ouvert par l'outil, au démarrage, et non choisi :
+  // sa ligne reste grise tant qu'on n'a pas cliqué.
+  ouvertureAuto: false,
   detail: null,
   refund: null,
   suppliers: [],
@@ -239,7 +242,10 @@ function applySideFold() {
   const button = document.getElementById('side-fold');
   if (button) {
     button.setAttribute('aria-pressed', String(folded));
-    button.title = folded ? 'Déplier la navigation' : 'Replier la navigation';
+    // Pas de `title` : la bulle de la colonne dit déjà le nom du bouton, et
+    // l'infobulle du navigateur viendrait s'y superposer une seconde après.
+    button.removeAttribute('title');
+    button.setAttribute('aria-label', folded ? 'Déplier la navigation' : 'Replier la navigation');
   }
 }
 
@@ -247,7 +253,95 @@ document.getElementById('side-fold')?.addEventListener('click', () => {
   const folded = localStorage.getItem('csav.side') === 'folded';
   localStorage.setItem('csav.side', folded ? 'open' : 'folded');
   applySideFold();
+  cacherBulleSide();
 });
+
+/*
+ * Repliée, la navigation ne montre plus que des icônes, et une icône seule ne
+ * dit pas toujours où elle mène. Au survol, chacune donne son nom dans une
+ * bulle à sa droite, comme la barre latérale de Finder ou le Dock.
+ *
+ * Une seule bulle, posée sur `body` : la colonne repliée coupe ce qui dépasse
+ * (`overflow: hidden`), une bulle dessinée dans le bouton y resterait cachée.
+ * La première attend un instant — un passage de souris n'est pas une
+ * question ; tant qu'une bulle est ouverte, la suivante vient sans attendre,
+ * pour qu'on puisse descendre la colonne en lisant.
+ */
+const BULLE_SIDE_CIBLES = '.nav-item, #shop-switch, #side-fold';
+const bulleSide = document.createElement('div');
+bulleSide.className = 'side-bulle';
+bulleSide.id = 'side-bulle';
+bulleSide.setAttribute('role', 'tooltip');
+bulleSide.hidden = true;
+document.body.append(bulleSide);
+let bulleSideMinuteur = null;
+let bulleSideOuverteJusqua = 0;
+let bulleSideCible = null;
+let bulleSideAttendue = null;
+
+function nomDansLaBulle(cible) {
+  if (cible.classList.contains('nav-item')) {
+    const nom = cible.querySelector('.nav-label')?.textContent ?? '';
+    const compte = cible.querySelector('.tally')?.textContent;
+    return compte ? `${nom} · ${compte}` : nom;
+  }
+  if (cible.id === 'shop-switch') return $('merchant-name')?.textContent ?? '';
+  return cible.getAttribute('aria-label') ?? '';
+}
+
+function montrerBulleSide(cible) {
+  const texte = nomDansLaBulle(cible).trim();
+  if (!texte) return;
+  bulleSideCible = cible;
+  bulleSide.textContent = texte;
+  bulleSide.hidden = false;
+  const zone = cible.getBoundingClientRect();
+  bulleSide.style.top = `${Math.round(zone.top + zone.height / 2)}px`;
+  bulleSide.style.left = `${Math.round(zone.right + 10)}px`;
+  cible.setAttribute('aria-describedby', 'side-bulle');
+  requestAnimationFrame(() => bulleSide.classList.add('side-bulle-visible'));
+}
+
+function cacherBulleSide() {
+  clearTimeout(bulleSideMinuteur);
+  bulleSideAttendue = null;
+  if (bulleSide.hidden) return;
+  bulleSideOuverteJusqua = Date.now() + 300;
+  bulleSideCible?.removeAttribute('aria-describedby');
+  bulleSideCible = null;
+  bulleSide.classList.remove('side-bulle-visible');
+  bulleSide.hidden = true;
+}
+
+function proposerBulleSide(cible, { attendre = true } = {}) {
+  // Dépliée, chaque bouton porte déjà son nom : seul « Replier » reste muet.
+  const repliee = $('app-grid')?.classList.contains('folded');
+  if (!cible || (!repliee && cible.id !== 'side-fold')) return cacherBulleSide();
+  if (cible === bulleSideCible || cible === bulleSideAttendue) return;
+  const deja = !bulleSide.hidden || Date.now() < bulleSideOuverteJusqua;
+  cacherBulleSide();
+  if (!attendre || deja) return montrerBulleSide(cible);
+  bulleSideAttendue = cible;
+  bulleSideMinuteur = setTimeout(() => {
+    bulleSideAttendue = null;
+    montrerBulleSide(cible);
+  }, 450);
+}
+
+{
+  const colonne = document.querySelector('.side');
+  colonne?.addEventListener('pointerover', (event) => {
+    if (event.pointerType === 'touch') return;
+    proposerBulleSide(event.target.closest(BULLE_SIDE_CIBLES));
+  });
+  colonne?.addEventListener('pointerleave', cacherBulleSide);
+  colonne?.addEventListener('focusin', (event) => {
+    if (event.target.matches(':focus-visible')) proposerBulleSide(event.target.closest(BULLE_SIDE_CIBLES), { attendre: false });
+  });
+  colonne?.addEventListener('focusout', cacherBulleSide);
+  colonne?.addEventListener('pointerdown', cacherBulleSide);
+  colonne?.addEventListener('scroll', cacherBulleSide, { passive: true });
+}
 
 applySideFold();
 
@@ -1238,7 +1332,7 @@ async function loadQueue({ append = false } = {}) {
           // pouvant pas retirer le libellé. `openedAt` dit qu'on l'a ouvert
           // ici. Sans le second, cliquer sur un message ne l'éteignait jamais.
           lu ? ' q-done' : ''
-        }" data-id="${ticket.id}"
+        }${ticket.id === state.currentId && state.ouvertureAuto ? ' q-auto' : ''}" data-id="${ticket.id}"
           aria-current="${ticket.id === state.currentId}">
           <!--
             Trois étages : qui écrit, ce qu'il demande, ce qu'il dit.
@@ -3016,11 +3110,24 @@ async function selectTicket(id, { silent = false } = {}) {
   const autreTicket = id !== state.currentId;
   state.currentId = id;
 
+  /*
+   * Ouvert par l'outil, ou choisi ?
+   *
+   * Au démarrage, le premier message s'ouvre seul, et sa ligne se remplissait
+   * de l'accent comme si on l'avait cliquée : une discussion en couleur alors
+   * qu'on n'avait rien sélectionné. Comme dans Mail, une sélection qu'on n'a
+   * pas faite reste grise ; elle prend l'accent au premier clic. Recharger le
+   * même message en silence, après une action, ne la fait pas repasser au gris.
+   */
+  state.ouvertureAuto = silent ? autreTicket || state.ouvertureAuto : false;
+
   // Retour visuel immédiat, avant toute requête : la ligne cliquée s'allume
   // tout de suite. Attendre le serveur pour déplacer une surbrillance donne
   // l'impression d'un clic perdu.
   document.querySelectorAll('.queue-item').forEach((item) => {
-    item.setAttribute('aria-current', String(item.dataset.id === id));
+    const courant = item.dataset.id === id;
+    item.setAttribute('aria-current', String(courant));
+    item.classList.toggle('q-auto', courant && state.ouvertureAuto);
   });
 
   const detail = (await prefetched.get(id)) ?? (await api(`/api/tickets/${id}`));
@@ -14405,20 +14512,45 @@ const SEUIL_TIRAGE = 64;
 const TIRAGE_MAX = 96;
 let ignorerClicJusqua = 0;
 
-function installerTirage() {
-  const colonne = document.querySelector('.side');
+/*
+ * Trois façons de tirer, un seul geste.
+ *
+ * Le clic-glissé à la souris existait seul. Le geste qu'on fait sur un Mac est
+ * pourtant celui du trackpad — deux doigts vers le bas, déjà tout en haut —,
+ * et sur un téléphone celui du pouce : ni l'un ni l'autre n'actualisait, et
+ * le geste semblait avoir disparu. Les trois mènent maintenant au même
+ * endroit, dans la colonne de gauche comme dans la liste des conversations.
+ *
+ * Le trackpad a un piège : l'inertie. Une liste lancée vers le haut arrive en
+ * butée avec de l'élan, et cet élan ressemble à un tirage. Seul compte donc un
+ * geste COMMENCÉ tout en haut — un geste se termine quand les événements
+ * s'arrêtent un quart de seconde.
+ *
+ * « Tout en haut » se vérifie sur toute la chaîne, pas sur la seule colonne :
+ * selon la largeur, c'est la colonne qui défile, la liste dans la colonne, ou
+ * la page entière. Une liste à mi-course sous une colonne immobile n'est pas
+ * en haut.
+ */
+function enHautDuTirage(cible, colonne, avecPage) {
+  for (let el = cible; el && el !== document.body; el = el.parentElement) {
+    if (el.scrollTop > 0) return false;
+    if (el === colonne) break;
+  }
+  return !avecPage || (document.scrollingElement?.scrollTop ?? 0) <= 0;
+}
+
+function installerTirage(colonne, avant = null) {
   if (!colonne) return;
 
   const indicateur = document.createElement('div');
   indicateur.className = 'ptr';
   indicateur.setAttribute('aria-hidden', 'true');
   indicateur.innerHTML = '<span class="ptr-fleche">↓</span><span class="ptr-texte"></span>';
-  colonne.prepend(indicateur);
+  if (avant) avant.before(indicateur);
+  else colonne.prepend(indicateur);
   const texte = indicateur.querySelector('.ptr-texte');
 
-  let depart = null;
   let distance = 0;
-  let tire = false;
 
   const afficher = () => {
     const pret = distance >= SEUIL_TIRAGE;
@@ -14428,10 +14560,34 @@ function installerTirage() {
     texte.textContent = pret ? 'Relâcher pour actualiser' : 'Tirer pour actualiser';
   };
 
+  /** Le geste est fini : au-delà du seuil, on actualise ; en deçà, rien. */
+  const finir = async () => {
+    if (distance < SEUIL_TIRAGE || state.refreshing) {
+      distance = 0;
+      afficher();
+      return;
+    }
+    indicateur.classList.add('ptr-charge');
+    indicateur.style.height = '40px';
+    texte.textContent = 'Mise à jour…';
+    try {
+      changesCountAt = 0;
+      await Promise.all([refreshCurrent(), refreshChangesCount()]);
+    } finally {
+      indicateur.classList.remove('ptr-charge');
+      distance = 0;
+      afficher();
+    }
+  };
+
+  /* --- À la souris : cliquer, tirer, relâcher. --- */
+  let depart = null;
+  let tire = false;
+
   colonne.addEventListener('pointerdown', (event) => {
     if (event.button !== 0 || event.pointerType === 'touch') return;
-    if (colonne.scrollTop > 0 || state.refreshing) return;
-    if (event.target.closest('input, textarea, select, .shop-menu')) return;
+    if (!enHautDuTirage(event.target, colonne, false) || state.refreshing) return;
+    if (event.target.closest('input, textarea, select, .shop-menu, button, a, label, .queue-item')) return;
     depart = { y: event.clientY, id: event.pointerId };
     distance = 0;
     tire = false;
@@ -14454,31 +14610,14 @@ function installerTirage() {
     afficher();
   });
 
-  const relacher = async (event) => {
+  const relacher = (event) => {
     if (!depart || event.pointerId !== depart.id) return;
     depart = null;
     if (!tire) return;
     tire = false;
     colonne.classList.remove('ptr-actif');
     ignorerClicJusqua = Date.now() + 400;
-
-    if (distance < SEUIL_TIRAGE || state.refreshing) {
-      distance = 0;
-      afficher();
-      return;
-    }
-
-    indicateur.classList.add('ptr-charge');
-    indicateur.style.height = '40px';
-    texte.textContent = 'Mise à jour…';
-    try {
-      changesCountAt = 0;
-      await Promise.all([refreshCurrent(), refreshChangesCount()]);
-    } finally {
-      indicateur.classList.remove('ptr-charge');
-      distance = 0;
-      afficher();
-    }
+    void finir();
   };
   colonne.addEventListener('pointerup', relacher);
   colonne.addEventListener('pointercancel', relacher);
@@ -14493,9 +14632,74 @@ function installerTirage() {
     },
     { capture: true },
   );
+
+  /* --- Au trackpad : deux doigts vers le bas, déjà tout en haut. --- */
+  let dernierCran = 0;
+  let gesteEnHaut = false;
+  let cumul = 0;
+  let fin = null;
+
+  colonne.addEventListener(
+    'wheel',
+    (event) => {
+      const maintenant = Date.now();
+      // Un nouveau geste commence après un quart de seconde de calme.
+      if (maintenant - dernierCran > 250) {
+        gesteEnHaut = enHautDuTirage(event.target, colonne, true);
+        cumul = 0;
+      }
+      dernierCran = maintenant;
+      if (!gesteEnHaut || state.refreshing || event.deltaY >= 0 || !enHautDuTirage(event.target, colonne, true)) {
+        if (event.deltaY > 0) gesteEnHaut = false;
+        return;
+      }
+      cumul += -event.deltaY;
+      distance = Math.min(TIRAGE_MAX, cumul * 0.35);
+      afficher();
+      clearTimeout(fin);
+      fin = setTimeout(() => void finir(), 260);
+    },
+    { passive: true },
+  );
+
+  /* --- Au doigt : tirer la liste vers le bas, déjà tout en haut. --- */
+  let departDoigt = null;
+
+  colonne.addEventListener(
+    'touchstart',
+    (event) => {
+      departDoigt = enHautDuTirage(event.target, colonne, true) && !state.refreshing ? event.touches[0].clientY : null;
+      distance = 0;
+    },
+    { passive: true },
+  );
+  colonne.addEventListener(
+    'touchmove',
+    (event) => {
+      if (departDoigt === null) return;
+      const ecart = event.touches[0].clientY - departDoigt;
+      if (ecart <= 0 || !enHautDuTirage(event.target, colonne, true)) {
+        departDoigt = null;
+        distance = 0;
+        afficher();
+        return;
+      }
+      // Le défilement natif s'efface : c'est le tirage qui suit le doigt.
+      event.preventDefault();
+      distance = Math.min(TIRAGE_MAX, ecart * 0.5);
+      afficher();
+    },
+    { passive: false },
+  );
+  colonne.addEventListener('touchend', () => {
+    if (departDoigt === null) return;
+    departDoigt = null;
+    void finir();
+  });
 }
 
-installerTirage();
+installerTirage(document.querySelector('.side'));
+installerTirage($('queue')?.closest('.panel'), $('queue'));
 
 /**
  * Le bouton dit ce qu'il fait, pas depuis quand il ne l'a pas fait.
