@@ -114,23 +114,24 @@
           <!-- Urgences restées sans réponse de l'atelier : en tête de tous
                les écrans, avec le numéro à appeler, jusqu'à sa réponse. -->
           <div class="urg-banner" id="urg-banner" role="alert" hidden></div>
+          <!-- Trois zones, comme la barre d'outils d'une app du Mac : le titre à
+               gauche, la recherche au centre, les heures et les commandes à
+               droite. -->
           <header class="head">
-            <button class="navtoggle" id="navtoggle" type="button" aria-label="Ouvrir la navigation"
-              aria-expanded="false">
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"
-                stroke-linecap="round" aria-hidden="true">
-                <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11" />
-              </svg>
-            </button>
-            <div class="head-main">
-              <div class="crumb" id="crumb"></div>
-              <h1 id="view-title">SAV client</h1>
-              <p class="view-sub" id="view-sub" hidden></p>
+            <div class="head-gauche">
+              <button class="navtoggle" id="navtoggle" type="button" aria-label="Ouvrir la navigation"
+                aria-expanded="false">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"
+                  stroke-linecap="round" aria-hidden="true">
+                  <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11" />
+                </svg>
+              </button>
+              <div class="head-main">
+                <div class="crumb" id="crumb"></div>
+                <h1 id="view-title">SAV client</h1>
+                <p class="view-sub" id="view-sub" hidden></p>
+              </div>
             </div>
-            <!-- Les heures des ateliers et des clients, sur la ligne du titre,
-                 comme les horloges de la barre des menus du Mac. -->
-            <div class="clocks" id="clocks" role="button" tabindex="0"
-              title="Heures locales — cliquer pour les cadrans"></div>
             <!-- La recherche avait une fonction et pas de porte.
                  La palette ⌘K cherche déjà clients, commandes et messages,
                  mais rien à l'écran ne le disait : une commande qu'on ne voit
@@ -150,49 +151,53 @@
                    coupait partout ailleurs en « Recherch… », qui ne dit rien.
                    Mieux vaut une invite courte et entière qu'une longue
                    tronquée : la seconde a seulement l'air cassée. -->
-              <span>Rechercher un client…</span>
+              <span>Rechercher un client, une commande, un message…</span>
               <kbd>⌘K</kbd>
             </button>
-
-
-            <!-- Les états de connexion et le rafraîchissement remontent
-                 ici, sur la ligne du titre. Ils vivaient dans la rangée
-                 d'en dessous, qu'ils obligeaient à se replier sur deux
-                 lignes dès 1400 px : trois blocs de vingt pixels de haut
-                 pour une information qu'on ne lit qu'en cas de doute. -->
-            <!-- Shopify et Gmail ne parlent ici qu'en cas de panne : une
-                 pastille verte qu'on voit toute la journée n'apprend rien. -->
-            <div class="head-conn" id="conn"></div>
-            <span class="head-sync" id="sync-note"></span>
-            <div class="head-tools">
-              <!-- Le libellé reste pour les lecteurs d'écran ; à l'œil, l'icône
-                   suffit, et l'infobulle dit depuis quand c'est à jour. -->
-              <button class="btn btn-small" id="refresh" type="button" title="Rafraîchir (R)">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M20 12a8 8 0 1 1-2.4-5.7" />
-                  <path d="M20 4v4.5h-4.5" />
+            <div class="head-droite">
+              <!-- Les heures des ateliers et des clients, sur la ligne du titre,
+                   comme les horloges de la barre des menus du Mac. -->
+              <div class="clocks" id="clocks" role="button" tabindex="0"
+                title="Heures locales — cliquer pour les cadrans"></div>
+              <!-- Les états de connexion et le rafraîchissement remontent
+                   ici, sur la ligne du titre. Ils vivaient dans la rangée
+                   d'en dessous, qu'ils obligeaient à se replier sur deux
+                   lignes dès 1400 px : trois blocs de vingt pixels de haut
+                   pour une information qu'on ne lit qu'en cas de doute. -->
+              <!-- Shopify et Gmail ne parlent ici qu'en cas de panne : une
+                   pastille verte qu'on voit toute la journée n'apprend rien. -->
+              <div class="head-conn" id="conn"></div>
+              <span class="head-sync" id="sync-note"></span>
+              <div class="head-tools">
+                <!-- Le libellé reste pour les lecteurs d'écran ; à l'œil, l'icône
+                     suffit, et l'infobulle dit depuis quand c'est à jour. -->
+                <button class="btn btn-small" id="refresh" type="button" title="Rafraîchir (R)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M20 12a8 8 0 1 1-2.4-5.7" />
+                    <path d="M20 4v4.5h-4.5" />
+                  </svg>
+                  <span id="refresh-label">Rafraîchir</span>
+                </button>
+              </div>
+              <!-- La lune ne paraît que si « Ne pas déranger » est allumé, comme
+                   dans la barre des menus du Mac. -->
+              <span class="head-lune" id="head-lune" role="img" aria-label="Ne pas déranger activé"
+                title="Ne pas déranger" hidden>
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" />
                 </svg>
-                <span id="refresh-label">Rafraîchir</span>
+              </span>
+              <button class="head-cc" id="cc-btn" type="button" aria-label="Centre de contrôle"
+                title="Centre de contrôle" aria-haspopup="dialog" aria-expanded="false" aria-controls="cc">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+                  <rect x="3" y="4" width="18" height="6.5" rx="3.25" />
+                  <rect x="3" y="13.5" width="18" height="6.5" rx="3.25" />
+                  <circle cx="8" cy="7.25" r="1.6" fill="currentColor" />
+                  <circle cx="16" cy="16.75" r="1.6" fill="currentColor" />
+                </svg>
               </button>
             </div>
-            <!-- La lune ne paraît que si « Ne pas déranger » est allumé, comme
-                 dans la barre des menus du Mac. -->
-            <span class="head-lune" id="head-lune" role="img" aria-label="Ne pas déranger activé"
-              title="Ne pas déranger" hidden>
-              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" />
-              </svg>
-            </span>
-            <button class="head-cc" id="cc-btn" type="button" aria-label="Centre de contrôle"
-              title="Centre de contrôle" aria-haspopup="dialog" aria-expanded="false" aria-controls="cc">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
-                <rect x="3" y="4" width="18" height="6.5" rx="3.25" />
-                <rect x="3" y="13.5" width="18" height="6.5" rx="3.25" />
-                <circle cx="8" cy="7.25" r="1.6" fill="currentColor" />
-                <circle cx="16" cy="16.75" r="1.6" fill="currentColor" />
-              </svg>
-            </button>
           </header>
 
       <!-- Bandeau de simulation de rôle. En haut, pleine largeur, coloré :
