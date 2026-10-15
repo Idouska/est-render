@@ -12038,3 +12038,106 @@ progress { accent-color: var(--accent); }
 }
 .tp-four { border: 0; }
 .sig-acts { display: inline-flex; gap: 6px; margin-top: 9px; }
+
+/* --------------------------------------- SAV client : sélection, menus ---
+   La ligne ouverte ET cochée gardait le fond clair de « coché » sous le
+   texte blanc de « ouverte » : blanc sur bleu pâle, illisible. La ligne
+   ouverte garde son accent ; la case dit qu'elle est cochée. */
+#view-tickets .qrow.picked .queue-item[aria-current="true"],
+#view-tickets .qrow.picked .queue-item[aria-current="true"]:hover { background: var(--accent); }
+
+/* La case prend la place de l'avatar, à sa taille, comme dans Mail : un
+   rond vide au survol, un rond plein coché. Elle était posée en petit
+   par-dessus les initiales, qui dépassaient tout autour. */
+#view-tickets .qpick { top: 11px; left: 24px; width: 28px; height: 28px; border-radius: 50%; }
+#view-tickets .qpick input {
+  appearance: none;
+  -webkit-appearance: none;
+  display: block;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  border: 1.5px solid color-mix(in srgb, var(--ink) 30%, transparent);
+  border-radius: 50%;
+  background: var(--surface);
+  cursor: pointer;
+}
+#view-tickets .qpick input:checked { border-color: var(--accent); background: var(--accent); }
+#view-tickets .qpick input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#view-tickets .qpick:has(input:checked)::after {
+  content: '';
+  position: absolute;
+  top: 9px;
+  left: 9px;
+  width: 10px;
+  height: 5px;
+  border-left: 2px solid var(--on-accent);
+  border-bottom: 2px solid var(--on-accent);
+  transform: rotate(-45deg);
+  pointer-events: none;
+}
+/* Sur la ligne ouverte, remplie de l'accent, la case s'inverse. */
+#view-tickets .qrow:has(> .queue-item[aria-current="true"]) .qpick input {
+  border-color: color-mix(in srgb, var(--on-accent) 80%, transparent);
+  background: var(--accent);
+}
+#view-tickets .qrow:has(> .queue-item[aria-current="true"]) .qpick input:checked {
+  border-color: var(--on-accent);
+  background: var(--on-accent);
+}
+#view-tickets .qrow:has(> .queue-item[aria-current="true"]) .qpick:has(input:checked)::after {
+  border-color: var(--accent);
+}
+
+/* La barre d'actions groupées, en trois rangées fixes. */
+#view-tickets .bulk { flex-direction: column; align-items: stretch; flex-wrap: nowrap; gap: 8px; padding: 10px 12px 12px; }
+.bulk-tete { display: flex; align-items: center; gap: 8px; }
+.bulk-sortie {
+  margin-left: auto;
+  padding: 4px 2px;
+  border: 0;
+  background: none;
+  color: var(--accent-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 550;
+  cursor: pointer;
+}
+.bulk-sortie:hover { text-decoration: underline; }
+.bulk-gestes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.bulk-gestes .btn { justify-content: center; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bulk-choix { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 6px; }
+.bulk-choix .bulk-label { max-width: none; min-width: 0; min-height: 30px; }
+/* Sans catalogue de libellés, le menu d'assignation prend la place. */
+.bulk-choix:not(:has(#bulk-label)) { grid-template-columns: minmax(0, 1fr) auto; }
+@media (min-width: 1500px) {
+  .bulk-gestes { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+/* « Classer ce message » : un titre, une croix, la liste qui défile dessous. */
+.lmore-box { flex-direction: column; flex-wrap: nowrap; gap: 8px; padding: 8px 10px 10px; width: 280px; max-height: 320px; overflow: hidden; }
+.lmore-tete { display: flex; align-items: center; gap: 8px; }
+.lmore-tete b { flex: 1; font-size: 12.5px; font-weight: 650; color: var(--ink-soft); }
+.lmore-x {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.lmore-x:hover { background: color-mix(in srgb, var(--ink) 13%, transparent); color: var(--ink); }
+.lmore-chips { display: flex; flex-wrap: wrap; gap: 6px; overflow-y: auto; min-height: 0; }
+/* Au doigt, la case garde sa gouttière entre la pastille et l'avatar :
+   à 24 px, sans le recouvrir. */
+@media (max-width: 760px) {
+  #view-tickets .qpick { top: 13px; left: 21px; width: 24px; height: 24px; }
+  #view-tickets .qpick input { width: 24px; height: 24px; }
+  #view-tickets .qpick:has(input:checked)::after { top: 7.5px; left: 7px; width: 9px; height: 4.5px; }
+}

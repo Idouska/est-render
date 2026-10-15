@@ -459,6 +459,28 @@ $('q-labels-list')?.addEventListener('click', (event) => {
 $('q-labels-q')?.addEventListener('input', renderLabelChips);
 
 /*
+ * « Classer ce message » se referme comme un menu.
+ *
+ * C'est un `<details>` : il ne se refermait qu'en recliquant sur son propre
+ * titre. Un clic à côté, la croix ou Échap le ferment désormais, comme tous
+ * les menus de l'écran.
+ */
+function fermerClasser(sauf = null) {
+  document.querySelectorAll('details.lmore[open]').forEach((menu) => {
+    if (menu !== sauf) menu.open = false;
+  });
+}
+
+document.addEventListener('click', (event) => {
+  if (event.target.closest('[data-lmore-fermer]')) return fermerClasser();
+  fermerClasser(event.target.closest('details.lmore'));
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') fermerClasser();
+});
+
+/*
  * Les deux menus de la barre.
  *
  * Un seul ouvert à la fois, refermé au clic dehors et à Échap. Rien de plus :
@@ -2358,7 +2380,13 @@ $('head-search')?.addEventListener('click', () => openPalette());
    retombe sur le texte libre dans cette file. */
 $('queue-search')?.addEventListener('click', () => openPalette());
 
-$('queue-filter')?.addEventListener('click', () => $('q-filters-btn')?.click());
+/* Le clic s'arrête ici. Il ouvrait le menu, puis remontait jusqu'au
+   document, dont l'écouteur « clic dehors » le refermait aussitôt : le
+   bouton semblait ne rien faire. */
+$('queue-filter')?.addEventListener('click', (event) => {
+  event.stopPropagation();
+  $('q-filters-btn')?.click();
+});
 
 /*
  * Tri de la file, depuis l'en-tête.
@@ -4078,35 +4106,50 @@ function renderBulk() {
 
   const labels = Object.keys(labelStyles).sort((a, b) => a.localeCompare(b, 'fr'));
 
+  /*
+   * Trois rangées, toujours les mêmes.
+   *
+   * Les huit commandes s'enchaînaient au fil de la largeur : dans la colonne
+   * de la file, elles retombaient sur cinq lignes de longueurs inégales, et
+   * « Tout décocher » finissait seul au bas. En haut, ce qu'on a coché et la
+   * sortie ; au milieu, les quatre gestes de même poids, de même taille ; en
+   * bas, les deux choix et la suppression, à l'écart des gestes courants.
+   */
   bar.innerHTML = `
-    <b>${count} sélectionné${count > 1 ? 's' : ''}</b>
-    <button class="btn btn-small" data-bulk="read">Marquer lu</button>
-    <button class="btn btn-small" data-bulk="unread">Marquer non lu</button>
-    <button class="btn btn-small" data-bulk="close">Marquer résolu</button>
-    <button class="btn btn-small" data-bulk="analyze">Relancer l’IA</button>
-    ${
-      labels.length
-        ? `<select class="bulk-label" id="bulk-label">
-             <option value="">Poser un libellé…</option>
-             ${labels
-               .map((name) => `<option value="${esc(name)}">${esc(name)}</option>`)
-               .join('')}
-           </select>`
-        : ''
-    }
-    <select class="bulk-label" id="bulk-assign">
-      <option value="">Assigner à…</option>
-      <option value="none">Personne</option>
-      ${state.agents
-        .map((user) => `<option value="${esc(user.id)}">${esc(user.name ?? user.email)}</option>`)
-        .join('')}
-    </select>
-    ${
-      canI('configure')
-        ? `<button class="btn btn-small btn-danger" data-bulk="delete">Supprimer</button>`
-        : ''
-    }
-    <button class="btn btn-small" data-bulk="clear" style="margin-left:auto">Tout décocher</button>`;
+    <div class="bulk-tete">
+      <b>${count} sélectionné${count > 1 ? 's' : ''}</b>
+      <button class="bulk-sortie" type="button" data-bulk="clear">Tout décocher</button>
+    </div>
+    <div class="bulk-gestes">
+      <button class="btn btn-small" data-bulk="read">Marquer lu</button>
+      <button class="btn btn-small" data-bulk="unread">Marquer non lu</button>
+      <button class="btn btn-small" data-bulk="close">Marquer résolu</button>
+      <button class="btn btn-small" data-bulk="analyze">Relancer l’IA</button>
+    </div>
+    <div class="bulk-choix">
+      ${
+        labels.length
+          ? `<select class="bulk-label" id="bulk-label" aria-label="Poser un libellé">
+               <option value="">Libellé…</option>
+               ${labels
+                 .map((name) => `<option value="${esc(name)}">${esc(name)}</option>`)
+                 .join('')}
+             </select>`
+          : ''
+      }
+      <select class="bulk-label" id="bulk-assign" aria-label="Assigner à">
+        <option value="">Assigner…</option>
+        <option value="none">Personne</option>
+        ${state.agents
+          .map((user) => `<option value="${esc(user.id)}">${esc(user.name ?? user.email)}</option>`)
+          .join('')}
+      </select>
+      ${
+        canI('configure')
+          ? `<button class="btn btn-small btn-danger" data-bulk="delete">Supprimer</button>`
+          : ''
+      }
+    </div>`;
 
   bar.querySelectorAll('[data-bulk]').forEach((button) =>
     button.addEventListener('click', () => {
@@ -4293,7 +4336,13 @@ function renderTicketLabels(ticket) {
            <summary class="lchip lchip-more">${
              posed.length ? '＋ Libellé' : '＋ Classer ce message'
            }</summary>
-           <div class="lmore-box">${rest.map((name) => chip(name, false)).join('')}</div>
+           <div class="lmore-box" role="dialog" aria-label="Classer ce message">
+             <div class="lmore-tete">
+               <b>Classer ce message</b>
+               <button class="lmore-x" type="button" data-lmore-fermer aria-label="Fermer">×</button>
+             </div>
+             <div class="lmore-chips">${rest.map((name) => chip(name, false)).join('')}</div>
+           </div>
          </details>`
       : '') +
     /*
