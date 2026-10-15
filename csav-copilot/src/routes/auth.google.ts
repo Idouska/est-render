@@ -1,11 +1,12 @@
 import { randomBytes } from 'node:crypto';
-import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { google, type Auth } from 'googleapis';
 import { env } from '../config/env.ts';
 import { recordAudit } from '../lib/audit.ts';
 import { encryptSecret, safeEqual } from '../lib/crypto.ts';
 import { logger } from '../lib/logger.ts';
 import { prisma } from '../lib/prisma.ts';
+import { SESSION_COOKIE, verifySession } from '../lib/session.ts';
 import { requireSession } from '../plugins/auth.ts';
 import { createOAuthClient } from '../services/gmail/client.ts';
 import { startWatch } from '../services/gmail/watch.ts';
@@ -25,6 +26,17 @@ type RaisonGmail = 'refuse' | 'etat' | 'jeton' | 'echec';
 
 const retourGmail = (reply: FastifyReply, raison: RaisonGmail) =>
   reply.redirect(`/dashboard?gmail=${raison}`);
+
+/* Sans session — expirée pendant qu'on était chez Google, ou perdue avec une
+   fenêtre de navigation privée — le retour renvoie à la connexion plutôt qu'à
+   la même page noire, « Session absente ou expirée ». */
+async function sessionOuConnexion(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  if (!verifySession(request.cookies[SESSION_COOKIE])) {
+    await reply.redirect('/login');
+    return;
+  }
+  await requireSession(request, reply);
+}
 
 export async function googleAuthRoutes(app: FastifyInstance): Promise<void> {
   app.get('/auth/google', { preHandler: requireSession }, async (request, reply) => {
@@ -55,7 +67,7 @@ export async function googleAuthRoutes(app: FastifyInstance): Promise<void> {
 
   app.get<{ Querystring: { code?: string; state?: string; error?: string } }>(
     '/auth/google/callback',
-    { preHandler: requireSession },
+    { preHandler: sessionOuConnexion },
     async (request, reply) => {
       const { merchantId, userId } = request.session;
       const { code, state, error } = request.query;
