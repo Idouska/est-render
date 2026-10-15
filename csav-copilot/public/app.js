@@ -874,8 +874,8 @@ async function loadLabelStyles() {
   try {
     const data = await api('/api/labels');
     labelStyles = data.labels ?? {};
-    renderLabelChips();
-    renderQueueLabels();
+    renderFiltres();
+    renderJetons();
   } catch {
     // Sans couleurs, les étiquettes restent grises : lisibles, simplement
     // moins reconnaissables.
@@ -903,172 +903,6 @@ function labelChip(name) {
   return `<span class="tag tag-label" title="${esc(name)}"${paint}>${esc(leaf)}</span>`;
 }
 
-/**
- * Libellés Gmail en boutons, sur la file.
- *
- * Ils vivaient dans un menu déroulant réduit à « Tous » : autant dire nulle
- * part. Ce sont pourtant les catégories que le marchand a créées lui-même —
- * « Chargeback », « Out of stock », « Wismo » — et elles disent mieux que
- * n'importe quel motif deviné ce qu'il y a à faire.
- *
- * Seuls les libellés réellement portés par un ticket sont proposés. Lister
- * tout ce que Gmail connaît remplissait la barre des étiquettes privées du
- * compte — Doctolib, Impôts, EDF — qui ne filtrent rien ici et n'ont aucune
- * raison de s'afficher dans un outil de SAV. Gmail ne fournit plus que la
- * couleur ; c'est la file qui décide de la liste.
- */
-/**
- * Les libellés du marchand, dehors et colorés.
- *
- * Ce sont les catégories qu'il a créées lui-même dans Gmail, avec les couleurs
- * qu'il leur a données. Les reconnaître de loin est tout leur intérêt : rangés
- * dans une liste déroulante, ils se lisaient un par un — exactement ce qu'un
- * code couleur sert à éviter.
- *
- * Plusieurs à la fois, comme le menu le permettait déjà : le serveur les
- * entend en « au moins l'un d'eux ». Deux catégories voisines — « Refund » et
- * « Litige » — se regardent ensemble ou ne se regardent pas.
- *
- * Le menu reste : il porte la recherche, utile au-delà d'une quinzaine de
- * libellés. Les deux écrivent dans le même `state.queue.labels`, ils ne
- * peuvent donc pas se contredire.
- */
-function renderQueueLabels() {
-  const bar = $('q-label-chips');
-  if (!bar) return;
-
-  const used = new Set(state.queueLabels ?? []);
-  // Un libellé coché reste affiché même si le filtre en cours vide la file :
-  // sinon la pastille qu'on vient de cocher disparaîtrait sous le doigt.
-  for (const name of state.queue.labels) used.add(name);
-
-  const names = [...used].sort((a, b) => a.localeCompare(b, 'fr'));
-  bar.hidden = names.length === 0;
-
-  /*
-   * Tous, sans exception.
-   *
-   * Six étaient affichés et le reste se repliait derrière un « +N », parce
-   * que onze pastilles poussaient la barre sur deux rangées. Le champ de
-   * recherche a quitté cette barre depuis : la place existe, et un libellé
-   * qu'il faut déplier pour voir n'est pas un filtre, c'est un menu.
-   */
-  const montres = names;
-
-  bar.innerHTML = montres
-    .map((name) => {
-      const style = labelStyles[name];
-      const active = state.queue.labels.includes(name);
-      // Gmail range ses libellés en arborescence : « SAV/Litige » s'affiche
-      // « Litige », le chemin complet reste en infobulle.
-      const leaf = name.includes('/') ? name.slice(name.lastIndexOf('/') + 1) : name;
-
-      /* Peint seulement quand il est actif. Onze pastilles colorées en
-         permanence font un arc-en-ciel où plus rien ne ressort ; c'est le
-         libellé retenu qui doit se voir. Au repos, un point porte la couleur —
-         assez pour reconnaître, pas assez pour crier. */
-      const paint =
-        active && style?.background
-          ? ` style="background:${esc(style.background)};color:${esc(
-              style.text ?? '#000',
-            )};border-color:transparent"`
-          : '';
-
-      const dot = style?.background
-        ? `<span class="ql-dot" style="background:${esc(style.background)}"></span>`
-        : '';
-
-      return `<button class="chip ql-chip" data-qlabel="${esc(name)}"
-        aria-pressed="${active}" title="${esc(name)}"${paint}>${
-          active ? '' : dot
-        }<span class="ql-nom">${esc(leaf)}</span></button>`;
-    })
-    .join('');
-
-  /* Ni « +N » ni dégradé de bord : la bande ne défile plus, elle passe à la
-     ligne. Un dégradé annonçait « ça continue à droite » ; sur des rangées, il
-     mentirait — il n'y a rien à droite, tout est déjà là. */
-
-  bar.querySelectorAll('[data-qlabel]').forEach((chip) =>
-    chip.addEventListener('click', () => {
-      const name = chip.dataset.qlabel;
-      state.queue.labels = state.queue.labels.includes(name)
-        ? state.queue.labels.filter((other) => other !== name)
-        : [...state.queue.labels, name];
-      void loadQueue();
-    }),
-  );
-}
-
-function renderLabelChips() {
-  const list = $('q-labels-list');
-  if (!list) return;
-
-  const used = new Set(state.queueLabels ?? []);
-  // Un libellé coché reste proposé même si le filtre en cours vide la file :
-  // sinon la ligne qu'on vient de cocher disparaîtrait sous le doigt, et on ne
-  // pourrait plus la décocher.
-  for (const name of state.queue.labels) used.add(name);
-
-  const names = [...used].sort((a, b) => a.localeCompare(b, 'fr'));
-  $('qm-labels').hidden = names.length === 0;
-
-  const needle = ($('q-labels-q').value ?? '').trim().toLowerCase();
-  // La recherche ne masque jamais un libellé coché : le menu doit toujours
-  // montrer l'intégralité de ce qui filtre la file en dessous.
-  const shown = needle
-    ? names.filter(
-        (name) => name.toLowerCase().includes(needle) || state.queue.labels.includes(name),
-      )
-    : names;
-
-  // Onze libellés tiennent dans le champ de recherche du menu ; la barre, elle,
-  // n'a jamais eu la place. Le point de couleur suffit ici : les lignes sont
-  // alignées et lues de haut en bas, pas reconnues de loin.
-  list.innerHTML = shown.length
-    ? shown
-        .map((name) => {
-          const style = labelStyles[name];
-          const active = state.queue.labels.includes(name);
-          const leaf = name.includes('/') ? name.slice(name.lastIndexOf('/') + 1) : name;
-          const dot = style?.background
-            ? ` style="background:${esc(style.background)}"`
-            : ' style="background:var(--line)"';
-
-          return `<button type="button" class="qpop-item" data-label="${esc(name)}"
-            aria-pressed="${active}" title="${esc(name)}"><span class="qpop-box"
-            aria-hidden="true"></span><span class="qpop-dot"${dot} aria-hidden="true"></span>${esc(
-              leaf,
-            )}</button>`;
-        })
-        .join('')
-    : '<p class="qpop-empty">Aucun libellé ne correspond.</p>';
-
-  const count = state.queue.labels.length;
-  const badge = $('q-labels-n');
-  badge.hidden = count === 0;
-  badge.textContent = String(count);
-  $('q-labels-btn').setAttribute('aria-pressed', String(count > 0));
-}
-
-$('q-labels-list')?.addEventListener('click', (event) => {
-  const item = event.target.closest('[data-label]');
-  if (!item) return;
-
-  // Un second clic retire le libellé : c'est le geste attendu d'une case.
-  const name = item.dataset.label;
-  const picked = state.queue.labels;
-  state.queue.labels = picked.includes(name)
-    ? picked.filter((other) => other !== name)
-    : [...picked, name];
-
-  // Le menu reste ouvert : on coche rarement un seul libellé, et le refermer à
-  // chaque clic obligerait à le rouvrir pour le suivant.
-  void loadQueue();
-});
-
-$('q-labels-q')?.addEventListener('input', renderLabelChips);
-
 /*
  * « Classer ce message » se referme comme un menu.
  *
@@ -1089,44 +923,6 @@ document.addEventListener('click', (event) => {
 
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') fermerClasser();
-});
-
-/*
- * Les deux menus de la barre.
- *
- * Un seul ouvert à la fois, refermé au clic dehors et à Échap. Rien de plus :
- * un menu qui reste ouvert derrière un autre laisse deux listes de cases à
- * cocher à l'écran et on ne sait plus laquelle filtre quoi.
- */
-const QUEUE_MENUS = [
-  ['q-labels-btn', 'q-labels-pop'],
-  ['q-filters-btn', 'q-filters-pop'],
-];
-
-function closeQueueMenus(except = null) {
-  for (const [buttonId, popId] of QUEUE_MENUS) {
-    if (popId === except) continue;
-    $(popId).hidden = true;
-    $(buttonId).setAttribute('aria-expanded', 'false');
-  }
-}
-
-for (const [buttonId, popId] of QUEUE_MENUS) {
-  $(buttonId)?.addEventListener('click', () => {
-    const open = $(popId).hidden;
-    closeQueueMenus(open ? popId : null);
-    $(popId).hidden = !open;
-    $(buttonId).setAttribute('aria-expanded', String(open));
-    if (open && popId === 'q-labels-pop') $('q-labels-q').focus();
-  });
-}
-
-document.addEventListener('click', (event) => {
-  if (!event.target.closest('.qmenu')) closeQueueMenus();
-});
-
-document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') closeQueueMenus();
 });
 
 function renderMe() {
@@ -2990,57 +2786,49 @@ function actionBlockedReason(key, ticket) {
    deux réponses différentes le jour où l'un des deux évoluerait. */
 $('head-search')?.addEventListener('click', () => openPalette());
 
-/* Les deux icônes de l'en-tête de file ne font rien de neuf : elles mènent au
-   champ et au menu qui existent dans la barre de filtres. Un second champ de
-   recherche donnerait deux états à tenir synchronisés. */
-/* La loupe ouvre la palette, qui est devenue la seule recherche. Elle mène au
-   même filtre : sans correspondance de commande ni de client, `routeSearch`
-   retombe sur le texte libre dans cette file. */
-$('queue-search')?.addEventListener('click', () => openPalette());
-
-/* Le clic s'arrête ici. Il ouvrait le menu, puis remontait jusqu'au
-   document, dont l'écouteur « clic dehors » le refermait aussitôt : le
+/* Le clic s'arrête ici. Il ouvrait la fenêtre, puis remontait jusqu'au
+   document, dont l'écouteur « clic dehors » la refermait aussitôt : le
    bouton semblait ne rien faire. */
 $('queue-filter')?.addEventListener('click', (event) => {
   event.stopPropagation();
-  $('q-filters-btn')?.click();
+  ouvrirFiltres(!fenetreFiltresOuverte());
 });
 
 /*
- * Tri de la file, depuis l'en-tête.
+ * Trier et présenter, depuis l'en-tête.
  *
- * Les libellés sont lus dans le `select` du bas plutôt que recopiés : deux
- * listes des mêmes tris finiraient par diverger, et c'est celle qu'on regarde
- * le moins qui garderait l'ancien intitulé.
- *
- * Le choix écrit dans `state.queue.sort` et remet le `select` à jour — les
- * deux commandes désignent le même réglage, elles ne peuvent pas se
- * contredire.
+ * Un menu du Mac : « Trier par », le choix en cours coché, puis Liste ou
+ * Tableau. Le choix écrit dans `state.queue.sort`, la seule vérité du tri — le
+ * `select` qui le doublait dans l'ancienne rangée de filtres a disparu avec
+ * elle.
  */
+const TRIS = [
+  ['newest', 'Plus récent'],
+  ['oldest', 'Plus ancien'],
+  ['due', 'Échéance proche'],
+  ['amount', 'Montant élevé'],
+  ['confidence', 'Confiance basse'],
+];
+
 function renderSortMenu() {
-  const menu = $('queue-sort-menu');
-  const select = $('q-sort');
-  if (!menu || !select) return;
+  const liste = $('qtri-liste');
+  if (!liste) return;
 
-  menu.innerHTML = [...select.options]
-    .map(
-      (option) =>
-        `<button class="more-item" type="button" data-sort="${esc(option.value)}"
-          aria-pressed="${option.value === state.queue.sort}">${
-            option.value === state.queue.sort ? '✓ ' : ''
-          }${esc(option.textContent)}</button>`,
-    )
-    .join('');
-
-  menu.querySelectorAll('[data-sort]').forEach((button) =>
-    button.addEventListener('click', () => {
-      state.queue.sort = button.dataset.sort;
-      select.value = button.dataset.sort;
-      closeSortMenu();
-      void loadQueue();
-    }),
-  );
+  liste.innerHTML = TRIS.map(
+    ([cle, nom]) =>
+      `<button class="qf-ligne" type="button" role="menuitemradio" data-sort="${cle}"
+        aria-checked="${cle === state.queue.sort}"><span class="qf-coche" aria-hidden="true"></span><span
+        class="qf-nom">${esc(nom)}</span></button>`,
+  ).join('');
 }
+
+$('qtri-liste')?.addEventListener('click', (event) => {
+  const choix = event.target.closest('[data-sort]');
+  if (!choix) return;
+  state.queue.sort = choix.dataset.sort;
+  closeSortMenu();
+  void loadQueue();
+});
 
 function closeSortMenu() {
   const menu = $('queue-sort-menu');
@@ -3055,7 +2843,11 @@ $('queue-sort')?.addEventListener('click', (event) => {
   if (!menu) return;
 
   const open = menu.hidden;
-  if (open) renderSortMenu();
+  if (open) {
+    // Un menu à la fois : la fenêtre Filtres se referme.
+    ouvrirFiltres(false);
+    renderSortMenu();
+  }
   menu.hidden = !open;
   $('queue-sort').setAttribute('aria-expanded', String(open));
 });
@@ -3274,7 +3066,7 @@ async function loadSubstitutions(ticketId) {
   });
 }
 
-/* ------------------------------------------------- barre de filtres file */
+/* ------------------------------------------------ fenêtre Filtres de la file */
 
 const INTENT_LABELS = {
   WISMO: 'WISMO',
@@ -3286,99 +3078,460 @@ const INTENT_LABELS = {
   OTHER: 'Autre',
 };
 
-function renderQueueBar() {
-  // La pastille du terme suit chaque rendu de la barre : c'est le seul endroit
-  // d'où l'agent peut voir, et retirer, un filtre texte posé par la palette.
-  renderQueueTerm();
+/*
+ * La fenêtre Filtres, comme dans Mail.
+ *
+ * Tout ce qui restreint la file tient dans une fenêtre qui s'ouvre sous le
+ * bouton filtre de l'en-tête Conversations, au-dessus de la liste qu'elle
+ * filtre. Elle remplace une rangée entière — onze libellés, un compte, quatre
+ * menus — dont la fenêtre s'ouvrait à droite, par-dessus le message.
+ *
+ * Elle se lit comme un menu du Mac : « Afficher », un seul choix coché ;
+ * « Seulement », des cases qui se croisent ; les libellés du marchand avec
+ * leur couleur ; Motif, Assigné et Boîte en menus locaux. Ce qui est posé se
+ * voit ensuite en jetons sous les dossiers, qu'une croix retire. Au
+ * téléphone, la même fenêtre monte du bas en feuille, et ses cases
+ * deviennent des interrupteurs.
+ */
+const FILTRE_STATUTS = [
+  ['', 'Tous'],
+  ['NEEDS_REVIEW', 'À valider'],
+  ['DRAFT_READY', 'Brouillon prêt'],
+  ['NEW', 'Nouveaux'],
+  ['AWAITING_SUPPLIER', 'Chez le fournisseur'],
+  ['CLOSED', 'Clos'],
+];
+
+/* Des filtres qui croisent le statut au lieu de le remplacer : WISMO est un
+   motif, « Non lus » un état de lecture, le reste des raccourcis. Le
+   troisième terme nomme le compteur du serveur, quand il en existe un. */
+const FILTRE_SEULEMENT = [
+  ['unread', 'Non lus', 'UNREAD'],
+  ['wismo', 'WISMO', 'WISMO'],
+  ['urgent', 'Urgents · 3 j et plus'],
+  ['unassigned', 'Non assignés'],
+  ['unlinked', 'Sans commande'],
+  ['dueSoon', 'Litiges à échéance'],
+  ['bigAmount', 'Montant > 100 €'],
+  ['historical', 'Historique appris'],
+];
+
+/* La fenêtre suit la largeur : sous ce seuil, elle devient une feuille. */
+const FEUILLE_FILTRES = window.matchMedia('(max-width: 760px)');
+
+function fenetreFiltresOuverte() {
+  return $('qf')?.hidden === false;
+}
+
+function seulementActif(cle) {
+  return cle === 'wismo' ? state.queue.intent === 'WISMO' : Boolean(state.queue[cle]);
+}
+
+function basculerSeulement(cle) {
+  const f = state.queue;
+
+  if (cle === 'wismo') {
+    f.intent = f.intent === 'WISMO' ? '' : 'WISMO';
+    $('q-intent').value = f.intent;
+    return;
+  }
+
+  f[cle] = !f[cle];
+
+  // Le raccourci et le menu « Assigné » désignent la même chose : les laisser
+  // diverger afficherait deux vérités contradictoires à l'écran.
+  if (cle === 'unassigned') {
+    f.assignee = f.unassigned ? 'none' : '';
+    $('q-assignee').value = f.assignee;
+  }
+
+  // « Historique appris » n'est pas un filtre de plus, c'est un autre corpus :
+  // les échanges importés et le travail en cours ne cohabitent jamais dans la
+  // même liste. Les mêler donnerait des compteurs impossibles à interpréter.
+  if (cle === 'historical' && f.historical) {
+    state.filter = '';
+    f.urgent = false;
+    f.unassigned = false;
+    f.unlinked = false;
+    f.assignee = '';
+    $('q-assignee').value = '';
+  }
+}
+
+/* Les libellés que portent les tickets, plus ceux qui sont cochés : un libellé
+   coché reste proposé même si le filtre vide la file, sinon la ligne qu'on
+   vient de cocher disparaîtrait sous le doigt. Les étiquettes privées du
+   compte Gmail — Impôts, EDF — ne filtrent rien ici et n'y figurent pas. */
+function libellesProposes() {
+  const noms = new Set(state.queueLabels ?? []);
+  for (const nom of state.queue.labels) noms.add(nom);
+  return [...noms].sort((a, b) => a.localeCompare(b, 'fr'));
+}
+
+/* Gmail range ses libellés en arborescence : « SAV/Litige » se lit
+   « Litige », le chemin complet reste en infobulle. */
+const feuilleDuLibelle = (nom) => (nom.includes('/') ? nom.slice(nom.lastIndexOf('/') + 1) : nom);
+
+function pastilleDuLibelle(nom) {
+  const fond = labelStyles[nom]?.background;
+  return `<i class="qf-pastille" style="background:${esc(fond || 'var(--line)')}" aria-hidden="true"></i>`;
+}
+
+/* Une ligne de la fenêtre : la coche à gauche comme dans un menu du Mac, le
+   nom, le compte en gris. Les cases de « Seulement » portent aussi un
+   interrupteur, que seule la feuille du téléphone montre. */
+function ligneFiltre({ cle, role, coche, nom, n = '', pastille = '', titre = '', interrupteur = false }) {
+  return `<button type="button" class="qf-ligne" role="${role}" aria-checked="${coche}"
+    data-qf="${esc(cle)}"${titre ? ` title="${esc(titre)}"` : ''}><span class="qf-coche"
+    aria-hidden="true"></span>${pastille}<span class="qf-nom">${esc(nom)}</span>${
+      n === '' ? '' : `<span class="qf-n">${esc(n)}</span>`
+    }${interrupteur ? '<span class="qf-inter" aria-hidden="true"></span>' : ''}</button>`;
+}
+
+/*
+ * Ce que contient la liste, dit comme le sous-titre d'une boîte de Mail :
+ * « 5 923 messages, 52 non lus », ou « Filtrée · 12 messages ».
+ *
+ * Les compteurs du serveur honorent déjà le dossier et tous les filtres sauf
+ * le statut ; le statut coché lit donc son propre compteur. Le nombre est
+ * celui de la liste entière, pas des cinquante lignes chargées.
+ */
+function compteDeLaFile() {
+  if (!state.queueLoaded) return '';
   const counts = state.queueCounts ?? {};
+  const n = state.filter ? (counts[state.filter] ?? 0) : (counts.ALL ?? 0);
+  const messages = `${n.toLocaleString('fr-FR')} message${n > 1 ? 's' : ''}`;
+  if (queueIsFiltered()) return `Filtrée · ${messages}`;
 
-  $('filters')
-    .querySelectorAll('.chip')
-    .forEach((chip) => {
-      // Les pastilles croisées — WISMO, Non lu — n'ont pas de `data-filter` et
-      // se rendent plus bas. Sans ce garde, la boucle générique leur écrirait
-      // le total de la file et les éteindrait à chaque rafraîchissement.
-      if (chip.dataset.filter === undefined) return;
+  const nonLus = counts.UNREAD ?? 0;
+  return nonLus > 0
+    ? `${messages}, ${nonLus.toLocaleString('fr-FR')} non lu${nonLus > 1 ? 's' : ''}`
+    : messages;
+}
 
-      const status = chip.dataset.filter;
-      const count = status ? (counts[status] ?? 0) : (counts.ALL ?? 0);
-      chip.setAttribute('aria-pressed', String(status === state.filter));
+function renderFiltres() {
+  const boite = $('qf-listes');
+  if (!boite) return;
 
-      const base = chip.dataset.label ?? chip.textContent.trim();
-      chip.dataset.label = base;
-      chip.innerHTML = `${esc(base)}<span class="count">${count}</span>`;
-    });
+  const counts = state.queueCounts ?? {};
+  const nombre = (cle) => (counts[cle] ?? 0).toLocaleString('fr-FR');
 
-  for (const [key, id] of [
-    ['urgent', 'urgent'],
-    ['unassigned', 'unassigned'],
-    ['unlinked', 'unlinked'],
-    ['historical', 'historical'],
-    ['dueSoon', 'dueSoon'],
-    ['bigAmount', 'bigAmount'],
-  ]) {
-    $('queue-bar')
-      .querySelector(`[data-quick="${id}"]`)
-      .setAttribute('aria-pressed', String(Boolean(state.queue[key])));
+  const afficher = FILTRE_STATUTS.map(([statut, nom]) =>
+    ligneFiltre({
+      cle: `statut:${statut}`,
+      role: 'radio',
+      coche: state.filter === statut,
+      nom,
+      n: nombre(statut || 'ALL'),
+    }),
+  ).join('');
+
+  const seulement = FILTRE_SEULEMENT.map(([cle, nom, compteur]) =>
+    ligneFiltre({
+      cle: `seul:${cle}`,
+      role: 'checkbox',
+      coche: seulementActif(cle),
+      nom,
+      n: compteur ? nombre(compteur) : '',
+      interrupteur: true,
+    }),
+  ).join('');
+
+  const libelles = libellesProposes()
+    .map((nom) =>
+      ligneFiltre({
+        cle: `libelle:${nom}`,
+        role: 'checkbox',
+        coche: state.queue.labels.includes(nom),
+        nom: feuilleDuLibelle(nom),
+        titre: nom,
+        pastille: pastilleDuLibelle(nom),
+      }),
+    )
+    .join('');
+
+  // Le rendu remplace les lignes : celle qui avait le focus le retrouve, sans
+  // quoi le clavier repartirait du haut à chaque case cochée.
+  const focus = document.activeElement?.closest?.('#qf [data-qf]')?.dataset.qf;
+
+  boite.innerHTML = `<p class="qf-section">Afficher</p>
+    <div class="qf-groupe" role="radiogroup" aria-label="Afficher">${afficher}</div>
+    <p class="qf-section">Seulement</p>
+    <div class="qf-groupe" role="group" aria-label="Seulement">${seulement}</div>${
+      libelles
+        ? `<p class="qf-section">Libellés</p>
+    <div class="qf-groupe" role="group" aria-label="Libellés">${libelles}</div>`
+        : ''
+    }`;
+
+  if (focus) {
+    [...boite.querySelectorAll('[data-qf]')].find((ligne) => ligne.dataset.qf === focus)?.focus();
   }
 
-  // La pastille WISMO filtre par motif, pas par statut : elle s'allume et se
-  // compte à part — c'est la question n°1 de la boîte, elle a droit à son
-  // bouton.
-  const wismo = $('chip-wismo');
-  if (wismo) {
-    wismo.setAttribute('aria-pressed', String(state.queue.intent === 'WISMO'));
-    wismo.innerHTML = `WISMO<span class="count">${counts.WISMO ?? 0}</span>`;
+  const filtree = queueIsFiltered();
+  $('q-reset-groupe').hidden = !filtree;
+  $('qf-effacer').disabled = !filtree;
+  $('qf-compte').textContent = compteDeLaFile();
+}
+
+/*
+ * Les filtres posés, un jeton chacun.
+ *
+ * Un filtre qu'on ne voit pas vide la file sans que rien ne l'explique : c'est
+ * le seul défaut sérieux d'une fenêtre qui se referme. Le terme cherché depuis
+ * la palette y figure aussi — le champ qui le portait a disparu.
+ */
+function jetonsPoses() {
+  const f = state.queue;
+  const jetons = [];
+
+  const terme = f.q.trim();
+  if (terme) jetons.push({ cle: 'terme', nom: `« ${terme} »` });
+  if (state.filter) {
+    const statut = FILTRE_STATUTS.find(([cle]) => cle === state.filter);
+    jetons.push({ cle: 'statut', nom: statut?.[1] ?? STATUS_LABELS[state.filter] ?? state.filter });
+  }
+  for (const [cle, nom] of FILTRE_SEULEMENT) {
+    if (seulementActif(cle)) jetons.push({ cle: `seul:${cle}`, nom });
+  }
+  for (const nom of f.labels) {
+    jetons.push({ cle: `libelle:${nom}`, nom: feuilleDuLibelle(nom), titre: nom, pastille: pastilleDuLibelle(nom) });
+  }
+  // WISMO et « Non assignés » ont déjà leur jeton : le menu local qui les
+  // double n'en ajoute pas un second.
+  if (f.intent && f.intent !== 'WISMO') {
+    jetons.push({ cle: 'intent', nom: `Motif : ${INTENT_LABELS[f.intent] ?? f.intent}` });
+  }
+  if (f.assignee && f.assignee !== 'none') {
+    const agent = state.agents?.find((user) => user.id === f.assignee);
+    jetons.push({ cle: 'assignee', nom: `Assigné : ${agent?.name ?? agent?.email ?? 'un agent'}` });
+  }
+  if (f.mailbox) {
+    const boite = state.me?.gmail?.mailboxes?.find((mailbox) => mailbox.id === f.mailbox);
+    jetons.push({ cle: 'mailbox', nom: `Boîte : ${boite?.label || boite?.emailAddress || 'une boîte'}` });
   }
 
-  // Même traitement pour « Non lu », et pour la même raison : elle croise les
-  // statuts au lieu d'en être un.
-  /* Le total de l'en-tête suit le dossier ouvert, jamais le total absolu :
-     annoncer « 5 384 » au-dessus d'une liste filtrée à douze ferait douter du
-     filtre plutôt que du chiffre. */
+  return jetons;
+}
+
+function renderJetons() {
+  const boite = $('q-jetons');
+  if (!boite) return;
+
+  const jetons = jetonsPoses();
+  boite.hidden = jetons.length === 0;
+  boite.innerHTML = jetons.length
+    ? `${jetons
+        .map(
+          ({ cle, nom, titre = '', pastille = '' }) =>
+            `<button type="button" class="qjeton" data-jeton="${esc(cle)}"
+              aria-label="Retirer le filtre ${esc(titre || nom)}" title="${esc(
+                titre || 'Retirer ce filtre',
+              )}">${pastille}<span class="qjeton-nom">${esc(nom)}</span><span class="qjeton-x"
+              aria-hidden="true">✕</span></button>`,
+        )
+        .join('')}<button type="button" class="qjetons-effacer" data-jeton="*">Effacer</button>`
+    : '';
+
+  // Le bouton filtre se remplit quand un filtre est posé, et le dit.
+  const bouton = $('queue-filter');
+  if (bouton) {
+    bouton.classList.toggle('qh-filtre-actif', jetons.length > 0);
+    bouton.setAttribute(
+      'aria-label',
+      jetons.length
+        ? `Filtrer — ${jetons.length} filtre${jetons.length > 1 ? 's' : ''} posé${jetons.length > 1 ? 's' : ''}`
+        : 'Filtrer',
+    );
+  }
+}
+
+$('q-jetons')?.addEventListener('click', (event) => {
+  const jeton = event.target.closest('[data-jeton]');
+  if (!jeton) return;
+
+  const [type, ...reste] = jeton.dataset.jeton.split(':');
+  // Un libellé peut lui-même contenir des deux-points.
+  const valeur = reste.join(':');
+  const f = state.queue;
+
+  if (type === '*') return resetQueueFilters();
+  if (type === 'terme') f.q = '';
+  else if (type === 'statut') state.filter = '';
+  else if (type === 'seul') basculerSeulement(valeur);
+  else if (type === 'libelle') f.labels = f.labels.filter((nom) => nom !== valeur);
+  else if (type === 'intent') {
+    f.intent = '';
+    $('q-intent').value = '';
+  } else if (type === 'assignee') {
+    f.assignee = '';
+    f.unassigned = false;
+    $('q-assignee').value = '';
+  } else if (type === 'mailbox') {
+    f.mailbox = '';
+    $('q-mailbox').value = '';
+  }
+
+  rafraichirFiltres();
+});
+
+/* Un geste, trois rendus immédiats, puis la file : la case se coche sous le
+   doigt, sans attendre la réponse du serveur. */
+function rafraichirFiltres() {
+  renderFiltres();
+  renderJetons();
+  void loadQueue();
+}
+
+$('qf')?.addEventListener('click', (event) => {
+  const ligne = event.target.closest('[data-qf]');
+  if (!ligne) return;
+
+  const [type, ...reste] = ligne.dataset.qf.split(':');
+  const valeur = reste.join(':');
+
+  if (type === 'statut') state.filter = valeur;
+  else if (type === 'seul') basculerSeulement(valeur);
+  else if (type === 'libelle') {
+    // Plusieurs à la fois : le serveur les entend en « au moins l'un d'eux ».
+    // « Refund » et « Litige » se regardent ensemble.
+    const choisis = state.queue.labels;
+    state.queue.labels = choisis.includes(valeur)
+      ? choisis.filter((nom) => nom !== valeur)
+      : [...choisis, valeur];
+  }
+
+  // La fenêtre reste ouverte : on coche rarement une seule case.
+  rafraichirFiltres();
+});
+
+/*
+ * Sous le bouton, flèche comprise.
+ *
+ * La fenêtre est posée à la racine de la page et placée d'après le bouton :
+ * la colonne de la file masque ce qui déborde, et la fenêtre est plus haute
+ * que l'en-tête qui la porte. Son bord droit suit le bouton, elle s'étend
+ * vers la gauche au-dessus de la liste, jamais hors de l'écran. Au
+ * téléphone, la feuille du bas n'a rien à calculer.
+ */
+function placerFiltres() {
+  const fenetre = $('qf');
+  if (!fenetre || fenetre.hidden) return;
+
+  if (FEUILLE_FILTRES.matches) {
+    for (const prop of ['left', 'top', 'width', 'maxHeight']) fenetre.style[prop] = '';
+    fenetre.style.removeProperty('--fleche');
+    return;
+  }
+
+  const bouton = $('queue-filter').getBoundingClientRect();
+  const largeur = Math.min(340, innerWidth - 16);
+  const gauche = Math.max(8, Math.min(bouton.right + 14 - largeur, innerWidth - largeur - 8));
+  const haut = bouton.bottom + 10;
+
+  fenetre.style.width = `${largeur}px`;
+  fenetre.style.left = `${gauche}px`;
+  fenetre.style.top = `${haut}px`;
+  fenetre.style.maxHeight = `${Math.max(240, innerHeight - haut - 12)}px`;
+  fenetre.style.setProperty('--fleche', `${Math.round(bouton.left + bouton.width / 2 - gauche)}px`);
+}
+
+function ouvrirFiltres(ouvrir) {
+  const fenetre = $('qf');
+  if (!fenetre) return;
+
+  fenetre.hidden = !ouvrir;
+  $('qf-voile').hidden = !ouvrir || !FEUILLE_FILTRES.matches;
+  $('queue-filter')?.setAttribute('aria-expanded', String(ouvrir));
+  fenetre.style.removeProperty('transform');
+  if (!ouvrir) return;
+
+  closeSortMenu();
+  renderFiltres();
+  placerFiltres();
+  // Le focus entre dans la fenêtre sans s'afficher : les flèches la
+  // parcourent ensuite, Échap la referme.
+  fenetre.focus({ preventScroll: true });
+}
+
+addEventListener('resize', placerFiltres);
+FEUILLE_FILTRES.addEventListener('change', () => {
+  if (fenetreFiltresOuverte()) ouvrirFiltres(true);
+});
+
+/* Un clic à côté referme. Le chemin de l'événement est lu tel qu'il était au
+   départ : la ligne cliquée a déjà été remplacée par le rendu, et `closest`
+   ne retrouverait plus la fenêtre depuis un nœud détaché. */
+document.addEventListener('click', (event) => {
+  if (!fenetreFiltresOuverte()) return;
+  const chemin = event.composedPath();
+  if (chemin.includes($('qf')) || chemin.includes($('queue-filter'))) return;
+  ouvrirFiltres(false);
+});
+
+document.addEventListener('keydown', (event) => {
+  if (!fenetreFiltresOuverte()) return;
+  if (event.key === 'Escape') {
+    ouvrirFiltres(false);
+    $('queue-filter')?.focus();
+    return;
+  }
+  if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+  if (event.target.closest?.('select')) return;
+
+  // Les flèches parcourent les lignes, comme dans un menu.
+  const lignes = [...$('qf').querySelectorAll('.qf-ligne')];
+  if (!lignes.length) return;
+  event.preventDefault();
+  const rang = lignes.indexOf(document.activeElement);
+  const pas = event.key === 'ArrowDown' ? 1 : -1;
+  const suivant =
+    rang < 0 ? (pas > 0 ? lignes[0] : lignes.at(-1)) : lignes[(rang + pas + lignes.length) % lignes.length];
+  suivant.focus();
+});
+
+$('qf-voile')?.addEventListener('click', () => ouvrirFiltres(false));
+$('qf-ok')?.addEventListener('click', () => ouvrirFiltres(false));
+$('qf-effacer')?.addEventListener('click', () => resetQueueFilters());
+
+/* La feuille se referme aussi d'un geste vers le bas, depuis sa poignée. */
+{
+  let depart = null;
+  const tete = document.querySelector('#qf .qf-tete');
+
+  tete?.addEventListener('touchstart', (event) => {
+    if (!FEUILLE_FILTRES.matches) return;
+    depart = event.touches[0].clientY;
+  }, { passive: true });
+
+  tete?.addEventListener('touchmove', (event) => {
+    if (depart === null) return;
+    const ecart = Math.max(0, event.touches[0].clientY - depart);
+    $('qf').style.transform = `translateY(${ecart}px)`;
+  }, { passive: true });
+
+  tete?.addEventListener('touchend', (event) => {
+    if (depart === null) return;
+    const ecart = event.changedTouches[0].clientY - depart;
+    depart = null;
+    if (ecart > 90) ouvrirFiltres(false);
+    else $('qf').style.removeProperty('transform');
+  });
+}
+
+function renderQueueBar() {
+  /* Le sous-titre suit le dossier ouvert et les filtres, jamais un total
+     absolu : annoncer « 5 384 » au-dessus d'une liste filtrée à douze ferait
+     douter du filtre plutôt que du chiffre. */
   const totalBox = $('queue-total');
   if (totalBox) {
-    const n = state.queueFolders?.[state.queue.folder] ?? counts.ALL ?? 0;
-    totalBox.textContent = n > 0 ? n.toLocaleString('fr-FR') : '';
+    totalBox.textContent = compteDeLaFile();
+    totalBox.classList.toggle('queue-count-filtree', queueIsFiltered());
   }
 
-  const unread = $('chip-unread');
-  if (unread) {
-    unread.setAttribute('aria-pressed', String(Boolean(state.queue.unread)));
-    unread.innerHTML = `Non lu<span class="count">${counts.UNREAD ?? 0}</span>`;
-  }
-
-  renderLabelChips();
-  renderQueueLabels();
-
-  /*
-   * Le compteur du bouton « Filtres ».
-   *
-   * Il porte tout ce que le menu referme sur lui. Sans ce nombre, un raccourci
-   * coché la veille vide la file le lendemain sans que rien ne l'explique —
-   * c'est le seul défaut sérieux d'un menu, et il se corrige d'un chiffre.
-   */
-  const f = state.queue;
-  const active =
-    [f.urgent, f.unassigned, f.unlinked, f.historical, f.dueSoon, f.bigAmount].filter(Boolean)
-      .length +
-    [f.intent, f.assignee && f.assignee !== 'none' ? f.assignee : '', f.mailbox].filter(Boolean)
-      .length;
-
-  const badge = $('q-filters-n');
-  badge.hidden = active === 0;
-  badge.textContent = String(active);
-  $('q-filters-btn').setAttribute('aria-pressed', String(active > 0));
-
-  $('q-reset').hidden = !queueIsFiltered();
+  renderJetons();
+  if (fenetreFiltresOuverte()) renderFiltres();
   renderKeybarState();
-  // « 25 affichés » sur 556 laissait croire que le reste était perdu. Le
-  // total rend le rapport lisible, et le défilement fait le reste.
-  const total = state.queueCounts?.ALL ?? null;
-  $('q-count').textContent =
-    total !== null && total > state.tickets.length
-      ? `${state.tickets.length} sur ${total}`
-      : `${state.tickets.length} affiché${state.tickets.length > 1 ? 's' : ''}`;
 }
 
 /** Liste des agents pour le filtre et l'assignation. */
@@ -3418,106 +3571,41 @@ async function loadAgents() {
       .join('');
 }
 
+/*
+ * Effacer les filtres, pas l'endroit où l'on est.
+ *
+ * Le dossier ouvert et le tri choisi ne filtrent rien : les remettre à zéro
+ * ramenait en réception et au plus récent un agent qui voulait seulement voir
+ * à nouveau tout son dossier.
+ */
 function resetQueueFilters() {
   state.filter = '';
-  state.queue = emptyQueueFilters();
+  state.queue = { ...emptyQueueFilters(), folder: state.queue.folder, sort: state.queue.sort };
 
-  $('q-labels-q').value = '';
-  renderQueueTerm();
   $('q-mailbox').value = '';
-  $('q-sort').value = 'newest';
   $('q-assignee').value = '';
   $('q-intent').value = '';
 
-  void loadQueue();
+  rafraichirFiltres();
 }
-
-/*
- * Le terme de recherche actif, en pastille.
- *
- * Le champ ayant quitté la barre, un filtre texte deviendrait invisible :
- * l'agent verrait « 12 sur 5483 » sans savoir pourquoi, et « Tout
- * réinitialiser » emporterait aussi ses libellés. La pastille dit le terme et
- * ne retire que lui.
- */
-function renderQueueTerm() {
-  const boite = $('q-term');
-  if (!boite) return;
-
-  const terme = state.queue.q.trim();
-  boite.hidden = terme === '';
-  if (!terme) return (boite.innerHTML = '');
-
-  boite.innerHTML = `<button class="chip qterm-chip" type="button"
-    title="Retirer ce filtre">« ${esc(terme)} » <span aria-hidden="true">×</span></button>`;
-  boite.querySelector('button').addEventListener('click', async () => {
-    state.queue.q = '';
-    renderQueueTerm();
-    await loadQueue();
-  });
-}
-
-$('q-sort').addEventListener('change', (event) => {
-  state.queue.sort = event.target.value;
-  void loadQueue();
-});
 
 $('q-assignee').addEventListener('change', (event) => {
   state.queue.assignee = event.target.value;
   state.queue.unassigned = event.target.value === 'none';
-  void loadQueue();
+  rafraichirFiltres();
 });
 
 $('q-mailbox').addEventListener('change', (event) => {
   state.queue.mailbox = event.target.value;
-  void loadQueue();
+  rafraichirFiltres();
 });
 
 $('q-intent').addEventListener('change', (event) => {
   state.queue.intent = event.target.value;
-  void loadQueue();
+  rafraichirFiltres();
 });
 
 $('q-reset').addEventListener('click', resetQueueFilters);
-
-/*
- * Les onglets Tout / Client / Fournisseur / Litige ont disparu.
- *
- * Ils promettaient trois populations distinctes et n'étaient que des filtres
- * déjà présents ailleurs : « Fournisseur » posait le statut AWAITING_SUPPLIER,
- * qui a sa pastille juste en dessous, et « Litige » posait le motif DISPUTE,
- * qui est dans le menu Motif. Quatre boutons de plus pour rien, et deux
- * endroits où lire la même chose — donc deux endroits où elle pouvait se
- * contredire.
- */
-$('queue-bar').addEventListener('click', (event) => {
-  const quick = event.target.closest('[data-quick]');
-  if (!quick) return;
-
-  const key = quick.dataset.quick;
-  state.queue[key] = !state.queue[key];
-
-  // Le raccourci et le sélecteur « Assigné » désignent la même chose : les
-  // laisser diverger afficherait deux vérités contradictoires à l'écran.
-  if (key === 'unassigned') {
-    state.queue.assignee = state.queue.unassigned ? 'none' : '';
-    $('q-assignee').value = state.queue.assignee;
-  }
-
-  // « Historique appris » n'est pas un filtre de plus, c'est un autre corpus :
-  // les échanges importés et le travail en cours ne cohabitent jamais dans la
-  // même liste. Les mêler donnerait des compteurs impossibles à interpréter.
-  if (key === 'historical' && state.queue.historical) {
-    state.filter = '';
-    state.queue.urgent = false;
-    state.queue.unassigned = false;
-    state.queue.unlinked = false;
-    state.queue.assignee = '';
-    $('q-assignee').value = '';
-  }
-
-  void loadQueue();
-});
 
 const STATUS_LABELS = {
   NEW: 'Nouveau',
@@ -4590,7 +4678,6 @@ function renderQueueTable(multiMailbox, shopById) {
   box.querySelectorAll('[data-sort]').forEach((head) =>
     head.addEventListener('click', () => {
       state.queue.sort = head.dataset.sort;
-      $('q-sort').value = head.dataset.sort;
       void loadQueue();
     }),
   );
@@ -4652,7 +4739,10 @@ document.querySelectorAll('table.grid').forEach((table) => {
 });
 
 document.querySelectorAll('#queue-view [data-qview]').forEach((button) =>
-  button.addEventListener('click', () => setQueueView(button.dataset.qview)),
+  button.addEventListener('click', () => {
+    setQueueView(button.dataset.qview);
+    closeSortMenu();
+  }),
 );
 
 // Le mode mémorisé s'applique dès le chargement, avant la première file :
@@ -12025,7 +12115,7 @@ function routeSearch(raw) {
   // Sinon, du texte libre : la file de traitement le cherche dans les objets,
   // les clients et les numéros de commande.
   state.queue.q = term;
-  renderQueueTerm();
+  renderJetons();
   setView('tickets');
   void loadQueue();
 }
@@ -12429,7 +12519,7 @@ function setView(view) {
   // leur côté, et la page ne défile plus. Réservé à cet écran — les autres se
   // lisent comme des documents, d'un seul tenant. Voir `.app-locked`.
   $('app-grid')?.classList.toggle('app-locked', view === 'tickets');
-  $('queue-bar').hidden = view !== 'tickets';
+  ouvrirFiltres(false);
 
   renderNav();
 
@@ -14213,29 +14303,6 @@ async function loadAudit() {
 
 /* ------------------------------------------------------------ actions IHM */
 
-$('filters').addEventListener('click', async (event) => {
-  const chip = event.target.closest('.chip');
-  if (!chip) return;
-
-  // WISMO croise les statuts au lieu de les remplacer : « WISMO à valider »
-  // est une combinaison qui a du sens, un statut de plus n'en aurait pas.
-  if (chip.id === 'chip-wismo') {
-    state.queue.intent = state.queue.intent === 'WISMO' ? '' : 'WISMO';
-    $('q-intent').value = state.queue.intent;
-    await loadQueue();
-    return;
-  }
-
-  if (chip.id === 'chip-unread') {
-    state.queue.unread = !state.queue.unread;
-    await loadQueue();
-    return;
-  }
-
-  state.filter = chip.dataset.filter;
-  await loadQueue();
-});
-
 $('btn-save').addEventListener('click', async () => {
   const draft = state.detail?.ticket.drafts?.[0];
   if (!draft) return;
@@ -15447,9 +15514,14 @@ function renderKeybarState() {
   const box = $('kb-state');
   if (!box) return;
   const picked = state.picked.size;
+  // Le statut coché lit son propre compteur, comme le sous-titre de la file :
+  // les compteurs du serveur ignorent le statut, « 1 sur 2 » sous « À valider »
+  // aurait compté les autres statuts.
+  const counts = state.queueCounts ?? {};
+  const total = (state.filter ? counts[state.filter] : counts.ALL) ?? state.tickets.length;
   box.textContent = `${picked ? `${picked} sélectionné${picked > 1 ? 's' : ''} · ` : ''}${
     state.tickets.length
-  } sur ${state.queueCounts?.ALL ?? state.tickets.length}`;
+  } sur ${total}`;
 }
 
 document.addEventListener('keydown', (event) => {
@@ -15459,7 +15531,7 @@ document.addEventListener('keydown', (event) => {
   // Une fenêtre ouverte prend la main — la même garde que l'autre
   // gestionnaire, qui la portait seul : le curseur sur un bouton de la
   // fenêtre, « e » clôturait le ticket qu'on avait derrière.
-  if (document.querySelector('.backdrop.open')) return;
+  if (document.querySelector('.backdrop.open') || fenetreFiltresOuverte()) return;
 
   const key = event.key.toLowerCase();
 
@@ -15889,7 +15961,7 @@ document.addEventListener('keydown', (event) => {
   // `.open` et rien d'autre : une fenêtre fermée reste dans le DOM sans
   // attribut `hidden` — c'est `display: none` qui la cache — et un sélecteur
   // fondé sur `hidden` aurait éteint les raccourcis en permanence.
-  if (document.querySelector('.backdrop.open')) return;
+  if (document.querySelector('.backdrop.open') || fenetreFiltresOuverte()) return;
 
   switch (event.key) {
     case 'j':
@@ -16115,7 +16187,8 @@ function buildCommands() {
       hint: 'SAV client',
       run: () => {
         setView('tickets');
-        $('chip-wismo')?.click();
+        basculerSeulement('wismo');
+        rafraichirFiltres();
       },
     },
     {
@@ -16207,7 +16280,7 @@ function chercherDans(vue, terme) {
     void loadCustomers({ reset: true });
   } else {
     state.queue.q = terme;
-    renderQueueTerm();
+    renderJetons();
     setView('tickets');
     void loadQueue();
   }

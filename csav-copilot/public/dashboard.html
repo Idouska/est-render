@@ -332,6 +332,37 @@
           </svg>Réglages…</button>
       </div>
 
+      <!-- La fenêtre Filtres, comme dans Mail.
+
+           Elle s'ouvre sous le bouton de l'en-tête Conversations, flèche
+           comprise, au-dessus de la liste qu'elle filtre. Elle se lit comme un
+           menu du Mac : « Afficher », un seul choix coché ; « Seulement », des
+           cases ; les libellés avec leur couleur ; Motif, Assigné et Boîte en
+           menus locaux. Au téléphone, la même fenêtre monte du bas en feuille,
+           avec Effacer et Terminé. -->
+      <div class="qf-voile" id="qf-voile" hidden></div>
+      <div class="qf" id="qf" role="dialog" aria-label="Filtres" tabindex="-1" hidden>
+        <span class="qf-fleche" aria-hidden="true"></span>
+        <div class="qf-tete">
+          <span class="qf-poignee" aria-hidden="true"></span>
+          <button type="button" class="qf-effacer" id="qf-effacer">Effacer</button>
+          <span class="qf-titre"><b>Filtres</b><span id="qf-compte"></span></span>
+          <button type="button" class="qf-ok" id="qf-ok">Terminé</button>
+        </div>
+        <div class="qf-corps">
+          <div id="qf-listes"></div>
+          <p class="qf-section">Affiner</p>
+          <div class="qf-groupe qf-affiner">
+            <label class="qf-local">Motif <select id="q-intent"><option value="">Tous</option></select></label>
+            <label class="qf-local">Assigné <select id="q-assignee"><option value="">Tous</option></select></label>
+            <label class="qf-local">Boîte <select id="q-mailbox"><option value="">Toutes</option></select></label>
+          </div>
+          <div class="qf-groupe qf-pied" id="q-reset-groupe" hidden>
+            <button type="button" class="qf-ligne qf-tout" id="q-reset">Effacer les filtres</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Mode test : tant qu'il est allumé, ce bandeau reste sur toutes les
            pages. Un marchand qui l'oublierait croirait ses actions réelles. -->
       <div class="notice notice-warn" id="test-notice" hidden>
@@ -422,156 +453,11 @@
         </div>
       </div>
 
-      <section class="qbar" id="queue-bar" aria-label="Filtres de la file">
-        <!--
-          Deux lignes, pas cinq.
-
-          La barre occupait 231 px et vingt-cinq contrôles pour une file qu'on
-          filtre trois fois par jour : six raccourcis, onze libellés, quatre
-          onglets d'origine, six statuts, quatre menus. Plusieurs disaient la
-          même chose deux fois — l'onglet « Litige » et le raccourci « Litiges à
-          échéance », l'onglet « Fournisseur » et le statut « Fournisseur », le
-          menu « Motif » et les onglets d'origine, qui n'étaient que des motifs
-          déguisés. Les onglets disparaissent, le reste rentre dans deux menus.
-
-          Ce qui reste dehors est ce qu'on touche à chaque tri : la recherche,
-          les libellés, les statuts. Le nombre sur le bouton dit combien de
-          filtres sont posés — un menu fermé ne doit jamais cacher un filtre
-          actif sans le signaler.
-        -->
-        <div class="qbar-row qbar-main">
-          <!-- Le champ de recherche a quitté cette barre.
-
-               Deux champs pour une question : celui du haut ouvre la palette,
-               qui cherche commandes, clients ET texte libre — et retombe
-               justement sur le filtre de cette file quand rien d'autre ne
-               correspond. Le second faisait double emploi et prenait deux
-               cent cinquante pixels, exactement ce qui manquait aux libellés
-               du marchand pour tenir sans être repliés.
-
-               Un filtre texte actif reste visible : il s'affiche en pastille
-               à côté des libellés, et se retire d'un clic. -->
-          <span class="qterm" id="q-term" hidden></span>
-
-          <!-- Les libellés du marchand, sur la même ligne que la recherche
-               et les menus. Ils occupaient une rangée à eux seuls, qui
-               doublait de hauteur dès qu'il y en avait plus d'une dizaine :
-               ils s'arrêtent maintenant à six, le reste derrière un « +N ».
-
-               Le « +N » vit hors de la bande, parce que la bande défile : à
-               l'intérieur, il sortait du champ dès que les six pastilles
-               remplissaient la place, et rien ne disait plus qu'il restait
-               des libellés à voir. -->
-          <div class="qlabels-wrap">
-            <div class="qlabels" id="q-label-chips"></div>
-          </div>
-          <span class="qbar-count" id="q-count"></span>
-
-          <!-- Les libellés Gmail : les catégories que le marchand a créées
-               lui-même. En liste cochable avec leurs couleurs, et plusieurs à
-               la fois — « Refund » et « Litige » se regardent ensemble. -->
-          <div class="qmenu" id="qm-labels" hidden>
-            <button
-              type="button"
-              class="qbtn"
-              id="q-labels-btn"
-              aria-expanded="false"
-              aria-haspopup="true"
-            >Libellés<span class="qbtn-n" id="q-labels-n" hidden></span><span class="qbtn-car" aria-hidden="true"></span></button>
-            <div class="qpop" id="q-labels-pop" hidden>
-              <input
-                type="search"
-                class="qpop-search"
-                id="q-labels-q"
-                placeholder="Chercher un libellé…"
-                autocomplete="off"
-              />
-              <div class="qpop-list" id="q-labels-list"></div>
-            </div>
-          </div>
-
-          <div class="qmenu" id="qm-filters">
-            <button
-              type="button"
-              class="qbtn"
-              id="q-filters-btn"
-              aria-expanded="false"
-              aria-haspopup="true"
-            >Filtres<span class="qbtn-n" id="q-filters-n" hidden></span><span class="qbtn-car" aria-hidden="true"></span></button>
-            <div class="qpop qpop-wide" id="q-filters-pop" hidden>
-              <!-- Les statuts descendent ici. Ils décrivent l'avancement
-                   dans l'outil ; les libellés, eux, décrivent le classement du
-                   marchand — et c'est celui-là qu'on regarde en premier. Un
-                   seul des deux pouvait rester dehors. -->
-              <div class="qpop-head">Statut</div>
-              <div class="qbar-quick" id="filters">
-                <button class="chip" data-filter="" aria-pressed="true">Tous</button>
-                <button class="chip" data-filter="DRAFT_READY" aria-pressed="false">Brouillon prêt</button>
-                <button class="chip" data-filter="NEEDS_REVIEW" aria-pressed="false">À valider</button>
-                <button class="chip" data-filter="NEW" aria-pressed="false">Nouveaux</button>
-                <button class="chip" data-filter="AWAITING_SUPPLIER" aria-pressed="false">Fournisseur</button>
-                <button class="chip" data-filter="CLOSED" aria-pressed="false">Clos</button>
-                <!-- WISMO est un motif, pas un statut ; « Non lu » croise les
-                     autres filtres au lieu de les remplacer. Les deux gardent
-                     leur place ici, à part des statuts qui s'excluent. -->
-                <button class="chip chip-wismo" id="chip-wismo" aria-pressed="false">WISMO</button>
-                <button class="chip chip-unread" id="chip-unread" aria-pressed="false">Non lu</button>
-              </div>
-
-              <div class="qpop-head">Raccourcis</div>
-              <div class="qbar-quick">
-                <button class="qchip" data-quick="urgent" aria-pressed="false">Urgents 3 j+</button>
-                <button class="qchip" data-quick="unassigned" aria-pressed="false">Non assignés</button>
-                <button class="qchip" data-quick="unlinked" aria-pressed="false">Sans commande</button>
-                <button class="qchip" data-quick="dueSoon" aria-pressed="false">Litiges à échéance</button>
-                <button class="qchip" data-quick="bigAmount" aria-pressed="false">Montant &gt; 100 €</button>
-                <button class="qchip" data-quick="historical" aria-pressed="false">Historique appris</button>
-              </div>
-              <div class="qpop-head">Affiner</div>
-              <div class="qbar-selects">
-                <label>Motif <select id="q-intent"><option value="">Tous</option></select></label>
-                <label>Assigné <select id="q-assignee"><option value="">Tous</option></select></label>
-                <label>Boîte <select id="q-mailbox"><option value="">Toutes</option></select></label>
-              </div>
-              <div class="qpop-foot">
-                <button class="qlink" id="q-reset" hidden>Tout réinitialiser</button>
-              </div>
-            </div>
-          </div>
-
-          <label class="qsort">
-            <select id="q-sort" aria-label="Trier la file">
-              <option value="newest">Plus récent</option>
-              <option value="oldest">Plus ancien</option>
-              <option value="due">Échéance proche</option>
-              <option value="amount">Montant élevé</option>
-              <option value="confidence">Confiance basse</option>
-            </select>
-            <span class="qsort-car" aria-hidden="true"></span>
-          </label>
-
-          <!-- Tableau ou liste : parcourir et traiter sont deux gestes
-               différents. Le tableau prend toute la largeur et se lit à vingt
-               lignes ; la liste garde le mail ouvert à côté. -->
-          <div class="seg2" id="queue-view" role="group">
-            <button type="button" data-qview="list" aria-pressed="true">Liste</button>
-            <button type="button" data-qview="table" aria-pressed="false">Tableau</button>
-          </div>
-        </div>
-
-        <!-- Les libellés du marchand, dehors et lisibles.
-
-             Ils étaient enfermés dans un menu parce que la barre portait
-             vingt-cinq contrôles et n'avait plus la place. Elle en porte trois
-             aujourd'hui, et elle fait toute la largeur de l'écran : onze
-             libellés colorés y tiennent sur une ligne.
-
-             Ce sont les catégories que le marchand a créées lui-même, avec les
-             couleurs qu'il leur a données dans Gmail. Les reconnaître de loin
-             est tout leur intérêt — enfermées dans une liste, elles se lisent
-             une par une. -->
-
-      </section>
+      <!-- La rangée de filtres au-dessus de la file a disparu : le filtre et le
+           tri vivent dans l'en-tête Conversations, et la fenêtre Filtres
+           s'ouvre dessous (voir #qf). Elle prenait toute la largeur pour onze
+           libellés, un compte et quatre menus, et sa fenêtre s'ouvrait à
+           droite, sur le message. -->
           </div>
 
       <main class="workspace" id="view-tickets">
@@ -579,41 +465,49 @@
           <!-- L'en-tête de la file. Le nombre est celui du dossier courant,
                pas un total figé : c'est ce qui reste dans ce qu'on regarde. -->
           <div class="queue-head">
-            <span class="queue-title">Conversations</span>
-            <span class="queue-count" id="queue-total"></span>
-            <!-- Deux raccourcis vers des commandes déjà là : le champ de
-                 recherche et le menu de filtres vivent dans la barre en
-                 dessous, que l'on replie. Ces icônes y mènent sans la
-                 rouvrir. -->
-            <button class="ico-btn qh-ico" id="queue-search" type="button"
-              aria-label="Rechercher dans la file" title="Rechercher (/)">
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"
+            <!-- Le titre et, dessous, ce que la liste contient — en bleu quand
+                 un filtre la restreint, comme le sous-titre d'une boîte de
+                 Mail. -->
+            <div class="queue-titres">
+              <span class="queue-title">Conversations</span>
+              <span class="queue-count" id="queue-total"></span>
+            </div>
+            <!-- Le filtre, puis le tri : tout ce qui décide de la liste est
+                 au-dessus d'elle. Le bouton filtre se remplit quand un filtre
+                 est posé. -->
+            <button class="ico-btn qh-ico qh-filtre" id="queue-filter" type="button"
+              aria-label="Filtrer" title="Filtrer" aria-haspopup="dialog" aria-controls="qf"
+              aria-expanded="false" aria-pressed="false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
                 stroke-linecap="round" aria-hidden="true">
-                <circle cx="7.2" cy="7.2" r="4.2" /><path d="M10.4 10.4 13.5 13.5" />
+                <circle class="qh-filtre-rond" cx="12" cy="12" r="9" />
+                <path class="qh-filtre-traits" d="M7.5 9.5h9M9.5 12.5h5M11 15.5h2" />
               </svg>
             </button>
-            <!-- Le tri. Il vit dans un `select` de la barre du dessous, qu'on
-                 replie — et un `select` ne s'ouvre pas par programme de façon
-                 fiable. D'où un menu à part, qui écrit dans le même état et
-                 tient le `select` à jour : deux commandes, une seule vérité. -->
             <span class="more-wrap">
               <button class="ico-btn qh-ico" id="queue-sort" type="button"
-                aria-label="Trier la file" aria-expanded="false" title="Trier">
-                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"
-                  stroke-linecap="round" aria-hidden="true">
-                  <path d="M2.5 4h11M4.5 8h7M6.5 12h3" />
+                aria-label="Trier et présenter" title="Trier et présenter" aria-haspopup="menu"
+                aria-expanded="false">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M7 4v16M3.5 7.5 7 4l3.5 3.5M17 20V4M13.5 16.5 17 20l3.5-3.5" />
                 </svg>
               </button>
-              <div class="more-menu" id="queue-sort-menu" hidden></div>
+              <!-- Le tri et la présentation, en menu du Mac. Liste ou Tableau
+                   n'apparaît qu'au-dessus de 1100 px : en dessous, le tableau
+                   est illisible et la vue reste en liste. -->
+              <div class="more-menu qtri" id="queue-sort-menu" role="menu" aria-label="Trier et présenter" hidden>
+                <p class="qtri-tete">Trier par</p>
+                <div id="qtri-liste"></div>
+                <div class="qtri-vue">
+                  <p class="qtri-tete">Présentation</p>
+                  <div class="seg2" id="queue-view" role="group" aria-label="Présentation">
+                    <button type="button" data-qview="list" aria-pressed="true">Liste</button>
+                    <button type="button" data-qview="table" aria-pressed="false">Tableau</button>
+                  </div>
+                </div>
+              </div>
             </span>
-            <button class="ico-btn qh-ico" id="queue-filter" type="button"
-              aria-label="Filtres" title="Filtres">
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"
-                stroke-linecap="round" aria-hidden="true">
-                <circle cx="5" cy="4.5" r="1.6" /><path d="M7.4 4.5h6M2.5 4.5h1"/>
-                <circle cx="10.5" cy="11.5" r="1.6" /><path d="M2.5 11.5h6.4M12.6 11.5h.9"/>
-              </svg>
-            </button>
           </div>
           <!-- Barre d'actions groupées. Elle n'apparaît qu'une fois quelque
                chose de coché : une barre d'actions permanente sur une file
@@ -626,6 +520,9 @@
                propre — ses propositions en attente, et les fils où une
                réponse est partie. -->
           <nav class="folders" id="folders" aria-label="Dossiers"></nav>
+          <!-- Les filtres posés, en jetons : on voit ce qui restreint la liste
+               et on le retire d'une croix, sans rouvrir la fenêtre. -->
+          <div class="qjetons" id="q-jetons" aria-label="Filtres posés" hidden></div>
           <div class="bulk" id="bulk" hidden></div>
           <div class="qtable-wrap" id="queue-table" hidden></div>
           <ul class="queue-list" id="queue">
