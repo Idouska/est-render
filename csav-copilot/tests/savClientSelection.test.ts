@@ -11,8 +11,8 @@ import test from 'node:test';
  *      texte blanc de « ouverte » — illisible ;
  *   2. les huit commandes de la barre groupée retombaient sur cinq lignes
  *      inégales dans la colonne de la file ;
- *   3. le bouton « Filtres » de l'en-tête ouvrait son menu, que le même clic
- *      refermait en remontant jusqu'au document ;
+ *   3. le bouton « Filtres » de l'en-tête ouvrait sa fenêtre, que le même
+ *      clic refermait en remontant jusqu'au document ;
  *   4. « Classer ce message » ne se refermait qu'en recliquant sur son titre.
  */
 
@@ -68,13 +68,13 @@ test('la barre groupée tient en trois rangées fixes', () => {
   assert.match(css, /#view-tickets \.bulk \{ flex-direction: column;/);
 });
 
-test('le bouton Filtres de l’en-tête ouvre vraiment son menu', () => {
+test('le bouton Filtres de l’en-tête ouvre vraiment sa fenêtre', () => {
   const debut = app.indexOf("$('queue-filter')?.addEventListener('click'");
   const gestionnaire = app.slice(debut, app.indexOf('});', debut));
-  // Le clic s'arrête avant d'ouvrir le menu, sinon l'écouteur « clic
-  // dehors » du document le referme aussitôt.
+  // Le clic s'arrête avant d'ouvrir la fenêtre, sinon l'écouteur « clic
+  // dehors » du document la referme aussitôt.
   assert.ok(gestionnaire.indexOf('event.stopPropagation()') > 0);
-  assert.ok(gestionnaire.indexOf('event.stopPropagation()') < gestionnaire.indexOf("$('q-filters-btn')?.click()"));
+  assert.ok(gestionnaire.indexOf('event.stopPropagation()') < gestionnaire.indexOf('ouvrirFiltres(!fenetreFiltresOuverte())'));
 });
 
 test('« Classer ce message » se ferme par la croix, à côté et par Échap', () => {

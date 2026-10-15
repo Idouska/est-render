@@ -10610,25 +10610,6 @@ progress { accent-color: var(--accent); }
    ne doivent pas changer avec celles-ci. Les couleurs sont les jetons de
    l'application : le thème sombre et les palettes suivent seuls. */
 
-/* --------------------------------------------------- barre de filtres --- */
-
-/* Une barre d'outils plutôt qu'une carte : les libellés du marchand, le
-   compte, les filtres et la présentation, posés sur le fond. */
-#queue-bar {
-  padding: 0 2px;
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
-}
-/* Sur le bandeau de couleur, la barre garde un fond : son encre est celle
-   des surfaces, pas celle du bandeau. */
-.topzone[data-teinte] #queue-bar {
-  padding: 5px 8px;
-  background: var(--surface);
-  border-radius: 10px;
-}
-
 /* ----------------------------------------------------------- la fenêtre --- */
 
 @media (min-width: 1201px) {
@@ -13342,4 +13323,369 @@ progress { accent-color: var(--accent); }
    blanc à droite de la colonne. Le détail se contente de 420 px. */
 @media (min-width: 761px) {
   .reg-main { flex-basis: 420px; }
+}
+
+/* ==========================================================================
+   FENÊTRE FILTRES, COMME DANS MAIL
+   ==========================================================================
+
+   D'après la maquette « La fenêtre Filtres ». La rangée qui portait onze
+   libellés, un compte et quatre menus au-dessus de la file a disparu : le
+   filtre et le tri passent dans l'en-tête Conversations, la fenêtre s'ouvre
+   sous son bouton, flèche comprise, et se lit comme un menu du Mac. Au
+   téléphone, la même fenêtre monte du bas, en feuille. */
+
+/* L'en-tête : le titre, ce que contient la liste, puis les deux boutons. */
+#view-tickets .queue-head { align-items: center; gap: 2px; padding: 10px 8px 6px 14px; }
+.queue-titres { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+#view-tickets .queue-title { font-size: 15px; font-weight: 700; line-height: 1.25; }
+#view-tickets .queue-count {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 1.35;
+}
+#view-tickets .queue-count.queue-count-filtree { color: var(--accent-ink); }
+
+#view-tickets .queue-head .qh-ico {
+  width: 30px;
+  height: 30px;
+  margin: 0;
+  border-radius: 8px;
+  color: var(--ink-soft);
+}
+#view-tickets .queue-head .qh-ico svg { width: 20px; height: 20px; }
+#view-tickets .queue-head .qh-ico[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--ink) 9%, transparent);
+  color: var(--ink);
+}
+/* Un filtre posé : le bouton se remplit, comme dans Mail — fenêtre ouverte
+   ou non. */
+#view-tickets .queue-head .qh-filtre.qh-filtre-actif { color: var(--accent); }
+.qh-filtre.qh-filtre-actif .qh-filtre-rond { fill: currentColor; }
+.qh-filtre.qh-filtre-actif .qh-filtre-traits { stroke: var(--on-accent, #fff); }
+
+/* Les filtres posés, en jetons sous les dossiers. */
+.qjetons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px 8px;
+}
+.qjetons[hidden] { display: none; }
+.qjeton {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  height: 24px;
+  padding: 0 8px 0 9px;
+  border: 0;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 13%, transparent);
+  color: var(--accent-ink);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.qjeton:hover { background: color-mix(in srgb, var(--accent) 20%, transparent); }
+.qjeton:focus-visible { outline: none; box-shadow: var(--mac-halo); }
+.qjeton .qf-pastille { width: 7px; height: 7px; }
+.qjeton-nom { min-width: 0; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qjeton-x { font-size: 9px; opacity: 0.8; }
+.qjetons-effacer {
+  height: 24px;
+  padding: 0 6px;
+  border: 0;
+  background: transparent;
+  color: var(--accent-ink);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.qjetons-effacer:hover { text-decoration: underline; }
+
+/* La fenêtre : du verre dépoli, des coins de menu, une flèche vers le
+   bouton. Placée par `placerFiltres`. */
+.qf {
+  position: fixed;
+  z-index: 95;
+  top: 120px;
+  left: 8px;
+  width: 340px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  border-radius: 14px;
+  background: var(--verre);
+  -webkit-backdrop-filter: blur(30px) saturate(1.8);
+  backdrop-filter: blur(30px) saturate(1.8);
+  box-shadow: 0 0 0 0.5px var(--verre-bord), 0 22px 46px -14px rgb(0 0 0 / 35%);
+  color: var(--ink);
+  font-size: 13px;
+  outline: none;
+}
+.qf[hidden], .qf-voile[hidden], .qf [hidden] { display: none; }
+.qf-fleche {
+  position: absolute;
+  top: -7px;
+  left: calc(var(--fleche, 50%) - 7px);
+  width: 14px;
+  height: 14px;
+  background: var(--verre);
+  -webkit-backdrop-filter: blur(30px) saturate(1.8);
+  backdrop-filter: blur(30px) saturate(1.8);
+  box-shadow: -0.5px -0.5px 0 0 var(--verre-bord);
+  transform: rotate(45deg);
+}
+.qf-tete, .qf-voile { display: none; }
+.qf-corps {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px;
+}
+
+.qf-section {
+  margin: 0 4px;
+  padding: 9px 6px 3px;
+  border-top: 1px solid var(--line);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-mute);
+}
+#qf-listes > .qf-section:first-child { border-top: 0; padding-top: 4px; }
+
+/* Une ligne de menu : la coche à gauche, le nom, le compte en gris ; au
+   survol, la ligne entière prend l'accent, comme sur le Mac. */
+.qf-ligne {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  padding: 0 10px 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: default;
+}
+.qf-ligne:hover, .qf-ligne:focus-visible {
+  outline: none;
+  background: var(--accent);
+  color: var(--on-accent, #fff);
+}
+.qf-coche { width: 14px; flex: none; text-align: center; color: var(--accent); font-weight: 700; }
+.qf-ligne[aria-checked="true"] .qf-coche::before { content: "✓"; }
+.qf-nom { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qf-n { flex: none; font-size: 12px; color: var(--ink-mute); font-variant-numeric: tabular-nums; }
+.qf-ligne:hover .qf-coche, .qf-ligne:focus-visible .qf-coche,
+.qf-ligne:hover .qf-n, .qf-ligne:focus-visible .qf-n { color: inherit; }
+.qf-ligne:hover .qf-n, .qf-ligne:focus-visible .qf-n { opacity: 0.85; }
+.qf-pastille {
+  width: 9px;
+  height: 9px;
+  flex: none;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 12%);
+}
+.qf-inter { display: none; }
+
+/* Motif, Assigné, Boîte : des menus locaux, alignés sous les noms. */
+.qf-local {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 6px 0 26px;
+  font-size: 13px;
+  color: var(--ink);
+}
+.qf-local[hidden] { display: none; }
+.qf-local select { margin-left: auto; width: 168px; min-height: 24px; font-size: 12.5px; }
+.qf-pied { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); }
+.qf .qf-tout { padding-left: 26px; color: var(--accent-ink); }
+
+/* Trier et présenter : le même menu de verre, ancré sous son bouton. */
+.more-menu.qtri {
+  min-width: 224px;
+  padding: 6px;
+  gap: 0;
+  border: 0;
+  border-radius: 12px;
+  background: var(--verre);
+  -webkit-backdrop-filter: blur(30px) saturate(1.8);
+  backdrop-filter: blur(30px) saturate(1.8);
+  box-shadow: 0 0 0 0.5px var(--verre-bord), 0 22px 46px -14px rgb(0 0 0 / 35%);
+}
+.more-menu.qtri[hidden] { display: none; }
+.qtri-tete { margin: 4px 10px 3px; font-size: 11.5px; font-weight: 600; color: var(--ink-mute); }
+.qtri-vue { margin-top: 6px; padding-top: 4px; border-top: 1px solid var(--line); }
+.qtri .seg2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 4px 6px 4px;
+}
+@media (max-width: 1100px) {
+  /* Le tableau est illisible sous 1100 px : la vue y reste en liste. */
+  .qtri-vue { display: none; }
+}
+
+/* Au téléphone : une feuille qui monte du bas, comme sur iOS. Les cases de
+   « Seulement » deviennent des interrupteurs, les coches passent à droite. */
+@media (max-width: 760px) {
+  .qf-voile {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 94;
+    background: rgb(0 0 0 / 24%);
+    animation: qf-voile 0.25s ease;
+  }
+  .qf {
+    --qf-fond: #f2f2f7;
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-height: calc(100dvh - 64px);
+    padding: 0 16px;
+    border-radius: 24px 24px 0 0;
+    background: var(--qf-fond);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: 0 -8px 30px rgb(0 0 0 / 14%);
+    font-size: 17px;
+    transition: transform 0.2s ease;
+    animation: qf-monte 0.34s cubic-bezier(0.2, 0.9, 0.3, 1);
+  }
+  [data-theme="dark"] .qf { --qf-fond: #0f1115; }
+  .qf-fleche { display: none; }
+  .qf-tete {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    padding: 18px 0 10px;
+    touch-action: none;
+  }
+  .qf-poignee {
+    position: absolute;
+    top: 6px;
+    left: 50%;
+    width: 36px;
+    height: 5px;
+    margin-left: -18px;
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--ink) 25%, transparent);
+  }
+  .qf-effacer, .qf-ok {
+    padding: 6px 0;
+    border: 0;
+    background: transparent;
+    color: var(--accent);
+    font: inherit;
+    font-size: 17px;
+  }
+  .qf-effacer { justify-self: start; }
+  .qf-effacer:disabled { color: color-mix(in srgb, var(--ink) 30%, transparent); }
+  .qf-ok { justify-self: end; font-weight: 600; }
+  .qf-titre { display: flex; flex-direction: column; align-items: center; }
+  .qf-titre b { font-size: 17px; font-weight: 600; }
+  .qf-titre span { font-size: 12px; color: var(--ink-mute); }
+  .qf-corps { padding: 0 0 calc(24px + env(safe-area-inset-bottom)); }
+
+  .qf-section,
+  #qf-listes > .qf-section:first-child {
+    margin: 22px 16px 7px;
+    padding: 0;
+    border: 0;
+    font-size: 13px;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+  #qf-listes > .qf-section:first-child { margin-top: 6px; }
+  .qf-groupe { overflow: hidden; border-radius: 12px; background: var(--surface); }
+
+  .qf-ligne,
+  .qf-local {
+    min-height: 44px;
+    gap: 12px;
+    padding: 0 16px;
+    border-radius: 0;
+    font-size: 17px;
+  }
+  .qf-ligne + .qf-ligne, .qf-local + .qf-local { border-top: 0.5px solid var(--line); }
+  .qf-ligne:hover, .qf-ligne:focus-visible { background: transparent; color: var(--ink); }
+  .qf-ligne:active { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+  .qf-ligne:hover .qf-coche { color: var(--accent); }
+  .qf-ligne:hover .qf-n { color: var(--ink-mute); opacity: 1; }
+  .qf-coche { order: 3; width: 18px; text-align: right; }
+  .qf-n { font-size: 17px; }
+  .qf-pastille { width: 12px; height: 12px; }
+
+  /* Les interrupteurs d'iOS, vert allumé. */
+  .qf-ligne:has(.qf-inter) .qf-coche { display: none; }
+  .qf-inter {
+    display: block;
+    position: relative;
+    order: 4;
+    width: 51px;
+    height: 31px;
+    flex: none;
+    border-radius: 16px;
+    background: rgb(120 120 128 / 16%);
+    transition: background 0.2s ease;
+  }
+  .qf-inter::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 27px;
+    height: 27px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 3px 8px rgb(0 0 0 / 15%), 0 1px 1px rgb(0 0 0 / 16%);
+    transition: transform 0.2s ease;
+  }
+  .qf-ligne[aria-checked="true"] .qf-inter { background: #34c759; }
+  .qf-ligne[aria-checked="true"] .qf-inter::after { transform: translateX(20px); }
+
+  /* Les menus locaux : la valeur en gris à droite, comme dans Réglages. */
+  .qf-local select {
+    width: auto;
+    max-width: 60%;
+    min-height: 44px;
+    padding-right: 20px;
+    background-color: transparent;
+    background-position: right 0 center;
+    box-shadow: none;
+    color: var(--ink-mute);
+    font-size: 17px;
+    text-align: right;
+    text-align-last: right;
+  }
+  .qf-local select:hover:not(:disabled) { background-color: transparent; }
+  /* Effacer est dans l'en-tête de la feuille. */
+  .qf-pied { display: none; }
+
+  .more-menu.qtri { min-width: 250px; }
+  .qtri .qf-ligne { min-height: 40px; font-size: 16px; }
+}
+@keyframes qf-monte { from { transform: translateY(100%); } }
+@keyframes qf-voile { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .qf, .qf-voile { animation: none; }
 }
