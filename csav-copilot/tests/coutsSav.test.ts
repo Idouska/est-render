@@ -238,7 +238,9 @@ test('l’API : tout le monde lit, seuls propriétaire et superviseurs règlent 
 test('l’écran : dans Pilotage, ses coûts unitaires, et les mêmes clés que le serveur', () => {
   const app = lire('public/app.js');
   const page = lire('public/dashboard.html');
-  assert.match(app, /couts: \{\s*icon: 'euro',\s*label: 'Coûts SAV',\s*group: 'Pilotage',/);
+  // Des pièces : l'euro servait aussi à Annulation/Remboursement, et deux
+  // écrans ne partagent plus une icône.
+  assert.match(app, /couts: \{\s*icon: 'coins',\s*label: 'Coûts SAV',\s*group: 'Pilotage',/);
   assert.match(app, /couts: \(\) => loadCouts\(\),/);
   assert.match(page, /<section class="browse couts" id="view-couts" hidden aria-label="Coûts du SAV">/);
   // La copie de l'écran suit la liste du serveur, et chaque clé a son champ.

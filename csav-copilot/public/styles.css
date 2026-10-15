@@ -12569,6 +12569,12 @@ progress { accent-color: var(--accent); }
   cursor: pointer;
 }
 .head .clocks::-webkit-scrollbar { display: none; }
+/* Sur ordinateur, la bande se serre : la place gagnée revient à la recherche,
+   qui peut alors rester au milieu dès 1 400 px. */
+@media (min-width: 1001px) {
+  .head .clocks { gap: 9px; padding: 0 6px; }
+  .head .ckp { gap: 3px; }
+}
 /* Au téléphone, la place manque sur la ligne du titre : les heures prennent
    leur propre rangée, pleine largeur, et défilent au doigt. Rétrécies à côté
    des boutons, elles tombaient à vingt pixels — autant dire invisibles. */
@@ -13233,4 +13239,107 @@ progress { accent-color: var(--accent); }
   .pal-portees { width: 100%; justify-content: space-between; }
   .pal-portee { width: 52px; height: 52px; }
   .pal-resultats { width: 100%; }
+}
+
+/* ==========================================================================
+   BARRE DU HAUT EN TROIS ZONES, COLONNE SUR UNE LIGNE
+   ==========================================================================
+
+   Le titre à gauche, la recherche au centre, les heures et les commandes à
+   droite — comme la barre d'outils d'une app du Mac. La grille garde la
+   recherche au milieu tant que la place le permet ; quand la droite
+   (horloges + boutons) déborde de sa moitié, c'est la recherche qui se
+   décale et se resserre, jamais les heures qui se rognent. */
+
+.head-gauche { display: flex; align-items: center; gap: 10px; min-width: 0; }
+/* La droite ne se comprime jamais : sans `min-width: 0`, la grille lui garde
+   sa largeur entière, et c'est la recherche qui cède. Avec, les heures
+   passaient sous la recherche dès 1 280 px. */
+.head-droite { display: flex; align-items: center; justify-content: flex-end; gap: 4px; }
+
+@media (min-width: 1001px) {
+  .head {
+    display: grid;
+    /* `--cote` : la largeur de la zone de droite, mesurée par app.js et
+       réservée aussi à gauche — la recherche tombe pile au milieu. Quand la
+       place manque, elle vaut zéro et la recherche se décale. */
+    grid-template-columns: minmax(var(--cote, 0px), 1fr) minmax(220px, 480px) minmax(auto, 1fr);
+    align-items: center;
+    column-gap: 16px;
+  }
+  /* Un titre très long s'abrège plutôt que de passer sous la recherche. */
+  .head .head-gauche .head-main { flex: 1 1 auto; min-width: 0; }
+  .head .head-gauche .head-main > h1 { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+}
+
+/* Shopify ou Gmail en panne : le logo et le point rouge ou orange suffisent
+   dans la barre ; la phrase entière reste dans l'infobulle. */
+.head .conn-pill .conn-txt { display: none; }
+
+/* La recherche, lisible : plus haute, une invite entière, le texte à 14 px. */
+.head .head-search {
+  /* Visible à toutes les tailles : sans elle, le téléphone et la tablette
+     n'avaient plus de porte vers Spotlight. */
+  display: flex;
+  justify-self: stretch;
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  height: 34px;
+  padding: 0 12px;
+  gap: 8px;
+  border-radius: 17px;
+  font-size: 14px;
+}
+.head .head-search svg { width: 16px; height: 16px; }
+.head .head-search span { text-align: left; color: var(--ink-mute); }
+
+/* Tablette et téléphone : le titre et les boutons sur la première ligne, la
+   recherche puis les heures chacune sur toute la largeur. La zone de droite
+   s'efface (`display: contents`) pour que ses éléments se rangent seuls. */
+@media (max-width: 1000px) {
+  .head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 4px; }
+  .head-gauche { flex: 1 1 auto; order: 0; }
+  .head-droite { display: contents; }
+  .head .head-conn,
+  .head .head-tools,
+  .head .head-lune,
+  .head .head-cc { order: 1; }
+  .head .head-search { order: 2; flex: 1 1 100%; }
+  .head .clocks { order: 3; flex: 1 1 100%; min-width: 0; gap: 10px; padding: 0 2px; justify-content: flex-start; }
+}
+
+/* Grands écrans : les colonnes de côté s'élargissent (une largeur réglée à
+   la poignée l'emporte toujours), et le message garde une largeur de
+   lecture — une ligne de 1 500 px ne se lit pas. */
+@media (min-width: 1800px) {
+  .workspace { --ws-col1: 390px; --ws-col3: 350px; }
+  /* Des marges plutôt qu'un plafond sur chaque bloc : tout reste aligné à
+     gauche dans une colonne de lecture centrée. (Pour un élément de grille,
+     un pourcentage de marge intérieure se lit sur la largeur de sa colonne.) */
+  #view-tickets #d-pane { padding-inline: max(0px, calc((100% - 1040px) / 2)); }
+}
+@media (min-width: 2300px) {
+  .workspace { --ws-col1: 440px; --ws-col3: 390px; }
+  #view-tickets #d-pane { padding-inline: max(0px, calc((100% - 1120px) / 2)); }
+}
+
+/* La colonne, comme la maquette : 224 px, un libellé par ligne, coupé
+   proprement s'il est trop long. */
+@media (min-width: 1081px) {
+  .app:not(.folded) { grid-template-columns: 224px minmax(0, 1fr); }
+}
+.nav-item .nav-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Réglages sur tablette : à 768 px, la colonne (270) et le détail (520) ne
+   tenaient pas côte à côte ; le détail passait dessous et laissait un grand
+   blanc à droite de la colonne. Le détail se contente de 420 px. */
+@media (min-width: 761px) {
+  .reg-main { flex-basis: 420px; }
 }

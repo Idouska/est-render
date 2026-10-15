@@ -541,6 +541,59 @@ function proposerBulleSide(cible, { attendre = true } = {}) {
 }
 
 /*
+ * La recherche, au milieu de la barre du haut.
+ *
+ * La grille réserve à gauche la largeur de la zone de droite (les heures et
+ * les boutons) : la recherche tombe pile au centre. Une grille ne sait pas
+ * égaler deux colonnes de contenus différents ; on mesure donc la droite, et
+ * on n'impose la symétrie que si la recherche garde au moins 220 px — sinon,
+ * mieux vaut une recherche décalée qu'un champ trop étroit pour être lu.
+ */
+let centrageEnAttente = false;
+
+function centrerRecherche() {
+  centrageEnAttente = false;
+  const tete = document.querySelector('.head');
+  const droite = tete?.querySelector('.head-droite');
+  if (!tete || !droite) return;
+  if (innerWidth <= 1000) {
+    tete.style.removeProperty('--cote');
+    return;
+  }
+  const largeurAvant = droite.style.width;
+  droite.style.width = 'max-content';
+  const cote = Math.ceil(droite.getBoundingClientRect().width);
+  droite.style.width = largeurAvant;
+  const place = tete.clientWidth - 2 * 16 - 2 * cote;
+  if (place >= 220) tete.style.setProperty('--cote', `${cote}px`);
+  else tete.style.removeProperty('--cote');
+}
+
+function demanderCentrage() {
+  if (centrageEnAttente) return;
+  centrageEnAttente = true;
+  requestAnimationFrame(centrerRecherche);
+}
+
+addEventListener('resize', demanderCentrage);
+{
+  const droite = document.querySelector('.head-droite');
+  // Les heures, les pastilles ou la lune qui changent changent la largeur.
+  if (droite) {
+    new MutationObserver(demanderCentrage).observe(droite, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['hidden', 'class'],
+    });
+  }
+  // La colonne qu'on replie ou déplie change la largeur de la barre.
+  const grille = $('app-grid');
+  if (grille) new MutationObserver(demanderCentrage).observe(grille, { attributes: true, attributeFilter: ['class'] });
+  demanderCentrage();
+}
+
+/*
  * Le compte, en pied de colonne.
  *
  * Un clic ouvre son menu : l'actualisation automatique, les réglages, la
@@ -9928,6 +9981,24 @@ setInterval(renderClocks, 30000);
 /* Icônes en ligne : une police d'icônes ou un CDN ne passerait pas la
    politique de sécurité, et douze glyphes ne justifient pas un build. */
 const ICONS = {
+  /*
+   * Un symbole par écran, jamais deux fois le même.
+   *
+   * La colonne répétait la boîte cinq fois (Catalogue, Renvoi, Retour,
+   * Ruptures…), le camion, l'euro, les personnes et le plateau deux fois
+   * chacun : on ne repérait plus un écran à son icône. Chacun a maintenant la
+   * sienne, au trait, comme les SF Symbols.
+   */
+  coins:
+    '<ellipse cx="8" cy="4.2" rx="5" ry="1.9"/><path d="M3 4.2v3.6c0 1 2.2 1.9 5 1.9s5-.9 5-1.9V4.2M3 7.8v3.6c0 1 2.2 1.9 5 1.9s5-.9 5-1.9V7.8"/>',
+  person: '<circle cx="8" cy="8" r="6"/><circle cx="8" cy="6.6" r="2"/><path d="M4.3 12.3c.8-1.3 2.1-2 3.7-2s2.9.7 3.7 2"/>',
+  tag: '<path d="M2.5 2.5h5.2l5.8 5.8-5.2 5.2-5.8-5.8z"/><circle cx="5.4" cy="5.4" r="1"/>',
+  factory: '<path d="M1.8 13.8V7.2l3.4-2v2.4l3.4-2v2.4l3.4-2v7.8z"/><path d="M1.2 13.8h13.6M4.6 11.2h1M8 11.2h1M11.4 11.2h1"/>',
+  pencil: '<path d="M2.6 13.4l.8-3L11 2.8l2.2 2.2-7.6 7.6z"/><path d="M9.6 4.2l2.2 2.2"/>',
+  card: '<rect x="1.8" y="3.4" width="12.4" height="9.2" rx="1.6"/><path d="M1.8 6.4h12.4M4.4 10h2.6"/>',
+  cycle: '<path d="M13 6.4A5.2 5.2 0 0 0 3.6 4.6L2.8 5.4M2.8 2.6v2.8h2.8M3 9.6a5.2 5.2 0 0 0 9.4 1.8l.8-.8M13.2 13.4v-2.8h-2.8"/>',
+  uturn: '<path d="M6 3 3 6l3 3"/><path d="M3 6h6.6a3.6 3.6 0 0 1 0 7.2H6.8"/>',
+  bubble: '<path d="M2.5 3h11v7.6H7.2l-3.2 2.6v-2.6H2.5z"/><path d="M5 5.9h6M5 8.1h4"/>',
   clock: '<circle cx="8" cy="8" r="5.6"/><path d="M8 4.8V8l2.2 1.4"/>',
   bolt: '<path d="M9 1.5 3.5 9h3.6L7 14.5 12.5 7H8.9z"/>',
   grid: '<path d="M2.5 2.5h4.5v4.5H2.5zM9 2.5h4.5v4.5H9zM2.5 9h4.5v4.5H2.5zM9 9h4.5v4.5H9z"/>',
@@ -11657,7 +11728,7 @@ const VIEW_META = {
   tickets: { icon: 'inbox', label: 'SAV client', group: 'Pilotage', title: 'SAV client' },
   stats: { icon: 'chart', label: "Statistiques", group: 'Pilotage', title: "Statistiques d'équipe" },
   couts: {
-    icon: 'euro',
+    icon: 'coins',
     label: 'Coûts SAV',
     group: 'Pilotage',
     // Le même mot que dans le menu : « Coûts du SAV » se cassait sur deux
@@ -11666,8 +11737,8 @@ const VIEW_META = {
     sous: 'Ce que le SAV vous coûte, mois par mois',
   },
   orders: { icon: 'bag', label: 'Commandes', group: 'Commerce', title: 'Commandes' },
-  customers: { icon: 'users', label: 'Clients', group: 'Commerce', title: 'Clients' },
-  catalog: { icon: 'box', label: 'Catalogue', group: 'Commerce', title: 'Catalogue' },
+  customers: { icon: 'person', label: 'Clients', group: 'Commerce', title: 'Clients' },
+  catalog: { icon: 'tag', label: 'Catalogue', group: 'Commerce', title: 'Catalogue' },
   /*
    * Fournisseur : les quatre gestes du SAV, rien d'autre.
    *
@@ -11675,15 +11746,15 @@ const VIEW_META = {
    * sur son onglet : `alias` dit l'écran, `onglet` l'onglet ouvert.
    */
   suppliers: {
-    icon: 'truck',
+    icon: 'factory',
     label: 'Fournisseur',
     group: 'Fournisseur',
     title: 'Fournisseurs',
   },
-  changes: { icon: 'bolt', label: 'Modification', group: 'Fournisseur', title: 'Modification — demandes au fournisseur' },
-  refunds: { icon: 'euro', label: 'Annulation/\u200bRemboursement', group: 'Fournisseur', title: 'Annulations et remboursements' },
-  renvoi: { icon: 'box', label: 'Renvoi', group: 'Fournisseur', title: 'Renvoi — stock retours', alias: 'returns', onglet: 'stock' },
-  retour: { icon: 'box', label: 'Retour', group: 'Fournisseur', title: 'Retours clients', alias: 'returns', onglet: 'cases' },
+  changes: { icon: 'pencil', label: 'Modification', group: 'Fournisseur', title: 'Modification — demandes au fournisseur' },
+  refunds: { icon: 'card', label: 'Annulation/\u200bRemboursement', group: 'Fournisseur', title: 'Annulations et remboursements' },
+  renvoi: { icon: 'cycle', label: 'Renvoi', group: 'Fournisseur', title: 'Renvoi — stock retours', alias: 'returns', onglet: 'stock' },
+  retour: { icon: 'uturn', label: 'Retour', group: 'Fournisseur', title: 'Retours clients', alias: 'returns', onglet: 'cases' },
   // Atelier : le travail avec le fournisseur au quotidien.
   envoi: {
     icon: 'truck',
@@ -11693,7 +11764,7 @@ const VIEW_META = {
     sous: 'Stock retours d’abord, fournisseur ensuite',
   },
   ruptures: {
-    icon: 'box',
+    icon: 'alerte',
     label: 'Ruptures de stock',
     group: 'Atelier',
     title: 'Ruptures de stock',
@@ -11704,7 +11775,7 @@ const VIEW_META = {
   returns: { icon: 'box', label: 'Reshipment', group: 'Fournisseur', title: 'Reshipment — retours clients', hidden: true },
   disputes: { icon: 'shield', label: 'Litiges Shopify', group: 'Finance', title: 'Litiges Shopify' },
   team: { icon: 'users', label: 'Équipe & rôles', group: 'Plateforme', title: 'Équipe & rôles' },
-  canned: { icon: 'inbox', label: 'Réponses types', group: 'Plateforme', title: 'Réponses types' },
+  canned: { icon: 'bubble', label: 'Réponses types', group: 'Plateforme', title: 'Réponses types' },
   settings: { icon: 'gear', label: 'Réglages', group: 'Plateforme', title: 'Réglages' },
 };
 

@@ -52,9 +52,9 @@ test('la colonne colle au bord, le compte descend en pied', () => {
   assert.match(app, /if \(event\.key !== 'Escape' \|\| \$\('compte-menu'\)\?\.hidden\) return;/);
 });
 
-test('la barre du haut : titre, heures, recherche, Actualiser', () => {
+test('la barre du haut : titre, recherche au centre, heures et Actualiser à droite', () => {
   const tete = dashboard.slice(dashboard.indexOf('<header class="head">'), dashboard.indexOf('</header>'));
-  const rangs = ['id="view-title"', 'id="clocks"', 'id="head-search"', 'id="refresh"'].map((id) => tete.indexOf(id));
+  const rangs = ['id="view-title"', 'id="head-search"', 'id="clocks"', 'id="refresh"'].map((id) => tete.indexOf(id));
   assert.ok(rangs.every((r) => r > 0));
   assert.deepEqual([...rangs].sort((a, b) => a - b), rangs);
   // Shopify et Gmail ne parlent qu'en cas de panne.
