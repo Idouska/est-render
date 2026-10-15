@@ -773,13 +773,18 @@ for (const id of ['cc-shopify', 'cc-gmail']) {
  */
 const RETOURS_GMAIL = {
   connecte: ['Gmail est connecté.', false],
+  /* Le bouton s'appelle « Connecter Gmail », « Ajouter une boîte » ou
+     « reconnectez cette boîte » selon les boîtes déjà là : le message ne
+     nomme donc pas de bouton. Une adresse Google Workspace peut aussi être
+     bloquée par son administrateur, qui doit approuver l'application. */
   refuse: [
-    'Gmail n’est pas connecté : l’autorisation a été annulée sur la page de Google. ' +
-      'Cliquez sur « Connecter Gmail » et acceptez toutes les autorisations demandées.',
+    'Google a refusé la connexion : l’autorisation a été annulée ou bloquée sur sa page. ' +
+      'Recommencez et acceptez toutes les autorisations. Pour une adresse Google Workspace, ' +
+      'l’administrateur du domaine doit d’abord approuver l’application.',
     true,
   ],
   etat: [
-    'La page de Google est restée ouverte trop longtemps. Cliquez à nouveau sur « Connecter Gmail ».',
+    'La page de Google est restée ouverte trop longtemps. Recommencez la connexion de la boîte.',
     true,
   ],
   jeton: [
