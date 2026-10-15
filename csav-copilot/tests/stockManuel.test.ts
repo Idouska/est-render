@@ -41,7 +41,10 @@ test('le modèle et la déclinaison viennent du catalogue', () => {
 test('ce n’est pas un retour : ni dans les dossiers, ni dans leur compte', () => {
   assert.match(routes, /const retours = cases\.filter\(\(item\) => item\.origine !== 'MANUEL'\);/);
   assert.match(routes, /open: retours\.filter\(/);
-  assert.match(app, /item\.origine !== 'MANUEL' && !\['CLOSED', 'UNUSABLE'\]\.includes\(item\.status\)/);
+  // Les dossiers clos restent au tableau, sous leur intertitre ; la paire
+  // ajoutée à la main n'y entre jamais, ni en cours ni close.
+  assert.match(app, /const dossiers = state\.returns\.cases\.filter\(\(item\) => item\.origine !== 'MANUEL'\);/);
+  assert.match(app, /const items = dossiers\.filter\(\(item\) => !RETOURS_FINIS\.includes\(item\.status\)\);/);
   // Mais bien dans le stock, présentée comme telle.
   assert.match(app, /`ajout manuel\$\{item\.note \? ` · \$\{esc\(item\.note\)\}` : ''\}`/);
 });

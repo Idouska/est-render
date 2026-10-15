@@ -141,12 +141,21 @@
                   <path d="M16.5 3v3.5H13" />
                 </svg>
               </button>
-              <button class="ico" id="ws-more" type="button" title="Dates et export"
-                aria-expanded="false" aria-label="Dates et export">
+              <!-- Le téléchargement se voit : il dormait derrière « ··· », et
+                   l'atelier qui le cherchait ne pensait pas à ouvrir ce menu.
+                   Il suit la période choisie, comme avant. -->
+              <a class="btn ws-dl" id="ws-xlsx" download data-ttl="head.xlsx" title="Télécharger .xlsx">
                 <svg viewBox="0 0 20 20" aria-hidden="true">
-                  <circle cx="4.5" cy="10" r="1.4" />
-                  <circle cx="10" cy="10" r="1.4" />
-                  <circle cx="15.5" cy="10" r="1.4" />
+                  <path d="M10 3.5v9M6 9l4 4 4-4M4 16.5h12" />
+                </svg>
+                <span data-t="head.download">Télécharger</span>
+              </a>
+              <!-- Les dates précises et le CSV : un calendrier, plus « ··· ». -->
+              <button class="ico" id="ws-more" type="button" data-ttl="head.dates" title="Choisir des dates"
+                aria-expanded="false" aria-label="Choisir des dates">
+                <svg viewBox="0 0 20 20" aria-hidden="true">
+                  <rect x="3.5" y="4.5" width="13" height="12" rx="2" />
+                  <path d="M3.5 8.5h13M7 3v3M13 3v3" />
                 </svg>
               </button>
             </div>
@@ -209,7 +218,6 @@
             <label class="ws-range">
               <span data-t="head.to">au</span> <input type="date" id="ws-until" />
             </label>
-            <a class="btn btn-primary" id="ws-xlsx" download data-t="head.xlsx">Télécharger .xlsx</a>
             <a class="btn" id="ws-csv" download data-t="head.csv">CSV</a>
           </div>
 

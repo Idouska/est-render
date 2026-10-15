@@ -9534,14 +9534,26 @@ function renderReturns() {
   renderReturnAgencies(box);
 }
 
+/** Les statuts qui terminent un dossier : il quitte les dossiers en cours. */
+const RETOURS_FINIS = ['CLOSED', 'UNUSABLE'];
+
 function renderReturnCases(box) {
   // Une paire ajoutée à la main est du stock, pas un dossier de retour.
-  const items = state.returns.cases.filter(
-    (item) => item.origine !== 'MANUEL' && !['CLOSED', 'UNUSABLE'].includes(item.status),
-  );
+  const dossiers = state.returns.cases.filter((item) => item.origine !== 'MANUEL');
+  /*
+   * Un dossier clos ne disparaît plus.
+   *
+   * Passer le statut à « Clos » le faisait sortir du tableau sur-le-champ :
+   * on croyait l'avoir supprimé, et on ne pouvait plus le rouvrir. Il descend
+   * maintenant sous les dossiers en cours, grisé, avec son statut toujours
+   * modifiable. Les dix plus récents d'abord ; le reste sur demande.
+   */
+  const items = dossiers.filter((item) => !RETOURS_FINIS.includes(item.status));
+  const finis = dossiers.filter((item) => RETOURS_FINIS.includes(item.status));
+  const finisAffiches = state.returns.voirClos ? finis : finis.slice(0, 10);
   const silentSince = Date.now() - 3 * 24 * 60 * 60 * 1000;
 
-  if (items.length === 0) {
+  if (dossiers.length === 0) {
     box.innerHTML = `<div class="empty-block">
       <b>Aucun dossier de retour en cours.</b>
       <p>Le circuit : le client renvoie → l'agence du pays réceptionne → la
@@ -9558,14 +9570,23 @@ function renderReturnCases(box) {
       <th>Commande</th><th>Client</th><th>Article</th>
       <th>Bon de retour</th><th>Colis retour</th><th>Statut</th><th></th>
     </tr></thead><tbody>
-    ${items
-      .map((item) => {
+    ${items.length ? '' : '<tr class="ret-vide"><td colspan="7">Aucun dossier de retour en cours.</td></tr>'}
+    ${[...items, ...finisAffiches]
+      .map((item, rang) => {
         const silent =
           ['OPEN', 'LABEL_SENT'].includes(item.status) &&
           new Date(item.lastContactAt).getTime() < silentSince;
         const wa = returnWaLink(item);
+        const fini = RETOURS_FINIS.includes(item.status);
+        // L'intertitre, avant le premier dossier clos.
+        const intertitre =
+          rang === items.length
+            ? `<tr class="ret-sep"><td colspan="7">Clos et inutilisables · ${finis.length}</td></tr>`
+            : '';
 
-        return `<tr data-ret="${esc(item.id)}"${silent ? ' class="ret-silent"' : ''}>
+        return `${intertitre}<tr data-ret="${esc(item.id)}"${
+          silent ? ' class="ret-silent"' : fini ? ' class="ret-clos"' : ''
+        }>
           <td><b>${esc(item.orderName ?? '—')}</b><br /><small>${esc(
             RETURN_COUNTRIES[item.country] ?? item.country ?? '',
           )}</small></td>
@@ -9673,8 +9694,21 @@ function renderReturnCases(box) {
         </tr>`;
       })
       .join('')}
+    ${
+      finis.length > finisAffiches.length
+        ? `<tr class="ret-plus"><td colspan="7"><button class="btn btn-small" type="button" data-ret-clos-tous>Voir les ${
+            finis.length - finisAffiches.length
+          } autres dossiers clos</button></td></tr>`
+        : ''
+    }
     </tbody></table></div>`;
 }
+
+$('ret-body')?.addEventListener('click', (event) => {
+  if (!event.target.closest('[data-ret-clos-tous]')) return;
+  state.returns.voirClos = true;
+  renderReturns();
+});
 
 /** Un pays, en toutes lettres. */
 const nomPays = (code) => RETURN_COUNTRIES[code] ?? code ?? '—';
