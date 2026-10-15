@@ -39,8 +39,11 @@ const bloc = (source: string, debut: string) => {
 /* ---- les deux modes se voient ---- */
 
 test('les deux modes sont proposés, le guichet par défaut', () => {
-  assert.match(html, /data-mode="manuel" aria-selected="true"/);
-  assert.match(html, /data-mode="masse" aria-selected="false"/);
+  // L'import en masse est un bouton à côté du téléchargement : enfoncé, il
+  // remplace la file ; relâché — ou fermé par sa croix —, il y ramène.
+  assert.match(html, /id="ws-import" data-mode="masse" aria-pressed="false"/);
+  assert.match(js, /setMode\(state\.mode === 'masse' \? 'manuel' : 'masse'\)/);
+  assert.match(js, /\$\('bulk-fermer'\)\?\.addEventListener\('click', \(\) => setMode\('manuel'\)\);/);
   assert.match(js, /mode: 'manuel',/);
 });
 

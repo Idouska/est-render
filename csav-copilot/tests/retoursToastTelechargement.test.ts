@@ -56,12 +56,11 @@ test('l’atelier voit le bouton Télécharger sans ouvrir de menu', () => {
   const entete = espace.slice(espace.indexOf('<div class="wshead-acts">'), espace.indexOf('</header>', espace.indexOf('<div class="wshead-acts">')));
   assert.match(entete, /<a class="btn ws-dl" id="ws-xlsx" download/);
   assert.match(entete, /<span data-t="head.download">Télécharger<\/span>/);
-  // Le tiroir ne garde que les dates et le CSV.
-  const tiroir = espace.slice(espace.indexOf('id="ws-drawer"'), espace.indexOf('</div>', espace.indexOf('id="ws-drawer"')));
-  assert.doesNotMatch(tiroir, /ws-xlsx/);
-  assert.match(tiroir, /id="ws-csv"/);
-  // « ··· » devient un calendrier, nommé dans les trois langues.
-  assert.match(entete, /id="ws-more" type="button" data-ttl="head\.dates"/);
+  // Le CSV passe sous la petite flèche de Télécharger ; les dates, dans le
+  // menu de la période. Plus de « ··· ».
+  assert.match(entete, /id="ws-dl-plus" aria-haspopup="menu"/);
+  assert.match(entete, /<a class="cmd-item" id="ws-csv" download/);
+  assert.match(espace, /id="ws-more" aria-expanded="false" data-t="head\.dates"/);
   assert.match(espaceJs, /for \(const node of document\.querySelectorAll\('\[data-ttl\]'\)\) \{/);
   const table = STRINGS as Record<string, Record<string, string>>;
   for (const { code } of LANGS as Array<{ code: string }>) {

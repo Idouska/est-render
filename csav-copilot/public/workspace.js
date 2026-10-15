@@ -140,6 +140,7 @@ function applyLang(lang) {
   for (const node of document.querySelectorAll('[data-tip]')) {
     node.title = t(node.dataset.tip);
   }
+  majPeriode();
 
   renderLangPicker();
   // Les écrans construits en JavaScript se refont : ils ne portent pas de
@@ -493,12 +494,36 @@ function majCompteCommandes(n) {
   pastille.textContent = String(n);
 }
 
+/*
+ * Les outils de la file — recherche, interrupteur, tri — vivent en tête de la
+ * colonne de la file sur grand écran, comme dans Mail. Le rendu remplace
+ * `#ws-orders` en entier : ils en sont retirés avant, reposés après, et le
+ * champ de recherche garde le curseur si on était en train de taper.
+ */
 function renderOrders() {
+  const outils = $('cmd-outils');
+  const champ = $('ws-cmd-q');
+  const tapait = document.activeElement === champ;
+  const curseur = tapait ? champ.selectionStart : null;
+
+  $('ws-orders').before(outils);
+  dessinerCommandes();
+  $('ws-orders').querySelector('.ws-file')?.prepend(outils);
+
+  if (tapait && document.activeElement !== champ) {
+    champ.focus();
+    champ.setSelectionRange(curseur, curseur);
+  }
+}
+
+function dessinerCommandes() {
   const finished = state.orders.filter(orderIsDone).length;
   const left = state.orders.length - finished;
 
-  $('count-left').textContent = String(left);
-  $('count-all').textContent = String(state.orders.length);
+  $('ws-compte').textContent = t(state.filter === 'all' ? 'filter.countAll' : 'filter.countLeft', {
+    n: state.filter === 'all' ? state.orders.length : left,
+  });
+  $('ws-masquer')?.setAttribute('aria-checked', String(state.filter !== 'all'));
   // Le même chiffre sur l'onglet : il se voit depuis les deux autres.
   $('ws-sous-n').textContent = left ? String(left) : '';
   $('ws-sort')?.setAttribute('aria-pressed', String(state.sort === 'model'));
@@ -874,6 +899,7 @@ async function load() {
     $('ws-csv').href = apiUrl(`/api/workspace/${supplierId}/orders.csv`).toString();
     // L'étape 1 de l'import : la même feuille, pour la même période.
     $('bulk-xlsx').href = $('ws-xlsx').href;
+    $('ws-dl-xlsx').href = $('ws-xlsx').href;
 
     renderOrders();
   } catch (error) {
@@ -1411,15 +1437,11 @@ $('ws-sort')?.addEventListener('click', () => {
   renderOrders();
 });
 
-document.querySelectorAll('#ws-filter [data-filter]').forEach((button) =>
-  button.addEventListener('click', () => {
-    state.filter = button.dataset.filter;
-    document.querySelectorAll('#ws-filter [data-filter]').forEach((other) =>
-      other.setAttribute('aria-pressed', String(other === button)),
-    );
-    renderOrders();
-  }),
-);
+// « Masquer les préparées » : allumé, la file ne montre que ce qui reste.
+$('ws-masquer')?.addEventListener('click', () => {
+  state.filter = state.filter === 'all' ? 'left' : 'all';
+  renderOrders();
+});
 
 document.querySelectorAll('#ws-quick [data-range]').forEach((button) =>
   button.addEventListener('click', () => {
@@ -1431,9 +1453,71 @@ document.querySelectorAll('#ws-quick [data-range]').forEach((button) =>
       other.setAttribute('aria-pressed', String(other === button)),
     );
 
+    fermerMenusCommandes();
+    majPeriode();
     void load();
   }),
 );
+
+/** Le nom de la période dans le sous-titre : celle cochée, ou « Dates choisies ». */
+function majPeriode() {
+  const nom = $('ws-periode-nom');
+  if (!nom) return;
+  const cochee = document.querySelector('#ws-quick [data-range][aria-pressed="true"]');
+  nom.textContent = cochee ? cochee.textContent : t('range.custom');
+}
+
+/*
+ * Des dates précises rechargent la file.
+ *
+ * Elles ne servaient qu'aux exports : choisir le 12 octobre laissait la
+ * liste sur hier, et le fichier téléchargé ne disait pas la même chose que
+ * l'écran. Elles décochent les trois périodes nommées.
+ */
+for (const id of ['ws-since', 'ws-until']) {
+  $(id)?.addEventListener('change', () => {
+    if (!$('ws-since').value || !$('ws-until').value) return;
+    document.querySelectorAll('#ws-quick [data-range]').forEach((other) => other.setAttribute('aria-pressed', 'false'));
+    majPeriode();
+    void load();
+  });
+}
+
+/* Les deux menus de l'en-tête : la période, et les formats de téléchargement. */
+const MENUS_COMMANDES = [
+  ['ws-periode', 'ws-periode-menu'],
+  ['ws-dl-plus', 'ws-dl-menu'],
+];
+
+function fermerMenusCommandes(sauf = null) {
+  for (const [bouton, menu] of MENUS_COMMANDES) {
+    if (menu === sauf || !$(menu)) continue;
+    $(menu).hidden = true;
+    $(bouton).setAttribute('aria-expanded', 'false');
+  }
+}
+
+for (const [bouton, menu] of MENUS_COMMANDES) {
+  $(bouton)?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const ouvrir = $(menu).hidden;
+    fermerMenusCommandes(ouvrir ? menu : null);
+    $(menu).hidden = !ouvrir;
+    $(bouton).setAttribute('aria-expanded', String(ouvrir));
+  });
+}
+
+document.addEventListener('click', (event) => {
+  // Les dates se saisissent dans le menu : y cliquer ne le referme pas.
+  if (event.target.closest('#ws-periode-menu')) return;
+  fermerMenusCommandes();
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') fermerMenusCommandes();
+});
+$('ws-dl-menu')?.addEventListener('click', (event) => {
+  if (event.target.closest('a')) fermerMenusCommandes();
+});
 
 /* ------------------------------------------------------------- suivi ----- */
 
@@ -2488,12 +2572,12 @@ function setMode(mode) {
   const masse = state.mode === 'masse';
 
   document.querySelectorAll('#ws-modes [data-mode]').forEach((bouton) => {
-    bouton.setAttribute('aria-selected', String(bouton.dataset.mode === state.mode));
+    bouton.setAttribute('aria-pressed', String(bouton.dataset.mode === state.mode));
   });
 
   // En masse, la progression, les filtres et la liste s'effacent : ils
   // décrivent la file du guichet, pas l'import.
-  for (const id of ['ws-progress', 'ws-filter', 'ws-orders']) {
+  for (const id of ['ws-progress', 'cmd-outils', 'ws-orders']) {
     const bloc = $(id);
     if (bloc) bloc.classList.toggle('hors-mode', masse);
   }
@@ -2508,9 +2592,12 @@ function setMode(mode) {
   }
 }
 
+// « Importer un fichier » ouvre l'import à la place de la file ; un second clic,
+// ou la croix de l'import, y ramène.
 document.querySelectorAll('#ws-modes [data-mode]').forEach((bouton) =>
-  bouton.addEventListener('click', () => setMode(bouton.dataset.mode)),
+  bouton.addEventListener('click', () => setMode(state.mode === 'masse' ? 'manuel' : 'masse')),
 );
+$('bulk-fermer')?.addEventListener('click', () => setMode('manuel'));
 
 /* Les couleurs et les mots des statuts de ligne. `pret` est la seule qui
    sera écrite ; toutes les autres expliquent pourquoi une ligne ne l'est pas. */

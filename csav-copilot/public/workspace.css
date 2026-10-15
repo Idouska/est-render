@@ -2794,7 +2794,10 @@ input:focus, select:focus, textarea:focus {
   stroke-linejoin: round;
 }
 
-/* ---------------------------------------- les commandes, en quatre étages */
+/* ------------------------------------------------- les commandes, sans empilement
+   Deux étages au-dessus de la file : le titre et ses gestes, puis les onglets.
+   La période vit dans la phrase sous le titre ; l'import à côté du
+   téléchargement ; la recherche et le filtre en tête de la file. */
 
 /* Le mode test, en une ligne : il prévient sans pousser la page. */
 .wsapp .ws-test {
@@ -2813,57 +2816,201 @@ input:focus, select:focus, textarea:focus {
 .wsapp .ws-test::before { content: ''; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); }
 .wsapp .ws-test b { margin-right: 0; font-weight: 650; }
 
-/* Étage 1 : le titre porte l'avancement ; les gestes de l'écran à droite. */
-.wsapp .cmd-tete { align-items: flex-end; flex-wrap: wrap; gap: 12px 16px; margin-bottom: 14px; }
-.wsapp .cmd-titre { flex: 1; min-width: 240px; display: flex; flex-direction: column; gap: 6px; }
-.wsapp .cmd-titre h1 { flex: none; }
-.wsapp .cmd-tete .ws-progress { margin: 0; gap: 10px; font-size: 13.5px; font-weight: 500; }
-.wsapp .cmd-tete .ws-progress-bar { flex: 0 1 180px; height: 5px; }
-.wsapp .cmd-tete .wshead-acts { align-items: center; gap: 8px; }
-/* Colis enregistrés et Lots reçus n'ont ni avancement, ni téléchargement,
-   ni période : ils gardent le titre et les onglets. */
-.wsapp .cmd-tete:not([data-onglet='orders']) .ws-progress,
-.wsapp .cmd-tete:not([data-onglet='orders']) .wshead-acts,
-.wsapp .cmd-barre:not([data-onglet='orders']) #ws-quick { display: none; }
+/* La page prend la largeur : la file n'a plus à couper les noms. */
+.wsapp .wsmain { max-width: 1480px; }
 
-/* Étage 2 : les trois listes à gauche, la journée à droite. */
-.wsapp .cmd-barre { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 12px; margin-bottom: 14px; }
+/* Étage 1 : le titre, la phrase de la journée ; les gestes sur la même ligne. */
+.wsapp .cmd-tete { align-items: center; flex-wrap: wrap; gap: 12px 16px; margin-bottom: 14px; }
+.wsapp .cmd-titre { flex: 1; min-width: 280px; display: flex; flex-direction: column; gap: 4px; }
+.wsapp .cmd-titre h1 { flex: none; }
+.wsapp .cmd-sous { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; font-size: 14px; color: var(--ink-soft); }
+.wsapp .cmd-sous .ws-progress { flex: 1 1 260px; margin: 0; gap: 10px; font-size: 14px; font-weight: 500; }
+.wsapp .cmd-sous .ws-progress::before { content: '·'; color: var(--ink-mute); }
+.wsapp .cmd-sous .ws-progress-bar { flex: 0 1 180px; height: 5px; }
+.wsapp .cmd-tete .wshead-acts { align-items: center; gap: 8px; }
+
+/* La période : un lien qui ouvre un menu. */
+.wsapp .cmd-pop { position: relative; display: inline-flex; }
+.wsapp .cmd-periode {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 28px;
+  margin-left: -6px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--brand);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.wsapp .cmd-periode:hover,
+.wsapp .cmd-periode[aria-expanded='true'] { background: var(--brand-soft); }
+.wsapp .cmd-periode svg,
+.wsapp .cmd-dl-plus svg { width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
+
+/* Les menus de l'en-tête. */
+.wsapp .cmd-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: -6px;
+  z-index: 30;
+  min-width: 230px;
+  box-sizing: border-box;
+  padding: 5px;
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 8%), 0 12px 32px rgb(16 18 40 / 16%);
+}
+.wsapp .cmd-menu-droite { left: auto; right: 0; min-width: 190px; }
+.wsapp .cmd-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  box-sizing: border-box;
+  padding: 0 10px 0 30px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.wsapp .cmd-item:hover { background: var(--brand-soft); }
+.wsapp a.cmd-item { padding-left: 10px; }
+/* La période cochée, comme dans un menu du Mac. */
+.wsapp #ws-quick .cmd-item[aria-pressed='true'] { position: relative; font-weight: 600; }
+.wsapp #ws-quick .cmd-item[aria-pressed='true']::before {
+  content: '';
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  width: 4px;
+  height: 8px;
+  margin-top: -6px;
+  border-right: 2px solid var(--brand);
+  border-bottom: 2px solid var(--brand);
+  transform: rotate(45deg);
+}
+.wsapp .cmd-sep { height: 1px; margin: 5px 8px; border: 0; background: var(--line-soft); }
+.wsapp .cmd-menu .ws-drawer { flex-direction: column; align-items: stretch; gap: 6px; margin: 0; padding: 4px 10px 8px 30px; border: 0; background: none; box-shadow: none; }
+.wsapp .cmd-menu .ws-range { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--ink-soft); }
+
+/* Télécharger, et sa petite flèche collée. */
+.wsapp .cmd-dl .ws-dl { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.wsapp .cmd-dl-plus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  min-width: 0;
+  padding: 0;
+  margin-left: 1px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  color: var(--ink-soft);
+}
+.wsapp .ws-import { display: inline-flex; align-items: center; gap: 6px; }
+.wsapp .ws-import svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.wsapp .ws-import[aria-pressed='true'] { background: var(--brand-soft); color: var(--brand); }
+
+/* Colis enregistrés et Lots reçus gardent le titre et les onglets. */
+.wsapp .cmd-tete:not([data-onglet='orders']) .cmd-sous,
+.wsapp .cmd-tete:not([data-onglet='orders']) .wshead-acts { display: none; }
+
+/* Étage 2 : les trois listes, seul contrôle segmenté de l'écran. */
+.wsapp .cmd-barre { display: flex; margin-bottom: 14px; }
 .wsapp .cmd-barre .ws-sous { margin: 0; }
-.wsapp .cmd-barre #ws-quick { margin: 0 0 0 auto; }
 .wsapp #ws-sous-cmd .ws-sous-n { margin-left: 6px; background: var(--brand-soft); color: var(--brand); font-weight: 650; }
 .wsapp #ws-sous-cmd .ws-sous-n:empty { display: none; }
 .wsapp #ws-sous-cmd button { display: inline-flex; align-items: center; }
 
-/* Étage 3 : chercher, filtrer, ranger — et le mode, réduit à un sélecteur. */
-.wsapp .cmd-outils { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
-.wsapp .cmd-outils .ws-search-wrap { flex: 1 1 240px; max-width: 380px; margin: 0; }
-.wsapp .cmd-outils .chips { margin: 0; }
-.wsapp .cmd-outils .ws-modes { margin: 0 0 0 auto; }
-.wsapp .cmd-outils .ws-modes button { min-height: 30px; padding: 0 12px; gap: 6px; }
-.wsapp .cmd-outils .ws-modes svg { width: 16px; height: 16px; }
-.wsapp .cmd-outils .ws-mode-txt small { display: none; }
-.wsapp .cmd-outils .ws-mode-txt b { font-size: 13.5px; font-weight: 500; }
-.wsapp .cmd-outils .ws-modes button[aria-selected='true'] .ws-mode-txt b { font-weight: 600; }
+/* En tête de la file : chercher, masquer ce qui est fait, ranger. */
+.wsapp .cmd-outils { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.wsapp .ws-file > .cmd-outils { margin: 0 0 4px; padding: 6px 6px 10px; border-bottom: 1px solid var(--line-soft); }
+.wsapp .cmd-outils .ws-search-wrap { margin: 0; min-height: 34px; background: var(--paper); }
+.wsapp .cmd-filtre { display: flex; align-items: center; gap: 10px; }
+.wsapp .cmd-switch { display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--ink-soft); cursor: pointer; }
+.wsapp .cmd-switch button {
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 16%);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.wsapp .cmd-switch button::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 25%);
+  transition: left 0.15s ease;
+}
+.wsapp .cmd-switch button[aria-checked='true'] { background: #34c759; }
+.wsapp .cmd-switch button[aria-checked='true']::after { left: 16px; }
+.wsapp .cmd-switch button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.wsapp .cmd-filtre .chip-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  margin-left: auto;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.wsapp .cmd-filtre .chip-sort svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+.wsapp .cmd-filtre .chip-sort[aria-pressed='true'] { background: var(--brand-soft); color: var(--brand); }
+.wsapp .cmd-compte { font-size: 12.5px; color: var(--ink-soft); white-space: nowrap; }
+
+/* La file plus large : environ cinq onzièmes de la largeur. */
+.wsapp .ws-split { grid-template-columns: minmax(320px, 5fr) minmax(0, 6fr); }
+
+/* L'import a son titre et sa croix. */
+.wsapp .bulk-tete { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.wsapp .bulk-tete b { flex: 1; font-size: 17px; font-weight: 650; }
+.wsapp .bulk-fermer {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--piste);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
 
 /* Au guichet plein écran, ces étages se retirent comme l'ancien en-tête. */
 .ws-focus .wsapp .cmd-tete,
 .ws-focus .wsapp .cmd-barre,
 .ws-focus .wsapp .cmd-outils { display: none; }
-
-@media (max-width: 880px) {
-  .wsapp .cmd-tete .ws-progress-bar { flex: 1 1 auto; }
-  .wsapp .cmd-barre > *,
-  .wsapp .cmd-outils .ws-modes { width: 100%; margin-left: 0; }
-  .wsapp .cmd-barre #ws-quick { margin-left: 0; }
-  .wsapp .cmd-barre > * > button,
-  .wsapp .cmd-outils .ws-modes button { flex: 1; justify-content: center; }
-  .wsapp .cmd-outils .ws-search-wrap { flex-basis: 100%; max-width: none; }
-  .wsapp .cmd-outils .chips { flex: 1; }
-}
-@media (max-width: 880px) {
-  /* Deux moitiés égales, côte à côte : l'ancienne règle les empilait. */
-  .wsapp .cmd-outils .ws-modes { display: grid; grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
-}
 
 /* Au téléphone, les mots courts : « Colis enregistrés » passait à la ligne,
    et la phrase du mode test courait sur trois lignes sous les langues. */
@@ -2874,13 +3021,34 @@ input:focus, select:focus, textarea:focus {
   /* Le sélecteur de langue flotte en haut à droite : la capsule s'arrête avant. */
   .wsapp .ws-test { max-width: calc(100% - 150px); }
 
-  /* Le titre et ses trois gestes sur une ligne, l'avancement dessous. */
+  /* Le titre et ses gestes sur une ligne, la phrase de la journée dessous. */
   .wsapp .cmd-tete { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px 10px; }
   .wsapp .cmd-titre { display: contents; }
   .wsapp .cmd-titre h1 { grid-column: 1; grid-row: 1; }
   .wsapp .cmd-tete .wshead-acts { grid-column: 2; grid-row: 1; }
-  .wsapp .cmd-tete .ws-progress { grid-column: 1 / -1; grid-row: 2; }
-  /* Télécharger en icône : son nom reste lu et en infobulle. */
-  .wsapp .ws-dl { width: 44px; min-height: 44px; padding: 0; justify-content: center; }
-  .wsapp .ws-dl span { display: none; }
+  .wsapp .cmd-sous { grid-column: 1 / -1; grid-row: 2; font-size: 15px; }
+  .wsapp .cmd-sous .ws-progress-bar { flex: 1 1 auto; }
+  /* Des icônes : leur nom reste lu et en infobulle. */
+  .wsapp .ws-dl,
+  .wsapp .ws-import { width: 44px; min-height: 44px; padding: 0; justify-content: center; }
+  .wsapp .ws-dl span,
+  .wsapp .ws-import span { display: none; }
+  .wsapp .cmd-dl-plus { min-height: 44px; }
+  .wsapp #ws-reload { display: none; }
+  .wsapp .cmd-menu-droite { right: 0; }
+
+  .wsapp .cmd-barre .ws-sous { width: 100%; }
+  .wsapp .cmd-barre .ws-sous > button { flex: 1; justify-content: center; }
+  .wsapp .cmd-outils { padding: 10px 12px; border-radius: 14px; background: var(--card); }
+  .wsapp .cmd-switch { flex: 1; min-height: 44px; font-size: 15px; }
+}
+@media (max-width: 880px) {
+  /* Le compte est déjà sur l'onglet : au téléphone, l'interrupteur garde sa ligne. */
+  .wsapp .cmd-compte { display: none; }
+  .wsapp .cmd-switch span { white-space: nowrap; }
+}
+@media (max-width: 880px) {
+  /* Une ligne, même en anglais : « Test mode · nothing is shipped ». */
+  .wsapp .ws-test { max-width: calc(100% - 128px); white-space: nowrap; overflow: hidden; }
+  .wsapp .ws-test .ws-court { overflow: hidden; text-overflow: ellipsis; }
 }
