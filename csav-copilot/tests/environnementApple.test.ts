@@ -68,6 +68,11 @@ test('les heures : le sigle et l’heure, puis des cadrans de montre', () => {
   const heures = corps('function renderClocks(');
   assert.doesNotMatch(heures, /ckp-dot|<button/);
   assert.match(heures, /<span class="ckp-city">\$\{esc\(c\.short\)\}<\/span>/);
+  // Une petite horloge les signale ; le plafond de 46 % de l'écran ne les
+  // rogne plus ; au téléphone, elles prennent leur propre rangée.
+  assert.match(heures, /\$\('clocks'\)\.innerHTML = icone \+ cityTimes\(now\)/);
+  assert.match(css, /\.head \.clocks \{\n[^}]*flex: none;\n  max-width: none;/);
+  assert.match(css, /\.head \.clocks \{ order: 20; flex: 1 1 100%; min-width: 0;/);
   // Les chiffres d'abord, comme la montre qui sert de modèle.
   assert.match(app, /return localStorage\.getItem\('csav\.clocks'\) === 'analog' \? 'analog' : 'digital';/);
   const panneau = corps('function renderClockPop(');
