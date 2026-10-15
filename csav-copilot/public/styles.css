@@ -4545,8 +4545,12 @@ textarea:focus-visible {
 .qrow .queue-item { padding-right: 32px; }
 
 @media (max-width: 760px) {
-  /* Au doigt, il n'y a pas de survol : la pastille reste visible. */
-  .qread.lu { opacity: 1; }
+  /* Au doigt, un seul rond par ligne : la case de sélection. Le cercle creux
+     d'un message lu, toujours visible faute de survol, se posait juste à côté
+     et faisait deux ronds pour rien — comme dans Mail sur iPhone, seul le
+     point bleu d'un non-lu reste. « Marquer non lu » passe par la sélection
+     ou le message ouvert. */
+  .qread.lu { display: none; }
 }
 
 /* Barre d'actions groupées, collée en tête de la file : elle doit rester
