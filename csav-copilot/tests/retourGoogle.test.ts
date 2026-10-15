@@ -29,6 +29,9 @@ test('le retour de Google ne répond plus jamais par du JSON brut', () => {
   assert.match(rappel, /\} catch \(err\) \{\n.*\n\s+return retourGmail\(reply, 'echec'\);/);
   assert.match(rappel, /return reply\.redirect\('\/dashboard\?gmail=connecte'\);/);
   assert.match(route, /reply\.redirect\(`\/dashboard\?gmail=\$\{raison\}`\);/);
+  // Sans session, la connexion plutôt que « Session absente ou expirée ».
+  assert.match(rappel, /\{ preHandler: sessionOuConnexion \}/);
+  assert.match(route, /if \(!verifySession\(request\.cookies\[SESSION_COOKIE\]\)\) \{\n\s+await reply\.redirect\('\/login'\);/);
 });
 
 test('l’outil dit quoi faire, sur Réglages › Connexions, une seule fois', () => {
