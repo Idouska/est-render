@@ -3151,65 +3151,48 @@ function ticketTitle(ticket) {
 }
 
 /**
- * Identité du client et faits du dossier, sur deux lignes.
- *
- * La première nomme la personne et qualifie la demande. La seconde porte ce
- * qui se lit d'un coup d'œil et ne se travaille pas : combien de commandes,
- * combien dépensé, depuis quand le message attend, et l'objet d'origine — le
- * seul texte qui permette de retrouver le fil dans Gmail.
+ * Le client du message.
  *
  * Le nombre de commandes et le total dépensé viennent de la commande
- * rattachée, pas du ticket, et n'existent donc pas toujours. Une ligne courte
- * vaut mieux que deux zéros qui affirment que ce client n'a rien acheté.
+ * rattachée, pas du ticket, et n'existent donc pas toujours. Une rangée sans
+ * eux vaut mieux que deux zéros qui affirment que ce client n'a rien acheté.
  */
 function renderTicketMeta(ticket, order) {
   const customer = order?.customer;
-  const confidence =
-    ticket.intentConfidence != null
-      ? `<span class="tp tp-conf">${Math.round(ticket.intentConfidence * 100)} %</span>`
-      : '';
 
-  /* Une icône par fait plutôt qu'un point de séparation : à cette taille, un
-     pictogramme se reconnaît plus vite qu'il ne se lit, et la ligne cesse
-     d'être une phrase à parcourir. */
-  const facts = [];
+  /*
+   * Le client, en une rangée groupée.
+   *
+   * Le nom, son adresse et ses achats se lisaient sur deux lignes décousues —
+   * l'adresse en machine à écrire, deux pastilles accrochées au bout, puis
+   * une ligne de faits qui mêlait l'objet du mail. La rangée dit qui écrit et
+   * ce qu'il a acheté ; un clic ouvre sa fiche. L'intention devinée descend
+   * dans la ligne de classement, et l'objet a sa propre ligne au-dessus.
+   */
+  const achats = [];
   if (customer?.numberOfOrders != null) {
-    facts.push([
-      'bag',
-      `${customer.numberOfOrders} commande${customer.numberOfOrders > 1 ? 's' : ''}`,
-    ]);
+    achats.push(`<b>${customer.numberOfOrders} commande${customer.numberOfOrders > 1 ? 's' : ''}</b>`);
   }
   if (customer?.amountSpent != null && order?.currency) {
-    facts.push(['euro', `${euro(customer.amountSpent, order.currency)} dépensés`]);
+    achats.push(`<small>${esc(euro(customer.amountSpent, order.currency))} dépensés</small>`);
   }
-  facts.push(['clock', `ouvert depuis ${ageInDays(ticket.createdAt)} j`]);
 
   const nom = ticket.customerName ?? ticket.customerEmail;
-  $('d-meta').innerHTML =
-    `<span class="tm-who">
-       <span class="tm-av" aria-hidden="true" style="background:${avatarTint(nom)}">${esc(
-         initials(nom),
-       )}</span>
-       <button class="linkish" id="d-who">${esc(nom)}</button>
-       ${
-         // L'adresse `fournisseur+…@local` n'existe nulle part : la montrer
-         // laissait croire qu'on pouvait y répondre.
-         ticket.signalement
-           ? `<span class="tp tp-four">Fournisseur</span><span class="tp tp-intent">${esc(ticket.signalement.libelle)}</span>`
-           : `<code>${esc(ticket.customerEmail)}</code>${
-               ticket.intent
-                 ? `<span class="tp tp-intent">${esc(INTENT_LABELS[ticket.intent] ?? ticket.intent)}</span>`
-                 : ''
-             }${confidence}`
-       }
-     </span>
-     <span class="tm-facts">${facts
-       .map(([icon, text]) => `<span class="tm-fact">${ico(icon)}${esc(text)}</span>`)
-       .join('')}${
-       // L'objet d'origine : illisible comme titre, indispensable pour
-       // retrouver le fil dans Gmail.
-       ticket.subject ? `<span class="tm-fact tm-subj">${esc(ticket.subject)}</span>` : ''
-     }</span>`;
+  $('d-meta').innerHTML = `<button class="tm-client" id="d-who" type="button" title="Voir la fiche du client">
+       <span class="tm-av" aria-hidden="true" style="background:${avatarTint(nom)}">${esc(initials(nom))}</span>
+       <span class="tm-id">
+         <span class="tm-nom">${esc(nom)}</span>
+         ${
+           // L'adresse \`fournisseur+…@local\` n'existe nulle part : la montrer
+           // laissait croire qu'on pouvait y répondre.
+           ticket.signalement
+             ? '<span class="tp tp-four">Fournisseur</span>'
+             : `<span class="tm-mail">${esc(ticket.customerEmail)}</span>`
+         }
+       </span>
+       ${achats.length ? `<span class="tm-achats">${achats.join('')}</span>` : ''}
+       <svg class="tm-chev" viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg>
+     </button>`;
 }
 
 /*
@@ -3344,6 +3327,11 @@ function renderDetail() {
   if (escalate) escalate.hidden = !ticket || !canI('escalate');
 
   $('d-subject').textContent = ticketTitle(ticket);
+  $('d-when').textContent = dayOrDateTime(ticket.lastMessageAt);
+  // L'objet du client, entre guillemets, quand il dit autre chose que le titre.
+  const objet = ticket.subject?.trim() ?? '';
+  $('d-objet').hidden = !objet || objet === ticketTitle(ticket);
+  $('d-objet').textContent = objet ? `« ${objet} »` : '';
 
   renderTicketMeta(ticket, order);
   renderTicketLabels(ticket);
@@ -4304,62 +4292,87 @@ function renderTicketLabels(ticket) {
   // le rendrait impossible à décocher.
   for (const name of mine) if (!known.includes(name)) known.push(name);
 
-  const chip = (name, on) => {
+  const feuille = (name) => (name.includes('/') ? name.slice(name.lastIndexOf('/') + 1) : name);
+
+  /*
+   * Le classement, sur une ligne.
+   *
+   * Trois choses qu'on lisait à trois endroits : l'intention devinée (une
+   * pastille près du nom), sa certitude (une autre), les libellés (une rangée
+   * de boutons au-dessus du mail, « Classer ce message » en pointillés). Elles
+   * disent toutes la même chose — de quoi parle ce message — et se rangent
+   * ensemble : l'intention et sa certitude en une pastille, puis les libellés
+   * posés, chacun avec sa croix, puis « + Libellé ».
+   */
+  const intention = ticket.signalement
+    ? `<span class="cl-intention">Signalement<span>· ${esc(ticket.signalement.court)}</span></span>`
+    : ticket.intent
+      ? `<span class="cl-intention" title="Intention devinée par l’IA, et sa certitude">${esc(
+          INTENT_LABELS[ticket.intent] ?? ticket.intent,
+        )}${
+          ticket.intentConfidence != null
+            ? `<span>· sûr à ${Math.round(ticket.intentConfidence * 100)} %</span>`
+            : ''
+        }</span>`
+      : '';
+
+  const pose = (name) => {
     const style = labelStyles[name];
-    const leaf = name.includes('/') ? name.slice(name.lastIndexOf('/') + 1) : name;
-    const paint =
-      style?.background && on
-        ? ` style="background:${esc(style.background)};color:${esc(
-            style.text ?? '#000',
-          )};border-color:transparent"`
-        : '';
-    return `<button class="lchip" data-tlabel="${esc(name)}" aria-pressed="${on}"
-      title="${esc(name)}"${paint}>${esc(leaf)}</button>`;
+    const paint = style?.background
+      ? ` style="background:${esc(style.background)};color:${esc(style.text ?? '#000')}"`
+      : '';
+    return `<span class="cl-lib" title="${esc(name)}"${paint}>${esc(feuille(name))}<button class="cl-x" type="button"
+      data-tlabel="${esc(name)}" aria-label="Retirer ${esc(feuille(name))}">×</button></span>`;
   };
 
   /*
-   * Les libellés posés restent visibles, les autres se déplient.
+   * La liste des libellés : une case par ligne, une recherche, une croix.
    *
-   * Onze boutons affichés en permanence occupaient deux lignes au-dessus du
-   * mail — plus de place que le mail lui-même sur un portable. Or on classe
-   * une fois et on relit dix : c'est l'état du classement qui doit tenir à
-   * l'écran, pas le catalogue des étiquettes possibles.
+   * Treize étiquettes en boutons qui passaient à la ligne se lisaient mal :
+   * une liste se parcourt de haut en bas, et la case dit d'un coup d'œil ce
+   * qui est déjà posé. Elle reste ouverte pendant qu'on coche — on classe
+   * souvent sous deux libellés à la fois.
    */
-  const posed = known.filter((name) => mine.has(name));
-  const rest = known.filter((name) => !mine.has(name));
+  const ligne = (name) => `<button type="button" class="lmore-item" role="menuitemcheckbox"
+      data-tlabel="${esc(name)}" data-nom="${esc(name.toLowerCase())}" aria-checked="${mine.has(name)}">
+      <span class="lmore-case" aria-hidden="true"></span><span>${esc(feuille(name))}</span></button>`;
 
   bar.hidden = false;
   bar.innerHTML =
-    posed.map((name) => chip(name, true)).join('') +
-    (rest.length
+    '<span class="cl-titre">Classement</span>' +
+    intention +
+    known.filter((name) => mine.has(name)).map(pose).join('') +
+    (known.length
       ? `<details class="lmore">
-           <summary class="lchip lchip-more">${
-             posed.length ? '＋ Libellé' : '＋ Classer ce message'
-           }</summary>
+           <summary class="cl-ajout"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 2v8M2 6h8" /></svg>Libellé</summary>
            <div class="lmore-box" role="dialog" aria-label="Classer ce message">
              <div class="lmore-tete">
                <b>Classer ce message</b>
                <button class="lmore-x" type="button" data-lmore-fermer aria-label="Fermer">×</button>
              </div>
-             <div class="lmore-chips">${rest.map((name) => chip(name, false)).join('')}</div>
+             <label class="lmore-cherche">
+               <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5" /><path d="m10.5 10.5 3 3" /></svg>
+               <input type="search" data-lmore-q placeholder="Chercher un libellé" aria-label="Chercher un libellé" autocomplete="off" />
+             </label>
+             <div class="lmore-liste">${known.map(ligne).join('')}</div>
+             <p class="lmore-vide" hidden>Aucun libellé ne correspond.</p>
            </div>
          </details>`
-      : '') +
-    /*
-     * Les deux actions qu'on cherche le plus souvent, à portée constante.
-     *
-     * Elles existent aussi plus bas, mais la barre d'actions se réordonne
-     * selon l'intention devinée : « Rembourser » n'y figure même pas sur un
-     * WISMO. Or un client qui demande où est son colis finit régulièrement par
-     * demander son argent, et l'agent ne devrait pas avoir à faire dépendre le
-     * geste d'un classement automatique.
-     *
-     * Une action interdite reste affichée et désactivée, sa raison en
-     * infobulle : la faire disparaître laisserait croire qu'elle n'existe pas.
-     * Et « Rembourser » n'est pas peint en rouge malgré son poids — collé à
-     * « Supprimer », deux boutons rouges voisins invitent au faux clic.
-     */
-    '';
+      : '');
+
+  const champ = bar.querySelector('[data-lmore-q]');
+  champ?.addEventListener('input', () => {
+    const aiguille = champ.value.trim().toLowerCase();
+    let vus = 0;
+    bar.querySelectorAll('.lmore-item').forEach((item) => {
+      item.hidden = Boolean(aiguille) && !item.dataset.nom.includes(aiguille);
+      if (!item.hidden) vus += 1;
+    });
+    bar.querySelector('.lmore-vide').hidden = vus > 0;
+  });
+  bar.querySelector('details.lmore')?.addEventListener('toggle', (event) => {
+    if (event.target.open) champ?.focus();
+  });
 
   /*
    * Une seule action mise en avant, en haut à droite, à côté de « Actions ».
@@ -4442,7 +4455,19 @@ function renderTicketLabels(ticket) {
           body: JSON.stringify({ labels: next }),
         });
         ticket.labels = result.labels;
+        // La liste reste ouverte, sur la même recherche : on coche souvent
+        // deux libellés d'affilée.
+        const ouvert = bar.querySelector('details.lmore')?.open;
+        const recherche = bar.querySelector('[data-lmore-q]')?.value ?? '';
         renderTicketLabels(ticket);
+        if (ouvert) {
+          bar.querySelector('details.lmore').open = true;
+          const champ = bar.querySelector('[data-lmore-q]');
+          if (champ && recherche) {
+            champ.value = recherche;
+            champ.dispatchEvent(new Event('input'));
+          }
+        }
         if (result.gmail && result.gmail !== 'fait' && result.gmail !== 'sans-fil') {
           toast(MOTS_GMAIL.libelle[result.gmail] ?? MOTS_GMAIL.libelle.echec, result.gmail === 'echec');
         }

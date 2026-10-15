@@ -122,7 +122,7 @@ test('dans SAV client, un atelier ne passe plus pour un client', () => {
   assert.match(corps(app, 'function ticketTitle('), /if \(ticket\.signalement\) return `Signalement · \$\{ticket\.signalement\.court\}\$\{order\}`;/);
   assert.match(app, /\$\{ticket\.signalement \? '<span class="queue-four">Fournisseur<\/span>' : ''\}/);
   // L'adresse de repli n'est plus affichée comme une adresse.
-  assert.match(corps(app, 'function renderTicketMeta('), /ticket\.signalement\s+\? `<span class="tp tp-four">Fournisseur<\/span>/);
+  assert.match(corps(app, 'function renderTicketMeta('), /ticket\.signalement\s+\? '<span class="tp tp-four">Fournisseur<\/span>'/);
 });
 
 test('l’IA ne répond pas à un atelier comme à un client', () => {

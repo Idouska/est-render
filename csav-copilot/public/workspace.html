@@ -87,17 +87,81 @@
         <!-- Mode test du marchand : les saisies s'enregistrent, rien n'est expédié. -->
         <p class="ws-test" id="ws-test" hidden>
           <b data-t="test.title">Mode test</b>
-          <span data-t="test.banner">Vos saisies sont enregistrées, mais aucune commande n’est expédiée et aucun client n’est prévenu.</span>
+          <span class="ws-long" data-t="test.banner">Vos saisies sont enregistrées, mais aucune commande n’est expédiée et aucun client n’est prévenu.</span>
+          <span class="ws-court" data-t="test.short">rien n’est expédié</span>
         </p>
         <!-- ============================================ COMMANDES ======= -->
+        <!-- Les commandes, en quatre étages au lieu de huit.
+
+             1. Le titre porte l'avancement du jour ; Actualiser, Télécharger
+                et les dates à droite.
+             2. Les trois listes à gauche, la journée à droite.
+             3. (dans la section) Chercher, filtrer, ranger, et le mode de
+                saisie, réduit à un sélecteur.
+
+             Le titre ne change plus d'un onglet à l'autre : l'onglet dit déjà
+             où l'on est. Ce qui ne sert qu'à « À préparer » se retire sur les
+             deux autres (`data-onglet`). -->
+        <header class="wshead cmd-tete" id="cmd-tete" data-onglet="orders" hidden>
+          <div class="cmd-titre">
+            <h1 id="ws-title" data-t="nav.orders">Commandes</h1>
+            <div class="ws-progress" id="ws-progress" hidden>
+              <span id="ws-progress-text"></span>
+              <div class="ws-progress-bar"><i id="ws-progress-fill"></i></div>
+            </div>
+          </div>
+          <div class="wshead-acts">
+            <button class="ico" id="ws-reload" type="button" title="Actualiser"
+              aria-label="Actualiser">
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <path d="M16.5 10a6.5 6.5 0 1 1-2-4.7" />
+                <path d="M16.5 3v3.5H13" />
+              </svg>
+            </button>
+            <!-- Le téléchargement se voit : il dormait derrière « ··· », et
+                 l'atelier qui le cherchait ne pensait pas à ouvrir ce menu.
+                 Il suit la période choisie, comme avant. -->
+            <a class="btn ws-dl" id="ws-xlsx" download data-ttl="head.xlsx" title="Télécharger .xlsx">
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <path d="M10 3.5v9M6 9l4 4 4-4M4 16.5h12" />
+              </svg>
+              <span data-t="head.download">Télécharger</span>
+            </a>
+            <!-- Les dates précises et le CSV : un calendrier, plus « ··· ». -->
+            <button class="ico" id="ws-more" type="button" data-ttl="head.dates" title="Choisir des dates"
+              aria-expanded="false" aria-label="Choisir des dates">
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <rect x="3.5" y="4.5" width="13" height="12" rx="2" />
+                <path d="M3.5 8.5h13M7 3v3M13 3v3" />
+              </svg>
+            </button>
+          </div>
+        </header>
+        <div class="ws-drawer" id="ws-drawer" hidden>
+          <label class="ws-range">
+            <span data-t="head.from">Du</span> <input type="date" id="ws-since" />
+          </label>
+          <label class="ws-range">
+            <span data-t="head.to">au</span> <input type="date" id="ws-until" />
+          </label>
+          <a class="btn" id="ws-csv" download data-t="head.csv">CSV</a>
+        </div>
+
         <!-- Sous-navigation des commandes. « Suivi » n'était pas un écran :
              il reliste les colis déjà saisis juste à côté. Il redevient donc
              ce qu'il est — l'autre face du même travail — et libère une entrée
              de menu. -->
-        <div class="ws-sous" id="ws-sous-cmd" hidden>
-          <button type="button" data-sous="orders" aria-pressed="true" data-t="sous.toPrepare">À préparer</button>
-          <button type="button" data-sous="tracking" data-t="sous.parcels">Colis enregistrés</button>
-          <button type="button" data-sous="lots" data-t="sous.lots">Lots reçus</button>
+        <div class="cmd-barre" id="cmd-barre" data-onglet="orders" hidden>
+          <div class="ws-sous" id="ws-sous-cmd">
+            <button type="button" data-sous="orders" aria-pressed="true"><span data-t="sous.toPrepare">À préparer</span><b class="ws-sous-n" id="ws-sous-n"></b></button>
+            <button type="button" data-sous="tracking"><span class="ws-long" data-t="sous.parcels">Colis enregistrés</span><span class="ws-court" data-t="sous.parcelsShort">Colis</span></button>
+            <button type="button" data-sous="lots"><span class="ws-long" data-t="sous.lots">Lots reçus</span><span class="ws-court" data-t="sous.lotsShort">Lots</span></button>
+          </div>
+          <div class="seg" id="ws-quick" role="group">
+            <button type="button" data-range="yesterday" data-t="range.yesterday">Hier</button>
+            <button type="button" data-range="today" data-t="range.today">Aujourd'hui</button>
+            <button type="button" data-range="week" data-t="range.week">7 jours</button>
+          </div>
         </div>
 
         <!-- ============================================ AUJOURD'HUI ====== -->
@@ -131,122 +195,69 @@
         </section>
 
         <section id="view-orders" hidden>
-          <header class="wshead">
-            <h1 id="ws-title" data-t="head.title">Commandes à préparer</h1>
-            <div class="wshead-acts">
-              <button class="ico" id="ws-reload" type="button" title="Actualiser"
-                aria-label="Actualiser">
-                <svg viewBox="0 0 20 20" aria-hidden="true">
-                  <path d="M16.5 10a6.5 6.5 0 1 1-2-4.7" />
-                  <path d="M16.5 3v3.5H13" />
-                </svg>
-              </button>
-              <!-- Le téléchargement se voit : il dormait derrière « ··· », et
-                   l'atelier qui le cherchait ne pensait pas à ouvrir ce menu.
-                   Il suit la période choisie, comme avant. -->
-              <a class="btn ws-dl" id="ws-xlsx" download data-ttl="head.xlsx" title="Télécharger .xlsx">
-                <svg viewBox="0 0 20 20" aria-hidden="true">
-                  <path d="M10 3.5v9M6 9l4 4 4-4M4 16.5h12" />
-                </svg>
-                <span data-t="head.download">Télécharger</span>
-              </a>
-              <!-- Les dates précises et le CSV : un calendrier, plus « ··· ». -->
-              <button class="ico" id="ws-more" type="button" data-ttl="head.dates" title="Choisir des dates"
-                aria-expanded="false" aria-label="Choisir des dates">
-                <svg viewBox="0 0 20 20" aria-hidden="true">
-                  <rect x="3.5" y="4.5" width="13" height="12" rx="2" />
-                  <path d="M3.5 8.5h13M7 3v3M13 3v3" />
-                </svg>
-              </button>
-            </div>
-          </header>
 
-          <!-- Deux façons de traiter les commandes, et elles doivent se voir.
-               Le guichet existait seul : on y entrait en cliquant une ligne,
-               sans que rien ne dise qu'on pouvait faire autrement — et le
-               traitement en masse n'existait pas du tout. Un atelier qui
-               expédie cinquante colis ne les saisit pas un par un : il colle
-               le fichier que le transporteur lui rend. -->
-          <div class="ws-modes" id="ws-modes" role="tablist" aria-label="Mode de traitement">
-            <button type="button" role="tab" data-mode="manuel" aria-selected="true">
-              <svg viewBox="0 0 20 20" aria-hidden="true">
-                <rect x="4" y="3" width="12" height="14" rx="2" />
-                <path d="M7 7h6M7 10h6M7 13h3" />
-              </svg>
-              <span class="ws-mode-txt">
-                <b data-t="mode.manual">Une par une</b>
-                <small data-t="mode.manualHint">Saisie commande par commande</small>
-              </span>
-            </button>
-            <button type="button" role="tab" data-mode="masse" aria-selected="false">
-              <svg viewBox="0 0 20 20" aria-hidden="true">
-                <rect x="3" y="3" width="14" height="14" rx="2" />
-                <path d="M3 8h14M3 12.5h14M8 3v14" />
-              </svg>
-              <span class="ws-mode-txt">
-                <b data-t="mode.bulk">En masse</b>
-                <small data-t="mode.bulkHint">Déposer la feuille Excel remplie</small>
-              </span>
-            </button>
-          </div>
 
-          <!-- La période en un geste. Les dates précises et les exports vivent
-               derrière « … » : ils servent une fois par jour, la période à
-               chaque ouverture. -->
-          <!-- Retrouver n'importe quelle commande par son numéro, hors plage
-               de dates : un client cite une commande d'il y a trois semaines,
-               et la liste ne remonte qu'à hier. -->
-          <label class="ws-search-wrap" id="ws-cmd-search">
-            <svg viewBox="0 0 20 20" aria-hidden="true">
-              <circle cx="9" cy="9" r="5.2" />
-              <path d="m13 13 3.5 3.5" />
-            </svg>
-            <input type="search" id="ws-cmd-q" data-tph="orders.search"
-              placeholder="Chercher une commande (ex. #14674)" autocomplete="off" />
-          </label>
 
-          <div class="seg" id="ws-quick" role="group">
-            <button type="button" data-range="yesterday" data-t="range.yesterday">Hier</button>
-            <button type="button" data-range="today" data-t="range.today">Aujourd'hui</button>
-            <button type="button" data-range="week" data-t="range.week">7 jours</button>
-          </div>
-
-          <div class="ws-drawer" id="ws-drawer" hidden>
-            <label class="ws-range">
-              <span data-t="head.from">Du</span> <input type="date" id="ws-since" />
-            </label>
-            <label class="ws-range">
-              <span data-t="head.to">au</span> <input type="date" id="ws-until" />
-            </label>
-            <a class="btn" id="ws-csv" download data-t="head.csv">CSV</a>
-          </div>
 
           <!-- Alertes urgentes du marchand. Après la période, avant les
                commandes : elles existent pour interrompre le travail en cours. -->
           <div id="ws-alerts"></div>
 
-          <!-- Avancement de la journée. La question entre deux colis n'est pas
-               « combien y en a-t-il » mais « où j'en suis ». -->
-          <div class="ws-progress" id="ws-progress" hidden>
-            <span id="ws-progress-text"></span>
-            <div class="ws-progress-bar"><i id="ws-progress-fill"></i></div>
-          </div>
 
-          <div class="chips" id="ws-filter" role="group">
-            <button type="button" data-filter="left" aria-pressed="true">
-              <span data-t="filter.left">À préparer</span>
-              <b id="count-left">0</b>
-            </button>
-            <button type="button" data-filter="all">
-              <span data-t="filter.all">Toutes</span>
-              <b id="count-all">0</b>
-            </button>
-            <!-- Regrouper par modèle : quinze paires du même article
-                 s'emballent d'affilée dans le même carton. Un interrupteur,
-                 pas un menu — il n'y a que deux ordres possibles. -->
-            <button type="button" class="chip-sort" id="ws-sort" aria-pressed="false">
-              <span data-t="sort.model">Par modèle</span>
-            </button>
+          <!-- Chercher, filtrer, ranger — et comment on saisit. -->
+          <div class="cmd-outils" id="cmd-outils">
+            <label class="ws-search-wrap" id="ws-cmd-search">
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <circle cx="9" cy="9" r="5.2" />
+                <path d="m13 13 3.5 3.5" />
+              </svg>
+              <input type="search" id="ws-cmd-q" data-tph="orders.search"
+                placeholder="Chercher une commande (ex. #14674)" autocomplete="off" />
+            </label>
+            <div class="chips" id="ws-filter" role="group">
+              <button type="button" data-filter="left" aria-pressed="true">
+                <span data-t="filter.left">À préparer</span>
+                <b id="count-left">0</b>
+              </button>
+              <button type="button" data-filter="all">
+                <span data-t="filter.all">Toutes</span>
+                <b id="count-all">0</b>
+              </button>
+              <!-- Regrouper par modèle : quinze paires du même article
+                   s'emballent d'affilée dans le même carton. Un interrupteur,
+                   pas un menu — il n'y a que deux ordres possibles. -->
+              <button type="button" class="chip-sort" id="ws-sort" aria-pressed="false">
+                <span data-t="sort.model">Par modèle</span>
+              </button>
+            </div>
+            <!-- Deux façons de traiter les commandes, et elles doivent se voir.
+                 Le guichet existait seul : on y entrait en cliquant une ligne,
+                 sans que rien ne dise qu'on pouvait faire autrement — et le
+                 traitement en masse n'existait pas du tout. Un atelier qui
+                 expédie cinquante colis ne les saisit pas un par un : il colle
+                 le fichier que le transporteur lui rend. -->
+            <div class="ws-modes" id="ws-modes" role="tablist" aria-label="Mode de traitement">
+              <button type="button" role="tab" data-mode="manuel" aria-selected="true" data-tip="mode.manualHint" title="Saisie commande par commande">
+                <svg viewBox="0 0 20 20" aria-hidden="true">
+                  <rect x="4" y="3" width="12" height="14" rx="2" />
+                  <path d="M7 7h6M7 10h6M7 13h3" />
+                </svg>
+                <span class="ws-mode-txt">
+                  <b data-t="mode.manual">Une par une</b>
+                  <small data-t="mode.manualHint">Saisie commande par commande</small>
+                </span>
+              </button>
+              <button type="button" role="tab" data-mode="masse" aria-selected="false" data-tip="mode.bulkHint" title="Déposer la feuille Excel remplie">
+                <svg viewBox="0 0 20 20" aria-hidden="true">
+                  <rect x="3" y="3" width="14" height="14" rx="2" />
+                  <path d="M3 8h14M3 12.5h14M8 3v14" />
+                </svg>
+                <span class="ws-mode-txt">
+                  <b data-t="mode.bulk">En masse</b>
+                  <small data-t="mode.bulkHint">Déposer la feuille Excel remplie</small>
+                </span>
+              </button>
+            </div>
           </div>
 
           <div id="ws-orders"></div>
@@ -307,16 +318,10 @@
         <!-- Chaque fichier du jour envoyé par le marchand, commande par
              commande : à préparer, puis expédiée. -->
         <section id="view-lots" hidden>
-          <header class="wshead">
-            <h1 data-t="lots.title">Lots reçus</h1>
-          </header>
           <div id="lots-rows"></div>
         </section>
 
         <section id="view-tracking" hidden>
-          <header class="wshead">
-            <h1 data-t="tracking.title">Colis enregistrés</h1>
-          </header>
           <label class="ws-search-wrap">
             <svg viewBox="0 0 20 20" aria-hidden="true">
               <circle cx="9" cy="9" r="5.6" /><path d="m13.2 13.2 3.4 3.4" />

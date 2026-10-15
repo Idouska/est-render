@@ -136,6 +136,10 @@ function applyLang(lang) {
     node.title = t(node.dataset.ttl);
     node.setAttribute('aria-label', node.title);
   }
+  // Une infobulle qui complète un texte visible, sans le remplacer.
+  for (const node of document.querySelectorAll('[data-tip]')) {
+    node.title = t(node.dataset.tip);
+  }
 
   renderLangPicker();
   // Les écrans construits en JavaScript se refont : ils ne portent pas de
@@ -495,6 +499,8 @@ function renderOrders() {
 
   $('count-left').textContent = String(left);
   $('count-all').textContent = String(state.orders.length);
+  // Le même chiffre sur l'onglet : il se voit depuis les deux autres.
+  $('ws-sous-n').textContent = left ? String(left) : '';
   $('ws-sort')?.setAttribute('aria-pressed', String(state.sort === 'model'));
   // Sans fichier du jour, la colonne compte les commandes de la période ;
   // avec, c'est l'accueil qui pose le chiffre de ses lots.
@@ -1349,7 +1355,12 @@ function setView(view) {
     if (bloc) bloc.hidden = section !== courant;
   }
 
-  $('ws-sous-cmd').hidden = view !== 'orders';
+  // L'en-tête des commandes est commun à leurs trois onglets ; ce qui ne
+  // sert qu'à « À préparer » se retire sur les deux autres (CSS, `data-onglet`).
+  for (const id of ['cmd-tete', 'cmd-barre']) {
+    $(id).hidden = view !== 'orders';
+    $(id).dataset.onglet = courant;
+  }
   for (const barre of ['ws-sous-cmd']) {
     $(barre)?.querySelectorAll('[data-sous]').forEach((bouton) => {
       bouton.setAttribute('aria-pressed', String(bouton.dataset.sous === courant));
