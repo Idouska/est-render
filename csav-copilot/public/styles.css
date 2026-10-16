@@ -13248,7 +13248,9 @@ progress { accent-color: var(--accent); }
     /* `--cote` : la largeur de la zone de droite, mesurée par app.js et
        réservée aussi à gauche — la recherche tombe pile au milieu. Quand la
        place manque, elle vaut zéro et la recherche se décale. */
-    grid-template-columns: minmax(var(--cote, 0px), 1fr) minmax(220px, 480px) minmax(auto, 1fr);
+    /* Sans `--cote` (pas la place de centrer), le titre garde au moins
+       9 rem : il tombait à zéro pixel entre 1 024 et 1 280 px. */
+    grid-template-columns: minmax(var(--cote, 9rem), 1fr) minmax(220px, 480px) minmax(auto, 1fr);
     align-items: center;
     column-gap: 16px;
   }
@@ -13717,4 +13719,223 @@ progress { accent-color: var(--accent); }
   #view-tickets:not(.en-selection) .qrow .queue-item { padding-left: 26px; }
   /* Le filet suit l'avatar, qui a glissé avec la case. */
   #view-tickets:not(.en-selection) .qrow + .qrow::before { left: 64px; }
+}
+
+/* ==========================================================================
+   TÉLÉPHONE ET TABLETTE
+   ==========================================================================
+
+   L'outil se servait au doigt comme un site d'ordinateur rétréci : un
+   message touché s'ouvrait sous toute la liste, hors de l'écran ; le menu
+   dépassait de l'écran et c'était la page derrière qui défilait ; les
+   horloges couvraient tout ; l'en-tête prenait la moitié de l'écran ; les
+   boutons faisaient vingt pixels de haut. */
+
+/* --- Le message ouvert prend l'écran quand liste et message s'empilent. -- */
+.th-retour { display: none; }
+@media (max-width: 900px) {
+  #view-tickets:not(.pile-message) > #d-pane,
+  #view-tickets:not(.pile-message) > .context,
+  #view-tickets > .ws-handle { display: none; }
+  #view-tickets.pile-message > .panel:first-child { display: none; }
+  #view-tickets.pile-message .th-retour {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    height: 36px;
+    margin-right: auto;
+    padding: 0 10px 0 2px;
+    border: 0;
+    border-radius: 10px;
+    background: none;
+    color: var(--accent-ink);
+    font: inherit;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  #view-tickets .th-retour svg { width: 20px; height: 20px; flex: none; }
+  /* Le message ouvert démarre sous la barre du haut, pas collé au bord. */
+  #view-tickets.pile-message > #d-pane { scroll-margin-top: 8px; }
+}
+@media (max-width: 760px) {
+  /* Au téléphone, la place va au retour : on passe d'un message à l'autre
+     par la liste, comme dans Mail. */
+  #view-tickets.pile-message #d-prev,
+  #view-tickets.pile-message #d-next { display: none; }
+}
+
+/* --- Le menu latéral : à la hauteur de l'écran, et il défile seul. ------- */
+@media (max-width: 1080px) {
+  /* `align-self: start`, hérité de la colonne d'ordinateur, le faisait
+     mesurer son contenu au lieu de l'écran : il dépassait en bas, ne
+     défilait pas, et le doigt faisait défiler la page derrière. */
+  .side {
+    align-self: stretch;
+    height: auto;
+    overscroll-behavior: contain;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  }
+}
+
+/* --- Rien ne défile derrière une fenêtre ouverte. ----------------------- */
+@media (max-width: 1080px) {
+  html:has(#app-grid.nav-open),
+  html:has(#clockpop:not([hidden])),
+  html:has(#cc:not([hidden])),
+  html:has(#pal:not([hidden])),
+  html:has(.backdrop.open) { overflow: hidden; }
+}
+@media (max-width: 760px) {
+  html:has(#qf:not([hidden])) { overflow: hidden; }
+}
+.side,
+.clockpop,
+.cc,
+#pal-list,
+.qf-corps,
+.more-menu,
+.modal,
+.lmore-box { overscroll-behavior: contain; }
+
+/* --- Les horloges, au téléphone : une feuille compacte qui monte du bas. - */
+@media (max-width: 760px) {
+  .clockpop {
+    position: fixed;
+    z-index: 96;
+    left: 8px;
+    right: 8px;
+    top: auto;
+    bottom: calc(8px + env(safe-area-inset-bottom));
+    max-width: none;
+    max-height: 75dvh;
+    overflow-y: auto;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    justify-items: center;
+    gap: 14px 4px;
+    padding: 24px 8px 16px;
+    border-radius: 26px;
+    box-shadow: 0 0 0 0.5px rgb(0 0 0 / 14%), 0 -12px 40px -12px rgb(0 0 0 / 40%);
+  }
+  .clockpop::before {
+    content: "";
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    width: 36px;
+    height: 5px;
+    margin-left: -18px;
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--ink) 22%, transparent);
+  }
+  .clockpop .ckcard { min-width: 0; gap: 4px; }
+  /* Le cadran entier rapetisse, aiguilles comprises. */
+  .clockpop .montre { zoom: 0.78; }
+  .clockpop .ckcard-meta { font-size: 11px; }
+  .clockpop .ckcard-meta b { font-size: 12px; }
+}
+
+/* --- L'en-tête du téléphone : une ligne, puis la recherche. -------------- */
+@media (max-width: 760px) {
+  /* Les heures deviennent une icône à côté d'Actualiser : touchée, elle
+     ouvre la feuille des cinq cadrans. Elles occupaient une rangée entière
+     sur chaque page, avant même le premier chiffre de l'écran. */
+  .head .clocks {
+    order: 1;
+    flex: none;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 12px;
+  }
+  .head .clocks .ckp { display: none; }
+  .head .clocks svg { width: 20px; height: 20px; }
+  .head .head-search { height: 40px; border-radius: 20px; }
+  /* Le titre et ses icônes sur la même ligne : le sous-titre s'abrège au
+     lieu de pousser les icônes sur une deuxième rangée. */
+  .head .head-gauche { flex: 1 1 0; min-width: 0; }
+  .head .head-main { min-width: 0; }
+  .head .head-main > h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .head #view-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+
+/* --- Au doigt : des cibles qu'on peut toucher. -------------------------- */
+@media (pointer: coarse) {
+  /* Apple demande 44 points ; sans casser les rangées denses, 36 à 40
+     suffisent pour ne plus viser à côté. */
+  .btn,
+  .btn-small,
+  .seg button,
+  .seg2 button,
+  .chip,
+  .qchip,
+  #view-tickets .folder,
+  .folder,
+  .ov-lien,
+  .linklike,
+  .linkish { min-height: 36px; }
+  #view-tickets .folders { min-height: 40px; }
+  .ico-btn,
+  .qh-ico,
+  #view-tickets .queue-head .qh-ico { min-width: 40px; min-height: 40px; }
+  :root select:not([multiple]) { min-height: 38px; }
+  /* iOS agrandit la page quand un champ fait moins de 16 px : on écrit à 16. */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea { font-size: max(16px, 1em); }
+}
+
+/* Au doigt, les raccourcis clavier (⌘K, /) n'ont pas de sens. */
+@media (pointer: coarse) {
+  .head .head-search kbd,
+  .side-search kbd { display: none; }
+}
+
+/* Spotlight au téléphone : un voile derrière, et pas d'aide clavier. La
+   page restait lisible entre les boutons ronds, comme si la recherche
+   flottait sur elle. */
+@media (max-width: 760px) {
+  .pal {
+    padding: 10px 10px 20px;
+    background: rgb(10 10 20 / 28%);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+  }
+}
+@media (pointer: coarse) {
+  .pal-foot { display: none; }
+}
+
+/* « Écrire au client » au téléphone : le titre sur une ligne, la signature
+   dessous, et les boutons qui passent à la ligne entiers au lieu de casser
+   « Valider et envoyer » sur trois lignes. */
+@media (max-width: 480px) {
+  .compose-head { flex-wrap: wrap; row-gap: 2px; }
+  .compose-head h2 { flex: 1 1 auto; white-space: nowrap; }
+  .compose-sig { order: 5; flex: 1 1 100%; margin-left: 0; white-space: normal; }
+  .compose-foot .btn { flex: 1 1 auto; white-space: nowrap; }
+  .compose-foot .btn-primary { flex-basis: 100%; order: -1; }
+}
+/* La colonne des champs ne dépasse jamais la fenêtre : mesurée sur la largeur
+   naturelle d'un champ texte, elle débordait de trente pixels au téléphone. */
+.compose-fields { grid-template-columns: minmax(0, 1fr); }
+
+/* Le plus petit iPhone (320 px). */
+@media (max-width: 360px) {
+  /* Les graphiques côte à côte demandaient 320 px chacun : un de trop. */
+  .stats-duo { grid-template-columns: minmax(0, 1fr); }
+  /* L'en-tête Conversations : le titre s'abrège, les boutons se resserrent. */
+  #view-tickets .queue-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #view-tickets .queue-head .qh-ico { width: 34px; min-width: 34px; }
+  #view-tickets .queue-head .qh-texte { padding: 0 4px; font-size: 14px; }
+  /* Le retour ne garde que sa flèche, comme iOS quand la place manque :
+     « ‹ Conversations », Actions et Écrire au client ne tenaient pas sur une
+     ligne et élargissaient tout le message, coupé à droite. */
+  #view-tickets .th-retour-txt { display: none; }
+  /* La date passe sous le titre au lieu de le pousser hors de l'écran. */
+  #view-tickets .th-top { flex-wrap: wrap; }
+  #view-tickets .th-titre { min-width: 0; }
+  #view-tickets .th-quand { white-space: normal; }
 }

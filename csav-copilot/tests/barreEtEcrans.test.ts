@@ -23,7 +23,7 @@ test('trois zones : le titre, la recherche au centre, les heures et les boutons 
   const droite = tete.slice(tete.indexOf('<div class="head-droite">'));
   for (const id of ['clocks', 'conn', 'refresh', 'head-lune', 'cc-btn']) assert.ok(droite.includes(`id="${id}"`), id);
   // La grille réserve à gauche la largeur de la droite : la recherche au milieu.
-  assert.match(css, /grid-template-columns: minmax\(var\(--cote, 0px\), 1fr\) minmax\(220px, 480px\) minmax\(auto, 1fr\);/);
+  assert.match(css, /grid-template-columns: minmax\(var\(--cote, 9rem\), 1fr\) minmax\(220px, 480px\) minmax\(auto, 1fr\);/);
   assert.match(app, /if \(place >= 220\) tete\.style\.setProperty\('--cote', `\$\{cote\}px`\);/);
   // La droite ne se comprime jamais (sinon les heures passaient sous la recherche).
   assert.match(css, /\.head-droite \{ display: flex; align-items: center; justify-content: flex-end; gap: 4px; \}/);

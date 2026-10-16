@@ -1805,7 +1805,8 @@ async function loadQueue({ append = false } = {}) {
     button.addEventListener('click', () => {
       // En mode sélection, toucher la ligne la coche, comme Mail sur iPhone.
       if (enSelection()) return button.closest('.qrow')?.querySelector('[data-pick]')?.click();
-      selectTicket(button.dataset.id);
+      void selectTicket(button.dataset.id);
+      ouvrirMessagePile();
     });
     button.addEventListener('mouseenter', () => prefetchTicket(button.dataset.id));
     // Le survol n'existe pas au doigt : sur mobile, le contact précède le clic
@@ -3774,6 +3775,10 @@ function prefetchTicket(id) {
 async function selectTicket(id, { silent = false } = {}) {
   const autreTicket = id !== state.currentId;
   state.currentId = id;
+  // Un autre message, choisi : quand la liste et le message s'empilent, il
+  // prend l'écran (voir `ouvrirMessagePile`). Recharger le même, ou ouvrir le
+  // premier au démarrage, ne quitte pas la liste.
+  if (!silent && autreTicket) ouvrirMessagePile();
 
   /*
    * Ouvert par l'outil, ou choisi ?
@@ -4877,6 +4882,43 @@ function modeSelection(actif) {
 }
 
 $('queue-select')?.addEventListener('click', () => modeSelection(!enSelection()));
+
+/*
+ * Le message ouvert prend l'écran, quand la liste et lui s'empilent.
+ *
+ * Au téléphone et sur une tablette en portrait (900 px et moins), le message
+ * s'affichait sous toute la liste, hors de l'écran : toucher une
+ * conversation semblait ne rien faire. Comme dans Mail sur iPhone, il prend
+ * maintenant la place de la liste, avec « ‹ Conversations » pour revenir ; le
+ * bouton Retour d'Android et le geste de retour d'iOS ramènent aussi à la
+ * liste, à l'endroit où on l'avait laissée.
+ */
+const PILE_TICKETS = window.matchMedia('(max-width: 900px)');
+let defilementListe = 0;
+
+function ouvrirMessagePile() {
+  const vue = $('view-tickets');
+  if (!PILE_TICKETS.matches || !vue) return;
+  if (!vue.classList.contains('pile-message')) {
+    defilementListe = scrollY;
+    vue.classList.add('pile-message');
+    history.pushState({ csavMessage: true }, '');
+  }
+  requestAnimationFrame(() => $('d-pane')?.scrollIntoView({ block: 'start' }));
+}
+
+function fermerMessagePile({ parHistorique = false } = {}) {
+  const vue = $('view-tickets');
+  if (!vue?.classList.contains('pile-message')) return;
+  vue.classList.remove('pile-message');
+  // L'entrée posée à l'ouverture s'en va avec le message : sinon le prochain
+  // Retour d'Android ne ferait rien.
+  if (!parHistorique && history.state?.csavMessage) history.back();
+  requestAnimationFrame(() => scrollTo(0, defilementListe));
+}
+
+addEventListener('popstate', () => fermerMessagePile({ parHistorique: true }));
+$('d-retour')?.addEventListener('click', () => fermerMessagePile());
 
 function clearPicked() {
   state.picked.clear();
@@ -12604,6 +12646,7 @@ function setView(view) {
   $('app-grid')?.classList.toggle('app-locked', view === 'tickets');
   ouvrirFiltres(false);
   modeSelection(false);
+  if (view !== 'tickets') fermerMessagePile();
 
   renderNav();
 
