@@ -1802,7 +1802,11 @@ async function loadQueue({ append = false } = {}) {
   );
 
   list.querySelectorAll('.queue-item').forEach((button) => {
-    button.addEventListener('click', () => selectTicket(button.dataset.id));
+    button.addEventListener('click', () => {
+      // En mode sélection, toucher la ligne la coche, comme Mail sur iPhone.
+      if (enSelection()) return button.closest('.qrow')?.querySelector('[data-pick]')?.click();
+      selectTicket(button.dataset.id);
+    });
     button.addEventListener('mouseenter', () => prefetchTicket(button.dataset.id));
     // Le survol n'existe pas au doigt : sur mobile, le contact précède le clic
     // d'assez peu pour que ça compte quand même.
@@ -4845,6 +4849,35 @@ function bindPickers() {
   );
 }
 
+/*
+ * Sélectionner, au téléphone, comme Mail sur iPhone.
+ *
+ * Une case vide sur chaque ligne, à côté du point bleu des non-lus, faisait
+ * deux ronds par message pour un geste qu'on fait rarement. Les cases
+ * n'apparaissent qu'après « Sélectionner » ; toucher une ligne la coche
+ * alors au lieu de l'ouvrir, et « OK » referme le mode. Sur ordinateur, rien
+ * ne change : la case paraît au survol.
+ */
+const TELEPHONE_FILE = window.matchMedia('(max-width: 760px)');
+
+function enSelection() {
+  return TELEPHONE_FILE.matches && Boolean($('view-tickets')?.classList.contains('en-selection'));
+}
+
+function modeSelection(actif) {
+  $('view-tickets')?.classList.toggle('en-selection', actif);
+  const bouton = $('queue-select');
+  if (bouton) {
+    bouton.textContent = actif ? 'OK' : 'Sélectionner';
+    bouton.setAttribute('aria-pressed', String(actif));
+  }
+  // Sortir du mode, c'est tout décocher : des cases cochées qu'on ne voit
+  // plus agiraient encore sur la barre d'actions.
+  if (!actif && state.picked.size) clearPicked();
+}
+
+$('queue-select')?.addEventListener('click', () => modeSelection(!enSelection()));
+
 function clearPicked() {
   state.picked.clear();
   document.querySelectorAll('[data-pick]').forEach((box) => {
@@ -4972,6 +5005,7 @@ async function runBulk(action, extra, button) {
     );
 
     state.picked.clear();
+    modeSelection(false);
     await loadQueue();
   } catch (error) {
     toast(error.message, true);
@@ -12569,6 +12603,7 @@ function setView(view) {
   // lisent comme des documents, d'un seul tenant. Voir `.app-locked`.
   $('app-grid')?.classList.toggle('app-locked', view === 'tickets');
   ouvrirFiltres(false);
+  modeSelection(false);
 
   renderNav();
 

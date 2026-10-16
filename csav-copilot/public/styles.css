@@ -13693,3 +13693,28 @@ progress { accent-color: var(--accent); }
 @media (prefers-reduced-motion: reduce) {
   .qf, .qf-voile { animation: none; }
 }
+
+/* Sélectionner, au téléphone, comme Mail sur iPhone : pas de cases tant
+   qu'on ne l'a pas demandé, et la ligne se resserre autour du point bleu des
+   non-lus. Sur ordinateur, le bouton n'existe pas : la case paraît au survol. */
+.qh-texte { display: none; }
+@media (max-width: 760px) {
+  #view-tickets .queue-head .qh-texte {
+    display: inline-flex;
+    align-items: center;
+    height: 30px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 8px;
+    background: none;
+    color: var(--accent-ink);
+    font: inherit;
+    font-size: 15px;
+    cursor: pointer;
+  }
+  #view-tickets .queue-head .qh-texte[aria-pressed="true"] { font-weight: 600; }
+  #view-tickets:not(.en-selection) .qpick { display: none; }
+  #view-tickets:not(.en-selection) .qrow .queue-item { padding-left: 26px; }
+  /* Le filet suit l'avatar, qui a glissé avec la case. */
+  #view-tickets:not(.en-selection) .qrow + .qrow::before { left: 64px; }
+}
