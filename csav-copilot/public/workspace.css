@@ -1943,6 +1943,9 @@ input:focus, select:focus, textarea:focus {
 .ord-hist .hist-colis span { color: var(--ok-ink); }
 .ord-hist .hist-demande span { font-weight: 600; }
 
+/* La feuille de « Signaler un problème » monte du bas, au téléphone. */
+@keyframes sig-monte { from { transform: translateY(100%); } }
+
 /* ==========================================================================
    ESPACE FOURNISSEUR, FAÇON APPLE
 
@@ -3051,4 +3054,348 @@ input:focus, select:focus, textarea:focus {
   /* Une ligne, même en anglais : « Test mode · nothing is shipped ». */
   .wsapp .ws-test { max-width: calc(100% - 128px); white-space: nowrap; overflow: hidden; }
   .wsapp .ws-test .ws-court { overflow: hidden; text-overflow: ellipsis; }
+}
+
+/* ==========================================================================
+   SIGNALER UN PROBLÈME
+   ==========================================================================
+
+   D'après la maquette du même nom. La commande en fiche, cinq tuiles pour le
+   problème, ce que la commande sait déjà selon le problème, le détail requis.
+   Boutons en bas à droite, bleu système ; au téléphone, une feuille d'iOS
+   avec Annuler et Envoyer en haut. */
+
+/* Le bouton principal d'une fenêtre restait violet au survol : la règle
+   bleue ne visait que `.wsapp`, dont les fenêtres sont sœurs. */
+.wsapp ~ .modal-wrap .btn-primary:hover { background: #0058b0; }
+
+.wsapp ~ .modal-wrap .modal.sig {
+  --sig-encart: #f5f5f7;
+  --sig-filet: #d2d2d7;
+  width: min(600px, 100%);
+  border-radius: 16px;
+  box-shadow: 0 0 0 0.5px rgb(0 0 0 / 18%), 0 30px 70px -18px rgb(0 0 0 / 45%);
+}
+.wsapp ~ .modal-wrap .sig-barre { display: none; }
+.wsapp ~ .modal-wrap .sig .sig-tete { padding: 20px 24px 6px; border-bottom: 0; }
+.wsapp ~ .modal-wrap .sig .sig-tete h2 { font-size: 17px; font-weight: 700; }
+.wsapp ~ .modal-wrap .sig .sig-tete p { font-size: 12.5px; }
+.wsapp ~ .modal-wrap .sig .sig-corps { display: flex; flex-direction: column; gap: 16px; padding: 10px 24px 4px; }
+.wsapp ~ .modal-wrap .sig-titre { display: block; margin: 0 0 7px; font-size: 12.5px; font-weight: 600; color: var(--ink-mute); }
+.wsapp ~ .modal-wrap .sig-requis { font-weight: 400; }
+
+/* La commande : une fiche qu'on reconnaît. */
+.wsapp ~ .modal-wrap .sig-fiche {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--sig-encart);
+}
+.wsapp ~ .modal-wrap .sig-vignettes { position: relative; width: 46px; height: 46px; flex: none; }
+.wsapp ~ .modal-wrap .sig-vignettes > * {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
+  object-fit: cover;
+  background: #e3e3e8;
+  box-shadow: 0 0 0 2px var(--sig-encart);
+}
+.wsapp ~ .modal-wrap .sig-vignettes > :nth-child(2) { left: auto; top: auto; right: 0; bottom: 0; width: 26px; height: 26px; border-radius: 7px; }
+.wsapp ~ .modal-wrap .sig-fiche-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.wsapp ~ .modal-wrap .sig-fiche-l1 { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.wsapp ~ .modal-wrap .sig-fiche-l1 b { font-size: 14px; }
+.wsapp ~ .modal-wrap .sig-fiche-l1 span,
+.wsapp ~ .modal-wrap .sig-fiche-l2 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wsapp ~ .modal-wrap .sig-fiche-l1 span { font-size: 13.5px; }
+.wsapp ~ .modal-wrap .sig-fiche-l2 { font-size: 12.5px; color: var(--ink-mute); }
+.wsapp ~ .modal-wrap .sig-lien {
+  flex: none;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--brand);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.wsapp ~ .modal-wrap .sig-lien:hover { background: var(--brand-soft); }
+.wsapp ~ .modal-wrap .sig-lien:disabled { color: rgb(60 60 67 / 30%); background: none; cursor: default; }
+
+/* La recherche, pendant qu'on tape. */
+.wsapp ~ .modal-wrap .sig-cherche { padding: 6px; border-radius: 12px; background: var(--sig-encart); }
+.wsapp ~ .modal-wrap .sig-champ {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 11px;
+  border-radius: 9px;
+  background: var(--card);
+  box-shadow: 0 0 0 1px var(--sig-filet);
+  color: var(--ink-mute);
+}
+.wsapp ~ .modal-wrap .sig-champ:focus-within { box-shadow: 0 0 0 1px var(--brand), 0 0 0 4px rgb(0 102 204 / 22%); }
+.wsapp ~ .modal-wrap .sig-champ svg { width: 16px; height: 16px; flex: none; }
+.wsapp ~ .modal-wrap .sig-champ input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  padding: 0;
+  box-shadow: none;
+  outline: none;
+}
+.wsapp ~ .modal-wrap .sig-res { display: flex; flex-direction: column; gap: 1px; }
+.wsapp ~ .modal-wrap .sig-res:not(:empty) { margin-top: 6px; }
+.wsapp ~ .modal-wrap .sig-res-ligne {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.wsapp ~ .modal-wrap .sig-res-ligne b { min-width: 64px; }
+.wsapp ~ .modal-wrap .sig-res-ligne span:not(.sig-gris) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wsapp ~ .modal-wrap .sig-gris { font-size: 13px; color: var(--ink-mute); }
+.wsapp ~ .modal-wrap .sig-res-ligne:hover,
+.wsapp ~ .modal-wrap .sig-res-ligne:focus-visible { outline: none; background: var(--brand); color: #fff; }
+.wsapp ~ .modal-wrap .sig-res-ligne:hover .sig-gris,
+.wsapp ~ .modal-wrap .sig-res-ligne:focus-visible .sig-gris { color: rgb(255 255 255 / 85%); }
+.wsapp ~ .modal-wrap .sig-note { margin: 4px 10px; font-size: 13px; color: var(--ink-mute); }
+
+/* Le problème : cinq tuiles, un seul geste. */
+.wsapp ~ .modal-wrap .sig-natures { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.wsapp ~ .modal-wrap .sig-nature {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 76px;
+  padding: 6px 4px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: 0 0 0 1px var(--sig-filet);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-align: center;
+  cursor: pointer;
+}
+.wsapp ~ .modal-wrap .sig-nature:hover { background: #f5f5f7; }
+.wsapp ~ .modal-wrap .sig-nature:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--brand), 0 0 0 5px rgb(0 102 204 / 22%); }
+.wsapp ~ .modal-wrap .sig-nature[aria-checked="true"] {
+  background: var(--brand-soft);
+  box-shadow: 0 0 0 2px var(--brand);
+  color: var(--brand);
+  font-weight: 600;
+}
+.wsapp ~ .modal-wrap .sig-ico svg {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.wsapp ~ .modal-wrap .sig-nom { overflow-wrap: anywhere; }
+
+/* Ce que la commande sait déjà. */
+.wsapp ~ .modal-wrap .sig-contexte:empty { display: none; }
+.wsapp ~ .modal-wrap .sig-encart {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 11px 14px;
+  border-radius: 12px;
+  background: var(--sig-encart);
+}
+.wsapp ~ .modal-wrap .sig-encart-titre { font-size: 12.5px; color: var(--ink-mute); }
+.wsapp ~ .modal-wrap .sig-tel { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
+.wsapp ~ .modal-wrap .sig-adresse { display: flex; flex-direction: column; font-size: 14px; }
+.wsapp ~ .modal-wrap .sig-adresse span:first-child { font-weight: 600; }
+.wsapp ~ .modal-wrap .sig-vide { font-size: 14px; color: var(--ink-mute); }
+
+.wsapp ~ .modal-wrap .sig-articles { overflow: hidden; border-radius: 12px; background: var(--sig-encart); }
+.wsapp ~ .modal-wrap .sig-article {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 58px;
+  padding: 8px 14px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.wsapp ~ .modal-wrap .sig-article + .sig-article { border-top: 0.5px solid var(--sig-filet); }
+.wsapp ~ .modal-wrap .sig-article:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
+.wsapp ~ .modal-wrap .sig-rond {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px #c7c7cc;
+}
+.wsapp ~ .modal-wrap .sig-article[aria-checked="true"] .sig-rond { background: var(--brand); box-shadow: none; }
+.wsapp ~ .modal-wrap .sig-article[aria-checked="true"] .sig-rond::after {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 4px;
+  width: 6px;
+  height: 11px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.wsapp ~ .modal-wrap .sig-article > img,
+.wsapp ~ .modal-wrap .sig-article > i { width: 42px; height: 42px; flex: none; border-radius: 9px; object-fit: cover; background: #e3e3e8; }
+.wsapp ~ .modal-wrap .sig-article-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.wsapp ~ .modal-wrap .sig-article-txt b,
+.wsapp ~ .modal-wrap .sig-article-txt span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wsapp ~ .modal-wrap .sig-article-txt b { font-size: 14px; font-weight: 600; }
+.wsapp ~ .modal-wrap .sig-article-txt span { font-size: 12.5px; color: var(--ink-mute); }
+.wsapp ~ .modal-wrap .sig-qte { flex: none; font-size: 13px; color: var(--ink-mute); }
+.wsapp ~ .modal-wrap .sig-manque { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; font-size: 13.5px; }
+.wsapp ~ .modal-wrap .sig-manque input { width: 80px; min-height: 34px; text-align: center; }
+
+/* Le détail, requis. */
+.wsapp ~ .modal-wrap .sig textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 78px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--card);
+  box-shadow: 0 0 0 1px var(--sig-filet);
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.4;
+}
+.wsapp ~ .modal-wrap .sig textarea:focus { outline: none; box-shadow: 0 0 0 1px var(--brand), 0 0 0 4px rgb(0 102 204 / 22%); }
+.wsapp ~ .modal-wrap .sig textarea::placeholder { color: #a1a1a6; }
+
+/* Les boutons en bas à droite, comme une fenêtre du Mac. */
+.wsapp ~ .modal-wrap .sig .sig-pied { justify-content: flex-end; padding: 16px 24px 20px; border-top: 0; }
+.wsapp ~ .modal-wrap .sig .sig-pied .btn { flex: none; min-height: 38px; padding: 0 18px; font-size: 14px; }
+.wsapp ~ .modal-wrap .sig .sig-pied .btn-primary:disabled { opacity: 0.4; }
+
+/* Au téléphone : une feuille qui monte du bas, Annuler et Envoyer en haut,
+   comme Mail. Les tuiles deviennent une liste, chacune avec son icône de
+   couleur, comme dans Réglages. */
+@media (max-width: 640px) {
+  .wsapp ~ #issue-modal { align-items: flex-end; padding: 0; }
+  .wsapp ~ .modal-wrap .modal.sig {
+    width: 100%;
+    max-height: calc(100dvh - 44px);
+    border-radius: 14px 14px 0 0;
+    background: #f2f2f7;
+    --sig-encart: #ffffff;
+    animation: sig-monte 0.32s cubic-bezier(0.2, 0.9, 0.3, 1);
+  }
+  .wsapp ~ .modal-wrap .sig-barre {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    padding: 12px 12px 10px;
+    background: #f2f2f7;
+  }
+  .wsapp ~ .modal-wrap .sig-barre b { font-size: 17px; font-weight: 600; }
+  .wsapp ~ .modal-wrap .sig-barre .sig-lien { justify-self: start; font-size: 17px; }
+  .wsapp ~ .modal-wrap .sig-barre .sig-envoyer { justify-self: end; font-weight: 600; }
+  .wsapp ~ .modal-wrap .sig .sig-tete,
+  .wsapp ~ .modal-wrap .sig .sig-pied { display: none; }
+  .wsapp ~ .modal-wrap .sig .sig-corps { gap: 0; padding: 0 16px calc(28px + env(safe-area-inset-bottom)); }
+  .wsapp ~ .modal-wrap .sig-titre,
+  .wsapp ~ .modal-wrap .sig .sig-bloc > .sig-titre {
+    margin: 22px 16px 7px;
+    font-size: 13px;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+  .wsapp ~ .modal-wrap .sig-contexte > .sig-titre { margin-top: 22px; }
+  .wsapp ~ .modal-wrap .sig-contexte:not(:empty) { margin-top: 22px; }
+  .wsapp ~ .modal-wrap .sig-contexte > .sig-titre:first-child { margin-top: 0; }
+  .wsapp ~ .modal-wrap .sig-fiche,
+  .wsapp ~ .modal-wrap .sig-cherche,
+  .wsapp ~ .modal-wrap .sig-encart,
+  .wsapp ~ .modal-wrap .sig-articles { background: #fff; }
+
+  .wsapp ~ .modal-wrap .sig-natures { grid-template-columns: 1fr; gap: 0; overflow: hidden; border-radius: 12px; background: #fff; }
+  .wsapp ~ .modal-wrap .sig-nature {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 12px;
+    min-height: 46px;
+    padding: 0 16px;
+    border-radius: 0;
+    box-shadow: none;
+    color: var(--ink);
+    font-size: 17px;
+    font-weight: 400;
+    text-align: left;
+  }
+  .wsapp ~ .modal-wrap .sig-nature + .sig-nature .sig-nom { box-shadow: 0 -0.5px 0 rgb(60 60 67 / 18%); }
+  .wsapp ~ .modal-wrap .sig-nom { flex: 1; align-self: stretch; display: flex; align-items: center; }
+  .wsapp ~ .modal-wrap .sig-nature[aria-checked="true"] { background: none; box-shadow: none; color: var(--ink); font-weight: 400; }
+  .wsapp ~ .modal-wrap .sig-nature[aria-checked="true"] .sig-nom::after { content: "✓"; margin-left: auto; color: var(--brand); font-weight: 600; }
+  .wsapp ~ .modal-wrap .sig-nature:active { background: #e5e5ea; }
+  .wsapp ~ .modal-wrap .sig-ico {
+    width: 29px;
+    height: 29px;
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 7px;
+    color: #fff;
+  }
+  .wsapp ~ .modal-wrap .sig-ico svg { width: 18px; height: 18px; stroke-width: 2; }
+  .wsapp ~ .modal-wrap .n-tel .sig-ico { background: #34c759; }
+  .wsapp ~ .modal-wrap .n-adresse .sig-ico { background: #0a84ff; }
+  .wsapp ~ .modal-wrap .n-stock .sig-ico { background: #ff9500; }
+  .wsapp ~ .modal-wrap .n-abime .sig-ico { background: #ff3b30; }
+  .wsapp ~ .modal-wrap .n-autre .sig-ico { background: #8e8e93; }
+
+  .wsapp ~ .modal-wrap .sig-manque { min-height: 46px; padding: 0 8px 0 16px; border-radius: 12px; background: #fff; font-size: 17px; }
+  .wsapp ~ .modal-wrap .sig textarea { box-shadow: none; border-radius: 12px; font-size: 17px; }
+  .wsapp ~ .modal-wrap .sig-champ input { font-size: 17px; }
+  .wsapp ~ .modal-wrap .sig-article-txt b { font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wsapp ~ .modal-wrap .modal.sig { animation: none; }
 }
