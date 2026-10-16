@@ -570,9 +570,11 @@
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"
                     stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg><span class="th-retour-txt">Conversations</span></button>
                 <button class="ico-btn" id="d-prev" type="button"
-                  aria-label="Message précédent" title="Précédent (k)">‹</button>
+                  aria-label="Message précédent" title="Précédent (k)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+                    stroke-linejoin="round" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" /></svg></button>
                 <button class="ico-btn" id="d-next" type="button"
-                  aria-label="Message suivant" title="Suivant (j)">›</button>
+                  aria-label="Message suivant" title="Suivant (j)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+                    stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" /></svg></button>
                 <!-- L'action principale et le reste.
 
                      Quatre boutons de poids identique se disputaient le bas
@@ -743,7 +745,7 @@
             <div class="rail-head">
               <span class="rail-title">Client</span>
               <button class="linkish rail-more" id="c-sheet" type="button">
-                Voir le profil →
+                Voir le profil
               </button>
             </div>
             <div class="card-body" id="c-customer"><p class="empty">—</p></div>
@@ -1309,7 +1311,7 @@
         <div class="browse-bar">
           <!-- Créer une demande sans passer par un mail : le client a pu
                appeler, ou l'erreur se voir dans la commande elle-même. -->
-          <button class="btn btn-primary btn-small" id="changes-new">＋ Nouvelle demande</button>
+          <button class="btn btn-primary btn-small" id="changes-new">Nouvelle demande</button>
           <div class="filters" id="changes-filters">
             <button class="chip" data-chg="PENDING" aria-pressed="true">En attente</button>
             <button class="chip" data-chg="" aria-pressed="false">Toutes</button>
@@ -2228,7 +2230,7 @@ Remboursement : sous 5 jours ouvrés après réception du retour."></textarea>
           <!-- Alerte urgente : mail immédiat + bandeau rouge en tête de son
                atelier. Le canal normal est l'atelier, qu'il ouvre le matin ;
                « n'expédie pas » ne peut pas attendre demain matin. -->
-          <button class="btn btn-danger" id="sup-f-alert" hidden>⚡ Alerte urgente</button>
+          <button class="btn btn-danger" id="sup-f-alert" hidden>Alerte urgente</button>
           <button class="btn btn-danger" id="sup-f-delete" hidden>Supprimer</button>
           <button class="btn" id="sup-f-cancel">Annuler</button>
           <button class="btn btn-primary" id="sup-f-save">Enregistrer</button>
@@ -2450,7 +2452,7 @@ Remboursement : sous 5 jours ouvrés après réception du retour."></textarea>
         </div>
         <div class="modal-foot">
           <button class="btn" id="alert-cancel">Annuler</button>
-          <button class="btn btn-primary" id="alert-send">⚡ Envoyer au fournisseur</button>
+          <button class="btn btn-primary" id="alert-send">Envoyer au fournisseur</button>
         </div>
       </div>
     </div>

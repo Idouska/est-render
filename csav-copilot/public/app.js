@@ -1152,7 +1152,7 @@ function renderShopMenu() {
   if (canAdd) {
     rows.push('<hr />');
     rows.push(
-      '<button class="shop-item shop-add" type="button" data-shop-add="1">＋ Ajouter une boutique</button>',
+      '<button class="shop-item shop-add" type="button" data-shop-add="1">Ajouter une boutique</button>',
     );
   }
 
@@ -1918,7 +1918,7 @@ async function openTracking(number, externalUrl = null) {
   // choix secondaire : l'outil répond d'abord lui-même.
   const external = externalUrl
     ? `<p class="sheet-ext"><a href="${esc(externalUrl)}" target="_blank" rel="noopener">
-        Ouvrir chez le transporteur ↗</a></p>`
+        Ouvrir chez le transporteur</a></p>`
     : '';
 
   $('sheet-body').innerHTML = `
@@ -3382,7 +3382,7 @@ function renderJetons() {
               aria-label="Retirer le filtre ${esc(titre || nom)}" title="${esc(
                 titre || 'Retirer ce filtre',
               )}">${pastille}<span class="qjeton-nom">${esc(nom)}</span><span class="qjeton-x"
-              aria-hidden="true">✕</span></button>`,
+              aria-hidden="true">${ico('close')}</span></button>`,
         )
         .join('')}<button type="button" class="qjetons-effacer" data-jeton="*">Effacer</button>`
     : '';
@@ -4646,7 +4646,7 @@ function renderQueueTable(multiMailbox, shopById) {
               col.sort ? ` data-sort="${col.sort}"` : ''
             }>${esc(col.label)}${
               col.sort
-                ? `<span class="qt-arrow${state.queue.sort === col.sort ? ' on' : ''}">↓</span>`
+                ? `<span class="qt-arrow${state.queue.sort === col.sort ? ' on' : ''}">${ico('bas')}</span>`
                 : ''
             }</th>`,
         )
@@ -5829,9 +5829,9 @@ function shopifyOrderLink(order, label = null) {
   // porte le numéro ; en bouton sous les articles, où il porte l'action.
   return label
     ? `<a class="linkish rail-more" target="_blank" rel="noopener noreferrer"
-        href="${href}">${esc(label)} <span aria-hidden="true">↗</span></a>`
+        href="${href}">${esc(label)}</a>`
     : `<a class="btn btn-small rail-link" target="_blank" rel="noopener noreferrer"
-        href="${href}">Voir dans Shopify →</a>`;
+        href="${href}">Voir dans Shopify</a>`;
 }
 
 /*
@@ -8099,7 +8099,7 @@ function renderOvPriorite() {
                 t.dueAt ? `<span class="ovdue ovdue-${e.ton}">${esc(e.label)}</span>` : ''
               }
             </span>
-            <span class="ov-go" aria-hidden="true">›</span>
+            <span class="ov-go" aria-hidden="true">${ico('suiv')}</span>
           </button></li>`,
         )
         .join('')
@@ -8183,7 +8183,7 @@ function ovStatLigne({ label, valeur, ton, filtre, vue, periode, aide, ico: nomI
       // qui réclame un geste.
       valeur === '0' || valeur === '—' ? ' sv-nul' : ''
     }">${esc(valeur)}</b>
-    ${cliquable ? '<span class="statrow-x" aria-hidden="true">›</span>' : ''}
+    ${cliquable ? `<span class="statrow-x" aria-hidden="true">${ico('suiv')}</span>` : ''}
   </${balise}></li>`;
 }
 
@@ -9997,10 +9997,10 @@ const TRACK_LABELS = {
 
 /* L'équipe travaille avec des fournisseurs en Asie et des clients en Europe :
    l'heure locale décide si un appel a une chance d'aboutir maintenant. */
-// Le sigle court est ce qui s'affiche en barre haute : cinq cadrans sans
+// Le sigle court est ce qui s'affiche en barre haute : des cadrans sans
 // aucun nom obligeaient à compter les positions pour savoir lequel est Paris.
+// Quatre villes, pour tenir sur une seule rangée jusque sur un téléphone.
 const CLOCKS = [
-  ['Agadir', 'Africa/Casablanca', 'ma', 'AGA'],
   ['Paris', 'Europe/Paris', 'fr', 'PAR'],
   ['Chine', 'Asia/Shanghai', 'cn', 'CHN'],
   ['New York', 'America/New_York', 'us', 'NYC'],
@@ -10056,10 +10056,11 @@ function cityTimes(now) {
  * barre des menus. Une ville hors horaires s'efface à moitié ; le point vert
  * ou ambre disait la même chose une seconde fois.
  *
- * Au clic : cinq cadrans de montre. Les chiffres hauts et fins du cadran
- * numérique, la date en haut, deux complications rondes en bas — le
- * décalage, puis un soleil (joignable) ou une lune (hors horaires). Hors
- * horaires, la montre passe en veille, comme l'écran toujours allumé.
+ * Au clic : quatre cadrans de montre, sur une seule rangée. Les chiffres
+ * hauts et fins du cadran numérique, la date en haut, deux complications
+ * rondes en bas — le décalage, puis un soleil (joignable) ou une lune (hors
+ * horaires). Hors horaires, la montre passe en veille, comme l'écran
+ * toujours allumé.
  */
 /*
  * Les heures locales portent `role="button"` depuis toujours, sans jamais
@@ -10235,6 +10236,10 @@ const ICONS = {
   expand: '<path d="M9.5 2.5h4v4M6.5 13.5h-4v-4M13.5 2.5 9 7M2.5 13.5 7 9"/>',
   collapse: '<path d="M13.5 6.5h-4v-4M2.5 9.5h4v4M13.5 2.5 9.5 6.5M2.5 13.5 6.5 9.5"/>',
   close: '<path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/>',
+  // Des chevrons, pas des flèches : précédent et suivant, comme dans Mail.
+  prec: '<path d="M10 3.5 5.5 8l4.5 4.5"/>',
+  suiv: '<path d="M6 3.5 10.5 8 6 12.5"/>',
+  bas: '<path d="M3.5 6 8 10.5 12.5 6"/>',
   // Bulle et combiné, au trait comme les autres : pas de logo, pas de vert
   // plein — c'est une icône du produit, pas une bannière de WhatsApp.
   whatsapp:
@@ -10592,7 +10597,7 @@ function renderReturnCases(box) {
             ${
               wa
                 ? `<button class="ret-wa" data-ret-wa="${esc(item.id)}"
-                    title="Relancer ce client sur WhatsApp" aria-label="Relancer sur WhatsApp">✆</button>`
+                    title="Relancer ce client sur WhatsApp" aria-label="Relancer sur WhatsApp">${ico('whatsapp')}</button>`
                 : ''
             }
             ${
@@ -10820,7 +10825,7 @@ function renderReturnStock(box) {
 
   box.innerHTML =
     `<div class="ret-stock-barre">
-      <button class="btn btn-small btn-primary" type="button" id="stk-ouvrir">＋ Ajouter au stock</button>
+      <button class="btn btn-small btn-primary" type="button" id="stk-ouvrir">Ajouter au stock</button>
       <small>Fin de série, paire d'exposition… : des paires qui ne viennent pas d'un retour.</small>
     </div>` +
     (stock.length
@@ -13185,7 +13190,7 @@ function orderDetailMarkup(order, atelier = [], reemploi = []) {
     .map(
       (parcel) => `<div class="ordv-row">
         <span>${esc(parcel.carrier ?? 'Atelier')} · colis ${parcel.index}/${parcel.total}${
-          parcel.photoMime ? ' · 📷 étiquette' : ''
+          parcel.photoMime ? ' · photo de l’étiquette' : ''
         } · <span class="sub">pas encore dans Shopify</span>${
           parcel.test ? ' <span class="tag tone-wait">test</span>' : ''
         }</span>
@@ -13235,9 +13240,7 @@ function orderDetailMarkup(order, atelier = [], reemploi = []) {
     : phone.link
       ? `<div class="ordv-phone">
            <a class="rail-phone mono" href="${esc(phone.link)}" target="_blank" rel="noopener noreferrer"
-             title="Ouvrir dans WhatsApp — saisi : ${esc(phone.raw)}">${esc(
-               phone.affiche,
-             )} <span aria-hidden="true">↗</span></a>
+             title="Ouvrir dans WhatsApp — saisi : ${esc(phone.raw)}">${esc(phone.affiche)}</a>
            <a class="btn btn-small wa-btn" href="${esc(phone.link)}" target="_blank" rel="noopener noreferrer"
              aria-label="Ouvrir WhatsApp avec ${esc(address?.name ?? order.customer?.displayName ?? 'le client')}"
              title="Ouvrir la conversation dans WhatsApp Web">${ico('whatsapp')} WhatsApp</a>
@@ -13384,7 +13387,7 @@ async function openOrderSheet(id) {
     `<section class="sheet-group">${orderDetailMarkup(order, parcels, reemploi)}</section>` +
     // Les gestes d'abord : c'est pour eux qu'on a ouvert la fiche.
     `<section class="sheet-group sheet-acts">
-       <button class="btn btn-small btn-primary" id="ordv-change">${ico('bolt')} Contacter le fournisseur</button>
+       <button class="btn btn-small btn-primary" id="ordv-change">Contacter le fournisseur</button>
        ${
          tracking
            ? `<button class="btn btn-small" data-track="${esc(tracking.trackingNumber)}"${
@@ -13816,7 +13819,7 @@ function renderSettings() {
     // c'est l'ajout qu'on cherche une fois la première boîte en place.
     actions: `<a class="btn btn-small${
       gmail.connected ? '' : ' btn-primary'
-    }" href="/auth/google">${gmail.connected ? '＋ Ajouter une boîte' : 'Connecter Gmail'}</a>`,
+    }" href="/auth/google">${gmail.connected ? 'Ajouter une boîte' : 'Connecter Gmail'}</a>`,
   });
 
   // Effacement des tickets d'une boîte. Séparé du débranchement, qui conserve
@@ -15737,6 +15740,213 @@ document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') toggleNav(false);
 });
 
+/* ---------------------------------------------------------------- gestes - */
+
+/*
+ * Glisser, comme sur iPhone : le menu s'ouvre vers la droite et se referme
+ * vers la gauche ; les horloges s'écartent d'un côté ou de l'autre ; un
+ * message ouvert revient à la liste vers la droite. Au trackpad, deux doigts
+ * font de même sur la colonne et sur les horloges.
+ *
+ * Un doigt qui part de travers fait défiler la page : le geste ne se décide
+ * qu'au dixième pixel, et seulement s'il est franchement horizontal. Ce qui
+ * défile déjà en largeur — un tableau, une rangée de pastilles — et les
+ * champs de saisie gardent leur propre glissé.
+ */
+const SEUIL_GLISSE = 60;
+const TIROIR = window.matchMedia('(max-width: 1080px)');
+const SANS_GLISSE =
+  'input, textarea, select, [contenteditable="true"], .backdrop, .cc, .pal, #qf, .more-menu';
+const FENETRES_OUVERTES =
+  '#cc:not([hidden]), #pal:not([hidden]), #qf:not([hidden]), .backdrop.open';
+
+function defileEnLargeur(noeud) {
+  for (let n = noeud; n && n !== document.body; n = n.parentElement) {
+    const { overflowX } = getComputedStyle(n);
+    if ((overflowX === 'auto' || overflowX === 'scroll') && n.scrollWidth > n.clientWidth + 1) return true;
+  }
+  return false;
+}
+
+/** Ce que ce doigt posé là va faire, s'il glisse en largeur. */
+function gesteAuDepart(cible) {
+  const side = document.querySelector('.side');
+  const horloges = $('clockpop');
+  if (horloges && !horloges.hidden) return cible.closest('#clockpop') ? 'horloges' : null;
+  if (document.querySelector(FENETRES_OUVERTES)) return null;
+
+  if (TIROIR.matches) {
+    if ($('app-grid').classList.contains('nav-open')) return cible.closest('.side, #scrim') ? 'fermer' : null;
+    if (cible.closest(SANS_GLISSE) || defileEnLargeur(cible)) return null;
+    // Un message ouvert en plein écran : vers la droite, on revient à la
+    // liste, comme dans Mail ; un second glissé ouvre le menu.
+    const vue = $('view-tickets');
+    return vue && !vue.hidden && vue.classList.contains('pile-message') ? 'retour' : 'ouvrir';
+  }
+  // Sur une tablette en paysage, la colonne est là : on la replie ou on la
+  // déplie du doigt, comme avec son bouton.
+  return side && cible.closest('.side') && !cible.closest(SANS_GLISSE) ? 'colonne' : null;
+}
+
+/** Le menu suit le doigt ; `null` le rend à sa feuille de style. */
+function poserTiroir(decalage) {
+  const side = document.querySelector('.side');
+  const scrim = $('scrim');
+  if (decalage === null) {
+    side.style.transform = side.style.transition = '';
+    scrim.style.opacity = '';
+    return;
+  }
+  const largeur = side.offsetWidth || 280;
+  const x = Math.max(-largeur, Math.min(0, decalage));
+  side.style.transition = 'none';
+  side.style.transform = `translateX(${x}px)`;
+  scrim.hidden = false;
+  scrim.style.opacity = String(1 + x / largeur);
+}
+
+function replierColonne(replier) {
+  if ((localStorage.getItem('csav.side') === 'folded') === replier) return;
+  localStorage.setItem('csav.side', replier ? 'folded' : 'open');
+  applySideFold();
+  cacherBulleSide();
+}
+
+const SANS_ANIMATION = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+/** Les horloges s'en vont du côté où on les pousse, puis se ferment. */
+function ecarterHorloges(vers) {
+  const pop = $('clockpop');
+  if (!pop || pop.hidden) return;
+  const remettre = () => {
+    pop.hidden = true;
+    pop.style.transform = pop.style.transition = pop.style.opacity = '';
+  };
+  if (SANS_ANIMATION.matches) return remettre();
+  pop.style.transition = 'transform 0.22s ease-out, opacity 0.22s ease-out';
+  pop.style.transform = `translateX(${vers * (innerWidth + 40)}px)`;
+  pop.style.opacity = '0';
+  setTimeout(remettre, 220);
+}
+
+function suivreGeste(geste) {
+  const { type, dx } = geste;
+  if (type === 'ouvrir') poserTiroir(dx - (document.querySelector('.side').offsetWidth || 280));
+  else if (type === 'fermer') poserTiroir(dx);
+  else if (type === 'retour') {
+    const pane = $('d-pane');
+    if (pane) {
+      pane.style.transition = 'none';
+      pane.style.transform = `translateX(${Math.max(0, dx)}px)`;
+    }
+  } else if (type === 'horloges') {
+    const pop = $('clockpop');
+    pop.style.transition = 'none';
+    pop.style.transform = `translateX(${dx}px)`;
+    pop.style.opacity = String(Math.max(0.2, 1 - Math.abs(dx) / (pop.offsetWidth || innerWidth)));
+  }
+}
+
+function conclureGeste({ type, dx }, annule) {
+  const franchi = !annule && Math.abs(dx) > SEUIL_GLISSE;
+  if (type === 'ouvrir') {
+    poserTiroir(null);
+    toggleNav(franchi && dx > 0);
+  } else if (type === 'fermer') {
+    poserTiroir(null);
+    toggleNav(!(franchi && dx < 0));
+  } else if (type === 'retour') {
+    const pane = $('d-pane');
+    if (pane) pane.style.transform = pane.style.transition = '';
+    if (franchi && dx > 0) fermerMessagePile();
+  } else if (type === 'horloges') {
+    const pop = $('clockpop');
+    if (franchi) return ecarterHorloges(Math.sign(dx));
+    pop.style.transition = SANS_ANIMATION.matches ? '' : 'transform 0.2s ease, opacity 0.2s ease';
+    pop.style.transform = pop.style.opacity = '';
+  } else if (type === 'colonne' && franchi) {
+    replierColonne(dx < 0);
+  }
+}
+
+(() => {
+  let geste = null;
+  document.addEventListener(
+    'touchstart',
+    (event) => {
+      geste = null;
+      if (event.touches.length !== 1 || !(event.target instanceof Element)) return;
+      const type = gesteAuDepart(event.target);
+      const doigt = event.touches[0];
+      if (type) geste = { type, x0: doigt.clientX, y0: doigt.clientY, dx: 0, horizontal: null };
+    },
+    { passive: true },
+  );
+  document.addEventListener(
+    'touchmove',
+    (event) => {
+      if (!geste || event.touches.length !== 1) return;
+      const doigt = event.touches[0];
+      const dx = doigt.clientX - geste.x0;
+      const dy = doigt.clientY - geste.y0;
+      if (geste.horizontal === null) {
+        if (Math.hypot(dx, dy) < 10) return;
+        geste.horizontal = Math.abs(dx) > Math.abs(dy) * 1.5;
+        if (!geste.horizontal) {
+          geste = null;
+          return;
+        }
+      }
+      geste.dx = dx;
+      suivreGeste(geste);
+    },
+    { passive: true },
+  );
+  const finir = (annule) => {
+    if (geste?.horizontal) conclureGeste(geste, annule);
+    geste = null;
+  };
+  document.addEventListener('touchend', () => finir(false));
+  document.addEventListener('touchcancel', () => finir(true));
+})();
+
+/*
+ * Au trackpad, deux doigts en largeur. Avec le défilement naturel du Mac,
+ * des doigts qui vont vers la gauche donnent un `deltaX` positif. Un geste
+ * finit après un tiers de seconde de calme, et ne déclenche qu'une fois :
+ * l'inertie qui suit ne referme pas ce qu'on vient d'ouvrir.
+ */
+function glisseTrackpad(zone, action) {
+  if (!zone) return;
+  let cumul = 0;
+  let dernier = 0;
+  let fait = false;
+  zone.addEventListener(
+    'wheel',
+    (event) => {
+      const maintenant = Date.now();
+      if (maintenant - dernier > 300) {
+        cumul = 0;
+        fait = false;
+      }
+      dernier = maintenant;
+      if (fait || Math.abs(event.deltaX) <= Math.abs(event.deltaY)) return;
+      cumul += event.deltaX;
+      if (Math.abs(cumul) < 80) return;
+      fait = true;
+      action(cumul > 0 ? -1 : 1);
+    },
+    { passive: true },
+  );
+}
+
+glisseTrackpad(document.querySelector('.side'), (vers) => {
+  if (TIROIR.matches) {
+    if (vers < 0) toggleNav(false);
+  } else replierColonne(vers < 0);
+});
+glisseTrackpad($('clockpop'), ecarterHorloges);
+
 /* --------------------------------------------------- événements boutiques */
 
 $('shop-switch').addEventListener('click', (event) => {
@@ -16621,7 +16831,7 @@ function chercherMessagesPalette(query) {
 function rendrePortee() {
   const jeton = $('pal-jeton');
   jeton.hidden = !palettePortee;
-  jeton.textContent = palettePortee ? `${PAL_PORTEES[palettePortee]} ✕` : '';
+  jeton.innerHTML = palettePortee ? `${esc(PAL_PORTEES[palettePortee])}${ico('close')}` : '';
   document.querySelectorAll('.pal-portee').forEach((bouton) => {
     bouton.setAttribute('aria-pressed', String(bouton.dataset.portee === palettePortee));
   });
@@ -17299,7 +17509,7 @@ function renderRuptureLignes(page, total) {
               )}</span>`
             : '<span class="rup-prio rup-prio-basse">—</span>'
         }</td>
-        <td class="rup-go" aria-hidden="true">›</td>
+        <td class="rup-go" aria-hidden="true">${ico('suiv')}</td>
       </tr>`;
     })
     .join('');
@@ -17350,11 +17560,11 @@ function renderRupturePager(total, pages) {
     <span class="rup-pages">
       <button class="btn btn-small" type="button" id="rup-prev"${
         r.page === 1 ? ' disabled' : ''
-      } aria-label="Page précédente">‹</button>
+      } aria-label="Page précédente">${ico('prec')}</button>
       <span>${r.page} / ${pages}</span>
       <button class="btn btn-small" type="button" id="rup-next"${
         r.page >= pages ? ' disabled' : ''
-      } aria-label="Page suivante">›</button>
+      } aria-label="Page suivante">${ico('suiv')}</button>
     </span>`;
 
   $('rup-size').addEventListener('change', (event) => {
@@ -17467,7 +17677,7 @@ function renderRupturePanneau() {
         d.commandesImpactees > 1 && d.article?.sku
           ? `<button class="linkish" type="button" id="rup-meme-sku">Voir les ${
               d.commandesImpactees
-            } commandes concernées →</button>`
+            } commandes concernées</button>`
           : ''
       }
     </div>

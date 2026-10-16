@@ -9,7 +9,7 @@ import test from 'node:test';
  * CE QUE CES TESTS PROTÈGENT. L'outil se servait au doigt comme un site
  * d'ordinateur rétréci : un message touché s'ouvrait sous toute la liste,
  * hors de l'écran ; le menu dépassait de l'écran et c'était la page derrière
- * qui défilait ; les horloges couvraient tout ; l'en-tête prenait la moitié
+ * qui défilait ; les horloges couvraient tout l'écran ; l'en-tête prenait la moitié
  * de l'écran ; le titre disparaissait sur un iPad en paysage ; les boutons
  * faisaient vingt pixels de haut.
  */
@@ -57,13 +57,15 @@ test('le menu fait la hauteur de l’écran, défile seul, et la page attend', (
   assert.match(telTab, /html:has\(\.backdrop\.open\) \{ overflow: hidden; \}/);
 });
 
-test('les horloges, au téléphone : une feuille compacte qui monte du bas', () => {
-  const feuille = telTab.slice(telTab.indexOf('  .clockpop {'), telTab.indexOf('.clockpop::before'));
+test('les horloges, au téléphone : une rangée de quatre cadrans, en haut', () => {
+  const feuille = telTab.slice(telTab.indexOf('  .clockpop {'), telTab.indexOf('  .clockpop .ckcard {'));
   assert.match(feuille, /position: fixed;/);
-  assert.match(feuille, /bottom: calc\(8px \+ env\(safe-area-inset-bottom\)\);/);
-  assert.match(feuille, /max-height: 75dvh;/);
-  assert.match(feuille, /grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/);
-  assert.match(telTab, /\.clockpop \.montre \{ zoom: 0\.78; \}/);
+  assert.match(feuille, /top: calc\(8px \+ env\(safe-area-inset-top\)\);/);
+  assert.match(feuille, /bottom: auto;/);
+  assert.match(feuille, /grid-template-columns: repeat\(4, minmax\(0, 1fr\)\);/);
+  assert.match(telTab, /\.clockpop \.montre \{ zoom: 0\.74; \}/);
+  // Sur ordinateur aussi, une seule rangée.
+  assert.match(telTab, /\.clockpop \{ flex-wrap: nowrap; touch-action: pan-y; \}/);
 });
 
 test('l’en-tête du téléphone tient sur une ligne, puis la recherche', () => {

@@ -72,7 +72,7 @@ export const STRINGS = {
     'parcel.savedToast': 'Colis {index}/{total} enregistré.',
     'parcel.badPhoto': 'Photo illisible — reprenez-la.',
 
-    'ticket.new': '＋ Nouveau ticket',
+    'ticket.new': 'Nouveau ticket',
     'ticket.order': 'Numéro de commande',
     'ticket.find': 'Chercher',
     'ticket.found': 'Commande {name} trouvée.',
@@ -530,7 +530,7 @@ export const STRINGS = {
     'parcel.savedToast': 'Parcel {index}/{total} saved.',
     'parcel.badPhoto': 'Unreadable photo — take it again.',
 
-    'ticket.new': '＋ New ticket',
+    'ticket.new': 'New ticket',
     'ticket.order': 'Order number',
     'ticket.find': 'Search',
     'ticket.found': 'Order {name} found.',
@@ -988,7 +988,7 @@ export const STRINGS = {
     'parcel.savedToast': '包裹 {index}/{total} 已保存。',
     'parcel.badPhoto': '照片无法识别，请重拍。',
 
-    'ticket.new': '＋ 新建工单',
+    'ticket.new': '新建工单',
     'ticket.order': '订单号',
     'ticket.find': '搜索',
     'ticket.found': '已找到订单 {name}。',
