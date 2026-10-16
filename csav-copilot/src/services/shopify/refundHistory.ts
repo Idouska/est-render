@@ -137,3 +137,219 @@ export async function fetchShopRefunds(
 
   return found;
 }
+
+/* ------------------------------------------------------------------------ */
+
+/**
+ * Les remboursements d'une période, avec leurs articles — pour les
+ * statistiques.
+ *
+ * La liste ci-dessus ne lit qu'un montant et une note par remboursement :
+ * assez pour rapprocher une caisse, pas pour dire quels produits reviennent.
+ * Ici chaque remboursement porte ses lignes remboursées, et chaque commande
+ * ses premiers articles : un remboursement fait sans préciser d'article se
+ * rattache à la commande entière, ou à son article unique.
+ *
+ * Les commandes sont lues par date de mise à jour : un remboursement met la
+ * commande à jour, alors qu'une commande de janvier remboursée en mars ne
+ * serait pas « créée » en mars.
+ *
+ * Shopify refuse une requête dont le coût dépasse 1 000 points, et ne publie
+ * pas la formule exacte : la page rétrécit de moitié tant qu'il la trouve
+ * trop chère, et on attend quand il demande d'attendre. Au-delà du temps ou
+ * des pages accordés, le résultat est marqué partiel plutôt que faux.
+ */
+export interface LigneRemboursee {
+  title: string;
+  variantTitle: string | null;
+  quantity: number;
+  amount: number | null;
+  image: string | null;
+}
+
+export interface RemboursementDetaille {
+  id: string;
+  shopifyOrderId: string;
+  orderName: string;
+  orderTotal: number;
+  createdAt: string;
+  amount: number;
+  currency: string;
+  note: string | null;
+  lignes: LigneRemboursee[];
+  lignesCommande: LigneRemboursee[];
+}
+
+const QUERY_DETAILS = /* GraphQL */ `
+  query RefundStats($query: String!, $cursor: String, $first: Int!) {
+    orders(first: $first, after: $cursor, query: $query, sortKey: UPDATED_AT, reverse: true) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      nodes {
+        id
+        name
+        totalPriceSet {
+          shopMoney {
+            amount
+          }
+        }
+        lineItems(first: 5) {
+          nodes {
+            title
+            variantTitle
+            quantity
+            discountedTotalSet {
+              shopMoney {
+                amount
+              }
+            }
+            image {
+              url
+            }
+          }
+        }
+        refunds(first: 5) {
+          id
+          createdAt
+          note
+          totalRefundedSet {
+            shopMoney {
+              amount
+              currencyCode
+            }
+          }
+          refundLineItems(first: 5) {
+            nodes {
+              quantity
+              subtotalSet {
+                shopMoney {
+                  amount
+                }
+              }
+              lineItem {
+                title
+                variantTitle
+                image {
+                  url
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
+interface RawLigne {
+  title: string;
+  variantTitle: string | null;
+  quantity: number;
+  discountedTotalSet?: { shopMoney: { amount: string } } | null;
+  image: { url: string } | null;
+}
+
+interface RawOrderDetaille {
+  id: string;
+  name: string;
+  totalPriceSet: { shopMoney: { amount: string } } | null;
+  lineItems: { nodes: RawLigne[] } | null;
+  refunds: Array<{
+    id: string;
+    createdAt: string;
+    note: string | null;
+    totalRefundedSet: { shopMoney: { amount: string; currencyCode: string } };
+    refundLineItems: {
+      nodes: Array<{
+        quantity: number;
+        subtotalSet: { shopMoney: { amount: string } } | null;
+        lineItem: { title: string; variantTitle: string | null; image: { url: string } | null } | null;
+      }>;
+    } | null;
+  }> | null;
+}
+
+const attendre = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function codesErreur(error: unknown): string[] {
+  const details = (error as { details?: unknown })?.details;
+  const codes = Array.isArray(details)
+    ? details.map((e: { extensions?: { code?: string } }) => e?.extensions?.code ?? '')
+    : [];
+  return [...codes, String((error as Error)?.message ?? '')];
+}
+
+export async function fetchRefundDetails(
+  client: ShopifyClient,
+  depuis: Date,
+  { pagesMax = 20, delaiMax = 25_000 }: { pagesMax?: number; delaiMax?: number } = {},
+): Promise<{ remboursements: RemboursementDetaille[]; partiel: boolean }> {
+  const query = `updated_at:>=${depuis.toISOString().slice(0, 10)} AND (financial_status:refunded OR financial_status:partially_refunded)`;
+  const debut = Date.now();
+  const remboursements: RemboursementDetaille[] = [];
+  let cursor: string | null = null;
+  let first = 25;
+  let pages = 0;
+  let essais = 0;
+
+  for (;;) {
+    if (pages >= pagesMax || Date.now() - debut > delaiMax) return { remboursements, partiel: true };
+
+    let data: { orders: { pageInfo: { hasNextPage: boolean; endCursor: string | null }; nodes: RawOrderDetaille[] } };
+    try {
+      data = await client.request(QUERY_DETAILS, { query, cursor, first });
+    } catch (error) {
+      const codes = codesErreur(error).join(' ');
+      if (/MAX_COST_EXCEEDED|exceeds the single query max cost/i.test(codes) && first > 2) {
+        first = Math.max(2, Math.floor(first / 2));
+        continue;
+      }
+      if (/THROTTLED|throttled/i.test(codes) && essais < 4) {
+        essais += 1;
+        await attendre(1500 * essais);
+        continue;
+      }
+      throw error;
+    }
+    essais = 0;
+    pages += 1;
+
+    for (const order of data.orders.nodes) {
+      const lignesCommande = (order.lineItems?.nodes ?? []).map((ligne) => ({
+        title: ligne.title,
+        variantTitle: ligne.variantTitle,
+        quantity: ligne.quantity,
+        amount: ligne.discountedTotalSet ? Number(ligne.discountedTotalSet.shopMoney.amount) : null,
+        image: ligne.image?.url ?? null,
+      }));
+      for (const refund of order.refunds ?? []) {
+        if (new Date(refund.createdAt) < depuis) continue;
+        remboursements.push({
+          id: refund.id,
+          shopifyOrderId: order.id,
+          orderName: order.name,
+          orderTotal: Number(order.totalPriceSet?.shopMoney.amount ?? 0),
+          createdAt: refund.createdAt,
+          amount: Number(refund.totalRefundedSet.shopMoney.amount),
+          currency: refund.totalRefundedSet.shopMoney.currencyCode,
+          note: refund.note?.trim() || null,
+          lignes: (refund.refundLineItems?.nodes ?? [])
+            .filter((ligne) => ligne.lineItem)
+            .map((ligne) => ({
+              title: ligne.lineItem!.title,
+              variantTitle: ligne.lineItem!.variantTitle,
+              quantity: ligne.quantity,
+              amount: ligne.subtotalSet ? Number(ligne.subtotalSet.shopMoney.amount) : null,
+              image: ligne.lineItem!.image?.url ?? null,
+            })),
+          lignesCommande,
+        });
+      }
+    }
+
+    if (!data.orders.pageInfo.hasNextPage) return { remboursements, partiel: false };
+    cursor = data.orders.pageInfo.endCursor;
+  }
+}

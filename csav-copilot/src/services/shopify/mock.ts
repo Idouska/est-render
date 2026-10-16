@@ -363,6 +363,72 @@ function runSearch(query: string): MockOrder[] {
   return [...result].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
+/*
+ * Un an de remboursements fictifs, pour les statistiques : des motifs variés
+ * (dont des notes vides, comme dans une vraie boutique), des remboursements
+ * avec et sans articles précisés, des partiels. Déterministe : un graphique
+ * de démonstration qui change à chaque appel ferait douter du vrai.
+ */
+const PRODUITS_FICTIFS: Array<[string, Array<string | null>, number]> = [
+  ['Lampe Perce-neige', ['Laiton', 'Noir'], 89],
+  ['Applique Halo', ['Noir mat', 'Laiton'], 74],
+  ['Lampe Rosée', ['Verre soufflé'], 96],
+  ['Suspension Brume', ['Opaline', 'Fumé'], 89.9],
+  ['Lampadaire Sillage', ['Chêne', 'Noyer'], 156],
+  ['Ampoule E27 ambrée 4 W', [null], 14.5],
+];
+const NOTES_FICTIVES = [
+  'Article endommagé à la réception',
+  'Colis perdu par le transporteur',
+  'Erreur de préparation',
+  'Geste commercial',
+  'Retour reçu et accepté',
+  '',
+  'Article endommagé à la réception',
+  '',
+  'Le client a changé d’avis',
+];
+
+function remboursementsFictifs() {
+  return Array.from({ length: 72 }, (_, i) => {
+    const [titre, variantes, prix] = PRODUITS_FICTIFS[(i * 7 + (i >> 2)) % PRODUITS_FICTIFS.length]!;
+    const quantite = i % 5 === 0 ? 2 : 1;
+    const totalLigne = Math.round(prix * quantite * 100) / 100;
+    const partiel = i % 4 === 0;
+    const montant = partiel ? Math.round(totalLigne * 30) / 100 : totalLigne;
+    const date = new Date(Date.now() - (((i * 37) % 360) + 1) * 86_400_000 - (i % 24) * 3_600_000);
+    const ligne = {
+      title: titre,
+      variantTitle: variantes[i % variantes.length] ?? null,
+      quantity: quantite,
+      discountedTotalSet: { shopMoney: { amount: totalLigne.toFixed(2) } },
+      image: null,
+    };
+    return {
+      id: `gid://shopify/Order/2${1000 + i}`,
+      name: `#2${1000 + i}`,
+      totalPriceSet: { shopMoney: { amount: totalLigne.toFixed(2) } },
+      lineItems: { nodes: [ligne] },
+      refunds: [
+        {
+          id: `gid://shopify/Refund/7${1000 + i}`,
+          createdAt: date.toISOString(),
+          note: NOTES_FICTIVES[i % NOTES_FICTIVES.length] || null,
+          totalRefundedSet: { shopMoney: { amount: montant.toFixed(2), currencyCode: 'EUR' } },
+          // Un sur trois sans article précisé, comme un remboursement fait
+          // d'un montant dans l'administration.
+          refundLineItems: {
+            nodes:
+              i % 3 === 1 || partiel
+                ? []
+                : [{ quantity: quantite, subtotalSet: { shopMoney: { amount: totalLigne.toFixed(2) } }, lineItem: ligne }],
+          },
+        },
+      ],
+    };
+  });
+}
+
 export function createMockShopifyClient(shopDomain: string): ShopifyClient {
   const refunds = new Map<string, string>();
 
@@ -570,6 +636,14 @@ export function createMockShopifyClient(shopDomain: string): ShopifyClient {
             },
           },
         } as T;
+      }
+
+      if (query.includes('query RefundStats')) {
+        const depuis = String(variables?.query ?? '').match(/updated_at:>=(\d{4}-\d{2}-\d{2})/)?.[1];
+        const nodes = remboursementsFictifs().filter(
+          (commande) => !depuis || commande.refunds[0]!.createdAt.slice(0, 10) >= depuis,
+        );
+        return { orders: { pageInfo: { hasNextPage: false, endCursor: null }, nodes } } as T;
       }
 
       if (query.includes('query RefundHistory')) {

@@ -14489,3 +14489,256 @@ progress { accent-color: var(--accent); }
   .cmd-ligne { padding-top: 11px; padding-bottom: 11px; }
   .fc-geste { padding: 11px 4px 10px; }
 }
+
+/* ==========================================================================
+   STATISTIQUES DES REMBOURSEMENTS
+   ==========================================================================
+
+   D'après la maquette du même nom. Deux vues sur la page : les chiffres et
+   la liste de toujours, sous une même période. Le total en grand, puis la
+   part du chiffre d'affaires, le montant moyen et les demandes reçues ; le
+   montant par semaine (une série, une teinte, pas de légende) ; les raisons
+   triées ; les produits les plus remboursés et leur raison principale. */
+
+.rmb-entete { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.rmb-onglets {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+.rmb-onglets button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.rmb-onglets button[aria-selected="true"],
+.rmb-onglets button[aria-pressed="true"] {
+  background: var(--surface);
+  font-weight: 600;
+  box-shadow: 0 0 0 0.5px rgb(0 0 0 / 12%), 0 1px 2px rgb(0 0 0 / 12%);
+}
+[data-theme="dark"] .rmb-onglets button[aria-selected="true"],
+[data-theme="dark"] .rmb-onglets button[aria-pressed="true"] { background: color-mix(in srgb, var(--ink) 16%, var(--surface)); }
+.rmb-onglets button:focus-visible { outline: none; box-shadow: var(--mac-halo); }
+.rmb-petit button { height: 22px; padding: 0 9px; font-size: 12px; }
+
+.rmb-stats { display: flex; flex-direction: column; gap: 13px; }
+.rmb-stats.rmb-charge > * { opacity: 0.55; transition: opacity 0.15s; }
+.rmb-vide { margin: 60px 0; text-align: center; color: var(--ink-mute); }
+
+.rmb-tuiles { display: grid; grid-template-columns: 1.4fr repeat(3, minmax(0, 1fr)); gap: 12px; }
+.rmb-tuile,
+.rmb-carte {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  background: var(--surface);
+}
+.rmb-tuile { display: flex; flex-direction: column; padding: 14px 18px 16px; }
+.rmb-t { font-size: 12.5px; font-weight: 600; color: var(--ink-mute); }
+.rmb-v { margin-top: 6px; font-size: 26px; font-weight: 650; letter-spacing: -0.01em; }
+.rmb-s { margin-top: auto; padding-top: 4px; font-size: 12.5px; color: var(--ink-soft); }
+/* Le total : la seule grande valeur de l'écran. */
+.rmb-heros .rmb-v { margin-top: 2px; font-size: 40px; font-weight: 700; letter-spacing: -0.02em; }
+
+.rmb-carte { padding: 14px 18px; }
+.rmb-carte-tete { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.rmb-carte-tete h2 { margin: 0; font-size: 14px; font-weight: 650; }
+.rmb-raisons .rmb-carte-tete h2,
+.rmb-produits .rmb-carte-tete h2 { flex: 1; }
+.rmb-aide { font-size: 12px; color: var(--ink-mute); }
+
+/* Montant par semaine : barres de 24 px au plus, bout arrondi, filets fins. */
+.rmb-graphe { position: relative; height: 180px; margin: 16px 0 0 52px; }
+.rmb-grille span { position: absolute; left: 0; right: 0; border-top: 1px solid var(--line); }
+.rmb-grille em {
+  position: absolute;
+  left: -52px;
+  top: -8px;
+  width: 44px;
+  font-size: 11px;
+  font-style: normal;
+  color: var(--ink-mute);
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.rmb-barres {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(var(--n), minmax(0, 1fr));
+  align-items: end;
+}
+.rmb-col {
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.rmb-col:focus-visible { outline: none; }
+.rmb-col:focus-visible .rmb-barre { box-shadow: var(--mac-halo); }
+.rmb-barre { width: min(24px, 62%); border-radius: 4px 4px 0 0; background: var(--accent); }
+.rmb-col:hover .rmb-barre,
+.rmb-col.on .rmb-barre { background: color-mix(in srgb, var(--accent) 78%, var(--ink)); }
+.rmb-bulle {
+  position: absolute;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  width: max-content;
+  max-width: 220px;
+  padding: 7px 10px;
+  border-radius: 9px;
+  background: var(--verre);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 0 0 0.5px var(--verre-bord), 0 10px 24px -8px rgb(0 0 0 / 30%);
+  font-size: 12px;
+  pointer-events: none;
+}
+.rmb-bulle span { color: var(--ink-soft); }
+.rmb-axe {
+  display: grid;
+  grid-template-columns: repeat(var(--n), minmax(0, 1fr));
+  margin: 6px 0 0 52px;
+  font-size: 11px;
+  color: var(--ink-mute);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.rmb-duo { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 12px; align-items: start; }
+
+/* Raisons : triées, une teinte, la valeur au bout de la barre. */
+.rmb-constat { margin: 6px 0 10px; font-size: 12.5px; color: var(--ink-soft); }
+.rmb-raison {
+  display: grid;
+  grid-template-columns: minmax(110px, 196px) minmax(40px, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 30px;
+}
+.rmb-raison-nom { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rmb-piste { height: 12px; border-radius: 0 4px 4px 0; background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.rmb-piste i { display: block; height: 100%; border-radius: 0 4px 4px 0; background: var(--accent); }
+.rmb-raison-val { min-width: 92px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rmb-raison-val b { font-weight: 600; }
+.rmb-raison-val span { color: var(--ink-mute); }
+
+/* Produits : la raison principale dit quoi corriger. */
+.rmb-lien { padding: 0; border: 0; background: none; color: var(--accent-ink); font: inherit; font-size: 12.5px; cursor: pointer; }
+.rmb-lien:hover { text-decoration: underline; }
+.rmb-prod {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 56px 92px minmax(0, 170px);
+  align-items: center;
+  gap: 10px;
+  min-height: 50px;
+  padding: 0 8px;
+}
+.rmb-prod-tete {
+  min-height: 0;
+  margin-top: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-mute);
+}
+.rmb-prod-tete span:nth-child(2),
+.rmb-prod-tete span:nth-child(3) { text-align: right; }
+.rmb-prod-nom { min-width: 0; display: flex; align-items: center; gap: 10px; }
+.rmb-prod-nom img,
+.rmb-vignette {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--inset);
+  box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 8%);
+}
+.rmb-prod-txt { min-width: 0; display: flex; flex-direction: column; }
+.rmb-prod-txt b,
+.rmb-prod-txt span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rmb-prod-txt b { font-weight: 600; }
+.rmb-prod-txt span { font-size: 12px; color: var(--ink-mute); }
+.rmb-prod-n,
+.rmb-prod-m { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rmb-prod-m { font-weight: 500; }
+.rmb-unite { display: none; }
+.rmb-prod-r { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rmb-prod-r span { color: var(--ink-mute); }
+.rmb-reste { margin: 6px 8px 2px; font-size: 12px; color: var(--ink-mute); }
+.rmb-vide-petit { margin: 16px 0 8px; color: var(--ink-mute); }
+.rmb-rien { padding: 40px 18px; text-align: center; color: var(--ink-mute); }
+.rmb-note { margin: 0 4px; font-size: 12px; color: var(--ink-mute); }
+
+@media (max-width: 1180px) {
+  .rmb-duo { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 900px) {
+  .rmb-tuiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .rmb-heros { grid-column: 1 / -1; }
+}
+/* Au téléphone : la période en pleine largeur, les tuiles serrées, les
+   raisons et les produits en lignes d'iPhone. */
+@media (max-width: 760px) {
+  .rmb-entete { flex-direction: column; align-items: stretch; }
+  .rmb-entete > .rmb-onglets { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
+  .rmb-entete > .rmb-onglets button { padding: 0 4px; }
+  .rmb-tuiles { gap: 8px; }
+  .rmb-tuile { padding: 10px 10px 11px; border-radius: 12px; }
+  .rmb-t,
+  .rmb-s { font-size: 12px; }
+  .rmb-v { margin-top: 3px; font-size: 20px; }
+  .rmb-heros { padding: 14px 16px 16px; }
+  .rmb-heros .rmb-v { font-size: 36px; }
+  .rmb-carte { padding: 12px 14px; border-radius: 12px; }
+  .rmb-aide { display: none; }
+  .rmb-graphe { height: 140px; margin-left: 40px; }
+  .rmb-grille em { left: -40px; width: 34px; }
+  .rmb-axe { margin-left: 40px; }
+  .rmb-axe .rmb-axe-pair { visibility: hidden; }
+  .rmb-barre { width: min(14px, 62%); }
+  .rmb-raison {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "nom val" "piste piste";
+    row-gap: 5px;
+    padding: 6px 0;
+  }
+  .rmb-raison-nom { grid-area: nom; }
+  .rmb-piste { grid-area: piste; height: 8px; }
+  .rmb-raison-val { grid-area: val; min-width: 0; }
+  .rmb-prod-tete { display: none; }
+  .rmb-prod {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "nom m" "r n";
+    row-gap: 2px;
+    padding: 8px 0;
+  }
+  .rmb-prod + .rmb-prod { border-top: 1px solid var(--line-soft); }
+  .rmb-prod-nom { grid-area: nom; }
+  .rmb-prod-m { grid-area: m; }
+  .rmb-prod-n { grid-area: n; font-size: 12.5px; color: var(--ink-mute); }
+  .rmb-unite { display: inline; }
+  .rmb-prod-r { grid-area: r; padding-left: 44px; font-size: 12.5px; color: var(--ink-mute); }
+}

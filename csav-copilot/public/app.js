@@ -9708,6 +9708,7 @@ async function loadRefunds() {
         button.setAttribute('aria-pressed', String(Number(button.dataset.days) === refundDays)),
       );
     state.refundRows = refunds;
+    $('refunds-n').textContent = refunds.length ? String(refunds.length) : '';
 
     const pending = totals.PENDING ?? { count: 0, amount: 0 };
     const done = totals.COMPLETED ?? { count: 0, amount: 0 };
@@ -12619,7 +12620,7 @@ const VIEW_LOADERS = {
   envoi: () => loadEnvoi(),
   returns: () => loadReturns(),
   tracking: () => loadTracking(),
-  refunds: () => loadRefunds(),
+  refunds: () => chargerVueRemboursements(),
   disputes: () => loadDisputes(),
   team: () => loadTeam(),
   stats: () => loadStats(),
@@ -12700,6 +12701,7 @@ function setView(view) {
   if (view !== 'tickets') fermerMessagePile();
   if (view !== 'orders') fermerFichePile();
   if (view === 'orders') afficherSousCommandes();
+  if (view === 'refunds') afficherSousRemboursements();
 
   renderNav();
 
@@ -17283,7 +17285,365 @@ $('refunds-range')?.addEventListener('click', (event) => {
   const button = event.target.closest('[data-days]');
   if (!button) return;
   refundDays = Number(button.dataset.days);
-  void loadRefunds();
+  chargerVueRemboursements();
+});
+
+/* ----------------------------------------- remboursements : statistiques */
+
+/*
+ * Deux vues sur la même page : les chiffres — combien, pourquoi, sur quels
+ * produits — et la liste de toujours. La période vaut pour les deux. Le
+ * choix de la vue est gardé : qui vient pour les chiffres y revient.
+ */
+let vueRemboursements = (() => {
+  try {
+    return localStorage.getItem('csav.remb.vue') === 'liste' ? 'liste' : 'stats';
+  } catch {
+    return 'stats';
+  }
+})();
+let mesureRaisons = 'montant';
+let tousLesProduits = false;
+let statsRemb = null;
+let seqStatsRemb = 0;
+
+const PERIODES_REMB = { 30: '30 jours', 90: '90 jours', 180: '6 mois', 365: '12 mois' };
+
+function chargerVueRemboursements() {
+  const stats = vueRemboursements === 'stats';
+  $('refunds-stats').hidden = !stats;
+  $('refunds-liste').hidden = stats;
+  $('refunds-vue')
+    .querySelectorAll('[data-vue]')
+    .forEach((onglet) => onglet.setAttribute('aria-selected', String(onglet.dataset.vue === vueRemboursements)));
+  $('refunds-range')
+    .querySelectorAll('[data-days]')
+    .forEach((bouton) => bouton.setAttribute('aria-pressed', String(Number(bouton.dataset.days) === refundDays)));
+  if (stats) void chargerStatsRemboursements();
+  else void loadRefunds();
+}
+
+$('refunds-vue').addEventListener('click', (event) => {
+  const onglet = event.target.closest('[data-vue]');
+  if (!onglet || onglet.dataset.vue === vueRemboursements) return;
+  vueRemboursements = onglet.dataset.vue;
+  try {
+    localStorage.setItem('csav.remb.vue', vueRemboursements);
+  } catch {
+    /* un navigateur sans stockage garde le choix le temps de la page */
+  }
+  chargerVueRemboursements();
+});
+
+/**
+ * Les statistiques de la période. Celles déjà affichées restent à
+ * demi-teinte pendant le calcul : un écran qui se vide à chaque clic de
+ * période clignote, et le calcul sur un an prend quelques secondes.
+ */
+async function chargerStatsRemboursements() {
+  const zone = $('refunds-stats');
+  const jours = refundDays;
+  const seq = ++seqStatsRemb;
+  if (statsRemb?.jours === jours) renderStatsRemboursements();
+  else if (statsRemb) zone.classList.add('rmb-charge');
+  else zone.innerHTML = '<p class="rmb-vide">Calcul des statistiques…</p>';
+
+  try {
+    const data = await api(`/api/refunds/stats?days=${jours}`);
+    if (seq !== seqStatsRemb) return;
+    statsRemb = { jours, data };
+    renderStatsRemboursements();
+  } catch (error) {
+    if (seq !== seqStatsRemb) return;
+    zone.innerHTML = `<p class="rmb-vide">${esc(error.message)}</p>`;
+  } finally {
+    if (seq === seqStatsRemb) zone.classList.remove('rmb-charge');
+  }
+}
+
+/** Sous le titre : le total, la première chose qu'on cherche. */
+function afficherSousRemboursements() {
+  const sous = $('view-sub');
+  const d = statsRemb?.data;
+  if (!sous || !d || state.view !== 'refunds') return;
+  sous.textContent = `${euro(d.total.montant, d.devise)} remboursés en ${PERIODES_REMB[d.jours] ?? `${d.jours} jours`}`;
+  sous.hidden = false;
+}
+
+/** Un pas d'axe rond — 1, 2, 2,5 ou 5 fois une puissance de dix. */
+function pasRond(valeur) {
+  if (!(valeur > 0)) return 1;
+  const puissance = 10 ** Math.floor(Math.log10(valeur));
+  return [1, 2, 2.5, 5, 10].map((m) => m * puissance).find((pas) => pas >= valeur);
+}
+
+/* « Un remboursement sur trois » se lit mieux que « 34 % ». */
+function fractionLisible(part) {
+  if (part >= 0.9) return 'presque tous les remboursements';
+  if (part >= 0.6) return 'plus d’un remboursement sur deux';
+  if (part >= 0.45) return 'un remboursement sur deux';
+  if (part >= 0.3) return 'un remboursement sur trois';
+  if (part >= 0.22) return 'un remboursement sur quatre';
+  return `${Math.round(part * 100)} % des remboursements`;
+}
+
+function grapheRemboursements(d) {
+  const points = d.serie.points;
+  const semaine = d.serie.pas === 'semaine';
+  const max = Math.max(0, ...points.map((p) => p.montant));
+  const pas = pasRond(max / 4);
+  const haut = Math.max(pas, pas * Math.ceil(max / pas));
+  const graduations = [];
+  for (let t = 0; t <= haut + 1e-9; t += pas) graduations.push(t);
+  const compact = new Intl.NumberFormat('fr-FR', {
+    style: 'currency',
+    currency: d.devise,
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  });
+  const libelle = (p) =>
+    new Date(p.debut).toLocaleDateString(
+      'fr-FR',
+      semaine ? { day: 'numeric', month: 'short', timeZone: 'UTC' } : { month: 'short', year: '2-digit', timeZone: 'UTC' },
+    );
+  const titre = (p) => (semaine ? `Semaine du ${libelle(p)}` : libelle(p));
+  // Sept étiquettes au plus sous l'axe : au-delà, elles se chevauchent.
+  const saut = Math.ceil(points.length / 7);
+
+  return `<section class="rmb-carte rmb-serie">
+    <div class="rmb-carte-tete"><h2>Montant remboursé par ${semaine ? 'semaine' : 'mois'}</h2>
+      <span class="rmb-aide">Survolez ou touchez une barre pour le détail</span></div>
+    <div class="rmb-graphe">
+      <div class="rmb-grille" aria-hidden="true">${graduations
+        .map((t) => `<span style="bottom: ${(t / haut) * 100}%"><em>${esc(compact.format(t))}</em></span>`)
+        .join('')}</div>
+      <div class="rmb-barres" style="--n: ${points.length}">${points
+        .map(
+          (p, i) => `<button type="button" class="rmb-col" data-i="${i}"
+            data-titre="${esc(titre(p))}" data-detail="${esc(
+              `${euro(p.montant, d.devise)} · ${p.nombre} remboursement${p.nombre > 1 ? 's' : ''}`,
+            )}" aria-label="${esc(titre(p))} : ${esc(euro(p.montant, d.devise))}, ${p.nombre} remboursement${
+              p.nombre > 1 ? 's' : ''
+            }"><i class="rmb-barre" style="height: ${(p.montant / haut) * 100}%"></i></button>`,
+        )
+        .join('')}</div>
+      <div class="rmb-bulle" hidden></div>
+    </div>
+    <div class="rmb-axe" style="--n: ${points.length}" aria-hidden="true">${points
+      // Une étiquette sur deux s'efface sur petit écran (voir la feuille de style).
+      .map((p, i) =>
+        i % saut === 0
+          ? `<span${(i / saut) % 2 ? ' class="rmb-axe-pair"' : ''}>${esc(libelle(p))}</span>`
+          : '<span></span>',
+      )
+      .join('')}</div>
+  </section>`;
+}
+
+function renderStatsRemboursements() {
+  const zone = $('refunds-stats');
+  const d = statsRemb?.data;
+  if (!d) return;
+  afficherSousRemboursements();
+
+  const periode = PERIODES_REMB[d.jours] ?? `${d.jours} jours`;
+  const rond = (n) =>
+    Number(n).toLocaleString('fr-FR', { style: 'currency', currency: d.devise, maximumFractionDigits: 0 });
+  const pluriel = (n, mot) => `${n.toLocaleString('fr-FR')} ${mot}${n > 1 ? 's' : ''}`;
+
+  const evolution =
+    d.evolution != null
+      ? `${Math.round(Math.abs(d.evolution) * 100)} % de ${d.evolution >= 0 ? 'plus' : 'moins'} que les ${periode} précédents`
+      : d.total.nombre
+        ? `aucun sur les ${periode} précédents`
+        : '';
+  const partSous =
+    d.chiffreAffaires != null
+      ? `sur ${rond(d.chiffreAffaires)} de ventes`
+      : d.sources.shopify
+        ? 'trop de commandes pour la calculer ici'
+        : 'Shopify n’a pas répondu';
+
+  const tuiles = `<div class="rmb-tuiles">
+    <div class="rmb-tuile rmb-heros">
+      <span class="rmb-t">Total remboursé</span>
+      <b class="rmb-v">${esc(euro(d.total.montant, d.devise))}</b>
+      <span class="rmb-s">${esc(pluriel(d.total.nombre, 'remboursement'))}${evolution ? ` · ${esc(evolution)}` : ''}</span>
+    </div>
+    <div class="rmb-tuile">
+      <span class="rmb-t">Part du chiffre d’affaires</span>
+      <b class="rmb-v">${d.part == null ? '—' : esc(`${(d.part * 100).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} %`)}</b>
+      <span class="rmb-s">${esc(partSous)}</span>
+    </div>
+    <div class="rmb-tuile">
+      <span class="rmb-t">Montant moyen</span>
+      <b class="rmb-v">${d.moyenne == null ? '—' : esc(euro(d.moyenne, d.devise))}</b>
+      <span class="rmb-s">par remboursement</span>
+    </div>
+    <div class="rmb-tuile">
+      <span class="rmb-t">Demandes reçues par mail</span>
+      <b class="rmb-v">${d.demandes.recues.toLocaleString('fr-FR')}</b>
+      <span class="rmb-s">dont ${d.demandes.remboursees.toLocaleString('fr-FR')} remboursée${d.demandes.remboursees > 1 ? 's' : ''}</span>
+    </div>
+  </div>`;
+
+  const note = [
+    'Comptés : les remboursements faits depuis l’outil et ceux passés dans Shopify. La raison vient du motif choisi au remboursement, ou du dossier de retour ; « Sans motif » quand Shopify n’en a pas.',
+    !d.sources.shopify ? 'Shopify n’a pas répondu : seuls les remboursements faits depuis l’outil sont comptés.' : '',
+    d.sources.partiel ? 'Calculé sur les remboursements les plus récents : la période en compte plus que Shopify n’en sert d’un coup.' : '',
+  ]
+    .filter(Boolean)
+    .map((ligne) => `<p class="rmb-note">${esc(ligne)}</p>`)
+    .join('');
+
+  if (!d.total.nombre) {
+    zone.innerHTML = `${tuiles}<div class="rmb-carte rmb-rien">Aucun remboursement sur les ${esc(periode)}.</div>${note}`;
+    return;
+  }
+
+  // Pourquoi : barres triées, une seule teinte, la valeur au bout.
+  const valeur = (r) => (mesureRaisons === 'montant' ? r.montant : r.nombre);
+  const raisons = [...d.raisons].sort((a, b) => valeur(b) - valeur(a));
+  const plus = valeur(raisons[0]) || 1;
+  const somme = raisons.reduce((total, r) => total + valeur(r), 0) || 1;
+  /*
+   * Une phrase pour ce qui ressort. « Sans motif » n'est pas une raison : on
+   * ne le met en avant que s'il l'emporte vraiment, pour dire qu'il manque
+   * des motifs. Deux raisons à égalité sont nommées ensemble.
+   */
+  const sansMotif = d.raisons.find((r) => r.cle === 'sans');
+  const parNombre = d.raisons.filter((r) => r.cle !== 'sans').sort((a, b) => b.nombre - a.nombre);
+  const [premiere, seconde] = parNombre;
+  let constat = '';
+  const partSans = sansMotif ? sansMotif.nombre / d.total.nombre : 0;
+  if (partSans >= 0.9) {
+    constat = 'Presque aucun remboursement n’a de motif : ils ont été faits dans Shopify sans note.';
+  } else if (partSans >= 0.5) {
+    constat = `${fractionLisible(partSans).replace(/^./, (c) => c.toUpperCase())} n’a pas de motif : fait dans Shopify sans note.`;
+  } else if (premiere && seconde && seconde.nombre === premiere.nombre) {
+    constat = `« ${premiere.libelle} » et « ${seconde.libelle} » reviennent le plus : ${fractionLisible(
+      premiere.nombre / d.total.nombre,
+    )} chacun.`;
+  } else if (premiere) {
+    const produit = d.produits.find((p) => p.raison === premiere.libelle)?.titre;
+    constat = `« ${premiere.libelle} » revient le plus : ${fractionLisible(premiere.nombre / d.total.nombre)}${
+      produit ? `, surtout sur ${produit}` : ''
+    }.`;
+  }
+
+  const blocRaisons = `<section class="rmb-carte rmb-raisons">
+    <div class="rmb-carte-tete"><h2>Raisons</h2>
+      <div class="rmb-onglets rmb-petit" role="tablist" aria-label="Mesure">
+        <button type="button" role="tab" data-mesure="montant" aria-selected="${mesureRaisons === 'montant'}">Montant</button>
+        <button type="button" role="tab" data-mesure="nombre" aria-selected="${mesureRaisons === 'nombre'}">Nombre</button>
+      </div></div>
+    ${constat ? `<p class="rmb-constat">${esc(constat)}</p>` : ''}
+    ${raisons
+      .map(
+        (r) => `<div class="rmb-raison">
+          <span class="rmb-raison-nom">${esc(r.libelle)}</span>
+          <span class="rmb-piste" aria-hidden="true"><i style="width: ${(valeur(r) / plus) * 100}%"></i></span>
+          <span class="rmb-raison-val"><b>${esc(mesureRaisons === 'montant' ? rond(r.montant) : String(r.nombre))}</b>
+            <span>${Math.round((valeur(r) / somme) * 100)} %</span></span>
+        </div>`,
+      )
+      .join('')}
+  </section>`;
+
+  // Quels produits : la raison principale dit quoi corriger.
+  const visibles = tousLesProduits ? d.produits : d.produits.slice(0, 6);
+  const reste = [
+    !tousLesProduits && d.produitsTotal > visibles.length
+      ? `Et ${pluriel(d.produitsTotal - visibles.length, 'autre produit')}.`
+      : '',
+    d.nonAttribues.nombre
+      ? `${pluriel(d.nonAttribues.nombre, 'remboursement')} sans article précisé (${rond(d.nonAttribues.montant)}).`
+      : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+  const blocProduits = `<section class="rmb-carte rmb-produits">
+    <div class="rmb-carte-tete"><h2>Produits les plus remboursés</h2>${
+      d.produits.length > 6
+        ? `<button type="button" class="rmb-lien" data-tous>${tousLesProduits ? 'Voir moins' : 'Tout voir'}</button>`
+        : ''
+    }</div>
+    ${
+      visibles.length
+        ? `<div class="rmb-prod rmb-prod-tete" aria-hidden="true"><span>Produit</span><span>Remb.</span><span>Montant</span><span>Raison principale</span></div>
+          ${visibles
+            .map(
+              (p) => `<div class="rmb-prod">
+                <span class="rmb-prod-nom">${
+                  p.image ? `<img src="${esc(p.image)}" alt="" loading="lazy" />` : '<i class="rmb-vignette" aria-hidden="true"></i>'
+                }<span class="rmb-prod-txt"><b>${esc(p.titre)}</b>${
+                  p.variante ? `<span>Le plus touché : ${esc(p.variante)}</span>` : ''
+                }</span></span>
+                <span class="rmb-prod-n">${p.nombre}<span class="rmb-unite"> remb.</span></span>
+                <span class="rmb-prod-m">${esc(rond(p.montant))}</span>
+                <span class="rmb-prod-r">${p.raison ? `${esc(p.raison)} <span>· ${p.raisonNombre}</span>` : ''}</span>
+              </div>`,
+            )
+            .join('')}`
+        : '<p class="rmb-vide-petit">Aucun article précisé sur ces remboursements.</p>'
+    }
+    ${reste ? `<p class="rmb-reste">${esc(reste)}</p>` : ''}
+  </section>`;
+
+  zone.innerHTML = `${tuiles}${grapheRemboursements(d)}<div class="rmb-duo">${blocRaisons}${blocProduits}</div>${note}`;
+}
+
+/* Le détail d'une barre : au survol à la souris, au toucher, au clavier. */
+function montrerBulleRemb(colonne) {
+  const graphe = colonne.closest('.rmb-graphe');
+  const bulle = graphe?.querySelector('.rmb-bulle');
+  if (!bulle) return;
+  graphe.querySelectorAll('.rmb-col.on').forEach((autre) => autre.classList.remove('on'));
+  colonne.classList.add('on');
+  bulle.innerHTML = `<b>${esc(colonne.dataset.titre)}</b><span>${esc(colonne.dataset.detail)}</span>`;
+  bulle.hidden = false;
+  const cadre = graphe.getBoundingClientRect();
+  const col = colonne.getBoundingClientRect();
+  const barre = colonne.querySelector('.rmb-barre').getBoundingClientRect();
+  const largeur = bulle.offsetWidth;
+  const centre = col.left - cadre.left + col.width / 2;
+  bulle.style.left = `${Math.min(Math.max(centre - largeur / 2, 0), cadre.width - largeur)}px`;
+  bulle.style.bottom = `${cadre.bottom - barre.top + 8}px`;
+}
+
+function cacherBulleRemb(graphe) {
+  graphe?.querySelector('.rmb-bulle')?.setAttribute('hidden', '');
+  graphe?.querySelectorAll('.rmb-col.on').forEach((col) => col.classList.remove('on'));
+}
+
+$('refunds-stats').addEventListener('pointerover', (event) => {
+  const colonne = event.target.closest('.rmb-col');
+  if (colonne && event.pointerType === 'mouse') montrerBulleRemb(colonne);
+});
+$('refunds-stats').addEventListener('pointerout', (event) => {
+  const graphe = event.target.closest('.rmb-graphe');
+  if (graphe && event.pointerType === 'mouse' && !graphe.contains(event.relatedTarget)) cacherBulleRemb(graphe);
+});
+$('refunds-stats').addEventListener('focusin', (event) => {
+  const colonne = event.target.closest('.rmb-col');
+  if (colonne) montrerBulleRemb(colonne);
+});
+$('refunds-stats').addEventListener('click', (event) => {
+  const colonne = event.target.closest('.rmb-col');
+  if (colonne) {
+    montrerBulleRemb(colonne);
+    return;
+  }
+  const mesure = event.target.closest('[data-mesure]');
+  if (mesure) {
+    mesureRaisons = mesure.dataset.mesure;
+    renderStatsRemboursements();
+    return;
+  }
+  if (event.target.closest('[data-tous]')) {
+    tousLesProduits = !tousLesProduits;
+    renderStatsRemboursements();
+  }
 });
 
 /* Essai du fournisseur d'IA. Le seul moyen, sans accès aux journaux, de savoir

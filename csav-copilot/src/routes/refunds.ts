@@ -11,6 +11,7 @@ import { fetchShopRefunds, type ShopRefund } from '../services/shopify/refundHis
 import { getShopifyClient } from '../services/shopify/client.ts';
 import { enModeTest } from '../services/modeTest.ts';
 import { createRefund, getRefundableTransactions } from '../services/shopify/refunds.ts';
+import { oublierStatsRemboursements, statsRemboursements } from '../services/refunds/stats.ts';
 
 const refundBody = z.object({
   ticketId: z.string().optional(),
@@ -151,6 +152,8 @@ export async function refundRoutes(app: FastifyInstance): Promise<void> {
         ipAddress: request.ip,
       });
 
+      // Les statistiques gardées en cache ne comptent pas encore celui-ci.
+      oublierStatsRemboursements(merchantId);
       return reply.send({ id: record.id, shopifyRefundId: refundId, status: 'COMPLETED' });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Erreur inconnue';
@@ -174,6 +177,20 @@ export async function refundRoutes(app: FastifyInstance): Promise<void> {
 
       return reply.code(502).send({ error: `Shopify a refusé le remboursement : ${message}` });
     }
+  });
+
+  /*
+   * Les statistiques : combien, pourquoi, sur quels produits. Même fenêtre
+   * que la liste, de 7 jours à un an.
+   */
+  app.get('/api/refunds/stats', async (request, reply) => {
+    const fenetre = z
+      .object({ days: z.coerce.number().int().min(7).max(365).default(90) })
+      .safeParse(request.query);
+    if (!fenetre.success) return reply.code(400).send({ error: 'Période invalide' });
+    return reply.send(
+      await statsRemboursements(request.session.merchantId, fenetre.data.days, { journal: request.log }),
+    );
   });
 
   app.get('/api/refunds', async (request, reply) => {
