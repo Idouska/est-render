@@ -30,6 +30,8 @@ import { lotsRecents } from '../services/envoi/lots.ts';
 import { chronologie } from '../services/suppliers/historique.ts';
 
 const TRENTE_JOURS = 30 * 24 * 60 * 60 * 1000;
+/** Photos jointes à un signalement : assez pour montrer un défaut sous trois angles. */
+const PHOTOS_SIGNALEMENT_MAX = 4;
 const ADRESSE_WEB_ATELIER = /:\/\/|^www\./i;
 
 /**
@@ -1796,6 +1798,8 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
    */
   app.post<{ Params: { id: string }; Querystring: { token?: string } }>(
     '/api/workspace/:id/issues',
+    // Quatre photos au plus, déjà réduites dans le navigateur.
+    { bodyLimit: PHOTOS_SIGNALEMENT_MAX * 3 * 1024 * 1024 + 64 * 1024 },
     async (request, reply) => {
       const workspace = await authorize(request, reply);
       if (!workspace) return;
@@ -1821,6 +1825,13 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
           size: z.string().max(40).nullish(),
           sku: z.string().max(80).nullish(),
           quantity: z.number().int().min(1).max(999).nullish(),
+          /*
+           * Les photos d'un article abîmé. Une semelle décollée se voit d'un
+           * coup d'œil sur une photo, et c'est elle qui décide du
+           * remboursement ; décrite en une phrase, elle appelle un aller-retour
+           * avec l'atelier pour la demander.
+           */
+          photos: z.array(photoSchema).max(PHOTOS_SIGNALEMENT_MAX).nullish(),
         })
         .safeParse(request.body);
 
@@ -1858,7 +1869,7 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
         select: { id: true, subject: true },
       });
 
-      await prisma.message.create({
+      const message = await prisma.message.create({
         data: {
           merchantId: workspace.merchantId,
           ticketId: ticket.id,
@@ -1891,7 +1902,25 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
             .replace(/\n{3,}/g, '\n\n'),
           receivedAt: new Date(),
         },
+        select: { id: true },
       });
+
+      /* Les photos, en pièces jointes du message : le SAV les montre déjà sous
+         chaque message, en vignettes. Aucun mail derrière — le contenu est en
+         base (`Attachment.data`), comme celui des photos d'étiquettes. */
+      const photos = (parsed.data.photos ?? []).map(decodePhoto);
+      if (photos.length) {
+        await prisma.attachment.createMany({
+          data: photos.map((photo, i) => ({
+            merchantId: workspace.merchantId,
+            messageId: message.id,
+            filename: `photo-${i + 1}.${photo.mime.split('/')[1] === 'jpeg' ? 'jpg' : photo.mime.split('/')[1]}`,
+            mimeType: photo.mime,
+            size: photo.data.byteLength,
+            data: photo.data,
+          })),
+        });
+      }
 
       await recordAudit({
         merchantId: workspace.merchantId,
@@ -1900,7 +1929,7 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
         action: 'supplier.issue_reported',
         targetType: 'Ticket',
         targetId: ticket.id,
-        metadata: { kind: parsed.data.kind, orderName: parsed.data.orderName },
+        metadata: { kind: parsed.data.kind, orderName: parsed.data.orderName, photos: photos.length },
         ipAddress: request.ip,
       });
 
