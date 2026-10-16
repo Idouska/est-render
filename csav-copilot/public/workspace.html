@@ -421,39 +421,73 @@
       <option value="GLS"></option>
     </datalist>
 
+    <!-- Signaler un problème.
+
+         La commande se montre une fois, en fiche qu'on reconnaît ; la
+         recherche part pendant qu'on tape. Le problème se choisit d'un geste,
+         parmi cinq tuiles. Ce que la commande sait déjà s'affiche selon le
+         problème : le numéro, l'adresse, les articles à toucher. Le détail est
+         requis, et le bouton l'attend. Au téléphone, une feuille d'iOS :
+         Annuler et Envoyer en haut. -->
     <div class="modal-wrap" id="issue-modal">
-      <div class="modal">
-        <div class="modal-head">
-          <h2 data-t="issue.title">Signaler un problème</h2>
-          <p id="issue-order"></p>
+      <div class="modal sig" role="dialog" aria-modal="true" aria-labelledby="issue-title">
+        <div class="sig-barre">
+          <button class="sig-lien" type="button" id="issue-cancel-top" data-t="issue.cancel">Annuler</button>
+          <b data-t="issue.title">Signaler un problème</b>
+          <button class="sig-lien sig-envoyer" type="button" id="issue-send-top" data-t="issue.sendShort" disabled>Envoyer</button>
         </div>
-        <div class="modal-body">
-          <!-- « Nouveau ticket » : la commande se retrouve par son numéro.
-               Depuis une ligne de commande, elle est déjà connue. -->
-          <div class="field" id="issue-find" hidden>
-            <span data-t="ticket.order">Numéro de commande</span>
-            <div class="field-row">
-              <input id="issue-num" type="text" placeholder="#10480" autocomplete="off" />
-              <button class="btn" type="button" id="issue-find-btn" data-t="ticket.find">Chercher</button>
+        <div class="modal-head sig-tete">
+          <h2 id="issue-title" data-t="issue.title">Signaler un problème</h2>
+          <p data-t="issue.lead">Le marchand le reçoit dans son SAV, avec la commande.</p>
+        </div>
+        <div class="modal-body sig-corps">
+          <section class="sig-bloc">
+            <p class="sig-titre" data-t="issue.orderLabel">Commande</p>
+            <div class="sig-fiche" id="issue-fiche" hidden></div>
+            <!-- « Nouveau ticket » : la commande se retrouve par son numéro.
+                 Depuis une ligne de commande, elle est déjà connue. -->
+            <div class="sig-cherche" id="issue-find" hidden>
+              <label class="sig-champ">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M10.5 17a6.5 6.5 0 1 0 0-13a6.5 6.5 0 1 0 0 13M15.5 15.5 20 20" /></svg>
+                <input id="issue-num" type="search" placeholder="#10480" autocomplete="off" enterkeyhint="search"
+                  data-ttl="ticket.order" />
+              </label>
+              <div class="sig-res" id="issue-find-res" aria-live="polite"></div>
             </div>
-            <p class="issue-find-res" id="issue-find-res"></p>
-          </div>
+          </section>
 
-          <label class="field">
-            <span data-t="issue.kind">Nature du problème</span>
-            <select id="issue-kind">
-              <option value="PHONE" data-t="issue.kind.PHONE">Numéro de téléphone incomplet ou invalide</option>
-              <option value="ADDRESS" data-t="issue.kind.ADDRESS">Adresse incomplète ou incorrecte</option>
-              <option value="STOCK" data-t="issue.kind.STOCK">Article indisponible</option>
-              <option value="DAMAGE" data-t="issue.kind.DAMAGE">Article abîmé</option>
-              <option value="OTHER" data-t="issue.kind.OTHER">Autre problème</option>
-            </select>
-          </label>
+          <section class="sig-bloc">
+            <p class="sig-titre" id="issue-kind-titre" data-t="issue.kindAsk">Quel est le problème ?</p>
+            <div class="sig-natures" id="issue-kinds" role="radiogroup" aria-labelledby="issue-kind-titre">
+              <button type="button" class="sig-nature n-tel" role="radio" aria-checked="true" data-kind="PHONE">
+                <span class="sig-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6.6 3.5h2.6l1.4 4-2 1.3a11 11 0 0 0 6.6 6.6l1.3-2 4 1.4v2.6a2 2 0 0 1-2.2 2A17.5 17.5 0 0 1 4.6 5.7a2 2 0 0 1 2-2.2z" /></svg></span>
+                <span class="sig-nom" data-t="issue.k.PHONE">Téléphone</span>
+              </button>
+              <button type="button" class="sig-nature n-adresse" role="radio" aria-checked="false" data-kind="ADDRESS">
+                <span class="sig-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11zM12 12.5a2.5 2.5 0 1 0 0-5a2.5 2.5 0 0 0 0 5z" /></svg></span>
+                <span class="sig-nom" data-t="issue.k.ADDRESS">Adresse</span>
+              </button>
+              <button type="button" class="sig-nature n-stock" role="radio" aria-checked="false" data-kind="STOCK">
+                <span class="sig-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7.5 12 3.5l8 4v9l-8 4-8-4zM4 7.5l8 4 8-4M12 11.5v9M3.5 3.5l17 17" /></svg></span>
+                <span class="sig-nom" data-t="issue.k.STOCK">Indisponible</span>
+              </button>
+              <button type="button" class="sig-nature n-abime" role="radio" aria-checked="false" data-kind="DAMAGE">
+                <span class="sig-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 4 2.8 19.5h18.4zM12 10v4.5M12 17.2v.3" /></svg></span>
+                <span class="sig-nom" data-t="issue.k.DAMAGE">Abîmé</span>
+              </button>
+              <button type="button" class="sig-nature n-autre" role="radio" aria-checked="false" data-kind="OTHER">
+                <span class="sig-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.5 3.5V17A2.5 2.5 0 0 1 4 14.5zM8.5 10.5h.01M12 10.5h.01M15.5 10.5h.01" /></svg></span>
+                <span class="sig-nom" data-t="issue.k.OTHER">Autre</span>
+              </button>
+            </div>
+          </section>
 
-          <!-- Détail de l'article, pour une rupture. Replié tant que la nature
-               n'est pas « indisponible » : demander la taille pour un téléphone
-               erroné ferait renoncer au signalement. -->
-          <div id="issue-item" hidden>
+          <!-- Ce que la commande sait déjà, selon le problème (`renderContexte`). -->
+          <div class="sig-contexte" id="issue-contexte"></div>
+
+          <!-- L'article à la main : seulement quand la commande ne liste aucun
+               article à toucher. -->
+          <div class="sig-bloc" id="issue-item" hidden>
             <label class="field">
               <span data-t="issue.product">Modèle</span>
               <input id="issue-product" type="text" data-tph="issue.productHint" placeholder="Ex. : Nike Mind 001" />
@@ -478,15 +512,16 @@
             </label>
           </div>
 
-          <label class="field">
-            <span data-t="issue.note">Détail</span>
-            <textarea id="issue-note" rows="4" data-tph="issue.noteHint"
-              placeholder="Ex. : le numéro fait 8 chiffres, il en manque un."></textarea>
-          </label>
+          <section class="sig-bloc">
+            <label class="sig-titre" for="issue-note"><span data-t="issue.note">Détail</span>
+              <span class="sig-requis" data-t="issue.required">· requis</span></label>
+            <textarea id="issue-note" rows="3" data-tph="issue.hint.PHONE"
+              placeholder="Ex. : il manque un chiffre au numéro."></textarea>
+          </section>
         </div>
-        <div class="modal-foot">
+        <div class="modal-foot sig-pied">
           <button class="btn" id="issue-cancel" data-t="issue.cancel">Annuler</button>
-          <button class="btn btn-primary" id="issue-send" data-t="issue.send">Envoyer au marchand</button>
+          <button class="btn btn-primary" id="issue-send" data-t="issue.send" disabled>Envoyer au marchand</button>
         </div>
       </div>
     </div>

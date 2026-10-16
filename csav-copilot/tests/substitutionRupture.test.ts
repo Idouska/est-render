@@ -155,7 +155,8 @@ test('l’ordre des options n’a pas d’importance', () => {
 });
 
 test('le formulaire s’en sert', () => {
-  assert.match(workspace, /const \{ couleur, taille \} = repartirDeclinaison\(first\?\.variantTitle\)/);
+  // L'article touché dans la fenêtre — le premier, par défaut — remplit les champs.
+  assert.match(workspace, /const \{ couleur, taille \} = repartirDeclinaison\(article\?\.variantTitle\)/);
   assert.match(workspace, /\$\('issue-size'\)\.value = taille/);
 });
 

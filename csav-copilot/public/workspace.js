@@ -996,10 +996,7 @@ $('ws-orders').addEventListener('click', async (event) => {
 
   const issue = event.target.closest('[data-issue]');
   if (issue) {
-    $('issue-find').hidden = true;
-    $('issue-note').value = '';
-    preparerSignalement(state.orders.find((order) => order.id === issue.dataset.issue) ?? null);
-    $('issue-modal').classList.add('open');
+    ouvrirSignalement(state.orders.find((order) => order.id === issue.dataset.issue) ?? null);
     return;
   }
 
@@ -1105,6 +1102,33 @@ async function corrigerColis(pid, corps) {
   }
 }
 
+/*
+ * Signaler un problème.
+ *
+ * La commande se montre une fois, en fiche qu'on reconnaît — numéro, client,
+ * date, articles en vignettes — au lieu d'être dite trois fois sans preuve
+ * que c'est la bonne. Le problème se choisit d'un geste parmi cinq tuiles ;
+ * ce que la commande sait déjà s'affiche selon le problème : le numéro, tel
+ * qu'il est écrit, l'adresse, ou les articles à toucher plutôt qu'à retaper.
+ * Le détail est requis, et le bouton l'attend au lieu de le reprocher après
+ * coup.
+ */
+function ouvrirSignalement(order) {
+  state.issueKind = 'PHONE';
+  state.issueArticle = 0;
+  $('issue-note').value = '';
+  $('issue-num').value = '';
+  $('issue-find-res').innerHTML = '';
+  preparerSignalement(order);
+  $('issue-modal').classList.add('open');
+  // Sans commande, on commence par la chercher ; avec, par dire le problème.
+  (order ? $('issue-kinds').querySelector('[aria-checked="true"]') : $('issue-num'))?.focus();
+}
+
+function fermerSignalement() {
+  $('issue-modal').classList.remove('open');
+}
+
 /**
  * La commande visée par le signalement, et l'article pré-rempli.
  *
@@ -1113,15 +1137,151 @@ async function corrigerColis(pid, corps) {
  */
 function preparerSignalement(order) {
   state.issueOrder = order;
-  $('issue-order').textContent = order ? t('issue.order', { name: order.name ?? '' }) : '';
-  const first = order?.lineItems?.[0];
-  $('issue-product').value = first?.title ?? '';
-  const { couleur, taille } = repartirDeclinaison(first?.variantTitle);
+  state.issueArticle = 0;
+  $('issue-fiche').hidden = !order;
+  $('issue-find').hidden = Boolean(order);
+  $('issue-fiche').innerHTML = order ? ficheCommande(order) : '';
+  remplirArticle(order?.lineItems?.[0]);
+  renderSignalement();
+}
+
+/* Les champs d'article envoyés au marchand : remplis d'après l'article
+   touché, ou à la main quand la commande n'en liste aucun. */
+function remplirArticle(article) {
+  $('issue-product').value = article?.title ?? '';
+  const { couleur, taille } = repartirDeclinaison(article?.variantTitle);
   $('issue-color').value = couleur;
   $('issue-size').value = taille;
-  $('issue-sku').value = first?.sku ?? '';
-  $('issue-qty').value = String(first?.quantity ?? 1);
-  toggleIssueItem();
+  $('issue-sku').value = article?.sku ?? '';
+  $('issue-qty').value = String(article?.quantity ?? 1);
+}
+
+const clientDeLaCommande = (order) =>
+  order?.shippingAddress?.name ?? order?.customer?.displayName ?? '';
+
+const jourDeLaCommande = (order) =>
+  order?.createdAt
+    ? new Date(order.createdAt).toLocaleDateString(locale, { day: 'numeric', month: 'short' })
+    : '';
+
+function vignette(article) {
+  return article?.image
+    ? `<img src="${esc(article.image)}" alt="" loading="lazy" />`
+    : '<i aria-hidden="true"></i>';
+}
+
+/* La fiche : de quoi reconnaître la commande d'un coup d'œil. Pas de
+   montant — c'est le prix de vente du marchand, pas l'affaire de l'atelier. */
+function ficheCommande(order) {
+  const articles = order.lineItems ?? [];
+  const n = order.itemsQuantity ?? articles.reduce((total, item) => total + (item.quantity ?? 1), 0);
+  const ville = order.shippingAddress?.city ?? '';
+  return `<span class="sig-vignettes" aria-hidden="true">${articles.slice(0, 2).map(vignette).join('')}</span>
+    <span class="sig-fiche-txt">
+      <span class="sig-fiche-l1"><b>${esc(order.name ?? '')}</b><span>${esc(
+        [clientDeLaCommande(order), ville].filter(Boolean).join(' · '),
+      )}</span></span>
+      <span class="sig-fiche-l2">${esc([jourDeLaCommande(order), t(n > 1 ? 'issue.items' : 'issue.item', { n })].filter(Boolean).join(' · '))}</span>
+    </span>
+    <button type="button" class="sig-lien" data-changer>${esc(t('issue.change'))}</button>`;
+}
+
+/* La tuile choisie, le contexte qui va avec, l'indice du détail, le bouton. */
+function renderSignalement() {
+  const kind = state.issueKind;
+  for (const tuile of $('issue-kinds').querySelectorAll('[data-kind]')) {
+    const choisie = tuile.dataset.kind === kind;
+    tuile.setAttribute('aria-checked', String(choisie));
+    tuile.tabIndex = choisie ? 0 : -1;
+  }
+  // `data-tph` suit le problème : un changement de langue garde le bon indice.
+  const note = $('issue-note');
+  note.dataset.tph = `issue.hint.${kind}`;
+  note.placeholder = t(note.dataset.tph);
+  renderContexte();
+  majEnvoiSignalement();
+}
+
+/*
+ * Ce que la commande sait déjà, selon le problème.
+ *
+ * Le numéro et l'adresse s'affichent tels qu'ils sont écrits, sans jugement :
+ * l'atelier voit ce qui cloche. Pour un article manquant ou abîmé, on touche
+ * la ligne de la commande — modèle, couleur, taille et référence suivent ; la
+ * saisie à la main ne reste que si la commande ne liste aucun article.
+ */
+function renderContexte() {
+  const boite = $('issue-contexte');
+  const order = state.issueOrder;
+  const kind = state.issueKind;
+  const articles = order?.lineItems ?? [];
+  const parArticle = kind === 'STOCK' || kind === 'DAMAGE';
+
+  $('issue-item').hidden = !(order && parArticle && articles.length === 0);
+  if (!order) return (boite.innerHTML = '');
+
+  if (kind === 'PHONE') {
+    const tel = order.shippingAddress?.phone ?? order.customer?.address?.phone ?? null;
+    boite.innerHTML = `<div class="sig-encart"><span class="sig-encart-titre">${esc(t('issue.phoneOnOrder'))}</span>${
+      tel ? `<b class="sig-tel">${esc(tel)}</b>` : `<span class="sig-vide">${esc(t('issue.noPhone'))}</span>`
+    }</div>`;
+    return;
+  }
+
+  if (kind === 'ADDRESS') {
+    const adresse = order.shippingAddress;
+    const lignes = adresse?.formatted?.length
+      ? adresse.formatted
+      : [
+          adresse?.name,
+          [adresse?.address1, adresse?.address2].filter(Boolean).join(' '),
+          [adresse?.zip, adresse?.city].filter(Boolean).join(' '),
+          adresse?.country,
+        ].filter(Boolean);
+    boite.innerHTML = `<div class="sig-encart"><span class="sig-encart-titre">${esc(t('issue.addressOnOrder'))}</span>${
+      lignes.length
+        ? `<span class="sig-adresse">${lignes.map((ligne) => `<span>${esc(ligne)}</span>`).join('')}</span>`
+        : `<span class="sig-vide">${esc(t('issue.noAddress'))}</span>`
+    }</div>`;
+    return;
+  }
+
+  if (parArticle && articles.length) {
+    const choisi = articles[state.issueArticle] ?? articles[0];
+    boite.innerHTML = `<p class="sig-titre" id="issue-article-titre">${esc(
+      t(kind === 'STOCK' ? 'issue.whichMissing' : 'issue.whichDamaged'),
+    )}</p>
+      <div class="sig-articles" role="radiogroup" aria-labelledby="issue-article-titre">${articles
+        .map(
+          (article, i) => `<button type="button" class="sig-article" role="radio" data-article="${i}"
+            aria-checked="${i === state.issueArticle}"><span class="sig-rond" aria-hidden="true"></span>${vignette(
+              article,
+            )}<span class="sig-article-txt"><b>${esc(article.title)}</b><span>${esc(
+              [article.variantTitle, article.sku].filter(Boolean).join(' · '),
+            )}</span></span><span class="sig-qte">× ${esc(article.quantity)}</span></button>`,
+        )
+        .join('')}</div>${
+        kind === 'STOCK'
+          ? `<label class="sig-manque"><span>${esc(t('issue.qtyMissing'))}</span><input type="number"
+              id="issue-qty-manque" min="1" max="${esc(Math.max(1, choisi.quantity ?? 1))}"
+              value="${esc($('issue-qty').value)}" /></label>`
+          : ''
+      }`;
+    return;
+  }
+
+  boite.innerHTML = '';
+}
+
+function signalementPret() {
+  // Trois caractères : le minimum que le serveur accepte pour une note.
+  return Boolean(state.issueOrder) && $('issue-note').value.trim().length >= 3;
+}
+
+function majEnvoiSignalement() {
+  const pret = signalementPret();
+  $('issue-send').disabled = !pret;
+  $('issue-send-top').disabled = !pret;
 }
 
 /*
@@ -1131,45 +1291,117 @@ function preparerSignalement(order) {
  * se retrouve par son numéro, avec la même recherche que la liste — donc le
  * même niveau d'accès.
  */
-$('ws-new-ticket')?.addEventListener('click', () => {
-  preparerSignalement(null);
-  $('issue-find').hidden = false;
-  $('issue-num').value = '';
-  $('issue-find-res').textContent = '';
-  $('issue-note').value = '';
-  $('issue-modal').classList.add('open');
-  $('issue-num').focus();
-});
+$('ws-new-ticket')?.addEventListener('click', () => ouvrirSignalement(null));
 
-async function trouverCommandeDuTicket() {
+/*
+ * La recherche part pendant qu'on tape.
+ *
+ * Plus de bouton « Chercher » : les commandes qui correspondent s'affichent
+ * en liste, et on choisit la bonne d'un clic. Rien n'est choisi tout seul —
+ * « 1218 » trouverait la commande #1218 avant qu'on ait fini d'écrire
+ * « 12189 ». Entrée prend la seule réponse quand il n'y en a qu'une.
+ */
+let rechercheSignalement = 0;
+
+async function trouverCommandeDuTicket({ prendreSeule = false } = {}) {
   const terme = $('issue-num').value.trim();
-  if (terme.length < 2) return;
+  const tour = ++rechercheSignalement;
+  const res = $('issue-find-res');
+  state.issueResults = [];
+  if (terme.replace(/^#/, '').length < 2) return (res.innerHTML = '');
 
-  $('issue-find-res').textContent = '…';
+  res.innerHTML = '<p class="sig-note">…</p>';
   try {
     const data = await api(`/api/workspace/${supplierId}/orders/search?q=${encodeURIComponent(terme)}`);
-    const order = data.orders?.[0] ?? null;
-    preparerSignalement(order);
-    $('issue-find-res').textContent = order
-      ? t('ticket.found', { name: order.name ?? '' })
-      : (data.reason ?? t('orders.notFound'));
+    if (tour !== rechercheSignalement) return;
+    const orders = data.orders ?? [];
+    state.issueResults = orders;
+    if (prendreSeule && orders.length === 1) return preparerSignalement(orders[0]);
+    res.innerHTML = orders.length
+      ? orders
+          .map(
+            (order, i) => `<button type="button" class="sig-res-ligne" data-pick="${i}"><b>${esc(
+              order.name ?? '',
+            )}</b><span>${esc(clientDeLaCommande(order))}</span><span class="sig-gris">${esc(
+              jourDeLaCommande(order),
+            )}</span></button>`,
+          )
+          .join('')
+      : `<p class="sig-note">${esc(data.reason ?? t('orders.notFound'))}</p>`;
   } catch (error) {
-    preparerSignalement(null);
-    $('issue-find-res').textContent = messageServeur(error, 'orders.err');
+    if (tour === rechercheSignalement) res.innerHTML = `<p class="sig-note">${esc(messageServeur(error, 'orders.err'))}</p>`;
   }
 }
 
-$('issue-find-btn')?.addEventListener('click', () => void trouverCommandeDuTicket());
+$('issue-num')?.addEventListener('input', () => {
+  clearTimeout(state.issueTimer);
+  state.issueTimer = setTimeout(() => void trouverCommandeDuTicket(), 300);
+});
 $('issue-num')?.addEventListener('keydown', (event) => {
   if (event.key !== 'Enter') return;
   event.preventDefault();
-  void trouverCommandeDuTicket();
+  clearTimeout(state.issueTimer);
+  void trouverCommandeDuTicket({ prendreSeule: true });
 });
 
-$('issue-cancel').addEventListener('click', () => $('issue-modal').classList.remove('open'));
+$('issue-find-res')?.addEventListener('click', (event) => {
+  const ligne = event.target.closest('[data-pick]');
+  if (!ligne) return;
+  preparerSignalement(state.issueResults?.[Number(ligne.dataset.pick)] ?? null);
+  $('issue-kinds').querySelector('[aria-checked="true"]')?.focus();
+});
+
+/* « Changer » : la recherche revient, la commande s'efface. */
+$('issue-fiche')?.addEventListener('click', (event) => {
+  if (!event.target.closest('[data-changer]')) return;
+  preparerSignalement(null);
+  $('issue-num').value = '';
+  $('issue-find-res').innerHTML = '';
+  $('issue-num').focus();
+});
+
+/* Les tuiles : un clic, ou les flèches comme dans un groupe de boutons radio. */
+$('issue-kinds')?.addEventListener('click', (event) => {
+  const tuile = event.target.closest('[data-kind]');
+  if (!tuile) return;
+  state.issueKind = tuile.dataset.kind;
+  renderSignalement();
+});
+$('issue-kinds')?.addEventListener('keydown', (event) => {
+  const pas = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key];
+  if (!pas) return;
+  event.preventDefault();
+  const tuiles = [...$('issue-kinds').querySelectorAll('[data-kind]')];
+  const rang = tuiles.findIndex((tuile) => tuile.dataset.kind === state.issueKind);
+  const suivante = tuiles[(rang + pas + tuiles.length) % tuiles.length];
+  state.issueKind = suivante.dataset.kind;
+  renderSignalement();
+  suivante.focus();
+});
+
+$('issue-contexte')?.addEventListener('click', (event) => {
+  const ligne = event.target.closest('[data-article]');
+  if (!ligne) return;
+  state.issueArticle = Number(ligne.dataset.article);
+  remplirArticle(state.issueOrder?.lineItems?.[state.issueArticle]);
+  renderContexte();
+  $('issue-contexte').querySelector(`[data-article="${state.issueArticle}"]`)?.focus();
+});
+$('issue-contexte')?.addEventListener('input', (event) => {
+  if (event.target.id === 'issue-qty-manque') $('issue-qty').value = event.target.value;
+});
+
+$('issue-note').addEventListener('input', majEnvoiSignalement);
+
+$('issue-cancel').addEventListener('click', fermerSignalement);
+$('issue-cancel-top')?.addEventListener('click', fermerSignalement);
+$('issue-send-top')?.addEventListener('click', () => $('issue-send').click());
 
 $('issue-modal').addEventListener('click', (event) => {
-  if (event.target === $('issue-modal')) $('issue-modal').classList.remove('open');
+  if (event.target === $('issue-modal')) fermerSignalement();
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && $('issue-modal').classList.contains('open')) fermerSignalement();
 });
 
 $('issue-send').addEventListener('click', async () => {
@@ -1178,12 +1410,14 @@ $('issue-send').addEventListener('click', async () => {
     toast(t('ticket.needOrder'), true);
     return;
   }
-  if (!note) {
+  if (note.length < 3) {
     toast(t('issue.needNote'), true);
     return;
   }
 
+  const kind = state.issueKind;
   $('issue-send').disabled = true;
+  $('issue-send-top').disabled = true;
 
   try {
     await api(`/api/workspace/${supplierId}/issues`, {
@@ -1192,37 +1426,31 @@ $('issue-send').addEventListener('click', async () => {
         shopifyOrderId: state.issueOrder.id,
         orderName: state.issueOrder.name,
         customerEmail: state.issueOrder.customer?.email ?? null,
-        kind: $('issue-kind').value,
+        kind,
         note,
-        // Champs d'article : envoyés seulement pour une rupture, et seulement
-        // s'ils sont remplis — un champ vide n'apprend rien au marchand.
-        ...($('issue-kind').value === 'STOCK'
+        // Champs d'article : envoyés pour une rupture ou un article abîmé —
+        // l'agent sait alors lequel sans rouvrir la commande — et seulement
+        // s'ils sont remplis : un champ vide n'apprend rien au marchand.
+        ...(kind === 'STOCK' || kind === 'DAMAGE'
           ? {
               product: $('issue-product').value.trim() || null,
               color: $('issue-color').value.trim() || null,
               size: $('issue-size').value.trim() || null,
               sku: $('issue-sku').value.trim() || null,
-              quantity: Number($('issue-qty').value) || null,
+              quantity: kind === 'STOCK' ? Number($('issue-qty').value) || null : null,
             }
           : {}),
       },
     });
 
-    $('issue-modal').classList.remove('open');
+    fermerSignalement();
     toast(t('issue.sent'));
   } catch (error) {
     toast(error.message, true);
   } finally {
-    $('issue-send').disabled = false;
+    majEnvoiSignalement();
   }
 });
-
-/* Les champs d'article ne concernent que la rupture. */
-function toggleIssueItem() {
-  $('issue-item').hidden = $('issue-kind').value !== 'STOCK';
-}
-
-$('issue-kind').addEventListener('change', toggleIssueItem);
 
 /**
  * Alertes urgentes du marchand, en tête de l'atelier.
