@@ -5,6 +5,9 @@ import { prisma } from '../lib/prisma.ts';
 import { requireSession } from '../plugins/auth.ts';
 import { getShopifyClient, ShopifyError } from '../services/shopify/client.ts';
 import { fetchCommerceStats } from '../services/shopify/commerceStats.ts';
+import { statsVentesPeriode } from '../services/shopify/ventesPeriode.ts';
+import { lirePeriode, resumePeriode } from '../services/stats/periode.ts';
+import { statsSavPeriode } from '../services/stats/savPeriode.ts';
 import { brouillonsEnvoyes, premieresReponses } from '../services/tickets/premiereReponse.ts';
 import { delaisResolution } from '../services/tickets/resolution.ts';
 
@@ -63,6 +66,36 @@ export async function statsRoutes(app: FastifyInstance): Promise<void> {
           amount: Number(viaTool._sum.amount ?? 0),
         },
       });
+    } catch (error) {
+      if (error instanceof ShopifyError) {
+        return reply.code(502).send({ error: 'Shopify n’a pas répondu.' });
+      }
+      throw error;
+    }
+  });
+
+  /**
+   * Les statistiques façon Shopify : une période au calendrier, une
+   * comparaison, un regroupement. Deux routes, comme plus haut : les ventes
+   * viennent de Shopify et peuvent tarder ou tomber seules, le SAV vient de
+   * la base et s'affiche sans les attendre.
+   *
+   * `?debut=2026-09-17&fin=2026-10-16&comparer=precedente&grain=jour&tz=Europe/Paris`
+   */
+  app.get('/api/stats/periode/sav', async (request, reply) => {
+    const lu = lirePeriode(request.query);
+    if (!lu.ok) return reply.code(400).send({ error: lu.erreur });
+    const { merchantId } = request.session;
+    return reply.send({ periode: resumePeriode(lu.periode), ...(await statsSavPeriode(merchantId, lu.periode)) });
+  });
+
+  app.get('/api/stats/periode/ventes', async (request, reply) => {
+    const lu = lirePeriode(request.query);
+    if (!lu.ok) return reply.code(400).send({ error: lu.erreur });
+    const { merchantId } = request.session;
+    try {
+      const client = await getShopifyClient(merchantId);
+      return reply.send({ periode: resumePeriode(lu.periode), ...(await statsVentesPeriode(merchantId, client, lu.periode)) });
     } catch (error) {
       if (error instanceof ShopifyError) {
         return reply.code(502).send({ error: 'Shopify n’a pas répondu.' });

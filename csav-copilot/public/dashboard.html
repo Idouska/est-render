@@ -1093,56 +1093,81 @@
         </div>
       </section>
 
-      <section class="browse" id="view-stats" hidden aria-label="Statistiques">
-        <!-- La période gouverne tout l'écran : un seul sélecteur, en tête,
-             plutôt qu'un réglage par graphe qui finirait incohérent. -->
-        <div class="stats-bar">
-          <div class="seg" id="stats-range">
-            <button data-days="7">7 jours</button>
-            <button data-days="30" aria-pressed="true">30 jours</button>
-            <button data-days="90">90 jours</button>
+      <!-- ================================================== STATISTIQUES ==
+           Façon Shopify : une période au calendrier, une comparaison, un
+           regroupement — et chaque carte s'ouvre en grand. -->
+      <section class="browse sta" id="view-stats" hidden aria-label="Statistiques">
+        <div class="sta-barre">
+          <button type="button" class="sta-bouton sta-periode" id="sta-periode" aria-haspopup="dialog"
+            aria-expanded="false" aria-controls="sta-choix">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+              aria-hidden="true"><path d="M4 6.5h16v13.5H4zM4 10.5h16M8.5 3.5v4M15.5 3.5v4" /></svg>
+            <span id="sta-periode-nom">30 derniers jours</span>
+          </button>
+          <button type="button" class="sta-bouton sta-compare" id="sta-compare" aria-haspopup="menu"
+            aria-expanded="false" aria-controls="sta-menu-compare">
+            <span class="sta-compare-long">Comparer : <b id="sta-compare-nom">période précédente</b></span>
+            <span class="sta-compare-court">Comparer</span>
+          </button>
+          <span class="sta-ressort"></span>
+          <span class="sta-grain-l" id="sta-grain-l">Regrouper par</span>
+          <div class="rmb-onglets sta-grains" role="group" aria-labelledby="sta-grain-l" data-grains></div>
+
+          <!-- Les raccourcis à gauche, le calendrier à droite ; au téléphone,
+               une feuille qui monte du bas. -->
+          <div class="sta-choix" id="sta-choix" role="dialog" aria-label="Période" hidden>
+            <div class="sta-feuille-tete">
+              <button type="button" class="sta-texte-bouton" data-periode-annuler>Annuler</button>
+              <b>Période</b>
+              <button type="button" class="sta-texte-bouton sta-ok" data-periode-appliquer>OK</button>
+            </div>
+            <div class="sta-raccourcis" id="sta-raccourcis"></div>
+            <div class="sta-cal">
+              <div class="sta-dates">
+                <input type="date" id="sta-debut" aria-label="Premier jour" />
+                <span>au</span>
+                <input type="date" id="sta-fin" aria-label="Dernier jour" />
+              </div>
+              <div class="sta-mois-nav">
+                <button type="button" class="sta-pas" id="sta-mois-prec" aria-label="Mois précédent">
+                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+                    stroke-linejoin="round" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" /></svg>
+                </button>
+                <button type="button" class="sta-pas" id="sta-mois-suiv" aria-label="Mois suivant">
+                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+                    stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" /></svg>
+                </button>
+              </div>
+              <div class="sta-mois" id="sta-mois"></div>
+              <p class="sta-cal-note" id="sta-cal-note" aria-live="polite"></p>
+              <div class="sta-actions">
+                <button type="button" class="btn" data-periode-annuler>Annuler</button>
+                <button type="button" class="btn btn-primary" data-periode-appliquer>Appliquer</button>
+              </div>
+            </div>
+          </div>
+          <div class="sta-menu" id="sta-menu-compare" role="menu" aria-label="Comparer" hidden>
+            <button type="button" role="menuitemradio" data-compare="precedente">Période précédente</button>
+            <button type="button" role="menuitemradio" data-compare="annee">Même période l’an dernier</button>
+            <button type="button" role="menuitemradio" data-compare="aucune">Aucune comparaison</button>
           </div>
         </div>
+        <p class="sta-sous" id="sta-sous"></p>
 
-        <div class="kpis" id="commerce-kpis"></div>
+        <div class="sta-corps" id="sta-corps">
+          <h2 class="sta-h">Ventes</h2>
+          <div class="sta-cartes" id="sta-ventes"></div>
+          <section class="sta-carte sta-graphe" id="sta-ca" aria-labelledby="sta-ca-titre"></section>
 
-        <div class="panel">
-          <div class="panel-head">
-            <span class="panel-title">Chiffre d'affaires par jour</span>
-            <span class="hint" id="ca-note"></span>
+          <h2 class="sta-h">SAV</h2>
+          <div class="sta-cartes" id="sta-sav"></div>
+          <div class="sta-duo">
+            <section class="sta-carte sta-motifs" id="sta-motifs" aria-labelledby="sta-motifs-titre"></section>
+            <section class="sta-carte sta-equipe" aria-labelledby="sta-equipe-titre">
+              <h3 class="sta-carte-titre" id="sta-equipe-titre">Équipe</h3>
+              <div class="sta-equipe-liste" id="sta-equipe"></div>
+            </section>
           </div>
-          <div class="card-body" id="chart-revenue"><p class="empty">Chargement…</p></div>
-        </div>
-
-        <div class="stats-duo">
-          <div class="panel">
-            <div class="panel-head"><span class="panel-title">Commandes par jour</span></div>
-            <div class="card-body" id="chart-orders"></div>
-          </div>
-          <div class="panel">
-            <div class="panel-head"><span class="panel-title">Motifs des demandes</span></div>
-            <div class="card-body" id="chart-intents"></div>
-          </div>
-        </div>
-
-        <div class="kpis" id="stats-kpis"></div>
-        <div class="panel">
-          <div class="panel-head"><span class="panel-title">Messages par jour</span></div>
-          <div class="card-body" id="stats-daily"></div>
-        </div>
-        <div class="table-wrap">
-          <table class="grid">
-            <thead>
-              <tr>
-                <th>Membre</th>
-                <th>Rôle</th>
-                <th class="num">Réponses envoyées</th>
-                <th class="num">Remboursements</th>
-                <th class="num">Escalades</th>
-              </tr>
-            </thead>
-            <tbody id="stats-team"></tbody>
-          </table>
         </div>
       </section>
 
@@ -2616,6 +2641,30 @@ Remboursement : sous 5 jours ouvrés après réception du retour."></textarea>
         </div>
       </div>
     </div>
+
+    <!-- Une carte des Statistiques ouverte en grand : centrée à l'ordinateur,
+         poussée en plein écran au téléphone, avec le retour « Statistiques ». -->
+    <div class="sta-detail" id="sta-detail" hidden>
+      <div class="sta-detail-voile" data-detail-fermer></div>
+      <div class="sta-detail-fenetre" role="dialog" aria-modal="true" aria-labelledby="sta-detail-titre" tabindex="-1">
+        <div class="sta-detail-nav">
+          <button type="button" class="sta-retour" data-detail-fermer>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"
+              stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>Statistiques
+          </button>
+        </div>
+        <div class="sta-detail-tete">
+          <div class="sta-detail-titres">
+            <h2 id="sta-detail-titre"></h2>
+            <span id="sta-detail-sous"></span>
+          </div>
+          <div class="rmb-onglets sta-grains" role="group" aria-label="Regrouper par" data-grains></div>
+          <button type="button" class="btn sta-fermer" data-detail-fermer>Fermer</button>
+        </div>
+        <div class="sta-detail-corps" id="sta-detail-corps"></div>
+      </div>
+    </div>
+    <div class="sta-voile" id="sta-voile" hidden></div>
 
     <div class="toast" id="toast" role="status"></div>
 
