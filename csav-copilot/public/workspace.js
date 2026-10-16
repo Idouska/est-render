@@ -7,6 +7,7 @@
  */
 
 import { LANGS, LOCALES, pickLang, saveLang, translator } from './workspace.i18n.js';
+import { verifierAdresse, verifierTelephone } from './workspace.verif.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -1225,7 +1226,7 @@ function renderContexte() {
     const tel = order.shippingAddress?.phone ?? order.customer?.address?.phone ?? null;
     boite.innerHTML = `<div class="sig-encart"><span class="sig-encart-titre">${esc(t('issue.phoneOnOrder'))}</span>${
       tel ? `<b class="sig-tel">${esc(tel)}</b>` : `<span class="sig-vide">${esc(t('issue.noPhone'))}</span>`
-    }</div>`;
+    }${pastillesAvertissement(verifierTelephone(tel, order.shippingAddress?.country))}</div>`;
     return;
   }
 
@@ -1243,7 +1244,7 @@ function renderContexte() {
       lignes.length
         ? `<span class="sig-adresse">${lignes.map((ligne) => `<span>${esc(ligne)}</span>`).join('')}</span>`
         : `<span class="sig-vide">${esc(t('issue.noAddress'))}</span>`
-    }</div>`;
+    }${adresse ? pastillesAvertissement(verifierAdresse(adresse)) : ''}</div>`;
     return;
   }
 
@@ -1322,6 +1323,18 @@ async function ajouterPhotos(fichiers) {
     }
   }
   renderContexte();
+}
+
+/*
+ * Les repères orange : ce qui cloche probablement, d'après des règles
+ * prudentes (voir `workspace.verif.js`). Un repère, pas un verdict — l'atelier
+ * voit le numéro et l'adresse juste au-dessus, et en juge.
+ */
+function pastillesAvertissement(avertissements) {
+  if (!avertissements.length) return '';
+  return `<span class="sig-avert" title="${esc(t('issue.warn.hint'))}">${avertissements
+    .map(({ cle, valeurs }) => `<span class="sig-pastille">${esc(t(cle, valeurs))}</span>`)
+    .join('')}</span>`;
 }
 
 function signalementPret() {
