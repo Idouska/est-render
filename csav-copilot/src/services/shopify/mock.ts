@@ -70,6 +70,57 @@ const ORDERS: MockOrder[] = [
       },
     ],
   },
+  // Pas encore payée, rien d'expédié : l'onglet « À expédier ».
+  {
+    id: 'gid://shopify/Order/10433',
+    name: '#10433',
+    createdAt: '2026-02-04T09:02:00Z',
+    displayFinancialStatus: 'PENDING',
+    displayFulfillmentStatus: 'UNFULFILLED',
+    total: '58.00',
+    currency: 'EUR',
+    customerEmail: 'nora.haddad@exemple.fr',
+    customerName: 'Nora Haddad',
+    customerSince: '2026-02-04T09:00:00Z',
+    customerOrders: 1,
+    customerSpent: '0.00',
+    items: [{ title: 'Abat-jour Lin naturel', quantity: 1, variantTitle: 'Ø 30 cm' }],
+    fulfillments: [],
+    address: {
+      name: 'Nora Haddad',
+      address1: '8 allée des Tanneurs',
+      city: 'Nantes',
+      zip: '44000',
+      province: 'FR-44',
+      country: 'FR',
+      phone: '+33 7 81 22 40 19',
+    },
+  },
+  // Remboursée après retour : l'onglet « Remboursées ».
+  {
+    id: 'gid://shopify/Order/10360',
+    name: '#10360',
+    createdAt: '2026-01-19T16:48:00Z',
+    displayFinancialStatus: 'REFUNDED',
+    displayFulfillmentStatus: 'FULFILLED',
+    total: '45.00',
+    currency: 'EUR',
+    customerEmail: 'chloe.martin@exemple.fr',
+    customerName: 'Chloé Martin',
+    customerSince: '2025-10-02T09:00:00Z',
+    customerOrders: 2,
+    customerSpent: '91.00',
+    items: [{ title: 'Applique Lune', quantity: 1, variantTitle: 'Opaline' }],
+    fulfillments: [
+      {
+        status: 'DELIVERED',
+        updatedAt: '2026-01-22T10:30:00Z',
+        estimatedDeliveryAt: null,
+        company: 'Colissimo',
+        number: '6A18440098712',
+      },
+    ],
+  },
   {
     id: 'gid://shopify/Order/10391',
     name: '#10391',
@@ -247,7 +298,10 @@ function toGraphQL(order: MockOrder) {
     },
     lineItems: { nodes: order.items },
     fulfillments: order.fulfillments.map((f) => ({
-      status: f.status,
+      // Comme l'API : `status` ne dit que « l'expédition existe », l'état du
+      // colis chez le transporteur est dans `displayStatus`.
+      status: 'SUCCESS',
+      displayStatus: f.status,
       updatedAt: f.updatedAt,
       estimatedDeliveryAt: f.estimatedDeliveryAt,
       trackingInfo: [{ company: f.company, number: f.number, url: `https://suivi.example/${f.number}` }],
@@ -275,16 +329,36 @@ function toGraphQL(order: MockOrder) {
   };
 }
 
-/** Interprète les filtres `email:"…"` et `name:"#…"` de la recherche Shopify. */
+/*
+ * Les filtres d'état de la recherche Shopify : plusieurs valeurs d'un même
+ * champ se lisent en « ou », comme `(fulfillment_status:a OR fulfillment_status:b)`.
+ */
+const EXPEDITION: Record<string, (o: MockOrder) => boolean> = {
+  unfulfilled: (o) => o.displayFulfillmentStatus === 'UNFULFILLED',
+  unshipped: (o) => o.displayFulfillmentStatus === 'UNFULFILLED',
+  partial: (o) => o.displayFulfillmentStatus === 'PARTIALLY_FULFILLED',
+  shipped: (o) => !['UNFULFILLED', 'PARTIALLY_FULFILLED'].includes(o.displayFulfillmentStatus),
+  fulfilled: (o) => !['UNFULFILLED', 'PARTIALLY_FULFILLED'].includes(o.displayFulfillmentStatus),
+};
+
+function valeurs(query: string, champ: string): string[] {
+  return [...query.matchAll(new RegExp(`${champ}:(\\w+)`, 'gi'))].map((m) => m[1]!.toLowerCase());
+}
+
+/** Interprète les filtres `email:"…"`, `name:"#…"` et d'état de la recherche Shopify. */
 function runSearch(query: string): MockOrder[] {
   const email = query.match(/email:"([^"]+)"/i)?.[1]?.toLowerCase();
   const name = query.match(/name:"([^"]+)"/i)?.[1];
   const free = query.match(/^"([^"]+)"/)?.[1]?.toLowerCase();
+  const paiements = valeurs(query, 'financial_status');
+  const expeditions = valeurs(query, 'fulfillment_status');
 
   let result = ORDERS;
   if (email) result = result.filter((o) => o.customerEmail.toLowerCase() === email);
   if (name) result = result.filter((o) => o.name === name);
   if (free) result = result.filter((o) => o.customerName.toLowerCase().includes(free));
+  if (paiements.length) result = result.filter((o) => paiements.includes(o.displayFinancialStatus.toLowerCase()));
+  if (expeditions.length) result = result.filter((o) => expeditions.some((v) => EXPEDITION[v]?.(o)));
 
   return [...result].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
@@ -303,13 +377,23 @@ export function createMockShopifyClient(shopDomain: string): ShopifyClient {
         return { orders: { nodes: found.map(toGraphQL) } } as T;
       }
 
+      if (query.includes('query OrderCounts')) {
+        return Object.fromEntries(
+          Object.entries(variables ?? {}).map(([cle, filtre]) => [
+            cle,
+            { count: runSearch(String(filtre ?? '')).length, precision: 'EXACT' },
+          ]),
+        ) as T;
+      }
+
       // Listes du carnet de commandes et du fichier client. La pagination
       // n'est pas simulée : le jeu fictif tient sur une page.
       if (query.includes('query ListOrders')) {
-        const found = runSearch(String(variables?.query ?? '')).slice(
-          0,
-          Number(variables?.limit ?? 25),
-        );
+        // Le tri de l'écran Commandes, comme Shopify : date ou montant.
+        const cle = (o: MockOrder) => (variables?.sortKey === 'TOTAL_PRICE' ? Number(o.total) : o.createdAt);
+        const found = runSearch(String(variables?.query ?? ''))
+          .sort((a, b) => (cle(a) < cle(b) ? -1 : cle(a) > cle(b) ? 1 : 0) * (variables?.reverse === false ? 1 : -1))
+          .slice(0, Number(variables?.limit ?? 25));
         return {
           orders: {
             pageInfo: { hasNextPage: false, endCursor: null },

@@ -15,7 +15,7 @@ import { requireSession } from '../plugins/auth.ts';
 import { getShopifyClient, ShopifyError, ShopifyScopeError } from '../services/shopify/client.ts';
 import { listCollections, listDisputes, listProducts, listVariants } from '../services/shopify/catalog.ts';
 import { listCustomers } from '../services/shopify/customers.ts';
-import { getOrderById, listOrders, quoteSearchValue } from '../services/shopify/orders.ts';
+import { countOrders, getOrderById, listOrders, quoteSearchValue } from '../services/shopify/orders.ts';
 import { customerOrderNames, missingOrderIds } from '../services/customers/sheet.ts';
 
 /**
@@ -40,8 +40,24 @@ const listQuery = z.object({
  * aucun sens sur une liste de fournisseurs, et une barre unique partagée
  * afficherait partout des options mortes.
  */
+/**
+ * Les onglets de l'écran Commandes, et la requête Shopify de chacun.
+ *
+ * Shopify ne filtre une commande que sur l'expédition (expédiée ou non),
+ * jamais sur l'état du colis chez le transporteur : « en transit » et
+ * « livrée » se lisent ligne par ligne, pas en onglet. Une commande
+ * expédiée en partie reste à expédier — il manque un colis.
+ */
+export const ORDER_SEGMENTS = {
+  toutes: '',
+  aExpedier: '(fulfillment_status:unfulfilled OR fulfillment_status:partial)',
+  expediees: 'fulfillment_status:shipped',
+  remboursees: '(financial_status:refunded OR financial_status:partially_refunded)',
+} as const;
+
 const orderQuery = listQuery.extend({
   sort: z.enum(['recent', 'oldest', 'updated', 'amountDesc', 'amountAsc']).default('recent'),
+  vue: z.enum(Object.keys(ORDER_SEGMENTS) as [keyof typeof ORDER_SEGMENTS]).optional(),
   payment: z.enum(['paid', 'pending', 'refunded', 'partially_refunded', 'voided']).optional(),
   delivery: z.enum(['fulfilled', 'unfulfilled', 'partial', 'in_transit']).optional(),
 });
@@ -50,6 +66,7 @@ const orderQuery = listQuery.extend({
 function buildOrderQuery(input: z.infer<typeof orderQuery>): string {
   return [
     toOrderQuery(input.q),
+    input.vue ? ORDER_SEGMENTS[input.vue] : '',
     input.payment ? `financial_status:${input.payment}` : '',
     input.delivery ? `fulfillment_status:${input.delivery}` : '',
   ]
@@ -354,6 +371,30 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
       const { status, message } = describeShopifyError(error);
       request.log.error({ err: error }, 'Listing des commandes en échec');
       return reply.code(status).send({ error: message });
+    }
+  });
+
+  /*
+   * Le compte de chaque onglet, pour la recherche en cours. Un plus, pas une
+   * condition : si Shopify refuse, les onglets restent là, sans nombre.
+   */
+  app.get('/api/orders/counts', async (request, reply) => {
+    const parsed = z.object({ q: z.string().max(200).optional() }).safeParse(request.query);
+    if (!parsed.success) return reply.code(400).send({ error: 'Paramètres invalides' });
+
+    try {
+      const client = await getShopifyClient(request.session.merchantId);
+      const recherche = toOrderQuery(parsed.data.q);
+      const queries = Object.fromEntries(
+        Object.entries(ORDER_SEGMENTS).map(([cle, filtre]) => [
+          cle,
+          [recherche, filtre].filter(Boolean).join(' AND '),
+        ]),
+      );
+      return reply.send({ counts: await countOrders(client, queries) });
+    } catch (error) {
+      request.log.warn({ err: error }, 'Comptes des commandes indisponibles');
+      return reply.send({ counts: null });
     }
   });
 

@@ -499,3 +499,35 @@ export async function listOrders(
     hasNextPage: data.orders.pageInfo.hasNextPage,
   };
 }
+
+/**
+ * Combien de commandes répondent à chaque requête, en un seul appel.
+ *
+ * Les onglets de l'écran Commandes affichent leur compte, comme les dossiers
+ * de Mail : « À expédier 37 » dit s'il y a du travail avant même de cliquer.
+ * Un appel par onglet ferait quatre allers-retours à chaque frappe dans la
+ * recherche ; les alias GraphQL les regroupent en un seul.
+ *
+ * Shopify plafonne un compte (10 000 par défaut) et le dit par `precision` :
+ * au-delà, c'est « au moins », jamais un nombre faux.
+ */
+export async function countOrders(
+  client: ShopifyClient,
+  queries: Record<string, string>,
+): Promise<Record<string, { count: number; auMoins: boolean }>> {
+  const cles = Object.keys(queries).filter((cle) => /^[A-Za-z]\w*$/.test(cle));
+  if (cles.length === 0) return {};
+
+  const data = await client.request<Record<string, { count: number; precision: string } | null>>(
+    /* GraphQL */ `
+      query OrderCounts(${cles.map((cle) => `$${cle}: String`).join(', ')}) {
+        ${cles.map((cle) => `${cle}: ordersCount(query: $${cle}) { count precision }`).join('\n        ')}
+      }
+    `,
+    Object.fromEntries(cles.map((cle) => [cle, queries[cle] || null])),
+  );
+
+  return Object.fromEntries(
+    cles.map((cle) => [cle, { count: data[cle]?.count ?? 0, auMoins: data[cle]?.precision === 'AT_LEAST' }]),
+  );
+}
