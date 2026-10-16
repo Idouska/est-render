@@ -71,3 +71,22 @@ test('les réponses envoyées depuis Gmail rejoignent leur conversation', () => 
   // La relève l'appelle, sans dépendre de lui pour son curseur.
   assert.match(lireSource('src/services/gmail/sync.ts'), /await releverReponsesEnvoyees\(merchantId, gmail, connection\.emailAddress\);/);
 });
+
+test('les réponses déjà envoyées sont rattrapées une fois, sur six mois', () => {
+  const lireSource = (chemin: string) => readFileSync(fileURLToPath(new URL(`../${chemin}`, import.meta.url)), 'utf8');
+  const envoyes = lireSource('src/services/gmail/envoyes.ts');
+  const rattrapage = envoyes.slice(envoyes.indexOf('export async function rattraperReponsesEnvoyees'));
+  assert.match(envoyes, /const RATTRAPAGE_JOURS = 180;/);
+  // Déjà fait : rien n'est relu.
+  assert.match(rattrapage, /if \(connexion\.envoyesRattrapesAt\) return \{ ajoutees: 0, termine: true \};/);
+  assert.match(rattrapage, /const q = `in:sent after:\$\{/);
+  // Deux lectures par page, et seuls les fils suivis sont téléchargés.
+  assert.match(rattrapage, /gmailThreadId: \{ in: \[\.\.\.new Set\(page\.map\(\(m\) => m\.threadId!\)\)\] \}/);
+  assert.match(rattrapage, /if \(!ticketId \|\| dejaRanges\.has\(id!\)\) continue;/);
+  assert.match(rattrapage, /connexion\.emailAddress\.toLowerCase\(\)/);
+  // Vingt secondes au plus par relève ; marqué fait seulement après la dernière page.
+  assert.match(rattrapage, /if \(Date\.now\(\) - debut > RATTRAPAGE_DUREE_MS\) return \{ ajoutees, termine: false \};/);
+  assert.ok(rattrapage.indexOf('} while (pageToken);') < rattrapage.indexOf('data: { envoyesRattrapesAt: new Date() }'));
+  assert.match(lireSource('prisma/schema.prisma'), /envoyesRattrapesAt DateTime\?/);
+  assert.match(lireSource('src/services/gmail/sync.ts'), /await rattraperReponsesEnvoyees\(merchantId, gmail, connection\);/);
+});

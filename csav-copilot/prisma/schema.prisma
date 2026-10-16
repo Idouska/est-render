@@ -215,6 +215,11 @@ model GmailConnection {
   /// chez lui. Nul pour une boîte connectée avant ce champ.
   scopes String?
 
+  /// Quand les réponses déjà envoyées depuis Gmail ont été rangées dans leur
+  /// conversation. Fait une fois par boîte, au fil des relèves ; nul tant que
+  /// ce n'est pas terminé. Voir `services/gmail/envoyes.ts`.
+  envoyesRattrapesAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

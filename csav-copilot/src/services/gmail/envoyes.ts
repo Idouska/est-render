@@ -77,3 +77,103 @@ export async function releverReponsesEnvoyees(
   }
   return ajoutees;
 }
+
+/**
+ * Une fois par boîte : les réponses déjà envoyées depuis Gmail, sur six mois.
+ *
+ * La relève ci-dessus ne prend que ce qui part à partir de maintenant ; les
+ * statistiques des semaines passées resteraient vides. Le rattrapage lit le
+ * libellé « Envoyés » depuis six mois, page après page, et range dans leur
+ * conversation les réponses des fils que l'outil suit — les autres ne sont
+ * même pas téléchargés.
+ *
+ * Il se fait au fil des relèves, vingt secondes au plus chacune, pour ne
+ * jamais retarder l'arrivée des nouveaux mails. Il est sans danger à rejouer :
+ * un message déjà rangé est sauté. La boîte n'est marquée faite qu'une fois
+ * toutes les pages lues.
+ */
+const RATTRAPAGE_JOURS = 180;
+const RATTRAPAGE_DUREE_MS = 20_000;
+
+export async function rattraperReponsesEnvoyees(
+  merchantId: string,
+  gmail: gmail_v1.Gmail,
+  connexion: { id: string; emailAddress: string; envoyesRattrapesAt: Date | null },
+  { maintenant = Date.now() }: { maintenant?: number } = {},
+): Promise<{ ajoutees: number; termine: boolean }> {
+  if (connexion.envoyesRattrapesAt) return { ajoutees: 0, termine: true };
+
+  const depuis = new Date(maintenant - RATTRAPAGE_JOURS * 86_400_000);
+  const q = `in:sent after:${depuis.getUTCFullYear()}/${depuis.getUTCMonth() + 1}/${depuis.getUTCDate()}`;
+  const debut = Date.now();
+  let ajoutees = 0;
+  let pageToken: string | undefined;
+
+  try {
+    do {
+      if (Date.now() - debut > RATTRAPAGE_DUREE_MS) return { ajoutees, termine: false };
+
+      const { data } = await gmail.users.messages.list({ userId: 'me', q, maxResults: 100, pageToken });
+      const page = (data.messages ?? []).filter((m) => m.id && m.threadId);
+
+      // Deux lectures par page plutôt qu'une par message : les fils suivis,
+      // et les messages déjà rangés.
+      const [suivis, connus] = await Promise.all([
+        prisma.ticket.findMany({
+          where: { merchantId, gmailThreadId: { in: [...new Set(page.map((m) => m.threadId!))] } },
+          select: { id: true, gmailThreadId: true },
+        }),
+        prisma.message.findMany({
+          where: { merchantId, gmailMessageId: { in: page.map((m) => m.id!) } },
+          select: { gmailMessageId: true },
+        }),
+      ]);
+      const ticketDuFil = new Map(suivis.map((t) => [t.gmailThreadId, t.id]));
+      const dejaRanges = new Set(connus.map((m) => m.gmailMessageId));
+
+      for (const { id, threadId } of page) {
+        const ticketId = ticketDuFil.get(threadId!);
+        if (!ticketId || dejaRanges.has(id!)) continue;
+        if (Date.now() - debut > RATTRAPAGE_DUREE_MS) return { ajoutees, termine: false };
+
+        const { data: brut } = await gmail.users.messages.get({ userId: 'me', id: id!, format: 'full' });
+        const message = parseMessage(brut);
+        if (!message || message.labelIds.includes('DRAFT')) continue;
+        if (message.fromEmail.toLowerCase() !== connexion.emailAddress.toLowerCase()) continue;
+        if (message.bodyText.trim().length === 0) continue;
+
+        try {
+          await prisma.message.create({
+            data: {
+              merchantId,
+              ticketId,
+              gmailMessageId: message.gmailMessageId,
+              direction: 'OUTBOUND',
+              fromEmail: message.fromEmail,
+              toEmail: message.toEmail,
+              subject: message.subject,
+              bodyText: message.bodyText,
+              snippet: message.snippet,
+              receivedAt: message.receivedAt,
+            },
+          });
+          ajoutees += 1;
+        } catch {
+          // Course avec la relecture du fil : la clé unique tranche.
+        }
+      }
+
+      pageToken = data.nextPageToken ?? undefined;
+    } while (pageToken);
+
+    await prisma.gmailConnection.update({
+      where: { id: connexion.id },
+      data: { envoyesRattrapesAt: new Date() },
+    });
+    logger.info({ merchantId, ajoutees }, 'Réponses envoyées depuis Gmail rattrapées');
+    return { ajoutees, termine: true };
+  } catch (error) {
+    logger.warn({ merchantId, err: error }, 'Rattrapage des réponses envoyées interrompu');
+    return { ajoutees, termine: false };
+  }
+}
