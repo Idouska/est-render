@@ -2,7 +2,7 @@ import { logger } from '../../lib/logger.ts';
 import { prisma } from '../../lib/prisma.ts';
 import { getGmailClient } from './client.ts';
 import { curseurApres } from './curseur.ts';
-import { releverReponsesEnvoyees } from './envoyes.ts';
+import { rattraperReponsesEnvoyees, releverReponsesEnvoyees } from './envoyes.ts';
 import { isUnknownCursor } from './errors.ts';
 import { parseMessage, type ParsedMessage } from './messages.ts';
 
@@ -305,6 +305,8 @@ export async function fetchNewMessages(
 
   // Les réponses parties de Gmail rejoignent leur conversation : voir `envoyes.ts`.
   await releverReponsesEnvoyees(merchantId, gmail, connection.emailAddress);
+  // Une fois par boîte, les six derniers mois, au fil des relèves.
+  await rattraperReponsesEnvoyees(merchantId, gmail, connection);
 
   // Les identifiants arrivent du plus ancien au plus récent : tronquer par la
   // fin traite d'abord ce qui attend depuis le plus longtemps.
