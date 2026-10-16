@@ -6523,61 +6523,191 @@ function dureeLisible(heures) {
 }
 
 /*
- * La fiabilité de l'atelier sur trente jours : quatre chiffres vérifiables
- * dans nos propres données, chacun avec son volume. Rouge au-delà d'un seuil
- * qui mérite un coup de fil : deux jours pour répondre, un refus sur trois,
- * une commande sur cinq en retard.
+ * La fiabilité d'un atelier, en lignes, comme dans Réglages.
+ *
+ * Quatre chiffres sur trente jours, trois sur quatre-vingt-dix, chacun avec
+ * son volume. En rouge au-delà d'un seuil qui mérite un coup de fil — deux
+ * jours pour répondre, un refus sur trois, une commande sur cinq en retard —
+ * mais jamais sous cinq cas : « 100 % de refus » sur une seule demande
+ * alarmait pour rien. En dessous, l'écran donne le compte : « 1 sur 1 ».
  */
+const ECHANTILLON_MIN = 5;
+
+function lignesAtelier(lignes) {
+  return `<div class="foa-lignes">${lignes
+    .map(
+      ({ nom, valeur, sur = '', chaud = false }) => `<div class="foa-ligne">
+        <span>${esc(nom)}</span><span class="foa-sur">${esc(sur)}</span><b${chaud ? ' class="foa-chaud"' : ''}>${esc(valeur)}</b>
+      </div>`,
+    )
+    .join('')}</div>`;
+}
+
 function fiabiliteMarkup(f) {
   const q = f?.qualite;
-  if (!f || (f.demandes === 0 && f.commandes === 0 && !q?.commandes)) {
-    return '<p class="supc-fiab-vide">Fiabilité : pas encore de données sur 30 jours.</p>';
-  }
   const pct = (valeur) => (valeur === null || valeur === undefined ? '—' : `${String(valeur).replace('.', ',')} %`);
-  const ligne = (titre, cases) => `<span class="supc-fiab-t">${esc(titre)}</span>
-    <div class="supc-stats">${cases
-      .map(
-        (c) => `<div class="supc-stat${c.chaud ? ' hot' : ''}"><b>${esc(c.valeur)}</b><span>${esc(c.libelle)}</span></div>`,
-      )
-      .join('')}</div>`;
-  const fiabilite = [
-    {
-      valeur: f.reponseMoyenneH === null ? '—' : dureeLisible(f.reponseMoyenneH),
-      libelle: `pour répondre · ${f.demandes} demande${f.demandes > 1 ? 's' : ''}`,
-      chaud: f.reponseMoyenneH !== null && f.reponseMoyenneH > 48,
-    },
-    {
-      valeur: f.refusPct === null ? '—' : `${f.refusPct} %`,
-      libelle: 'de refus',
-      chaud: f.refusPct !== null && f.refusPct >= 33,
-    },
-    {
-      valeur: f.expeditionMoyenneJ === null ? '—' : `${String(f.expeditionMoyenneJ).replace('.', ',')} j`,
-      libelle: 'pour expédier un lot',
-      chaud: false,
-    },
-    {
-      valeur: f.retardPct === null ? '—' : `${f.retardPct} %`,
-      libelle: `en retard · ${f.commandes} commande${f.commandes > 1 ? 's' : ''}`,
-      chaud: f.retardPct !== null && f.retardPct >= 20,
-    },
-  ];
+  const assez = (n) => n >= ECHANTILLON_MIN;
+  const repondues = f?.repondues ?? 0;
+  const refus = f?.refus ?? 0;
+  const retards = f?.retardPct === null || f?.retardPct === undefined ? 0 : Math.round((f.retardPct * f.commandes) / 100);
+
+  const fiabilite =
+    !f || (f.demandes === 0 && f.commandes === 0)
+      ? '<p class="foa-vide">Pas encore de données sur 30 jours.</p>'
+      : lignesAtelier([
+          {
+            nom: 'Délai de réponse',
+            valeur: f.reponseMoyenneH === null ? '—' : dureeLisible(f.reponseMoyenneH),
+            sur: f.demandes ? `sur ${pluriel(f.demandes, 'demande')}` : '',
+            chaud: assez(repondues) && f.reponseMoyenneH > 48,
+          },
+          {
+            nom: 'Refus',
+            valeur: f.refusPct === null ? '—' : assez(repondues) ? `${f.refusPct} %` : `${refus} sur ${repondues}`,
+            sur: f.refusPct !== null && assez(repondues) ? `${refus} sur ${repondues}` : '',
+            chaud: assez(repondues) && f.refusPct >= 33,
+          },
+          {
+            nom: 'Expédition d’un lot',
+            valeur: f.expeditionMoyenneJ === null ? '—' : `${String(f.expeditionMoyenneJ).replace('.', ',')} j`,
+          },
+          {
+            nom: 'Retards',
+            valeur: f.retardPct === null ? '—' : assez(f.commandes) ? `${f.retardPct} %` : `${retards} sur ${f.commandes}`,
+            sur: f.commandes && assez(f.commandes) ? `sur ${pluriel(f.commandes, 'commande')}` : '',
+            chaud: assez(f.commandes) && f.retardPct >= 20,
+          },
+        ]) +
+        (repondues > 0 && !assez(repondues)
+          ? '<p class="foa-note">Trop peu de réponses pour en tirer une part : elle s’affichera à partir de cinq.</p>'
+          : '');
+
   /*
    * La qualité, sur 90 jours : un retour arrive des semaines après
    * l'expédition. Le défaut est la part qui revient à l'atelier — une taille
    * qui ne va pas tient au produit, pas à lui.
    */
   const qualite = q?.commandes
-    ? [
-        { valeur: pct(q.retoursPct), libelle: `de retours · ${q.commandes} commande${q.commandes > 1 ? 's' : ''}`, chaud: false },
-        { valeur: pct(q.defautPct), libelle: 'pour défaut', chaud: (q.defautPct ?? 0) >= 3 },
-        { valeur: pct(q.manquantsPct), libelle: 'partis incomplets', chaud: (q.manquantsPct ?? 0) >= 2 },
-      ]
-    : null;
-  return `<div class="supc-fiab">
-    ${ligne('Fiabilité · 30 jours', fiabilite)}
-    ${qualite ? ligne('Qualité · 90 jours', qualite) : ''}
-  </div>`;
+    ? lignesAtelier([
+        { nom: 'Retours', valeur: pct(q.retoursPct), sur: `sur ${pluriel(q.commandes, 'commande')}` },
+        { nom: 'Défauts', valeur: pct(q.defautPct), chaud: assez(q.commandes) && (q.defautPct ?? 0) >= 3 },
+        { nom: 'Partis incomplets', valeur: pct(q.manquantsPct), chaud: assez(q.commandes) && (q.manquantsPct ?? 0) >= 2 },
+      ])
+    : '<p class="foa-vide">Pas encore assez de commandes sur 90 jours.</p>';
+
+  return `<div class="foa-bloc"><p class="foa-t">Fiabilité · 30 jours</p>${fiabilite}</div>
+    <div class="foa-bloc"><p class="foa-t">Qualité · 90 jours</p>${qualite}</div>`;
+}
+
+function initialesAtelier(nom) {
+  return (
+    String(nom ?? '')
+      .split(/[\s@.\-]+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((mot) => mot.charAt(0).toUpperCase())
+      .join('') || '?'
+  );
+}
+
+const CHEVRON_LIGNE =
+  '<svg class="fo-chevron" viewBox="0 0 8 13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1.5 1.5l5 5-5 5" /></svg>';
+
+/**
+ * Un atelier, sur toute la largeur.
+ *
+ * En tête : qui il est, ses règles d'attribution et ses quatre gestes. Puis
+ * aujourd'hui (à préparer, colis du jour, ce qui attend et de quoi c'est
+ * fait, les colis du mois), sa fiabilité et sa qualité. « En attente » se
+ * clique : la liste des demandes ne garde que les siennes. Au téléphone, la
+ * carte se résume à une ligne et se pousse par-dessus quand on la touche.
+ */
+function atelierMarkup(supplier, stats) {
+  const regles = [
+    ...(supplier.isDefault ? ['Atelier par défaut'] : []),
+    ...(supplier.vendors ?? []),
+    ...(supplier.skuPrefixes ?? []).map((prefix) => `${prefix}*`),
+    ...(supplier.joursCommande === 'PAIRS' ? ['Jours pairs'] : supplier.joursCommande === 'IMPAIRS' ? ['Jours impairs'] : []),
+  ];
+
+  const demandes = stats.pendingChanges ?? 0;
+  const ruptures = stats.ruptures ?? 0;
+  const escalades = stats.escalades ?? Math.max(0, (stats.openEscalations ?? 0) - ruptures);
+  const attente = demandes + ruptures + escalades;
+  const composition = [
+    demandes ? pluriel(demandes, 'demande') : '',
+    ruptures ? pluriel(ruptures, 'rupture') : '',
+    escalades ? pluriel(escalades, 'escalade') : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  const joursAttente = stats.oldestPendingAt
+    ? Math.floor((Date.now() - new Date(stats.oldestPendingAt).getTime()) / 86400000)
+    : 0;
+
+  const chiffre = (valeur, nom, sous = '', classe = '') =>
+    `<span class="foa-chiffre${classe}"><b>${esc(valeur)}</b><span>${esc(nom)}</span>${
+      sous ? `<small>${esc(sous)}</small>` : ''
+    }</span>`;
+  const enAttente = `<b>${attente}</b><span>en attente</span>${
+    composition ? `<small>${esc(composition)}${joursAttente >= 2 ? ` · ${joursAttente} j` : ''}</small>` : ''
+  }`;
+
+  return `<article class="foa${supplier.active ? '' : ' foa-inactif'}${
+    state.demandesFiltre?.fournisseur === supplier.id ? ' foa-on' : ''
+  }" data-supplier="${esc(supplier.id)}">
+    <button type="button" class="foa-resume" data-sup-pousser="${esc(supplier.id)}">
+      <span class="foa-avatar" aria-hidden="true">${esc(initialesAtelier(supplier.name))}</span>
+      <span class="foa-resume-txt"><b>${esc(supplier.name)}</b><span>${esc(
+        `${stats.toPrepare ?? '—'} à préparer · ${stats.parcelsToday ?? 0} colis`,
+      )}</span></span>
+      ${attente ? `<span class="foa-resume-attente">${attente} en attente</span>` : ''}
+      ${CHEVRON_LIGNE}
+    </button>
+
+    <div class="foa-tete">
+      <span class="foa-avatar foa-avatar-grand" aria-hidden="true">${esc(initialesAtelier(supplier.name))}</span>
+      <span class="foa-id">
+        <span class="foa-nom"><b>${esc(supplier.name)}</b><span class="foa-actif${supplier.active ? '' : ' foa-actif-non'}"><i></i>${
+          supplier.active ? 'Actif' : 'Désactivé'
+        }</span></span>
+        <span class="foa-contact">${esc(supplier.contactEmail)}${supplier.phone ? ` · ${esc(supplier.phone)}` : ''}</span>
+      </span>
+      <span class="foa-regles">${
+        regles.length
+          ? regles.map((regle) => `<span class="foa-regle">${esc(regle)}</span>`).join('')
+          : '<span class="foa-regle foa-regle-vide">Aucune règle : cet atelier ne reçoit rien automatiquement</span>'
+      }</span>
+      <div class="foa-gestes">
+        <button type="button" class="fo-bouton" data-sup-open="${esc(supplier.id)}">Ouvrir l’espace</button>
+        <button type="button" class="fo-bouton" data-sup-link="${esc(supplier.id)}">Copier le lien</button>
+        <button type="button" class="fo-bouton" data-sup-releve="${esc(supplier.id)}">Relevé du mois</button>
+        <button type="button" class="fo-bouton" data-sup-edit="${esc(supplier.id)}">Modifier</button>
+      </div>
+    </div>
+
+    <div class="foa-corps">
+      <div class="foa-bloc">
+        <p class="foa-t">Aujourd’hui</p>
+        <div class="foa-jour">
+          ${chiffre(stats.toPrepare ?? '—', 'à préparer')}
+          ${chiffre(stats.parcelsToday ?? 0, 'colis aujourd’hui')}
+          ${
+            demandes
+              ? `<button type="button" class="foa-chiffre foa-chiffre-attente" data-sup-attente="${esc(
+                  supplier.id,
+                )}" title="Voir ses demandes en attente">${enAttente}</button>`
+              : `<span class="foa-chiffre${attente ? ' foa-chiffre-attente' : ''}">${enAttente}</span>`
+          }
+          ${chiffre(stats.parcels30d ?? 0, 'colis sur 30 j', stats.photoRate != null ? `${stats.photoRate} % avec photo` : '')}
+        </div>
+        <p class="foa-note">${
+          stats.lastParcelAt ? `Dernier colis saisi ${esc(relativeTime(stats.lastParcelAt))}.` : 'Aucun colis saisi encore.'
+        }</p>
+      </div>
+      ${fiabiliteMarkup(stats.fiabilite)}
+    </div>
+  </article>`;
 }
 
 function renderSuppliers() {
@@ -6585,138 +6715,17 @@ function renderSuppliers() {
   const hub = state.supplierHub ?? {};
 
   $('suppliers-rows').innerHTML =
-    rows
-      .map((supplier) => {
-        const stats = hub[supplier.id] ?? {};
-        const rules = [
-          ...(supplier.vendors ?? []).map((vendor) => `<span class="tag tag-order">${esc(vendor)}</span>`),
-          ...(supplier.skuPrefixes ?? []).map((prefix) => `<span class="tag tag-order mono">${esc(prefix)}*</span>`),
-          ...(supplier.isDefault ? ['<span class="tag tone-ok">Atelier par défaut</span>'] : []),
-          ...(supplier.joursCommande === 'PAIRS'
-            ? ['<span class="tag tone-wait">Jours pairs</span>']
-            : supplier.joursCommande === 'IMPAIRS'
-              ? ['<span class="tag tone-wait">Jours impairs</span>']
-              : []),
-        ];
-
-        const waiting = (stats.pendingChanges ?? 0) + (stats.openEscalations ?? 0);
-        const oldestDays = stats.oldestPendingAt
-          ? Math.floor((Date.now() - new Date(stats.oldestPendingAt).getTime()) / 86400000)
-          : 0;
-
-        return `<article class="supc${supplier.active ? '' : ' muted'}" data-supplier="${esc(supplier.id)}">
-          <div class="supc-head">
-            <b>${esc(supplier.name)}</b>
-            ${
-              supplier.active
-                ? '<span class="tag tone-ok">Actif</span>'
-                : '<span class="tag tone-mute">Désactivé</span>'
-            }
-            <button class="btn btn-small" data-sup-edit="${esc(supplier.id)}"
-              style="margin-left:auto">Modifier</button>
-          </div>
-
-          <p class="supc-contact">${esc(supplier.contactEmail)}${
-            supplier.phone ? ` · ${esc(supplier.phone)}` : ''
-          }</p>
-
-          <div class="supc-rules">${
-            rules.length
-              ? rules.join('')
-              : '<span class="tag tone-wait">Aucune règle — cet atelier ne reçoit rien automatiquement</span>'
-          }</div>
-
-          <div class="supc-stats">
-            <div class="supc-stat"><b>${stats.toPrepare ?? '—'}</b><span>à préparer</span></div>
-            <div class="supc-stat"><b>${stats.parcelsToday ?? 0}</b><span>colis aujourd'hui</span></div>
-            <div class="supc-stat${waiting > 0 ? ' hot' : ''}">
-              <b>${waiting}</b><span>en attente${
-                waiting > 0 && oldestDays >= 2 ? ` · ${oldestDays} j` : ''
-              }</span>
-            </div>
-            <div class="supc-stat"><b>${stats.parcels30d ?? 0}</b><span>colis / 30 j${
-              stats.photoRate != null ? ` · ${stats.photoRate}% photo` : ''
-            }</span></div>
-          </div>
-
-          ${fiabiliteMarkup(stats.fiabilite)}
-
-          <p class="supc-last">${
-            stats.lastParcelAt
-              ? `Dernier colis ${esc(relativeTime(stats.lastParcelAt))}`
-              : 'Aucun colis saisi encore'
-          }</p>
-
-          <div class="supc-acts">
-            <button class="btn btn-small btn-primary" data-sup-link="${esc(supplier.id)}">
-              Copier le lien de l’espace
-            </button>
-            <button class="btn btn-small" data-sup-open="${esc(supplier.id)}">Ouvrir l’espace fournisseur</button>
-            <button class="btn btn-small" data-sup-releve="${esc(supplier.id)}">Relevé du mois</button>
-            ${
-              waiting > 0
-                ? `<button class="btn btn-small" data-sup-updates="${esc(supplier.id)}">Voir ce qui attend</button>`
-                : ''
-            }
-          </div>
-        </article>`;
-      })
-      .join('') ||
-    '<p class="empty" style="padding:20px">Aucun contact. Ajoutez le fournisseur, le transporteur ou l’atelier que vous sollicitez le plus.</p>';
+    rows.map((supplier) => atelierMarkup(supplier, hub[supplier.id] ?? {})).join('') ||
+    '<p class="fo-vide">Aucun atelier. Ajoutez le fournisseur, le transporteur ou l’atelier que vous sollicitez le plus.</p>';
 
   const active = activeSuppliers().length;
   $('suppliers-count').textContent = rows.length
-    ? `${rows.length} contact${rows.length > 1 ? 's' : ''} · ${active} actif${active > 1 ? 's' : ''}`
+    ? `${active} actif${active > 1 ? 's' : ''}${rows.length > active ? ` sur ${rows.length}` : ''}`
     : '';
 
-  $('suppliers-rows')
-    .querySelectorAll('[data-sup-edit]')
-    .forEach((button) =>
-      button.addEventListener('click', () => openSupplierForm(button.dataset.supEdit)),
-    );
-
-  // Le lien atelier, copié ou ouvert : émis à la demande, jamais stocké.
-  $('suppliers-rows')
-    .querySelectorAll('[data-sup-link], [data-sup-open]')
-    .forEach((button) =>
-      button.addEventListener('click', async () => {
-        const id = button.dataset.supLink ?? button.dataset.supOpen;
-        try {
-          const { url } = await api(`/api/suppliers/${id}/portal-link`, { method: 'POST' });
-          if (button.dataset.supOpen) {
-            window.open(url, '_blank', 'noopener');
-          } else {
-            await navigator.clipboard.writeText(url);
-            toast('Lien de l’espace fournisseur copié — transmettez-le au fournisseur.');
-          }
-        } catch (error) {
-          toast(error.message, true);
-        }
-      }),
-    );
-
-  $('suppliers-rows')
-    .querySelectorAll('[data-sup-releve]')
-    .forEach((button) => button.addEventListener('click', () => void ouvrirReleve(button.dataset.supReleve)));
-
-  $('suppliers-rows')
-    .querySelectorAll('[data-sup-updates]')
-    .forEach((button) =>
-      button.addEventListener('click', () => {
-        // Ses demandes en attente, juste en dessous — plus besoin de changer d'écran.
-        state.demandesFiltre = { fournisseur: button.dataset.supUpdates, type: '', statut: 'PENDING' };
-        $('sup-dem-statut')
-          ?.querySelectorAll('[data-dstatut]')
-          .forEach((chip) => chip.setAttribute('aria-pressed', String(chip.dataset.dstatut === 'PENDING')));
-        renderDemandesFournisseur();
-        $('sup-dem-rows').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      }),
-    );
-
-  // Le hub re-rend les cartes : la sélection doit survivre.
-  document.querySelectorAll('#suppliers-rows .supc').forEach((carte) =>
-    carte.classList.toggle('supc-on', carte.dataset.supplier === state.demandesFiltre?.fournisseur),
-  );
+  // La carte poussée au téléphone survit au rafraîchissement du hub.
+  if (state.foPile?.mode === 'atelier') marquerAtelierPousse(state.foPile.id);
+  renderATraiter();
 }
 
 /** Chiffres du hub, chargés après la liste : l'écran paraît, puis se remplit. */
@@ -6741,125 +6750,284 @@ function splitList(value) {
     .filter(Boolean);
 }
 
+/* Le lien de l'espace fournisseur, copié ou ouvert : émis à la demande, jamais stocké. */
+async function lienEspaceFournisseur(button) {
+  const id = button.dataset.supLink ?? button.dataset.supOpen;
+  try {
+    const { url } = await api(`/api/suppliers/${id}/portal-link`, { method: 'POST' });
+    if (button.dataset.supOpen) {
+      window.open(url, '_blank', 'noopener');
+      return;
+    }
+    await navigator.clipboard.writeText(url);
+    toast('Lien de l’espace fournisseur copié — transmettez-le au fournisseur.');
+    button.textContent = 'Lien copié';
+    setTimeout(() => {
+      if (button.isConnected) button.textContent = 'Copier le lien';
+    }, 2500);
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
 
 /**
- * Ce que les ateliers ont renvoyé, en tête de l'écran Fournisseurs.
+ * Ce que les ateliers ont renvoyé : le chiffre de la pastille.
  *
- * Un chiffre dans la navigation dit qu'il y a quelque chose ; encore faut-il
- * que l'écran dise quoi, et y mène. Trois natures, trois destinations — sans
- * ça la pastille devient une alarme qu'on apprend à ignorer.
+ * Un chiffre dans la navigation dit qu'il y a quelque chose ; la liste « À
+ * traiter » dit quoi, et chaque ligne porte son geste. Le chiffre et la liste
+ * sortent des mêmes comptes : une pastille qui annonce ce que la page ne
+ * montre pas devient une alarme qu'on apprend à ignorer.
  */
 async function renderSupplierActivity() {
-  const box = $('sup-activity');
-  if (!box) return;
-
-  let activity = state.supplierActivity;
   try {
-    activity = await api('/api/supplier-activity');
+    const activity = await api('/api/supplier-activity');
     state.supplierActivity = activity;
     state.navCounts = { ...state.navCounts, suppliers: activity.total };
     renderNav();
   } catch {
-    // Le carnet de contacts reste utilisable sans ce bandeau.
+    // Le reste de la page reste utilisable sans ce compte.
   }
-
-  // Les signalements ont leur section juste en dessous : le bandeau ne garde
-  // que ce qui n'est listé nulle part sur cet écran.
-  box.hidden = !activity || activity.answered + activity.changes === 0;
-  if (box.hidden) return;
-
-  const line = (count, label, view) =>
-    count > 0
-      ? `<button class="sup-act" data-goto="${view}">
-           <b>${count}</b><span>${esc(label)}</span>
-         </button>`
-      : '';
-
-  box.innerHTML =
-    `<span class="rail-title">Retours de vos ateliers</span>
-     <div class="sup-act-row">
-       ${line(activity.answered, activity.answered > 1 ? 'escalades répondues' : 'escalade répondue', 'tickets')}
-       ${line(activity.changes, activity.changes > 1 ? 'changements à répercuter' : 'changement à répercuter', 'changes')}
-     </div>`;
-
-  box.querySelectorAll('[data-goto]').forEach((button) =>
-    button.addEventListener('click', () => setView(button.dataset.goto)),
-  );
+  renderATraiter();
 }
 
 /*
- * Les signalements des ateliers, sur la page Fournisseur.
- *
- * Un atelier qui trouve une adresse incomplète au moment d'emballer ouvre un
- * ticket depuis son espace. Il entrait dans SAV client titré « Autre », au
- * milieu du courrier des clients ; la pastille « Fournisseur » le comptait,
- * mais la page n'en disait rien. Chaque ligne dit le motif, la commande, ce
- * que l'atelier a écrit, et propose les deux gestes : ouvrir la conversation,
- * ou la classer — l'atelier la voit alors « Clos » dans son espace.
+ * Les signalements des ateliers : une adresse incomplète, un téléphone faux,
+ * un article abîmé. Ils entraient dans SAV client titrés « Autre », au milieu
+ * du courrier des clients ; ils ont leur ligne dans « À traiter », avec les
+ * deux gestes : ouvrir la conversation, ou la classer — l'atelier la voit
+ * alors « Clos » dans son espace.
  */
 const MOTIF_ICONE = { ADDRESS: 'pin', PHONE: 'alerte', DAMAGE: 'box', STOCK: 'box', OTHER: 'alerte' };
 
 async function renderSignalementsFournisseurs() {
-  const section = $('sup-sig');
-  if (!section) return;
-
-  let signalements;
   try {
-    ({ signalements } = await api('/api/supplier-signalements'));
+    const { signalements } = await api('/api/supplier-signalements');
+    state.signalementsFournisseurs = signalements;
   } catch {
-    // Le carnet de contacts reste utilisable sans cette section.
+    // La page reste utilisable sans ces lignes.
     return;
   }
-
-  section.hidden = signalements.length === 0;
-  $('sup-sig-n').textContent = signalements.length ? String(signalements.length) : '';
-  $('sup-sig-rows').innerHTML = signalements
-    .map((sig) => {
-      const jours = ageInDays(sig.createdAt);
-      return `<article class="sigc" data-sig="${esc(sig.id)}">
-        <span class="sigc-ico sigc-${esc(sig.motif)}" aria-hidden="true">${ico(MOTIF_ICONE[sig.motif] ?? 'alerte')}</span>
-        <div class="sigc-main">
-          <div class="sigc-head">
-            <b>${esc(sig.libelle)}</b>
-            ${sig.orderName ? `<span class="tag tag-order">${esc(sig.orderName)}</span>` : ''}
-            <span class="sigc-when${jours >= 2 ? ' sigc-vieux' : ''}">${esc(
-              jours <= 0 ? 'aujourd’hui' : `depuis ${jours} j`,
-            )}</span>
-          </div>
-          ${sig.note ? `<p class="sigc-note">${esc(sig.note)}</p>` : ''}
-          <p class="sigc-meta">Signalé par <b>${esc(sig.fournisseur ?? 'l’atelier')}</b> · ${esc(dateTime(sig.createdAt))}</p>
-        </div>
-        <div class="sigc-acts">
-          <button class="btn btn-small" type="button" data-sig-open="${esc(sig.id)}">Ouvrir la conversation</button>
-          <button class="btn btn-small btn-primary" type="button" data-sig-done="${esc(sig.id)}">Traité</button>
-        </div>
-      </article>`;
-    })
-    .join('');
+  renderATraiter();
 }
 
-$('sup-sig')?.addEventListener('click', async (event) => {
-  if (event.target.closest('[data-sig-ruptures]')) return setView('ruptures');
+/** Une ligne de « À traiter » : son pictogramme, ce qui s'est passé, ses gestes. */
+function ligneATraiter({ ton, icone, titre, sous, gestes }) {
+  return `<div class="fot" role="listitem">
+    <span class="fot-ico fot-${ton}" aria-hidden="true">${icone}</span>
+    <span class="fot-txt"><b>${esc(titre)}</b><span>${esc(sous)}</span></span>
+    <span class="fot-gestes">${gestes}</span>
+  </div>`;
+}
 
-  const ouvrir = event.target.closest('[data-sig-open]');
-  if (ouvrir) {
-    setView('tickets');
-    void selectTicket(ouvrir.dataset.sigOpen);
-    return;
+function renderATraiter() {
+  const box = $('fo-traiter');
+  if (!box) return;
+  const lignes = [];
+
+  // Les réponses des ateliers dont le client n'a pas encore été prévenu.
+  for (const change of (state.changesRows ?? []).filter(aPrevenir)) {
+    const d = lireDemande(change);
+    lignes.push(
+      ligneATraiter({
+        ton: change.status === 'REFUSED' ? 'refusee' : 'faite',
+        icone: traitDemande(change.kind),
+        titre: `${d.client} : ${d.nature.toLowerCase()}${d.valeur ? ` ${d.valeur}` : ''}${
+          d.avant ? ` au lieu de ${d.avant}` : ''
+        }, ${change.status === 'REFUSED' ? 'refusée' : 'faite'} par l’atelier`,
+        sous: [
+          change.orderName,
+          `${change.supplier?.name ?? 'L’atelier'}, ${quandLong(change.acknowledgedAt ?? change.createdAt)}${
+            change.supplierNote ? ` : « ${change.supplierNote} »` : ''
+          }`,
+        ]
+          .filter(Boolean)
+          .join(' · '),
+        gestes: `<button type="button" class="fo-bouton" data-traiter-voir="${esc(change.id)}">Voir la demande</button>
+          <button type="button" class="btn btn-primary btn-small" data-dem-prevenu="${esc(change.id)}">Client prévenu</button>`,
+      }),
+    );
   }
 
-  const fait = event.target.closest('[data-sig-done]');
-  if (!fait) return;
-  fait.disabled = true;
+  for (const sig of state.signalementsFournisseurs ?? []) {
+    const jours = ageInDays(sig.createdAt);
+    lignes.push(
+      ligneATraiter({
+        ton: 'signalement',
+        icone: ico(MOTIF_ICONE[sig.motif] ?? 'alerte'),
+        titre: `${sig.libelle}, signalé par ${sig.fournisseur ?? 'l’atelier'}`,
+        sous: [sig.orderName, sig.note ? `« ${sig.note} »` : '', jours <= 0 ? 'aujourd’hui' : `depuis ${pluriel(jours, 'jour')}`]
+          .filter(Boolean)
+          .join(' · '),
+        gestes: `<button type="button" class="fo-bouton" data-sig-done="${esc(sig.id)}">Classer</button>
+          <button type="button" class="btn btn-primary btn-small" data-sig-open="${esc(sig.id)}">Ouvrir</button>`,
+      }),
+    );
+  }
+
+  const activite = state.supplierActivity;
+  if (activite?.answered) {
+    lignes.push(
+      ligneATraiter({
+        ton: 'faite',
+        icone: ico('bubble'),
+        titre: `${pluriel(activite.answered, 'réponse')} d’atelier à reprendre`,
+        sous: 'Des escalades auxquelles l’atelier a répondu, dans SAV client',
+        gestes: '<button type="button" class="btn btn-primary btn-small" data-goto="tickets">Ouvrir SAV client</button>',
+      }),
+    );
+  }
+  const aFaire = lignes.length;
+
+  // Les ruptures : une ligne d'information. Elles ont leur écran et leur
+  // pastille ; la page dit seulement où elles en sont.
+  if (activite?.ruptures) {
+    const parAtelier = (state.suppliers ?? [])
+      .map((supplier) => [supplier.name, state.supplierHub?.[supplier.id]?.ruptures ?? 0])
+      .filter(([, n]) => n > 0)
+      .map(([nom, n]) => `${nom} ${n}`)
+      .join(', ');
+    lignes.push(
+      ligneATraiter({
+        ton: 'info',
+        icone: ico('box'),
+        titre: `${pluriel(activite.ruptures, 'rupture')} en cours`,
+        sous: [parAtelier, 'les articles indisponibles se traitent dans Ruptures de stock'].filter(Boolean).join(' · '),
+        gestes: '<button type="button" class="fo-bouton" data-goto="ruptures">Ruptures de stock</button>',
+      }),
+    );
+  }
+
+  box.hidden = lignes.length === 0;
+  $('fo-traiter-n').textContent = aFaire ? String(aFaire) : '';
+  $('fo-traiter-rows').innerHTML = lignes.join('');
+}
+
+async function classerSignalement(bouton) {
+  bouton.disabled = true;
   try {
-    await api(`/api/tickets/${fait.dataset.sigDone}/resolve`, { method: 'POST', body: '{}' });
+    await api(`/api/tickets/${bouton.dataset.sigDone}/resolve`, { method: 'POST', body: '{}' });
     toast('Signalement classé — l’atelier le voit comme repris.');
     changesCountAt = 0;
     void refreshChangesCount();
-    await renderSignalementsFournisseurs();
+    await Promise.all([renderSignalementsFournisseurs(), renderSupplierActivity()]);
   } catch (error) {
-    fait.disabled = false;
+    bouton.disabled = false;
     toast(error.message, true);
+  }
+}
+
+/* ------------------------------------------- l'atelier poussé, au téléphone */
+
+const PILE_ATELIER = window.matchMedia('(max-width: 760px)');
+let defilementFournisseurs = 0;
+
+function marquerAtelierPousse(id) {
+  document.querySelectorAll('#suppliers-rows .foa').forEach((carte) => {
+    carte.classList.toggle('foa-pousse', carte.dataset.supplier === id);
+  });
+}
+
+/**
+ * Au téléphone, un atelier ou une demande se pousse par-dessus la page, comme
+ * dans Réglages : le reste se cache, « Fournisseurs » en haut à gauche ou un
+ * glissé vers la droite ramène la liste, et le bouton Retour du téléphone
+ * aussi.
+ */
+function ouvrirPileFo(mode, id) {
+  const vue = $('view-suppliers');
+  if (!vue) return;
+  const pile = mode === 'atelier' ? PILE_ATELIER : PILE_TICKETS;
+  if (!pile.matches) return;
+  if (!state.foPile) {
+    defilementFournisseurs = scrollY;
+    history.pushState({ csavFournisseur: true }, '');
+  }
+  state.foPile = { mode, id };
+  vue.classList.add('fo-pile');
+  vue.classList.toggle('fo-pile-atelier', mode === 'atelier');
+  vue.classList.toggle('fo-pile-fiche', mode === 'fiche');
+  if (mode === 'atelier') marquerAtelierPousse(id);
+  requestAnimationFrame(() => scrollTo(0, 0));
+}
+
+function fermerPileFo({ parHistorique = false } = {}) {
+  const vue = $('view-suppliers');
+  if (!state.foPile || !vue) return;
+  state.foPile = null;
+  vue.classList.remove('fo-pile', 'fo-pile-atelier', 'fo-pile-fiche');
+  marquerAtelierPousse(null);
+  if (!parHistorique && history.state?.csavFournisseur) history.back();
+  requestAnimationFrame(() => scrollTo(0, defilementFournisseurs));
+}
+
+addEventListener('popstate', () => fermerPileFo({ parHistorique: true }));
+
+/* --------------------------------------------- un seul écouteur, la page -- */
+
+$('view-suppliers').addEventListener('click', async (event) => {
+  const sur = (selecteur) => event.target.closest(selecteur);
+  let cible;
+
+  if (gererClicDemande(event, 'suppliers')) return;
+  if ((cible = sur('#fo-retour'))) return fermerPileFo();
+  if ((cible = sur('[data-sup-edit]'))) return openSupplierForm(cible.dataset.supEdit);
+  if ((cible = sur('[data-sup-link], [data-sup-open]'))) return void lienEspaceFournisseur(cible);
+  if ((cible = sur('[data-sup-releve]'))) return void ouvrirReleve(cible.dataset.supReleve);
+  if ((cible = sur('[data-sup-pousser]'))) return ouvrirPileFo('atelier', cible.dataset.supPousser);
+
+  // « En attente » d'un atelier : ses demandes, juste en dessous.
+  if ((cible = sur('[data-sup-attente]'))) {
+    state.demandesFiltre = { ...state.demandesFiltre, fournisseur: cible.dataset.supAttente, type: '', statut: 'PENDING' };
+    state.demandeChoisie.suppliers = null;
+    if (state.foPile) fermerPileFo();
+    renderSuppliers();
+    renderDemandesFournisseur();
+    $('sup-dem-h').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return;
+  }
+
+  // « Voir la demande » depuis « À traiter » : la demande, ouverte.
+  if ((cible = sur('[data-traiter-voir]'))) {
+    state.demandesFiltre = { fournisseur: null, type: '', statut: 'PREVENIR' };
+    state.demandeChoisie.suppliers = cible.dataset.traiterVoir;
+    renderSuppliers();
+    renderDemandesFournisseur();
+    if (PILE_TICKETS.matches) ouvrirPileFo('fiche', cible.dataset.traiterVoir);
+    else $('sup-dem-h').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return;
+  }
+
+  if ((cible = sur('[data-sig-open]'))) {
+    setView('tickets');
+    void selectTicket(cible.dataset.sigOpen);
+    return;
+  }
+  if ((cible = sur('[data-sig-done]'))) return void classerSignalement(cible);
+  if ((cible = sur('[data-goto]'))) return setView(cible.dataset.goto);
+
+  if ((cible = sur('#sup-dem-qui'))) {
+    state.demandesFiltre = { ...state.demandesFiltre, fournisseur: null };
+    renderSuppliers();
+    renderDemandesFournisseur();
+    return;
+  }
+  if ((cible = sur('[data-dstatut]'))) {
+    state.demandesFiltre = { ...state.demandesFiltre, statut: cible.dataset.dstatut };
+    state.demandeChoisie.suppliers = null;
+    renderDemandesFournisseur();
+    return;
+  }
+  if ((cible = sur('#sup-dem-type-btn'))) {
+    event.stopPropagation();
+    basculerMenuTypes();
+    return;
+  }
+  if ((cible = sur('[data-dtype]'))) {
+    state.demandesFiltre = { ...state.demandesFiltre, type: cible.dataset.dtype };
+    state.demandeChoisie.suppliers = null;
+    basculerMenuTypes(false);
+    renderDemandesFournisseur();
+    $('sup-dem-type-btn').focus();
   }
 });
 
@@ -7318,6 +7486,9 @@ $('alert-send')?.addEventListener('click', async () => {
     if (state.view === 'changes') {
       changesCountAt = 0;
       await loadChanges();
+    } else if (state.view === 'suppliers') {
+      changesCountAt = 0;
+      await chargerDemandesFournisseur();
     } else if (state.currentId) {
       prefetched.delete(state.currentId);
       await selectTicket(state.currentId);
@@ -12959,7 +13130,7 @@ const VIEW_META = {
     group: 'Fournisseur',
     title: 'Fournisseurs',
   },
-  changes: { icon: 'pencil', label: 'Modification', group: 'Fournisseur', title: 'Modification — demandes au fournisseur' },
+  changes: { icon: 'pencil', label: 'Modification', group: 'Fournisseur', title: 'Modification' },
   refunds: { icon: 'card', label: 'Annulation/\u200bRemboursement', group: 'Fournisseur', title: 'Annulations et remboursements' },
   renvoi: { icon: 'cycle', label: 'Renvoi', group: 'Fournisseur', title: 'Renvoi — stock retours', alias: 'returns', onglet: 'stock' },
   retour: { icon: 'uturn', label: 'Retour', group: 'Fournisseur', title: 'Retours clients', alias: 'returns', onglet: 'cases' },
@@ -13001,10 +13172,6 @@ const VIEWS = Object.keys(VIEW_META);
 /** « Modification » : Taille, Modèle, Coordonnées — le reste vit dans Fournisseur. */
 const KINDS_MODIFICATION = new Set(['SIZE', 'PRODUCT', 'ADDRESS', 'PHONE']);
 
-/** La pastille dit ce que l'écran montre : les seules modifications en attente. */
-function modificationsEnAttente(demandes) {
-  return (demandes ?? []).filter((d) => d.status === 'PENDING' && KINDS_MODIFICATION.has(d.kind)).length;
-}
 
 /** Copie de `DELAI_URGENCE_H` (src/services/suppliers/urgence.ts), comparée par les tests. */
 const DELAI_URGENCE_H = 4;
@@ -13075,7 +13242,8 @@ async function refreshChangesCount() {
       api('/api/ruptures/compte').catch(() => null),
     ]);
 
-    const pending = modificationsEnAttente(demandes);
+    // La pastille dit ce que l'écran montre d'abord : les clients à prévenir.
+    const pending = modificationsAPrevenir(demandes);
     state.changesPending = pending;
     renderUrgencesSansReponse(demandes);
     guetterAtelier(state.supplierActivity, activity);
@@ -13268,239 +13436,532 @@ document.addEventListener('keydown', (event) => {
 
 /* --------------------------------------------------- demandes de changement */
 
-/**
- * L'écran « Changements » : toutes les demandes envoyées aux fournisseurs.
- *
- * Trié par le serveur, en attente d'abord. Chaque carte dit trois choses dans
- * l'ordre où l'on décide : ce qui change (44 → 45), ce que le fournisseur en
- * a fait, et si la commande était déjà expédiée — une taille à changer sur un
- * colis parti n'appelle plus la même réponse au client.
- */
-state.changesRows = [];
-state.changesFilter = 'PENDING';
+/* ==========================================================================
+   DEMANDES AUX ATELIERS — écrans Modification et Fournisseur
 
-async function loadChanges() {
-  const rows = $('changes-rows');
-  rows.innerHTML = '<p class="empty" style="padding:14px">Chargement…</p>';
+   Une ligne par demande et la fiche à côté ; au téléphone, la fiche se
+   pousse par-dessus. Chaque ligne dit, dans l'ordre où l'on décide : ce qui
+   change (« 44 au lieu de 42 »), la commande et le client, ce que l'atelier
+   en a fait, et ce qui reste à faire de notre côté — un client à prévenir.
+   La fiche dit en plus quoi lui répondre, l'historique, et si la commande
+   est déjà partie : une taille à changer sur un colis parti n'appelle plus
+   la même réponse.
+   ========================================================================== */
 
-  let data;
-  try {
-    data = await api('/api/changes');
-  } catch (error) {
-    rows.innerHTML = `<p class="empty" style="padding:14px">${esc(error.message)}</p>`;
-    return;
+const STATUTS_DEMANDE = [
+  ['PREVENIR', 'À prévenir'],
+  ['PENDING', 'En attente'],
+  ['ACKNOWLEDGED', 'Faites'],
+  ['REFUSED', 'Refusées'],
+  ['', 'Toutes'],
+];
+const ETATS_DEMANDE = {
+  PENDING: { mot: 'En attente', ton: 'attente' },
+  ACKNOWLEDGED: { mot: 'Faite', ton: 'faite' },
+  REFUSED: { mot: 'Refusée', ton: 'refusee' },
+};
+
+/** Une réponse de l'atelier dont le client n'a pas encore été prévenu. */
+function aPrevenir(change) {
+  return change.status !== 'PENDING' && !change.handledAt;
+}
+
+function passeLeStatut(change, statut) {
+  return statut === 'PREVENIR' ? aPrevenir(change) : !statut || change.status === statut;
+}
+
+const TRAITS_DEMANDE = {
+  SIZE: 'M3 15.5 15.5 3l5.5 5.5L8.5 21zM7 12l2 2M10 9l2 2M13 6l2 2',
+  PRODUCT: 'M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5zM3.5 7.5 12 12l8.5-4.5M12 12v9',
+  COLOR: 'M12 3a9 9 0 1 0 0 18c1.1 0 1.8-.7 1.8-1.6 0-.5-.2-.9-.5-1.2a1.7 1.7 0 0 1 1.3-2.8H17a4 4 0 0 0 4-4C21 6.6 17 3 12 3zM7.5 12.5h.01M9.5 8h.01M14.5 8h.01',
+  ADDRESS: 'M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21zM12 12a2.5 2.5 0 1 0 0-5a2.5 2.5 0 0 0 0 5',
+  PHONE: 'M5 3.5h3.5l1.8 4.6-2.3 1.4a11 11 0 0 0 5.5 5.5l1.4-2.3 4.6 1.8V18a2.5 2.5 0 0 1-2.5 2.5A15.5 15.5 0 0 1 2.5 6 2.5 2.5 0 0 1 5 3.5',
+  HOLD: 'M12 21a9 9 0 1 0 0-18a9 9 0 0 0 0 18M10 9v6M14 9v6',
+  CANCEL: 'M12 21a9 9 0 1 0 0-18a9 9 0 0 0 0 18M5.6 5.6l12.8 12.8',
+  MISSING_ITEM: 'M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5zM3.5 7.5 12 12l8.5-4.5M12 12v9',
+  DELAY: 'M12 21a9 9 0 1 0 0-18a9 9 0 0 0 0 18M12 7v5l3 2',
+  TRACKING: 'M2.5 6.5h11v10h-11zM13.5 10h4l3 3.2v3.3h-7M6.5 19a1.8 1.8 0 1 0 0-3.6a1.8 1.8 0 0 0 0 3.6M17 19a1.8 1.8 0 1 0 0-3.6a1.8 1.8 0 0 0 0 3.6',
+  OTHER: 'M4 20l1.3-3.8A8 8 0 1 1 8.2 19z',
+};
+
+function traitDemande(kind) {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+    stroke-linejoin="round" aria-hidden="true"><path d="${TRAITS_DEMANDE[kind] ?? TRAITS_DEMANDE.OTHER}" /></svg>`;
+}
+
+/** Ce qu'on lit d'une demande : sa nature, la valeur voulue, l'ancienne, le client. */
+function lireDemande(change) {
+  const simple = valeurSimple(change);
+  const message =
+    String(change.message ?? '')
+      .split('\n')
+      .map((ligne) => ligne.trim())
+      .find(Boolean) ?? '';
+  return {
+    nature: CHANGE_KINDS[change.kind] ?? change.kind,
+    valeur: simple ?? change.afterValue ?? '',
+    avant: !simple && change.afterValue ? (change.beforeValue ?? '') : '',
+    message,
+    client:
+      change.ticket?.customerName ??
+      change.ticket?.customerEmail ??
+      (change.orderName ? `Commande ${change.orderName}` : 'Sans client'),
+  };
+}
+
+function texteChangement(d) {
+  if (d.valeur) return d.avant ? `${d.valeur} au lieu de ${d.avant}` : d.valeur;
+  return d.message || d.nature;
+}
+
+/** « d’Atelier Nord », « de Test Factory » : l'élision, devant une voyelle. */
+function deNom(nom) {
+  return /^[aeiouyhàâäéèêëîïôöûü]/i.test(nom) ? `d’${nom}` : `de ${nom}`;
+}
+
+/** Pour une liste : l'heure aujourd'hui, « hier », le jour de la semaine, puis la date. */
+function quandCourt(iso) {
+  if (!iso) return '';
+  const date = new Date(iso);
+  const minutes = (Date.now() - date.getTime()) / 60000;
+  if (minutes < 1) return 'à l’instant';
+  if (minutes < 60) return `il y a ${Math.round(minutes)} min`;
+  const aujourdhui = new Date();
+  const hier = new Date();
+  hier.setDate(aujourdhui.getDate() - 1);
+  if (date.toDateString() === aujourdhui.toDateString()) return shortTime(iso);
+  if (date.toDateString() === hier.toDateString()) return 'hier';
+  if (minutes < 6 * 1440) return date.toLocaleDateString('fr-FR', { weekday: 'long' });
+  return date.toLocaleDateString('fr-FR', {
+    day: 'numeric',
+    month: 'short',
+    ...(date.getFullYear() !== aujourdhui.getFullYear() ? { year: 'numeric' } : {}),
+  });
+}
+
+/** Pour une phrase : « aujourd’hui à 09:12 », « hier à 16:54 », « le 11 octobre 2026 à 18:02 ». */
+function quandLong(iso) {
+  if (!iso) return '';
+  const texte = dayOrDateTime(iso);
+  return /^(Aujourd|Hier)/.test(texte) ? texte.charAt(0).toLowerCase() + texte.slice(1) : `le ${texte}`;
+}
+
+/** Ce qui reste à faire de notre côté, sous l'état de la ligne. */
+function suiteDemande(change) {
+  if (change.status !== 'PENDING') {
+    return change.handledAt ? { texte: 'client prévenu', classe: '' } : { texte: 'client à prévenir', classe: ' fod-suite-action' };
   }
-
-  state.changesRows = data.changes ?? [];
-  state.changesPending = modificationsEnAttente(state.changesRows);
-  state.navCounts = { ...state.navCounts, changes: state.changesPending };
-  renderNav();
-  renderChangesScreen();
+  if (change.emailedAt) return { texte: 'mail parti', classe: '' };
+  return KINDS_URGENTS.has(change.kind)
+    ? { texte: 'mail non parti', classe: ' fod-suite-alerte' }
+    : { texte: 'au récap de 9 h (Chine)', classe: '' };
 }
 
-
-function renderChangesScreen() {
-  const filter = state.changesFilter;
-  const shown = state.changesRows.filter(
-    (change) => KINDS_MODIFICATION.has(change.kind) && (!filter || change.status === filter),
-  );
-  renderDemandes($('changes-rows'), $('changes-count'), shown, filter);
-  if (state.view === 'suppliers') renderDemandesFournisseur();
+function ligneDemande(change, choisie) {
+  const d = lireDemande(change);
+  const etat = ETATS_DEMANDE[change.status] ?? ETATS_DEMANDE.PENDING;
+  const suite = suiteDemande(change);
+  return `<div role="listitem"><button type="button" class="fod" data-dem="${esc(change.id)}" aria-current="${
+    change.id === choisie
+  }">
+    <span class="fod-nature">${traitDemande(change.kind)}<span><b>${esc(d.nature)}<span class="fod-qui"> · ${esc(
+      d.client,
+    )}</span></b><span>${esc(texteChangement(d))}</span></span></span>
+    <b class="fod-num">${esc(change.orderName ?? '—')}</b>
+    <span class="fod-client"><span>${esc(d.client)}</span><span>${esc(change.supplier?.name ?? '—')}</span></span>
+    <span class="fod-etat"><span><i class="fod-point fod-${etat.ton}" aria-hidden="true"></i>${esc(etat.mot)}</span><span class="fod-suite${
+      suite.classe
+    }">${esc(suite.texte)}</span></span>
+    <span class="fod-date">${esc(quandCourt(change.createdAt))}</span>
+  </button></div>`;
 }
 
-/*
- * Les demandes aux fournisseurs, en cartes. Le même rendu sert deux écrans :
- * « Modification » (les trois motifs de modification) et « Fournisseur »
- * (toutes, triées par fournisseur et par type).
- */
 /**
- * Les demandes au fournisseur, en cartes. `statut` est le filtre de statut de
- * l'écran appelant : il choisit le message de la liste vide.
+ * La liste des demandes. `statut` est le filtre de statut de l'écran
+ * appelant : il choisit le message de la liste vide. La ligne choisie se lit
+ * dans `rows.dataset.choisie`.
  */
 function renderDemandes(rows, compteur, shown, statut) {
   if (!rows) return;
   if (compteur) {
     compteur.textContent = shown.length ? `${shown.length} demande${shown.length > 1 ? 's' : ''}` : '';
   }
-
+  const choisie = rows.dataset?.choisie ?? '';
   rows.innerHTML =
-    shown
-      .map((change) => {
-        const status = CHANGE_STATUS[change.status] ?? CHANGE_STATUS.PENDING;
-
-        return `<div class="chgc chgc-${status.tone}" data-chg-ticket="${esc(
-          change.ticket?.id ?? '',
-        )}">
-          <div class="chgc-head">
-            <b>${esc(CHANGE_KINDS[change.kind] ?? change.kind)}</b>
-            ${change.orderName ? `<span class="tag tag-order">${esc(change.orderName)}</span>` : ''}
-            <span class="tag tone-${status.tone}">${esc(status.label)}</span>
-            ${
-              change.orderShipped === null
-                ? ''
-                : change.orderShipped
-                  ? '<span class="tag tone-bad">déjà expédiée</span>'
-                  : '<span class="tag tone-ok">pas encore expédiée</span>'
-            }
-            <span class="chgc-when">${esc(dateTime(change.createdAt))}</span>
-          </div>
-
-          ${
-            valeurSimple(change)
-              ? `<div class="chgc-swap"><b>${esc(valeurSimple(change))}</b></div>`
-              : change.afterValue
-              ? `<div class="chgc-swap">
-                   <s>${esc(change.beforeValue ?? '—')}</s>
-                   <span aria-hidden="true">→</span>
-                   <b>${esc(change.afterValue)}</b>
-                 </div>`
-              : change.message
-                ? `<p class="chgc-msg">${esc(change.message)}</p>`
-                : ''
-          }
-
-          <div class="chgc-meta">
-            ${
-              // Le brouillon n'existe que sur une demande née d'un mail et
-              // déjà répondue : le dire ici évite d'ouvrir pour vérifier.
-              change.status !== 'PENDING' && change.ticket && !change.handledAt
-                ? '<span class="chgc-draft">✉︎ réponse au client prête</span>'
-                : ''
-            }
-            <span>${esc(change.supplier?.name ?? '—')}</span>
-            ${
-              change.ticket
-                ? `<span>· ${esc(
-                    change.ticket.customerName ?? change.ticket.customerEmail ?? '',
-                  )}</span>`
-                : ''
-            }
-            ${
-              change.emailedAt
-                ? ''
-                : KINDS_URGENTS.has(change.kind)
-                  ? '<span class="set-alert">· mail non parti</span>'
-                  : change.status === 'PENDING'
-                    ? '<span>· au récap de 9 h (Chine)</span>'
-                    : ''
-            }
-          </div>
-          ${
-            change.supplierNote
-              ? `<p class="chgc-note">« ${esc(change.supplierNote)} »</p>`
-              : ''
-          }
-          ${
-            change.status === 'PENDING'
-              ? `<button class="chgc-edit" data-chg-edit="${esc(
-                  change.id,
-                )}">Modifier</button>
-                 <button class="chgc-cancel" data-chg-cancel="${esc(
-                  change.id,
-                )}">Annuler la demande</button>`
-              : change.handledAt
-                ? '<span class="chgc-done">✓ répercuté au client</span>'
-                : `<button class="chgc-handled" data-chg-handled="${esc(
-                    change.id,
-                  )}">J’ai prévenu le client</button>`
-          }
-        </div>`;
-      })
-      .join('') ||
-    `<p class="empty" style="padding:14px">${
-      statut === 'PENDING'
-        ? 'Aucune demande en attente — les fournisseurs sont à jour.'
-        : 'Aucune demande.'
+    shown.map((change) => ligneDemande(change, choisie)).join('') ||
+    `<p class="fo-vide">${
+      statut === 'PREVENIR'
+        ? 'Aucun client à prévenir : tout est transmis.'
+        : statut === 'PENDING'
+          ? 'Aucune demande en attente — les fournisseurs sont à jour.'
+          : 'Aucune demande.'
     }</p>`;
-
-  // La carte ouvre le mail d'origine : c'est là qu'on répond au client une
-  // fois le changement confirmé ou refusé.
-  rows.querySelectorAll('[data-chg-ticket]').forEach((card) =>
-    card.addEventListener('click', () => {
-      const ticketId = card.dataset.chgTicket;
-      if (!ticketId) return;
-      setView('tickets');
-      void selectTicket(ticketId);
-    }),
-  );
-
-  rows.querySelectorAll('[data-chg-handled]').forEach((button) =>
-    button.addEventListener('click', async (event) => {
-      event.stopPropagation();
-      button.disabled = true;
-      try {
-        await api(`/api/changes/${button.dataset.chgHandled}/handled`, {
-          method: 'POST',
-          body: '{}',
-        });
-        toast('Noté — la demande sort de vos retours fournisseur.');
-        changesCountAt = 0;
-        await loadChanges();
-      } catch (error) {
-        toast(error.message, true);
-        button.disabled = false;
-      }
-    }),
-  );
-
-  // Corriger une demande en attente : le même formulaire que la création,
-  // pré-rempli — l'annuler pour la refaire enverrait un second mail.
-  rows.querySelectorAll('[data-chg-edit]').forEach((button) =>
-    button.addEventListener('click', (event) => {
-      event.stopPropagation();
-      const change = state.changesRows.find(
-        (candidate) => candidate.id === button.dataset.chgEdit,
-      );
-      if (!change) return;
-
-      $('alert-modal').dataset.supplier = change.supplier?.id ?? '';
-      $('alert-modal').dataset.ticket = '';
-      $('alert-modal').dataset.order = change.shopifyOrderId ?? '';
-      $('alert-modal').dataset.editing = change.id;
-      $('alert-who').textContent = change.supplier?.name
-        ? `Demande à ${change.supplier.name}`
-        : '';
-      state.alertCtx = null;
-      setAlertKind(change.kind);
-      $('alert-before').value = change.beforeValue ?? '';
-      $('alert-after').value = change.afterValue ?? '';
-      const single = KINDS_SINGLE[change.kind];
-      if (single) {
-        $('alert-single').value =
-          (single.champ === 'before' ? change.beforeValue : change.afterValue) ?? '';
-      }
-      $('alert-order').value = change.orderName ?? '';
-      $('alert-message').value = change.message ?? '';
-      renderAlertSuppliers();
-      if (change.supplier?.id) $('alert-supplier').value = change.supplier.id;
-      $('alert-modal').hidden = false;
-      $('alert-modal').classList.add('open');
-    }),
-  );
-
-  rows.querySelectorAll('[data-chg-cancel]').forEach((button) =>
-    button.addEventListener('click', async (event) => {
-      // Le clic sur « Annuler » ne doit pas aussi ouvrir le mail : la carte
-      // entière est cliquable, et les deux gestes n'ont rien à voir.
-      event.stopPropagation();
-
-      if (!confirm('Annuler cette demande ? Elle disparaît aussi de l’espace du fournisseur.')) {
-        return;
-      }
-
-      button.disabled = true;
-      try {
-        await api(`/api/changes/${button.dataset.chgCancel}`, { method: 'DELETE' });
-        toast('Demande annulée.');
-        changesCountAt = 0;
-        await loadChanges();
-      } catch (error) {
-        toast(error.message, true);
-        button.disabled = false;
-      }
-    }),
-  );
 }
+
+function segmentsDemandesMarkup(liste, actif, attribut) {
+  return STATUTS_DEMANDE.map(([cle, nom]) => {
+    const n = liste.filter((change) => passeLeStatut(change, cle)).length;
+    return `<button type="button" data-${attribut}="${cle}" aria-pressed="${cle === actif}">${nom}<span class="fo-seg-n${
+      cle === 'PREVENIR' && n ? ' fo-seg-n-action' : ''
+    }">${n}</span></button>`;
+  }).join('');
+}
+
+const PROPOSER_AU_CLIENT = { SIZE: 'une autre taille', COLOR: 'une autre couleur', PRODUCT: 'un autre modèle' };
+const COCHE_FICHE =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>';
+const PICTOS_ETAT = {
+  attente: 'M7 3.5h10M7 20.5h10M8 3.5c0 5 8 5 8 8.5s-8 3.5-8 8.5M16 3.5c0 5-8 5-8 8.5',
+  faite: 'M5 12.5l4.5 4.5L19 7.5',
+  refusee: 'M7 7l10 10M17 7 7 17',
+};
+
+/** La fiche d'une demande : où elle en est, ce que dit l'atelier, quoi faire. */
+function ficheDemandeMarkup(change) {
+  if (!change) return '<p class="fo-vide fof-vide">Choisissez une demande dans la liste.</p>';
+  const d = lireDemande(change);
+  const etat = ETATS_DEMANDE[change.status] ?? ETATS_DEMANDE.PENDING;
+  const atelier = change.supplier?.name ?? 'l’atelier';
+  const repondue = change.status !== 'PENDING';
+  const id = esc(change.id);
+
+  const titreEtat =
+    change.status === 'REFUSED'
+      ? `Refusée par ${atelier}`
+      : change.status === 'ACKNOWLEDGED'
+        ? `Faite par ${atelier}`
+        : `En attente ${deNom(atelier)}`;
+
+  let conseil;
+  if (change.status === 'REFUSED') {
+    conseil = change.handledAt
+      ? 'Le client a été prévenu du refus.'
+      : `Ne confirmez rien au client : l’atelier n’a pas pu le faire.${
+          PROPOSER_AU_CLIENT[change.kind] ? ` Proposez-lui ${PROPOSER_AU_CLIENT[change.kind]}, ou un remboursement.` : ''
+        }`;
+  } else if (change.status === 'ACKNOWLEDGED') {
+    conseil = change.handledAt ? 'Le client a été prévenu.' : 'C’est fait : vous pouvez le confirmer au client.';
+  } else {
+    const heures = state.supplierHub?.[change.supplier?.id]?.fiabilite?.reponseMoyenneH;
+    conseil = `${heures != null ? `${atelier} répond d’ordinaire en ${dureeLisible(heures)}. ` : ''}Sa réponse arrivera dans À traiter, sur la page Fournisseur.`;
+    if (change.orderShipped) conseil = `La commande est déjà partie : la demande arrive peut-être trop tard. ${conseil}`;
+  }
+
+  const lienMail = (texte) =>
+    change.ticket ? `<button type="button" class="fof-lien" data-dem-mail="${esc(change.ticket.id)}">${texte}</button>` : '';
+  const gestes = aPrevenir(change)
+    ? `<div class="fof-gestes">
+        <button type="button" class="btn btn-primary" data-dem-prevenu="${id}">J’ai prévenu le client</button>
+        ${change.ticket ? `<button type="button" class="fo-bouton" data-dem-mail="${esc(change.ticket.id)}">Ouvrir le mail du client</button>` : ''}
+      </div>`
+    : change.status === 'PENDING'
+      ? `<div class="fof-gestes">
+          <button type="button" class="fo-bouton" data-chg-edit="${id}">Modifier la demande</button>
+          <button type="button" class="fo-bouton fo-bouton-rouge" data-chg-cancel="${id}">Annuler la demande</button>
+        </div>${lienMail('Ouvrir le mail du client')}`
+      : `<div class="fof-prevenu">${COCHE_FICHE}<span>Client prévenu ${esc(quandLong(change.handledAt))}</span>${lienMail('Ouvrir le mail')}</div>`;
+
+  const histoire = [
+    { quoi: change.creePar ? `Demandée par ${change.creePar}` : 'Demandée', quand: change.createdAt, ton: 'gris' },
+    change.emailedAt
+      ? { quoi: `Mail parti à ${atelier}`, quand: change.emailedAt, ton: 'gris' }
+      : change.status === 'PENDING'
+        ? KINDS_URGENTS.has(change.kind)
+          ? { quoi: 'Le mail n’est pas parti', quand: null, ton: 'refusee' }
+          : { quoi: 'Partira au récap de 9 h (Chine)', quand: null, ton: 'gris' }
+        : null,
+    repondue
+      ? { quoi: change.status === 'REFUSED' ? 'Refusée par l’atelier' : 'Faite par l’atelier', quand: change.acknowledgedAt, ton: etat.ton }
+      : { quoi: 'Réponse de l’atelier attendue', quand: null, ton: 'attente' },
+    change.handledAt ? { quoi: 'Client prévenu', quand: change.handledAt, ton: 'bleu' } : null,
+  ].filter(Boolean);
+
+  const expedition =
+    change.orderShipped === null || change.orderShipped === undefined
+      ? ''
+      : `<span><i class="fod-point fod-${repondue ? 'gris' : change.orderShipped ? 'refusee' : 'faite'}" aria-hidden="true"></i>${
+          change.orderShipped ? 'Déjà expédiée' : 'Pas encore expédiée'
+        }</span>`;
+
+  return `<div class="fof">
+    <div class="fof-tete">
+      <span class="fof-sur">${esc(
+        d.valeur ? [d.nature, change.orderName].filter(Boolean).join(' · ') : change.orderName ? `Commande ${change.orderName}` : 'Demande',
+      )}</span>
+      <h3 class="fof-titre">${esc(d.valeur || d.nature)}</h3>
+      <span class="fof-sous">${esc(
+        [d.avant ? `au lieu de ${d.avant}` : '', d.client, `demandée ${quandLong(change.createdAt)}`].filter(Boolean).join(' · '),
+      )}</span>
+    </div>
+
+    <div class="fof-etat fof-${etat.ton}">
+      <div class="fof-etat-l">
+        <span class="fof-pastille" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"
+          stroke-linecap="round" stroke-linejoin="round"><path d="${PICTOS_ETAT[etat.ton]}" /></svg></span>
+        <b>${esc(titreEtat)}</b>
+        <span class="fof-quand">${esc(repondue ? quandLong(change.acknowledgedAt) : change.emailedAt ? 'mail parti' : '')}</span>
+      </div>
+      ${change.supplierNote ? `<p class="fof-note">« ${esc(change.supplierNote)} »</p>` : ''}
+      <p class="fof-conseil">${esc(conseil)}</p>
+    </div>
+
+    ${gestes}
+
+    ${
+      !d.valeur && change.message
+        ? `<section class="fof-section"><h4 class="fof-t">Message à l’atelier</h4><p class="fof-message">${esc(change.message)}</p></section>`
+        : ''
+    }
+
+    <section class="fof-section">
+      <h4 class="fof-t">Historique</h4>
+      <ol class="fof-histoire">${histoire
+        .map(
+          (h) => `<li><i class="fod-point fod-${h.ton}" aria-hidden="true"></i><span>${esc(h.quoi)}</span><time>${esc(
+            h.quand ? quandLong(h.quand) : '',
+          )}</time></li>`,
+        )
+        .join('')}</ol>
+    </section>
+
+    ${
+      change.orderName
+        ? `<section class="fof-section">
+            <h4 class="fof-t">Commande ${esc(change.orderName)}</h4>
+            <div class="fof-commande">
+              <span class="fof-commande-txt"><b>${esc(d.client)}</b>${expedition}</span>
+              ${change.shopifyOrderId ? `<button type="button" class="fof-lien" data-dem-commande="${esc(change.shopifyOrderId)}">Voir la commande</button>` : ''}
+            </div>
+          </section>`
+        : ''
+    }
+  </div>`;
+}
+
+/* Les gestes de la liste et de la fiche, les mêmes sur les deux écrans. */
+function gererClicDemande(event, ecran) {
+  const sur = (selecteur) => event.target.closest(selecteur);
+  let cible;
+  if ((cible = sur('[data-dem]'))) {
+    choisirDemande(ecran, cible.dataset.dem);
+    return true;
+  }
+  if ((cible = sur('[data-dem-prevenu]'))) {
+    void marquerPrevenu(cible);
+    return true;
+  }
+  if ((cible = sur('[data-dem-mail]'))) {
+    setView('tickets');
+    void selectTicket(cible.dataset.demMail);
+    return true;
+  }
+  if ((cible = sur('[data-dem-commande]'))) {
+    void openOrderSheet(cible.dataset.demCommande);
+    return true;
+  }
+  if ((cible = sur('[data-chg-edit]'))) {
+    modifierDemande(cible.dataset.chgEdit);
+    return true;
+  }
+  if ((cible = sur('[data-chg-cancel]'))) {
+    void annulerDemande(cible);
+    return true;
+  }
+  return false;
+}
+
+function choisirDemande(ecran, id) {
+  state.demandeChoisie[ecran] = id;
+  if (ecran === 'changes') {
+    renderChangesScreen();
+    ouvrirPileModif();
+  } else {
+    renderDemandesFournisseur();
+    if (PILE_TICKETS.matches) ouvrirPileFo('fiche', id);
+  }
+}
+
+/* Les flèches haut et bas parcourent la liste, comme dans Mail. */
+function parcourirDemandes(event, ecran) {
+  if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+  const lignes = [...event.currentTarget.querySelectorAll('[data-dem]')];
+  const i = lignes.indexOf(document.activeElement);
+  if (i < 0) return;
+  event.preventDefault();
+  const suivante = lignes[i + (event.key === 'ArrowDown' ? 1 : -1)];
+  if (!suivante) return;
+  state.demandeChoisie[ecran] = suivante.dataset.dem;
+  if (ecran === 'changes') renderChangesScreen();
+  else renderDemandesFournisseur();
+  event.currentTarget.querySelector(`[data-dem="${suivante.dataset.dem}"]`)?.focus();
+}
+
+async function rechargerDemandes() {
+  changesCountAt = 0;
+  try {
+    const data = await api('/api/changes');
+    state.changesRows = data.changes ?? [];
+  } catch (error) {
+    toast(error.message, true);
+    return;
+  }
+  if (state.view === 'changes') renderChangesScreen();
+  if (state.view === 'suppliers') {
+    renderDemandesFournisseur();
+    renderATraiter();
+    void renderSupplierActivity();
+  }
+  void refreshChangesCount();
+}
+
+async function marquerPrevenu(bouton) {
+  bouton.disabled = true;
+  try {
+    await api(`/api/changes/${bouton.dataset.demPrevenu}/handled`, { method: 'POST', body: '{}' });
+    toast('Noté — la demande sort de vos retours fournisseur.');
+    await rechargerDemandes();
+  } catch (error) {
+    toast(error.message, true);
+    bouton.disabled = false;
+  }
+}
+
+// Corriger une demande en attente : le même formulaire que la création,
+// pré-rempli — l'annuler pour la refaire enverrait un second mail.
+function modifierDemande(id) {
+  const change = state.changesRows.find((candidate) => candidate.id === id);
+  if (!change) return;
+
+  $('alert-modal').dataset.supplier = change.supplier?.id ?? '';
+  $('alert-modal').dataset.ticket = '';
+  $('alert-modal').dataset.order = change.shopifyOrderId ?? '';
+  $('alert-modal').dataset.editing = change.id;
+  $('alert-who').textContent = change.supplier?.name ? `Demande à ${change.supplier.name}` : '';
+  state.alertCtx = null;
+  setAlertKind(change.kind);
+  $('alert-before').value = change.beforeValue ?? '';
+  $('alert-after').value = change.afterValue ?? '';
+  const single = KINDS_SINGLE[change.kind];
+  if (single) {
+    $('alert-single').value = (single.champ === 'before' ? change.beforeValue : change.afterValue) ?? '';
+  }
+  $('alert-order').value = change.orderName ?? '';
+  $('alert-message').value = change.message ?? '';
+  renderAlertSuppliers();
+  if (change.supplier?.id) $('alert-supplier').value = change.supplier.id;
+  $('alert-modal').hidden = false;
+  $('alert-modal').classList.add('open');
+}
+
+async function annulerDemande(bouton) {
+  if (!confirm('Annuler cette demande ? Elle disparaît aussi de l’espace du fournisseur.')) return;
+  bouton.disabled = true;
+  try {
+    await api(`/api/changes/${bouton.dataset.chgCancel}`, { method: 'DELETE' });
+    toast('Demande annulée.');
+    await rechargerDemandes();
+  } catch (error) {
+    toast(error.message, true);
+    bouton.disabled = false;
+  }
+}
+
+/* ------------------------------------------------------- Modification --- */
+
+state.changesRows = [];
+// Choisi au premier affichage : « À prévenir » s'il y a quelqu'un à prévenir.
+state.changesFilter = null;
+state.changesQ = '';
+state.demandeChoisie = { changes: null, suppliers: null };
+
+/** La pastille de Modification : les clients à prévenir d'une modification. */
+function modificationsAPrevenir(demandes) {
+  return (demandes ?? []).filter((d) => KINDS_MODIFICATION.has(d.kind) && aPrevenir(d)).length;
+}
+
+async function loadChanges() {
+  const rows = $('changes-rows');
+  if (!state.changesRows.length) rows.innerHTML = '<p class="fo-vide">Chargement…</p>';
+
+  let data;
+  try {
+    data = await api('/api/changes');
+  } catch (error) {
+    rows.innerHTML = `<p class="fo-vide">${esc(error.message)}</p>`;
+    return;
+  }
+
+  state.changesRows = data.changes ?? [];
+  state.changesPending = modificationsAPrevenir(state.changesRows);
+  state.navCounts = { ...state.navCounts, changes: state.changesPending };
+  renderNav();
+  renderChangesScreen();
+}
+
+function renderChangesScreen() {
+  const modifications = state.changesRows.filter((change) => KINDS_MODIFICATION.has(change.kind));
+  if (state.changesFilter === null) {
+    state.changesFilter = modifications.some(aPrevenir)
+      ? 'PREVENIR'
+      : modifications.some((change) => change.status === 'PENDING')
+        ? 'PENDING'
+        : '';
+  }
+  const filter = state.changesFilter;
+  const q = state.changesQ.trim().toLowerCase();
+  const cherche = (change) =>
+    !q ||
+    [change.orderName, change.supplier?.name, change.ticket?.customerName, change.ticket?.customerEmail, change.afterValue, change.beforeValue]
+      .some((valeur) => String(valeur ?? '').toLowerCase().includes(q));
+  const trouvees = modifications.filter(cherche);
+
+  $('changes-filters').innerHTML = segmentsDemandesMarkup(trouvees, filter, 'chg');
+  const shown = trouvees.filter((change) => passeLeStatut(change, filter));
+  const choisie =
+    shown.find((change) => change.id === state.demandeChoisie.changes) ??
+    (PILE_TICKETS.matches ? modifications.find((change) => change.id === state.demandeChoisie.changes) : shown[0]);
+  $('changes-rows').dataset.choisie = choisie?.id ?? '';
+  renderDemandes($('changes-rows'), $('changes-count'), shown, filter);
+  $('changes-fiche-corps').innerHTML = ficheDemandeMarkup(choisie);
+}
+
+let defilementModif = 0;
+
+function ouvrirPileModif() {
+  const vue = $('view-changes');
+  if (!PILE_TICKETS.matches || !vue) return;
+  if (!vue.classList.contains('pile-fiche')) {
+    defilementModif = scrollY;
+    vue.classList.add('pile-fiche');
+    history.pushState({ csavModif: true }, '');
+  }
+  requestAnimationFrame(() => scrollTo(0, 0));
+}
+
+function fermerPileModif({ parHistorique = false } = {}) {
+  const vue = $('view-changes');
+  if (!vue?.classList.contains('pile-fiche')) return;
+  vue.classList.remove('pile-fiche');
+  if (!parHistorique && history.state?.csavModif) history.back();
+  requestAnimationFrame(() => scrollTo(0, defilementModif));
+}
+
+addEventListener('popstate', () => fermerPileModif({ parHistorique: true }));
+
+$('view-changes').addEventListener('click', (event) => {
+  if (gererClicDemande(event, 'changes')) return;
+  if (event.target.closest('#changes-retour')) return fermerPileModif();
+  const segment = event.target.closest('[data-chg]');
+  if (!segment) return;
+  state.changesFilter = segment.dataset.chg;
+  state.demandeChoisie.changes = null;
+  renderChangesScreen();
+});
+$('changes-rows').addEventListener('keydown', (event) => parcourirDemandes(event, 'changes'));
+$('changes-q').addEventListener('input', (event) => {
+  state.changesQ = event.target.value;
+  renderChangesScreen();
+});
 
 /*
  * Demande hors mail.
@@ -13529,17 +13990,96 @@ $('changes-new')?.addEventListener('click', () => {
   $('alert-order').focus();
 });
 
-$('changes-filters')?.addEventListener('click', (event) => {
-  const chip = event.target.closest('[data-chg]');
-  if (!chip) return;
+/* --------------------------------------- écran Fournisseur : demandes ---- */
 
-  state.changesFilter = chip.dataset.chg;
-  $('changes-filters')
-    .querySelectorAll('.chip')
-    .forEach((other) =>
-      other.setAttribute('aria-pressed', String(other.dataset.chg === state.changesFilter)),
-    );
-  renderChangesScreen();
+// Toutes les demandes, triées par atelier, par type et par statut. Le statut
+// part de « À prévenir » s'il y a quelqu'un à prévenir.
+state.demandesFiltre = { fournisseur: null, type: '', statut: null };
+
+function renderDemandesFournisseur() {
+  const filtre = state.demandesFiltre;
+  const toutes = state.changesRows ?? [];
+  if (filtre.statut === null) {
+    filtre.statut = toutes.some(aPrevenir) ? 'PREVENIR' : toutes.some((change) => change.status === 'PENDING') ? 'PENDING' : '';
+  }
+
+  const portee = toutes.filter(
+    (change) =>
+      (!filtre.fournisseur || change.supplier?.id === filtre.fournisseur) &&
+      (!filtre.type || change.kind === filtre.type),
+  );
+  $('sup-dem-statut').innerHTML = segmentsDemandesMarkup(portee, filtre.statut, 'dstatut');
+
+  // Les types proposés sont ceux qui existent : un choix qui ne trie rien
+  // n'apprend qu'à ne plus ouvrir le menu.
+  const types = [...new Set(toutes.map((change) => change.kind))];
+  $('sup-dem-types').innerHTML = [['', 'Tous les types'], ...types.map((kind) => [kind, CHANGE_KINDS[kind] ?? kind])]
+    .map(
+      ([kind, nom]) => `<button type="button" role="menuitemradio" data-dtype="${esc(kind)}" aria-checked="${
+        filtre.type === kind
+      }"><span>${esc(nom)}</span><span class="fo-menu-n">${
+        toutes.filter((change) => !kind || change.kind === kind).length
+      }</span></button>`,
+    )
+    .join('');
+  $('sup-dem-type-nom').textContent = filtre.type ? (CHANGE_KINDS[filtre.type] ?? filtre.type) : 'Tous les types';
+
+  const fournisseur = state.suppliers?.find((supplier) => supplier.id === filtre.fournisseur);
+  const jeton = $('sup-dem-qui');
+  jeton.hidden = !fournisseur;
+  jeton.innerHTML = fournisseur
+    ? `${esc(fournisseur.name)}<svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M2 2l6 6M8 2 2 8" /></svg>`
+    : '';
+  jeton.setAttribute('aria-label', fournisseur ? `Retirer le filtre ${fournisseur.name}` : '');
+  document.querySelectorAll('#suppliers-rows .foa').forEach((carte) =>
+    carte.classList.toggle('foa-on', carte.dataset.supplier === filtre.fournisseur),
+  );
+
+  const shown = portee.filter((change) => passeLeStatut(change, filtre.statut));
+  const choisie =
+    shown.find((change) => change.id === state.demandeChoisie.suppliers) ??
+    (PILE_TICKETS.matches ? toutes.find((change) => change.id === state.demandeChoisie.suppliers) : shown[0]);
+  $('sup-dem-rows').dataset.choisie = choisie?.id ?? '';
+  renderDemandes($('sup-dem-rows'), $('sup-dem-count'), shown, filtre.statut);
+  $('sup-dem-fiche').innerHTML = ficheDemandeMarkup(choisie);
+}
+
+async function chargerDemandesFournisseur() {
+  try {
+    const data = await api('/api/changes');
+    state.changesRows = data.changes ?? [];
+  } catch (error) {
+    $('sup-dem-rows').innerHTML = `<p class="fo-vide">${esc(error.message)}</p>`;
+    return;
+  }
+  renderDemandesFournisseur();
+  renderATraiter();
+}
+
+function basculerMenuTypes(ouvrir) {
+  const menu = $('sup-dem-types');
+  const ouvert = ouvrir ?? menu.hidden;
+  menu.hidden = !ouvert;
+  $('sup-dem-type-btn').setAttribute('aria-expanded', String(ouvert));
+  if (ouvert) (menu.querySelector('[aria-checked="true"]') ?? menu.querySelector('button'))?.focus();
+}
+
+$('sup-dem-rows').addEventListener('keydown', (event) => parcourirDemandes(event, 'suppliers'));
+$('sup-dem-types').addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    basculerMenuTypes(false);
+    $('sup-dem-type-btn').focus();
+    return;
+  }
+  if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+  event.preventDefault();
+  const items = [...$('sup-dem-types').querySelectorAll('button')];
+  const i = items.indexOf(document.activeElement);
+  items[(i + (event.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length]?.focus();
+});
+document.addEventListener('click', (event) => {
+  if ($('sup-dem-types').hidden || event.target.closest('#sup-dem-types, #sup-dem-type-btn')) return;
+  basculerMenuTypes(false);
 });
 
 /* Chaque vue charge à sa première ouverture. Interroger Shopify pour un écran
@@ -17059,6 +17599,10 @@ function gesteAuDepart(cible) {
     if (vue && !vue.hidden && vue.classList.contains('pile-message')) return 'retour';
     const commandes = $('view-orders');
     if (commandes && !commandes.hidden && commandes.classList.contains('pile-fiche')) return 'retourCommande';
+    const fournisseurs = $('view-suppliers');
+    if (fournisseurs && !fournisseurs.hidden && fournisseurs.classList.contains('fo-pile')) return 'retourFournisseur';
+    const modifications = $('view-changes');
+    if (modifications && !modifications.hidden && modifications.classList.contains('pile-fiche')) return 'retourModification';
     return 'ouvrir';
   }
   // Sur une tablette en paysage, la colonne est là : on la replie ou on la
@@ -17107,16 +17651,27 @@ function ecarterHorloges(vers) {
   setTimeout(remettre, 220);
 }
 
+/* Ce qu'un glissé vers la droite referme, et ce qu'il fait suivre au doigt. */
+const RETOURS = {
+  retour: { pane: () => $('d-pane'), fermer: () => fermerMessagePile() },
+  retourCommande: { pane: () => $('orders-fiche'), fermer: () => fermerFichePile() },
+  retourStats: { pane: () => document.querySelector('#sta-detail .sta-detail-fenetre'), fermer: () => fermerDetailStats() },
+  retourFournisseur: {
+    pane: () => (state.foPile?.mode === 'atelier' ? document.querySelector('#suppliers-rows .foa-pousse') : $('sup-dem-fiche')),
+    fermer: () => fermerPileFo(),
+  },
+  retourModification: { pane: () => $('changes-fiche'), fermer: () => fermerPileModif() },
+};
+
 function paneDuRetour(type) {
-  if (type === 'retourStats') return document.querySelector('#sta-detail .sta-detail-fenetre');
-  return $(type === 'retour' ? 'd-pane' : 'orders-fiche');
+  return RETOURS[type]?.pane() ?? null;
 }
 
 function suivreGeste(geste) {
   const { type, dx } = geste;
   if (type === 'ouvrir') poserTiroir(dx - (document.querySelector('.side').offsetWidth || 280));
   else if (type === 'fermer') poserTiroir(dx);
-  else if (type === 'retour' || type === 'retourCommande' || type === 'retourStats') {
+  else if (RETOURS[type]) {
     const pane = paneDuRetour(type);
     if (pane) {
       pane.style.transition = 'none';
@@ -17138,10 +17693,10 @@ function conclureGeste({ type, dx }, annule) {
   } else if (type === 'fermer') {
     poserTiroir(null);
     toggleNav(!(franchi && dx < 0));
-  } else if (type === 'retour' || type === 'retourCommande' || type === 'retourStats') {
+  } else if (RETOURS[type]) {
     const pane = paneDuRetour(type);
     if (pane) pane.style.transform = pane.style.transition = '';
-    if (franchi && dx > 0) ({ retour: fermerMessagePile, retourCommande: fermerFichePile, retourStats: fermerDetailStats })[type]();
+    if (franchi && dx > 0) RETOURS[type].fermer();
   } else if (type === 'horloges') {
     const pop = $('clockpop');
     if (franchi) return ecarterHorloges(Math.sign(dx));
@@ -20573,82 +21128,6 @@ $('upd-send')?.addEventListener('click', async () => {
   } finally {
     bouton.disabled = false;
   }
-});
-
-
-/* --------------------------------------- écran Fournisseur : demandes ---- */
-
-state.demandesFiltre = { fournisseur: null, type: '', statut: 'PENDING' };
-
-function renderDemandesFournisseur() {
-  const filtre = state.demandesFiltre;
-  const toutes = state.changesRows ?? [];
-
-  // Les types proposés sont ceux qui existent : un bouton qui ne trie rien
-  // n'apprend qu'à ne plus cliquer.
-  const types = [...new Set(toutes.map((change) => change.kind))];
-  $('sup-dem-types').innerHTML = [
-    `<button class="chip" data-dtype="" aria-pressed="${!filtre.type}">Tous les types</button>`,
-    ...types.map(
-      (kind) => `<button class="chip" data-dtype="${esc(kind)}" aria-pressed="${filtre.type === kind}">${esc(
-        CHANGE_KINDS[kind] ?? kind,
-      )}</button>`,
-    ),
-  ].join('');
-
-  const fournisseur = state.suppliers?.find((supplier) => supplier.id === filtre.fournisseur);
-  $('sup-dem-qui').textContent = fournisseur ? `· ${fournisseur.name}` : '';
-  document.querySelectorAll('#suppliers-rows .supc').forEach((carte) =>
-    carte.classList.toggle('supc-on', carte.dataset.supplier === filtre.fournisseur),
-  );
-
-  const shown = toutes.filter(
-    (change) =>
-      (!filtre.fournisseur || change.supplier?.id === filtre.fournisseur) &&
-      (!filtre.type || change.kind === filtre.type) &&
-      (!filtre.statut || change.status === filtre.statut),
-  );
-  renderDemandes($('sup-dem-rows'), $('sup-dem-count'), shown, filtre.statut);
-}
-
-async function chargerDemandesFournisseur() {
-  try {
-    const data = await api('/api/changes');
-    state.changesRows = data.changes ?? [];
-  } catch (error) {
-    $('sup-dem-rows').innerHTML = `<p class="empty">${esc(error.message)}</p>`;
-    return;
-  }
-  renderDemandesFournisseur();
-}
-
-$('sup-dem-types')?.addEventListener('click', (event) => {
-  const chip = event.target.closest('[data-dtype]');
-  if (!chip) return;
-  state.demandesFiltre.type = chip.dataset.dtype;
-  renderDemandesFournisseur();
-});
-
-$('sup-dem-statut')?.addEventListener('click', (event) => {
-  const chip = event.target.closest('[data-dstatut]');
-  if (!chip) return;
-  state.demandesFiltre.statut = chip.dataset.dstatut;
-  $('sup-dem-statut')
-    .querySelectorAll('[data-dstatut]')
-    .forEach((other) => other.setAttribute('aria-pressed', String(other.dataset.dstatut === chip.dataset.dstatut)));
-  renderDemandesFournisseur();
-});
-
-// Un clic sur la carte d'un fournisseur (hors de ses boutons) ne garde que
-// ses demandes ; un second clic les rend toutes.
-$('suppliers-rows')?.addEventListener('click', (event) => {
-  if (event.target.closest('button, a')) return;
-  const carte = event.target.closest('.supc[data-supplier]');
-  if (!carte) return;
-  const id = carte.dataset.supplier;
-  state.demandesFiltre.fournisseur = state.demandesFiltre.fournisseur === id ? null : id;
-  renderDemandesFournisseur();
-  $('sup-dem-rows').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 });
 
 

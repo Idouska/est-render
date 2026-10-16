@@ -78,7 +78,7 @@ test('la qualité se rattache à l’atelier qui a préparé la commande', () =>
   const donnees = lire('src/services/suppliers/fiabiliteDonnees.ts');
   assert.match(donnees, /const depuis = new Date\(maintenant\.getTime\(\) - 90 \* 86_400_000\);/);
   assert.match(donnees, /if \(atelierDe\.get\(manquant\.shopifyOrderId!\) === manquant\.supplierId\)/);
-  assert.match(lire('public/app.js'), /ligne\('Qualité · 90 jours', qualite\)/);
+  assert.match(lire('public/app.js'), /<p class="foa-t">Qualité · 90 jours<\/p>\$\{qualite\}/);
 });
 
 test('le relevé : borné à la boutique, à l’écran et en Excel', () => {

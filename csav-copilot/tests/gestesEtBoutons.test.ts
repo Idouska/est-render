@@ -56,10 +56,8 @@ test('le menu s’ouvre vers la droite, se ferme vers la gauche', () => {
   const conclure = corps('function conclureGeste(');
   assert.match(conclure, /toggleNav\(franchi && dx > 0\);/);
   assert.match(conclure, /toggleNav\(!\(franchi && dx < 0\)\);/);
-  assert.match(
-    conclure,
-    /if \(franchi && dx > 0\) \(\{ retour: fermerMessagePile, retourCommande: fermerFichePile, retourStats: fermerDetailStats \}\)\[type\]\(\);/,
-  );
+  assert.match(conclure, /if \(franchi && dx > 0\) RETOURS\[type\]\.fermer\(\);/);
+  assert.match(app, /retourCommande: \{ pane: \(\) => \$\('orders-fiche'\), fermer: \(\) => fermerFichePile\(\) \}/);
   // Le menu suit le doigt.
   assert.match(corps('function poserTiroir('), /side\.style\.transform = `translateX\(\$\{x\}px\)`;/);
 });

@@ -36,8 +36,8 @@ test('l’espace porte son nouveau nom, dans les trois langues', () => {
   assert.equal(table.zh!['head.crumb'], '供应商空间');
   assert.match(html, /<title>Espace fournisseur — commandes à préparer<\/title>/);
   // Les boutons du marchand qui ouvrent ou copient le lien suivent.
-  assert.match(app, />Ouvrir l’espace fournisseur<\/button>/);
-  assert.match(app, /Copier le lien de l’espace\n/);
+  assert.match(app, /data-sup-open="\$\{esc\(supplier\.id\)\}">Ouvrir l’espace<\/button>/);
+  assert.match(app, /data-sup-link="\$\{esc\(supplier\.id\)\}">Copier le lien<\/button>/);
   assert.doesNotMatch(app, /Copier le lien atelier|>Ouvrir l'atelier</);
 });
 

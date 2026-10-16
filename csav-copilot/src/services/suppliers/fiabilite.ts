@@ -35,6 +35,13 @@ export interface Fiabilite {
   demandes: number;
   reponseMoyenneH: number | null;
   refusPct: number | null;
+  /**
+   * Le volume derrière la part de refus. Sur une ou deux réponses, l'écran
+   * dit « 1 sur 1 » plutôt que « 100 % » : un pourcentage sur un seul cas
+   * alarme pour rien.
+   */
+  repondues: number;
+  refus: number;
   /** Commandes dont le délai est écoulé : les seules qu'on peut juger. */
   commandes: number;
   expeditionMoyenneJ: number | null;
@@ -82,6 +89,8 @@ export function calculerFiabilite(params: {
     refusPct: repondues.length
       ? Math.round((repondues.filter((demande) => demande.statut === 'REFUSED').length / repondues.length) * 100)
       : null,
+    repondues: repondues.length,
+    refus: repondues.filter((demande) => demande.statut === 'REFUSED').length,
     commandes: jugeables.length,
     expeditionMoyenneJ: expedition === null ? null : Math.round(expedition * 10) / 10,
     retardPct: jugeables.length ? Math.round((enRetard.length / jugeables.length) * 100) : null,

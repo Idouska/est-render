@@ -98,15 +98,17 @@ test('la page Fournisseur liste ce que sa pastille compte', () => {
   assert.match(routeFournisseurs, /prisma\.ticket\.count\(\{ where: signalementsOuverts\(merchantId\) \}\)/);
   assert.doesNotMatch(routeFournisseurs, /customerEmail: \{ startsWith: 'fournisseur\+' \}/);
 
-  // L'écran : la section, chargée avec la vue, et ses deux gestes.
-  assert.match(html, /<section class="sup-sig" id="sup-sig" hidden/);
+  // L'écran : une ligne par signalement dans « À traiter », chargée avec la
+  // vue, et ses deux gestes.
+  assert.match(html, /<section class="fo-bloc fo-traiter" id="fo-traiter" hidden/);
   assert.match(app, /void renderSupplierActivity\(\);\n\s+void renderSignalementsFournisseurs\(\);/);
-  const rendu = corps(app, 'async function renderSignalementsFournisseurs(');
-  assert.match(rendu, /api\('\/api\/supplier-signalements'\)/);
+  assert.match(corps(app, 'async function renderSignalementsFournisseurs('), /api\('\/api\/supplier-signalements'\)/);
+  const rendu = corps(app, 'function renderATraiter(');
+  assert.match(rendu, /for \(const sig of state\.signalementsFournisseurs \?\? \[\]\)/);
   assert.match(rendu, /data-sig-open=/);
   assert.match(rendu, /data-sig-done=/);
   // « Traité » clôt le ticket : l'atelier le voit alors « Clos ».
-  assert.match(app, /api\(`\/api\/tickets\/\$\{fait\.dataset\.sigDone\}\/resolve`/);
+  assert.match(app, /api\(`\/api\/tickets\/\$\{bouton\.dataset\.sigDone\}\/resolve`/);
   // Le bandeau du haut ne renvoie plus vers toute la file SAV client.
   assert.doesNotMatch(app, /signalement d’atelier', 'tickets'\)/);
 });
