@@ -670,6 +670,33 @@ export function createMockShopifyClient(shopDomain: string): ShopifyClient {
         } as T;
       }
 
+      // Deux ans de ventes déterministes, à l'heure près : la comparaison avec
+      // l'an dernier et le regroupement par heure ont de quoi se montrer. La
+      // graine est le jour du calendrier, pas « il y a N jours » : un même
+      // jour garde ses ventes d'un appel à l'autre.
+      if (query.includes('query VentesPeriode')) {
+        const [, debut = '', fin = ''] = /created_at:>='([^']+)' created_at:<'([^']+)'/.exec(String(variables?.query ?? '')) ?? [];
+        const depuis = Date.parse(debut);
+        const avant = Math.min(Date.parse(fin), Date.now());
+        const nodes = [];
+        for (let jour = Math.floor(depuis / 86_400_000); jour * 86_400_000 < avant; jour += 1) {
+          const graine = (jour * 7919) % 23;
+          const saison = 1 + 0.25 * Math.sin(jour / 58);
+          const nombre = Math.round((2 + (graine % 5)) * saison);
+          for (let i = 0; i < nombre; i += 1) {
+            const instant = jour * 86_400_000 + (7 + ((graine * 5 + i * 7) % 15)) * 3_600_000 + ((i * 17) % 60) * 60_000;
+            if (instant < depuis || instant >= avant) continue;
+            nodes.push({
+              createdAt: new Date(instant).toISOString(),
+              cancelledAt: (graine + i) % 29 === 0 ? new Date(instant).toISOString() : null,
+              totalPriceSet: { shopMoney: { amount: (79 + ((graine * 13 + i * 31) % 90)).toFixed(2), currencyCode: 'EUR' } },
+              totalRefundedSet: (graine + i) % 11 === 0 ? { shopMoney: { amount: '39.00' } } : null,
+            });
+          }
+        }
+        return { orders: { pageInfo: { hasNextPage: false, endCursor: null }, nodes } } as T;
+      }
+
       if (query.includes('query CommerceStats')) {
         // Soixante jours de ventes plausibles, déterministes : un graphe de
         // démonstration qui change à chaque appel ferait douter du vrai.

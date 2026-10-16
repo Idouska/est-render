@@ -8542,54 +8542,12 @@ function duration(minutes) {
   return `${Math.round(hours / 24)} j`;
 }
 
-/* La période choisie vaut pour tout l'écran de statistiques. */
-let statsDays = 30;
-
 function money(value, currency) {
   return new Intl.NumberFormat('fr-FR', {
     style: 'currency',
     currency: currency || 'EUR',
     maximumFractionDigits: value >= 1000 ? 0 : 2,
   }).format(value);
-}
-
-/**
- * Histogramme SVG, sans bibliothèque.
- *
- * Chaque barre porte son infobulle native (`<title>`) : jour, valeur exacte.
- * Une bibliothèque de graphiques apporterait le zoom et les légendes animées ;
- * pour trente barres et une lecture de tendance, elle n'apporterait que du
- * poids et une dépendance à surveiller.
- */
-function svgBars(days, pick, format, options = {}) {
-  const peak = Math.max(1, ...days.map(pick));
-  const width = 100 / days.length;
-
-  const bars = days
-    .map((day, index) => {
-      const value = pick(day);
-      const height = Math.max(value > 0 ? 2 : 0, (value / peak) * 92);
-      const label = new Date(day.day + 'T00:00:00').toLocaleDateString('fr-FR', {
-        day: 'numeric',
-        month: 'short',
-      });
-      return `<g>
-        <title>${esc(label)} — ${esc(format(value))}</title>
-        <rect x="${(index * width + width * 0.15).toFixed(2)}" y="${(100 - height).toFixed(2)}"
-          width="${(width * 0.7).toFixed(2)}" height="${height.toFixed(2)}" rx="1"
-          class="bar${options.soft ? ' bar-soft' : ''}" />
-      </g>`;
-    })
-    .join('');
-
-  // Repères horizontaux au quart : assez pour situer, pas assez pour rayer.
-  const grid = [25, 50, 75]
-    .map((y) => `<line x1="0" x2="100" y1="${y}" y2="${y}" class="chart-grid" />`)
-    .join('');
-
-  return `<svg class="chart" viewBox="0 0 100 100" preserveAspectRatio="none"
-    role="img">${grid}${bars}</svg>
-    <div class="chart-scale"><span>${esc(format(peak))}</span><span>0</span></div>`;
 }
 
 /*
@@ -8684,161 +8642,1138 @@ function intentBars(byIntent, options = {}) {
     .join('');
 }
 
-async function loadStats() {
-  // Les deux sources partent ensemble et échouent séparément : Shopify en
-  // panne ne doit pas priver l'écran des chiffres d'équipe, ni l'inverse.
-  const [raw, commerce] = await Promise.all([
-    api(`/api/stats?days=${statsDays}`),
-    api(`/api/stats/commerce?days=${statsDays}`).catch(() => null),
-  ]);
+/*
+ * Les statistiques, façon Shopify.
+ *
+ * Trois réglages gouvernent tout l'écran : une période au calendrier
+ * (« 30 derniers jours », « Depuis le 1er janvier », ou deux dates choisies),
+ * une comparaison (la période précédente, la même l'an dernier, aucune) et un
+ * regroupement (heure, jour, semaine, mois). Chaque carte s'ouvre en grand :
+ * ses barres face à celles de la comparaison, et le tableau de ses valeurs.
+ *
+ * Les ventes viennent de Shopify, le SAV de la base : deux appels qui
+ * arrivent et échouent séparément. Les réglages restent dans ce navigateur.
+ */
 
-  /*
-   * La réponse est complétée avant d'être lue.
-   *
-   * L'écran piochait dans une dizaine de champs imbriqués sans jamais vérifier
-   * qu'ils existent : une réponse partielle — appel dégradé, version d'API
-   * décalée — et toute la page Statistiques tombait sur une exception, sans
-   * un mot. Un chiffre à zéro se lit ; un écran blanc, non.
-   */
-  const stats = {
-    ...raw,
-    tickets: { total: 0, byIntent: {}, daily: [], ...(raw?.tickets ?? {}) },
-    firstReply: { medianMinutes: null, measured: 0, ...(raw?.firstReply ?? {}) },
-    team: raw?.team ?? [],
-    drafts: {
-      total: 0,
-      sent: 0,
-      sendRate: 0,
-      averageConfidence: null,
-      ...(raw?.drafts ?? {}),
-    },
-    agents: raw?.agents ?? [],
-  };
+const PERIODES_STATS = [
+  { cle: 'aujourdhui', nom: 'Aujourd’hui' },
+  { cle: 'hier', nom: 'Hier' },
+  { cle: '7', nom: '7 derniers jours' },
+  { cle: '30', nom: '30 derniers jours' },
+  { cle: '90', nom: '90 derniers jours' },
+  { cle: '365', nom: '12 derniers mois' },
+  { cle: 'annee', nom: 'Depuis le 1er janvier' },
+  { cle: 'perso', nom: 'Personnalisée' },
+];
+const COMPARAISONS_STATS = {
+  precedente: { nom: 'période précédente', court: 'la période précédente', colonne: 'Période précédente' },
+  annee: { nom: 'même période l’an dernier', court: 'l’an dernier', colonne: 'L’an dernier' },
+  aucune: { nom: 'aucune', court: '', colonne: '' },
+};
+const GRAINS_STATS = [
+  { cle: 'heure', nom: 'Heure', par: 'heure' },
+  { cle: 'jour', nom: 'Jour', par: 'jour' },
+  { cle: 'semaine', nom: 'Semaine', par: 'semaine' },
+  { cle: 'mois', nom: 'Mois', par: 'mois' },
+];
+/** Un an et un jour au plus, comme côté serveur (`JOURS_MAX`). */
+const JOURS_MAX_STATS = 366;
 
-  $('stats-range')
-    .querySelectorAll('button')
-    .forEach((button) => {
-      button.setAttribute('aria-pressed', String(Number(button.dataset.days) === statsDays));
-    });
+/*
+ * Chaque mesure : d'où elle vient, comment elle s'écrit, et dans quel sens
+ * elle s'améliore — un remboursé qui monte s'écrit en rouge, un panier qui
+ * monte en vert. Une part se compare en points, pas en pour cent d'elle-même.
+ */
+const MESURES_STATS = {
+  ca: { titre: 'Chiffre d’affaires', source: 'ventes', format: 'argent', mieux: 1, total: (t) => t.ca },
+  commandes: { titre: 'Commandes', source: 'ventes', format: 'nombre', mieux: 1, total: (t) => t.commandes },
+  panier: { titre: 'Panier moyen', source: 'ventes', format: 'argent', mieux: 1, total: (t) => t.panier },
+  rembourse: { titre: 'Remboursé', source: 'ventes', format: 'argent', mieux: -1, total: (t) => t.rembourse },
+  messages: { titre: 'Messages reçus', source: 'sav', format: 'nombre', mieux: -1, total: (t) => t.messages },
+  premiereReponse: {
+    titre: 'Première réponse',
+    source: 'sav',
+    format: 'duree',
+    mieux: -1,
+    total: (t) => t.premiereReponse.mediane,
+  },
+  brouillons: { titre: 'Brouillons utilisés', source: 'sav', format: 'part', mieux: 1, total: (t) => t.brouillons.taux },
+  aClasser: { titre: 'À classer', source: 'sav', format: 'part', mieux: -1, total: (t) => t.aClasser.part },
+  motifs: { titre: 'Motifs des demandes', source: 'sav', format: 'nombre', mieux: -1, total: (t) => t.messages },
+};
 
-  /* ------------------------------------------------ chiffres boutique --- */
+/* Les motifs en mots de tous les jours ; les messages sans motif sont « à classer ». */
+const MOTIFS_STATS = {
+  WISMO: 'Où est ma commande',
+  RETURN: 'Retour',
+  DISPUTE: 'Litige',
+  REFUND: 'Remboursement',
+  PRODUCT_QUESTION: 'Question produit',
+  POSITIVE: 'Message positif',
+  OTHER: 'À classer',
+};
 
-  if (commerce) {
-    const t = commerce.totals;
-    $('commerce-kpis').innerHTML = [
-      ['Chiffre d’affaires', money(t.revenue, commerce.currency), `${t.orders} commandes`],
-      ['Panier moyen', money(t.averageOrder, commerce.currency), 'par commande'],
-      [
-        'Remboursé',
-        money(t.refunded, commerce.currency),
-        `${(t.refundRate * 100).toFixed(1).replace('.', ',')} % du CA`,
-      ],
-      ['À expédier', t.unfulfilled, t.cancelled ? `${t.cancelled} annulées` : 'commandes en attente'],
-    ]
-      .map(
-        ([label, value, note]) => `<div class="kpi">
-          <span class="kpi-label">${esc(String(label))}</span>
-          <span class="kpi-value">${esc(String(value))}</span>
-          <span class="kpi-note">${esc(String(note))}</span>
-        </div>`,
-      )
-      .join('');
+/* ------------------------------------------------------------ dates ---- */
 
-    $('chart-revenue').innerHTML = svgBars(
-      commerce.days,
-      (day) => day.revenue,
-      (value) => money(value, commerce.currency),
-    );
-    $('ca-note').textContent =
-      (commerce.refundsViaTool?.count ?? 0) > 0
-        ? `${commerce.refundsViaTool.count} remboursement${
-            commerce.refundsViaTool.count > 1 ? 's' : ''
-          } via l’outil`
-        : '';
-
-    $('chart-orders').innerHTML = svgBars(
-      commerce.days,
-      (day) => day.orders,
-      (value) => `${Math.round(value)} commande${value > 1 ? 's' : ''}`,
-      { soft: true },
-    );
-  } else {
-    $('commerce-kpis').innerHTML = '';
-    $('chart-revenue').innerHTML =
-      '<p class="empty">Shopify n’a pas répondu — les chiffres boutique reviendront avec lui.</p>';
-    $('chart-orders').innerHTML = '<p class="empty">—</p>';
-    $('ca-note').textContent = '';
-  }
-
-  $('chart-intents').innerHTML = intentBars(stats.tickets?.byIntent);
-
-  /* --------------------------------------------------------- équipe --- */
-
-  $('stats-kpis').innerHTML = [
-    ['Messages reçus', stats.tickets.total, `${statsDays} derniers jours`],
-    // Les réponses parties de Gmail comptent comme celles de l'outil : voir
-    // `premieresReponses` côté serveur.
-    [
-      'Première réponse',
-      duration(stats.firstReply.medianMinutes),
-      `médiane sur ${stats.firstReply.measured} conversation${stats.firstReply.measured > 1 ? 's' : ''}`,
-    ],
-    ['Brouillons utilisés', `${Math.round(stats.drafts.sendRate * 100)} %`, `${stats.drafts.sent} sur ${stats.drafts.total}, suivis d’une réponse`],
-    [
-      'Confiance moyenne',
-      stats.drafts.averageConfidence === null
-        ? '—'
-        : `${Math.round(stats.drafts.averageConfidence * 100)} %`,
-      'sur les brouillons rédigés',
-    ],
-  ]
-    .map(
-      ([label, value, note]) => `<div class="kpi">
-        <span class="kpi-label">${esc(label)}</span>
-        <span class="kpi-value">${esc(String(value))}</span>
-        <span class="kpi-note">${esc(note)}</span>
-      </div>`,
-    )
-    .join('');
-
-  /* Histogramme en CSS pur : une bibliothèque de graphiques pour douze barres
-     ajouterait un build et une dépendance à surveiller. */
-  const peak = Math.max(1, ...stats.tickets.daily.map((day) => day.received));
-
-  $('stats-daily').innerHTML = `<div class="spark">${stats.tickets.daily
-    .map(
-      (day) => `<span class="spark-col" title="${esc(day.day)} — ${day.received} reçus, ${
-        day.handled
-      } traités">
-        <i style="height:${Math.round((day.received / peak) * 100)}%"></i>
-        <u style="height:${Math.round((day.handled / peak) * 100)}%"></u>
-      </span>`,
-    )
-    .join('')}</div>
-    <p class="set-help" style="margin-top:10px">
-      Barre pleine : messages reçus. Barre foncée : messages traités. Quand la
-      seconde reste durablement sous la première, la file grossit.
-    </p>`;
-
-  $('stats-team').innerHTML =
-    stats.team
-      .map(
-        (member) => `<tr class="${member.active ? '' : 'muted'}">
-          <td><b>${esc(member.name)}</b></td>
-          <td>${esc(ROLE_LABELS[member.role] ?? member.role)}</td>
-          <td class="num mono">${member.replies}</td>
-          <td class="num mono">${member.refunds}</td>
-          <td class="num mono">${member.escalations}</td>
-        </tr>`,
-      )
-      .join('') || '<tr><td colspan="5" class="empty">Aucune activité sur la période.</td></tr>';
+/** Une date du calendrier local, `AAAA-MM-JJ`. */
+function dateLocale(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+/** À midi UTC : aucun changement d'heure ne fait glisser la date. */
+function jourDe(date) {
+  const [a, m, j] = date.split('-').map(Number);
+  return new Date(Date.UTC(a, m - 1, j, 12));
+}
+function decalerDate(date, n) {
+  const d = jourDe(date);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+function joursDe(debut, fin) {
+  return Math.round((jourDe(fin) - jourDe(debut)) / 86_400_000) + 1;
+}
+function anneeAvant(date) {
+  const [a, m, j] = date.split('-').map(Number);
+  const dernier = new Date(Date.UTC(a - 1, m, 0)).getUTCDate();
+  return `${a - 1}-${String(m).padStart(2, '0')}-${String(Math.min(j, dernier)).padStart(2, '0')}`;
 }
 
-$('stats-range').addEventListener('click', (event) => {
-  const button = event.target.closest('[data-days]');
-  if (!button) return;
-  statsDays = Number(button.dataset.days);
+function datesDuRaccourci(cle) {
+  const auj = dateLocale();
+  if (cle === 'aujourdhui') return [auj, auj];
+  if (cle === 'hier') return [decalerDate(auj, -1), decalerDate(auj, -1)];
+  if (cle === 'annee') return [`${auj.slice(0, 4)}-01-01`, auj];
+  const jours = { 7: 7, 90: 90, 365: 365 }[cle] ?? 30;
+  return [decalerDate(auj, -(jours - 1)), auj];
+}
+
+function periodeComparee(debut, fin, comparer) {
+  if (comparer === 'aucune') return null;
+  if (comparer === 'annee') return [anneeAvant(debut), anneeAvant(fin)];
+  const jours = joursDe(debut, fin);
+  return [decalerDate(debut, -jours), decalerDate(debut, -1)];
+}
+
+/* Mêmes règles que le serveur (`grainParDefaut`, `grainPermis`). */
+function grainEffectif(grain, jours) {
+  const defaut = jours <= 1 ? 'heure' : jours <= 31 ? 'jour' : jours <= 120 ? 'semaine' : 'mois';
+  const g = grain ?? defaut;
+  return g === 'heure' && jours > 7 ? 'jour' : g;
+}
+
+const moisLong = (d) => d.toLocaleDateString('fr-FR', { month: 'long', timeZone: 'UTC' });
+const quantieme = (d) => (d.getUTCDate() === 1 ? '1er' : String(d.getUTCDate()));
+
+/** « du 17 septembre au 16 octobre 2026 », « le 16 octobre 2026 ». */
+function plageEnLettres(debut, fin) {
+  const d = jourDe(debut);
+  const f = jourDe(fin);
+  const an = (x) => x.getUTCFullYear();
+  const finTxt = `${quantieme(f)} ${moisLong(f)} ${an(f)}`;
+  if (debut === fin) return `le ${finTxt}`;
+  if (an(d) !== an(f)) return `du ${quantieme(d)} ${moisLong(d)} ${an(d)} au ${finTxt}`;
+  if (d.getUTCMonth() === f.getUTCMonth()) return `du ${quantieme(d)} au ${finTxt}`;
+  return `du ${quantieme(d)} ${moisLong(d)} au ${finTxt}`;
+}
+
+/** « 17 sept. – 16 oct. 2026 » : le nom d'une période choisie au calendrier. */
+function plageCourte(debut, fin) {
+  const court = (x, an) =>
+    x.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', ...(an ? { year: 'numeric' } : {}), timeZone: 'UTC' });
+  if (debut === fin) return court(jourDe(fin), true);
+  return `${court(jourDe(debut), debut.slice(0, 4) !== fin.slice(0, 4))} – ${court(jourDe(fin), true)}`;
+}
+
+const majuscule = (texte) => texte.charAt(0).toUpperCase() + texte.slice(1);
+
+/** Le nom d'un point : `14 h`, `16 oct.`, `oct. 2026` ; en long pour l'infobulle et le tableau. */
+function etiquettePoint(cle, grain, long = false) {
+  if (grain === 'heure') {
+    const heure = `${Number(cle.slice(11))} h`;
+    return long ? `${jourDe(cle.slice(0, 10)).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })}, ${heure}` : heure;
+  }
+  if (grain === 'mois') {
+    return jourDe(`${cle}-01`).toLocaleDateString('fr-FR', { month: long ? 'long' : 'short', year: 'numeric', timeZone: 'UTC' });
+  }
+  const d = jourDe(cle);
+  if (grain === 'semaine') {
+    const txt = d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+    return long ? `Semaine du ${txt}` : txt;
+  }
+  return d.toLocaleDateString('fr-FR', {
+    ...(long ? { weekday: 'short' } : {}),
+    day: 'numeric',
+    month: 'short',
+    ...(long ? { year: 'numeric' } : {}),
+    timeZone: 'UTC',
+  });
+}
+
+/* ------------------------------------------------------------ chiffres - */
+
+function dureeStat(minutes) {
+  if (minutes <= 0) return '0 min';
+  if (minutes < 1) return '< 1 min';
+  if (minutes < 60) return `${Math.round(minutes)} min`;
+  const total = Math.round(minutes);
+  if (total < 1440) return `${Math.floor(total / 60)} h ${String(total % 60).padStart(2, '0')}`;
+  const heures = Math.round(total / 60);
+  return `${Math.floor(heures / 24)} j ${heures % 24} h`;
+}
+
+function formatStat(valeur, format, devise, compact = false) {
+  if (valeur === null || valeur === undefined || Number.isNaN(valeur)) return '—';
+  if (format === 'argent') {
+    return compact
+      ? new Intl.NumberFormat('fr-FR', {
+          style: 'currency',
+          currency: devise || 'EUR',
+          notation: 'compact',
+          maximumFractionDigits: 1,
+        }).format(valeur)
+      : money(valeur, devise);
+  }
+  if (format === 'duree') return dureeStat(valeur);
+  if (format === 'part') return `${Math.round(valeur * 100)} %`;
+  return Math.round(valeur).toLocaleString('fr-FR');
+}
+
+const signeStat = (n) => (n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : '0');
+
+/**
+ * L'écart avec la comparaison, et sa couleur.
+ *
+ * Rien quand il n'y a rien à comparer : un écart avec zéro n'est pas « +∞ % ».
+ * Une part s'écarte en points. Arrondi à zéro, l'écart reste gris.
+ */
+function ecartStat(courant, compare, mesure) {
+  if (courant === null || courant === undefined || compare === null || compare === undefined) return null;
+  let arrondi;
+  let texte;
+  if (mesure.format === 'part') {
+    arrondi = Math.round((courant - compare) * 100);
+    texte = `${signeStat(arrondi)} pt${Math.abs(arrondi) > 1 ? 's' : ''}`;
+  } else {
+    if (compare === 0) return null;
+    arrondi = Math.round(((courant - compare) / Math.abs(compare)) * 100);
+    texte = `${signeStat(arrondi)} %`;
+  }
+  const ton = arrondi === 0 ? 'neutre' : Math.sign(arrondi) === mesure.mieux ? 'bon' : 'mauvais';
+  return { texte, ton };
+}
+
+function ecartMarkup(ecart, contexte) {
+  if (!ecart) return '';
+  return `<span class="sta-delta sta-${ecart.ton}">${esc(ecart.texte)}<span class="sr-only"> ${esc(contexte)}</span></span>`;
+}
+
+/** Un plafond rond et son pas : 4 crans de 1, 2, 2,5 ou 5 fois une puissance de dix. */
+function echelleStat(max) {
+  if (!(max > 0)) return { haut: 4, pas: 1 };
+  const brut = max / 4;
+  const puissance = 10 ** Math.floor(Math.log10(brut));
+  const pas = [1, 2, 2.5, 5, 10].map((m) => m * puissance).find((p) => p >= brut) ?? brut;
+  return { haut: pas * Math.ceil(max / pas), pas };
+}
+
+/** Les rangs qui portent une étiquette sur l'axe : six au plus, le dernier toujours. */
+function rangsEtiquetes(cles, grain) {
+  const n = cles.length;
+  if (n <= 1) return [0];
+  // Par heure sur plusieurs jours : une étiquette par jour, à minuit.
+  if (grain === 'heure' && n > 24) {
+    const pas = Math.ceil(n / 24 / 6) * 24;
+    return cles.map((_, i) => i).filter((i) => i % pas === 0);
+  }
+  const pas = Math.max(1, Math.ceil(n / 6));
+  const rangs = cles.map((_, i) => i).filter((i) => i % pas === 0);
+  if (n - 1 - rangs[rangs.length - 1] >= pas / 2) rangs.push(n - 1);
+  return rangs;
+}
+
+function etiquetteAxe(cle, grain, nombre) {
+  return grain === 'heure' && nombre > 24 ? etiquettePoint(cle.slice(0, 10), 'jour') : etiquettePoint(cle, grain);
+}
+
+/** Un tracé fin de 200 × 40 ; un trou dans la série coupe la ligne. */
+function sparkline(valeurs, n, max) {
+  let d = '';
+  let leve = true;
+  for (let i = 0; i < n; i += 1) {
+    const v = valeurs[i];
+    if (v === null || v === undefined) {
+      leve = true;
+      continue;
+    }
+    const y = (38 - (max ? (v / max) * 34 : 0)).toFixed(1);
+    if (n === 1) return `M90 ${y}L110 ${y}`;
+    d += `${leve ? 'M' : 'L'}${((i / (n - 1)) * 200).toFixed(1)} ${y}`;
+    leve = false;
+  }
+  return d;
+}
+
+/* ------------------------------------------------------------ état ----- */
+
+const etatStats = (() => {
+  const reglages = { raccourci: '30', debut: null, fin: null, comparer: 'precedente', grain: null };
+  try {
+    const garde = JSON.parse(localStorage.getItem('csav.stats') ?? 'null');
+    if (garde && PERIODES_STATS.some((p) => p.cle === garde.raccourci)) reglages.raccourci = garde.raccourci;
+    if (garde && garde.comparer in COMPARAISONS_STATS) reglages.comparer = garde.comparer;
+    if (garde && GRAINS_STATS.some((g) => g.cle === garde.grain)) reglages.grain = garde.grain;
+    const date = /^\d{4}-\d{2}-\d{2}$/;
+    if (reglages.raccourci === 'perso' && date.test(garde.debut) && date.test(garde.fin)) {
+      reglages.debut = garde.debut;
+      reglages.fin = garde.fin > dateLocale() ? dateLocale() : garde.fin;
+    }
+  } catch {
+    // Stockage indisponible : les réglages par défaut.
+  }
+  if (!reglages.debut || joursDe(reglages.debut, reglages.fin) < 1 || joursDe(reglages.debut, reglages.fin) > JOURS_MAX_STATS) {
+    if (reglages.raccourci === 'perso') reglages.raccourci = '30';
+    [reglages.debut, reglages.fin] = datesDuRaccourci(reglages.raccourci);
+  }
+  return { ...reglages, sav: null, ventes: null, attente: new Set(), seq: 0, detail: null, choix: null, moisVu: null };
+})();
+
+function garderReglagesStats() {
+  const { raccourci, debut, fin, comparer, grain } = etatStats;
+  try {
+    localStorage.setItem('csav.stats', JSON.stringify({ raccourci, debut, fin, comparer, grain }));
+  } catch {
+    // Navigation privée : les réglages valent pour cette visite.
+  }
+}
+
+function fuseauStats() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Paris';
+  } catch {
+    return 'Europe/Paris';
+  }
+}
+
+/* ------------------------------------------------------------ relève --- */
+
+async function loadStats() {
+  // Une période « glissante » se recale sur aujourd'hui à chaque relève.
+  if (etatStats.raccourci !== 'perso') [etatStats.debut, etatStats.fin] = datesDuRaccourci(etatStats.raccourci);
+  const seq = ++etatStats.seq;
+  const { debut, fin, comparer } = etatStats;
+  const grain = grainEffectif(etatStats.grain, joursDe(debut, fin));
+  const params = new URLSearchParams({ debut, fin, comparer, grain, tz: fuseauStats() });
+
+  etatStats.attente = new Set(['sav', 'ventes']);
+  rendreBarreStats();
+  rendreStats();
+
+  const arrivee = (cle) => (valeur) => {
+    if (seq !== etatStats.seq) return;
+    etatStats[cle] = valeur;
+    etatStats.attente.delete(cle);
+    rendreStats();
+    if (etatStats.detail) rendreDetailStats();
+  };
+  await Promise.all([
+    api(`/api/stats/periode/sav?${params}`).then(arrivee('sav'), () => arrivee('sav')(null)),
+    api(`/api/stats/periode/ventes?${params}`).then(arrivee('ventes'), () => arrivee('ventes')(null)),
+  ]);
+}
+
+/* ------------------------------------------------------------ barre ---- */
+
+function grainsMarkup(jours, grain) {
+  return GRAINS_STATS.map((g) => {
+    const inactif = g.cle === 'heure' && jours > 7;
+    return `<button type="button" data-grain="${g.cle}" aria-pressed="${g.cle === grain}"${
+      inactif ? ' disabled title="Par heure : sur 7 jours au plus"' : ''
+    }>${g.nom}</button>`;
+  }).join('');
+}
+
+function rendreBarreStats() {
+  const { raccourci, debut, fin, comparer } = etatStats;
+  const jours = joursDe(debut, fin);
+  const grain = grainEffectif(etatStats.grain, jours);
+  $('sta-periode-nom').textContent =
+    raccourci === 'perso' ? plageCourte(debut, fin) : PERIODES_STATS.find((p) => p.cle === raccourci).nom;
+  $('sta-compare-nom').textContent = COMPARAISONS_STATS[comparer].nom;
+  $('sta-compare').classList.toggle('sta-actif', comparer !== 'aucune');
+  document.querySelectorAll('[data-grains]').forEach((zone) => {
+    zone.innerHTML = grainsMarkup(jours, grain);
+  });
+  $('sta-menu-compare')
+    .querySelectorAll('[data-compare]')
+    .forEach((item) => item.setAttribute('aria-checked', String(item.dataset.compare === comparer)));
+
+  const autre = periodeComparee(debut, fin, comparer);
+  const face = autre ? plageEnLettres(...autre) : '';
+  $('sta-sous').textContent =
+    majuscule(plageEnLettres(debut, fin)) +
+    (!autre ? '' : autre[0] === autre[1] ? ` · comparé au ${face.replace(/^le /, '')}` : ` · comparé à la période ${face}`);
+}
+
+/* ------------------------------------------------------------ cartes --- */
+
+/** Les valeurs d'une mesure : la période, la comparaison, leurs séries et leurs points. */
+function lireMesure(cle) {
+  const mesure = MESURES_STATS[cle];
+  const donnees = etatStats[mesure.source];
+  if (!donnees) return null;
+  const serie = cle === 'motifs' ? 'messages' : cle;
+  return {
+    mesure,
+    devise: donnees.devise ?? 'EUR',
+    periode: donnees.periode,
+    total: mesure.total(donnees.courant.totaux),
+    totalCompare: donnees.compare ? mesure.total(donnees.compare.totaux) : null,
+    serie: donnees.courant.series[serie],
+    serieCompare: donnees.compare?.series[serie] ?? null,
+  };
+}
+
+function contexteEcart() {
+  const autre = COMPARAISONS_STATS[etatStats.comparer];
+  return autre.court ? `par rapport à ${autre.court}` : '';
+}
+
+function tuileMarkup(cle, sous, { courbe = false } = {}) {
+  const lu = lireMesure(cle);
+  const mesure = MESURES_STATS[cle];
+  if (!lu) {
+    return `<div class="sta-carte sta-tuile sta-tuile-vide" aria-hidden="true">
+      <span class="sta-t">${esc(mesure.titre)}</span><span class="sta-v"><b>—</b></span>
+      ${courbe ? '<span class="sta-spark"></span>' : ''}<span class="sta-s">&nbsp;</span>
+    </div>`;
+  }
+  const n = lu.serie.length;
+  const prec = lu.serieCompare ? lu.serieCompare.slice(0, n) : [];
+  const max = Math.max(0, ...lu.serie.filter((v) => v !== null), ...prec.filter((v) => v !== null));
+  return `<button type="button" class="sta-carte sta-tuile" data-ouvrir="${cle}" aria-haspopup="dialog">
+    <span class="sta-t">${esc(mesure.titre)}</span>
+    <span class="sta-v"><b>${esc(formatStat(lu.total, mesure.format, lu.devise))}</b>${ecartMarkup(
+      ecartStat(lu.total, lu.totalCompare, mesure),
+      contexteEcart(),
+    )}</span>
+    ${
+      courbe
+        ? `<svg class="sta-spark" viewBox="0 0 200 40" preserveAspectRatio="none" aria-hidden="true">
+            ${prec.length ? `<path class="sta-trace-prec" d="${sparkline(prec, n, max)}" />` : ''}
+            <path class="sta-trace-cour" d="${sparkline(lu.serie, n, max)}" />
+          </svg>`
+        : ''
+    }
+    <span class="sta-s">${esc(sous)}</span>
+  </button>`;
+}
+
+const pluriel = (n, mot) => `${n.toLocaleString('fr-FR')} ${mot}${n > 1 ? 's' : ''}`;
+function parJour(total, jours) {
+  const moyenne = total / jours;
+  return `${moyenne.toLocaleString('fr-FR', { maximumFractionDigits: moyenne < 10 ? 1 : 0 })} par jour en moyenne`;
+}
+
+function rendreStats() {
+  const corps = $('sta-corps');
+  if (!corps) return;
+  const jours = joursDe(etatStats.debut, etatStats.fin);
+  corps.classList.toggle('sta-attente-ventes', etatStats.attente.has('ventes') && Boolean(etatStats.ventes));
+  corps.classList.toggle('sta-attente-sav', etatStats.attente.has('sav') && Boolean(etatStats.sav));
+
+  /* Ventes */
+  const ventes = etatStats.ventes;
+  if (!ventes && !etatStats.attente.has('ventes')) {
+    $('sta-ventes').innerHTML =
+      '<p class="sta-panne">Shopify n’a pas répondu : les ventes reviendront avec lui. Le SAV, lui, est à jour.</p>';
+    $('sta-ca').hidden = true;
+  } else {
+    const t = ventes?.courant.totaux;
+    $('sta-ventes').innerHTML = [
+      tuileMarkup('ca', t ? pluriel(t.commandes, 'commande') : '', { courbe: true }),
+      tuileMarkup('commandes', t ? parJour(t.commandes, jours) : '', { courbe: true }),
+      tuileMarkup('panier', 'par commande', { courbe: true }),
+      tuileMarkup(
+        'rembourse',
+        t?.partRembourse != null
+          ? `${(t.partRembourse * 100).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} % du chiffre d’affaires`
+          : 'sur les commandes de la période',
+        { courbe: true },
+      ),
+    ].join('');
+    $('sta-ca').hidden = false;
+    $('sta-ca').innerHTML = grapheCaMarkup();
+  }
+
+  /* SAV */
+  const sav = etatStats.sav?.courant.totaux;
+  $('sta-sav').innerHTML = [
+    tuileMarkup('messages', sav ? parJour(sav.messages, jours) : ''),
+    tuileMarkup(
+      'premiereReponse',
+      !sav
+        ? ''
+        : sav.premiereReponse.mesurees
+          ? `médiane sur ${pluriel(sav.premiereReponse.mesurees, 'conversation')}, réponses de Gmail comprises`
+          : 'aucune réponse partie sur la période',
+    ),
+    tuileMarkup('brouillons', sav ? `${sav.brouillons.utilises} sur ${sav.brouillons.total} suivis d’une réponse` : ''),
+    tuileMarkup('aClasser', sav ? `${pluriel(sav.aClasser.n, 'message')} sans motif clair` : ''),
+  ].join('');
+  if (!etatStats.sav && !etatStats.attente.has('sav')) {
+    $('sta-sav').insertAdjacentHTML('afterbegin', '<p class="sta-panne">Les chiffres du SAV n’ont pas pu être lus. Réessayez dans un instant.</p>');
+  }
+  $('sta-motifs').innerHTML = motifsMarkup();
+  $('sta-equipe').innerHTML = equipeMarkup();
+}
+
+/* Le chiffre d'affaires, en ligne, face à la comparaison. */
+function grapheCaMarkup() {
+  const lu = lireMesure('ca');
+  const grain = grainEffectif(etatStats.grain, joursDe(etatStats.debut, etatStats.fin));
+  const nomGrain = GRAINS_STATS.find((g) => g.cle === (lu?.periode.grain ?? grain)).par;
+  const comparer = etatStats.comparer;
+  const tete = `<div class="sta-carte-tete">
+      <h3 class="sta-carte-titre" id="sta-ca-titre">Chiffre d’affaires par ${nomGrain}</h3>
+      <button type="button" class="sta-lien" data-ouvrir="ca" aria-haspopup="dialog">Ouvrir en grand</button>
+      <span class="sta-ressort"></span>
+      <span class="sta-legende">
+        <span><i class="sta-l-cour"></i>${esc($('sta-periode-nom').textContent)}</span>
+        ${comparer !== 'aucune' ? `<span><i class="sta-l-prec"></i>${esc(COMPARAISONS_STATS[comparer].colonne)}</span>` : ''}
+      </span>
+    </div>`;
+  if (!lu) return `${tete}<div class="sta-trace sta-trace-vide"></div>`;
+
+  const { cles } = lu.periode.courante;
+  const n = cles.length;
+  const prec = lu.serieCompare ? lu.serieCompare.slice(0, n) : null;
+  const max = Math.max(0, ...lu.serie.filter((v) => v !== null), ...(prec ?? []).filter((v) => v !== null));
+  const { haut, pas } = echelleStat(max);
+  const x = (i) => (n === 1 ? 500 : (i / (n - 1)) * 1000);
+  const y = (v) => 200 - (v / haut) * 200;
+  // Un point seul — un seul jour, ou la première heure d'aujourd'hui — se
+  // trace en petit trait : un « M » sans « L » ne dessinerait rien.
+  const chemin = (serie) =>
+    serie
+      .map((v, i) => {
+        if (v === null || v === undefined) return '';
+        const seul = (serie[i - 1] ?? null) === null && (serie[i + 1] ?? null) === null;
+        const debut = (serie[i - 1] ?? null) === null;
+        if (seul) return `M${(x(i) - 6).toFixed(1)} ${y(v).toFixed(1)}L${(x(i) + 6).toFixed(1)} ${y(v).toFixed(1)}`;
+        return `${debut ? 'M' : 'L'}${x(i).toFixed(1)} ${y(v).toFixed(1)}`;
+      })
+      .join('');
+  const presents = lu.serie.map((v, i) => [v, i]).filter(([v]) => v !== null);
+  const aire = presents.length > 1
+    ? `${chemin(lu.serie.slice(0, presents[presents.length - 1][1] + 1))}L${x(presents[presents.length - 1][1]).toFixed(1)} 200L${x(presents[0][1]).toFixed(1)} 200Z`
+    : '';
+  const graduations = Array.from({ length: Math.round(haut / pas) + 1 }, (_, i) => i * pas)
+    .map((v) => `<span style="bottom:${((v / haut) * 100).toFixed(2)}%"><em>${esc(formatStat(v, 'argent', lu.devise, true))}</em></span>`)
+    .join('');
+  const axe = rangsEtiquetes(cles, lu.periode.grain)
+    .map((i) => `<span style="left:${(x(i) / 10).toFixed(2)}%">${esc(etiquetteAxe(cles[i], lu.periode.grain, n))}</span>`)
+    .join('');
+
+  return `${tete}
+    <div class="sta-trace" data-ouvrir="ca" data-n="${n}">
+      <div class="sta-grille" aria-hidden="true">${graduations}</div>
+      <svg viewBox="0 0 1000 200" preserveAspectRatio="none" aria-hidden="true">
+        ${aire ? `<path class="sta-aire" d="${aire}" />` : ''}
+        ${prec ? `<path class="sta-ligne-prec" d="${chemin(prec)}" />` : ''}
+        <path class="sta-ligne" d="${chemin(lu.serie)}" />
+      </svg>
+      <span class="sta-repere" hidden></span>
+      <div class="rmb-bulle sta-bulle" hidden></div>
+    </div>
+    <div class="sta-axe" aria-hidden="true">${axe}</div>
+    <p class="sr-only">${esc(`Chiffre d’affaires : ${formatStat(lu.total, 'argent', lu.devise)} sur la période.`)} Ouvrez en grand pour le tableau des valeurs.</p>
+    ${ventesTronquees()}`;
+}
+
+function ventesTronquees() {
+  return etatStats.ventes?.tronque
+    ? '<p class="sta-note">Période très chargée : seules les 3 000 premières commandes sont comptées. Raccourcissez la période pour un compte exact.</p>'
+    : '';
+}
+
+const NOMBRES_EN_LETTRES = ['', '', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf', 'dix'];
+
+/** Ce que la liste des motifs dit en une phrase. */
+function constatMotifs(motifs, total) {
+  if (!total) return 'Aucun message sur la période.';
+  const part = (motifs.OTHER ?? 0) / total;
+  if (part >= 0.5) return 'La plupart des messages n’ont pas de motif clair : ils sont « à classer ».';
+  if (part >= 0.095) {
+    const un = Math.round(1 / part);
+    return `Un message sur ${NOMBRES_EN_LETTRES[un] ?? un} n’a pas de motif clair : ils sont « à classer ».`;
+  }
+  const [premier, n] = Object.entries(motifs).sort((a, b) => b[1] - a[1])[0];
+  return `${MOTIFS_STATS[premier] ?? premier} en tête : ${Math.round((n / total) * 100)} % des messages.`;
+}
+
+function lignesMotifs() {
+  const sav = etatStats.sav;
+  if (!sav) return null;
+  const motifs = sav.courant.motifs;
+  const avant = sav.compare?.motifs ?? null;
+  const cles = [...new Set([...Object.keys(motifs), ...Object.keys(avant ?? {})])].filter((c) => (motifs[c] ?? 0) > 0 || (avant?.[c] ?? 0) > 0);
+  return cles
+    .map((cle) => ({
+      cle,
+      nom: MOTIFS_STATS[cle] ?? INTENT_LABELS[cle] ?? cle,
+      n: motifs[cle] ?? 0,
+      avant: avant ? (avant[cle] ?? 0) : null,
+      ecart: avant ? ecartStat(motifs[cle] ?? 0, avant[cle] ?? 0, { format: 'nombre', mieux: cle === 'POSITIVE' ? 1 : -1 }) : null,
+    }))
+    .sort((a, b) => b.n - a.n || (b.avant ?? 0) - (a.avant ?? 0));
+}
+
+function motifsMarkup() {
+  const lignes = lignesMotifs();
+  const court = COMPARAISONS_STATS[etatStats.comparer].court;
+  const tete = `<div class="sta-carte-tete">
+      <h3 class="sta-carte-titre" id="sta-motifs-titre">Motifs des demandes</h3>
+      <button type="button" class="sta-lien" data-ouvrir="motifs" aria-haspopup="dialog">Ouvrir en grand</button>
+      <span class="sta-ressort"></span>
+      ${court ? `<span class="sta-aide">écart avec ${esc(court)}</span>` : ''}
+    </div>`;
+  if (!lignes) return `${tete}<p class="sta-constat">&nbsp;</p>`;
+  const total = etatStats.sav.courant.totaux.messages;
+  const plus = Math.max(1, ...lignes.map((l) => l.n));
+  return `${tete}
+    <p class="sta-constat">${esc(constatMotifs(etatStats.sav.courant.motifs, total))}</p>
+    <div class="sta-motifs-liste" data-ouvrir="motifs">${
+      lignes
+        .map(
+          (l) => `<div class="sta-motif${l.cle === 'OTHER' ? ' sta-motif-autre' : ''}">
+            <span class="sta-motif-nom">${esc(l.nom)}</span>
+            <span class="sta-piste"><i style="width:${((l.n / plus) * 100).toFixed(1)}%"></i></span>
+            <b>${l.n.toLocaleString('fr-FR')}</b>
+            <span class="sta-motif-ecart">${ecartMarkup(l.ecart, contexteEcart())}</span>
+          </div>`,
+        )
+        .join('') || '<p class="sta-vide">Aucun message sur la période.</p>'
+    }</div>`;
+}
+
+function equipeMarkup() {
+  const equipe = etatStats.sav?.equipe;
+  if (!equipe) return '';
+  const actifs = equipe.filter((m) => m.active || m.replies || m.refunds || m.escalations);
+  if (actifs.length === 0) return '<p class="sta-vide">Aucune activité sur la période.</p>';
+  const initiales = (nom) =>
+    String(nom)
+      .split(/[\s@.]+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((mot) => mot.charAt(0).toUpperCase())
+      .join('');
+  return `<div class="sta-eq sta-eq-tete"><span>Personne</span><span>Réponses</span><span title="Remboursements">Rembours.</span><span>Escalades</span></div>
+    ${actifs
+      .map(
+        (m) => `<div class="sta-eq${m.active ? '' : ' sta-eq-inactif'}">
+          <span class="sta-eq-nom"><i aria-hidden="true">${esc(initiales(m.name))}</i><span><b>${esc(m.name)}</b><small>${esc(
+            ROLE_LABELS[m.role] ?? m.role,
+          )}</small></span></span>
+          <span>${m.replies}</span><span>${m.refunds}</span><span>${m.escalations}</span>
+        </div>`,
+      )
+      .join('')}`;
+}
+
+/* Survol du graphique : un repère, la valeur du point et celle d'en face. */
+function survolCa(event) {
+  const trace = event.target.closest('.sta-trace');
+  const lu = trace && lireMesure('ca');
+  if (!lu || event.pointerType === 'touch') return;
+  const { cles } = lu.periode.courante;
+  const n = cles.length;
+  const boite = trace.getBoundingClientRect();
+  const i = n === 1 ? 0 : Math.max(0, Math.min(n - 1, Math.round(((event.clientX - boite.left) / boite.width) * (n - 1))));
+  const gauche = n === 1 ? boite.width / 2 : (i / (n - 1)) * boite.width;
+  const repere = trace.querySelector('.sta-repere');
+  const bulle = trace.querySelector('.sta-bulle');
+  repere.hidden = false;
+  repere.style.left = `${gauche}px`;
+  const comparees = lu.periode.comparee?.cles;
+  const prec = lu.serieCompare?.[i];
+  bulle.innerHTML = `<b>${esc(formatStat(lu.serie[i], 'argent', lu.devise))}</b><span>${esc(etiquettePoint(cles[i], lu.periode.grain, true))}</span>${
+    comparees?.[i] !== undefined
+      ? `<span class="sta-bulle-prec">${esc(formatStat(prec, 'argent', lu.devise))} · ${esc(etiquettePoint(comparees[i], lu.periode.grain, true))}</span>`
+      : ''
+  }`;
+  bulle.hidden = false;
+  const largeur = bulle.offsetWidth;
+  bulle.style.left = `${Math.max(0, Math.min(boite.width - largeur, gauche - largeur / 2))}px`;
+  bulle.style.top = '4px';
+}
+
+function finSurvolCa() {
+  document.querySelectorAll('#sta-ca .sta-repere, #sta-ca .sta-bulle').forEach((el) => {
+    el.hidden = true;
+  });
+}
+
+/* ------------------------------------------------------------ en grand - */
+
+let retourDetailStats = null;
+let carteDetailStats = null;
+
+function ouvrirDetailStats(cle) {
+  if (!MESURES_STATS[cle]) return;
+  etatStats.detail = cle;
+  retourDetailStats = document.activeElement;
+  carteDetailStats = cle;
+  fermerChoixPeriode(false);
+  fermerMenuCompare();
+  $('sta-detail').hidden = false;
+  document.documentElement.classList.add('sta-fige');
+  rendreDetailStats();
+  $('sta-detail').querySelector('.sta-detail-fenetre').focus();
+}
+
+function fermerDetailStats() {
+  if ($('sta-detail').hidden) return;
+  $('sta-detail').hidden = true;
+  document.documentElement.classList.remove('sta-fige');
+  etatStats.detail = null;
+  // La carte a pu être redessinée entre-temps (autre regroupement) : on
+  // rend le focus à celle qui porte la même mesure.
+  const retour = retourDetailStats?.isConnected
+    ? retourDetailStats
+    : document.querySelector(`#view-stats [data-ouvrir="${carteDetailStats}"]`);
+  retour?.focus();
+  retourDetailStats = carteDetailStats = null;
+}
+
+function rendreDetailStats() {
+  const cle = etatStats.detail;
+  if (!cle) return;
+  const mesure = MESURES_STATS[cle];
+  const lu = lireMesure(cle);
+  const autre = periodeComparee(etatStats.debut, etatStats.fin, etatStats.comparer);
+  $('sta-detail-titre').textContent = mesure.titre;
+  $('sta-detail-sous').textContent =
+    majuscule(plageEnLettres(etatStats.debut, etatStats.fin)) +
+    (autre ? ` · comparé à ${COMPARAISONS_STATS[etatStats.comparer].court}` : '');
+  $('sta-detail').querySelector('[data-grains]').hidden = cle === 'motifs';
+  const corps = $('sta-detail-corps');
+  if (!lu) {
+    corps.innerHTML = etatStats.attente.has(mesure.source)
+      ? '<p class="sta-vide">Chargement…</p>'
+      : `<p class="sta-vide">${mesure.source === 'ventes' ? 'Shopify n’a pas répondu : réessayez dans un instant.' : 'Les chiffres du SAV n’ont pas pu être lus.'}</p>`;
+    return;
+  }
+  corps.classList.toggle('sta-charge', etatStats.attente.has(mesure.source));
+  const ecart = ecartStat(lu.total, lu.totalCompare, mesure);
+  const tete = `<div class="sta-detail-valeur">
+      <b>${esc(formatStat(lu.total, mesure.format, lu.devise))}</b>
+      ${ecart ? `<span class="sta-delta sta-${ecart.ton}">${esc(ecart.texte)} ${esc(contexteEcart())}</span>` : ''}
+    </div>`;
+  // Au téléphone, la valeur et le graphique forment une carte, le tableau une autre.
+  const [graphe, tableau] = cle === 'motifs' ? detailMotifsMarkup() : detailSerieMarkup(lu);
+  corps.innerHTML = `<div class="sta-detail-carte">${tete}${graphe}</div>${tableau}${mesure.source === 'ventes' ? ventesTronquees() : ''}`;
+}
+
+function legendeMarkup() {
+  const colonne = COMPARAISONS_STATS[etatStats.comparer].colonne;
+  return `<div class="sta-legende">
+    <span><i class="sta-l-cour sta-l-barre"></i>${esc($('sta-periode-nom').textContent)}</span>
+    ${colonne ? `<span><i class="sta-l-prec sta-l-barre"></i>${esc(colonne)}</span>` : ''}
+  </div>`;
+}
+
+function detailSerieMarkup(lu) {
+  const { mesure, devise } = lu;
+  const { cles, grain } = { cles: lu.periode.courante.cles, grain: lu.periode.grain };
+  const comparees = lu.periode.comparee?.cles ?? null;
+  const n = cles.length;
+  const prec = lu.serieCompare ? lu.serieCompare.slice(0, n) : null;
+  const max = Math.max(0, ...lu.serie.filter((v) => v !== null), ...(prec ?? []).filter((v) => v !== null));
+  const { haut } = echelleStat(mesure.format === 'part' ? Math.min(1, max) : max);
+  const h = (v) => (v === null || v === undefined ? 0 : Math.max(v > 0 ? 1 : 0, (v / haut) * 100));
+  const colonnes = cles
+    .map((cle, i) => {
+      const label = JSON.stringify([
+        formatStat(lu.serie[i], mesure.format, devise),
+        etiquettePoint(cle, grain, true),
+        prec && comparees?.[i] ? `${formatStat(prec[i], mesure.format, devise)} · ${etiquettePoint(comparees[i], grain, true)}` : '',
+      ]);
+      return `<span class="sta-col" data-i="${i}" data-bulle="${esc(label)}">
+        ${prec ? `<i class="sta-b-prec" style="height:${h(prec[i]).toFixed(2)}%"></i>` : ''}
+        <i class="sta-b-cour" style="height:${h(lu.serie[i]).toFixed(2)}%"></i>
+      </span>`;
+    })
+    .join('');
+  const graduations = [0, 0.5, 1]
+    .map((f) => `<span style="bottom:${f * 100}%"><em>${esc(formatStat(haut * f, mesure.format, devise, true))}</em></span>`)
+    .join('');
+  const axe = rangsEtiquetes(cles, grain)
+    .map((i) => `<span style="left:${(((i + 0.5) / n) * 100).toFixed(2)}%">${esc(etiquetteAxe(cles[i], grain, n))}</span>`)
+    .join('');
+  const nomGrain = GRAINS_STATS.find((g) => g.cle === grain).nom;
+  const colonne = COMPARAISONS_STATS[etatStats.comparer].colonne;
+  const lignes = cles
+    .map((cle, i) => {
+      const ecart = prec ? ecartStat(lu.serie[i], prec[i], mesure) : null;
+      return `<tr>
+        <th scope="row">${esc(etiquettePoint(cle, grain, true))}</th>
+        <td>${esc(formatStat(lu.serie[i], mesure.format, devise))}</td>
+        ${colonne ? `<td class="sta-td-prec">${esc(formatStat(prec?.[i], mesure.format, devise))}</td><td>${ecart ? `<span class="sta-delta sta-${ecart.ton}">${esc(ecart.texte)}</span>` : '—'}</td>` : ''}
+      </tr>`;
+    })
+    .reverse()
+    .join('');
+  return [
+    `${legendeMarkup()}
+    <div class="sta-barres-zone" style="--n:${n}">
+      <div class="sta-grille" aria-hidden="true">${graduations}</div>
+      <div class="sta-barres${n > 60 ? ' sta-barres-denses' : ''}" aria-hidden="true">${colonnes}</div>
+      <div class="rmb-bulle sta-bulle" hidden></div>
+    </div>
+    <div class="sta-axe sta-axe-barres" aria-hidden="true">${axe}</div>`,
+    `<h3 class="sta-table-titre">Par ${esc(nomGrain.toLowerCase())}</h3>
+    <div class="sta-table-zone">
+      <table class="sta-table">
+        <thead><tr><th scope="col">${esc(nomGrain)}</th><th scope="col">${esc($('sta-periode-nom').textContent)}</th>${
+          colonne ? `<th scope="col" class="sta-td-prec">${esc(colonne)}</th><th scope="col">Écart</th>` : ''
+        }</tr></thead>
+        <tbody>${lignes}</tbody>
+      </table>
+    </div>`,
+  ];
+}
+
+function detailMotifsMarkup() {
+  const lignes = lignesMotifs() ?? [];
+  const plus = Math.max(1, ...lignes.map((l) => Math.max(l.n, l.avant ?? 0)));
+  const colonne = COMPARAISONS_STATS[etatStats.comparer].colonne;
+  return [
+    `${legendeMarkup()}
+    <div class="sta-hbarres">${lignes
+      .map(
+        (l) => `<div class="sta-hbarre${l.cle === 'OTHER' ? ' sta-motif-autre' : ''}">
+          <span class="sta-motif-nom">${esc(l.nom)}</span>
+          <span class="sta-hpistes">
+            <i class="sta-b-cour" style="width:${((l.n / plus) * 100).toFixed(1)}%"></i>
+            ${l.avant !== null ? `<i class="sta-b-prec" style="width:${((l.avant / plus) * 100).toFixed(1)}%"></i>` : ''}
+          </span>
+          <b>${l.n.toLocaleString('fr-FR')}</b>
+        </div>`,
+      )
+      .join('')}</div>`,
+    `<h3 class="sta-table-titre">Par motif</h3>
+    <div class="sta-table-zone">
+      <table class="sta-table">
+        <thead><tr><th scope="col">Motif</th><th scope="col">${esc($('sta-periode-nom').textContent)}</th>${
+          colonne ? `<th scope="col" class="sta-td-prec">${esc(colonne)}</th><th scope="col">Écart</th>` : ''
+        }</tr></thead>
+        <tbody>${lignes
+          .map(
+            (l) => `<tr><th scope="row">${esc(l.nom)}</th><td>${l.n.toLocaleString('fr-FR')}</td>${
+              colonne
+                ? `<td class="sta-td-prec">${(l.avant ?? 0).toLocaleString('fr-FR')}</td><td>${
+                    l.ecart ? `<span class="sta-delta sta-${l.ecart.ton}">${esc(l.ecart.texte)}</span>` : '—'
+                  }</td>`
+                : ''
+            }</tr>`,
+          )
+          .join('')}</tbody>
+      </table>
+    </div>`,
+  ];
+}
+
+/* ------------------------------------------------------------ période -- */
+
+function ouvrirChoixPeriode() {
+  fermerMenuCompare();
+  const { raccourci, debut, fin } = etatStats;
+  etatStats.choix = { raccourci, debut, fin, ancre: null, note: '' };
+  etatStats.moisVu = fin.slice(0, 7);
+  // Au téléphone, la feuille monte au-dessus de tout : elle quitte la barre,
+  // dont l'empilement la garderait sous le voile.
+  if (STATS_PLEIN_ECRAN.matches) document.body.append($('sta-choix'));
+  else document.querySelector('#view-stats .sta-barre').append($('sta-choix'));
+  $('sta-choix').hidden = false;
+  $('sta-voile').hidden = false;
+  $('sta-periode').setAttribute('aria-expanded', 'true');
+  rendreChoixPeriode();
+  ($('sta-raccourcis').querySelector('[aria-pressed="true"]') ?? $('sta-raccourcis').querySelector('button'))?.focus();
+}
+
+function fermerChoixPeriode(rendreLeFocus = true) {
+  if ($('sta-choix').hidden) return;
+  $('sta-choix').hidden = true;
+  $('sta-voile').hidden = true;
+  $('sta-periode').setAttribute('aria-expanded', 'false');
+  etatStats.choix = null;
+  if (rendreLeFocus) $('sta-periode').focus();
+}
+
+function appliquerPeriode() {
+  const choix = etatStats.choix;
+  if (!choix) return;
+  const change = choix.debut !== etatStats.debut || choix.fin !== etatStats.fin || choix.raccourci !== etatStats.raccourci;
+  Object.assign(etatStats, { raccourci: choix.raccourci, debut: choix.debut, fin: choix.fin });
+  // Une autre période, un autre regroupement par défaut : un an se lit au mois.
+  if (change) etatStats.grain = null;
+  garderReglagesStats();
+  fermerChoixPeriode();
+  if (change) loadStats();
+}
+
+const COCHE_STATS =
+  '<svg class="sta-coche" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7" /></svg>';
+
+function moisDecale(mois, n) {
+  const [a, m] = mois.split('-').map(Number);
+  const d = new Date(Date.UTC(a, m - 1 + n, 1));
+  return d.toISOString().slice(0, 7);
+}
+
+function moisMarkup(mois) {
+  const choix = etatStats.choix;
+  const auj = dateLocale();
+  const premier = jourDe(`${mois}-01`);
+  const decalage = (premier.getUTCDay() + 6) % 7;
+  const nbJours = new Date(Date.UTC(premier.getUTCFullYear(), premier.getUTCMonth() + 1, 0)).getUTCDate();
+  const cases = Array.from({ length: decalage }, () => '<span></span>');
+  for (let j = 1; j <= nbJours; j += 1) {
+    const date = `${mois}-${String(j).padStart(2, '0')}`;
+    const classes = [
+      date === choix.debut ? 'sta-j-debut' : '',
+      date === choix.fin ? 'sta-j-fin' : '',
+      date > choix.debut && date < choix.fin ? 'sta-j-dans' : '',
+      date === auj ? 'sta-j-auj' : '',
+    ].filter(Boolean);
+    cases.push(`<button type="button" class="sta-jour ${classes.join(' ')}" data-date="${date}"${date > auj ? ' disabled' : ''}
+      aria-pressed="${date >= choix.debut && date <= choix.fin}" aria-label="${esc(`${quantieme(jourDe(date))} ${moisLong(jourDe(date))} ${mois.slice(0, 4)}`)}">${j}</button>`);
+  }
+  const nom = premier.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  return `<div class="sta-mois-un">
+    <b>${esc(majuscule(nom))}</b>
+    <div class="sta-semaine" aria-hidden="true"><span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span>D</span></div>
+    <div class="sta-jours">${cases.join('')}</div>
+  </div>`;
+}
+
+function rendreChoixPeriode() {
+  const choix = etatStats.choix;
+  if (!choix) return;
+  $('sta-raccourcis').innerHTML = PERIODES_STATS.map(
+    (p) => `<button type="button" data-raccourci="${p.cle}" aria-pressed="${p.cle === choix.raccourci}">
+      <span>${esc(p.nom)}</span>${p.cle === choix.raccourci ? COCHE_STATS : ''}
+    </button>`,
+  ).join('');
+  $('sta-debut').value = choix.debut;
+  $('sta-fin').value = choix.fin;
+  $('sta-debut').max = $('sta-fin').max = dateLocale();
+  const vu = etatStats.moisVu;
+  $('sta-mois').innerHTML = moisMarkup(moisDecale(vu, -1)) + moisMarkup(vu);
+  $('sta-mois-suiv').disabled = vu >= dateLocale().slice(0, 7);
+  $('sta-cal-note').textContent = choix.note;
+  $('sta-choix').classList.toggle('sta-choix-perso', choix.raccourci === 'perso');
+}
+
+/** Deux dates dans l'ordre, un an au plus, pas après aujourd'hui. */
+function poserDates(debut, fin) {
+  const choix = etatStats.choix;
+  const auj = dateLocale();
+  let [d, f] = debut <= fin ? [debut, fin] : [fin, debut];
+  if (f > auj) f = auj;
+  if (d > f) d = f;
+  choix.note = '';
+  if (joursDe(d, f) > JOURS_MAX_STATS) {
+    d = decalerDate(f, -(JOURS_MAX_STATS - 1));
+    choix.note = 'Un an au plus : le début a été avancé.';
+  }
+  choix.debut = d;
+  choix.fin = f;
+  choix.raccourci = 'perso';
+}
+
+/* ------------------------------------------------------------ comparer - */
+
+function ouvrirMenuCompare() {
+  fermerChoixPeriode(false);
+  $('sta-menu-compare').style.left = `${$('sta-compare').offsetLeft}px`;
+  $('sta-menu-compare').hidden = false;
+  $('sta-compare').setAttribute('aria-expanded', 'true');
+  ($('sta-menu-compare').querySelector('[aria-checked="true"]') ?? $('sta-menu-compare').querySelector('button')).focus();
+}
+
+function fermerMenuCompare(rendreLeFocus = false) {
+  if ($('sta-menu-compare').hidden) return;
+  $('sta-menu-compare').hidden = true;
+  $('sta-compare').setAttribute('aria-expanded', 'false');
+  if (rendreLeFocus) $('sta-compare').focus();
+}
+
+/* ------------------------------------------------------------ écouteurs  */
+
+$('sta-periode').addEventListener('click', (event) => {
+  event.stopPropagation();
+  if ($('sta-choix').hidden) ouvrirChoixPeriode();
+  else fermerChoixPeriode();
+});
+$('sta-compare').addEventListener('click', (event) => {
+  event.stopPropagation();
+  if ($('sta-menu-compare').hidden) ouvrirMenuCompare();
+  else fermerMenuCompare(true);
+});
+$('sta-menu-compare').addEventListener('click', (event) => {
+  const item = event.target.closest('[data-compare]');
+  if (!item) return;
+  fermerMenuCompare(true);
+  if (item.dataset.compare === etatStats.comparer) return;
+  etatStats.comparer = item.dataset.compare;
+  garderReglagesStats();
   loadStats();
+});
+$('sta-menu-compare').addEventListener('keydown', (event) => {
+  if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+  event.preventDefault();
+  const items = [...$('sta-menu-compare').querySelectorAll('button')];
+  const i = items.indexOf(document.activeElement);
+  items[(i + (event.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length].focus();
+});
+
+$('sta-choix').addEventListener('click', (event) => {
+  event.stopPropagation();
+  const choix = etatStats.choix;
+  if (!choix) return;
+  const raccourci = event.target.closest('[data-raccourci]');
+  if (raccourci) {
+    choix.raccourci = raccourci.dataset.raccourci;
+    choix.ancre = null;
+    choix.note = '';
+    if (choix.raccourci !== 'perso') [choix.debut, choix.fin] = datesDuRaccourci(choix.raccourci);
+    etatStats.moisVu = choix.fin.slice(0, 7);
+    rendreChoixPeriode();
+    $('sta-raccourcis').querySelector(`[data-raccourci="${choix.raccourci}"]`)?.focus();
+    return;
+  }
+  const jour = event.target.closest('[data-date]');
+  if (jour) {
+    // Premier clic : un seul jour ; second clic : la période entre les deux.
+    if (choix.ancre) {
+      poserDates(choix.ancre, jour.dataset.date);
+      choix.ancre = null;
+    } else {
+      poserDates(jour.dataset.date, jour.dataset.date);
+      choix.ancre = jour.dataset.date;
+    }
+    rendreChoixPeriode();
+    $('sta-mois').querySelector(`[data-date="${jour.dataset.date}"]`)?.focus();
+    return;
+  }
+  if (event.target.closest('#sta-mois-prec')) {
+    etatStats.moisVu = moisDecale(etatStats.moisVu, -1);
+    rendreChoixPeriode();
+  } else if (event.target.closest('#sta-mois-suiv')) {
+    etatStats.moisVu = moisDecale(etatStats.moisVu, 1);
+    rendreChoixPeriode();
+  } else if (event.target.closest('[data-periode-appliquer]')) appliquerPeriode();
+  else if (event.target.closest('[data-periode-annuler]')) fermerChoixPeriode();
+});
+['sta-debut', 'sta-fin'].forEach((id) => {
+  $(id).addEventListener('change', () => {
+    const choix = etatStats.choix;
+    if (!choix || !$('sta-debut').value || !$('sta-fin').value) return;
+    poserDates($('sta-debut').value, $('sta-fin').value);
+    choix.ancre = null;
+    etatStats.moisVu = choix.fin.slice(0, 7);
+    rendreChoixPeriode();
+  });
+});
+$('sta-voile').addEventListener('click', () => fermerChoixPeriode(false));
+
+// Le regroupement, depuis la barre comme depuis la carte ouverte en grand.
+document.addEventListener('click', (event) => {
+  const bouton = event.target.closest('[data-grains] [data-grain]');
+  if (bouton && !bouton.disabled) {
+    if (bouton.getAttribute('aria-pressed') === 'true') return;
+    etatStats.grain = bouton.dataset.grain;
+    garderReglagesStats();
+    // Les boutons sont redessinés aussitôt : le focus revient sur le même.
+    const zone = bouton.closest('#sta-detail') ?? $('view-stats');
+    loadStats();
+    zone.querySelector(`[data-grains] [data-grain="${etatStats.grain}"]`)?.focus();
+    return;
+  }
+  // Un clic ailleurs referme la période et le menu, comme un menu du Mac.
+  if (!event.target.closest('#sta-choix, #sta-periode')) fermerChoixPeriode(false);
+  if (!event.target.closest('#sta-menu-compare, #sta-compare')) fermerMenuCompare();
+});
+
+$('view-stats').addEventListener('click', (event) => {
+  const cible = event.target.closest('[data-ouvrir]');
+  if (cible) ouvrirDetailStats(cible.dataset.ouvrir);
+});
+$('view-stats').addEventListener('pointermove', (event) => {
+  if (event.target.closest('#sta-ca .sta-trace')) survolCa(event);
+  else finSurvolCa();
+});
+$('view-stats').addEventListener('pointerleave', finSurvolCa);
+
+/* Survol d'une barre ouverte en grand : sa valeur et celle d'en face. */
+$('sta-detail').addEventListener('pointerover', (event) => {
+  const col = event.target.closest('.sta-col');
+  const zone = col?.closest('.sta-barres-zone');
+  const bulle = zone?.querySelector('.sta-bulle');
+  if (!col || !bulle || event.pointerType === 'touch') return;
+  zone.querySelectorAll('.sta-col.on').forEach((autre) => autre.classList.remove('on'));
+  col.classList.add('on');
+  const [valeur, quand, face] = JSON.parse(col.dataset.bulle);
+  bulle.innerHTML = `<b>${esc(valeur)}</b><span>${esc(quand)}</span>${face ? `<span class="sta-bulle-prec">${esc(face)}</span>` : ''}`;
+  bulle.hidden = false;
+  const boite = zone.getBoundingClientRect();
+  const c = col.getBoundingClientRect();
+  const centre = c.left - boite.left + c.width / 2;
+  bulle.style.left = `${Math.max(0, Math.min(boite.width - bulle.offsetWidth, centre - bulle.offsetWidth / 2))}px`;
+  bulle.style.top = '4px';
+});
+$('sta-detail').addEventListener('pointerout', (event) => {
+  const zone = event.target.closest('.sta-barres-zone');
+  if (!zone || zone.contains(event.relatedTarget)) return;
+  zone.querySelectorAll('.sta-col.on').forEach((col) => col.classList.remove('on'));
+  zone.querySelector('.sta-bulle').hidden = true;
+});
+
+$('sta-detail').addEventListener('click', (event) => {
+  if (event.target.closest('[data-detail-fermer]')) fermerDetailStats();
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    if (!$('sta-detail').hidden) {
+      event.preventDefault();
+      fermerDetailStats();
+    } else if (!$('sta-choix').hidden) {
+      event.preventDefault();
+      fermerChoixPeriode();
+    } else if (!$('sta-menu-compare').hidden) {
+      event.preventDefault();
+      fermerMenuCompare(true);
+    }
+    return;
+  }
+  // La carte ouverte en grand garde le focus pour elle, comme une fenêtre.
+  if (event.key === 'Tab' && !$('sta-detail').hidden) {
+    const fenetre = $('sta-detail').querySelector('.sta-detail-fenetre');
+    const focusables = [...fenetre.querySelectorAll('button:not([disabled]), [tabindex="0"]')].filter((el) => el.offsetParent !== null);
+    if (focusables.length === 0) return;
+    const premier = focusables[0];
+    const dernier = focusables[focusables.length - 1];
+    if (event.shiftKey && (document.activeElement === premier || document.activeElement === fenetre)) {
+      event.preventDefault();
+      dernier.focus();
+    } else if (!event.shiftKey && document.activeElement === dernier) {
+      event.preventDefault();
+      premier.focus();
+    }
+  }
 });
 
 /* --------------------------------------------------------- coûts du SAV -- */
@@ -11999,7 +12934,7 @@ const VIEW_META = {
     sous: 'Votre activité SAV en un coup d’œil',
   },
   tickets: { icon: 'inbox', label: 'SAV client', group: 'Pilotage', title: 'SAV client' },
-  stats: { icon: 'chart', label: "Statistiques", group: 'Pilotage', title: "Statistiques d'équipe" },
+  stats: { icon: 'chart', label: "Statistiques", group: 'Pilotage', title: "Statistiques" },
   couts: {
     icon: 'coins',
     label: 'Coûts SAV',
@@ -16091,7 +17026,9 @@ const TIROIR = window.matchMedia('(max-width: 1080px)');
 const SANS_GLISSE =
   'input, textarea, select, [contenteditable="true"], .backdrop, .cc, .pal, #qf, .more-menu';
 const FENETRES_OUVERTES =
-  '#cc:not([hidden]), #pal:not([hidden]), #qf:not([hidden]), .backdrop.open';
+  '#cc:not([hidden]), #pal:not([hidden]), #qf:not([hidden]), .backdrop.open, #sta-choix:not([hidden])';
+/* Au téléphone, une carte des Statistiques ouverte en grand occupe l'écran. */
+const STATS_PLEIN_ECRAN = window.matchMedia('(max-width: 760px)');
 
 function defileEnLargeur(noeud) {
   for (let n = noeud; n && n !== document.body; n = n.parentElement) {
@@ -16106,6 +17043,11 @@ function gesteAuDepart(cible) {
   const side = document.querySelector('.side');
   const horloges = $('clockpop');
   if (horloges && !horloges.hidden) return cible.closest('#clockpop') ? 'horloges' : null;
+  // Une carte des Statistiques en plein écran : vers la droite, on revient.
+  const detailStats = $('sta-detail');
+  if (detailStats && !detailStats.hidden) {
+    return STATS_PLEIN_ECRAN.matches && !defileEnLargeur(cible) ? 'retourStats' : null;
+  }
   if (document.querySelector(FENETRES_OUVERTES)) return null;
 
   if (TIROIR.matches) {
@@ -16165,12 +17107,17 @@ function ecarterHorloges(vers) {
   setTimeout(remettre, 220);
 }
 
+function paneDuRetour(type) {
+  if (type === 'retourStats') return document.querySelector('#sta-detail .sta-detail-fenetre');
+  return $(type === 'retour' ? 'd-pane' : 'orders-fiche');
+}
+
 function suivreGeste(geste) {
   const { type, dx } = geste;
   if (type === 'ouvrir') poserTiroir(dx - (document.querySelector('.side').offsetWidth || 280));
   else if (type === 'fermer') poserTiroir(dx);
-  else if (type === 'retour' || type === 'retourCommande') {
-    const pane = $(type === 'retour' ? 'd-pane' : 'orders-fiche');
+  else if (type === 'retour' || type === 'retourCommande' || type === 'retourStats') {
+    const pane = paneDuRetour(type);
     if (pane) {
       pane.style.transition = 'none';
       pane.style.transform = `translateX(${Math.max(0, dx)}px)`;
@@ -16191,10 +17138,10 @@ function conclureGeste({ type, dx }, annule) {
   } else if (type === 'fermer') {
     poserTiroir(null);
     toggleNav(!(franchi && dx < 0));
-  } else if (type === 'retour' || type === 'retourCommande') {
-    const pane = $(type === 'retour' ? 'd-pane' : 'orders-fiche');
+  } else if (type === 'retour' || type === 'retourCommande' || type === 'retourStats') {
+    const pane = paneDuRetour(type);
     if (pane) pane.style.transform = pane.style.transition = '';
-    if (franchi && dx > 0) (type === 'retour' ? fermerMessagePile : fermerFichePile)();
+    if (franchi && dx > 0) ({ retour: fermerMessagePile, retourCommande: fermerFichePile, retourStats: fermerDetailStats })[type]();
   } else if (type === 'horloges') {
     const pop = $('clockpop');
     if (franchi) return ecarterHorloges(Math.sign(dx));

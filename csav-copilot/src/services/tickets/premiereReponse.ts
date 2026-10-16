@@ -25,6 +25,15 @@ export function premieresReponses(
   premiersSortants: GroupeMessages[],
   brouillons: Array<{ ticketId: string; sentAt: Date | null; ticketCreatedAt: Date }>,
 ): number[] {
+  return [...delaisParTicket(premiersEntrants, premiersSortants, brouillons).values()].sort((a, b) => a - b);
+}
+
+/** Les mêmes délais, par conversation : l'écran les range ensuite par jour, semaine ou mois. */
+export function delaisParTicket(
+  premiersEntrants: GroupeMessages[],
+  premiersSortants: GroupeMessages[],
+  brouillons: Array<{ ticketId: string; sentAt: Date | null; ticketCreatedAt: Date }>,
+): Map<string, number> {
   const entree = new Map(premiersEntrants.map((g) => [g.ticketId, g._min?.receivedAt ?? null]));
   const delais = new Map<string, number>();
 
@@ -45,17 +54,25 @@ export function premieresReponses(
     if (connu === undefined || minutes < connu) delais.set(brouillon.ticketId, minutes);
   }
 
-  return [...delais.values()].sort((a, b) => a - b);
+  return delais;
 }
 
 export function brouillonsEnvoyes(
   brouillons: Array<{ ticketId: string; sentAt: Date | null; createdAt: Date }>,
   derniersSortants: GroupeMessages[],
 ): number {
+  return brouillonsUtilises(brouillons, derniersSortants).filter(Boolean).length;
+}
+
+/** Brouillon par brouillon, dans l'ordre reçu : a-t-il servi ? */
+export function brouillonsUtilises(
+  brouillons: Array<{ ticketId: string; sentAt: Date | null; createdAt: Date }>,
+  derniersSortants: GroupeMessages[],
+): boolean[] {
   const derniere = new Map(derniersSortants.map((g) => [g.ticketId, g._max?.receivedAt ?? null]));
-  return brouillons.filter((brouillon) => {
+  return brouillons.map((brouillon) => {
     if (brouillon.sentAt) return true;
     const sortie = derniere.get(brouillon.ticketId);
     return Boolean(sortie && sortie > brouillon.createdAt);
-  }).length;
+  });
 }
