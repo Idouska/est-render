@@ -900,48 +900,57 @@
         </div>
       </section>
 
-      <section class="browse" id="view-suppliers" hidden aria-label="Fournisseurs">
-        <!-- Ce que les ateliers ont renvoyé. En tête de l'écran, avant le
-             carnet de contacts : un chiffre dans la navigation dit qu'il y a
-             quelque chose, il faut que l'écran dise quoi. -->
-        <div class="sup-activity" id="sup-activity" hidden></div>
-        <!-- Ce que les ateliers ont signalé depuis leur espace : une adresse
-             incomplète, un téléphone faux, un article abîmé. Ces tickets
-             entraient dans SAV client titrés « Autre », au milieu du courrier
-             des clients ; c'est ici que le marchand les cherche. -->
-        <section class="sup-sig" id="sup-sig" hidden aria-labelledby="sup-sig-h">
-          <div class="sup-sig-bar">
-            <h3 class="sup-dem-h" id="sup-sig-h">Signalements de vos fournisseurs <small id="sup-sig-n"></small></h3>
-            <span class="sup-sig-aide">Les articles indisponibles sont dans
-              <button class="linkish" type="button" data-sig-ruptures>Ruptures de stock</button>.</span>
-          </div>
-          <div class="sup-sig-rows" id="sup-sig-rows"></div>
-        </section>
-        <div class="browse-bar">
-          <span class="browse-count" id="suppliers-count"></span>
-          <button class="btn btn-primary" id="sup-new" style="margin-left:auto">
-            Ajouter un contact
-          </button>
-        </div>
-        <div class="sup-grid" id="suppliers-rows"></div>
+      <!-- ================================================== FOURNISSEURS ==
+           Ce qui attend d'abord, les ateliers ensuite, puis les demandes —
+           la liste et la fiche côte à côte, comme dans Modification. Au
+           téléphone, un atelier ou une demande se pousse par-dessus. -->
+      <section class="browse fo" id="view-suppliers" hidden aria-label="Fournisseurs">
+        <button type="button" class="fo-retour" id="fo-retour">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"
+            stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>Fournisseurs
+        </button>
 
-        <!-- Toutes les demandes envoyées aux fournisseurs. Un clic sur un
-             fournisseur ci-dessus ne garde que les siennes ; le type et le
-             statut se trient ici. Les ruptures restent dans leur écran. -->
-        <div class="sup-dem">
-          <div class="browse-bar sup-dem-bar">
-            <h3 class="sup-dem-h">Demandes aux fournisseurs <small id="sup-dem-qui"></small></h3>
-            <div class="filters" id="sup-dem-statut">
-              <button class="chip" data-dstatut="PENDING" aria-pressed="true">En attente</button>
-              <button class="chip" data-dstatut="" aria-pressed="false">Toutes</button>
-              <button class="chip" data-dstatut="ACKNOWLEDGED" aria-pressed="false">Faites</button>
-              <button class="chip" data-dstatut="REFUSED" aria-pressed="false">Refusées</button>
-            </div>
-            <span class="browse-count" id="sup-dem-count"></span>
+        <!-- Tout ce que les ateliers ont renvoyé, avec son geste sur la ligne :
+             un client à prévenir, un signalement, les ruptures. La pastille de
+             la colonne compte exactement ces lignes (hors ruptures, qui ont la
+             leur). -->
+        <section class="fo-bloc fo-traiter" id="fo-traiter" hidden aria-labelledby="fo-traiter-h">
+          <div class="fo-h"><h2 id="fo-traiter-h">À traiter</h2><span class="fo-h-n" id="fo-traiter-n"></span></div>
+          <div class="fo-liste" id="fo-traiter-rows"></div>
+        </section>
+
+        <section class="fo-bloc fo-ateliers-bloc" aria-labelledby="fo-ateliers-h">
+          <div class="fo-h">
+            <h2 id="fo-ateliers-h">Ateliers</h2><span class="fo-h-n" id="suppliers-count"></span>
+            <span class="fo-ressort"></span>
+            <button class="btn" id="sup-new" type="button">Ajouter un atelier</button>
           </div>
-          <div class="filters sup-dem-types" id="sup-dem-types" role="group" aria-label="Type de demande"></div>
-          <div id="sup-dem-rows"></div>
-        </div>
+          <div class="fo-ateliers" id="suppliers-rows"></div>
+        </section>
+
+        <section class="fo-bloc fo-demandes" aria-labelledby="sup-dem-h">
+          <div class="fo-h fo-dem-tete">
+            <h2 id="sup-dem-h">Demandes aux fournisseurs</h2>
+            <span class="fo-ressort"></span>
+            <button type="button" class="fo-jeton" id="sup-dem-qui" hidden></button>
+            <div class="rmb-onglets fo-segments" id="sup-dem-statut" role="group" aria-label="Afficher"></div>
+            <span class="fo-menu-ancre">
+              <button type="button" class="fo-bouton" id="sup-dem-type-btn" aria-haspopup="menu" aria-expanded="false"
+                aria-controls="sup-dem-types"><span id="sup-dem-type-nom">Tous les types</span>
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                  stroke-linejoin="round" aria-hidden="true"><path d="M4 6l4 4 4-4" /></svg></button>
+              <div class="fo-menu" id="sup-dem-types" role="menu" aria-label="Type de demande" hidden></div>
+            </span>
+          </div>
+          <div class="fo-dem">
+            <div class="fo-table">
+              <div class="fod-tete" aria-hidden="true"><span>Demande</span><span>Commande</span><span>Client</span><span>État</span><span>Date</span></div>
+              <div id="sup-dem-rows" role="list" aria-label="Demandes aux fournisseurs"></div>
+            </div>
+            <aside class="fo-fiche" id="sup-dem-fiche" aria-label="Demande"></aside>
+          </div>
+          <span class="sr-only" id="sup-dem-count" aria-live="polite"></span>
+        </section>
       </section>
 
       <section class="browse" id="view-team" hidden aria-label="Équipe">
@@ -1322,20 +1331,36 @@
         </div>
       </section>
 
-      <section class="browse" id="view-changes" hidden aria-label="Demandes de changement">
-        <div class="browse-bar">
-          <!-- Créer une demande sans passer par un mail : le client a pu
-               appeler, ou l'erreur se voir dans la commande elle-même. -->
-          <button class="btn btn-primary btn-small" id="changes-new">Nouvelle demande</button>
-          <div class="filters" id="changes-filters">
-            <button class="chip" data-chg="PENDING" aria-pressed="true">En attente</button>
-            <button class="chip" data-chg="" aria-pressed="false">Toutes</button>
-            <button class="chip" data-chg="ACKNOWLEDGED" aria-pressed="false">Faites</button>
-            <button class="chip" data-chg="REFUSED" aria-pressed="false">Refusées</button>
+      <!-- ================================================== MODIFICATION ==
+           Taille, modèle, adresse, téléphone : la liste et la fiche côte à
+           côte. S'ouvre sur « À prévenir », les réponses des ateliers qu'il
+           faut encore transmettre au client. -->
+      <section class="browse mod" id="view-changes" hidden aria-label="Modification">
+        <div class="mod-liste">
+          <div class="mod-barre">
+            <div class="rmb-onglets fo-segments" id="changes-filters" role="group" aria-label="Afficher"></div>
+            <label class="mod-cherche">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"
+                aria-hidden="true"><path d="M10.5 17a6.5 6.5 0 1 0 0-13a6.5 6.5 0 1 0 0 13M15.5 15.5 20 20" /></svg>
+              <input type="search" id="changes-q" placeholder="N°, client, atelier" aria-label="Filtrer les demandes" />
+            </label>
+            <!-- Créer une demande sans passer par un mail : le client a pu
+                 appeler, ou l'erreur se voir dans la commande elle-même. -->
+            <button class="btn btn-primary" id="changes-new" type="button">Nouvelle demande</button>
           </div>
-          <span class="browse-count" id="changes-count"></span>
+          <div class="fo-table">
+            <div class="fod-tete" aria-hidden="true"><span>Demande</span><span>Commande</span><span>Client</span><span>État</span><span>Date</span></div>
+            <div id="changes-rows" role="list" aria-label="Demandes de modification"></div>
+          </div>
+          <div class="mod-pied"><span id="changes-count"></span><span>Les autres demandes (annulation, retard, colis) sont dans Fournisseur.</span></div>
         </div>
-        <div id="changes-rows"></div>
+        <aside class="fo-fiche mod-fiche" id="changes-fiche" aria-label="Demande">
+          <button type="button" class="fo-retour" id="changes-retour">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"
+              stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>Modification
+          </button>
+          <div id="changes-fiche-corps"></div>
+        </aside>
       </section>
 
       <!-- ============================================================

@@ -198,8 +198,9 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
         where: { merchantId, status: 'PENDING' },
         select: { supplierId: true, createdAt: true },
       }),
+      // Par motif : « 5 en attente » doit pouvoir dire « 1 demande · 4 ruptures ».
       prisma.supplierEscalation.groupBy({
-        by: ['supplierId'],
+        by: ['supplierId', 'reason'],
         where: { merchantId, status: { in: ['OPEN', 'ANSWERED'] } },
         _count: true,
       }),
@@ -214,9 +215,10 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
       fiabiliteDesFournisseurs(merchantId),
     ]);
 
-    const escalationCounts = new Map(
-      escalations.map((row) => [row.supplierId, row._count]),
-    );
+    const escalationsDe = (supplierId: string, ruptures: boolean) =>
+      escalations
+        .filter((row) => row.supplierId === supplierId && (row.reason === 'OUT_OF_STOCK') === ruptures)
+        .reduce((total, row) => total + row._count, 0);
 
     const defaultId = suppliers.find((supplier) => supplier.isDefault)?.id ?? null;
 
@@ -259,7 +261,9 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
           ),
           pendingChanges: pending.length,
           oldestPendingAt: oldest,
-          openEscalations: escalationCounts.get(supplier.id) ?? 0,
+          openEscalations: escalationsDe(supplier.id, true) + escalationsDe(supplier.id, false),
+          ruptures: escalationsDe(supplier.id, true),
+          escalades: escalationsDe(supplier.id, false),
           fiabilite: fiabilite.get(supplier.id) ?? null,
         };
       }),
@@ -474,29 +478,61 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/changes', async (request, reply) => {
     const { merchantId } = request.session;
 
-    const changes = await prisma.supplierAlert.findMany({
-      where: { merchantId },
-      orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
-      take: 100,
-      select: {
-        id: true,
-        kind: true,
-        status: true,
-        message: true,
-        beforeValue: true,
-        afterValue: true,
-        orderName: true,
-        shopifyOrderId: true,
-        supplierNote: true,
-        createdAt: true,
-        acknowledgedAt: true,
-        emailedAt: true,
-        handledAt: true,
-        // Le téléphone : le bandeau des urgences sans réponse dit qui appeler.
-        supplier: { select: { id: true, name: true, phone: true } },
-        ticket: { select: { id: true, subject: true, customerName: true, customerEmail: true } },
-      },
-    });
+    const select = {
+      id: true,
+      kind: true,
+      status: true,
+      message: true,
+      beforeValue: true,
+      afterValue: true,
+      orderName: true,
+      shopifyOrderId: true,
+      supplierNote: true,
+      createdAt: true,
+      createdById: true,
+      acknowledgedAt: true,
+      emailedAt: true,
+      handledAt: true,
+      // Le téléphone : le bandeau des urgences sans réponse dit qui appeler.
+      supplier: { select: { id: true, name: true, phone: true } },
+      ticket: { select: { id: true, subject: true, customerName: true, customerEmail: true } },
+    } as const;
+
+    /*
+     * Tout ce qui attend, quel que soit son âge, puis les cent dernières.
+     *
+     * La pastille compte toutes les réponses d'atelier dont le client n'a pas
+     * été prévenu ; une liste coupée aux cent dernières demandes pouvait en
+     * laisser une hors de l'écran, et la pastille annonçait alors ce que la
+     * page ne montrait pas.
+     */
+    const [enCours, recentes] = await Promise.all([
+      prisma.supplierAlert.findMany({
+        where: { merchantId, OR: [{ status: 'PENDING' }, { status: { not: 'PENDING' }, handledAt: null }] },
+        orderBy: { createdAt: 'desc' },
+        take: 300,
+        select,
+      }),
+      prisma.supplierAlert.findMany({
+        where: { merchantId },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+        select,
+      }),
+    ]);
+    const vues = new Set<string>();
+    const changes = [...enCours, ...recentes]
+      .filter((change) => (vues.has(change.id) ? false : (vues.add(change.id), true)))
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+    // Qui a demandé : l'historique de la fiche le dit.
+    const auteurs = [...new Set(changes.map((change) => change.createdById).filter(Boolean))] as string[];
+    const noms = new Map(
+      (auteurs.length
+        ? await prisma.user.findMany({ where: { merchantId, id: { in: auteurs } }, select: { id: true, name: true, email: true } })
+        : []
+      ).map((user) => [user.id, user.name ?? user.email]),
+    );
 
     /*
      * Expédiée ou non : lu dans nos colis plutôt que demandé à Shopify.
@@ -520,8 +556,9 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
 
     return reply.send({
       pending: changes.filter((change) => change.status === 'PENDING').length,
-      changes: changes.map((change) => ({
+      changes: changes.map(({ createdById, ...change }) => ({
         ...change,
+        creePar: createdById ? (noms.get(createdById) ?? null) : null,
         orderShipped: change.shopifyOrderId ? shipped.has(change.shopifyOrderId) : null,
       })),
     });
@@ -538,9 +575,12 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/supplier-activity', async (request, reply) => {
     const { merchantId } = request.session;
 
-    const [answered, issues, changes] = await Promise.all([
+    const [answered, issues, changes, ruptures] = await Promise.all([
       // Escalades auxquelles le fournisseur a répondu, pas encore reprises.
-      prisma.supplierEscalation.count({ where: { merchantId, status: 'ANSWERED' } }),
+      // Hors ruptures : elles ont leur écran et leur pastille.
+      prisma.supplierEscalation.count({
+        where: { merchantId, status: 'ANSWERED', reason: { not: 'OUT_OF_STOCK' } },
+      }),
       /*
        * Signalements venus de l'atelier : téléphone incomplet, adresse,
        * article abîmé. Comptés comme la section qui les liste, sur la même
@@ -553,6 +593,11 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
       prisma.supplierAlert.count({
         where: { merchantId, status: { not: 'PENDING' }, handledAt: null },
       }),
+      // Les ruptures en cours : une ligne d'information en tête de la page,
+      // hors du total — elles sont comptées par leur propre pastille.
+      prisma.supplierEscalation.count({
+        where: { merchantId, status: { in: ['OPEN', 'ANSWERED'] }, reason: 'OUT_OF_STOCK' },
+      }),
     ]);
 
     return reply.send({
@@ -560,6 +605,7 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
       answered,
       issues,
       changes,
+      ruptures,
     });
   });
 
