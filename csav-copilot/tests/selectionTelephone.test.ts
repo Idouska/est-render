@@ -38,7 +38,7 @@ test('pas de cases tant qu’on n’a pas demandé à sélectionner', () => {
 });
 
 test('en mode sélection, toucher une ligne la coche ; « OK » décoche tout', () => {
-  assert.match(app, /if \(enSelection\(\)\) return button\.closest\('\.qrow'\)\?\.querySelector\('\[data-pick\]'\)\?\.click\(\);\n\s+selectTicket\(button\.dataset\.id\);/);
+  assert.match(app, /if \(enSelection\(\)\) return button\.closest\('\.qrow'\)\?\.querySelector\('\[data-pick\]'\)\?\.click\(\);\n\s+void selectTicket\(button\.dataset\.id\);/);
   const mode = corps('function modeSelection(');
   assert.match(mode, /bouton\.textContent = actif \? 'OK' : 'Sélectionner';/);
   assert.match(mode, /if \(!actif && state\.picked\.size\) clearPicked\(\);/);

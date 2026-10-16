@@ -99,6 +99,8 @@ test('un autre ticket s’ouvre en haut ; le même ne bouge pas', async () => {
       $: (cle: string) => (cle === 'd-pane' ? colonne : null),
       loadEscalations: async () => {},
       loadMetrics: async () => {},
+      // Téléphone et tablette en portrait : sans effet ici.
+      ouvrirMessagePile: () => {},
     };
     const selectTicket = new Function(...Object.keys(doublures), `${source}\nreturn selectTicket;`)(
       ...Object.values(doublures),
