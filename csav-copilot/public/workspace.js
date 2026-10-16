@@ -11,6 +11,19 @@ import { verifierAdresse, verifierTelephone } from './workspace.verif.js';
 
 const $ = (id) => document.getElementById(id);
 
+/*
+ * Des chevrons, une croix et une coche dessinés, jamais des caractères : une
+ * flèche tapée au clavier n'a ni l'épaisseur ni l'alignement d'une icône, et
+ * un bouton se lit à son libellé.
+ */
+const trait = (d) =>
+  `<svg class="ws-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"
+    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}" /></svg>`;
+const ICO_PREC = trait('M10 3.5 5.5 8l4.5 4.5');
+const ICO_SUIV = trait('M6 3.5 10.5 8 6 12.5');
+const ICO_CROIX = trait('M4.5 4.5l7 7M11.5 4.5l-7 7');
+const ICO_COCHE = trait('M3.5 8.5l3 3 6-7');
+
 const params = new URLSearchParams(window.location.search);
 const token = params.get('token');
 const supplierId = window.location.pathname.split('/').pop();
@@ -615,11 +628,11 @@ function dessinerCommandes() {
           </span>
           <small>${esc(item?.title ?? '')}${
             item?.variantTitle ? ` · ${esc(item.variantTitle)}` : ''
-          }${phoneShort ? ` <b class="rowo-warn">☎ ${esc(t('orders.phoneMissing'))}</b>` : ''}</small>
+          }${phoneShort ? ` <b class="rowo-warn">${esc(t('orders.phoneMissing'))}</b>` : ''}</small>
         </span>
         <span class="rowo-state${done ? ' ok' : ''}">${
           done
-            ? '✓'
+            ? ICO_COCHE
             : esc(t('progress.parcels', { done: orderDone(order, total), total }))
         }</span>
         <svg class="rowo-car" viewBox="0 0 20 20" aria-hidden="true"><path d="m7.5 4.5 5.5 5.5-5.5 5.5" /></svg>
@@ -681,14 +694,14 @@ function focusMarkup(shown) {
 
   return `
     <div class="focus-bar">
-      <button type="button" class="btn btn-small" data-back="1">← ${esc(t('focus.back'))}</button>
+      <button type="button" class="btn btn-small" data-back="1">${ICO_PREC}${esc(t('focus.back'))}</button>
       <span class="focus-pos">${at + 1} / ${list.length}</span>
       <span class="focus-nav">
         <button type="button" class="btn btn-small" data-nav="prev" ${at <= 0 ? 'disabled' : ''}
-          aria-label="${esc(t('focus.prev'))}">←</button>
+          aria-label="${esc(t('focus.prev'))}">${ICO_PREC}</button>
         <button type="button" class="btn btn-small" data-nav="next"
           ${at >= list.length - 1 ? 'disabled' : ''}
-          aria-label="${esc(t('focus.next'))}">→</button>
+          aria-label="${esc(t('focus.next'))}">${ICO_SUIV}</button>
       </span>
     </div>
 
@@ -1297,7 +1310,7 @@ function zonePhotos() {
     .map(
       (photo, i) => `<span class="sig-photo"><img src="${photo}" alt="" /><button type="button"
         class="sig-photo-x" data-retirer-photo="${i}" aria-label="${esc(t('issue.photoRemove'))}"
-        title="${esc(t('issue.photoRemove'))}">✕</button></span>`,
+        title="${esc(t('issue.photoRemove'))}">${ICO_CROIX}</button></span>`,
     )
     .join('');
   const ajout =

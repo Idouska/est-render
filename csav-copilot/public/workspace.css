@@ -3470,3 +3470,10 @@ input:focus, select:focus, textarea:focus {
    seule, la page attend. */
 html:has(.wsapp ~ .modal-wrap.open) { overflow: hidden; }
 .wsapp ~ .modal-wrap .modal { overscroll-behavior: contain; }
+
+/* --- Des icônes dessinées dans les boutons, plus de flèches ni d'émojis. -- */
+.wsapp .ws-ico { width: 15px; height: 15px; flex: none; }
+.wsapp [data-back] .ws-ico { width: 16px; height: 16px; margin-left: -4px; }
+.wsapp .rowo-state.ok .ws-ico { width: 12px; height: 12px; stroke-width: 2.2; }
+.wsapp ~ .modal-wrap .sig-photo-x { display: grid; place-items: center; padding: 0; }
+.wsapp ~ .modal-wrap .sig-photo-x .ws-ico { width: 11px; height: 11px; stroke-width: 2.2; }

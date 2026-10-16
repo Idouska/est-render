@@ -13789,6 +13789,13 @@ progress { accent-color: var(--accent); }
 @media (max-width: 760px) {
   html:has(#qf:not([hidden])) { overflow: hidden; }
 }
+/* Au doigt, glisser en largeur ouvre le menu ou revient à la liste : le
+   navigateur ne doit pas en faire un « page précédente », qui quittait
+   l'outil pour l'écran de connexion. */
+@media (pointer: coarse), (max-width: 1080px) {
+  html,
+  body { overscroll-behavior-x: none; }
+}
 .side,
 .clockpop,
 .cc,
@@ -13798,48 +13805,56 @@ progress { accent-color: var(--accent); }
 .modal,
 .lmore-box { overscroll-behavior: contain; }
 
-/* --- Les horloges, au téléphone : une feuille compacte qui monte du bas. - */
+/* --- Les horloges : une seule rangée, en haut de l'écran. ---------------- */
+/* Quatre cadrans côte à côte, jamais sur deux lignes : une heure qu'il faut
+   chercher sous les autres n'est plus un coup d'œil. */
+.clockpop { flex-wrap: nowrap; touch-action: pan-y; }
+@keyframes horloges-descend {
+  from { transform: translateY(calc(-100% - 16px)); }
+}
 @media (max-width: 760px) {
+  /* Au téléphone, une bannière qui descend du haut, comme une notification
+     d'iPhone, et qu'on écarte d'un glissé à gauche ou à droite. */
   .clockpop {
     position: fixed;
     z-index: 96;
     left: 8px;
     right: 8px;
-    top: auto;
-    bottom: calc(8px + env(safe-area-inset-bottom));
+    top: calc(8px + env(safe-area-inset-top));
+    bottom: auto;
     max-width: none;
-    max-height: 75dvh;
-    overflow-y: auto;
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     justify-items: center;
-    gap: 14px 4px;
-    padding: 24px 8px 16px;
+    gap: 4px;
+    padding: 12px 8px;
     border-radius: 26px;
-    box-shadow: 0 0 0 0.5px rgb(0 0 0 / 14%), 0 -12px 40px -12px rgb(0 0 0 / 40%);
-  }
-  .clockpop::before {
-    content: "";
-    position: absolute;
-    top: 8px;
-    left: 50%;
-    width: 36px;
-    height: 5px;
-    margin-left: -18px;
-    border-radius: 3px;
-    background: color-mix(in srgb, var(--ink) 22%, transparent);
+    box-shadow: 0 0 0 0.5px rgb(0 0 0 / 14%), 0 16px 40px -12px rgb(0 0 0 / 40%);
+    animation: horloges-descend 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
   .clockpop .ckcard { min-width: 0; gap: 4px; }
-  /* Le cadran entier rapetisse, aiguilles comprises. */
-  .clockpop .montre { zoom: 0.78; }
-  .clockpop .ckcard-meta { font-size: 11px; }
-  .clockpop .ckcard-meta b { font-size: 12px; }
+  /* Le cadran entier rapetisse, aiguilles comprises, pour que les quatre
+     tiennent dans la largeur de l'écran. */
+  .clockpop .montre { zoom: 0.74; }
+  /* Le décalage et le soleil ou la lune sont déjà sur le cadran. */
+  .clockpop .ckcard-sub { display: none; }
+  .clockpop .ckcard-meta b { font-size: 12px; white-space: nowrap; }
+}
+@media (max-width: 410px) { .clockpop .montre { zoom: 0.7; } }
+@media (max-width: 385px) { .clockpop .montre { zoom: 0.66; } }
+@media (max-width: 370px) { .clockpop .montre { zoom: 0.63; } }
+@media (max-width: 350px) {
+  .clockpop .montre { zoom: 0.56; }
+  .clockpop .ckcard-meta b { font-size: 11px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .clockpop { animation: none; }
 }
 
 /* --- L'en-tête du téléphone : une ligne, puis la recherche. -------------- */
 @media (max-width: 760px) {
   /* Les heures deviennent une icône à côté d'Actualiser : touchée, elle
-     ouvre la feuille des cinq cadrans. Elles occupaient une rangée entière
+     ouvre la rangée des quatre cadrans. Elles occupaient une rangée entière
      sur chaque page, avant même le premier chiffre de l'écran. */
   .head .clocks {
     order: 1;
@@ -13939,3 +13954,23 @@ progress { accent-color: var(--accent); }
   #view-tickets .th-titre { min-width: 0; }
   #view-tickets .th-quand { white-space: normal; }
 }
+
+/* --- Des icônes dessinées dans les boutons, plus de flèches ni d'émojis. -- */
+/* « ＋ », « ⚡ », « → » et « ↗ » tapés dans les libellés : un bouton se lit à
+   son libellé, et les seuls signes qui restent — précédent, suivant, retirer —
+   sont dessinés au trait, comme les symboles d'Apple. */
+#d-prev svg,
+#d-next svg { width: 16px; height: 16px; }
+#rup-prev,
+#rup-next { display: inline-grid; place-items: center; }
+#rup-prev svg,
+#rup-next svg { width: 14px; height: 14px; }
+.qjeton-x { display: inline-grid; place-items: center; }
+.qjeton-x svg { width: 9px; height: 9px; stroke-width: 2; }
+.pal-jeton { display: inline-flex; align-items: center; gap: 6px; }
+.pal-jeton svg { width: 10px; height: 10px; stroke-width: 2; }
+.ret-wa svg { width: 15px; height: 15px; }
+.qt-arrow svg { width: 9px; height: 9px; stroke-width: 2; vertical-align: 0; }
+.ov-go svg,
+.statrow-x svg,
+.rup-go svg { display: block; width: 13px; height: 13px; margin-left: auto; stroke-width: 1.8; }
