@@ -49,12 +49,14 @@ test('le menu s’ouvre vers la droite, se ferme vers la gauche', () => {
   const depart = corps('function gesteAuDepart(');
   assert.match(depart, /return cible\.closest\('\.side, #scrim'\) \? 'fermer' : null;/);
   assert.match(depart, /if \(cible\.closest\(SANS_GLISSE\) \|\| defileEnLargeur\(cible\)\) return null;/);
-  // Un message ouvert en plein écran : vers la droite, retour à la liste.
-  assert.match(depart, /classList\.contains\('pile-message'\) \? 'retour' : 'ouvrir'/);
+  // Un message ou une commande ouverts en plein écran : vers la droite,
+  // retour à la liste.
+  assert.match(depart, /classList\.contains\('pile-message'\)\) return 'retour';/);
+  assert.match(depart, /classList\.contains\('pile-fiche'\)\) return 'retourCommande';/);
   const conclure = corps('function conclureGeste(');
   assert.match(conclure, /toggleNav\(franchi && dx > 0\);/);
   assert.match(conclure, /toggleNav\(!\(franchi && dx < 0\)\);/);
-  assert.match(conclure, /if \(franchi && dx > 0\) fermerMessagePile\(\);/);
+  assert.match(conclure, /if \(franchi && dx > 0\) \(type === 'retour' \? fermerMessagePile : fermerFichePile\)\(\);/);
   // Le menu suit le doigt.
   assert.match(corps('function poserTiroir('), /side\.style\.transform = `translateX\(\$\{x\}px\)`;/);
 });

@@ -804,78 +804,68 @@
         <span class="kb-right" id="kb-state"></span>
       </div>
 
-      <section class="browse" id="view-orders" hidden aria-label="Commandes">
-        <div class="qbar">
-          <div class="qbar-row">
-            <input
-              type="search"
-              id="orders-q"
-              placeholder="#1042, email ou nom du client…"
-              aria-label="Rechercher une commande"
-            />
-            <a class="btn btn-small" id="orders-xlsx" download>Feuille Excel</a>
-            <a class="btn btn-small" id="orders-export" download>CSV</a>
+      <!-- Commandes, façon Finder et Contacts : la liste et la fiche côte à
+           côte. La fiche ne recouvre plus la liste — passer d'une commande
+           à l'autre ne demande plus de la fermer. Au téléphone, elle se
+           pousse par-dessus, comme un message dans Mail. -->
+      <section class="browse cmd" id="view-orders" hidden aria-label="Commandes">
+        <div class="cmd-liste">
+          <div class="cmd-outils">
+            <!-- Des onglets avec leur compte, à la place des trois menus
+                 déroulants. Shopify ne filtre une commande que sur
+                 l'expédition : « en transit » et « livrée » se lisent ligne
+                 par ligne. -->
+            <div class="cmd-vues" id="orders-vues" role="tablist" aria-label="Afficher">
+              <button type="button" role="tab" data-vue="toutes" aria-selected="true">Toutes<span class="cmd-n" data-n="toutes"></span></button>
+              <button type="button" role="tab" data-vue="aExpedier" aria-selected="false">À expédier<span class="cmd-n" data-n="aExpedier"></span></button>
+              <button type="button" role="tab" data-vue="expediees" aria-selected="false">Expédiées<span class="cmd-n" data-n="expediees"></span></button>
+              <button type="button" role="tab" data-vue="remboursees" aria-selected="false">Remboursées<span class="cmd-n" data-n="remboursees"></span></button>
+            </div>
+            <label class="cmd-cherche"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M10.5 17a6.5 6.5 0 1 0 0-13a6.5 6.5 0 1 0 0 13M15.5 15.5 20 20" /></svg><input
+                type="search"
+                id="orders-q"
+                placeholder="N°, client, e-mail"
+                aria-label="Rechercher une commande"
+              /></label>
+            <div class="more-wrap cmd-exporter">
+              <button class="btn btn-small" id="orders-exporter" type="button" aria-haspopup="menu" aria-expanded="false">Exporter</button>
+              <div class="more-menu cmd-export-menu" id="orders-export-menu" role="menu" hidden>
+                <a role="menuitem" id="orders-xlsx" download>Feuille Excel</a>
+                <a role="menuitem" id="orders-export" download>Fichier CSV</a>
+                <p class="cmd-export-note">Les commandes des dernières 24 heures, au format de la feuille de l’atelier.</p>
+              </div>
+            </div>
           </div>
 
-          <div class="qbar-row qbar-selects">
-            <label>Trier <select id="orders-sort">
-              <option value="recent">Commande la plus récente</option>
-              <option value="oldest">La plus ancienne</option>
-              <option value="updated">Modifiée récemment</option>
-              <option value="amountDesc">Montant décroissant</option>
-              <option value="amountAsc">Montant croissant</option>
-            </select></label>
+          <div class="cmd-table" role="table" aria-label="Commandes">
+            <!-- On trie en cliquant l'en-tête, comme dans le Finder. -->
+            <div class="cmd-tete" role="row">
+              <span role="columnheader">Commande</span>
+              <span role="columnheader">Client</span>
+              <button class="cmd-tri" type="button" role="columnheader" data-tri="date" aria-sort="descending">Date<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6 8 10.5 12.5 6" /></svg></button>
+              <button class="cmd-tri cmd-tri-num" type="button" role="columnheader" data-tri="total" aria-sort="none">Total<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6 8 10.5 12.5 6" /></svg></button>
+              <span role="columnheader">Paiement</span>
+              <span role="columnheader">Expédition</span>
+            </div>
+            <div class="cmd-lignes" id="orders-rows" role="rowgroup"></div>
+          </div>
 
-            <label>Paiement <select id="orders-payment">
-              <option value="">Tous</option>
-              <option value="paid">Payé</option>
-              <option value="pending">En attente</option>
-              <option value="partially_refunded">Partiellement remboursé</option>
-              <option value="refunded">Remboursé</option>
-              <option value="voided">Annulé</option>
-            </select></label>
-
-            <label>Livraison <select id="orders-delivery">
-              <option value="">Toutes</option>
-              <option value="unfulfilled">Non expédiée</option>
-              <option value="partial">Partiellement expédiée</option>
-              <option value="in_transit">En transit</option>
-              <option value="fulfilled">Livrée</option>
-            </select></label>
-
-            <span class="qbar-count" id="orders-count"></span>
+          <div class="cmd-pied">
+            <span id="orders-count"></span>
+            <button class="btn btn-small" id="orders-more" type="button" hidden>Charger la suite</button>
           </div>
         </div>
-        <div class="table-wrap">
-          <table class="grid grid-pin">
-            <thead>
-              <tr>
-                <!-- Les colonnes de la liste Shopify, dans son ordre : le
-                     marchand passe de l'une à l'autre dans la journée, et
-                     un tableau qui range autrement lui fait relire deux
-                     fois la même commande. Pas de case à cocher : rien ici
-                     ne s'applique à plusieurs commandes à la fois, et une
-                     case qui ne commande rien est un bouton mort. -->
-                <th>Commande</th>
-                <th>Date</th>
-                <th>Client</th>
-                <th>Destination</th>
-                <th>Canal</th>
-                <th class="num">Total</th>
-                <th>Statut du paiement</th>
-                <th>Statut du traitement</th>
-                <th>Articles</th>
-                <th>Statut de la livraison</th>
-                <th>Mode de livraison</th>
-                <th>Balises</th>
-              </tr>
-            </thead>
-            <tbody id="orders-rows"></tbody>
-          </table>
-        </div>
-        <div class="browse-foot">
-          <button class="btn" id="orders-more" hidden>Charger la suite</button>
-        </div>
+
+        <aside class="cmd-fiche" id="orders-fiche" aria-label="Commande">
+          <div class="cmd-fiche-nav">
+            <button class="th-retour cmd-retour" id="orders-retour" type="button" aria-label="Retour aux commandes">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"
+                stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg><span>Commandes</span></button>
+          </div>
+          <div class="cmd-fiche-corps" id="orders-fiche-corps">
+            <p class="cmd-vide">Choisissez une commande dans la liste.</p>
+          </div>
+        </aside>
       </section>
 
       <section class="browse" id="view-customers" hidden aria-label="Clients">

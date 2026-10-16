@@ -58,7 +58,9 @@ const state = {
   queueLoaded: false,
   orders: {
     items: [], cursor: null, hasNext: false, q: '', loading: false, loaded: false, timer: null,
-    sort: 'recent', payment: '', delivery: '',
+    // L'onglet (Toutes, À expédier…), la commande ouverte dans la fiche, et
+    // les comptes des onglets — périmés dès qu'une réponse plus récente arrive.
+    sort: 'recent', vue: 'toutes', choisie: null, counts: null, seqCounts: 0, seqFiche: 0,
   },
   customers: { items: [], cursor: null, hasNext: false, q: '', loading: false, loaded: false, timer: null },
 };
@@ -9516,18 +9518,62 @@ $('catalog-more').addEventListener('click', () => loadCatalog());
 $('orders-xlsx').href = '/api/orders/export.xlsx?limit=250';
 $('orders-export').href = '/api/orders/export.csv?limit=250';
 
-// Les filtres de commandes rejouent la requête depuis le début : garder le
+// Les onglets et le tri rejouent la requête depuis le début : garder le
 // curseur mélangerait deux tris dans la même liste.
-for (const [id, key] of [
-  ['orders-sort', 'sort'],
-  ['orders-payment', 'payment'],
-  ['orders-delivery', 'delivery'],
-]) {
-  $(id).addEventListener('change', (event) => {
-    state.orders[key] = event.target.value;
+$('orders-vues').addEventListener('click', (event) => {
+  const onglet = event.target.closest('[data-vue]');
+  if (!onglet || onglet.dataset.vue === state.orders.vue) return;
+  state.orders.vue = onglet.dataset.vue;
+  $('orders-vues')
+    .querySelectorAll('[data-vue]')
+    .forEach((autre) => autre.setAttribute('aria-selected', String(autre === onglet)));
+  void loadOrders({ reset: true });
+});
+
+/*
+ * Trier en cliquant l'en-tête, comme dans le Finder : Date puis Total ; un
+ * second clic sur la même colonne inverse l'ordre.
+ */
+const TRIS_COMMANDES = {
+  date: ['recent', 'oldest'],
+  total: ['amountDesc', 'amountAsc'],
+};
+
+$('view-orders').querySelectorAll('.cmd-tri').forEach((entete) =>
+  entete.addEventListener('click', () => {
+    const [premier, second] = TRIS_COMMANDES[entete.dataset.tri];
+    state.orders.sort = state.orders.sort === premier ? second : premier;
+    rendreTriCommandes();
     void loadOrders({ reset: true });
+  }),
+);
+
+function rendreTriCommandes() {
+  $('view-orders').querySelectorAll('.cmd-tri').forEach((entete) => {
+    const [premier, second] = TRIS_COMMANDES[entete.dataset.tri];
+    const sens = state.orders.sort === premier ? 'descending' : state.orders.sort === second ? 'ascending' : 'none';
+    entete.setAttribute('aria-sort', sens);
   });
 }
+
+/* « Exporter » : les deux fichiers dans un menu, plutôt que deux boutons. */
+function fermerExportCommandes() {
+  const menu = $('orders-export-menu');
+  if (!menu || menu.hidden) return;
+  menu.hidden = true;
+  $('orders-exporter').setAttribute('aria-expanded', 'false');
+}
+
+$('orders-exporter').addEventListener('click', (event) => {
+  event.stopPropagation();
+  const menu = $('orders-export-menu');
+  menu.hidden = !menu.hidden;
+  $('orders-exporter').setAttribute('aria-expanded', String(!menu.hidden));
+});
+$('orders-export-menu').addEventListener('click', () => setTimeout(fermerExportCommandes));
+document.addEventListener('click', (event) => {
+  if (!event.target.closest?.('.cmd-exporter')) fermerExportCommandes();
+});
 
 $('catalog-q').addEventListener('input', (event) => {
   state.catalog.q = event.target.value.trim();
@@ -12652,6 +12698,8 @@ function setView(view) {
   ouvrirFiltres(false);
   modeSelection(false);
   if (view !== 'tickets') fermerMessagePile();
+  if (view !== 'orders') fermerFichePile();
+  if (view === 'orders') afficherSousCommandes();
 
   renderNav();
 
@@ -13007,17 +13055,27 @@ function statusTag(value, labels, alert) {
   return `<span class="tag tag-status ${cls}">${esc(label)}</span>`;
 }
 
+/*
+ * La liste des commandes.
+ *
+ * Une réponse lente ne doit pas écraser une plus récente : changer d'onglet
+ * pendant un chargement repart de zéro, et la réponse de l'onglet quitté est
+ * ignorée à son arrivée. « Charger la suite », lui, attend le chargement en
+ * cours — deux pages demandées au même curseur se dédoubleraient.
+ */
 async function loadOrders({ reset = false } = {}) {
   const store = state.orders;
-  if (store.loading) return;
+  if (store.loading && !reset) return;
 
+  const seq = (store.seqListe = (store.seqListe ?? 0) + 1);
   store.loading = true;
   const body = $('orders-rows');
 
   if (reset) {
     store.items = [];
     store.cursor = null;
-    body.innerHTML = '<tr><td colspan="6" class="empty">Chargement…</td></tr>';
+    body.innerHTML = '<p class="cmd-etat-vide">Chargement…</p>';
+    void loadOrderCounts();
   }
 
   const params = new URLSearchParams();
@@ -13027,127 +13085,445 @@ async function loadOrders({ reset = false } = {}) {
   if (store.q) params.set('q', store.q);
   if (store.cursor) params.set('cursor', store.cursor);
   if (store.sort && store.sort !== 'recent') params.set('sort', store.sort);
-  if (store.payment) params.set('payment', store.payment);
-  if (store.delivery) params.set('delivery', store.delivery);
+  if (store.vue && store.vue !== 'toutes') params.set('vue', store.vue);
 
   try {
     const page = await api(`/api/orders?${params}`);
+    if (seq !== store.seqListe) return;
     store.items = store.items.concat(page.orders);
     store.cursor = page.cursor;
     store.hasNext = page.hasNextPage;
     store.loaded = true;
     renderOrders();
   } catch (error) {
-    body.innerHTML = `<tr><td colspan="7" class="empty">${esc(error.message)}</td></tr>`;
+    if (seq !== store.seqListe) return;
+    body.innerHTML = `<p class="cmd-etat-vide">${esc(error.message)}</p>`;
     $('orders-count').textContent = '';
     $('orders-more').hidden = true;
   } finally {
-    store.loading = false;
+    if (seq === store.seqListe) store.loading = false;
   }
+}
+
+/**
+ * Le compte de chaque onglet, comme les dossiers de Mail.
+ *
+ * Il suit la recherche : chercher « Morel » dit combien de ses commandes
+ * restent à expédier. Un plus, pas une condition — sans réponse, les
+ * onglets restent là, sans nombre.
+ */
+async function loadOrderCounts() {
+  const store = state.orders;
+  const seq = ++store.seqCounts;
+  const params = new URLSearchParams();
+  if (store.q) params.set('q', store.q);
+
+  let counts = null;
+  try {
+    ({ counts } = await api(`/api/orders/counts?${params}`));
+  } catch {
+    counts = null;
+  }
+  if (seq !== store.seqCounts) return;
+
+  store.counts = counts;
+  document.querySelectorAll('#orders-vues [data-n]').forEach((n) => {
+    const compte = counts?.[n.dataset.n];
+    n.textContent = compte ? `${compte.count.toLocaleString('fr-FR')}${compte.auMoins ? '+' : ''}` : '';
+  });
+  if (state.view === 'orders') afficherSousCommandes();
+}
+
+/** Sous le titre : combien de commandes, et combien attendent un colis. */
+function afficherSousCommandes() {
+  const sous = $('view-sub');
+  const counts = state.orders.counts;
+  if (!sous || !counts?.toutes || state.orders.q) return;
+  const nombre = (compte) => `${compte.count.toLocaleString('fr-FR')}${compte.auMoins ? '+' : ''}`;
+  const toutes = counts.toutes;
+  const attente = counts.aExpedier;
+  sous.textContent = `${nombre(toutes)} commande${toutes.count > 1 ? 's' : ''}${
+    attente ? ` · ${nombre(attente)} à expédier` : ''
+  }`;
+  sous.hidden = false;
+}
+
+/*
+ * L'état d'une commande, en un point de couleur et un mot.
+ *
+ * Trois pastilles de couleur par ligne se lisaient comme une alarme. Ici,
+ * comme dans les apps d'Apple, un point et un mot : vert quand c'est fait,
+ * orange quand quelque chose attend, rouge quand ça a échoué, gris quand
+ * c'est clos. Le troisième terme sert le résumé d'une ligne au téléphone :
+ * un paiement qui attend passe avant l'expédition.
+ */
+const PAIEMENTS = {
+  PAID: ['Payée', 'ok'],
+  PARTIALLY_PAID: ['Payée en partie', 'warn', 'Payée en partie'],
+  PENDING: ['En attente', 'warn', 'À payer'],
+  AUTHORIZED: ['Autorisée', 'warn', 'Paiement autorisé'],
+  EXPIRED: ['Expiré', 'crit', 'Paiement expiré'],
+  PARTIALLY_REFUNDED: ['Remboursée en partie', 'gris'],
+  REFUNDED: ['Remboursée', 'gris', 'Remboursée'],
+  VOIDED: ['Annulée', 'gris', 'Annulée'],
+};
+
+function etatPaiement(order) {
+  const statut = order.displayFinancialStatus;
+  const [label, ton, resume = null] = PAIEMENTS[statut] ?? [FINANCIAL_LABELS[statut] ?? '—', 'gris'];
+  return { label, ton, resume };
+}
+
+/**
+ * Où en est l'expédition : le statut de Shopify, précisé par celui du colis
+ * chez le transporteur quand il existe. `etape` place la commande sur la
+ * frise de la fiche : 1 à expédier, 2 en route, 3 arrivée.
+ */
+function etatExpedition(order) {
+  const ful = order.displayFulfillmentStatus;
+  const colis = (order.fulfillments ?? []).find((f) => f.displayStatus)?.displayStatus;
+
+  if (!ful || ful === 'UNFULFILLED') return { label: 'À expédier', ton: 'warn', etape: 1 };
+  if (ful === 'ON_HOLD') return { label: 'En attente', ton: 'warn', etape: 1 };
+  if (ful === 'SCHEDULED') return { label: 'Programmée', ton: 'warn', etape: 1 };
+  if (ful === 'PARTIALLY_FULFILLED') return { label: 'Expédiée en partie', ton: 'warn', etape: 1 };
+  if (ful === 'RESTOCKED') return { label: 'Remise en stock', ton: 'gris', etape: 1 };
+  if (colis === 'DELIVERED' || ful === 'DELIVERED') return { label: 'Livrée', ton: 'ok', etape: 3 };
+  if (colis === 'PICKED_UP') return { label: 'Retirée', ton: 'ok', etape: 3 };
+  if (colis === 'ATTEMPTED_DELIVERY') return { label: 'Livraison tentée', ton: 'crit', etape: 2 };
+  if (colis === 'NOT_DELIVERED' || colis === 'FAILURE') return { label: 'Non livrée', ton: 'crit', etape: 2 };
+  if (colis === 'OUT_FOR_DELIVERY' || ful === 'OUT_FOR_DELIVERY') {
+    return { label: 'En cours de livraison', ton: 'info', etape: 2 };
+  }
+  if (colis === 'READY_FOR_PICKUP') return { label: 'À retirer', ton: 'info', etape: 2 };
+  if (colis === 'IN_TRANSIT' || ful === 'IN_TRANSIT') return { label: 'En transit', ton: 'info', etape: 2 };
+  return { label: 'Expédiée', ton: 'info', etape: 2 };
+}
+
+function pastilleEtat({ label, ton }) {
+  return `<i class="cmd-point ton-${ton}" aria-hidden="true"></i><span>${esc(label)}</span>`;
+}
+
+/** Le pays en toutes lettres : « Lyon, France » plutôt que « Lyon, FR ». */
+const NOMS_PAYS = (() => {
+  try {
+    return new Intl.DisplayNames(['fr'], { type: 'region' });
+  } catch {
+    return null;
+  }
+})();
+
+function paysEnLettres(code) {
+  if (!code) return '';
+  try {
+    return NOMS_PAYS?.of(code) ?? code;
+  } catch {
+    return code;
+  }
+}
+
+/** « Aujourd'hui », « Hier », « 3 févr. », puis l'année quand elle change. */
+function jourCommande(iso) {
+  if (!iso) return '';
+  const date = new Date(iso);
+  const aujourdhui = new Date();
+  const hier = new Date(aujourdhui);
+  hier.setDate(aujourdhui.getDate() - 1);
+  const meme = (a, b) => a.toDateString() === b.toDateString();
+  if (meme(date, aujourdhui)) return `Aujourd’hui`;
+  if (meme(date, hier)) return 'Hier';
+  return date.toLocaleDateString('fr-FR', {
+    day: 'numeric',
+    month: 'short',
+    ...(date.getFullYear() === aujourdhui.getFullYear() ? {} : { year: 'numeric' }),
+  });
+}
+
+function ligneCommande(order, index) {
+  const store = state.orders;
+  const on = order.id === store.choisie;
+  // La ligne qu'atteint la touche Tab : la commande ouverte, sinon la première.
+  const focusable = on || (index === 0 && !store.items.some((o) => o.id === store.choisie));
+  const adresse = order.shippingAddress;
+  const lieu = [adresse?.city, paysEnLettres(adresse?.country)].filter(Boolean).join(', ');
+  const client = order.customer?.displayName ?? adresse?.name ?? order.customer?.email ?? 'Client inconnu';
+  const paie = etatPaiement(order);
+  const expe = etatExpedition(order);
+  const resume = paie.resume ? { label: paie.resume, ton: paie.ton } : expe;
+
+  return `<div class="cmd-ligne${on ? ' on' : ''}" role="row" tabindex="${focusable ? 0 : -1}"
+      aria-selected="${on}" data-order="${esc(order.id)}">
+    <b class="cmd-num" role="cell">${esc(order.name)}</b>
+    <span class="cmd-client" role="cell"><span class="cmd-nom">${esc(client)}</span>${
+      lieu ? `<span class="cmd-lieu">${esc(lieu)}</span>` : ''
+    }</span>
+    <span class="cmd-date" role="cell" title="${esc(dateTime(order.createdAt))}">${esc(jourCommande(order.createdAt))}</span>
+    <span class="cmd-total" role="cell">${esc(euro(order.totalPrice, order.currency))}</span>
+    <span class="cmd-etat cmd-paie" role="cell">${pastilleEtat(paie)}</span>
+    <span class="cmd-etat cmd-expe" role="cell">${pastilleEtat(expe)}</span>
+    <span class="cmd-etat cmd-resume" aria-hidden="true">${pastilleEtat(resume)}</span>
+  </div>`;
 }
 
 function renderOrders() {
   const store = state.orders;
+  const filtree = Boolean(store.q) || store.vue !== 'toutes';
 
   $('orders-rows').innerHTML =
-    store.items
-      .map(
-        (order) => {
-          const address = order.shippingAddress;
-          const destination = [address?.city, address?.country].filter(Boolean).join(', ');
-          const quantity = order.itemsQuantity ?? (order.lineItems ?? []).reduce((n, i) => n + i.quantity, 0);
-          // L'état du colis n'existe qu'une fois expédié : avant, la case
-          // reste vide, comme chez Shopify — un « — » en pastille se lirait
-          // comme un statut de plus.
-          const shipment = order.fulfillments?.[0]?.displayStatus;
-          const tags = order.tags ?? [];
-
-          return `<tr class="grid-row" data-order="${esc(order.id)}">
-          <td class="mono"><b>${esc(order.name)}</b></td>
-          <td title="${esc(dateTime(order.createdAt))}">${dayOrDateTime(order.createdAt)}</td>
-          <td>${esc(order.customer?.displayName ?? order.customer?.email ?? 'Client inconnu')}</td>
-          <td>${esc(destination)}</td>
-          <td>${esc(order.channel ?? '')}</td>
-          <td class="num mono">${euro(order.totalPrice, order.currency)}</td>
-          <td>${statusTag(order.displayFinancialStatus, FINANCIAL_LABELS, ['PENDING', 'PARTIALLY_PAID', 'EXPIRED'])}</td>
-          <td>${statusTag(order.displayFulfillmentStatus, FULFILLMENT_LABELS, ['UNFULFILLED', 'ON_HOLD'])}</td>
-          <td>${quantity} article${quantity > 1 ? 's' : ''}</td>
-          <td>${shipment ? statusTag(shipment, SHIPMENT_LABELS, ['ATTEMPTED_DELIVERY', 'NOT_DELIVERED', 'FAILURE']) : ''}</td>
-          <td class="clip" title="${esc(order.shippingMethod ?? '')}">${esc(order.shippingMethod ?? '')}</td>
-          <td>${tags.length ? `<span class="grid-tags">${tags.map((t) => `<span class="tag tag-order">${esc(t)}</span>`).join('')}</span>` : ''}</td>
-        </tr>`;
-        },
-      )
-      .join('') || '<tr><td colspan="12" class="empty">Aucune commande.</td></tr>';
+    store.items.map(ligneCommande).join('') ||
+    `<p class="cmd-etat-vide">${filtree ? 'Aucune commande ne correspond.' : 'Aucune commande.'}</p>`;
 
   $('orders-count').textContent = store.items.length
     ? `${store.items.length} commande${store.items.length > 1 ? 's' : ''}${store.hasNext ? ' affichées' : ''}`
     : '';
   $('orders-more').hidden = !store.hasNext;
 
-  // Cliquer une ligne ouvre le détail dans le panneau latéral de la file :
-  // c'est là que vivent déjà l'adresse, le suivi et le remboursement.
-  $('orders-rows')
-    .querySelectorAll('.grid-row')
-    .forEach((row) => row.addEventListener('click', () => openOrderSheet(row.dataset.order)));
+  // Sur grand écran, la fiche n'est jamais vide : la première commande s'y
+  // ouvre, comme le premier message dans Mail. Au téléphone, la liste d'abord.
+  if (!PILE_TICKETS.matches && store.items.length && !store.items.some((o) => o.id === store.choisie)) {
+    void ouvrirCommande(store.items[0].id, { pousser: false });
+  }
 }
 
-const FIN_LABELS = {
-  PAID: 'Payée',
-  PENDING: 'Paiement en attente',
-  REFUNDED: 'Remboursée',
-  PARTIALLY_REFUNDED: 'Partiellement remboursée',
-  VOIDED: 'Annulée',
-  AUTHORIZED: 'Autorisée',
-};
+/* Une seule écoute pour toutes les lignes : elles sont redessinées à chaque page. */
+$('orders-rows').addEventListener('click', (event) => {
+  const ligne = event.target.closest('.cmd-ligne');
+  if (ligne) void ouvrirCommande(ligne.dataset.order);
+});
 
-const FUL_LABELS = {
-  FULFILLED: 'Expédiée',
-  UNFULFILLED: 'À expédier',
-  PARTIALLY_FULFILLED: 'Partiellement expédiée',
-  IN_TRANSIT: 'En transit',
-  DELIVERED: 'Livrée',
-  RESTOCKED: 'Remise en stock',
-};
+/* Au clavier, comme une liste du Finder : les flèches passent d'une commande
+   à l'autre, Entrée ouvre. */
+$('orders-rows').addEventListener('keydown', (event) => {
+  const ligne = event.target.closest('.cmd-ligne');
+  if (!ligne) return;
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    void ouvrirCommande(ligne.dataset.order);
+    return;
+  }
+  if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+  event.preventDefault();
+  const voisine = event.key === 'ArrowDown' ? ligne.nextElementSibling : ligne.previousElementSibling;
+  if (!voisine?.classList.contains('cmd-ligne')) return;
+  voisine.focus();
+  void ouvrirCommande(voisine.dataset.order, { pousser: false });
+});
+
+/** Marque la ligne ouverte, sans redessiner la liste. */
+function marquerLigneCommande(id) {
+  $('orders-rows')
+    .querySelectorAll('.cmd-ligne')
+    .forEach((ligne) => {
+      const on = ligne.dataset.order === id;
+      ligne.classList.toggle('on', on);
+      ligne.setAttribute('aria-selected', String(on));
+      ligne.tabIndex = on ? 0 : -1;
+    });
+}
+
+/*
+ * La fiche d'une commande.
+ *
+ * La même partout : à côté de la liste sur l'écran Commandes, dans la
+ * feuille quand on l'ouvre d'ailleurs (un remboursement, un client). En
+ * tête, le numéro et le total ; le client, qui mène à sa fiche ; quatre
+ * gestes comme sous une fiche de Contacts ; où en est la commande ; puis
+ * ce qu'elle contient et où elle va.
+ */
+function lienShopifyCommande(order) {
+  const shop = state.me?.merchant?.shopDomain;
+  const id = String(order?.id ?? '').split('/').pop();
+  if (!shop || !id || !/^\d+$/.test(id)) return '';
+  return `https://${shop}/admin/orders/${id}`;
+}
+
+/** Payée, préparée, expédiée, livrée — et une phrase qui le dit. */
+function suiviCommandeMarkup(order) {
+  const paie = order.displayFinancialStatus;
+  const expe = etatExpedition(order);
+  const payee = ['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED'].includes(paie);
+  // Une commande expédiée sans paiement confirmé (paiement à terme) avance
+  // quand même sur la frise : c'est le colis qui compte.
+  const etape = !payee && expe.etape < 2 ? 0 : expe.etape;
+  const premier = (order.fulfillments ?? []).find((f) => f.trackingCompany || f.trackingNumber);
+  const transporteur = premier?.trackingCompany;
+  const prevue = premier?.estimatedDeliveryAt
+    ? new Date(premier.estimatedDeliveryAt).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
+    : '';
+
+  let phrase;
+  if (paie === 'VOIDED') phrase = 'Commande annulée.';
+  else if (etape === 0) {
+    phrase =
+      paie === 'EXPIRED'
+        ? 'Le paiement a expiré : rien ne partira sans nouveau paiement.'
+        : 'Le paiement n’est pas encore confirmé : rien ne part avant.';
+  } else if (etape === 1) {
+    phrase =
+      order.displayFulfillmentStatus === 'PARTIALLY_FULFILLED'
+        ? 'Expédiée en partie : un colis reste à partir.'
+        : order.displayFulfillmentStatus === 'ON_HOLD'
+          ? 'L’expédition est suspendue.'
+          : 'Payée, pas encore expédiée.';
+  } else if (etape === 2) {
+    phrase = `${expe.label}${transporteur ? ` chez ${transporteur}` : ''}${
+      prevue && expe.ton !== 'crit' ? `, livraison prévue ${prevue}` : ''
+    }.`;
+  } else {
+    phrase = `${expe.label}${transporteur ? ` par ${transporteur}` : ''}.`;
+  }
+  if (paie === 'REFUNDED') phrase += ' Remboursée.';
+  if (paie === 'PARTIALLY_REFUNDED') phrase += ' Remboursée en partie.';
+
+  const teinte = expe.ton === 'crit' ? 'crit' : etape === 3 ? 'ok' : 'accent';
+  const etapes = ['Payée', 'Préparée', 'Expédiée', 'Livrée']
+    .map((nom, i) => {
+      const fait = i < etape || etape === 3;
+      const courant = i === etape && etape < 3;
+      return `<li class="${fait ? 'fait' : courant ? 'courant' : ''}"${courant ? ' aria-current="step"' : ''}>
+        <i aria-hidden="true"></i>${nom}</li>`;
+    })
+    .join('');
+
+  return `<section class="fc-carte fc-suivi fc-${teinte}" aria-label="Où en est la commande">
+    <ol class="fc-frise" style="--avance: ${etape * 25}%">${etapes}</ol>
+    <p class="fc-phrase">${esc(phrase)}</p>
+  </section>`;
+}
+
+function ficheCommandeMarkup({ order, tickets = [], parcels = [], changes = [], reemploi = [] }, { titre = true } = {}) {
+  const client = order.customer;
+  const nom = client?.displayName ?? order.shippingAddress?.name ?? client?.email ?? '';
+  const commandes = client?.numberOfOrders;
+  const phone = customerPhone(order);
+  const shopify = lienShopifyCommande(order);
+
+  // Le suivi de Shopify d'abord ; à défaut, le premier colis saisi par l'atelier.
+  const tracking =
+    (order.fulfillments ?? []).find((fulfillment) => fulfillment.trackingNumber) ??
+    (parcels[0] ? { trackingNumber: parcels[0].trackingNumber, trackingUrl: null } : undefined);
+
+  const inactif = (icone, nomGeste, raison) =>
+    `<button class="fc-geste" type="button" disabled title="${esc(raison)}">${ico(icone)}<span>${nomGeste}</span></button>`;
+
+  const gestes = [
+    `<button class="fc-geste" type="button" data-fc-fournisseur>${ico('factory')}<span>Fournisseur</span></button>`,
+    tracking
+      ? `<button class="fc-geste" type="button" data-track="${esc(tracking.trackingNumber)}"${
+          tracking.trackingUrl ? ` data-track-url="${esc(tracking.trackingUrl)}"` : ''
+        }>${ico('truck')}<span>Suivre</span></button>`
+      : inactif('truck', 'Suivre', 'Pas encore de numéro de suivi'),
+    phone?.link
+      ? `<a class="fc-geste" href="${esc(phone.link)}" target="_blank" rel="noopener noreferrer"
+          aria-label="Ouvrir WhatsApp avec ${esc(nom || 'le client')}">${ico('whatsapp')}<span>WhatsApp</span></a>`
+      : inactif('whatsapp', 'WhatsApp', phone ? phone.raison : 'Pas de numéro sur la commande'),
+    shopify
+      ? `<a class="fc-geste" href="${esc(shopify)}" target="_blank" rel="noopener noreferrer"
+          aria-label="Ouvrir la commande dans Shopify">${ico('bag')}<span>Shopify</span></a>`
+      : inactif('bag', 'Shopify', 'Boutique non reliée'),
+  ].join('');
+
+  // Les demandes de changement : ce qu'on a déjà promis sur cette commande.
+  const demandes = changes
+    .map((change) => {
+      const status = CHANGE_STATUS[change.status] ?? CHANGE_STATUS.PENDING;
+      const simple = valeurSimple(change);
+      const valeur = simple
+        ? simple
+        : change.afterValue
+          ? `${change.afterValue}${change.beforeValue ? `, au lieu de ${change.beforeValue}` : ''}`
+          : '';
+      return `<div class="fc-ligne">
+        <span class="fc-ligne-txt"><b>${esc(CHANGE_KINDS[change.kind] ?? change.kind)}${
+          valeur ? ` · ${esc(valeur)}` : ''
+        }</b><span>${esc(change.supplier?.name ?? '')} · ${esc(dateTime(change.createdAt))}</span>${
+          change.supplierNote ? `<span>« ${esc(change.supplierNote)} »</span>` : ''
+        }</span>
+        <span class="tag tone-${status.tone}">${esc(status.label)}</span>
+      </div>`;
+    })
+    .join('');
+
+  // Les mails du client sur cette commande : la fiche mène à la conversation.
+  const messages = tickets
+    .map(
+      (ticket) => `<button class="fc-ligne fc-ligne-lien" type="button" data-ticket="${esc(ticket.id)}">
+        <span class="fc-ligne-txt"><b>${esc(ticket.subject ?? '(sans objet)')}</b><span>${esc(
+          dateTime(ticket.lastMessageAt),
+        )}</span></span>
+        <span class="tag tag-status st-${esc(ticket.status)}">${esc(STATUS_LABELS[ticket.status] ?? ticket.status)}</span>
+      </button>`,
+    )
+    .join('');
+
+  const balises = order.tags ?? [];
+  const total = `<b class="fc-total">${esc(euro(order.totalPrice, order.currency))}</b>`;
+  const quand = `<p class="fc-quand">Passée le ${esc(dateTime(order.createdAt))}${
+    order.channel ? ` · ${esc(order.channel)}` : ''
+  }</p>`;
+
+  return `<div class="fc">
+    <header class="fc-tete">
+      ${
+        // Dans la feuille, le numéro est déjà dans son en-tête : la date
+        // prend sa place, à gauche du total.
+        titre
+          ? `<div class="fc-titre"><h2>Commande ${esc(order.name)}</h2>${total}</div>${quand}`
+          : `<div class="fc-titre">${quand}${total}</div>`
+      }
+    </header>
+    ${
+      client?.email
+        ? `<button class="fc-client" type="button" data-fc-client>
+            <span class="fc-avatar" aria-hidden="true">${esc(initials(nom))}</span>
+            <span class="fc-client-txt"><b>${esc(nom)}</b><span>${esc(client.email)}${
+              commandes ? ` · ${commandes} commande${commandes > 1 ? 's' : ''}` : ''
+            }</span></span>
+            <span class="fc-client-lien">Fiche client</span>
+          </button>`
+        : ''
+    }
+    <div class="fc-gestes">${gestes}</div>
+    ${suiviCommandeMarkup(order)}
+    ${orderDetailMarkup(order, parcels, reemploi)}
+    ${
+      demandes
+        ? `<section class="fc-groupe"><h3 class="fc-legende">Demandes au fournisseur</h3><div class="fc-carte">${demandes}</div></section>`
+        : ''
+    }
+    ${
+      messages
+        ? `<section class="fc-groupe"><h3 class="fc-legende">Messages SAV</h3><div class="fc-carte">${messages}</div></section>`
+        : ''
+    }
+    ${
+      balises.length
+        ? `<div class="fc-balises" aria-label="Balises">${balises.map((t) => `<span class="fc-balise">${esc(t)}</span>`).join('')}</div>`
+        : ''
+    }
+  </div>`;
+}
 
 /**
- * Une commande, dans le panneau central.
- *
- * Elle vivait dans le rail latéral, en trois lignes de texte sous un fil de
- * discussion vide : un agent qui cherche ce qui a été acheté devait faire
- * défiler la page entière pour lire à la loupe ce que Shopify affiche en grand.
- * Ici elle occupe la place qui lui revient — articles avec leurs vignettes,
- * montants, statuts, adresse, colis.
+ * Ce que contient la commande et où elle va : les articles, puis la
+ * livraison et les colis côte à côte.
  */
 function orderDetailMarkup(order, atelier = [], reemploi = []) {
-  const fin = order.displayFinancialStatus;
-  const ful = order.displayFulfillmentStatus;
-
   const items = (order.lineItems ?? [])
-    .map(
-      (item) => {
-        // L'API sert `image` en chaîne plate (voir services/shopify/orders.ts) ;
-        // Shopify brut l'enveloppe dans `{ url }`. Lire les deux formes — ne
-        // lire que l'objet laissait une vignette grise sur chaque article,
-        // exactement comme trackingInfo en son temps.
-        const imageUrl = typeof item.image === 'string' ? item.image : item.image?.url;
-        return `<div class="ordv-item">
-        ${
-          imageUrl
-            ? `<img src="${esc(imageUrl)}" alt="" loading="lazy" />`
-            : '<span class="ordv-noimg"></span>'
-        }
-        <div>
-          <b>${esc(item.title)}</b>
-          <span>${[item.variantTitle, item.sku ? `réf. ${item.sku}` : null]
-            .filter(Boolean)
-            .map(esc)
-            .join(' · ')}</span>
-        </div>
-        <span class="ordv-qty mono">× ${item.quantity}</span>
+    .map((item) => {
+      // L'API sert `image` en chaîne plate (voir services/shopify/orders.ts) ;
+      // Shopify brut l'enveloppe dans `{ url }`. Lire les deux formes — ne
+      // lire que l'objet laissait une vignette grise sur chaque article,
+      // exactement comme trackingInfo en son temps.
+      const imageUrl = typeof item.image === 'string' ? item.image : item.image?.url;
+      const detail = [item.variantTitle, item.sku ? `réf. ${item.sku}` : null].filter(Boolean).map(esc).join(' · ');
+      return `<div class="fc-article">
+        ${imageUrl ? `<img src="${esc(imageUrl)}" alt="" loading="lazy" />` : '<span class="fc-vignette" aria-hidden="true"></span>'}
+        <span class="fc-article-txt"><b>${esc(item.title)}</b>${detail ? `<span>${detail}</span>` : ''}</span>
+        <span class="fc-qte">× ${item.quantity}</span>
+        ${item.price != null ? `<span class="fc-prix">${esc(euro(item.price, order.currency))}</span>` : ''}
       </div>`;
-      },
-    )
+    })
     .join('');
 
   /*
@@ -13162,13 +13538,13 @@ function orderDetailMarkup(order, atelier = [], reemploi = []) {
   const expeditions = (order.fulfillments ?? []).filter((fulfillment) => fulfillment.trackingNumber);
   const parcelsShopify = expeditions
     .map(
-      (fulfillment) => `<div class="ordv-row">
-        <span>${esc(fulfillment.trackingCompany ?? 'Transporteur')}${
+      (fulfillment) => `<div class="fc-colis">
+        <span class="fc-colis-qui"><b>${esc(fulfillment.trackingCompany ?? 'Transporteur')}</b>${
           fulfillment.displayStatus
-            ? ` · ${esc(SHIPMENT_LABELS[fulfillment.displayStatus] ?? fulfillment.displayStatus)}`
+            ? `<span class="sub">${esc(SHIPMENT_LABELS[fulfillment.displayStatus] ?? fulfillment.displayStatus)}</span>`
             : ''
         }</span>
-        <button class="linklike mono" data-track="${esc(fulfillment.trackingNumber)}"${
+        <button class="linklike mono" type="button" data-track="${esc(fulfillment.trackingNumber)}"${
           fulfillment.trackingUrl ? ` data-track-url="${esc(fulfillment.trackingUrl)}"` : ''
         }>${esc(fulfillment.trackingNumber)}</button>
       </div>`,
@@ -13188,13 +13564,13 @@ function orderDetailMarkup(order, atelier = [], reemploi = []) {
   const parcelsAtelier = atelier
     .filter((parcel) => !connusDeShopify.has(normaliserSuivi(parcel.trackingNumber)))
     .map(
-      (parcel) => `<div class="ordv-row">
-        <span>${esc(parcel.carrier ?? 'Atelier')} · colis ${parcel.index}/${parcel.total}${
-          parcel.photoMime ? ' · photo de l’étiquette' : ''
-        } · <span class="sub">pas encore dans Shopify</span>${
+      (parcel) => `<div class="fc-colis">
+        <span class="fc-colis-qui"><b>${esc(parcel.carrier ?? 'Atelier')}${
           parcel.test ? ' <span class="tag tone-wait">test</span>' : ''
-        }</span>
-        <button class="linklike mono" data-track="${esc(parcel.trackingNumber)}">${esc(
+        }</b><span class="sub">colis ${parcel.index}/${parcel.total}${
+          parcel.photoMime ? ' · photo de l’étiquette' : ''
+        } · pas encore dans Shopify</span></span>
+        <button class="linklike mono" type="button" data-track="${esc(parcel.trackingNumber)}">${esc(
           parcel.trackingNumber,
         )}</button>
       </div>`,
@@ -13207,13 +13583,15 @@ function orderDetailMarkup(order, atelier = [], reemploi = []) {
    */
   const parcelsStock = reemploi
     .map(
-      (paire) => `<div class="ordv-row">
-        <span>Stock retours · ${esc(RETURN_COUNTRIES[paire.agency?.country] ?? paire.agency?.country ?? '')}${
-          paire.agency?.name ? ` · ${esc(paire.agency.name)}` : ''
-        } · ${esc(paire.productTitle)}${paire.variantTitle ? ` · ${esc(paire.variantTitle)}` : ''}</span>
+      (paire) => `<div class="fc-colis">
+        <span class="fc-colis-qui"><b>Stock retours · ${esc(
+          RETURN_COUNTRIES[paire.agency?.country] ?? paire.agency?.country ?? '',
+        )}</b><span class="sub">${paire.agency?.name ? `${esc(paire.agency.name)} · ` : ''}${esc(paire.productTitle)}${
+          paire.variantTitle ? ` · ${esc(paire.variantTitle)}` : ''
+        }</span></span>
         ${
           paire.reshipTrackingNumber
-            ? `<button class="linklike mono" data-track="${esc(paire.reshipTrackingNumber)}">${esc(
+            ? `<button class="linklike mono" type="button" data-track="${esc(paire.reshipTrackingNumber)}">${esc(
                 paire.reshipTrackingNumber,
               )}</button>`
             : '<span class="sub">à expédier par l’agence</span>'
@@ -13224,126 +13602,180 @@ function orderDetailMarkup(order, atelier = [], reemploi = []) {
   const parcels = parcelsStock + parcelsShopify + parcelsAtelier;
 
   const address = order.shippingAddress;
+  // Le texte de Shopify quand il existe : c'est lui qui part sur l'étiquette.
+  const lignesAdresse = address
+    ? address.formatted?.length
+      ? address.formatted
+      : [
+          address.name,
+          address.address1,
+          address.address2,
+          `${address.zip ?? ''} ${address.city ?? ''}`.trim(),
+          paysEnLettres(address.country),
+        ].filter(Boolean)
+    : [];
 
   /*
    * Le téléphone de livraison, composable ou non.
    *
-   * Il s'affichait en texte brut. Même source et mêmes règles que la fiche
-   * client du rail : le pays de l'adresse décide de l'indicatif, jamais une
-   * supposition. Composable, il devient un lien et le bouton WhatsApp se
-   * pose à côté ; sinon il reste lisible, et l'infobulle dit pourquoi il ne
-   * s'ouvre pas.
+   * Même source et mêmes règles que la fiche client du rail : le pays de
+   * l'adresse décide de l'indicatif, jamais une supposition. Composable, il
+   * ouvre WhatsApp ; sinon il reste lisible, et l'infobulle dit pourquoi.
    */
   const phone = customerPhone(order);
   const phoneMarkup = !phone
     ? ''
     : phone.link
-      ? `<div class="ordv-phone">
-           <a class="rail-phone mono" href="${esc(phone.link)}" target="_blank" rel="noopener noreferrer"
-             title="Ouvrir dans WhatsApp — saisi : ${esc(phone.raw)}">${esc(phone.affiche)}</a>
-           <a class="btn btn-small wa-btn" href="${esc(phone.link)}" target="_blank" rel="noopener noreferrer"
-             aria-label="Ouvrir WhatsApp avec ${esc(address?.name ?? order.customer?.displayName ?? 'le client')}"
-             title="Ouvrir la conversation dans WhatsApp Web">${ico('whatsapp')} WhatsApp</a>
-         </div>`
-      : `<div class="ordv-phone"><span class="rail-phone-off mono" title="${esc(phone.raison)}">${esc(
-          phone.affiche,
-        )}</span></div>`;
+      ? `<div class="fc-tel"><span class="mono" title="Saisi : ${esc(phone.raw)}">${esc(phone.affiche)}</span>
+          <a class="fc-lien" href="${esc(phone.link)}" target="_blank" rel="noopener noreferrer"
+            title="Ouvrir la conversation dans WhatsApp Web">WhatsApp</a></div>`
+      : `<div class="fc-tel"><span class="mono rail-phone-off" title="${esc(phone.raison)}">${esc(phone.affiche)}</span></div>`;
 
-  // L'état du colis, quand il y en a un : c'est la troisième pastille de la
-  // liste Shopify, et la question que le client pose vraiment.
-  const shipment = order.fulfillments?.[0]?.displayStatus;
-
-  /*
-   * Ce que la liste affiche en colonnes et que la fiche taisait : le canal, le
-   * mode de livraison, le nombre d'articles, les balises. Une fiche qui en
-   * sait moins que la liste qui l'ouvre oblige à refermer pour vérifier.
-   */
-  const tags = order.tags ?? [];
   const quantity = order.itemsQuantity ?? (order.lineItems ?? []).reduce((n, i) => n + i.quantity, 0);
-  const fact = (label, value) =>
-    value ? `<div class="ordv-fact"><span>${label}</span><b>${value}</b></div>` : '';
-  const facts =
-    fact('Canal', esc(order.channel ?? '')) +
-    fact('Livraison', esc(order.shippingMethod ?? '')) +
-    fact('Articles', `${quantity} article${quantity > 1 ? 's' : ''}`) +
-    fact(
-      'Balises',
-      tags.length
-        ? `<span class="ordv-tags">${tags.map((t) => `<span class="tag tag-order">${esc(t)}</span>`).join('')}</span>`
-        : '',
-    );
+  const paie = etatPaiement(order);
+  const nonExpediee = etatExpedition(order).etape === 1;
 
-  return `<div class="ordv">
-    <div class="ordv-head">
-      <div class="ordv-badges">
-        <span class="tag ${fin === 'PAID' ? 'st-CLOSED' : 'st-NEEDS_REVIEW'}">${esc(
-          FIN_LABELS[fin] ?? fin ?? '—',
-        )}</span>
-        <span class="tag ${
-          ful === 'FULFILLED' || ful === 'DELIVERED' ? 'st-CLOSED' : 'st-NEW'
-        }">${esc(FUL_LABELS[ful] ?? ful ?? '—')}</span>
-        ${
-          shipment
-            ? `<span class="tag st-CLOSED">${esc(SHIPMENT_LABELS[shipment] ?? shipment)}</span>`
-            : ''
-        }
-        <span class="ordv-when" title="${esc(dateTime(order.createdAt))}">${dayOrDateTime(
-          order.createdAt,
-        )}</span>
+  return `<section class="fc-groupe">
+      <h3 class="fc-legende">Articles · ${quantity}</h3>
+      <div class="fc-carte">
+        ${items || '<p class="fc-rien">Aucun article.</p>'}
+        <div class="fc-somme"><span>Total</span><span class="cmd-etat">${pastilleEtat(paie)}</span><b>${esc(
+          euro(order.totalPrice, order.currency),
+        )}</b></div>
       </div>
-      <b class="ordv-total mono">${esc(euro(order.totalPrice, order.currency))}</b>
-    </div>
-
-    ${facts ? `<div class="ordv-facts">${facts}</div>` : ''}
-
-    <div class="ordv-items">${items || '<p class="empty">Aucun article.</p>'}</div>
-
-    <div class="ordv-cols">
-      <section>
-        <span class="rail-title">Livraison</span>
-        ${
-          address
-            ? `<p class="ordv-addr">${[
-                address.name,
-                address.address1,
-                address.address2,
-                `${address.zip ?? ''} ${address.city ?? ''}`.trim(),
-                address.country,
-              ]
-                .filter(Boolean)
-                .map(esc)
-                .join('<br>')}</p>${phoneMarkup}`
-            : '<p class="empty">Aucune adresse.</p>'
-        }
+    </section>
+    <div class="fc-duo">
+      <section class="fc-groupe">
+        <h3 class="fc-legende">Livraison</h3>
+        <div class="fc-carte fc-bloc">
+          ${
+            lignesAdresse.length
+              ? `<p class="fc-adresse">${lignesAdresse.map(esc).join('<br>')}</p>`
+              : '<p class="fc-rien">Aucune adresse.</p>'
+          }
+          ${order.shippingMethod ? `<p class="fc-mode">${esc(order.shippingMethod)}</p>` : ''}
+          ${phoneMarkup}
+        </div>
       </section>
-      <section>
-        <span class="rail-title">Colis</span>
-        ${parcels || '<p class="empty">Aucun numéro de suivi.</p>'}
+      <section class="fc-groupe">
+        <h3 class="fc-legende">Colis</h3>
+        <div class="fc-carte fc-bloc">${
+          parcels || `<p class="fc-rien">${nonExpediee ? 'Pas encore expédiée.' : 'Aucun numéro de suivi.'}</p>`
+        }</div>
       </section>
-    </div>
-  </div>`;
+    </div>`;
+}
+
+/** Les gestes de la fiche, où qu'elle soit affichée. */
+function brancherFicheCommande(conteneur, { order }) {
+  conteneur.querySelector('[data-fc-client]')?.addEventListener('click', () =>
+    void openCustomerSheet(order.customer.email, order.customer.displayName ?? ''),
+  );
+  conteneur.querySelector('[data-fc-fournisseur]')?.addEventListener('click', () => contacterFournisseurCommande(order));
+  conteneur.querySelectorAll('[data-ticket]').forEach((row) =>
+    row.addEventListener('click', () => {
+      closeCustomerSheet();
+      setView('tickets');
+      void selectTicket(row.dataset.ticket);
+    }),
+  );
+}
+
+/*
+ * Demander un changement au fournisseur depuis la fiche. La demande part
+ * pré-remplie : commande, article et déclinaison actuelle. Ne rester à saisir
+ * que la nouvelle valeur, c'est ce qui fait qu'on le fait.
+ */
+function contacterFournisseurCommande(order) {
+  if (activeSuppliers().length === 0) {
+    toast('Ajoutez d’abord un fournisseur dans l’écran Fournisseurs.', true);
+    return;
+  }
+
+  closeCustomerSheet();
+  $('alert-modal').dataset.supplier = '';
+  $('alert-modal').dataset.ticket = '';
+  $('alert-modal').dataset.order = order.id ?? '';
+  $('alert-who').textContent = `Commande ${order.name} · ${order.customer?.displayName ?? order.customer?.email ?? ''}`;
+  state.alertCtx = alertContextFromOrder(order);
+  setAlertKind('SIZE');
+  $('alert-order').value = order.name ?? '';
+  $('alert-message').value = '';
+  renderAlertSuppliers();
+  $('alert-modal').hidden = false;
+  $('alert-modal').classList.add('open');
+  $('alert-after').focus();
 }
 
 /**
- * Fiche complète d'une commande, par-dessus l'écran courant.
+ * Ouvre une commande dans la fiche de l'écran Commandes.
  *
- * Elle basculait sur l'écran SAV et se servait des panneaux du ticket : on
- * cliquait sur une commande et on se retrouvait dans les mails, la liste des
- * commandes perdue et rien à quoi revenir. Or consulter une commande n'est
- * pas traiter un mail — c'est une lecture, et une lecture se fait sans quitter
- * ce qu'on faisait.
- *
- * Le panneau réutilise la feuille latérale déjà employée pour la fiche client :
- * même geste pour fermer, même comportement au clavier, rien de nouveau à
- * apprendre.
+ * La fiche garde l'ancienne commande le temps que la nouvelle arrive, à
+ * demi-teinte : un panneau qui se vide à chaque clic clignote. Au téléphone,
+ * elle se pousse par-dessus la liste (`pousser`), comme un message dans Mail.
  */
+async function ouvrirCommande(id, { pousser = true } = {}) {
+  const store = state.orders;
+  store.choisie = id;
+  marquerLigneCommande(id);
+  if (pousser) ouvrirFichePile();
+
+  const corps = $('orders-fiche-corps');
+  const seq = ++store.seqFiche;
+  if (corps.querySelector('.fc')) corps.classList.add('cmd-charge');
+  else corps.innerHTML = '<p class="cmd-vide">Chargement…</p>';
+
+  let data;
+  try {
+    data = await api(`/api/orders/${encodeURIComponent(id)}`);
+  } catch (error) {
+    if (seq !== store.seqFiche) return;
+    corps.classList.remove('cmd-charge');
+    corps.innerHTML = `<p class="cmd-vide">${esc(error.message)}</p>`;
+    return;
+  }
+  if (seq !== store.seqFiche) return;
+  corps.classList.remove('cmd-charge');
+
+  if (!data?.order) {
+    corps.innerHTML = '<p class="cmd-vide">Cette commande n’est plus disponible.</p>';
+    return;
+  }
+  corps.innerHTML = ficheCommandeMarkup(data);
+  $('orders-fiche').setAttribute('aria-label', `Commande ${data.order.name}`);
+  brancherFicheCommande(corps, data);
+  $('orders-fiche').scrollTop = 0;
+}
+
+/* --- Au téléphone, la fiche se pousse par-dessus la liste. ------------- */
+let defilementCommandes = 0;
+
+function ouvrirFichePile() {
+  const vue = $('view-orders');
+  if (!PILE_TICKETS.matches || !vue) return;
+  if (!vue.classList.contains('pile-fiche')) {
+    defilementCommandes = scrollY;
+    vue.classList.add('pile-fiche');
+    history.pushState({ csavCommande: true }, '');
+  }
+  requestAnimationFrame(() => scrollTo(0, 0));
+}
+
+function fermerFichePile({ parHistorique = false } = {}) {
+  const vue = $('view-orders');
+  if (!vue?.classList.contains('pile-fiche')) return;
+  vue.classList.remove('pile-fiche');
+  if (!parHistorique && history.state?.csavCommande) history.back();
+  requestAnimationFrame(() => scrollTo(0, defilementCommandes));
+}
+
+addEventListener('popstate', () => fermerFichePile({ parHistorique: true }));
+$('orders-retour').addEventListener('click', () => fermerFichePile());
+
 /**
- * Fiche complète d'une commande, par-dessus l'écran courant.
- *
- * Une fiche où l'on ne peut rien décider est une impasse : celle-ci porte les
- * trois fils que l'outil connaît — les mails du client sur cette commande, les
- * colis saisis par l'atelier, les demandes de changement en cours — et le
- * geste qui manquait : demander un changement au fournisseur depuis ici.
+ * La même fiche, dans la feuille, quand on ouvre une commande d'ailleurs —
+ * un remboursement, un client. Consulter une commande n'est pas quitter ce
+ * qu'on faisait : la feuille se ferme et l'écran d'avant est là.
  */
 async function openOrderSheet(id) {
   $('sheet-name').textContent = 'Commande';
@@ -13359,150 +13791,43 @@ async function openOrderSheet(id) {
     return;
   }
 
-  const { order, tickets = [], parcels = [], changes = [], reemploi = [] } = data;
-
   // Une réponse sans commande — droit manquant, commande supprimée — laissait
   // l'écran à moitié dessiné sur une exception. Même famille que le menu des
   // boutiques : ce qui vient du réseau se lit avec précaution.
-  if (!order) {
+  if (!data?.order) {
     $('sheet-body').innerHTML = '<p class="empty">Cette commande n’est plus disponible.</p>';
     return;
   }
 
-  $('sheet-name').textContent = `Commande ${order.name}`;
-  $('sheet-email').textContent = order.customer?.email ?? '';
+  $('sheet-name').textContent = `Commande ${data.order.name}`;
   // Le tiroir est partagé avec la fiche client : son intitulé accessible
   // était figé sur « Fiche client », quoi qu'il montre.
-  $('sheet').setAttribute('aria-label', `Commande ${order.name}`);
-
-  // Le suivi de Shopify d'abord ; à défaut, le premier colis saisi par l'atelier.
-  const tracking =
-    (order.fulfillments ?? []).find((fulfillment) => fulfillment.trackingNumber) ??
-    (parcels[0] ? { trackingNumber: parcels[0].trackingNumber, trackingUrl: null } : undefined);
-
-  const section = (title, body) =>
-    `<section class="sheet-group"><span class="rail-title">${title}</span>${body}</section>`;
-
-  $('sheet-body').innerHTML =
-    `<section class="sheet-group">${orderDetailMarkup(order, parcels, reemploi)}</section>` +
-    // Les gestes d'abord : c'est pour eux qu'on a ouvert la fiche.
-    `<section class="sheet-group sheet-acts">
-       <button class="btn btn-small btn-primary" id="ordv-change">Contacter le fournisseur</button>
-       ${
-         tracking
-           ? `<button class="btn btn-small" data-track="${esc(tracking.trackingNumber)}"${
-               tracking.trackingUrl ? ` data-track-url="${esc(tracking.trackingUrl)}"` : ''
-             }>Suivre le colis</button>`
-           : ''
-       }
-       ${
-         order.customer?.email
-           ? `<button class="btn btn-small" id="ordv-customer">Fiche client</button>`
-           : ''
-       }
-       ${
-         // Par la fonction commune : sans domaine de boutique, elle ne rend rien
-         // — le lien construit à la main restait cliquable vers une URL vide.
-         shopifyOrderLink(order)
-       }
-     </section>` +
-    // Les demandes de changement : ce qu'on a déjà promis sur cette commande.
-    (changes.length
-      ? section(
-          'Demandes au fournisseur',
-          changes
-            .map((change) => {
-              const status = CHANGE_STATUS[change.status] ?? CHANGE_STATUS.PENDING;
-              return `<div class="sheet-row" style="display:block">
-                <b>${esc(CHANGE_KINDS[change.kind] ?? change.kind)}</b>
-                ${
-                  valeurSimple(change)
-                    ? ` <span class="mono">${esc(valeurSimple(change))}</span>`
-                    : change.afterValue
-                    ? ` <span class="mono">${esc(change.beforeValue ?? '—')} → ${esc(
-                        change.afterValue,
-                      )}</span>`
-                    : ''
-                }
-                <span class="tag tone-${status.tone}">${esc(status.label)}</span>
-                <span class="sub"> ${esc(change.supplier?.name ?? '')} · ${esc(
-                  dateTime(change.createdAt),
-                )}</span>
-                ${
-                  change.supplierNote
-                    ? `<br><span class="sub">« ${esc(change.supplierNote)} »</span>`
-                    : ''
-                }
-              </div>`;
-            })
-            .join(''),
-        )
-      : '') +
-    // Les mails du client sur cette commande : la fiche mène à la conversation.
-    (tickets.length
-      ? section(
-          'Messages SAV liés',
-          tickets
-            .map(
-              (ticket) => `<div class="sheet-row clickable" data-ticket="${esc(ticket.id)}">
-                <b>${esc(ticket.subject ?? '(sans objet)')}</b>
-                <span class="tag tag-status st-${esc(ticket.status)}">${esc(
-                  STATUS_LABELS[ticket.status] ?? ticket.status,
-                )}</span>
-                <span class="when">${esc(dateTime(ticket.lastMessageAt))}</span>
-              </div>`,
-            )
-            .join(''),
-        )
-      : '');
-
-  $('ordv-customer')?.addEventListener('click', () =>
-    void openCustomerSheet(order.customer.email, order.customer.displayName ?? ''),
-  );
-
-  // La demande part pré-remplie : commande, article et déclinaison actuelle.
-  // Ne rester à saisir que la nouvelle valeur, c'est ce qui fait qu'on le fait.
-  $('ordv-change')?.addEventListener('click', () => {
-    if (activeSuppliers().length === 0) {
-      toast('Ajoutez d’abord un fournisseur dans l’écran Fournisseurs.', true);
-      return;
-    }
-
-    closeCustomerSheet();
-    $('alert-modal').dataset.supplier = '';
-    $('alert-modal').dataset.ticket = '';
-    $('alert-modal').dataset.order = order.id ?? '';
-    $('alert-who').textContent = `Commande ${order.name} · ${
-      order.customer?.displayName ?? order.customer?.email ?? ''
-    }`;
-    state.alertCtx = alertContextFromOrder(order);
-    setAlertKind('SIZE');
-    $('alert-order').value = order.name ?? '';
-    $('alert-message').value = '';
-    renderAlertSuppliers();
-    $('alert-modal').hidden = false;
-    $('alert-modal').classList.add('open');
-    $('alert-after').focus();
-  });
-
-  $('sheet-body')
-    .querySelectorAll('[data-ticket]')
-    .forEach((row) =>
-      row.addEventListener('click', () => {
-        closeCustomerSheet();
-        setView('tickets');
-        void selectTicket(row.dataset.ticket);
-      }),
-    );
+  $('sheet').setAttribute('aria-label', `Commande ${data.order.name}`);
+  $('sheet-body').innerHTML = ficheCommandeMarkup(data, { titre: false });
+  brancherFicheCommande($('sheet-body'), data);
 }
 
 $('orders-more').addEventListener('click', () => loadOrders());
+
+// Les suivantes se chargent en descendant : arrivé au pied de la liste, la
+// page suivante vient d'elle-même. Le bouton reste pour qui le cherche.
+if ('IntersectionObserver' in window) {
+  new IntersectionObserver((entrees) => {
+    if (entrees.some((e) => e.isIntersecting) && !$('orders-more').hidden && state.view === 'orders') {
+      void loadOrders();
+    }
+  }, { rootMargin: '200px' }).observe($('orders-more'));
+}
 
 $('orders-q').addEventListener('input', (event) => {
   state.orders.q = event.target.value.trim();
   clearTimeout(state.orders.timer);
   // Chaque frappe déclencherait un appel Shopify : on attend une pause.
   state.orders.timer = setTimeout(() => loadOrders({ reset: true }), 350);
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') fermerExportCommandes();
 });
 
 /* ------------------------------------------------------------- clients -- */
@@ -15778,10 +16103,13 @@ function gesteAuDepart(cible) {
   if (TIROIR.matches) {
     if ($('app-grid').classList.contains('nav-open')) return cible.closest('.side, #scrim') ? 'fermer' : null;
     if (cible.closest(SANS_GLISSE) || defileEnLargeur(cible)) return null;
-    // Un message ouvert en plein écran : vers la droite, on revient à la
-    // liste, comme dans Mail ; un second glissé ouvre le menu.
+    // Un message ou une commande ouverts en plein écran : vers la droite, on
+    // revient à la liste, comme dans Mail ; un second glissé ouvre le menu.
     const vue = $('view-tickets');
-    return vue && !vue.hidden && vue.classList.contains('pile-message') ? 'retour' : 'ouvrir';
+    if (vue && !vue.hidden && vue.classList.contains('pile-message')) return 'retour';
+    const commandes = $('view-orders');
+    if (commandes && !commandes.hidden && commandes.classList.contains('pile-fiche')) return 'retourCommande';
+    return 'ouvrir';
   }
   // Sur une tablette en paysage, la colonne est là : on la replie ou on la
   // déplie du doigt, comme avec son bouton.
@@ -15833,8 +16161,8 @@ function suivreGeste(geste) {
   const { type, dx } = geste;
   if (type === 'ouvrir') poserTiroir(dx - (document.querySelector('.side').offsetWidth || 280));
   else if (type === 'fermer') poserTiroir(dx);
-  else if (type === 'retour') {
-    const pane = $('d-pane');
+  else if (type === 'retour' || type === 'retourCommande') {
+    const pane = $(type === 'retour' ? 'd-pane' : 'orders-fiche');
     if (pane) {
       pane.style.transition = 'none';
       pane.style.transform = `translateX(${Math.max(0, dx)}px)`;
@@ -15855,10 +16183,10 @@ function conclureGeste({ type, dx }, annule) {
   } else if (type === 'fermer') {
     poserTiroir(null);
     toggleNav(!(franchi && dx < 0));
-  } else if (type === 'retour') {
-    const pane = $('d-pane');
+  } else if (type === 'retour' || type === 'retourCommande') {
+    const pane = $(type === 'retour' ? 'd-pane' : 'orders-fiche');
     if (pane) pane.style.transform = pane.style.transition = '';
-    if (franchi && dx > 0) fermerMessagePile();
+    if (franchi && dx > 0) (type === 'retour' ? fermerMessagePile : fermerFichePile)();
   } else if (type === 'horloges') {
     const pop = $('clockpop');
     if (franchi) return ecarterHorloges(Math.sign(dx));

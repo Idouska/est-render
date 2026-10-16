@@ -13974,3 +13974,518 @@ progress { accent-color: var(--accent); }
 .ov-go svg,
 .statrow-x svg,
 .rup-go svg { display: block; width: 13px; height: 13px; margin-left: auto; stroke-width: 1.8; }
+
+/* ==========================================================================
+   COMMANDES, FAÇON FINDER ET CONTACTS
+   ==========================================================================
+
+   D'après la maquette du même nom. Avant : douze colonnes recopiées de
+   Shopify, trois menus déroulants, deux boutons d'export, et une fiche qui
+   recouvrait la liste. Maintenant : des onglets avec leur compte, six
+   colonnes, le tri sur l'en-tête, « Exporter » en menu, et la fiche à côté
+   de la liste — au téléphone, poussée par-dessus, comme un message dans
+   Mail. La même fiche sert quand on ouvre une commande d'ailleurs. */
+
+.cmd { --cmd-bleu: #0a84ff; --cmd-gris: #aeaeb2; }
+[data-theme="dark"] .cmd,
+[data-theme="dark"] .fc { --cmd-bleu: #409cff; --cmd-gris: #636366; }
+.fc { --cmd-bleu: #0a84ff; --cmd-gris: #aeaeb2; }
+
+#view-orders.cmd {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(360px, 30vw, 460px);
+  gap: 13px;
+  align-items: start;
+}
+
+/* --- La liste. ----------------------------------------------------------- */
+.cmd-liste {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  background: var(--surface);
+  container: cmdliste / inline-size;
+}
+.cmd-outils { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 14px 10px; }
+
+.cmd-vues {
+  display: flex;
+  gap: 2px;
+  min-width: 0;
+  padding: 2px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+.cmd-vues button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.cmd-vues button[aria-selected="true"] {
+  background: var(--surface);
+  font-weight: 600;
+  box-shadow: 0 0 0 0.5px rgb(0 0 0 / 12%), 0 1px 2px rgb(0 0 0 / 12%);
+}
+[data-theme="dark"] .cmd-vues button[aria-selected="true"] { background: color-mix(in srgb, var(--ink) 16%, var(--surface)); }
+.cmd-vues button:focus-visible { outline: none; box-shadow: var(--mac-halo); }
+.cmd-n { color: var(--ink-mute); font-weight: 400; font-variant-numeric: tabular-nums; }
+.cmd-n:empty { display: none; }
+
+.cmd-cherche {
+  flex: 0 1 220px;
+  min-width: 140px;
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  color: var(--ink-mute);
+}
+.cmd-cherche:focus-within { box-shadow: var(--mac-halo); }
+.cmd-cherche svg { width: 13px; height: 13px; flex: none; }
+.cmd .cmd-cherche input {
+  flex: 1;
+  min-width: 0;
+  height: auto;
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.cmd-exporter .btn { height: 30px; }
+.more-menu.cmd-export-menu {
+  min-width: 236px;
+  padding: 5px;
+  gap: 0;
+  border: 0;
+  border-radius: 10px;
+  background: var(--verre);
+  -webkit-backdrop-filter: blur(30px) saturate(1.8);
+  backdrop-filter: blur(30px) saturate(1.8);
+  box-shadow: 0 0 0 0.5px var(--verre-bord), 0 22px 46px -14px rgb(0 0 0 / 35%);
+}
+.cmd-export-menu a {
+  display: block;
+  padding: 5px 10px;
+  border-radius: 6px;
+  color: var(--ink);
+  font-size: 13px;
+  text-decoration: none;
+}
+.cmd-export-menu a:hover,
+.cmd-export-menu a:focus-visible { background: var(--accent); color: var(--on-accent); outline: none; }
+.cmd-export-note {
+  margin: 5px 10px 3px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+  font-size: 11.5px;
+  color: var(--ink-mute);
+}
+
+/* Six colonnes : ce qui distingue une commande d'une autre, rien d'autre.
+   Le canal, le mode de livraison et les balises sont dans la fiche. */
+.cmd-table { display: flex; flex-direction: column; padding: 0 8px; }
+.cmd-tete,
+.cmd-ligne {
+  display: grid;
+  grid-template-columns: 76px minmax(120px, 1fr) 84px 88px minmax(110px, 0.8fr) minmax(110px, 0.8fr);
+  align-items: center;
+  column-gap: 10px;
+  padding: 0 10px;
+}
+.cmd-tete {
+  height: 30px;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-mute);
+  font-size: 12px;
+  font-weight: 500;
+}
+.cmd-tri {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.cmd-tri-num { justify-self: end; }
+.cmd-tri svg { width: 9px; height: 9px; opacity: 0; transition: transform 0.15s var(--ease); }
+.cmd-tri[aria-sort="descending"],
+.cmd-tri[aria-sort="ascending"] { color: var(--ink); font-weight: 600; }
+.cmd-tri[aria-sort="descending"] svg,
+.cmd-tri[aria-sort="ascending"] svg { opacity: 1; }
+.cmd-tri[aria-sort="ascending"] svg { transform: rotate(180deg); }
+.cmd-tri:focus-visible { outline: none; box-shadow: var(--mac-halo); border-radius: 4px; }
+
+.cmd-lignes { display: flex; flex-direction: column; gap: 1px; padding: 4px 0; }
+.cmd-ligne {
+  min-height: 46px;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: default;
+  outline: none;
+}
+.cmd-ligne:hover { background: color-mix(in srgb, var(--ink) 4%, transparent); }
+.cmd-ligne:focus-visible { box-shadow: var(--mac-halo); }
+/* La commande ouverte, en bleu comme la sélection du Finder. */
+.cmd-ligne.on,
+.cmd-ligne.on:hover { background: var(--accent); color: var(--on-accent); }
+.cmd-num { font-weight: 650; font-variant-numeric: tabular-nums; }
+.cmd-client { min-width: 0; display: flex; flex-direction: column; }
+.cmd-nom,
+.cmd-lieu { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmd-nom { font-weight: 500; }
+.cmd-lieu { font-size: 12px; color: var(--ink-mute); }
+.cmd-date { color: var(--ink-mute); white-space: nowrap; }
+.cmd-total { text-align: right; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cmd-etat { min-width: 0; display: flex; align-items: center; gap: 6px; }
+.cmd-etat span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmd-resume { display: none; }
+.cmd-point { width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--cmd-gris); }
+.cmd-point.ton-ok { background: var(--ok); }
+.cmd-point.ton-warn { background: var(--warn); }
+.cmd-point.ton-crit { background: var(--crit); }
+.cmd-point.ton-info { background: var(--cmd-bleu); }
+.cmd-ligne.on .cmd-lieu,
+.cmd-ligne.on .cmd-date { color: color-mix(in srgb, var(--on-accent) 82%, transparent); }
+.cmd-ligne.on .cmd-point { background: var(--on-accent); }
+.cmd-etat-vide { margin: 36px 0; text-align: center; color: var(--ink-mute); }
+.cmd-pied {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 18px 12px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--ink-mute);
+}
+
+/* Trop étroite pour six colonnes, la liste passe en lignes de Mail : le
+   client et le total, puis le numéro, la date et l'état qui compte. */
+@container cmdliste (max-width: 680px) {
+  /* La recherche et Exporter sur une ligne, les onglets sur toute la
+     largeur dessous. */
+  .cmd-outils .cmd-cherche { order: -2; flex: 1 1 160px; margin-left: 0; }
+  .cmd-exporter { order: -1; }
+  .cmd-vues { flex: 1 1 100%; overflow-x: auto; scrollbar-width: none; }
+  .cmd-vues::-webkit-scrollbar { display: none; }
+  .cmd-vues button { flex: 1 0 auto; gap: 4px; padding: 0 7px; font-size: 12px; }
+  /* Plus de colonnes, mais toujours de quoi trier. */
+  .cmd-tete { display: flex; justify-content: flex-end; gap: 16px; height: 26px; padding: 0 12px; }
+  .cmd-tete::before { content: "Trier par"; margin-right: auto; }
+  .cmd-tete > span { display: none; }
+  .cmd-tri svg { opacity: 0; }
+  .cmd-ligne {
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "client client client total"
+      "num date . resume";
+    column-gap: 6px;
+    row-gap: 2px;
+    min-height: 0;
+    padding: 9px 12px;
+  }
+  .cmd-client { grid-area: client; }
+  .cmd-lieu { display: none; }
+  .cmd-nom { font-size: 14.5px; font-weight: 600; }
+  .cmd-total { grid-area: total; font-size: 14.5px; }
+  .cmd-num { grid-area: num; font-weight: 400; color: var(--ink-mute); }
+  .cmd-date { grid-area: date; }
+  .cmd-date::before { content: "· "; }
+  .cmd-paie,
+  .cmd-expe { display: none; }
+  .cmd-resume { grid-area: resume; justify-self: end; display: flex; }
+  .cmd-ligne.on .cmd-num { color: color-mix(in srgb, var(--on-accent) 82%, transparent); }
+}
+
+/* --- La fiche, à côté. ---------------------------------------------------- */
+.cmd-fiche {
+  position: sticky;
+  top: 8px;
+  max-height: calc(100dvh - 16px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  background: var(--inset);
+}
+.cmd-fiche-nav { display: none; }
+.cmd-fiche-corps { padding: 16px; }
+.cmd-fiche-corps.cmd-charge .fc { opacity: 0.55; transition: opacity 0.15s; }
+.cmd-vide { margin: 60px 16px; text-align: center; color: var(--ink-mute); }
+
+.fc { container: fc / inline-size; display: flex; flex-direction: column; gap: 14px; }
+/* Dans la feuille ouverte d'un autre écran : le même fond groupé, pour que
+   les cartes se détachent. */
+.sheet-body:has(> .fc) { background: var(--inset); }
+.fc-tete { display: flex; flex-direction: column; gap: 2px; padding: 0 4px; }
+.fc-titre { display: flex; align-items: baseline; gap: 12px; }
+.fc-titre h2 { margin: 0; font-size: 21px; font-weight: 700; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.fc-total { margin-left: auto; font-size: 21px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fc-quand { margin: 0; font-size: 13px; color: var(--ink-mute); }
+
+.fc-client {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.fc-client:hover { background: color-mix(in srgb, var(--ink) 3%, var(--surface)); }
+.fc-client:focus-visible { outline: none; box-shadow: var(--mac-halo); }
+.fc-avatar {
+  width: 36px;
+  height: 36px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #a1a1a6, #7c7c80);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+}
+.fc-client-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.fc-client-txt b,
+.fc-client-txt span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fc-client-txt b { font-size: 14px; font-weight: 600; }
+.fc-client-txt span { font-size: 12px; color: var(--ink-mute); }
+.fc-client-lien { font-size: 12.5px; color: var(--accent-ink); white-space: nowrap; }
+
+/* Quatre gestes, comme sous une fiche de Contacts. Grisés quand ils ne
+   mènent nulle part : pas de suivi, pas de numéro, boutique non reliée. */
+.fc-gestes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.fc-geste {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 9px 4px 8px;
+  border: 0;
+  border-radius: 11px;
+  background: var(--surface);
+  color: var(--accent-ink);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+}
+.fc-geste svg { width: 20px; height: 20px; }
+.fc-geste span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fc-geste:hover { background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
+.fc-geste:focus-visible { outline: none; box-shadow: var(--mac-halo); }
+.fc-geste:disabled { color: var(--ink-mute); opacity: 0.55; cursor: default; }
+.fc-geste:disabled:hover { background: var(--surface); }
+
+.fc-groupe { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.fc-legende { margin: 0 0 0 12px; font-size: 12px; font-weight: 600; color: var(--ink-mute); }
+.fc-carte { border-radius: 12px; background: var(--surface); overflow: hidden; }
+
+/* Payée, préparée, expédiée, livrée : la frise de l'Apple Store. */
+.fc-suivi { padding: 14px 14px 12px; }
+.fc-accent { --fc-teinte: var(--accent); }
+.fc-ok { --fc-teinte: var(--ok); }
+.fc-crit { --fc-teinte: var(--crit); }
+.fc-frise {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fc-frise::before,
+.fc-frise::after {
+  content: "";
+  position: absolute;
+  top: 7px;
+  left: 12.5%;
+  height: 2px;
+  border-radius: 1px;
+}
+.fc-frise::before { right: 12.5%; background: color-mix(in srgb, var(--ink) 12%, transparent); }
+.fc-frise::after { width: var(--avance); background: var(--fc-teinte); }
+.fc-frise li {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink-mute);
+}
+.fc-frise i {
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border: 1.5px solid color-mix(in srgb, var(--ink) 22%, transparent);
+  border-radius: 50%;
+  background: var(--surface);
+}
+.fc-frise li.fait { color: var(--ink); }
+.fc-frise li.fait i { border-color: var(--fc-teinte); background: var(--fc-teinte); }
+.fc-frise li.courant { color: var(--ink); font-weight: 600; }
+.fc-frise li.courant i { border: 2px solid var(--fc-teinte); }
+.fc-phrase {
+  margin: 12px 2px 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.fc-article { display: flex; align-items: center; gap: 12px; padding: 10px 14px; }
+.fc-article + .fc-article { border-top: 1px solid var(--line-soft); }
+.fc-article img,
+.fc-vignette {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: 9px;
+  object-fit: cover;
+  background: var(--inset);
+  box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 8%);
+}
+.fc-article-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.fc-article-txt b,
+.fc-article-txt span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fc-article-txt b { font-size: 13.5px; font-weight: 600; }
+.fc-article-txt span { font-size: 12px; color: var(--ink-mute); }
+.fc-qte { color: var(--ink-mute); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fc-prix { min-width: 64px; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fc-somme { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-top: 1px solid var(--line); }
+.fc-somme > span:first-child { flex: 1; color: var(--ink-mute); }
+.fc-somme b { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.fc-duo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.fc-duo .fc-carte { flex: 1; }
+.fc-bloc { display: flex; flex-direction: column; gap: 6px; padding: 11px 14px; }
+.fc-adresse { margin: 0; line-height: 1.45; overflow-wrap: anywhere; }
+.fc-mode { margin: 0; font-size: 12.5px; color: var(--ink-mute); }
+.fc-tel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line-soft);
+}
+.fc-tel .mono { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fc-lien { color: var(--accent-ink); text-decoration: none; white-space: nowrap; }
+.fc-lien:hover { text-decoration: underline; }
+.fc-colis { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
+.fc-colis + .fc-colis { margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--line-soft); }
+.fc-colis-qui { display: flex; flex-direction: column; }
+.fc-colis .sub { font-size: 12px; color: var(--ink-mute); }
+.fc-colis .linklike { max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-size: 12.5px; }
+.fc-rien { margin: 0; color: var(--ink-mute); }
+
+.fc-ligne {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+}
+.fc-ligne + .fc-ligne { border-top: 1px solid var(--line-soft); }
+.fc-ligne-lien { cursor: pointer; }
+.fc-ligne-lien:hover { background: color-mix(in srgb, var(--ink) 3%, transparent); }
+.fc-ligne-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.fc-ligne-txt b { font-weight: 600; }
+.fc-ligne-txt span { font-size: 12px; color: var(--ink-mute); }
+.fc-balises { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 4px; }
+.fc-balise {
+  padding: 2px 9px;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  font-size: 12px;
+}
+
+@container fc (max-width: 360px) {
+  .fc-duo { grid-template-columns: minmax(0, 1fr); }
+  .fc-titre h2,
+  .fc-total { font-size: 18px; }
+  .fc-gestes { gap: 6px; }
+  .fc-geste { padding-left: 2px; padding-right: 2px; font-size: 10.5px; }
+}
+
+/* --- Au téléphone et sur tablette en portrait : la fiche par-dessus. ---- */
+@media (max-width: 900px) {
+  #view-orders.cmd { grid-template-columns: minmax(0, 1fr); }
+  #view-orders.cmd:not(.pile-fiche) > .cmd-fiche { display: none; }
+  #view-orders.cmd.pile-fiche > .cmd-liste { display: none; }
+  .cmd-fiche {
+    position: static;
+    max-height: none;
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  .cmd-fiche-nav { display: flex; align-items: center; padding: 0 0 6px; }
+  #view-orders .cmd-retour {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    height: 36px;
+    padding: 0 10px 0 2px;
+    border: 0;
+    border-radius: 10px;
+    background: none;
+    color: var(--accent-ink);
+    font: inherit;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  #view-orders .cmd-retour svg { width: 20px; height: 20px; flex: none; }
+  .cmd-fiche-corps { padding: 0 0 24px; }
+  /* Sur iPad en portrait, une fiche à la largeur d'une page, pas de l'écran. */
+  .cmd-fiche-nav,
+  .cmd-fiche-corps { width: 100%; max-width: 680px; margin-inline: auto; box-sizing: border-box; }
+}
+@media (max-width: 900px) and (pointer: coarse) {
+  .cmd-ligne { padding-top: 11px; padding-bottom: 11px; }
+  .fc-geste { padding: 11px 4px 10px; }
+}
