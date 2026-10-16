@@ -28,6 +28,14 @@ import { commandesServiesParLeStock } from '../services/reshipment/reservations.
 import { enTete } from '../services/suppliers/demande.ts';
 import { lotsRecents } from '../services/envoi/lots.ts';
 import { chronologie } from '../services/suppliers/historique.ts';
+import {
+  consigneCourante,
+  consigneDeCommande,
+  consignesDesTickets,
+  repondreConsigne,
+  ReponseRefusee,
+} from '../services/ruptures/consigne.ts';
+import { consigneSurLaCommande } from '../services/ruptures/consigneTexte.ts';
 
 const TRENTE_JOURS = 30 * 24 * 60 * 60 * 1000;
 /** Photos jointes à un signalement : assez pour montrer un défaut sous trois angles. */
@@ -468,7 +476,7 @@ async function signalementsDeLAtelier(
   if (tickets.length === 0) return [];
 
   const ids = tickets.map((ticket) => ticket.id);
-  const [reponses, substitutions] = await Promise.all([
+  const [reponses, substitutions, consignes] = await Promise.all([
     /*
      * La dernière réponse partie vers le client, pour chaque signalement.
      *
@@ -500,6 +508,8 @@ async function signalementsDeLAtelier(
         reponduLe: true,
       },
     }),
+    // Les réponses du marchand à CET atelier, dans le même ticket.
+    consignesDesTickets(workspace.merchantId, ids, workspace.supplierId),
   ]);
   const reponduLe = new Map(reponses.map((ligne) => [ligne.ticketId, ligne._max.receivedAt]));
   const parTicket = new Map<string, typeof substitutions>();
@@ -524,9 +534,47 @@ async function signalementsDeLAtelier(
       detail: ticket.messages[0]?.bodyText ?? null,
       article: lireArticle(ticket.messages[0]?.bodyText),
       substitutions: parTicket.get(ticket.id) ?? [],
+      consignes: consignes.get(ticket.id) ?? [],
       signaleLe: ticket.createdAt,
     };
   });
+}
+
+/*
+ * La consigne du marchand, inscrite sur la commande.
+ *
+ * « Attendre le réassort jusqu'au 26 » lue dans un ticket s'oublie au moment
+ * d'emballer ; posée sur la commande, elle est sous les yeux de celui qui
+ * tient le carton. Seule la consigne courante, et seulement si elle change le
+ * colis : un message ou un refus n'a rien à faire sur la commande.
+ */
+async function consignesDesCommandes(
+  workspace: { merchantId: string; supplierId: string },
+  commandes: readonly string[],
+): Promise<Map<string, ReturnType<typeof consigneDeCommande>>> {
+  const parCommande = new Map<string, ReturnType<typeof consigneDeCommande>>();
+  if (commandes.length === 0) return parCommande;
+
+  const tickets = await prisma.ticket.findMany({
+    where: {
+      merchantId: workspace.merchantId,
+      shopifyOrderId: { in: [...commandes] },
+      consignes: { some: { supplierId: workspace.supplierId, remplaceeLe: null } },
+    },
+    select: { id: true, shopifyOrderId: true },
+  });
+  const consignes = await consignesDesTickets(
+    workspace.merchantId,
+    tickets.map((ticket) => ticket.id),
+    workspace.supplierId,
+  );
+  for (const ticket of tickets) {
+    const courante = consigneCourante(consignes.get(ticket.id));
+    if (courante && ticket.shopifyOrderId && consigneSurLaCommande(courante)) {
+      parCommande.set(ticket.shopifyOrderId, consigneDeCommande(courante));
+    }
+  }
+  return parCommande;
 }
 
 export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<void> {
@@ -620,6 +668,7 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
         const key = parcel.shopifyOrderId ?? '';
         byOrder.set(key, [...(byOrder.get(key) ?? []), parcel]);
       }
+      const consignes = await consignesDesCommandes(workspace, visible.map((order) => order.id));
 
       return reply.send({
         supplier: { name: workspace.supplierName, ordersAccess: workspace.ordersAccess },
@@ -630,6 +679,7 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
         orders: visible.map((order) => ({
           ...order,
           parcels: (byOrder.get(order.id) ?? []).map(toParcelView),
+          consigne: consignes.get(order.id) ?? null,
         })),
       });
     },
@@ -1647,6 +1697,7 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
       for (const proposition of substitutions) {
         parTicket.set(proposition.ticketId, [...(parTicket.get(proposition.ticketId) ?? []), proposition]);
       }
+      const consignes = await consignesDesTickets(workspace.merchantId, ticketsConcernes, workspace.supplierId);
 
       return reply.send({
         demandes: demandes
@@ -1664,6 +1715,7 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
             // remplacements au lieu d'un paragraphe à relire.
             article: lireArticle(demande.messages[0]?.body ?? demande.note),
             substitutions: parTicket.get(demande.ticket.id) ?? [],
+            consignes: consignes.get(demande.ticket.id) ?? [],
             envoyeLe: demande.notifiedAt ?? demande.createdAt,
             // Vue depuis l'atelier : créé tant qu'il n'a pas répondu, traité
             // quand il l'a fait, classé quand le marchand a clos.
@@ -1990,6 +2042,64 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
     },
   );
 
+  /* ------------------------------------------------------------ consignes -- */
+
+  /**
+   * L'atelier répond à la consigne du marchand : compris, je ne pourrai pas
+   * (avec la raison), ou sa réponse à un message.
+   *
+   * Comme pour les remplacements, un bouton plutôt qu'une phrase : la réponse
+   * se lit d'un coup d'œil chez le marchand. La raison d'un refus, elle, est
+   * écrite — et traduite en français pour lui.
+   */
+  app.post<{ Params: { id: string; consigneId: string }; Querystring: { token?: string } }>(
+    '/api/workspace/:id/consignes/:consigneId',
+    async (request, reply) => {
+      const workspace = await authorize(request, reply);
+      if (!workspace) return;
+
+      const parsed = z
+        .object({
+          reponse: z.enum(['COMPRIS', 'IMPOSSIBLE', 'REPONDU']),
+          note: z.string().trim().max(1000).nullish(),
+          modele: z.number().int().min(0).max(9).nullish(),
+          langue: z.enum(['fr', 'en', 'zh']).nullish(),
+        })
+        .safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ code: 'invalide', error: 'Réponse invalide.' });
+
+      try {
+        const consigne = await repondreConsigne({
+          merchantId: workspace.merchantId,
+          supplierId: workspace.supplierId,
+          consigneId: request.params.consigneId,
+          reponse: parsed.data.reponse,
+          note: parsed.data.note ?? null,
+          modeleChoisi: parsed.data.modele ?? null,
+          langue: parsed.data.langue ?? null,
+        });
+
+        await recordAudit({
+          merchantId: workspace.merchantId,
+          actorType: 'SUPPLIER',
+          actorId: workspace.supplierId,
+          action: `supplier.consigne_${parsed.data.reponse.toLowerCase()}`,
+          targetType: 'RuptureConsigne',
+          targetId: consigne.id,
+          ipAddress: request.ip,
+        });
+
+        return reply.send({ consigne });
+      } catch (error) {
+        if (error instanceof ReponseRefusee) {
+          const code = error.code === 'introuvable' ? 404 : error.code === 'deja' ? 409 : 400;
+          return reply.code(code).send({ code: error.code, error: error.message });
+        }
+        throw error;
+      }
+    },
+  );
+
   /* ---------------------------------------------- chercher une commande -- */
 
   /**
@@ -2074,11 +2184,13 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
         const key = parcel.shopifyOrderId ?? '';
         byOrder.set(key, [...(byOrder.get(key) ?? []), parcel]);
       }
+      const consignes = await consignesDesCommandes(workspace, visible.map((order) => order.id));
 
       return reply.send({
         orders: visible.map((order) => ({
           ...order,
           parcels: (byOrder.get(order.id) ?? []).map(toParcelView),
+          consigne: consignes.get(order.id) ?? null,
         })),
         // Trouvée chez Shopify mais écartée par le niveau d'accès : le dire,
         // plutôt que laisser croire que la commande n'existe pas.

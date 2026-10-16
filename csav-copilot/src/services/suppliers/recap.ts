@@ -3,6 +3,7 @@ import { prisma } from '../../lib/prisma.ts';
 import { FERMETURE, heureAtelier, jourAtelier } from '../envoi/rappel.ts';
 import { sendPlainEmail } from '../gmail/send.ts';
 import { lienAtelier } from '../ruptures/substitution.ts';
+import { CHAMPS_CONSIGNE, vueConsigne } from '../ruptures/consigne.ts';
 import { langueAtelier } from './langueAtelier.ts';
 import { recapDuJour, type RuptureDuRecap } from './recapTexte.ts';
 import { KINDS_DU_RECAP } from './urgence.ts';
@@ -83,7 +84,8 @@ export async function envoyerRecapitulatifs(maintenant = new Date()): Promise<nu
     // Un dossier clos ne demande plus rien à l'atelier, même sans sa réponse.
     const dossierOuvert = { ticket: { status: { not: 'CLOSED' as const } } };
 
-    const [nouvelles, enAttente, propositions, propositionsEnAttente] = await Promise.all([
+    const choixConsigne = { ...CHAMPS_CONSIGNE, ticket: { select: { orderName: true } } } as const;
+    const [nouvelles, enAttente, propositions, propositionsEnAttente, consignes, consignesEnAttente] = await Promise.all([
       // Jamais annoncées : les non urgentes, et une urgente dont le mail a
       // échoué — le récapitulatif la rattrape plutôt que de la perdre.
       prisma.supplierAlert.findMany({
@@ -112,17 +114,40 @@ export async function envoyerRecapitulatifs(maintenant = new Date()): Promise<nu
         orderBy: { createdAt: 'asc' },
         select: { id: true, ticketId: true, createdAt: true, ticket: { select: { orderName: true } } },
       }),
+      // Les réponses du marchand sur une rupture : la courante seulement, tant
+      // que l'atelier ne l'a pas confirmée. « Ne pas expédier » a déjà eu son
+      // mail (`avisLe` posé) : elle n'y revient qu'en rappel.
+      prisma.ruptureConsigne.findMany({
+        where: { ...chez, ...dossierOuvert, remplaceeLe: null, reponse: null, avisLe: null, createdAt: { gte: fraiches } },
+        orderBy: { createdAt: 'asc' },
+        select: choixConsigne,
+      }),
+      prisma.ruptureConsigne.findMany({
+        where: { ...chez, ...dossierOuvert, remplaceeLe: null, reponse: null, rappelLe: null, avisLe: { not: null, lte: annoncees } },
+        orderBy: { createdAt: 'asc' },
+        select: choixConsigne,
+      }),
     ]);
+    const langue = langueAtelier(atelier.langue);
+    const enLigne = (consigne: (typeof consignes)[number]) => ({
+      orderName: consigne.ticket.orderName,
+      court: vueConsigne(consigne).textes[langue].court,
+    });
 
     const nom = atelier.merchant.brandName || atelier.merchant.name || atelier.merchant.shopDomain;
     const jours = (date: Date) => Math.floor((maintenant.getTime() - date.getTime()) / 86_400_000);
     const recap = recapDuJour({
-      langue: langueAtelier(atelier.langue),
+      langue,
       merchantName: nom,
-      nouvelles: { demandes: nouvelles, ruptures: parDossier(propositions, maintenant) },
+      nouvelles: {
+        demandes: nouvelles,
+        ruptures: parDossier(propositions, maintenant),
+        consignes: consignes.map(enLigne),
+      },
       enAttente: {
         demandes: enAttente.map((demande) => ({ ...demande, jours: jours(demande.createdAt) })),
         ruptures: parDossier(propositionsEnAttente, maintenant),
+        consignes: consignesEnAttente.map((consigne) => ({ ...enLigne(consigne), jours: jours(consigne.createdAt) })),
       },
       lien: await lienAtelier(atelier.merchantId, atelier.id),
       signature: atelier.merchant.emailSignature,
@@ -149,6 +174,14 @@ export async function envoyerRecapitulatifs(maintenant = new Date()): Promise<nu
         }),
         prisma.ruptureSubstitution.updateMany({
           where: { id: { in: propositionsEnAttente.map((proposition) => proposition.id) } },
+          data: { rappelLe: maintenant },
+        }),
+        prisma.ruptureConsigne.updateMany({
+          where: { id: { in: consignes.map((consigne) => consigne.id) } },
+          data: { avisLe: maintenant },
+        }),
+        prisma.ruptureConsigne.updateMany({
+          where: { id: { in: consignesEnAttente.map((consigne) => consigne.id) } },
           data: { rappelLe: maintenant },
         }),
         prisma.supplier.update({ where: { id: atelier.id }, data: { recapLe: maintenant } }),

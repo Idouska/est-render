@@ -7,7 +7,7 @@ import test from 'node:test';
  * Une fenêtre ouverte doit se voir.
  *
  * `.backdrop` est en `display:none` tant qu'il ne porte pas `.open`. Retirer
- * `hidden` ne suffit donc pas : la fenêtre « Proposer un remplacement » est
+ * `hidden` ne suffit donc pas : l'ancienne fenêtre « Proposer un remplacement » est
  * sortie ainsi, le bouton ne faisait rien de visible, et aucun test ne l'a vu.
  */
 
@@ -26,7 +26,7 @@ test('le fond de fenêtre reste caché sans .open', () => {
 });
 
 test('toute fenêtre dont on retire hidden reçoit aussi .open', () => {
-  assert.ok(fenetres.includes('subst-modal'));
+  assert.ok(fenetres.includes('ra-modal'));
   for (const id of fenetres) {
     const echappe = id.replace(/[-]/g, '\\-');
     if (!new RegExp(`\\$\\('${echappe}'\\)\\.hidden = false`).test(app)) continue;
@@ -38,7 +38,7 @@ test('toute fenêtre dont on retire hidden reçoit aussi .open', () => {
   }
 });
 
-test('la fenêtre de remplacement se ferme en retirant .open', () => {
-  assert.match(app, /function fermerFenetreSubstitution\(\)[\s\S]*?classList\.remove\('open'\)/);
-  assert.doesNotMatch(app, /\$\('subst-modal'\)\.hidden = true;\s*\n\s*toast/);
+test('la fenêtre « Répondre à l’atelier » se ferme en retirant .open', () => {
+  assert.match(app, /function fermerReponseAtelier\(\)[\s\S]*?classList\.remove\('open'\)/);
+  assert.doesNotMatch(app, /\$\('ra-modal'\)\.hidden = true;\s*\n\s*toast/);
 });

@@ -5,8 +5,10 @@ import { prisma } from '../lib/prisma.ts';
 import { recordAudit } from '../lib/audit.ts';
 import { requirePermission, requireSession } from '../plugins/auth.ts';
 import { atelierDuDossier, ouvrirDossierRupture, proposerSubstitutions } from '../services/ruptures/substitution.ts';
+import { consignesDesTickets, envoyerConsigne, prevenirSansAttendre } from '../services/ruptures/consigne.ts';
+import { CHOIX_CONSIGNE, lireDateConsigne } from '../services/ruptures/consigneTexte.ts';
 import { getShopifyClient, ShopifyError } from '../services/shopify/client.ts';
-import { listOrders, quoteSearchValue } from '../services/shopify/orders.ts';
+import { getOrderById, listOrders, quoteSearchValue } from '../services/shopify/orders.ts';
 import { fournisseurDuFil, lireArticle } from '../services/suppliers/signalement.ts';
 import {
   cleProduit,
@@ -129,7 +131,7 @@ export async function ruptureRoutes(app: FastifyInstance): Promise<void> {
           createdAt: true,
           notifiedAt: true,
           resolvedAt: true,
-          supplier: { select: { id: true, name: true, contactEmail: true, phone: true } },
+          supplier: { select: { id: true, name: true, contactEmail: true, phone: true, langue: true } },
           /*
            * `FROM_SUPPLIER`, et non `INBOUND` : un fil fournisseur n'a pas les
            * mêmes sens de circulation qu'un fil client. Se tromper
@@ -178,7 +180,7 @@ export async function ruptureRoutes(app: FastifyInstance): Promise<void> {
       (idsAteliers.length
         ? await prisma.supplier.findMany({
             where: { merchantId, id: { in: idsAteliers } },
-            select: { id: true, name: true, contactEmail: true, phone: true },
+            select: { id: true, name: true, contactEmail: true, phone: true, langue: true },
           })
         : []
       ).map((atelier) => [atelier.id, atelier]),
@@ -189,7 +191,7 @@ export async function ruptureRoutes(app: FastifyInstance): Promise<void> {
       ...escalations.map((escalade) => escalade.ticketId),
     ];
 
-    const [dernieresReponses, remboursements] = await Promise.all([
+    const [dernieresReponses, remboursements, consignes] = await Promise.all([
       prisma.message.groupBy({
         by: ['ticketId'],
         where: { merchantId, ticketId: { in: ticketIds }, direction: 'OUTBOUND' },
@@ -200,6 +202,8 @@ export async function ruptureRoutes(app: FastifyInstance): Promise<void> {
         where: { merchantId, ticketId: { in: ticketIds }, status: { not: 'FAILED' } },
         _count: true,
       }),
+      // Ce que le marchand a déjà répondu à l'atelier, et ce qu'il en a dit.
+      consignesDesTickets(merchantId, ticketIds),
     ]);
 
     const reponduLe = new Map(
@@ -388,6 +392,7 @@ export async function ruptureRoutes(app: FastifyInstance): Promise<void> {
           article,
           declare,
           signalement: ticket.messages[0]?.bodyText ?? null,
+          consignes: consignes.get(ticket.id) ?? [],
           commandesImpactees: impact(brut),
           fournisseur: atelier,
           synthese: syntheseDossier({
@@ -439,6 +444,7 @@ export async function ruptureRoutes(app: FastifyInstance): Promise<void> {
             : null,
           declare: null,
           signalement: null,
+          consignes: consignes.get(escalade.ticketId) ?? [],
           commandesImpactees: impact(brut),
           fournisseur: escalade.supplier,
           synthese: syntheseDossier({
@@ -574,6 +580,141 @@ export async function ruptureRoutes(app: FastifyInstance): Promise<void> {
       });
 
       return reply.send({ ...resultat, atelier: connu.name });
+    },
+  );
+
+  /* ----------------------------------------------------------- consigne -- */
+
+  /**
+   * Répondre à l'atelier : attendre le réassort, remplacer, ne pas expédier,
+   * ou lui écrire.
+   *
+   * Rien ne part vers le client : c'est une consigne pour l'atelier, qui la lit
+   * dans sa langue et la confirme d'un bouton. La dernière remplace les
+   * précédentes — « Modifier » renvoie une consigne, il ne réécrit pas l'ancienne.
+   */
+  app.post<{ Params: { ticketId: string } }>(
+    '/api/ruptures/:ticketId/consigne',
+    { preHandler: requirePermission('reply') },
+    async (request, reply) => {
+      const { merchantId, userId } = request.session;
+
+      const parsed = z
+        .object({
+          supplierId: z.string().min(1).max(60).optional(),
+          choix: z.enum(CHOIX_CONSIGNE),
+          expedierAvant: z.string().max(10).nullish(),
+          modeles: z
+            .array(
+              z.object({
+                productTitle: z.string().trim().min(1).max(300),
+                variantTitle: z.string().trim().max(120).nullish(),
+                sku: z.string().trim().max(120).nullish(),
+                image: z.string().trim().max(2000).nullish(),
+                inventory: z.number().int().min(-99999).max(999999).nullish(),
+                libre: z.boolean().optional(),
+              }),
+            )
+            .max(4)
+            .nullish(),
+          mot: z.string().max(1000).nullish(),
+        })
+        .safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({ code: 'invalide', error: 'Réponse invalide.' });
+      }
+      const { choix } = parsed.data;
+      const mot = parsed.data.mot?.trim() || null;
+      const modeles = parsed.data.modeles ?? [];
+
+      // Ce que chaque réponse doit préciser, vérifié ici et pas seulement à
+      // l'écran : une consigne « attendre » sans date ne dit pas jusqu'à quand.
+      const expedierAvant = choix === 'ATTENDRE' ? lireDateConsigne(parsed.data.expedierAvant) : null;
+      if (choix === 'ATTENDRE') {
+        const hier = Date.now() - 86_400_000;
+        if (!expedierAvant || expedierAvant.getTime() < hier || expedierAvant.getTime() > Date.now() + 366 * 86_400_000) {
+          return reply.code(400).send({ code: 'date', error: 'Choisissez une date d’expédition à venir.' });
+        }
+      }
+      if (choix === 'REMPLACER' && modeles.length === 0) {
+        return reply.code(400).send({ code: 'modele', error: 'Choisissez au moins un modèle.' });
+      }
+      if (choix === 'MESSAGE' && !mot) {
+        return reply.code(400).send({ code: 'mot', error: 'Écrivez votre message.' });
+      }
+
+      const ticket = await prisma.ticket.findFirst({
+        where: { id: request.params.ticketId, merchantId },
+        select: { id: true, orderName: true, shopifyOrderId: true },
+      });
+      if (!ticket) return reply.code(404).send({ code: 'introuvable', error: 'Dossier introuvable.' });
+
+      // Même règle que les remplacements : l'atelier annoncé est vérifié.
+      const atelierId = parsed.data.supplierId ?? (await atelierDuDossier(merchantId, ticket.id));
+      const atelier = atelierId
+        ? await prisma.supplier.findFirst({
+            where: { id: atelierId, merchantId, active: true },
+            select: { id: true, name: true, contactEmail: true, langue: true },
+          })
+        : null;
+      if (!atelier) {
+        return reply.code(409).send({
+          code: 'sans_atelier',
+          error: 'Aucun atelier actif n’est rattaché à ce dossier.',
+        });
+      }
+
+      /* « Ne pas expédier cet article » : l'atelier doit savoir s'il expédie
+         le reste ou rien. Une lecture de la commande ; si Shopify ne répond
+         pas, la consigne part quand même, sans promettre l'un ou l'autre. */
+      let articlesCommande: number | null = null;
+      if (choix === 'ANNULER' && ticket.shopifyOrderId) {
+        try {
+          const commande = await getOrderById(await getShopifyClient(merchantId), ticket.shopifyOrderId);
+          articlesCommande = commande ? commande.lineItems.reduce((total, ligne) => total + ligne.quantity, 0) : null;
+        } catch (error) {
+          request.log.warn({ err: error, ticketId: ticket.id }, 'Commande non relue pour la consigne');
+        }
+      }
+
+      await ouvrirDossierRupture({ merchantId, ticketId: ticket.id, supplierId: atelier.id });
+
+      const consigne = await envoyerConsigne({
+        merchantId,
+        ticketId: ticket.id,
+        supplierId: atelier.id,
+        choix,
+        expedierAvant,
+        modeles,
+        articlesCommande,
+        mot,
+        createdById: userId ?? null,
+      });
+
+      const boutique = await prisma.merchant.findUnique({
+        where: { id: merchantId },
+        select: { name: true, brandName: true, shopDomain: true },
+      });
+      const prevenu = await prevenirSansAttendre({
+        merchantId,
+        consigne,
+        orderName: ticket.orderName,
+        atelier,
+        fromName: boutique?.brandName || boutique?.name || boutique?.shopDomain || atelier.name,
+      });
+
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId: userId,
+        action: 'rupture.consigne_sent',
+        targetType: 'Ticket',
+        targetId: ticket.id,
+        metadata: { atelier: atelier.name, choix, traduite: Boolean(consigne.motTraduit), parMail: prevenu },
+        ipAddress: request.ip,
+      });
+
+      return reply.send({ consigne, atelier: atelier.name, parMail: prevenu });
     },
   );
 }

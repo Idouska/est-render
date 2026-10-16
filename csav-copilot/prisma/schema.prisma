@@ -128,6 +128,7 @@ model Merchant {
   returnAgencies      ReturnAgency[]
 
   substitutions RuptureSubstitution[]
+  consignes     RuptureConsigne[]
   envoisFournisseur EnvoiFournisseur[]
   @@index([organizationId])
 }
@@ -359,6 +360,7 @@ model Ticket {
   supplierAlerts SupplierAlert[]
 
   substitutions RuptureSubstitution[]
+  consignes     RuptureConsigne[]
   @@unique([merchantId, gmailThreadId])
   @@index([merchantId, status])
   @@index([merchantId, gmailUnread, openedAt])
@@ -655,6 +657,7 @@ model Supplier {
   // Deux fiches pour la même adresse chez un même marchand n'ont pas de sens :
   // les réponses arrivant par mail seraient impossibles à attribuer.
   substitutions RuptureSubstitution[]
+  consignes     RuptureConsigne[]
   envoisCommandes EnvoiFournisseur[]
   @@unique([merchantId, contactEmail])
   @@index([merchantId, active])
@@ -808,6 +811,81 @@ model RuptureSubstitution {
   @@index([merchantId, supplierId, accepte])
 }
 
+/// La réponse du marchand à l'atelier, sur une rupture : une consigne.
+///
+/// L'atelier signale « réassort dans dix jours » et attend. Le marchand ne
+/// pouvait lui répondre qu'en proposant un modèle de remplacement — et quand
+/// il n'y en avait aucun en stock, rien : le ticket restait « en attente du
+/// marchand » et la commande dormait chez l'atelier, sans instruction.
+///
+/// Quatre réponses, chacune avec ce qu'il faut préciser : attendre le réassort
+/// (jusqu'à quand), remplacer (par quoi), ne pas expédier, ou un message. Elles
+/// se posent en champs et non en phrase : l'atelier les lit dans sa langue,
+/// sans traduction approximative, et les confirme d'un bouton.
+///
+/// Rattachée au TICKET, comme les remplacements : une rupture signalée par
+/// l'atelier n'a pas d'escalade.
+model RuptureConsigne {
+  id         String @id @default(cuid())
+  merchantId String
+  ticketId   String
+  supplierId String
+
+  choix            ConsigneChoix
+  /// ATTENDRE : expédier au plus tard ce jour-là (date seule, posée à midi UTC).
+  expedierAvant    DateTime?
+  /// REMPLACER : les modèles proposés — [{ productTitle, variantTitle, sku, image, inventory, libre }].
+  modeles          Json?
+  /// ANNULER : le nombre d'articles de la commande, pour dire à l'atelier s'il
+  /// expédie le reste ou rien du tout. Nul si Shopify n'a pas répondu.
+  articlesCommande Int?
+
+  /// Le mot du marchand, tel qu'il l'a écrit.
+  mot        String? @db.Text
+  /// Sa traduction pour l'atelier : { en, zh }. Nulle si elle a échoué —
+  /// l'atelier lit alors l'original, plutôt que rien.
+  motTraduit Json?
+
+  /// La réponse de l'atelier. Nulle tant qu'il n'a rien dit.
+  reponse       ConsigneReponse?
+  /// REMPLACER à plusieurs modèles : le rang de celui qu'il expédie.
+  modeleChoisi  Int?
+  /// Sa raison, ou son message, tel qu'il l'a écrit — et en français.
+  reponseNote   String?          @db.Text
+  reponseNoteFr String?          @db.Text
+  reponduLe     DateTime?
+
+  /// Remplacée par une consigne plus récente sur le même dossier : elle reste
+  /// dans l'historique, mais ne demande plus rien à personne.
+  remplaceeLe DateTime?
+
+  /// Annoncée dans le récapitulatif du matin, puis rappelée une fois.
+  avisLe   DateTime?
+  rappelLe DateTime?
+
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  ticket   Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId, ticketId])
+  @@index([merchantId, supplierId, reponse])
+}
+
+enum ConsigneChoix {
+  ATTENDRE // attendre le réassort, puis expédier
+  REMPLACER // expédier un autre modèle
+  ANNULER // ne pas expédier cet article
+  MESSAGE // un message libre
+}
+
+enum ConsigneReponse {
+  COMPRIS
+  IMPOSSIBLE // « je ne pourrai pas », avec la raison
+  REPONDU // réponse à un message libre
+}
 model SupplierMessage {
   id           String @id @default(cuid())
   merchantId   String

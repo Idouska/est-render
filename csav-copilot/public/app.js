@@ -17603,6 +17603,8 @@ function gesteAuDepart(cible) {
     if (fournisseurs && !fournisseurs.hidden && fournisseurs.classList.contains('fo-pile')) return 'retourFournisseur';
     const modifications = $('view-changes');
     if (modifications && !modifications.hidden && modifications.classList.contains('pile-fiche')) return 'retourModification';
+    const ruptures = $('view-ruptures');
+    if (ruptures && !ruptures.hidden && ruptures.classList.contains('pile-fiche')) return 'retourRupture';
     return 'ouvrir';
   }
   // Sur une tablette en paysage, la colonne est là : on la replie ou on la
@@ -17661,6 +17663,7 @@ const RETOURS = {
     fermer: () => fermerPileFo(),
   },
   retourModification: { pane: () => $('changes-fiche'), fermer: () => fermerPileModif() },
+  retourRupture: { pane: () => $('rup-panel'), fermer: () => fermerPileRupture() },
 };
 
 function paneDuRetour(type) {
@@ -19599,6 +19602,26 @@ function renderRuptureFiltres() {
   $('rup-reset').hidden = !(r.q || r.fournisseur || r.priorite || r.vue !== 'tous' || r.tri !== 'recent');
 }
 
+/*
+ * Sous le statut : où en est la réponse à l'atelier, sinon qui a signalé.
+ *
+ * C'est ce qu'on cherche en parcourant la liste — « lui ai-je répondu ? a-t-il
+ * confirmé ? » — sans ouvrir chaque dossier.
+ */
+function sousEtatRupture(d) {
+  const consigne = consigneCouranteDe(d);
+  if (consigne) {
+    const [texte, ton] = {
+      ENVOYEE: ['atelier prévenu, sans confirmation', 'warn'],
+      COMPRISE: ['confirmé par l’atelier', 'ok'],
+      IMPOSSIBLE: ['l’atelier ne pourra pas', 'crit'],
+      REPONDUE: ['l’atelier a répondu', 'ok'],
+    }[consigne.etat] ?? ['', ''];
+    if (texte) return `<small class="rup-orig rup-orig-${ton}">${esc(texte)}</small>`;
+  }
+  return d.origine === 'atelier' ? '<small class="rup-orig">signalé par l’atelier</small>' : '';
+}
+
 function renderRuptureLignes(page, total) {
   const r = state.ruptures;
   const corps = $('rup-rows');
@@ -19693,9 +19716,7 @@ function renderRuptureLignes(page, total) {
              s'escamote sous 1 760 px, et savoir qui a signalé change la
              lecture du dossier — un fait rapporté par l'atelier n'est pas une
              question posée par le marchand. */
-          d.origine === 'atelier'
-            ? '<small class="rup-orig">signalé par l’atelier</small>'
-            : ''
+          sousEtatRupture(d)
         }</td>
         <td class="rup-age">${esc(age)}</td>
         <td>${
@@ -19781,6 +19802,10 @@ function renderRupturePager(total, pages) {
 
 /* ---- le panneau de droite ---- */
 
+/* Sur téléphone, le dossier se pousse en plein écran, comme une commande. */
+const PILE_RUPTURES = window.matchMedia('(max-width: 900px)');
+let defilementRuptures = 0;
+
 function ouvrirRupture(id) {
   const r = state.ruptures;
   const change = r.courant !== id;
@@ -19789,6 +19814,144 @@ function ouvrirRupture(id) {
   // à l'autre proposerait la chaussure d'un autre client.
   if (change) r.alternatives = null;
   renderRuptures();
+  ouvrirPileRupture();
+}
+
+function ouvrirPileRupture() {
+  const vue = $('view-ruptures');
+  if (!PILE_RUPTURES.matches || !vue) return;
+  if (!vue.classList.contains('pile-fiche')) {
+    defilementRuptures = scrollY;
+    vue.classList.add('pile-fiche');
+    history.pushState({ csavRupture: true }, '');
+  }
+  requestAnimationFrame(() => scrollTo(0, 0));
+}
+
+function fermerPileRupture({ parHistorique = false } = {}) {
+  const vue = $('view-ruptures');
+  if (!vue?.classList.contains('pile-fiche')) return;
+  vue.classList.remove('pile-fiche');
+  if (!parHistorique && history.state?.csavRupture) history.back();
+  requestAnimationFrame(() => scrollTo(0, defilementRuptures));
+}
+
+addEventListener('popstate', () => fermerPileRupture({ parHistorique: true }));
+
+/*
+ * Ce que l'atelier a écrit, sans ce que le dossier dit déjà.
+ *
+ * Son message porte l'article en champs — relus et affichés en tête du
+ * dossier — puis sa note libre : « réassort dans dix jours ». C'est elle qui
+ * appelle une réponse ; la répéter sous les champs qu'on vient de lire
+ * noierait la seule phrase qui compte.
+ */
+function noteDuSignalement(texte) {
+  if (!texte) return null;
+  const note = String(texte)
+    .split('\n')
+    .filter((ligne) => !/^Signalé par .+ depuis l'atelier\.$/.test(ligne.trim()))
+    .filter((ligne) => !/^(Article|Couleur|Taille|Référence|Quantité) : /.test(ligne))
+    .join('\n')
+    .trim();
+  return note || null;
+}
+
+/** « à 11:40 » aujourd'hui, « le 14 oct. à 11:40 » avant. */
+function quandConsigne(iso) {
+  const date = new Date(iso);
+  const heure = date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  return date.toDateString() === new Date().toDateString()
+    ? `à ${heure}`
+    : `le ${date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} à ${heure}`;
+}
+
+const consigneCouranteDe = (d) => {
+  const derniere = d.consignes?.at(-1);
+  return derniere && !derniere.remplaceeLe ? derniere : null;
+};
+
+/** La consigne en clair, côté marchand : ce qu'on a demandé, et ce qui le précise. */
+function resumeConsigne(consigne) {
+  const modeles = consigne.modeles ?? [];
+  const nom = (modele) => [modele.productTitle, modele.variantTitle].filter(Boolean).join(' · ');
+  const retenu = typeof consigne.modeleChoisi === 'number' ? modeles[consigne.modeleChoisi] : null;
+  const detail = {
+    ATTENDRE: consigne.expedierAvant ? `Au plus tard le ${dateConsigneFr(consigne.expedierAvant, true)}.` : '',
+    REMPLACER: retenu ? `Il expédie : ${nom(retenu)}.` : modeles.map(nom).join(' ou '),
+    ANNULER: consigne.textes?.fr?.detail ?? '',
+    MESSAGE: '',
+  }[consigne.choix];
+  return { titre: CONSIGNE_NOMS[consigne.choix] ?? consigne.choix, detail };
+}
+
+/** Où en est la consigne, en une ligne de couleur. */
+function suiviConsigne(consigne, atelier) {
+  const qui = atelier ?? 'L’atelier';
+  if (consigne.etat === 'COMPRISE') return { ton: 'ok', texte: `${qui} a confirmé ${quandConsigne(consigne.reponduLe)}` };
+  if (consigne.etat === 'IMPOSSIBLE') return { ton: 'crit', texte: `${qui} ne pourra pas — répondu ${quandConsigne(consigne.reponduLe)}` };
+  if (consigne.etat === 'REPONDUE') return { ton: 'ok', texte: `${qui} a répondu ${quandConsigne(consigne.reponduLe)}` };
+  return { ton: 'warn', texte: `Envoyée ${quandConsigne(consigne.envoyeeLe)} · en attente de sa confirmation` };
+}
+
+/* Sa réponse écrite, en français ; l'original à côté quand il a écrit dans sa langue. */
+function noteDeLAtelier(consigne) {
+  if (!consigne.reponseNote) return '';
+  const francais = consigne.reponseNoteFr && consigne.reponseNoteFr !== consigne.reponseNote;
+  return `<p class="rup-ra-note">« ${esc(francais ? consigne.reponseNoteFr : consigne.reponseNote)} »</p>${
+    francais ? `<p class="rup-ra-orig">Traduit · il a écrit : ${esc(consigne.reponseNote)}</p>` : ''
+  }`;
+}
+
+/*
+ * « Réponse à l'atelier » : ce qu'il attend de nous, ou ce qu'on lui a dit et
+ * ce qu'il en a fait.
+ */
+function reponseAtelierMarkup(d) {
+  const atelier = d.fournisseur?.name ?? null;
+  if (!d.fournisseur) {
+    return '<p class="empty">Aucun atelier n’est rattaché à ce dossier.</p>';
+  }
+  const consigne = consigneCouranteDe(d);
+  if (!consigne) {
+    if (d.etat === 'RESOLU') return '<p class="empty">Dossier clos sans réponse à l’atelier.</p>';
+    return `<div class="rup-ra rup-ra-attend">
+      <p>${esc(atelier)} attend votre décision pour cette commande.</p>
+      <button class="btn btn-primary" type="button" data-rup-repondre="1">Répondre à l’atelier</button>
+    </div>`;
+  }
+
+  const { titre, detail } = resumeConsigne(consigne);
+  const suivi = suiviConsigne(consigne, atelier);
+  const relancer = consigne.etat === 'IMPOSSIBLE' || consigne.etat === 'REPONDUE';
+  return `<div class="rup-ra">
+    <div class="rup-ra-tete"><b>${esc(titre)}</b>${
+      relancer ? '' : '<button class="linkish" type="button" data-rup-repondre="1">Modifier</button>'
+    }</div>
+    ${detail ? `<span class="rup-ra-detail">${esc(detail)}</span>` : ''}
+    ${consigne.mot ? `<p class="rup-ra-mot">« ${esc(consigne.mot)} »</p>` : ''}
+    <span class="rup-ra-suivi rup-ra-${suivi.ton}">${esc(suivi.texte)}</span>
+    ${noteDeLAtelier(consigne)}
+    ${
+      relancer
+        ? '<button class="btn btn-primary" type="button" data-rup-repondre="1">Répondre à l’atelier</button>'
+        : ''
+    }
+  </div>`;
+}
+
+/* Ce qu'on dit de la cliente : ce qu'elle sait, et ce qu'il faudrait lui proposer. */
+function texteCliente(d) {
+  const nom = d.client?.nom ?? 'Le client';
+  const consigne = consigneCouranteDe(d);
+  if (d.etat === 'RESOLU') return 'Dossier clos.';
+  if (consigne?.choix === 'ATTENDRE' && consigne.expedierAvant) {
+    return `Lui proposer d’attendre jusqu’au ${dateConsigneFr(consigne.expedierAvant, true)}, ou un remboursement.`;
+  }
+  if (consigne?.choix === 'ANNULER') return `Lui proposer un autre modèle, ou la rembourser.`;
+  if (d.etat === 'CLIENT_A_PREVENIR') return `${nom} n’a pas encore reçu de réponse.`;
+  if (d.etat === 'REMBOURSEMENT') return 'Un remboursement est engagé.';
+  return d.synthese?.[1] ?? d.synthese?.[0] ?? '';
 }
 
 function renderRupturePanneau() {
@@ -19797,77 +19960,87 @@ function renderRupturePanneau() {
   const d = r.dossiers.find((dossier) => dossier.id === r.courant);
 
   panneau.hidden = !d;
-  if (!d) return (panneau.innerHTML = '');
+  if (!d) {
+    // Plus de dossier : un téléphone resté en plein écran montrerait du vide.
+    fermerPileRupture();
+    return (panneau.innerHTML = '');
+  }
 
   const argent = (montant) =>
     typeof montant === 'number' ? money(montant, d.commande?.devise ?? 'EUR') : '—';
+  const article = d.article;
+  const note = d.origine === 'atelier' ? noteDuSignalement(d.signalement) : null;
+  const sousTitre = [
+    article?.variante,
+    article?.sku,
+    article ? `${article.quantite} article${article.quantite > 1 ? 's' : ''}` : null,
+  ].filter(Boolean);
 
   panneau.innerHTML = `
     <div class="rup-panel-head">
-      <b>${esc(d.commande?.nom ?? 'Dossier')}</b>
+      <button class="rup-retour" type="button" id="rup-retour">${ico('prec')}Ruptures</button>
       <span class="rup-etat rup-${esc(d.etat)}">${esc(RUP_LIBELLES[d.etat] ?? d.etat)}</span>
-      <button class="ico-btn" type="button" id="rup-close" aria-label="Fermer le panneau"
-        style="margin-left:auto">${ico('close')}</button>
+      <button class="ico-btn rup-fermer" type="button" id="rup-close" aria-label="Fermer le panneau">${ico('close')}</button>
     </div>
 
-    <!-- La synthèse d'abord : elle dit le problème, l'impact et le geste qui
-         manque, avant que l'oeil ait à reconstituer tout ça. -->
-    <div class="rup-synthese">${d.synthese.map((phrase) => `<p>${esc(phrase)}</p>`).join('')}</div>
+    <!-- Le produit d'abord : c'est de lui qu'on parle, et c'est lui qu'on
+         reconnaît d'un coup d'œil. -->
+    <div class="rup-tete">
+      ${
+        article?.image
+          ? `<img src="${esc(article.image)}" alt="" loading="lazy" />`
+          : '<span class="rup-blank" aria-hidden="true"></span>'
+      }
+      <span class="rup-tete-txt">
+        <b>${esc(article?.titre ?? (d.origine === 'atelier' ? 'Article non précisé' : 'Article non lu'))}</b>
+        ${sousTitre.length ? `<span>${esc(sousTitre.join(' · '))}</span>` : ''}
+        <span>${esc(
+          [`Commande ${d.commande?.nom ?? '—'}`, d.client?.nom ?? d.client?.email].filter(Boolean).join(' · '),
+        )}</span>
+      </span>
+    </div>
+
+    ${
+      note
+        ? `<div class="rup-sec">
+             <h3>L’atelier a écrit</h3>
+             <div class="rup-carte">
+               <p class="rup-dit">« ${esc(note)} »</p>
+               <small>${esc(`${d.fournisseur?.name ?? 'L’atelier'} · ${quandConsigne(d.creeLe).replace(/^à /, 'aujourd’hui à ')}`)}</small>
+             </div>
+           </div>`
+        : ''
+    }
+
+    <div class="rup-sec">
+      <h3>Réponse à l’atelier</h3>
+      ${reponseAtelierMarkup(d)}
+      <div id="rup-subs"></div>
+    </div>
 
     <div class="rup-sec">
       <h3>Client</h3>
-      <div class="rup-who">
-        <span class="qav" aria-hidden="true">${esc(initials(d.client?.nom ?? d.client?.email ?? '?'))}</span>
-        <span style="min-width:0">
-          <b>${esc(d.client?.nom ?? 'Client inconnu')}</b>
-          <small>${esc(d.client?.email ?? '')}</small>
+      <div class="rup-carte rup-client">
+        <span class="rup-client-txt">
+          <b>${esc(d.client?.nom ?? d.client?.email ?? 'Client inconnu')}</b>
+          ${d.client?.nom && d.client?.email ? `<small>${esc(d.client.email)}</small>` : ''}
+          ${d.client?.telephone ? `<small>${esc(d.client.telephone)}</small>` : ''}
+          <span>${esc(texteCliente(d))}</span>
         </span>
+        ${
+          // Sans adresse connue, écrire mènerait à un refus au clic.
+          d.origine === 'atelier' && !d.client?.email
+            ? ''
+            : '<button class="btn btn-small" type="button" data-rup-act="client">Écrire au client</button>'
+        }
       </div>
-      ${
-        d.client?.telephone
-          ? `<div class="rup-line"><span>Téléphone</span><span>${esc(d.client.telephone)}</span></div>`
-          : ''
-      }
+      <div id="rup-alts"></div>
     </div>
 
     <div class="rup-sec">
       <h3>Commande</h3>
       <div class="rup-line"><span>Numéro</span><span>${esc(d.commande?.nom ?? '—')}</span></div>
       <div class="rup-line"><span>Montant</span><span>${esc(argent(d.commande?.total))}</span></div>
-      ${
-        d.commande?.shopifyId
-          ? shopifyOrderLink({ id: d.commande.shopifyId }, 'Voir la commande')
-          : ''
-      }
-    </div>
-
-    <div class="rup-sec">
-      <h3>Produit en rupture</h3>
-      ${
-        d.article
-          ? `<div class="rup-prod">
-              ${
-                d.article.image
-                  ? `<img src="${esc(d.article.image)}" alt="" loading="lazy" />`
-                  : '<span class="rup-blank"></span>'
-              }
-              <span style="min-width:0">
-                <b>${esc(d.article.titre)}</b>
-                <small>${esc(d.article.sku ?? 'SKU inconnu')}</small>
-              </span>
-            </div>
-            ${
-              d.article.variante
-                ? `<div class="rup-line"><span>Variante</span><span>${esc(d.article.variante)}</span></div>`
-                : ''
-            }
-            <div class="rup-line"><span>${
-              d.origine === 'atelier' ? 'Quantité manquante' : 'Quantité commandée'
-            }</span><span>${d.article.quantite}</span></div>`
-          : d.origine === 'atelier'
-            ? '<p class="empty">L’atelier n’a pas précisé l’article : lisez son message ci-dessous.</p>'
-            : '<p class="empty">Article non lu : le détail vient de Shopify, qui n’a pas répondu.</p>'
-      }
       <div class="rup-line"><span>Commandes impactées</span><span>${d.commandesImpactees}</span></div>
       ${
         d.commandesImpactees > 1 && d.article?.sku
@@ -19876,68 +20049,10 @@ function renderRupturePanneau() {
             } commandes concernées</button>`
           : ''
       }
-    </div>
-
-    ${
-      /* Le message de l'atelier, tel qu'il l'a écrit. Le détail relu plus haut
-         en est tiré, mais la note libre — « il ne reste rien en 38 » — ne se
-         résume pas en champs, et c'est souvent elle qui dit quoi répondre. */
-      d.origine === 'atelier' && d.signalement
-        ? `<div class="rup-sec">
-             <h3>Message de l’atelier</h3>
-             <p class="rup-message">${esc(d.signalement)}</p>
-           </div>`
-        : ''
-    }
-
-    <div class="rup-sec">
-      <h3>Fournisseur</h3>
-      ${
-        d.origine === 'atelier'
-          ? `<div class="rup-line"><span>A signalé</span><span>${esc(
-              d.fournisseur?.name ?? 'Atelier inconnu',
-            )}</span></div>
-             <div class="rup-line"><span>Le</span><span>${esc(dateCourte(d.creeLe))}</span></div>`
-          : d.fournisseur
-          ? `<div class="rup-line"><span>Atelier</span><span>${esc(d.fournisseur.name)}</span></div>
-             ${
-               d.notifieLe
-                 ? `<div class="rup-line"><span>Sollicité le</span><span>${esc(
-                     dateCourte(d.notifieLe),
-                   )}</span></div>`
-                 : '<div class="rup-line"><span>Sollicité</span><span>pas encore</span></div>'
-             }
-             ${
-               d.reponseFournisseurLe
-                 ? `<div class="rup-line"><span>A répondu le</span><span>${esc(
-                     dateCourte(d.reponseFournisseurLe),
-                   )}</span></div>`
-                 : ''
-             }`
-          : '<p class="empty">Aucun fournisseur rattaché à ce dossier.</p>'
-      }
-    </div>
-
-    <!-- Les alternatives ne sont pas cherchées au rendu de la liste : ce
-         serait un appel au catalogue par ligne. Elles se demandent pour le
-         dossier ouvert, et pour lui seul. -->
-    <!-- Ce que l'atelier a déjà reçu, et ce qu'il en a dit. C'est la
-         réponse à « où en est-on ? », qui demandait jusqu'ici de rouvrir un
-         fil de discussion et de le relire. -->
-    <div class="rup-sec">
-      <h3>Remplacement proposé à l’atelier</h3>
-      <div id="rup-subs"></div>
-      <button class="btn btn-small btn-primary" type="button" id="rup-proposer"
-        style="margin-top:8px">Proposer un remplacement</button>
+      ${d.commande?.shopifyId ? shopifyOrderLink({ id: d.commande.shopifyId }, 'Voir la commande') : ''}
     </div>
 
     <div class="rup-sec">
-      <h3>Alternative pour le client</h3>
-      <div id="rup-alts"></div>
-    </div>
-
-    <div class="rup-sec">
-      <h3>Actions</h3>
       <div class="rup-actions" id="rup-actions"></div>
     </div>
 
@@ -19950,6 +20065,7 @@ function renderRupturePanneau() {
     r.courant = null;
     renderRuptures();
   });
+  $('rup-retour').addEventListener('click', () => fermerPileRupture());
 
   $('rup-meme-sku')?.addEventListener('click', () => {
     // Traiter la cause plutôt que huit fois le symptôme : la recherche par SKU
@@ -19958,24 +20074,27 @@ function renderRupturePanneau() {
     r.vue = 'tous';
     r.page = 1;
     $('rup-q').value = r.q;
+    fermerPileRupture();
     renderRuptures();
   });
+
+  panneau.querySelectorAll('[data-rup-repondre]').forEach((bouton) =>
+    bouton.addEventListener('click', () => ouvrirReponseAtelier(d)),
+  );
+  panneau.querySelector('[data-rup-act="client"]')?.addEventListener('click', () => ecrireAuClientDepuisRupture(d));
 
   renderRuptureActions(d);
   renderRuptureAlternatives(d);
   void chargerSubstitutions(d);
-
-  $('rup-proposer')?.addEventListener('click', () => void ouvrirFenetreSubstitution(d));
 }
 
-/* ---- le remplacement proposé à l'atelier ---- */
+/* ---- les remplacements proposés avant les consignes ---- */
 
 /*
- * Ce qui a déjà été proposé, et la réponse de l'atelier.
+ * Les modèles proposés à l'atelier avec l'ancienne fenêtre, et sa réponse.
  *
- * Trois états par ligne, et aucun à lire entre les lignes : proposé, « il
- * peut l'envoyer », « impossible ». C'est tout ce que le fil de discussion
- * disait, en trois jours et douze phrases.
+ * On n'en propose plus ainsi — « Remplacer » est une des quatre réponses —
+ * mais ceux déjà envoyés restent lisibles, avec ce que l'atelier en a dit.
  */
 async function chargerSubstitutions(d) {
   const boite = $('rup-subs');
@@ -19984,7 +20103,8 @@ async function chargerSubstitutions(d) {
   try {
     const { propositions } = await api(`/api/ruptures/${d.ticketId}/substitutions`);
     boite.innerHTML = propositions.length
-      ? propositions
+      ? `<span class="rup-subs-t">Remplacements proposés</span>` +
+        propositions
           .map((proposition) => {
             const details = [proposition.variantTitle, proposition.sku].filter(Boolean).join(' · ');
             const etat =
@@ -20001,28 +20121,305 @@ async function chargerSubstitutions(d) {
             }`;
           })
           .join('')
-      : '<p class="empty">Rien n’a encore été proposé à l’atelier.</p>';
+      : '';
   } catch {
-    boite.innerHTML = '<p class="empty">Propositions illisibles pour le moment.</p>';
+    boite.innerHTML = '';
   }
 }
 
+/* ---- répondre à l'atelier ---- */
+
 /*
- * La fenêtre de remplacement.
- *
- * Elle ne parle qu'à l'atelier : rien n'en sort vers le client. C'est la
- * distinction que l'ancien écran ne faisait pas — le seul bouton « Proposer »
- * ouvrait un brouillon client, et il n'existait aucun chemin pour demander à
- * l'atelier s'il avait la 44.
+ * Les quatre réponses, côté marchand : ce qu'on demande, à l'infinitif.
+ * L'atelier lit la même consigne à l'impératif et dans sa langue ; c'est le
+ * serveur qui l'écrit (`consigneTexte.ts`).
  */
-const fenetreSubst = { dossier: null, choisis: [] };
+const CONSIGNE_NOMS = {
+  ATTENDRE: 'Attendre le réassort, puis expédier',
+  REMPLACER: 'Remplacer par un autre modèle',
+  ANNULER: 'Ne pas expédier cet article',
+  MESSAGE: 'Message à l’atelier',
+};
+
+/*
+ * « Ce que verra l'atelier » : la consigne sur une ligne, dans sa langue.
+ * Copie des lignes courtes de `consigneTexte.ts`, que les tests comparent :
+ * l'aperçu doit dire exactement ce qui arrivera.
+ */
+const CONSIGNE_APERCU = {
+  fr: {
+    locale: 'fr-FR',
+    ATTENDRE: (date) => `Attendre le réassort · au plus tard le ${date}`,
+    REMPLACER: (ref) => `Expédier ${ref} à la place`,
+    ANNULER: () => 'Ne pas expédier cet article',
+    MESSAGE: () => 'Message du marchand',
+    ou: ' ou ',
+  },
+  en: {
+    locale: 'en-GB',
+    ATTENDRE: (date) => `Wait for restock · by ${date}`,
+    REMPLACER: (ref) => `Ship ${ref} instead`,
+    ANNULER: () => 'Do not ship this item',
+    MESSAGE: () => 'Message from the merchant',
+    ou: ' or ',
+  },
+  zh: {
+    locale: 'zh-CN',
+    ATTENDRE: (date) => `等补货 · 最迟 ${date}`,
+    REMPLACER: (ref) => `改发 ${ref}`,
+    ANNULER: () => '此商品不要发货',
+    MESSAGE: () => '商家留言',
+    ou: ' 或 ',
+  },
+};
+const LANGUE_ATELIER_NOM = { en: 'anglais', zh: 'chinois' };
+
+/** Une date « 2026-10-26 » se lit le même jour partout : posée à midi UTC. */
+function dateConsigneFr(valeur, longue = false, locale = 'fr-FR') {
+  const jour = String(valeur).slice(0, 10);
+  return new Date(`${jour}T12:00:00Z`).toLocaleDateString(locale, {
+    day: 'numeric',
+    month: longue ? 'long' : 'short',
+    timeZone: 'UTC',
+  });
+}
+
+/** « 2026-10-26 » décalé de n jours. */
+function decalerJour(jour, n) {
+  const date = new Date(`${jour}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + n);
+  return date.toISOString().slice(0, 10);
+}
+
+const aujourdhuiIso = () => {
+  const maintenant = new Date();
+  return `${maintenant.getFullYear()}-${String(maintenant.getMonth() + 1).padStart(2, '0')}-${String(
+    maintenant.getDate(),
+  ).padStart(2, '0')}`;
+};
+
+/*
+ * La date proposée : celle que l'atelier a annoncée.
+ *
+ * « Réassort prévu dans 10 jours » donne dix jours après son message : c'est
+ * le délai qu'il s'est donné, et le seul qu'on puisse lui demander de tenir.
+ * Sans délai lisible, une semaine.
+ */
+function delaiAnnonce(d) {
+  const note = noteDuSignalement(d.signalement) ?? '';
+  const jours = /(\d{1,3})\s*(?:jours?|j\b)/i.exec(note);
+  const semaines = /(\d{1,2})\s*semaines?/i.exec(note);
+  if (jours) return { jours: Number(jours[1]), annonce: true };
+  if (semaines) return { jours: Number(semaines[1]) * 7, annonce: true };
+  return { jours: 7, annonce: false };
+}
+
+const fenRa = {
+  dossier: null,
+  choix: 'ATTENDRE',
+  date: '',
+  aideDate: '',
+  choisis: [],
+  options: null,
+  optionsErreur: null,
+  supplierId: null,
+  depuisTicket: false,
+  envoi: false,
+};
+
+/**
+ * Ouvre la fenêtre « Répondre à l'atelier » sur un dossier.
+ *
+ * Elle reprend la consigne en cours quand il y en a une : « Modifier » doit
+ * repartir de ce qu'on a dit, pas d'une page blanche.
+ */
+function ouvrirReponseAtelier(d, options = {}) {
+  const courante = consigneCouranteDe(d);
+  const delai = delaiAnnonce(d);
+  const depart = d.creeLe ? new Date(d.creeLe) : new Date();
+  const proposee = decalerJour(
+    `${depart.getFullYear()}-${String(depart.getMonth() + 1).padStart(2, '0')}-${String(depart.getDate()).padStart(2, '0')}`,
+    delai.jours,
+  );
+
+  Object.assign(fenRa, {
+    dossier: d,
+    choix: options.choix ?? courante?.choix ?? 'ATTENDRE',
+    date:
+      courante?.choix === 'ATTENDRE' && courante.expedierAvant
+        ? String(courante.expedierAvant).slice(0, 10)
+        : proposee < aujourdhuiIso()
+          ? decalerJour(aujourdhuiIso(), 1)
+          : proposee,
+    aideDate: delai.annonce
+      ? `${delai.jours} jours après son signalement, comme il l’a annoncé.`
+      : 'Une semaine, faute de délai annoncé. La commande attend chez lui.',
+    choisis:
+      courante?.choix === 'REMPLACER'
+        ? (courante.modeles ?? []).map((modele, rang) => ({ ...modele, cle: `courant-${rang}` }))
+        : [],
+    options: null,
+    optionsErreur: null,
+    supplierId: options.supplierId ?? null,
+    depuisTicket: Boolean(options.depuisTicket),
+    envoi: false,
+  });
+
+  const atelier = d.fournisseur?.name ?? options.atelier ?? 'l’atelier';
+  const langue = d.fournisseur?.langue ?? 'fr';
+  $('ra-title').textContent = `Répondre à ${atelier}`;
+  $('ra-sub').textContent =
+    langue in LANGUE_ATELIER_NOM
+      ? `La réponse arrive dans son ticket, traduite en ${LANGUE_ATELIER_NOM[langue]}. Rien ne part au client.`
+      : 'La réponse arrive dans son ticket. Rien ne part au client.';
+
+  const article = d.article;
+  const note = noteDuSignalement(d.signalement);
+  $('ra-contexte').innerHTML = `
+    ${article?.image ? `<img src="${esc(article.image)}" alt="" loading="lazy" />` : '<span class="rup-blank" aria-hidden="true"></span>'}
+    <span class="ra-contexte-txt">
+      <b>${esc([article?.titre ?? 'Article non précisé', article?.variante].filter(Boolean).join(' · '))}</b>
+      <small>${esc([article?.sku, d.commande?.nom ? `commande ${d.commande.nom}` : null, d.client?.nom].filter(Boolean).join(' · '))}</small>
+    </span>
+    ${note ? `<span class="ra-contexte-dit">« ${esc(note)} »</span>` : ''}`;
+
+  $('ra-mot').value = '';
+  $('ra-l-model').value = '';
+  $('ra-l-taille').value = '';
+  $('ra-l-ref').value = '';
+  $('ra-libre').open = false;
+  majReponseAtelier();
+
+  $('ra-modal').hidden = false;
+  $('ra-modal').classList.add('open');
+  // Le choix en cours prend le focus : au clavier, les flèches changent de
+  // réponse. Pas au doigt : un anneau de focus sur une feuille d'iPhone ne
+  // signale rien.
+  if (window.matchMedia('(hover: hover)').matches) {
+    requestAnimationFrame(() => $('ra-choix').querySelector('[aria-checked="true"]')?.focus());
+  }
+
+  void chargerOptionsRemplacement(d);
+}
+
+/* Les modèles en stock, cherchés une fois par ouverture : le même croisement
+   commande → catalogue que l'écran SAV. */
+async function chargerOptionsRemplacement(d) {
+  try {
+    const data = await api(`/api/tickets/${d.ticketId}/substitutions`);
+    if (fenRa.dossier !== d) return;
+    fenRa.options = data.options ?? [];
+    fenRa.optionsErreur = fenRa.options.length ? null : (data.reason ?? 'Aucune référence équivalente en stock.');
+  } catch (error) {
+    if (fenRa.dossier !== d) return;
+    fenRa.options = [];
+    fenRa.optionsErreur = error.message;
+  }
+  majReponseAtelier();
+}
+
+/** Ce qui manque pour envoyer, ou rien. */
+function manqueReponseAtelier() {
+  if (fenRa.choix === 'ATTENDRE' && (!fenRa.date || fenRa.date < aujourdhuiIso())) return 'Choisissez une date à venir.';
+  if (fenRa.choix === 'REMPLACER' && fenRa.choisis.length === 0) return 'Choisissez au moins un modèle.';
+  if (fenRa.choix === 'MESSAGE' && !$('ra-mot').value.trim()) return 'Écrivez votre message.';
+  return null;
+}
+
+function apercuReponseAtelier() {
+  const langue = fenRa.dossier?.fournisseur?.langue ?? 'fr';
+  const mots = CONSIGNE_APERCU[langue] ?? CONSIGNE_APERCU.fr;
+  if (fenRa.choix === 'ATTENDRE') return mots.ATTENDRE(dateConsigneFr(fenRa.date, false, mots.locale));
+  if (fenRa.choix === 'REMPLACER') {
+    const refs = fenRa.choisis.map((modele) => modele.sku || [modele.productTitle, modele.variantTitle].filter(Boolean).join(' · '));
+    return refs.length ? mots.REMPLACER(refs.join(mots.ou)) : mots.REMPLACER('…');
+  }
+  return mots[fenRa.choix]();
+}
+
+function majReponseAtelier() {
+  const d = fenRa.dossier;
+  if (!d) return;
+
+  $('ra-choix').querySelectorAll('[data-ra-choix]').forEach((tuile) => {
+    const on = tuile.dataset.raChoix === fenRa.choix;
+    tuile.setAttribute('aria-checked', String(on));
+    tuile.tabIndex = on ? 0 : -1;
+  });
+  $('ra-attendre').hidden = fenRa.choix !== 'ATTENDRE';
+  $('ra-remplacer').hidden = fenRa.choix !== 'REMPLACER';
+  $('ra-annuler').hidden = fenRa.choix !== 'ANNULER';
+
+  $('ra-date').value = fenRa.date;
+  $('ra-date').min = aujourdhuiIso();
+  $('ra-date-aide').textContent = fenRa.aideDate;
+
+  // Les modèles en stock, cochés s'ils sont déjà choisis.
+  const options = fenRa.options;
+  $('ra-options').innerHTML =
+    options === null
+      ? '<p class="empty">Recherche des références en stock…</p>'
+      : options.length
+        ? options
+            .slice(0, 8)
+            .map((option) => {
+              const coche = fenRa.choisis.some((choisi) => choisi.cle === option.id);
+              return `<label class="ra-opt">
+                <input type="checkbox" data-ra-opt="${esc(option.id)}"${coche ? ' checked' : ''} />
+                ${option.image ? `<img src="${esc(option.image)}" alt="" loading="lazy" />` : '<span class="rup-blank" aria-hidden="true"></span>'}
+                <span class="ra-opt-txt">
+                  <b>${esc(option.productTitle)}</b>
+                  <small>${esc([option.variantTitle, option.sku].filter(Boolean).join(' · ') || '—')}</small>
+                </span>
+                <span class="ra-opt-stock">${option.inventoryQuantity ?? 0} en stock</span>
+              </label>`;
+            })
+            .join('')
+        : `<p class="empty">${esc(fenRa.optionsErreur ?? 'Aucune référence équivalente en stock.')}</p>`;
+
+  // Ceux qui ne viennent pas de la liste : saisis à la main, ou repris de la consigne.
+  const horsListe = fenRa.choisis.filter((choisi) => !(options ?? []).some((option) => option.id === choisi.cle));
+  $('ra-choisis').innerHTML = horsListe
+    .map(
+      (choisi) => `<div class="ra-opt ra-opt-libre">
+        <span class="rup-blank" aria-hidden="true"></span>
+        <span class="ra-opt-txt">
+          <b>${esc(choisi.productTitle)}</b>
+          <small>${esc([choisi.variantTitle, choisi.sku].filter(Boolean).join(' · ') || (choisi.libre ? 'hors catalogue' : '—'))}</small>
+        </span>
+        <button class="linkish" type="button" data-ra-retirer="${esc(choisi.cle)}">Retirer</button>
+      </div>`,
+    )
+    .join('');
+
+  const client = d.client?.nom ?? 'le client';
+  $('ra-annuler-texte').textContent = `L’atelier n’expédie pas cet article ; s’il y en a d’autres dans la commande, il les expédie. Pensez à rembourser ${client}, ou à annuler la commande dans Shopify.`;
+
+  const message = fenRa.choix === 'MESSAGE';
+  $('ra-mot-t').textContent = message ? 'Votre message' : 'Un mot pour l’atelier (facultatif)';
+  $('ra-mot').placeholder = message
+    ? 'Par exemple : pouvez-vous vérifier le stock dans la taille au-dessus ?'
+    : 'Par exemple : le client préfère attendre. Merci !';
+  $('ra-apercu').textContent = apercuReponseAtelier();
+
+  const manque = manqueReponseAtelier();
+  $('ra-pied').textContent = manque ?? 'Rien ne part au client.';
+  $('ra-pied').classList.toggle('ra-pied-manque', Boolean(manque));
+  $('ra-envoyer').disabled = Boolean(manque) || fenRa.envoi;
+}
+
+function fermerReponseAtelier() {
+  $('ra-modal').hidden = true;
+  $('ra-modal').classList.remove('open');
+  fenRa.dossier = null;
+}
 
 /**
  * « Rupture » choisi dans « Contacter le fournisseur ».
  *
- * La rupture se dit en modèles de remplacement, pas en phrase : on passe à la
- * fenêtre qui les propose, adressée à l'atelier choisi. L'envoi ouvre le
- * dossier côté serveur.
+ * La rupture se dit en consigne, pas en phrase : on ouvre la fenêtre des
+ * quatre réponses sur « Remplacer », adressée à l'atelier choisi. L'envoi
+ * ouvre le dossier côté serveur.
  */
 function ouvrirRuptureDepuisFenetre() {
   const ticketId = $('alert-modal').dataset.ticket;
@@ -20034,182 +20431,150 @@ function ouvrirRuptureDepuisFenetre() {
   }
 
   const item = state.detail?.order?.lineItems?.[0];
+  const atelier = $('alert-supplier').selectedOptions?.[0]?.textContent?.trim() || null;
   closeAlertModal();
-  void ouvrirFenetreSubstitution(
+  ouvrirReponseAtelier(
     {
       ticketId,
+      creeLe: new Date().toISOString(),
+      commande: { nom: state.detail?.ticket?.orderName ?? null },
+      client: { nom: state.detail?.ticket?.customerName ?? null },
       article: item
         ? { titre: item.title, variante: item.variantTitle, sku: item.sku, image: item.image ?? null }
         : null,
+      consignes: [],
     },
-    { supplierId, depuisTicket: true },
+    { supplierId, depuisTicket: true, choix: 'REMPLACER', atelier },
   );
 }
 
-async function ouvrirFenetreSubstitution(d, options = {}) {
-  fenetreSubst.dossier = d;
-  fenetreSubst.choisis = [];
-  fenetreSubst.supplierId = options.supplierId ?? null;
-  fenetreSubst.depuisTicket = Boolean(options.depuisTicket);
+$('ra-choix')?.addEventListener('click', (event) => {
+  const tuile = event.target.closest('[data-ra-choix]');
+  if (!tuile) return;
+  fenRa.choix = tuile.dataset.raChoix;
+  majReponseAtelier();
+});
 
-  const article = d.article;
-  $('subst-rupture').innerHTML = article
-    ? `<span class="subst-t">En rupture</span>
-       <div class="rup-prod">
-         ${article.image ? `<img src="${esc(article.image)}" alt="" loading="lazy" />` : '<span class="rup-blank"></span>'}
-         <span style="min-width:0">
-           <b>${esc(article.titre)}</b>
-           <small>${esc([article.variante, article.sku].filter(Boolean).join(' · ') || '—')}</small>
-         </span>
-       </div>`
-    : '<p class="empty">Article non précisé par l’atelier.</p>';
+/* Un groupe de boutons radio se parcourt aux flèches, comme ceux du système. */
+$('ra-choix')?.addEventListener('keydown', (event) => {
+  const sens = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key];
+  if (!sens) return;
+  event.preventDefault();
+  const tuiles = [...$('ra-choix').querySelectorAll('[data-ra-choix]')];
+  const rang = tuiles.findIndex((tuile) => tuile.dataset.raChoix === fenRa.choix);
+  const suivante = tuiles[(rang + sens + tuiles.length) % tuiles.length];
+  fenRa.choix = suivante.dataset.raChoix;
+  majReponseAtelier();
+  suivante.focus();
+});
 
-  $('subst-l-model').value = '';
-  $('subst-l-taille').value = '';
-  $('subst-l-ref').value = '';
-  majFenetreSubstitution();
-  // `.backdrop` est en `display:none` tant qu'il n'a pas `.open` : retirer
-  // `hidden` seul laissait la fenêtre invisible.
-  $('subst-modal').hidden = false;
-  $('subst-modal').classList.add('open');
+$('ra-date')?.addEventListener('change', (event) => {
+  fenRa.date = event.target.value;
+  majReponseAtelier();
+});
+$('ra-moins')?.addEventListener('click', () => {
+  const veille = decalerJour(fenRa.date || aujourdhuiIso(), -1);
+  if (veille >= aujourdhuiIso()) fenRa.date = veille;
+  majReponseAtelier();
+});
+$('ra-plus')?.addEventListener('click', () => {
+  fenRa.date = decalerJour(fenRa.date || aujourdhuiIso(), 1);
+  majReponseAtelier();
+});
 
-  const boite = $('subst-options');
-  boite.innerHTML = '<p class="empty">Recherche des références en stock…</p>';
-  try {
-    const data = await api(`/api/tickets/${d.ticketId}/substitutions`);
-    const options = data.options ?? [];
-    boite.innerHTML = options.length
-      ? options
-          .slice(0, 8)
-          .map(
-            (option) => `<label class="subst-opt">
-              <input type="checkbox" data-subst-opt="${esc(option.id)}" />
-              ${option.image ? `<img src="${esc(option.image)}" alt="" loading="lazy" />` : '<span class="rup-blank"></span>'}
-              <span style="min-width:0;flex:1">
-                <b>${esc(option.productTitle)}</b>
-                <small>${esc(option.variantTitle ?? '—')}</small>
-              </span>
-              <span class="subst-stock">${option.inventoryQuantity ?? 0} en stock</span>
-            </label>`,
-          )
-          .join('')
-      : `<p class="empty">${esc(data.reason ?? 'Aucune référence équivalente en stock.')}</p>`;
-
-    boite.querySelectorAll('[data-subst-opt]').forEach((case_) =>
-      case_.addEventListener('change', () => {
-        const option = options.find((candidat) => candidat.id === case_.dataset.substOpt);
-        if (!option) return;
-        if (case_.checked) {
-          fenetreSubst.choisis.push({
-            cle: option.id,
-            productTitle: option.productTitle,
-            variantTitle: option.variantTitle ?? null,
-            sku: option.sku ?? null,
-            image: option.image ?? null,
-            inventory: option.inventoryQuantity ?? null,
-            libre: false,
-          });
-        } else {
-          fenetreSubst.choisis = fenetreSubst.choisis.filter((choisi) => choisi.cle !== option.id);
-        }
-        majFenetreSubstitution();
-      }),
-    );
-  } catch (error) {
-    boite.innerHTML = `<p class="empty">${esc(error.message)}</p>`;
+$('ra-remplacer')?.addEventListener('change', (event) => {
+  const case_ = event.target.closest('[data-ra-opt]');
+  if (!case_) return;
+  const option = (fenRa.options ?? []).find((candidat) => candidat.id === case_.dataset.raOpt);
+  if (!option) return;
+  fenRa.choisis = fenRa.choisis.filter((choisi) => choisi.cle !== option.id);
+  if (case_.checked) {
+    // Quatre au plus : au-delà, l'atelier ne lit plus une consigne mais un catalogue.
+    if (fenRa.choisis.length >= 4) {
+      case_.checked = false;
+      return toast('Quatre modèles au plus.', true);
+    }
+    fenRa.choisis.push({
+      cle: option.id,
+      productTitle: option.productTitle,
+      variantTitle: option.variantTitle ?? null,
+      sku: option.sku ?? null,
+      image: option.image ?? null,
+      inventory: option.inventoryQuantity ?? null,
+      libre: false,
+    });
   }
-}
+  majReponseAtelier();
+});
 
-function majFenetreSubstitution() {
-  const liste = $('subst-choisis');
-  liste.innerHTML = fenetreSubst.choisis.length
-    ? `<span class="subst-t">À envoyer</span>` +
-      fenetreSubst.choisis
-        .map(
-          (choisi) => `<div class="rup-line">
-            <span>${esc(choisi.productTitle)}${
-              choisi.variantTitle ? ` <small>${esc(choisi.variantTitle)}</small>` : ''
-            }</span>
-            <button class="linkish" type="button" data-subst-del="${esc(choisi.cle)}">retirer</button>
-          </div>`,
-        )
-        .join('')
-    : '';
+$('ra-remplacer')?.addEventListener('click', (event) => {
+  const retirer = event.target.closest('[data-ra-retirer]');
+  if (!retirer) return;
+  fenRa.choisis = fenRa.choisis.filter((choisi) => choisi.cle !== retirer.dataset.raRetirer);
+  majReponseAtelier();
+});
 
-  liste.querySelectorAll('[data-subst-del]').forEach((bouton) =>
-    bouton.addEventListener('click', () => {
-      fenetreSubst.choisis = fenetreSubst.choisis.filter(
-        (choisi) => choisi.cle !== bouton.dataset.substDel,
-      );
-      // La case du catalogue se décoche avec : laisser la coche posée sur une
-      // ligne retirée ferait croire qu'elle part encore.
-      const case_ = $('subst-options').querySelector(`[data-subst-opt="${CSS.escape(bouton.dataset.substDel)}"]`);
-      if (case_) case_.checked = false;
-      majFenetreSubstitution();
-    }),
-  );
-
-  $('subst-manque').textContent = fenetreSubst.choisis.length
-    ? ''
-    : 'Choisissez au moins un modèle à proposer.';
-  $('subst-send').disabled = fenetreSubst.choisis.length === 0;
-}
-
-$('subst-l-add')?.addEventListener('click', () => {
-  const modele = $('subst-l-model').value.trim();
+$('ra-l-add')?.addEventListener('click', () => {
+  const modele = $('ra-l-model').value.trim();
   if (!modele) return toast('Indiquez au moins le modèle.', true);
-
-  fenetreSubst.choisis.push({
-    cle: `libre-${fenetreSubst.choisis.length}-${modele}`,
+  if (fenRa.choisis.length >= 4) return toast('Quatre modèles au plus.', true);
+  fenRa.choisis.push({
+    cle: `libre-${Date.now()}`,
     productTitle: modele,
-    variantTitle: $('subst-l-taille').value.trim() || null,
-    sku: $('subst-l-ref').value.trim() || null,
+    variantTitle: $('ra-l-taille').value.trim() || null,
+    sku: $('ra-l-ref').value.trim() || null,
     image: null,
     inventory: null,
     libre: true,
   });
-  $('subst-l-model').value = '';
-  $('subst-l-taille').value = '';
-  $('subst-l-ref').value = '';
-  majFenetreSubstitution();
+  $('ra-l-model').value = '';
+  $('ra-l-taille').value = '';
+  $('ra-l-ref').value = '';
+  majReponseAtelier();
 });
 
-function fermerFenetreSubstitution() {
-  $('subst-modal').hidden = true;
-  $('subst-modal').classList.remove('open');
-}
-
-$('subst-cancel')?.addEventListener('click', fermerFenetreSubstitution);
-$('subst-modal')?.addEventListener('click', (event) => {
-  if (event.target === event.currentTarget) fermerFenetreSubstitution();
+$('ra-mot')?.addEventListener('input', () => majReponseAtelier());
+$('ra-fermer')?.addEventListener('click', fermerReponseAtelier);
+$('ra-modal')?.addEventListener('click', (event) => {
+  if (event.target === event.currentTarget) fermerReponseAtelier();
+});
+$('ra-modal')?.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') fermerReponseAtelier();
 });
 
-$('subst-send')?.addEventListener('click', async () => {
-  const d = fenetreSubst.dossier;
-  if (!d || fenetreSubst.choisis.length === 0) return;
+$('ra-envoyer')?.addEventListener('click', async () => {
+  const d = fenRa.dossier;
+  if (!d || manqueReponseAtelier() || fenRa.envoi) return;
 
-  const bouton = $('subst-send');
-  bouton.disabled = true;
+  fenRa.envoi = true;
+  majReponseAtelier();
   try {
-    const resultat = await api(`/api/ruptures/${d.ticketId}/substitutions`, {
+    const resultat = await api(`/api/ruptures/${d.ticketId}/consigne`, {
       method: 'POST',
       body: JSON.stringify({
-        ...(fenetreSubst.supplierId ? { supplierId: fenetreSubst.supplierId } : {}),
-        propositions: fenetreSubst.choisis.map(({ cle, ...reste }) => reste),
+        ...(fenRa.supplierId ? { supplierId: fenRa.supplierId } : {}),
+        choix: fenRa.choix,
+        expedierAvant: fenRa.choix === 'ATTENDRE' ? fenRa.date : null,
+        modeles: fenRa.choix === 'REMPLACER' ? fenRa.choisis.map(({ cle, ...modele }) => modele) : null,
+        mot: $('ra-mot').value.trim() || null,
       }),
     });
-    fermerFenetreSubstitution();
-    // Visibles dans son atelier tout de suite ; annoncés dans le
-    // récapitulatif du matin plutôt que par un mail de plus.
-    toast(`${resultat.creees} modèle(s) proposé(s) à ${resultat.atelier} — visibles dans son espace fournisseur, annoncés dans son récapitulatif de 9 h.`);
-    if (fenetreSubst.depuisTicket) {
+    const depuisTicket = fenRa.depuisTicket;
+    fermerReponseAtelier();
+    toast(
+      resultat.parMail
+        ? `Envoyé à ${resultat.atelier} : dans son espace, et par mail tout de suite.`
+        : `Envoyé à ${resultat.atelier} : la réponse est dans son espace fournisseur.`,
+    );
+    if (depuisTicket) {
       prefetched.delete(d.ticketId);
       await selectTicket(d.ticketId);
     } else {
-      await Promise.all([chargerSubstitutions(d), loadRuptures()]);
+      await loadRuptures();
     }
   } catch (error) {
-    bouton.disabled = false;
+    fenRa.envoi = false;
+    majReponseAtelier();
     toast(error.message, true);
   }
 });
@@ -20226,107 +20591,90 @@ function dateCourte(iso) {
  * L'historique, tiré des dates que le dossier porte déjà.
  *
  * Pas d'appel au journal d'audit : il faudrait une requête par dossier ouvert,
- * et les trois dates qui comptent — ouverture, sollicitation, réponse — sont
- * déjà là. Le journal complet reste à un clic, dans le dossier.
+ * et les dates qui comptent — ouverture, sollicitation, réponses, consignes —
+ * sont déjà là. Le journal complet reste à un clic, dans le dossier.
  */
 function histoireRupture(d) {
+  const atelier = d.fournisseur?.name ?? 'l’atelier';
+  const consignes = (d.consignes ?? []).flatMap((consigne) => [
+    [consigne.envoyeeLe, `Réponse envoyée : ${(CONSIGNE_NOMS[consigne.choix] ?? '').toLowerCase()}`, 'accent'],
+    consigne.reponduLe
+      ? [
+          consigne.reponduLe,
+          {
+            COMPRIS: `Confirmé par ${atelier}`,
+            IMPOSSIBLE: `${atelier} ne pourra pas`,
+            REPONDU: `${atelier} a répondu`,
+          }[consigne.reponse] ?? 'Réponse de l’atelier',
+          consigne.reponse === 'IMPOSSIBLE' ? 'crit' : 'ok',
+        ]
+      : null,
+  ]);
   const lignes = [
-    d.resoluLe ? [d.resoluLe, 'Dossier clôturé'] : null,
-    d.reponseFournisseurLe ? [d.reponseFournisseurLe, 'Réponse du fournisseur'] : null,
-    d.notifieLe ? [d.notifieLe, 'Demande envoyée au fournisseur'] : null,
-    [d.creeLe, 'Rupture signalée'],
-  ].filter(Boolean);
+    d.resoluLe ? [d.resoluLe, 'Dossier clôturé', 'ok'] : null,
+    d.reponseFournisseurLe ? [d.reponseFournisseurLe, 'Réponse du fournisseur', 'ok'] : null,
+    d.notifieLe ? [d.notifieLe, 'Demande envoyée au fournisseur', 'accent'] : null,
+    ...consignes,
+    [d.creeLe, d.origine === 'atelier' ? `Rupture signalée par ${atelier}` : 'Rupture signalée', 'gris'],
+  ]
+    .filter(Boolean)
+    .sort((a, b) => new Date(b[0]).getTime() - new Date(a[0]).getTime());
 
   return lignes
-    .slice(0, 3)
+    .slice(0, 6)
     .map(
-      ([date, texte]) =>
-        `<li><time datetime="${esc(date)}">${esc(dateCourte(date))}</time> ${esc(texte)}</li>`,
+      ([date, texte, ton]) =>
+        `<li class="rup-hist-${ton}"><span>${esc(texte)}</span><time datetime="${esc(date)}">${esc(
+          `${dateCourte(date)} · ${new Date(date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`,
+        )}</time></li>`,
     )
     .join('');
 }
 
 /*
- * Les actions, dans un ordre qui dépend du dossier.
+ * Les gestes qui restent, sous le dossier.
  *
- * Un seul bouton principal, jamais sept du même poids : la page doit répondre
- * à « que dois-je faire maintenant », et sept boutons équivalents renvoient la
- * question à l'agent. Le principal est celui qui débloque l'état courant.
+ * Répondre à l'atelier et écrire au client ont leur bouton dans leur section,
+ * là où l'on vient de lire ce qui les appelle. Ici, ce qui sort du dossier :
+ * l'ouvrir dans le SAV, chercher une alternative pour le client, le clore.
  *
  * Ne figurent ici que des gestes réellement branchés. « Annuler la commande »
  * manque parce qu'aucun handler d'annulation n'existe côté serveur : un bouton
- * qui ne fait rien coûte plus cher que son absence — on l'essaie, on croit que
- * c'est parti, et on passe au dossier suivant.
+ * qui ne fait rien coûte plus cher que son absence.
  */
 function renderRuptureActions(d) {
   const boite = $('rup-actions');
-  const gestes = [];
-
-  const ecrireClient = {
-    cle: 'client',
-    label: 'Écrire au client',
-    faire: () => ecrireAuClientDepuisRupture(d),
-  };
-  const chercherAlt = {
-    cle: 'alt',
-    label: 'Chercher une alternative',
-    faire: () => void chargerAlternatives(d),
-  };
-  const resoudre = {
-    cle: 'resoudre',
-    label: 'Marquer résolu',
-    faire: () => void resoudreRupture(d),
-  };
-  // Une rupture se dit à l'atelier en modèles de remplacement : la
-  // proposition ouvre le dossier et le prévient, sans message libre.
-  const proposer = {
-    cle: 'proposer',
-    label: 'Proposer un remplacement',
-    faire: () => void ouvrirFenetreSubstitution(d),
-  };
-  const ouvrirDossier = {
-    cle: 'dossier',
-    label: 'Ouvrir le dossier',
-    faire: () => {
-      setView('tickets');
-      void selectTicket(d.ticketId);
+  const gestes = [
+    d.etat !== 'RESOLU' && {
+      cle: 'alt',
+      label: 'Chercher une alternative',
+      faire: () => void chargerAlternatives(d),
     },
-  };
-
-  // L'ordre dit la recommandation. « Sauver la vente » d'abord : une rupture
-  // ne mène au remboursement qu'en dernier recours, et l'écran doit rendre le
-  // bon geste plus facile que le mauvais.
-  if (d.etat === 'A_TRAITER') gestes.push(proposer, chercherAlt, ecrireClient, ouvrirDossier);
-  else if (d.etat === 'FOURNISSEUR_EN_ATTENTE')
-    gestes.push(chercherAlt, ecrireClient, ouvrirDossier);
-  else if (d.etat === 'CLIENT_A_PREVENIR') gestes.push(ecrireClient, chercherAlt, ouvrirDossier);
-  else if (d.etat === 'RESOLU') gestes.push(ouvrirDossier);
-  else gestes.push(resoudre, ecrireClient, ouvrirDossier);
-
-  if (d.etat !== 'RESOLU' && !gestes.some((geste) => geste.cle === 'resoudre')) {
-    gestes.push(resoudre);
-  }
-
-  // Un signalement sans adresse client connue : proposer d'écrire mènerait à
-  // un refus au clic. Le bouton disparaît, l'alternative passe devant.
-  if (d.origine === 'atelier' && !d.client?.email) {
-    const sans = gestes.filter((geste) => geste.cle !== 'client');
-    gestes.length = 0;
-    gestes.push(...sans);
-  }
+    {
+      cle: 'dossier',
+      label: 'Ouvrir le dossier',
+      faire: () => {
+        fermerPileRupture();
+        setView('tickets');
+        void selectTicket(d.ticketId);
+      },
+    },
+    d.etat !== 'RESOLU' && {
+      cle: 'resoudre',
+      label: 'Marquer résolu',
+      faire: () => void resoudreRupture(d),
+    },
+  ].filter(Boolean);
 
   boite.innerHTML = gestes
     .map(
-      (geste, rang) =>
-        `<button class="btn btn-small${rang === 0 ? ' btn-primary' : ''}" type="button"
-          data-rup-act="${esc(geste.cle)}">${esc(geste.label)}</button>`,
+      (geste) =>
+        `<button class="btn btn-small" type="button" data-rup-act="${esc(geste.cle)}">${esc(geste.label)}</button>`,
     )
     .join('');
 
   boite.querySelectorAll('[data-rup-act]').forEach((bouton) => {
     const geste = gestes.find((candidat) => candidat.cle === bouton.dataset.rupAct);
-    // Le bouton est passé au geste : celui qui envoie s'en sert pour se fermer
-    // pendant l'envoi. Les autres l'ignorent.
     bouton.addEventListener('click', () => geste.faire(bouton));
   });
 }
@@ -20426,10 +20774,9 @@ function renderRuptureAlternatives(d) {
   if (!boite) return;
 
   const options = state.ruptures.alternatives;
+  // Rien tant qu'on n'a pas cherché : « Chercher une alternative » est sous le dossier.
   if (options === null) {
-    boite.innerHTML =
-      '<p class="empty">Les références de remplacement se cherchent à la demande, ' +
-      'depuis le bouton ci-dessous.</p>';
+    boite.innerHTML = '';
     return;
   }
 

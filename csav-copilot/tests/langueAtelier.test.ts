@@ -101,7 +101,8 @@ test('chaque envoi lit la langue sur la fiche du fournisseur', () => {
   assert.match(lire('src/routes/suppliers.ts'), /\.\.\.texteUrgent\(alert, langueAtelier\(atelier\.langue\)\)/);
   assert.match(lire('src/routes/suppliers.ts'), /langue: z\.enum\(LANGUES_ATELIER\)\.optional\(\)/);
   assert.match(lire('src/cron.ts'), /mailRappelUrgent\(alert, langueAtelier\(alert\.supplier\.langue\)\)/);
-  assert.match(lire('src/services/suppliers/recap.ts'), /langue: langueAtelier\(atelier\.langue\),/);
+  // Lue une fois : le récapitulatif et les consignes qu'il annonce parlent la même langue.
+  assert.match(lire('src/services/suppliers/recap.ts'), /const langue = langueAtelier\(atelier\.langue\);[\s\S]*recapDuJour\(\{\n\s+langue,/);
   assert.match(lire('src/services/envoi/relances.ts'), /langue: langueAtelier\(atelier\.langue\),/);
   assert.match(lire('src/services/envoi/quotidien.ts'), /langue: langueAtelier\(supplier\.langue\),/);
   assert.match(lire('public/dashboard.html'), /<select id="sup-f-langue">/);

@@ -55,3 +55,44 @@ export async function translateToFrench(
 
   return { translations: result.data.translations, model: result.model };
 }
+
+/**
+ * Le mot du marchand, traduit pour l'atelier : en anglais et en chinois.
+ *
+ * Les deux d'un coup, parce que la langue de l'atelier se choisit dans son
+ * espace, au moment où il lit — pas quand le marchand écrit. Un appel pour
+ * deux traductions coûte moins que deux appels, et l'atelier qui passe du
+ * chinois à l'anglais n'attend rien.
+ *
+ * L'original reste en base à côté : c'est lui qui fait foi, et l'atelier peut
+ * toujours le demander.
+ */
+export async function traduireDuFrancais(texte: string): Promise<{ en: string; zh: string; model: string }> {
+  const provider = await getAiProvider();
+
+  const result = await provider.completeJson<{ en: string; zh: string }>({
+    system: [
+      'Tu traduis un court message qu’un commerçant français adresse à son atelier de fabrication.',
+      'Donne la traduction anglaise et la traduction en chinois simplifié.',
+      'Traduis fidèlement, sans résumer, sans commenter, sans ajouter de formule de politesse.',
+      'Conserve les numéros de commande, les tailles, les références et les noms propres tels quels.',
+    ].join('\n'),
+    user: texte,
+    schema: {
+      type: 'object',
+      properties: { en: { type: 'string' }, zh: { type: 'string' } },
+      required: ['en', 'zh'],
+      additionalProperties: false,
+    },
+    validate: (value) => {
+      const parsed = value as { en?: unknown; zh?: unknown };
+      if (typeof parsed.en !== 'string' || typeof parsed.zh !== 'string') {
+        throw new Error('en et zh doivent être des chaînes');
+      }
+      return { en: parsed.en, zh: parsed.zh };
+    },
+    maxTokens: 1500,
+  });
+
+  return { ...result.data, model: result.model };
+}
