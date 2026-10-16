@@ -58,6 +58,7 @@ export const MOTS = {
     depuis: (jours: number) => ` (depuis ${jours} j)`,
     rupture: (n: number) =>
       `Rupture : ${n > 1 ? `${n} modèles de remplacement` : 'un modèle de remplacement'} à valider`,
+    reponseMarchand: 'Réponse du marchand',
     lienHabituel: 'Ouvrez votre atelier avec le lien habituel.',
     retardSujet: (n: number, delai: number) =>
       `Rappel — ${n} ${pluriel(n, 'commande')} à expédier depuis plus de ${delai} jours`,
@@ -105,6 +106,7 @@ export const MOTS = {
     depuis: (jours: number) => ` (for ${jours} d)`,
     rupture: (n: number) =>
       `Out of stock: ${n > 1 ? `${n} replacement models` : 'one replacement model'} to confirm`,
+    reponseMarchand: 'Reply from the merchant',
     lienHabituel: 'Open your workspace with your usual link.',
     retardSujet: (n: number, delai: number) =>
       `Reminder — ${n} ${pluriel(n, 'order')} not shipped after ${delai} days`,
@@ -147,6 +149,7 @@ export const MOTS = {
     sansCommande: '无订单',
     depuis: (jours: number) => `（已 ${jours} 天）`,
     rupture: (n: number) => `缺货：${n > 1 ? `${n} 个替代款式` : '1 个替代款式'}待确认`,
+    reponseMarchand: '商家回复',
     lienHabituel: '请使用常用链接打开您的工作台。',
     retardSujet: (n: number, delai: number) => `提醒 — ${n} 个订单已超过 ${delai} 天未发货`,
     retardIntro: (delai: number) => `以下订单已于 ${delai} 天前发给您，至今尚无包裹：`,

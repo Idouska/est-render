@@ -629,6 +629,7 @@ function dessinerCommandes() {
           <small>${esc(item?.title ?? '')}${
             item?.variantTitle ? ` · ${esc(item.variantTitle)}` : ''
           }${phoneShort ? ` <b class="rowo-warn">${esc(t('orders.phoneMissing'))}</b>` : ''}</small>
+          ${consigneDeCommandeMarkup(order)}
         </span>
         <span class="rowo-state${done ? ' ok' : ''}">${
           done
@@ -677,6 +678,23 @@ function cablerFocus() {
     });
 }
 
+/*
+ * La consigne du marchand, sur la commande : « Attendre le réassort · au plus
+ * tard le 26 oct. » se lit au moment d'emballer, pas seulement dans un ticket
+ * qu'on a lu la veille.
+ */
+function consigneDeCommandeMarkup(order, grande = false) {
+  const consigne = order.consigne;
+  const texte = consigne?.textes?.[state.lang] ?? consigne?.textes?.fr;
+  if (!texte) return '';
+  return grande
+    ? `<div class="ord-consigne ord-consigne-${esc(consigne.choix)}">
+         <span class="ord-label">${esc(t('csg.onOrder'))}</span>
+         <b>${esc(texte)}</b>
+       </div>`
+    : `<span class="rowo-consigne rowo-consigne-${esc(consigne.choix)}">${esc(texte)}</span>`;
+}
+
 function focusMarkup(shown) {
   const order = state.orders.find((candidate) => candidate.id === state.focus);
   // La commande peut avoir quitté la file visible (filtrée « À préparer » et
@@ -713,6 +731,8 @@ function focusMarkup(shown) {
         )}</span>
         <span class="ord-when">${esc(shortMoment(order.createdAt))}</span>
       </div>
+
+      ${consigneDeCommandeMarkup(order, true)}
 
       <div class="ord-who">
         <span class="ord-label">${esc(t('focus.customer'))}</span>
@@ -2636,6 +2656,7 @@ function carteRupture(dossier, phase, date, estDemande) {
            </div>`
         : ''
     }
+    ${consignesMarkup(dossier)}
   </div>`;
 }
 
@@ -2713,6 +2734,257 @@ async function repondreSubstitution(id, accepte, bouton) {
     });
     toast(messageServeur(error, 'rup.err'), true);
   }
+}
+
+/* ------------------------------------------------------------ consignes -- */
+
+/*
+ * La réponse du marchand, dans le ticket même.
+ *
+ * L'atelier signalait « réassort dans dix jours » et n'entendait plus rien :
+ * le ticket restait « en attente du marchand », la commande dormait sur
+ * l'étagère. La réponse arrive maintenant sous son signalement — une
+ * consigne, pas une conversation : attendre, remplacer, ne pas expédier, ou
+ * un message. Elle est écrite dans sa langue par le serveur ; seul le mot du
+ * marchand est traduit, et l'original reste à un clic.
+ */
+const PICTOS_CONSIGNE = {
+  ATTENDRE: '<path d="M12 21a9 9 0 1 0 0-18a9 9 0 0 0 0 18M12 7v5l3 2" />',
+  REMPLACER: '<path d="M4 8h13l-3-3M20 16H7l3 3" />',
+  ANNULER: '<path d="M12 21a9 9 0 1 0 0-18a9 9 0 0 0 0 18M5.6 5.6l12.8 12.8" />',
+  MESSAGE: '<path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.5 3.5V17A2.5 2.5 0 0 1 4 14.5z" />',
+};
+
+/** La consigne qui vaut encore : la dernière, si elle n'a pas été remplacée. */
+function consigneCourante(dossier) {
+  const derniere = (dossier.consignes ?? []).at(-1);
+  return derniere && !derniere.remplaceeLe ? derniere : null;
+}
+
+/* Les guillemets de chaque langue : « » en chinois se lisent comme une faute. */
+const GUILLEMETS = { fr: ['« ', ' »'], en: ['“', '”'], zh: ['「', '」'] };
+const cite = (texte) => {
+  const [ouvre, ferme] = GUILLEMETS[state.lang] ?? GUILLEMETS.fr;
+  return `${ouvre}${texte}${ferme}`;
+};
+
+const texteDe = (consigne) => consigne.textes?.[state.lang] ?? consigne.textes?.fr ?? { titre: '', detail: '', court: '' };
+const motDe = (consigne) =>
+  state.lang === 'fr' ? consigne.mot : (consigne.motTraduit?.[state.lang] ?? consigne.mot);
+
+function modelesConsigneMarkup(consigne, active) {
+  const modeles = consigne.modeles ?? [];
+  if (consigne.choix !== 'REMPLACER' || !modeles.length) return '';
+  // Une fois qu'il a dit lequel il expédie, seul celui-là reste.
+  const retenus =
+    typeof consigne.modeleChoisi === 'number'
+      ? modeles.map((modele, rang) => [modele, rang]).filter(([, rang]) => rang === consigne.modeleChoisi)
+      : modeles.map((modele, rang) => [modele, rang]);
+  const aChoisir = active && modeles.length > 1;
+  return `<div class="csg-modeles">${retenus
+    .map(([modele, rang]) => {
+      const details = [modele.variantTitle, modele.sku].filter(Boolean).join(' · ');
+      const stock =
+        typeof modele.inventory === 'number'
+          ? t('rup.inStock').replace('{n}', String(modele.inventory))
+          : modele.libre
+            ? t('rup.offCatalog')
+            : '';
+      const corps = `${
+        modele.image
+          ? `<img src="${esc(modele.image)}" alt="" loading="lazy" />`
+          : '<span class="csg-vide" aria-hidden="true"></span>'
+      }
+        <span class="csg-modele-txt"><b>${esc(modele.productTitle)}</b>${
+          [details, stock].filter(Boolean).length
+            ? `<small>${esc([details, stock].filter(Boolean).join(' · '))}</small>`
+            : ''
+        }</span>`;
+      return aChoisir
+        ? `<label class="csg-modele csg-modele-choix"><input type="radio" name="csg-modele-${esc(consigne.id)}" value="${rang}" />${corps}</label>`
+        : `<div class="csg-modele">${corps}</div>`;
+    })
+    .join('')}</div>`;
+}
+
+function consigneMarkup(consigne, dossier) {
+  const texte = texteDe(consigne);
+  const mot = motDe(consigne);
+  const active = !consigne.remplaceeLe && !consigne.reponse;
+  const traduit = state.lang !== 'fr' && consigne.mot && consigne.motTraduit?.[state.lang];
+
+  const reponse = (() => {
+    if (consigne.reponse === 'COMPRIS') {
+      const heure = new Date(consigne.reponduLe).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+      return `<p class="csg-ok">${picto('coche')}${esc(t('csg.confirmed', { heure }))}</p>${
+        consigne.choix !== 'MESSAGE' && !consigne.remplaceeLe
+          ? `<div class="csg-cmd">
+               <b>${esc(dossier.orderName ? t('rup.order').replace('{name}', dossier.orderName) : t('rup.noOrder'))}</b>
+               <span class="csg-chip csg-chip-${esc(consigne.choix)}">${esc(texte.court)}</span>
+             </div>`
+          : ''
+      }`;
+    }
+    if (consigne.reponse === 'IMPOSSIBLE' || consigne.reponse === 'REPONDU') {
+      return `<div class="csg-moi">
+        <b>${esc(t(consigne.reponse === 'IMPOSSIBLE' ? 'csg.cannotBtn' : 'csg.yourReply'))}</b>
+        <span>${esc(consigne.reponseNote ?? '')}</span>
+        <small>${esc(`${shortMoment(consigne.reponduLe)} · ${t('csg.forMerchant')}`)}</small>
+      </div>`;
+    }
+    return '';
+  })();
+
+  return `<article class="csg${active ? ' csg-active' : ''}${consigne.remplaceeLe ? ' csg-remplacee' : ''}" data-csg="${esc(consigne.id)}">
+      <div class="csg-qui">
+        <span class="csg-av" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M3.5 8.5V16.5h13V8.5M2.5 8.5l1.6-5h11.8l1.6 5zM8 16.5v-4h4v4" /></svg></span>
+        <b>${esc(t('csg.merchant'))}</b>
+        <span>${esc(shortMoment(consigne.envoyeeLe))}</span>
+        ${consigne.remplaceeLe ? `<span class="pill">${esc(t('csg.replaced'))}</span>` : ''}
+      </div>
+      <div class="csg-corps">
+        <span class="csg-ico csg-ico-${esc(consigne.choix)}" aria-hidden="true"><svg viewBox="0 0 24 24">${
+          PICTOS_CONSIGNE[consigne.choix] ?? ''
+        }</svg></span>
+        <span class="csg-txt">
+          <b class="csg-titre">${esc(texte.titre)}</b>
+          ${texte.detail ? `<span class="csg-detail">${esc(texte.detail)}</span>` : ''}
+        </span>
+      </div>
+      ${modelesConsigneMarkup(consigne, active)}
+      ${mot ? `<p class="csg-mot">${esc(cite(mot))}</p>` : ''}
+      ${
+        traduit
+          ? `<p class="csg-trad">${esc(t('csg.translated'))} · <button type="button" class="csg-lien" data-csg-orig="${esc(
+              consigne.id,
+            )}" aria-expanded="false">${esc(t('csg.seeOriginal'))}</button></p>
+             <div class="csg-orig" lang="fr" hidden>${esc(consigne.mot)}</div>`
+          : ''
+      }
+    </article>
+    ${reponse}
+    ${
+      active
+        ? `<div class="csg-acts" data-csg-acts="${esc(consigne.id)}">
+             <p>${esc(t(consigne.choix === 'MESSAGE' ? 'csg.waitReply' : 'csg.waitConfirm'))}</p>
+             <div class="csg-boutons">${
+               consigne.choix === 'MESSAGE'
+                 ? `<button class="btn btn-primary" type="button" data-csg-ecrire="REPONDU" data-csg-id="${esc(consigne.id)}">${esc(t('csg.reply'))}</button>`
+                 : `<button class="btn" type="button" data-csg-ecrire="IMPOSSIBLE" data-csg-id="${esc(consigne.id)}">${esc(t('csg.cannotBtn'))}</button>
+                    <button class="btn btn-primary" type="button" data-csg-ok="${esc(consigne.id)}">${esc(t('csg.ok'))}</button>`
+             }</div>
+           </div>`
+        : ''
+    }`;
+}
+
+function consignesMarkup(dossier) {
+  const consignes = dossier.consignes ?? [];
+  if (!consignes.length) return '';
+  return `<div class="csg-fil">${consignes.map((consigne) => consigneMarkup(consigne, dossier)).join('')}</div>`;
+}
+
+/** Sous la ligne de la liste : ce que le marchand a fait depuis. */
+function etatConsigneDe(dossier) {
+  const courante = consigneCourante(dossier);
+  if (!courante) return '';
+  if (!courante.reponse) return t('csg.replied');
+  return texteDe(courante).court;
+}
+
+async function repondreConsigne(id, reponse, note, bouton) {
+  const carte = $('tk-rows').querySelector(`[data-csg-acts="${CSS.escape(id)}"]`);
+  let modele = null;
+  if (reponse === 'COMPRIS') {
+    const choix = $('tk-rows').querySelectorAll(`input[name="csg-modele-${CSS.escape(id)}"]`);
+    if (choix.length) {
+      const coche = [...choix].find((radio) => radio.checked);
+      if (!coche) return toast(t('csg.chooseModel'), true);
+      modele = Number(coche.value);
+    }
+  }
+  carte?.querySelectorAll('button').forEach((autre) => {
+    autre.disabled = true;
+  });
+  try {
+    await api(`/api/workspace/${supplierId}/consignes/${id}`, {
+      method: 'POST',
+      body: { reponse, note: note ?? null, modele, langue: state.lang },
+    });
+    toast(t(reponse === 'COMPRIS' ? 'csg.sentOk' : 'csg.sentNo'));
+    await loadTickets();
+  } catch (error) {
+    carte?.querySelectorAll('button').forEach((autre) => {
+      autre.disabled = false;
+    });
+    toast(messageServeur(error, 'csg.err'), true);
+    // La consigne a changé entre-temps : la page relue montre la nouvelle.
+    if (error.code === 'deja') await loadTickets();
+  }
+  bouton?.focus?.();
+}
+
+/* La raison d'un refus, ou la réponse à un message : écrite sur place, sous la
+   consigne, comme le motif d'un refus de demande. */
+function ouvrirRedactionConsigne(bouton) {
+  const actes = bouton.closest('.csg-acts');
+  const ouvert = actes.querySelector('.upd-raison');
+  if (ouvert) {
+    ouvert.remove();
+    bouton.setAttribute('aria-expanded', 'false');
+    return;
+  }
+  const reponse = bouton.dataset.csgEcrire;
+  bouton.setAttribute('aria-expanded', 'true');
+  actes.insertAdjacentHTML(
+    'beforeend',
+    `<form class="upd-raison">
+      <label><span>${esc(t(reponse === 'IMPOSSIBLE' ? 'csg.why' : 'csg.yourReply'))}</span>
+        <textarea rows="3" maxlength="1000" placeholder="${esc(
+          t(reponse === 'IMPOSSIBLE' ? 'csg.whyHint' : 'csg.replyHint'),
+        )}"></textarea></label>
+      <small class="csg-pour">${esc(t('csg.forMerchant'))}</small>
+      <div class="upd-raison-acts">
+        <button type="button" class="btn btn-small" data-raison-annuler="1">${esc(t('issue.cancel'))}</button>
+        <button type="submit" class="btn btn-small btn-primary">${esc(t('issue.send'))}</button>
+      </div>
+    </form>`,
+  );
+  const formulaire = actes.querySelector('.upd-raison');
+  const champ = formulaire.querySelector('textarea');
+  champ.focus();
+  formulaire.querySelector('[data-raison-annuler]').addEventListener('click', () => {
+    formulaire.remove();
+    bouton.setAttribute('aria-expanded', 'false');
+    bouton.focus();
+  });
+  formulaire.addEventListener('submit', (event) => {
+    event.preventDefault();
+    if (!champ.value.trim()) {
+      toast(t('csg.needText'), true);
+      champ.focus();
+      return;
+    }
+    void repondreConsigne(bouton.dataset.csgId, reponse, champ.value.trim(), bouton);
+  });
+}
+
+function cablerConsignes() {
+  const racine = $('tk-rows');
+  racine.querySelectorAll('[data-csg-ok]').forEach((bouton) =>
+    bouton.addEventListener('click', () => void repondreConsigne(bouton.dataset.csgOk, 'COMPRIS', null, bouton)),
+  );
+  racine.querySelectorAll('[data-csg-ecrire]').forEach((bouton) =>
+    bouton.addEventListener('click', () => ouvrirRedactionConsigne(bouton)),
+  );
+  racine.querySelectorAll('[data-csg-orig]').forEach((bouton) =>
+    bouton.addEventListener('click', () => {
+      const original = bouton.closest('.csg').querySelector('.csg-orig');
+      original.hidden = !original.hidden;
+      bouton.setAttribute('aria-expanded', String(!original.hidden));
+      bouton.textContent = t(original.hidden ? 'csg.seeOriginal' : 'csg.hideOriginal');
+    }),
+  );
 }
 
 /*
@@ -3328,11 +3600,18 @@ $('ws-orders').addEventListener('keydown', (event) => {
 /** Une rupture vue depuis l'atelier : à lui de répondre, au marchand, ou close. */
 function statutRupture(dossier, estDemande) {
   if (dossier.phase === 'classe') return 'CLOS';
+  // La consigne courante : la dernière, si elle n'a pas été remplacée.
+  const derniere = (dossier.consignes ?? []).at(-1);
+  const consigne = derniere && !derniere.remplaceeLe ? derniere : null;
+  // La réponse du marchand, pas encore confirmée : c'est à l'atelier.
+  if (consigne && !consigne.reponse) return 'A_REPONDRE';
   const propositions = dossier.substitutions ?? [];
   // Un remplacement proposé sans réponse : c'est à l'atelier.
   if (propositions.some((proposition) => !proposition.reponduLe)) return 'A_REPONDRE';
-  // Tout est répondu : la suite appartient au marchand.
-  if (propositions.length) return 'ATTENTE';
+  // Compris : il n'y a plus rien à dire, la consigne est sur la commande.
+  if (consigne?.reponse === 'COMPRIS') return 'CLOS';
+  // Il ne pourra pas, ou il a répondu : la suite appartient au marchand.
+  if (consigne || propositions.length) return 'ATTENTE';
   if (estDemande) return dossier.phase === 'cree' ? 'A_REPONDRE' : 'ATTENTE';
   return dossier.phase === 'traite' ? 'CLOS' : 'ATTENTE';
 }
@@ -3374,6 +3653,7 @@ async function chargerTickets() {
       type: 'RUPTURE',
       libelle: t('tk.type.rupture'),
       statut: statutRupture(demande, true),
+      etat: etatConsigneDe(demande),
       date: demande.envoyeLe,
       html: carteRupture(demande, demande.phase ?? 'cree', demande.envoyeLe, true),
     });
@@ -3386,6 +3666,7 @@ async function chargerTickets() {
       type: 'SIGNAL',
       libelle: `${t('tk.type.signal')} · ${t(`issue.kind.${signalement.motif}`)}`,
       statut: statutRupture(signalement, false),
+      etat: etatConsigneDe(signalement),
       date: signalement.signaleLe,
       html: carteRupture(signalement, signalement.phase ?? 'cree', signalement.signaleLe, false),
     });
@@ -3513,6 +3794,7 @@ function ligneDeTicket(item, courant) {
         vieux && item.statut === 'A_REPONDRE' ? ' tk-vieux' : ''
       }">${esc(texte)}</span></span>
       <span class="tk-ligne-quoi">${esc(resumeDe(item.html))}</span>
+      ${item.etat ? `<span class="tk-ligne-etat${item.statut === 'A_REPONDRE' ? ' tk-ligne-etat-neuf' : ''}">${esc(item.etat)}</span>` : ''}
     </span>
   </button>`;
 }
@@ -3584,6 +3866,7 @@ function cablerTickets() {
   );
 
   cablerSubstitutions();
+  cablerConsignes();
 
   for (const formulaire of racine.querySelectorAll('.ech-form')) {
     formulaire.addEventListener('submit', (event) => {

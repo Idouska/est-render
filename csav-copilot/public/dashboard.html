@@ -2342,33 +2342,86 @@ Remboursement : sous 5 jours ouvrés après réception du retour."></textarea>
          il fallait relire le fil pour savoir où l'on en était. Ici, le modèle
          en rupture est à gauche de ce qu'on propose, et l'atelier répondra
          d'un bouton. -->
-    <div class="backdrop" id="subst-modal" role="dialog" aria-modal="true" aria-labelledby="subst-title" hidden>
-      <div class="modal modal-wide">
+    <!-- Répondre à l'atelier sur une rupture : quatre réponses, chacune avec
+         ce qu'il faut préciser. Une consigne pour l'atelier — rien ne part au
+         client. -->
+    <div class="backdrop" id="ra-modal" role="dialog" aria-modal="true" aria-labelledby="ra-title" hidden>
+      <div class="modal modal-wide ra-fen">
         <div class="modal-head">
-          <h2 id="subst-title">Proposer un remplacement à l’atelier</h2>
-          <p id="subst-sub">L’atelier répondra d’un bouton, sans écrire. Rien ne part au client.</p>
+          <h2 id="ra-title">Répondre à l’atelier</h2>
+          <p id="ra-sub">La réponse arrive dans son ticket. Rien ne part au client.</p>
         </div>
-        <div class="modal-body">
-          <div class="subst-rupture" id="subst-rupture"></div>
+        <div class="modal-body ra-corps">
+          <div class="ra-contexte" id="ra-contexte"></div>
 
-          <h3 class="subst-h">En stock au catalogue</h3>
-          <div id="subst-options"><p class="empty">Recherche des références en stock…</p></div>
+          <section>
+            <h3 class="ra-h" id="ra-choix-t">Que doit faire l’atelier ?</h3>
+            <div class="ra-choix" id="ra-choix" role="radiogroup" aria-labelledby="ra-choix-t">
+              <button class="ra-tuile" type="button" role="radio" data-ra-choix="ATTENDRE" aria-checked="true">
+                <span class="ra-ico ra-ico-attendre" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 21a9 9 0 1 0 0-18a9 9 0 0 0 0 18M12 7v5l3 2" /></svg></span>
+                <span class="ra-tuile-txt"><b>Attendre le réassort, puis expédier</b><small>La commande attend chez lui.</small></span>
+              </button>
+              <button class="ra-tuile" type="button" role="radio" data-ra-choix="REMPLACER" aria-checked="false">
+                <span class="ra-ico ra-ico-remplacer" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 8h13l-3-3M20 16H7l3 3" /></svg></span>
+                <span class="ra-tuile-txt"><b>Remplacer par un autre modèle</b><small>Un modèle en stock, à choisir.</small></span>
+              </button>
+              <button class="ra-tuile" type="button" role="radio" data-ra-choix="ANNULER" aria-checked="false">
+                <span class="ra-ico ra-ico-annuler" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 21a9 9 0 1 0 0-18a9 9 0 0 0 0 18M5.6 5.6l12.8 12.8" /></svg></span>
+                <span class="ra-tuile-txt"><b>Ne pas expédier cet article</b><small>Annulé ou remboursé pour le client.</small></span>
+              </button>
+              <button class="ra-tuile" type="button" role="radio" data-ra-choix="MESSAGE" aria-checked="false">
+                <span class="ra-ico ra-ico-message" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.5 3.5V17A2.5 2.5 0 0 1 4 14.5z" /></svg></span>
+                <span class="ra-tuile-txt"><b>Lui écrire</b><small>Une question, une précision.</small></span>
+              </button>
+            </div>
+          </section>
 
-          <h3 class="subst-h">Hors catalogue</h3>
-          <p class="subst-aide">Un modèle que l’atelier a sous la main et que la boutique ne liste pas.</p>
-          <div class="subst-libre">
-            <input type="text" id="subst-l-model" placeholder="Modèle" />
-            <input type="text" id="subst-l-taille" placeholder="Taille" />
-            <input type="text" id="subst-l-ref" placeholder="Référence" />
-            <button class="btn btn-small" type="button" id="subst-l-add">Ajouter</button>
-          </div>
+          <section class="ra-detail ra-date" id="ra-attendre">
+            <span class="ra-date-txt">
+              <label for="ra-date"><b>Expédier au plus tard le</b></label>
+              <small id="ra-date-aide"></small>
+            </span>
+            <input type="date" id="ra-date" />
+            <span class="ra-pas">
+              <button class="btn btn-small" type="button" id="ra-moins" aria-label="Un jour plus tôt">−</button>
+              <button class="btn btn-small" type="button" id="ra-plus" aria-label="Un jour plus tard">+</button>
+            </span>
+          </section>
 
-          <div id="subst-choisis"></div>
-          <p class="subst-manque" id="subst-manque"></p>
+          <section class="ra-detail ra-modeles" id="ra-remplacer" hidden>
+            <h3 class="ra-h">En stock au catalogue</h3>
+            <div id="ra-options"></div>
+            <div id="ra-choisis"></div>
+            <details class="ra-libre" id="ra-libre">
+              <summary>Un modèle qu’il a sous la main mais pas au catalogue : l’ajouter à la main</summary>
+              <div class="ra-libre-champs">
+                <input type="text" id="ra-l-model" placeholder="Modèle" aria-label="Modèle" />
+                <input type="text" id="ra-l-taille" placeholder="Taille" aria-label="Taille" />
+                <input type="text" id="ra-l-ref" placeholder="Référence" aria-label="Référence" />
+                <button class="btn btn-small" type="button" id="ra-l-add">Ajouter</button>
+              </div>
+            </details>
+          </section>
+
+          <section class="ra-detail ra-annuler" id="ra-annuler" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21a9 9 0 1 0 0-18a9 9 0 0 0 0 18M12 11v5M12 8h.01" /></svg>
+            <p id="ra-annuler-texte"></p>
+          </section>
+
+          <section>
+            <label class="ra-h" for="ra-mot" id="ra-mot-t">Un mot pour l’atelier (facultatif)</label>
+            <textarea id="ra-mot" rows="2" maxlength="1000"></textarea>
+          </section>
+
+          <section class="ra-apercu" aria-live="polite">
+            <span>Ce que verra l’atelier</span>
+            <b id="ra-apercu"></b>
+          </section>
         </div>
-        <div class="modal-foot">
-          <button class="btn" type="button" id="subst-cancel">Annuler</button>
-          <button class="btn btn-primary" type="button" id="subst-send" disabled>Envoyer à l’atelier</button>
+        <div class="modal-foot ra-pied-barre">
+          <span class="ra-pied" id="ra-pied"></span>
+          <button class="btn" type="button" id="ra-fermer">Annuler</button>
+          <button class="btn btn-primary" type="button" id="ra-envoyer">Envoyer à l’atelier</button>
         </div>
       </div>
     </div>

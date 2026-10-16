@@ -147,6 +147,13 @@ test('la pastille de l’atelier ne compte que ce qui attend SA réponse', () =>
   assert.equal(statut({ phase: 'cree', substitutions: [] }, true), 'A_REPONDRE', 'une demande du marchand');
   assert.equal(statut({ phase: 'cree', substitutions: [repondue] }, true), 'ATTENTE', 'tout est répondu');
   assert.equal(statut({ phase: 'classe', substitutions: [{ reponduLe: null }] }, true), 'CLOS');
+
+  // La réponse du marchand à son signalement : à lui de la confirmer, puis close.
+  const consigne = (reste: object) => ({ phase: 'cree', substitutions: [], consignes: [{ remplaceeLe: null, reponse: null, ...reste }] });
+  assert.equal(statut(consigne({}), false), 'A_REPONDRE', 'le marchand a répondu');
+  assert.equal(statut(consigne({ reponse: 'COMPRIS' }), false), 'CLOS', 'compris : la consigne est sur la commande');
+  assert.equal(statut(consigne({ reponse: 'IMPOSSIBLE' }), false), 'ATTENTE', 'il ne pourra pas : au marchand');
+  assert.equal(statut(consigne({ remplaceeLe: '2026-10-16' }), false), 'ATTENTE', 'une consigne remplacée ne demande plus rien');
 });
 
 test('la pastille de l’atelier s’éteint quand la relève échoue', () => {

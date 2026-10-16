@@ -22,7 +22,16 @@ export interface RuptureDuRecap {
   combien: number;
 }
 
+/** La réponse du marchand sur une rupture, déjà écrite dans la langue de l'atelier. */
+export interface ConsigneDuRecap {
+  orderName: string | null;
+  /** « Attendre le réassort · au plus tard le 26 oct. » */
+  court: string;
+}
+
 type EnAttente<T> = T & { jours: number };
+
+const deuxPointsDe = (langue: LangueAtelier) => (langue === 'fr' ? ' : ' : langue === 'zh' ? '：' : ': ');
 
 const MESSAGE_MAX = 140;
 
@@ -55,11 +64,24 @@ export function ligneRupture(rupture: RuptureDuRecap, langue: LangueAtelier = 'f
   return `- ${rupture.orderName ?? MOTS[langue].sansCommande} — ${MOTS[langue].rupture(rupture.combien)}`;
 }
 
+export function ligneConsigne(consigne: ConsigneDuRecap, langue: LangueAtelier = 'fr'): string {
+  const mots = MOTS[langue];
+  return `- ${consigne.orderName ?? mots.sansCommande} — ${mots.reponseMarchand}${deuxPointsDe(langue)}${consigne.court}`;
+}
+
 export function recapDuJour(contexte: {
   langue?: LangueAtelier;
   merchantName: string;
-  nouvelles: { demandes: readonly DemandeDuRecap[]; ruptures: readonly RuptureDuRecap[] };
-  enAttente: { demandes: ReadonlyArray<EnAttente<DemandeDuRecap>>; ruptures: ReadonlyArray<EnAttente<RuptureDuRecap>> };
+  nouvelles: {
+    demandes: readonly DemandeDuRecap[];
+    ruptures: readonly RuptureDuRecap[];
+    consignes?: readonly ConsigneDuRecap[];
+  };
+  enAttente: {
+    demandes: ReadonlyArray<EnAttente<DemandeDuRecap>>;
+    ruptures: ReadonlyArray<EnAttente<RuptureDuRecap>>;
+    consignes?: ReadonlyArray<EnAttente<ConsigneDuRecap>>;
+  };
   lien: string | null;
   signature?: string | null;
 }): { subject: string; body: string } | null {
@@ -69,10 +91,12 @@ export function recapDuJour(contexte: {
   const nouvelles = [
     ...contexte.nouvelles.demandes.map((demande) => ligneDemande(demande, langue)),
     ...contexte.nouvelles.ruptures.map((rupture) => ligneRupture(rupture, langue)),
+    ...(contexte.nouvelles.consignes ?? []).map((consigne) => ligneConsigne(consigne, langue)),
   ];
   const enAttente = [
     ...contexte.enAttente.demandes.map((demande) => ligneDemande(demande, langue) + depuis(demande.jours)),
     ...contexte.enAttente.ruptures.map((rupture) => ligneRupture(rupture, langue) + depuis(rupture.jours)),
+    ...(contexte.enAttente.consignes ?? []).map((consigne) => ligneConsigne(consigne, langue) + depuis(consigne.jours)),
   ];
   // Rien à dire : pas de mail. Un récapitulatif vide apprend à ne plus l'ouvrir.
   const n = nouvelles.length + enAttente.length;

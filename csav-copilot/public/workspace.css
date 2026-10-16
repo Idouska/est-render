@@ -3477,3 +3477,126 @@ html:has(.wsapp ~ .modal-wrap.open) { overflow: hidden; }
 .wsapp .rowo-state.ok .ws-ico { width: 12px; height: 12px; stroke-width: 2.2; }
 .wsapp ~ .modal-wrap .sig-photo-x { display: grid; place-items: center; padding: 0; }
 .wsapp ~ .modal-wrap .sig-photo-x .ws-ico { width: 11px; height: 11px; stroke-width: 2.2; }
+
+/* ==========================================================================
+   LA RÉPONSE DU MARCHAND — la consigne dans le ticket, et sur la commande
+   ========================================================================== */
+
+.wsapp .csg-fil { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
+.wsapp .csg { padding: 14px 16px; border-radius: 14px; background: var(--paper); }
+.wsapp .csg-active { background: var(--card); box-shadow: inset 0 0 0 1.5px var(--brand); }
+.wsapp .csg-remplacee { opacity: 0.62; }
+.wsapp .csg-qui { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 13px; }
+.wsapp .csg-qui b { font-weight: 600; }
+.wsapp .csg-qui > span:not(.csg-av):not(.pill) { color: var(--ink-mute); }
+.wsapp .csg-av {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.wsapp .csg-av svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linejoin: round; }
+
+/* La consigne en grand, avec la couleur de sa réponse — la même que chez le marchand. */
+.wsapp .csg-corps { display: flex; gap: 12px; }
+.wsapp .csg-ico { width: 36px; height: 36px; flex: none; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #fff; }
+.wsapp .csg-ico svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.wsapp .csg-ico-ATTENDRE { background: #ff9500; }
+.wsapp .csg-ico-REMPLACER { background: #0a84ff; }
+.wsapp .csg-ico-ANNULER { background: #8e8e93; }
+.wsapp .csg-ico-MESSAGE { background: #34c759; }
+.wsapp .csg-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.wsapp .csg-titre { font-size: 17px; font-weight: 700; line-height: 1.25; }
+.wsapp .csg-detail { font-size: 14px; color: var(--ink-soft); }
+
+.wsapp .csg-modeles,
+.wsapp .csg-mot,
+.wsapp .csg-trad,
+.wsapp .csg-orig { margin-left: 48px; }
+.wsapp .csg-modeles { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.wsapp .csg-modele { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; background: var(--paper); }
+.wsapp .csg-modele img,
+.wsapp .csg-vide { width: 38px; height: 38px; flex: none; border-radius: 8px; object-fit: cover; background: var(--line-soft); }
+.wsapp .csg-modele-choix { cursor: pointer; }
+.wsapp .csg-modele-choix input { width: 18px; height: 18px; flex: none; accent-color: var(--brand); }
+.wsapp .csg-modele-txt { min-width: 0; display: flex; flex-direction: column; }
+.wsapp .csg-modele-txt b { font-size: 14px; font-weight: 600; }
+.wsapp .csg-modele-txt small { font-size: 12.5px; color: var(--ink-mute); }
+
+.wsapp .csg-mot { margin-top: 10px; margin-bottom: 0; font-size: 14.5px; font-style: italic; color: var(--ink-soft); }
+.wsapp .csg-trad { margin-top: 8px; margin-bottom: 0; font-size: 12.5px; color: var(--ink-mute); }
+.wsapp .csg-lien { padding: 0; border: 0; background: none; color: var(--brand); font: inherit; cursor: pointer; }
+.wsapp .csg-lien:hover { text-decoration: underline; }
+.wsapp .csg-orig { margin-top: 6px; padding: 8px 10px; border-radius: 9px; background: var(--paper); font-size: 13.5px; color: var(--ink-soft); }
+
+/* Ce qu'il en a fait : compris, sa raison, ou sa réponse. */
+.wsapp .csg-ok { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 0; color: var(--ok-ink); font-size: 13.5px; font-weight: 500; text-align: center; }
+.wsapp .csg-ok svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.wsapp .csg-cmd { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 12px 14px; border-radius: 12px; background: var(--card); box-shadow: 0 0 0 1px var(--line); }
+.wsapp .csg-cmd b { font-size: 14px; }
+.wsapp .csg-chip { padding: 3px 10px; border-radius: 8px; background: var(--warn-soft); color: var(--warn-ink); font-size: 13px; font-weight: 600; }
+.wsapp .csg-chip-ANNULER { background: var(--bad-soft); color: var(--bad); }
+.wsapp .csg-chip-REMPLACER { background: var(--brand-soft); color: var(--brand); }
+.wsapp .csg-moi {
+  align-self: flex-end;
+  max-width: 80%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  border-radius: 18px 18px 4px 18px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 14px;
+}
+.wsapp .csg-moi b { font-weight: 600; }
+.wsapp .csg-moi small { font-size: 12px; opacity: 0.85; }
+
+/* Les deux réponses possibles, sous la consigne. */
+.wsapp .csg-acts { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border-radius: 14px; background: var(--card); box-shadow: 0 0 0 1px var(--line); }
+.wsapp .csg-acts > p { margin: 0; font-size: 14px; color: var(--ink-soft); }
+.wsapp .csg-boutons { display: flex; justify-content: flex-end; gap: 10px; }
+.wsapp .csg-acts .upd-raison { margin-top: 0; }
+.wsapp .csg-pour { font-size: 12.5px; font-weight: 400; color: var(--ink-mute); }
+
+/* Dans la liste : ce que le marchand a fait depuis. */
+.wsapp .tk-ligne-etat { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 500; color: var(--ink-mute); }
+.wsapp .tk-ligne-etat-neuf { color: var(--brand); }
+.wsapp .tk-ligne[aria-current='true'] .tk-ligne-etat { color: #fff; }
+
+/* La consigne sur la commande : sur la ligne, puis au guichet, en tête. */
+.wsapp .rowo-consigne {
+  display: inline-block;
+  max-width: 100%;
+  margin-top: 3px;
+  padding: 1px 8px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--warn-soft);
+  color: var(--warn-ink);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wsapp .rowo-consigne-ANNULER { background: var(--bad-soft); color: var(--bad); }
+.wsapp .rowo-consigne-REMPLACER { background: var(--brand-soft); color: var(--brand); }
+.wsapp .ord-consigne { display: flex; flex-direction: column; gap: 3px; margin: 0 0 14px; padding: 12px 14px; border-radius: 12px; background: var(--warn-soft); color: var(--warn-ink); }
+.wsapp .ord-consigne b { font-size: 16px; }
+.wsapp .ord-consigne .ord-label { color: inherit; opacity: 0.85; }
+.wsapp .ord-consigne-ANNULER { background: var(--bad-soft); color: var(--bad); }
+.wsapp .ord-consigne-REMPLACER { background: var(--brand-soft); color: var(--brand); }
+
+@media (max-width: 760px) {
+  .wsapp .csg-modeles,
+  .wsapp .csg-mot,
+  .wsapp .csg-trad,
+  .wsapp .csg-orig { margin-left: 0; }
+  .wsapp .csg-titre { font-size: 18px; }
+  .wsapp .csg-boutons .btn { flex: 1; min-height: 48px; font-size: 16px; }
+}
