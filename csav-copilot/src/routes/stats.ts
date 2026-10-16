@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma.ts';
 import { requireSession } from '../plugins/auth.ts';
 import { getShopifyClient, ShopifyError } from '../services/shopify/client.ts';
 import { fetchCommerceStats } from '../services/shopify/commerceStats.ts';
+import { brouillonsEnvoyes, premieresReponses } from '../services/tickets/premiereReponse.ts';
 import { delaisResolution } from '../services/tickets/resolution.ts';
 
 /**
@@ -90,8 +91,22 @@ export async function statsRoutes(app: FastifyInstance): Promise<void> {
     // L'ordre des noms suit celui du tableau, pas l'ordre de lecture : une
     // déstructuration décalée d'un cran donne des données valides au mauvais
     // nom, ce qui ne ressemble pas à une erreur.
-    const [byStatus, byIntent, drafts, tickets, premiersEntrants, derniersSortants, users, audits] =
-      await Promise.all([
+    // Tous les tickets de la fenêtre, clos ou non : la première réponse se
+    // mesure aussi sur ceux qui attendent encore la suite.
+    const fenetre = { merchantId, ticket: { isHistorical: false, createdAt: { gte: since } } };
+
+    const [
+      byStatus,
+      byIntent,
+      drafts,
+      tickets,
+      premiersEntrants,
+      derniersSortants,
+      users,
+      audits,
+      entreesFenetre,
+      sortiesFenetre,
+    ] = await Promise.all([
       prisma.ticket.groupBy({
         by: ['status'],
         where: { merchantId, isHistorical: false, createdAt: { gte: since } },
@@ -153,6 +168,17 @@ export async function statsRoutes(app: FastifyInstance): Promise<void> {
         },
         _count: { _all: true },
       }),
+      prisma.message.groupBy({
+        by: ['ticketId'],
+        where: { ...fenetre, direction: 'INBOUND' },
+        _min: { receivedAt: true },
+      }),
+      prisma.message.groupBy({
+        by: ['ticketId'],
+        where: { ...fenetre, direction: 'OUTBOUND' },
+        _min: { receivedAt: true },
+        _max: { receivedAt: true },
+      }),
     ]);
 
     /* Volume par jour : le graphe le plus lu, parce qu'il montre si la file se
@@ -174,17 +200,14 @@ export async function statsRoutes(app: FastifyInstance): Promise<void> {
     }
 
     /* Délai de première réponse : la métrique que le client ressent. La moyenne
-       seule masque les tickets oubliés, on renvoie aussi la médiane.
-       Une seule mesure par ticket — la première réponse partie. */
-    const firstSent = new Map<string, number>();
-    for (const draft of drafts) {
-      if (!draft.sentAt) continue;
-      const minutes = (draft.sentAt.getTime() - draft.ticket.createdAt.getTime()) / 60000;
-      const known = firstSent.get(draft.ticketId);
-      if (known === undefined || minutes < known) firstSent.set(draft.ticketId, minutes);
-    }
-
-    const delays = [...firstSent.values()].sort((a, b) => a - b);
+       seule masque les tickets oubliés, on renvoie aussi la médiane. Une seule
+       mesure par ticket — la première réponse partie, de l'outil ou de Gmail.
+       Voir `premieresReponses`. */
+    const delays = premieresReponses(
+      entreesFenetre,
+      sortiesFenetre,
+      drafts.map((draft) => ({ ticketId: draft.ticketId, sentAt: draft.sentAt, ticketCreatedAt: draft.ticket.createdAt })),
+    );
 
     const median = delays.length ? delays[Math.floor(delays.length / 2)]! : null;
     const average = delays.length
@@ -200,7 +223,8 @@ export async function statsRoutes(app: FastifyInstance): Promise<void> {
       tickets.filter((ticket) => ticket.status === 'CLOSED' || ticket.status === 'AUTO_SENT').length,
     );
 
-    const sentDrafts = drafts.filter((draft) => draft.sentAt);
+    // Envoyé de l'outil, ou suivi d'une réponse partie du fil : il a servi.
+    const sentDrafts = brouillonsEnvoyes(drafts, sortiesFenetre);
     const confidences = drafts
       .map((draft) => draft.confidence)
       .filter((value): value is number => typeof value === 'number');
@@ -241,10 +265,10 @@ export async function statsRoutes(app: FastifyInstance): Promise<void> {
       resolution,
       drafts: {
         total: drafts.length,
-        sent: sentDrafts.length,
+        sent: sentDrafts,
         // Ce que l'IA a réellement fait gagner : un brouillon rédigé mais jamais
         // envoyé n'a fait économiser aucune minute.
-        sendRate: drafts.length ? sentDrafts.length / drafts.length : 0,
+        sendRate: drafts.length ? sentDrafts / drafts.length : 0,
         averageConfidence: confidences.length
           ? confidences.reduce((total, value) => total + value, 0) / confidences.length
           : null,

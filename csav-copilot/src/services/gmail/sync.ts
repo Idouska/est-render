@@ -2,6 +2,7 @@ import { logger } from '../../lib/logger.ts';
 import { prisma } from '../../lib/prisma.ts';
 import { getGmailClient } from './client.ts';
 import { curseurApres } from './curseur.ts';
+import { releverReponsesEnvoyees } from './envoyes.ts';
 import { isUnknownCursor } from './errors.ts';
 import { parseMessage, type ParsedMessage } from './messages.ts';
 
@@ -301,6 +302,9 @@ export async function fetchNewMessages(
     // fait son travail, et une panne ici ne doit pas annuler le sien.
     logger.warn({ merchantId, err: error }, 'Filet de la boîte de réception indisponible');
   }
+
+  // Les réponses parties de Gmail rejoignent leur conversation : voir `envoyes.ts`.
+  await releverReponsesEnvoyees(merchantId, gmail, connection.emailAddress);
 
   // Les identifiants arrivent du plus ancien au plus récent : tronquer par la
   // fin traite d'abord ce qui attend depuis le plus longtemps.

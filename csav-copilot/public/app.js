@@ -8776,8 +8776,14 @@ async function loadStats() {
 
   $('stats-kpis').innerHTML = [
     ['Messages reçus', stats.tickets.total, `${statsDays} derniers jours`],
-    ['Première réponse', duration(stats.firstReply.medianMinutes), `médiane sur ${stats.firstReply.measured}`],
-    ['Brouillons envoyés', `${Math.round(stats.drafts.sendRate * 100)} %`, `${stats.drafts.sent} sur ${stats.drafts.total}`],
+    // Les réponses parties de Gmail comptent comme celles de l'outil : voir
+    // `premieresReponses` côté serveur.
+    [
+      'Première réponse',
+      duration(stats.firstReply.medianMinutes),
+      `médiane sur ${stats.firstReply.measured} conversation${stats.firstReply.measured > 1 ? 's' : ''}`,
+    ],
+    ['Brouillons utilisés', `${Math.round(stats.drafts.sendRate * 100)} %`, `${stats.drafts.sent} sur ${stats.drafts.total}, suivis d’une réponse`],
     [
       'Confiance moyenne',
       stats.drafts.averageConfidence === null
