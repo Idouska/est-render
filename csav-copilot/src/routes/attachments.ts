@@ -48,24 +48,11 @@ export async function attachmentRoutes(app: FastifyInstance): Promise<void> {
 
     if (!attachment) return reply.code(404).send({ error: 'Pièce jointe introuvable' });
 
-    try {
-      const { gmail } = await getGmailClient(merchantId, attachment.message.ticket.mailboxId);
-
-      const { data } = await gmail.users.messages.attachments.get({
-        userId: 'me',
-        messageId: attachment.message.gmailMessageId,
-        id: attachment.gmailAttachmentId,
-      });
-
-      if (!data.data) return reply.code(404).send({ error: 'Contenu indisponible' });
-
-      const buffer = Buffer.from(data.data.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
-
-      // `inline` seulement pour ce qu'un navigateur sait rendre. Un fichier
-      // inconnu affiché en ligne, c'est une page de caractères illisibles.
-      const disposition = VIEWABLE.has(attachment.mimeType) ? 'inline' : 'attachment';
-
-      return reply
+    // `inline` seulement pour ce qu'un navigateur sait rendre. Un fichier
+    // inconnu affiché en ligne, c'est une page de caractères illisibles.
+    const disposition = VIEWABLE.has(attachment.mimeType) ? 'inline' : 'attachment';
+    const envoyer = (buffer: Buffer) =>
+      reply
         .type(attachment.mimeType)
         .header(
           'Content-Disposition',
@@ -75,6 +62,25 @@ export async function attachmentRoutes(app: FastifyInstance): Promise<void> {
         // de client n'a rien à y faire.
         .header('Cache-Control', 'private, max-age=3600')
         .send(buffer);
+
+    // Une photo jointe par un atelier à son signalement : pas de mail derrière,
+    // le contenu est en base.
+    if (attachment.data) return envoyer(Buffer.from(attachment.data));
+    if (!attachment.gmailAttachmentId) return reply.code(404).send({ error: 'Contenu indisponible' });
+    const gmailAttachmentId = attachment.gmailAttachmentId;
+
+    try {
+      const { gmail } = await getGmailClient(merchantId, attachment.message.ticket.mailboxId);
+
+      const { data } = await gmail.users.messages.attachments.get({
+        userId: 'me',
+        messageId: attachment.message.gmailMessageId,
+        id: gmailAttachmentId,
+      });
+
+      if (!data.data) return reply.code(404).send({ error: 'Contenu indisponible' });
+
+      return envoyer(Buffer.from(data.data.replace(/-/g, '+').replace(/_/g, '/'), 'base64'));
     } catch (error) {
       request.log.error({ err: error, id: attachment.id }, 'Pièce jointe illisible');
       return reply.code(502).send({

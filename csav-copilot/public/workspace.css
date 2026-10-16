@@ -3399,3 +3399,58 @@ input:focus, select:focus, textarea:focus {
 @media (prefers-reduced-motion: reduce) {
   .wsapp ~ .modal-wrap .modal.sig { animation: none; }
 }
+
+/* Les photos d'un article abîmé : des vignettes carrées qu'une croix retire,
+   et une case en pointillés pour en ajouter, jusqu'à quatre. */
+.wsapp ~ .modal-wrap .sig-photos { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.wsapp ~ .modal-wrap .sig-photo { position: relative; width: 72px; height: 72px; flex: none; }
+.wsapp ~ .modal-wrap .sig-photo img {
+  width: 100%;
+  height: 100%;
+  border-radius: 10px;
+  object-fit: cover;
+  box-shadow: 0 0 0 0.5px rgb(0 0 0 / 14%);
+}
+.wsapp ~ .modal-wrap .sig-photo-x {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--card);
+  border-radius: 50%;
+  background: #1d1d1f;
+  color: #fff;
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+}
+.wsapp ~ .modal-wrap .sig-ajout {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 200px;
+  min-height: 72px;
+  padding: 0 16px;
+  border: 1.5px dashed #c7c7cc;
+  border-radius: 12px;
+  color: var(--brand);
+  font-size: 14px;
+  cursor: pointer;
+}
+.wsapp ~ .modal-wrap .sig-ajout:hover { background: var(--brand-soft); }
+.wsapp ~ .modal-wrap .sig-ajout:focus-within { outline: 2px solid var(--brand); outline-offset: 2px; }
+.wsapp ~ .modal-wrap .sig-ajout svg {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linejoin: round;
+}
+.wsapp ~ .modal-wrap .sig-photos-note { margin: 6px 0 0; font-size: 12.5px; color: var(--ink-mute); }
+@media (max-width: 640px) {
+  .wsapp ~ .modal-wrap .sig-ajout { background: #fff; border-color: #d1d1d6; font-size: 17px; }
+  .wsapp ~ .modal-wrap .sig-photos-note { margin: 7px 16px 0; font-size: 13px; }
+}

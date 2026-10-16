@@ -450,11 +450,17 @@ model Message {
 /// conserver en base ferait grossir la sauvegarde sans rien apporter — Gmail
 /// les garde déjà, et le seul cas où elles disparaissent est celui du message
 /// supprimé, où l'on ne veut plus les montrer.
+///
+/// Exception : les photos qu'un atelier joint à un signalement. Aucun mail
+/// derrière, donc rien chez Gmail — le contenu vit ici (`data`), compressé
+/// dans le navigateur à quelques centaines de kilooctets, comme les photos
+/// d'étiquettes de colis.
 model Attachment {
-  id                String @id @default(cuid())
+  id                String  @id @default(cuid())
   merchantId        String
   messageId         String
-  gmailAttachmentId String
+  gmailAttachmentId String?
+  data              Bytes?
 
   filename String
   mimeType String

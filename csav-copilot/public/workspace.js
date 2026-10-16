@@ -1116,6 +1116,7 @@ async function corrigerColis(pid, corps) {
 function ouvrirSignalement(order) {
   state.issueKind = 'PHONE';
   state.issueArticle = 0;
+  state.issuePhotos = [];
   $('issue-note').value = '';
   $('issue-num').value = '';
   $('issue-find-res').innerHTML = '';
@@ -1246,31 +1247,81 @@ function renderContexte() {
     return;
   }
 
-  if (parArticle && articles.length) {
-    const choisi = articles[state.issueArticle] ?? articles[0];
-    boite.innerHTML = `<p class="sig-titre" id="issue-article-titre">${esc(
-      t(kind === 'STOCK' ? 'issue.whichMissing' : 'issue.whichDamaged'),
-    )}</p>
-      <div class="sig-articles" role="radiogroup" aria-labelledby="issue-article-titre">${articles
-        .map(
-          (article, i) => `<button type="button" class="sig-article" role="radio" data-article="${i}"
-            aria-checked="${i === state.issueArticle}"><span class="sig-rond" aria-hidden="true"></span>${vignette(
-              article,
-            )}<span class="sig-article-txt"><b>${esc(article.title)}</b><span>${esc(
-              [article.variantTitle, article.sku].filter(Boolean).join(' · '),
-            )}</span></span><span class="sig-qte">× ${esc(article.quantity)}</span></button>`,
-        )
-        .join('')}</div>${
-        kind === 'STOCK'
-          ? `<label class="sig-manque"><span>${esc(t('issue.qtyMissing'))}</span><input type="number"
-              id="issue-qty-manque" min="1" max="${esc(Math.max(1, choisi.quantity ?? 1))}"
-              value="${esc($('issue-qty').value)}" /></label>`
-          : ''
-      }`;
+  if (parArticle) {
+    boite.innerHTML = (articles.length ? listeArticles(articles, kind) : '') + (kind === 'DAMAGE' ? zonePhotos() : '');
     return;
   }
 
   boite.innerHTML = '';
+}
+
+/* Les articles de la commande, à toucher plutôt qu'à retaper. */
+function listeArticles(articles, kind) {
+  const choisi = articles[state.issueArticle] ?? articles[0];
+  return `<p class="sig-titre" id="issue-article-titre">${esc(
+    t(kind === 'STOCK' ? 'issue.whichMissing' : 'issue.whichDamaged'),
+  )}</p>
+    <div class="sig-articles" role="radiogroup" aria-labelledby="issue-article-titre">${articles
+      .map(
+        (article, i) => `<button type="button" class="sig-article" role="radio" data-article="${i}"
+          aria-checked="${i === state.issueArticle}"><span class="sig-rond" aria-hidden="true"></span>${vignette(
+            article,
+          )}<span class="sig-article-txt"><b>${esc(article.title)}</b><span>${esc(
+            [article.variantTitle, article.sku].filter(Boolean).join(' · '),
+          )}</span></span><span class="sig-qte">× ${esc(article.quantity)}</span></button>`,
+      )
+      .join('')}</div>${
+      kind === 'STOCK'
+        ? `<label class="sig-manque"><span>${esc(t('issue.qtyMissing'))}</span><input type="number"
+            id="issue-qty-manque" min="1" max="${esc(Math.max(1, choisi.quantity ?? 1))}"
+            value="${esc($('issue-qty').value)}" /></label>`
+        : ''
+    }`;
+}
+
+/*
+ * Les photos d'un article abîmé.
+ *
+ * Une semelle décollée se voit d'un coup d'œil ; décrite en une phrase, elle
+ * appelle un aller-retour avec l'atelier pour demander la photo. Quatre au
+ * plus — la limite du serveur — réduites dans le navigateur comme les photos
+ * d'étiquettes : quelques centaines de kilooctets, pas les mégaoctets bruts
+ * d'un téléphone. Au téléphone, le sélecteur propose l'appareil photo.
+ */
+const PHOTOS_MAX = 4;
+
+function zonePhotos() {
+  const photos = state.issuePhotos ?? [];
+  const vignettes = photos
+    .map(
+      (photo, i) => `<span class="sig-photo"><img src="${photo}" alt="" /><button type="button"
+        class="sig-photo-x" data-retirer-photo="${i}" aria-label="${esc(t('issue.photoRemove'))}"
+        title="${esc(t('issue.photoRemove'))}">✕</button></span>`,
+    )
+    .join('');
+  const ajout =
+    photos.length < PHOTOS_MAX
+      ? `<label class="sig-ajout"><input type="file" id="issue-photos-input" accept="image/*" multiple hidden /><svg
+          viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3v11H4zM12 16.5a3.5 3.5 0 1 0 0-7a3.5 3.5 0 0 0 0 7z" /></svg><span>${esc(
+            t(photos.length ? 'issue.addPhoto' : 'issue.addPhotos'),
+          )}</span></label>`
+      : '';
+  return `<div class="sig-photos">${vignettes}${ajout}</div>
+    <p class="sig-photos-note">${esc(t('issue.photosHint', { n: PHOTOS_MAX }))}</p>`;
+}
+
+async function ajouterPhotos(fichiers) {
+  const place = PHOTOS_MAX - (state.issuePhotos?.length ?? 0);
+  for (const fichier of [...fichiers].slice(0, Math.max(0, place))) {
+    try {
+      state.issuePhotos = [...(state.issuePhotos ?? []), await shrinkPhoto(fichier)];
+    } catch {
+      // Un format que le navigateur ne sait pas lire (HEIC sur un ordinateur,
+      // fichier abîmé) : on le dit, les autres photos passent.
+      toast(t('issue.photoErr'), true);
+    }
+  }
+  renderContexte();
 }
 
 function signalementPret() {
@@ -1380,6 +1431,12 @@ $('issue-kinds')?.addEventListener('keydown', (event) => {
 });
 
 $('issue-contexte')?.addEventListener('click', (event) => {
+  const retirer = event.target.closest('[data-retirer-photo]');
+  if (retirer) {
+    state.issuePhotos = state.issuePhotos.filter((_, i) => i !== Number(retirer.dataset.retirerPhoto));
+    renderContexte();
+    return;
+  }
   const ligne = event.target.closest('[data-article]');
   if (!ligne) return;
   state.issueArticle = Number(ligne.dataset.article);
@@ -1389,6 +1446,11 @@ $('issue-contexte')?.addEventListener('click', (event) => {
 });
 $('issue-contexte')?.addEventListener('input', (event) => {
   if (event.target.id === 'issue-qty-manque') $('issue-qty').value = event.target.value;
+});
+$('issue-contexte')?.addEventListener('change', (event) => {
+  if (event.target.id === 'issue-photos-input' && event.target.files?.length) {
+    void ajouterPhotos(event.target.files);
+  }
 });
 
 $('issue-note').addEventListener('input', majEnvoiSignalement);
@@ -1440,6 +1502,7 @@ $('issue-send').addEventListener('click', async () => {
               quantity: kind === 'STOCK' ? Number($('issue-qty').value) || null : null,
             }
           : {}),
+        ...(kind === 'DAMAGE' && state.issuePhotos?.length ? { photos: state.issuePhotos } : {}),
       },
     });
 
