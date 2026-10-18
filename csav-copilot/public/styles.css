@@ -16004,3 +16004,346 @@ button.foa-chiffre:focus-visible { outline: none; box-shadow: var(--mac-halo); }
   .ra-date input[type='date'] { flex: 1; height: 34px; }
   .ra-pas .btn { width: 44px; height: 34px; }
 }
+
+/* ==========================================================================
+   RUPTURES DE STOCK — la note « Out of stock » : cinq chiffres qui filtrent,
+   une liste où l'on envoie le mail et où l'on décide, les modèles qui
+   manquent, et les dates du dossier.
+   ========================================================================== */
+
+/* Les chiffres : quatre filtres et un délai. */
+.rup-chiffres { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.rup-chiffre {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--mac-filet);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.rup-chiffre-fixe { cursor: default; }
+button.rup-chiffre:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
+.rup-chiffre[aria-pressed='true'] { box-shadow: inset 0 0 0 1.5px var(--accent); background: var(--accent-soft); }
+.rup-chiffre:focus-visible { outline: none; box-shadow: inset 0 0 0 1.5px var(--accent), var(--mac-halo); }
+.rup-chiffre-t { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink-soft); }
+.rup-chiffre b { font-size: 26px; font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.rup-chiffre small { font-size: 12px; color: var(--ink-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+
+.rup-point { width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--ink-mute); }
+.rup-point-crit { background: #ff3b30; }
+.rup-point-accent { background: #0a84ff; }
+.rup-point-warn { background: #ff9500; }
+.rup-point-violet { background: #af52de; }
+.rup-point-ok { background: #34c759; }
+
+/* La liste à gauche, les modèles et le dossier à droite. */
+#view-ruptures .rup-split { grid-template-columns: minmax(0, 1fr) 340px; gap: 12px; }
+.rup-cote { display: flex; flex-direction: column; gap: 12px; min-width: 0; position: sticky; top: 8px; max-height: calc(100vh - 96px); overflow-y: auto; }
+.rup-cote .rup-panel { position: static; max-height: none; overflow: visible; border: 0; border-radius: 14px; background: var(--surface); box-shadow: var(--mac-filet); }
+
+.rup-liste { overflow: hidden; border-radius: 14px; background: var(--surface); box-shadow: var(--mac-filet); }
+.rup-liste-tete { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--line-soft); }
+.rup-liste-tete h2 { margin: 0; font-size: 15px; font-weight: 650; }
+.rup-filtre { padding: 2px 9px; border: 0; border-radius: 999px; background: var(--accent-soft); color: var(--accent-ink); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.rup-liste-tete .rup-search { flex: 1 1 180px; min-width: 150px; }
+.rup-liste-tete .rup-search input { height: 28px; padding: 0 10px; border: 0; border-radius: 8px; background: var(--inset); }
+.rup-mailauto { display: flex; align-items: center; gap: 8px; margin-left: auto; font-size: 12.5px; color: var(--ink-mute); white-space: nowrap; }
+
+/* Le contrôle segmenté du système : un choix, posé sur un fond creusé. */
+.rup-seg { display: inline-flex; padding: 2px; border-radius: 8px; background: var(--inset); }
+.rup-seg button { height: 24px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: var(--ink); font: inherit; font-size: 12.5px; cursor: pointer; white-space: nowrap; }
+.rup-seg button[aria-checked='true'] { background: var(--surface); box-shadow: 0 1px 2px rgb(0 0 0 / 12%), 0 0 0 0.5px rgb(0 0 0 / 6%); font-weight: 600; }
+
+/* La table : des lignes à plat, séparées d'un filet — plus de cartes à barre. */
+#view-ruptures .rup-main .table-wrap { overflow-x: auto; }
+#view-ruptures .rup-grid { border-collapse: collapse; border-spacing: 0; }
+#view-ruptures .rup-grid th { padding: 8px 10px; font-size: 12px; font-weight: 500; color: var(--ink-mute); background: transparent; }
+#view-ruptures .rup-grid tbody td,
+#view-ruptures .rup-grid tbody tr:last-child td {
+  padding: 12px 10px;
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  border-radius: 0;
+  background: transparent;
+}
+#view-ruptures .rup-grid tbody tr[data-phase] td:first-child { border-left: 0; }
+#view-ruptures .rup-grid th:first-child,
+#view-ruptures .rup-grid td:first-child { padding-left: 14px; }
+#view-ruptures .rup-grid th:last-child,
+#view-ruptures .rup-grid td:last-child { padding-right: 14px; }
+#view-ruptures .rup-grid tbody tr:hover td { background: color-mix(in srgb, var(--ink) 3%, transparent); }
+#view-ruptures .rup-grid tbody tr[aria-selected='true'] td { background: var(--accent-soft); }
+
+.rup-c-client { width: 22%; }
+.rup-c-cmd { width: 74px; }
+.rup-c-depuis { width: 54px; }
+.rup-c-act { width: 150px; }
+#view-ruptures .rup-who { display: flex; flex-direction: column; align-items: flex-start; gap: 0; }
+#view-ruptures .rup-who > span:last-child { max-width: none; }
+#view-ruptures .rup-who b,
+#view-ruptures .rup-who small { max-width: 190px; }
+#view-ruptures .rup-prod img,
+#view-ruptures .rup-prod .rup-blank { width: 38px; height: 38px; border: 0; border-radius: 9px; background: var(--inset); }
+#view-ruptures .rup-prod > span:last-child { max-width: 240px; }
+#view-ruptures .rup-prod small { display: block; font-family: inherit; font-size: 12px; }
+.rup-qui { display: none !important; }
+.rup-repete {
+  display: inline-block;
+  margin-top: 3px;
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: var(--warn-soft);
+  color: var(--warn-ink);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+/* L'état : un point de couleur, le mot, puis ce qui le précise. */
+.rup-file { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; white-space: nowrap; }
+.rup-file::before { content: ''; width: 7px; height: 7px; flex: none; border-radius: 50%; background: currentColor; }
+.rup-file-crit { color: var(--crit-ink); }
+.rup-file-warn { color: var(--warn-ink); }
+.rup-file-accent { color: var(--accent-ink); }
+.rup-file-ok { color: var(--ok-ink); }
+.rup-file-neutre { color: var(--ink-mute); }
+.rup-file-sous { display: block; margin: 2px 0 0 13px; font-size: 12px; color: var(--ink-mute); }
+
+/* Les gestes de la ligne : le mail au-dessus, la décision dessous. */
+.rup-gestes { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+.rup-gestes .btn { justify-content: center; height: 28px; border-radius: 8px; }
+.rup-b-decision { background: var(--inset); border-color: transparent; box-shadow: none; }
+.rup-mail-ok { display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px; font-size: 12px; font-weight: 500; color: var(--ok-ink); white-space: nowrap; }
+.rup-mail-ok svg { width: 12px; height: 12px; stroke-width: 2.2; }
+
+/* Les modèles en rupture. */
+.rup-modeles { padding: 12px 14px 6px; border-radius: 14px; background: var(--surface); box-shadow: var(--mac-filet); }
+.rup-modeles-t { display: flex; align-items: baseline; margin-bottom: 4px; }
+.rup-modeles-t h2 { flex: 1; margin: 0; font-size: 14px; font-weight: 650; }
+.rup-modeles-t span { font-size: 12px; color: var(--ink-mute); }
+.rup-modele { width: 100%; display: flex; align-items: center; gap: 10px; padding: 6px 0; border: 0; background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.rup-modele + .rup-modele { border-top: 1px solid var(--line-soft); }
+.rup-modele img,
+.rup-modele .rup-blank { width: 34px; height: 34px; flex: none; border-radius: 8px; object-fit: cover; background: var(--inset); }
+.rup-modele-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.rup-modele-txt b { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rup-modele-txt small { font-size: 12px; color: var(--ink-mute); }
+.rup-modele-n { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.1; }
+.rup-modele-n b { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.rup-modele-n small { font-size: 11px; color: var(--ink-mute); }
+
+/* Les dates du dossier : un fil, un point par étape, l'écart dessous. */
+.rup-dates { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
+.rup-dates li { position: relative; display: flex; flex-direction: column; align-items: flex-start; padding: 0 0 12px 20px; font-size: 13px; }
+.rup-dates li::before { content: ''; position: absolute; left: 0; top: 5px; width: 9px; height: 9px; border-radius: 50%; background: var(--ink-mute); }
+.rup-dates li::after { content: ''; position: absolute; left: 4px; top: 16px; bottom: 0; width: 1px; background: var(--line); }
+.rup-dates li:last-child { padding-bottom: 4px; }
+.rup-dates li:last-child::after { display: none; }
+.rup-dates b { font-weight: 600; }
+.rup-dates time { font-size: 12px; color: var(--ink-mute); }
+.rup-ecart { margin-top: 3px; padding: 1px 7px; border-radius: 6px; background: var(--inset); font-size: 11.5px; color: var(--ink-soft); }
+.rup-date-gris::before { background: var(--line) !important; box-shadow: inset 0 0 0 1px var(--ink-mute); }
+.rup-date-accent::before { background: #0a84ff !important; }
+.rup-date-warn::before { background: #ff9500 !important; }
+.rup-date-ok::before { background: #34c759 !important; }
+.rup-duree { padding-top: 8px; border-top: 1px solid var(--line-soft); }
+.rup-duree span:last-child { font-weight: 650; }
+.rup-ra-ecrire { align-self: flex-start; margin-top: 4px; }
+.rup-ra-attend .linkish { align-self: center; }
+
+/* La fenêtre « À traiter » : trois tuiles côte à côte. */
+.ra-choix { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.ra-choix .ra-tuile { flex-direction: column; gap: 8px; }
+.ra-choix .ra-ico { width: 30px; height: 30px; border-radius: 8px; }
+.ra-choix .ra-ico-annuler { background: #ff3b30; }
+.ra-choix .ra-ico-remplacer { background: #0a84ff; }
+.ra-choix .ra-ico-attendre { background: #ff9500; }
+
+.ra-modeles.ra-detail { padding: 0; background: transparent; gap: 6px; }
+.ra-nom { height: 34px; padding: 0 11px; border: 0; border-radius: 9px; background: var(--inset); color: var(--ink); font: inherit; font-size: 14px; }
+.ra-nom:focus-visible { outline: none; box-shadow: var(--mac-halo); }
+.ra-sugs { overflow: hidden; border-radius: 12px; background: var(--inset); }
+.ra-sugs:empty { display: none; }
+.ra-sugs .empty { margin: 0; padding: 10px 12px; }
+.ra-sug { width: 100%; display: flex; align-items: center; gap: 10px; padding: 7px 12px; border: 0; background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.ra-sug + .ra-sug { border-top: 1px solid var(--line-soft); }
+.ra-sug:hover { background: color-mix(in srgb, var(--ink) 4%, transparent); }
+.ra-sug[aria-selected='true'] { background: var(--accent-soft); }
+.ra-sug img,
+.ra-sug .rup-blank { width: 32px; height: 32px; flex: none; border-radius: 7px; object-fit: cover; background: var(--sunk); }
+.ra-sug-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ra-sug-txt b { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ra-sug-txt small { font-size: 12px; color: var(--ink-mute); }
+.ra-sug-stock { font-size: 12px; font-weight: 600; color: var(--ok-ink); white-space: nowrap; }
+.ra-sug-coche { width: 16px; flex: none; color: var(--accent-ink); }
+.ra-sug-coche svg { width: 14px; height: 14px; stroke-width: 2.2; }
+.ra-aide { font-size: 12px; color: var(--ink-mute); }
+
+.ra-annuler.ra-detail { display: block; }
+#ra-annuler-texte b { display: block; font-weight: 600; }
+#ra-annuler-texte ol { margin: 8px 0 0; padding: 8px 0 0 18px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--ink-soft); }
+#ra-annuler-texte li + li { margin-top: 4px; }
+
+.ra-restock.ra-detail { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+.ra-restock.ra-detail[hidden] { display: none; }
+.ra-restock .ra-date { padding: 10px 14px; }
+.ra-restock .ra-date + .ra-date { border-top: 1px solid var(--line); }
+.ra-relance-le { margin: 0; padding: 8px 14px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--ink-soft); }
+
+/* Le mail au client. */
+.rm-fen { width: min(580px, 100%); }
+.rm-corps { gap: 8px; }
+.rm-entete { display: grid; grid-template-columns: 54px minmax(0, 1fr); align-items: center; row-gap: 6px; font-size: 13px; }
+.rm-entete > span:first-child,
+.rm-entete label { color: var(--ink-mute); }
+.rm-entete input { height: 30px; padding: 0 9px; border: 0; border-radius: 8px; background: var(--inset); color: var(--ink); font: inherit; font-weight: 600; }
+#rm-texte { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 0; border-radius: 10px; background: var(--inset); color: var(--ink); font: inherit; font-size: 13.5px; line-height: 1.45; resize: vertical; }
+.rm-aide { font-size: 12px; color: var(--ink-mute); }
+
+@media (max-width: 1399px) {
+  .rup-chiffres { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 1279px) {
+  #view-ruptures .rup-split { grid-template-columns: minmax(0, 1fr); }
+  .rup-cote { position: static; max-height: none; overflow: visible; }
+}
+
+/*
+ * Sur téléphone, chaque dossier devient une carte : le modèle et qui l'a
+ * commandé, l'état, puis les deux gestes côte à côte, au doigt.
+ */
+@media (max-width: 900px) {
+  .rup-chiffres { display: flex; overflow-x: auto; gap: 8px; margin: 0 -16px; padding: 0 16px; scrollbar-width: none; }
+  .rup-chiffre { flex: 0 0 128px; padding: 10px 12px; }
+  .rup-chiffre b { order: -1; font-size: 22px; }
+  .rup-chiffre small { display: none; }
+  .rup-liste { overflow: visible; background: transparent; box-shadow: none; }
+  .rup-liste-tete { padding: 0 0 10px; border: 0; }
+  .rup-liste-tete h2 { display: none; }
+  .rup-liste-tete .rup-search { flex-basis: 100%; }
+  .rup-liste-tete .rup-search input { height: 36px; background: var(--surface); font-size: 16px; }
+  .rup-mailauto { width: 100%; justify-content: space-between; margin: 0; padding: 10px 12px; border-radius: 12px; background: var(--surface); color: var(--ink); font-size: 15px; }
+  #view-ruptures .rup-grid thead { display: none; }
+  #view-ruptures .rup-grid,
+  #view-ruptures .rup-grid tbody { display: block; }
+  #view-ruptures .rup-grid tbody tr[data-rup] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: 'art depuis' 'etat etat' 'act act';
+    gap: 4px 8px;
+    margin-bottom: 10px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: var(--surface);
+  }
+  #view-ruptures .rup-grid tbody tr[data-rup] td,
+  #view-ruptures .rup-grid tbody tr[data-rup]:last-child td { display: block; padding: 0; border: 0; background: transparent; text-align: left; }
+  /* La carte se lit sans les intitulés recopiés des tables génériques. */
+  #view-ruptures .rup-grid td::before { display: none; }
+  #view-ruptures .rup-grid tbody tr[data-rup] { box-shadow: none; border: 0; }
+  #view-ruptures .rup-grid tbody tr[aria-selected='true'] { background: var(--surface); }
+  #view-ruptures .rup-grid tbody tr[data-rup] td.rup-c-client,
+  #view-ruptures .rup-grid tbody tr[data-rup] td.rup-c-cmd,
+  #view-ruptures .rup-grid tbody tr[data-rup]:last-child td.rup-c-client,
+  #view-ruptures .rup-grid tbody tr[data-rup]:last-child td.rup-c-cmd { display: none; }
+  #view-ruptures .rup-c-art { grid-area: art; }
+  #view-ruptures .rup-c-depuis { grid-area: depuis; width: auto; font-size: 13px; color: var(--ink-mute); text-align: right; }
+  #view-ruptures .rup-c-etat { grid-area: etat; padding-left: 58px !important; }
+  #view-ruptures .rup-c-act { grid-area: act; width: auto; padding-top: 8px !important; }
+  #view-ruptures .rup-prod { align-items: flex-start; gap: 12px; }
+  #view-ruptures .rup-prod img,
+  #view-ruptures .rup-prod .rup-blank { width: 46px; height: 46px; border-radius: 11px; }
+  #view-ruptures .rup-prod > span:last-child { max-width: none; }
+  #view-ruptures .rup-prod b { font-size: 16px; }
+  #view-ruptures .rup-prod small { font-size: 13.5px; }
+  .rup-qui { display: block !important; }
+  .rup-file { font-size: 14px; }
+  .rup-file-sous { display: inline; margin-left: 6px; font-size: 13px; }
+  .rup-gestes { flex-direction: row; align-items: center; }
+  .rup-gestes > * { flex: 1 1 0; }
+  .rup-gestes .btn { height: 40px; border-radius: 11px; font-size: 15px; }
+  #view-ruptures .rup-gestes .rup-b-mail { background: var(--inset); background-image: none; border-color: transparent; color: var(--accent-ink); box-shadow: none; font-weight: 600; }
+  .rup-mail-ok { justify-content: flex-start; font-size: 13.5px; }
+  .rup-cote { gap: 10px; }
+  .rup-modeles { padding: 10px 14px 4px; }
+  #view-ruptures.pile-fiche .rup-modeles { display: none; }
+  #view-ruptures.pile-fiche .rup-cote .rup-panel { background: transparent; box-shadow: none; }
+  .pile-fiche .rup-dates li { font-size: 15px; }
+}
+
+@media (max-width: 700px) {
+  .ra-choix { grid-template-columns: 1fr; }
+  .ra-choix .ra-tuile { flex-direction: row; align-items: center; }
+  .ra-choix .ra-ico { width: 29px; height: 29px; }
+  .ra-sugs,
+  .ra-nom { background: var(--surface); }
+  .ra-nom { height: 40px; font-size: 16px; }
+  .ra-sug { padding: 9px 14px; }
+  .ra-sug-txt b { font-size: 15px; }
+  .ra-restock .ra-date { flex-wrap: wrap; }
+  .rup-seg button { height: 30px; padding: 0 12px; font-size: 14px; }
+  .rm-fen { display: flex; flex-direction: column; min-height: 100dvh; background: var(--sunk); }
+  #rm-modal .ra-pied-barre { order: -1; position: sticky; top: 0; z-index: 2; padding: 10px 14px; border-top: 0; background: var(--sunk); }
+  #rm-modal .ra-pied { display: none; }
+  #rm-modal #rm-fermer { margin-right: auto; }
+  #rm-modal .ra-pied-barre .btn,
+  #rm-modal .ra-pied-barre .btn:hover:not(:disabled) { height: auto; padding: 4px 0; border: 0; background: transparent; background-image: none; box-shadow: none; color: var(--accent-ink); font-size: 17px; font-weight: 400; }
+  #rm-modal .ra-pied-barre .btn-primary { font-weight: 600; }
+  #rm-modal .ra-pied-barre .btn:disabled { color: var(--ink-mute); opacity: 0.6; }
+  .rm-fen .modal-head { padding: 6px 16px 4px; border: 0; background: transparent; text-align: center; }
+  .rm-entete input,
+  #rm-texte { background: var(--surface); font-size: 16px; }
+}
+
+/* « À rembourser » : les remboursements décidés sur une rupture. */
+.rmb-afaire { display: flex; flex-direction: column; gap: 12px; }
+.rmb-afaire-aide { margin: 0; font-size: 13px; color: var(--ink-mute); }
+.rmb-afaire-liste { overflow: hidden; border-radius: 14px; background: var(--surface); box-shadow: var(--mac-filet); }
+.rmb-afaire-liste .rmb-vide { margin: 0; padding: 18px 16px; }
+.rmb-af-tete,
+.rmb-af-ligne {
+  display: grid;
+  grid-template-columns: minmax(130px, 190px) 74px minmax(0, 1fr) minmax(120px, 190px) 90px auto;
+  align-items: center;
+  column-gap: 14px;
+  padding: 0 16px;
+}
+.rmb-af-tete { height: 32px; font-size: 12px; font-weight: 500; color: var(--ink-mute); border-bottom: 1px solid var(--line-soft); }
+.rmb-af-ligne { min-height: 62px; padding-top: 8px; padding-bottom: 8px; font-size: 13px; }
+.rmb-af-ligne + .rmb-af-ligne { border-top: 1px solid var(--line-soft); }
+.rmb-af-fait { opacity: 0.72; }
+.rmb-af-client,
+.rmb-af-art,
+.rmb-af-par { min-width: 0; display: flex; flex-direction: column; }
+.rmb-af-client b,
+.rmb-af-art b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rmb-af-ligne small { font-size: 12px; color: var(--ink-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rmb-af-montant { text-align: right; font-variant-numeric: tabular-nums; }
+.rmb-af-geste { display: flex; align-items: center; justify-content: flex-end; gap: 12px; white-space: nowrap; }
+.rmb-af-ok { display: inline-flex; align-items: center; gap: 5px; color: var(--ok-ink); font-weight: 500; white-space: nowrap; }
+.rmb-af-ok svg { width: 13px; height: 13px; stroke-width: 2.2; }
+
+@media (max-width: 900px) {
+  .rmb-af-tete { display: none; }
+  .rmb-af-ligne {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: 'client montant' 'art art' 'par par' 'geste geste';
+    row-gap: 4px;
+    padding: 12px 14px;
+  }
+  .rmb-af-client { grid-area: client; }
+  .rmb-af-client b { font-size: 16px; }
+  .rmb-af-cmd { display: none; }
+  .rmb-af-art { grid-area: art; }
+  .rmb-af-par { grid-area: par; }
+  .rmb-af-montant { grid-area: montant; font-size: 16px; }
+  .rmb-af-geste { grid-area: geste; justify-content: space-between; padding-top: 6px; }
+  .rmb-af-geste .btn { flex: 1; height: 40px; border-radius: 11px; font-size: 15px; justify-content: center; }
+}

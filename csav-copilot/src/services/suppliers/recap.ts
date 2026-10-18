@@ -85,7 +85,7 @@ export async function envoyerRecapitulatifs(maintenant = new Date()): Promise<nu
     const dossierOuvert = { ticket: { status: { not: 'CLOSED' as const } } };
 
     const choixConsigne = { ...CHAMPS_CONSIGNE, ticket: { select: { orderName: true } } } as const;
-    const [nouvelles, enAttente, propositions, propositionsEnAttente, consignes, consignesEnAttente] = await Promise.all([
+    const [nouvelles, enAttente, propositions, propositionsEnAttente, consignes, consignesEnAttente, relances] = await Promise.all([
       // Jamais annoncées : les non urgentes, et une urgente dont le mail a
       // échoué — le récapitulatif la rattrape plutôt que de la perdre.
       prisma.supplierAlert.findMany({
@@ -127,6 +127,21 @@ export async function envoyerRecapitulatifs(maintenant = new Date()): Promise<nu
         orderBy: { createdAt: 'asc' },
         select: choixConsigne,
       }),
+      // « Restock » : le jour de relancer le client est venu. L'atelier est
+      // prévenu le même matin que l'équipe, une seule fois.
+      prisma.ruptureConsigne.findMany({
+        where: {
+          ...chez,
+          ...dossierOuvert,
+          choix: 'ATTENDRE',
+          remplaceeLe: null,
+          relanceFaiteLe: null,
+          relancerLe: { lte: maintenant },
+          OR: [{ reponse: null }, { reponse: { not: 'IMPOSSIBLE' } }],
+        },
+        orderBy: { relancerLe: 'asc' },
+        select: { id: true, ticket: { select: { orderName: true } } },
+      }),
     ]);
     const langue = langueAtelier(atelier.langue);
     const enLigne = (consigne: (typeof consignes)[number]) => ({
@@ -143,6 +158,7 @@ export async function envoyerRecapitulatifs(maintenant = new Date()): Promise<nu
         demandes: nouvelles,
         ruptures: parDossier(propositions, maintenant),
         consignes: consignes.map(enLigne),
+        relances: relances.map((relance) => ({ orderName: relance.ticket.orderName })),
       },
       enAttente: {
         demandes: enAttente.map((demande) => ({ ...demande, jours: jours(demande.createdAt) })),
@@ -183,6 +199,10 @@ export async function envoyerRecapitulatifs(maintenant = new Date()): Promise<nu
         prisma.ruptureConsigne.updateMany({
           where: { id: { in: consignesEnAttente.map((consigne) => consigne.id) } },
           data: { rappelLe: maintenant },
+        }),
+        prisma.ruptureConsigne.updateMany({
+          where: { id: { in: relances.map((relance) => relance.id) } },
+          data: { relanceFaiteLe: maintenant },
         }),
         prisma.supplier.update({ where: { id: atelier.id }, data: { recapLe: maintenant } }),
       ]);

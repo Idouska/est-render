@@ -109,6 +109,12 @@ model Merchant {
   /// `{ "bonRetour": 6.5, "fraisAgence": 3, ... }`. Voir `services/couts/calcul.ts`.
   coutsSav Json @default("{}")
 
+  /// Le mail « Rupture de stock » au client part tout seul quand l'atelier
+  /// signale la rupture. Faux : il part au clic, depuis la page des ruptures.
+  /// Le marchand choisit — un mail envoyé à son client en son nom ne part pas
+  /// sans qu'il l'ait voulu.
+  mailRuptureAuto Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -129,6 +135,7 @@ model Merchant {
 
   substitutions RuptureSubstitution[]
   consignes     RuptureConsigne[]
+  aRembourser   RemboursementAFaire[]
   envoisFournisseur EnvoiFournisseur[]
   @@index([organizationId])
 }
@@ -361,6 +368,7 @@ model Ticket {
 
   substitutions RuptureSubstitution[]
   consignes     RuptureConsigne[]
+  aRembourser   RemboursementAFaire[]
   @@unique([merchantId, gmailThreadId])
   @@index([merchantId, status])
   @@index([merchantId, gmailUnread, openedAt])
@@ -863,6 +871,12 @@ model RuptureConsigne {
   avisLe   DateTime?
   rappelLe DateTime?
 
+  /// ATTENDRE : le jour où relancer le client. Ce jour-là, le dossier revient
+  /// dans « À traiter » et l'atelier est relancé dans son récapitulatif.
+  relancerLe     DateTime?
+  /// La relance est partie chez l'atelier : une seule fois.
+  relanceFaiteLe DateTime?
+
   createdById String?
   createdAt   DateTime @default(now())
 
@@ -872,6 +886,40 @@ model RuptureConsigne {
 
   @@index([merchantId, ticketId])
   @@index([merchantId, supplierId, reponse])
+}
+
+/// Un remboursement décidé dans Ruptures de stock, que l'administration fait.
+///
+/// Décider et rembourser ne sont pas le même geste, ni toujours la même
+/// personne : l'équipe SAV choisit « Remboursement » sur une rupture,
+/// l'administration rembourse dans Shopify. Sans cette ligne, la décision
+/// restait dans le dossier et personne ne la voyait dans l'onglet où l'on
+/// rembourse.
+model RemboursementAFaire {
+  id         String @id @default(cuid())
+  merchantId String
+  ticketId   String
+  consigneId String?
+
+  orderName      String?
+  shopifyOrderId String?
+  /// L'article à rembourser, en clair : « Trail Brume · Kaki · 41 ».
+  article        String
+  /// Son prix, relu sur la commande. Nul si Shopify n'a pas répondu.
+  montant        Decimal? @db.Decimal(12, 2)
+  devise         String?
+
+  demandeParId String?
+  createdAt    DateTime  @default(now())
+  /// Fait : remboursé dans l'outil (rattaché), ou marqué fait à la main.
+  faitLe       DateTime?
+  refundId     String?
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  ticket   Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId, faitLe])
+  @@index([ticketId])
 }
 
 enum ConsigneChoix {

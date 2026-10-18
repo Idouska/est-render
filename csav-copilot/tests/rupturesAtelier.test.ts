@@ -33,7 +33,7 @@ test('la clé de fil s’écrit et se relit de la même façon', () => {
   // Écriture, dans la route de signalement.
   assert.match(
     routes,
-    /const threadId = `supplier:\$\{workspace\.supplierId\}:\$\{parsed\.data\.shopifyOrderId\}:\$\{parsed\.data\.kind\}`/,
+    /const threadId = `supplier:\$\{workspace\.supplierId\}:\$\{donnees\.shopifyOrderId\}:\$\{cleArticle\}\$\{donnees\.kind\}`/,
     'la forme de la clé a changé côté écriture',
   );
 

@@ -61,6 +61,7 @@ export const CHAMPS_CONSIGNE = {
   reponseNoteFr: true,
   reponduLe: true,
   remplaceeLe: true,
+  relancerLe: true,
   createdAt: true,
 } satisfies Prisma.RuptureConsigneSelect;
 const champs = CHAMPS_CONSIGNE;
@@ -103,6 +104,7 @@ export function vueConsigne(consigne: ConsigneEnBase) {
     reponseNoteFr: consigne.reponseNoteFr,
     reponduLe: consigne.reponduLe,
     remplaceeLe: consigne.remplaceeLe,
+    relancerLe: consigne.relancerLe,
     envoyeeLe: consigne.createdAt,
     etat: etatConsigne(consigne),
     textes: textesConsigne(aEcrire),
@@ -157,6 +159,8 @@ export async function envoyerConsigne(params: {
   modeles: readonly ModeleConsigne[];
   articlesCommande: number | null;
   mot: string | null;
+  /** ATTENDRE : le jour où relancer le client. */
+  relancerLe?: Date | null;
   createdById: string | null;
 }): Promise<VueConsigne> {
   const mot = params.mot?.trim() || null;
@@ -177,6 +181,7 @@ export async function envoyerConsigne(params: {
         expedierAvant: params.choix === 'ATTENDRE' ? params.expedierAvant : null,
         modeles: params.choix === 'REMPLACER' ? (params.modeles as unknown as Prisma.InputJsonValue) : undefined,
         articlesCommande: params.choix === 'ANNULER' ? params.articlesCommande : null,
+        relancerLe: params.choix === 'ATTENDRE' ? (params.relancerLe ?? null) : null,
         mot,
         motTraduit: traduit ? { en: traduit.en, zh: traduit.zh } : undefined,
         createdById: params.createdById,

@@ -20,89 +20,82 @@ const lire = (chemin: string) =>
   readFileSync(fileURLToPath(new URL(`../${chemin}`, import.meta.url)), 'utf8');
 const app = lire('public/app.js');
 
-function extraire(debut: string): string {
+function extraire(debut: string, finDeBloc = '\n}'): string {
   const i = app.indexOf(debut);
   assert.ok(i >= 0, `introuvable dans public/app.js : ${debut}`);
-  return app.slice(i, app.indexOf('\n}', i) + 2);
+  return app.slice(i, app.indexOf(finDeBloc, i) + finDeBloc.length);
 }
 
 interface Dossier {
   id: string;
   etat: string;
-  priorite: string | null;
   creeLe: string;
-  commandesImpactees: number;
+  suivi?: { file: { aTraiter: boolean; attenteClient: boolean; repete: boolean; attenteAtelier: boolean } };
 }
 
-function filtrer(dossiers: Dossier[], vue = 'tous', tri = 'recent'): string[] {
-  const state = {
-    ruptures: { dossiers, vue, tri, q: '', fournisseur: '', priorite: '' },
-  };
+function filtrer(dossiers: Dossier[], vue = 'tous'): string[] {
+  const state = { ruptures: { dossiers, vue, q: '' } };
   const fn = new Function(
     'state',
-    `${extraire('function rupturesFiltrees')} return rupturesFiltrees;`,
+    [
+      extraire('const RUP_FILTRES = {', '\n};'),
+      extraire('const fileDe = (d) =>', '\n  };'),
+      extraire('function rupturesFiltrees'),
+      'return rupturesFiltrees;',
+    ].join('\n'),
   )(state) as () => Dossier[];
   return fn().map((dossier) => dossier.id);
 }
 
-const d = (id: string, etat: string, jours: number): Dossier => ({
-  id,
-  etat,
-  priorite: etat === 'RESOLU' ? null : 'moyenne',
-  creeLe: new Date(Date.UTC(2026, 8, 10) - jours * 86_400_000).toISOString(),
-  commandesImpactees: 1,
+const file = (patch: Partial<NonNullable<Dossier['suivi']>['file']> = {}) => ({
+  file: { aTraiter: false, attenteClient: false, repete: false, attenteAtelier: false, ...patch },
 });
 
-test('un dossier résolu reste dans « Tous »', () => {
+const d = (id: string, etat: string, jours: number, suivi = file()): Dossier => ({
+  id,
+  etat,
+  creeLe: new Date(Date.UTC(2026, 8, 10) - jours * 86_400_000).toISOString(),
+  suivi,
+});
+
+test('un dossier résolu reste dans « Toutes les ruptures »', () => {
   const ids = filtrer([d('ouvert', 'CLIENT_A_PREVENIR', 2), d('clos', 'RESOLU', 1)]);
   assert.ok(ids.includes('clos'), 'le retirer ferait croire qu’il a été supprimé');
 });
 
-test('les dossiers clos descendent sous le travail restant, quel que soit le tri', () => {
-  // Le dossier clos est le plus récent : en « plus récent », il resterait en
-  // tête, au-dessus de ce qu'il faut encore traiter.
+test('ce qui attend une décision d’abord, les dossiers clos en dernier', () => {
+  // Le dossier clos est le plus récent : en tête, il passerait devant ce qu'il
+  // faut encore traiter.
   const dossiers = [
     d('clos-recent', 'RESOLU', 0),
-    d('ouvert-ancien', 'A_TRAITER', 5),
-    d('ouvert-recent', 'CLIENT_A_PREVENIR', 1),
+    d('attente-recent', 'FOURNISSEUR_CONTACTE', 1, file({ attenteAtelier: true })),
+    d('a-traiter-ancien', 'A_TRAITER', 5, file({ aTraiter: true })),
+    d('a-traiter-recent', 'A_TRAITER', 2, file({ aTraiter: true })),
   ];
-
-  assert.deepEqual(filtrer(dossiers, 'tous', 'recent'), [
-    'ouvert-recent',
-    'ouvert-ancien',
-    'clos-recent',
-  ]);
-  assert.deepEqual(filtrer(dossiers, 'tous', 'ancien'), [
-    'ouvert-ancien',
-    'ouvert-recent',
-    'clos-recent',
-  ], 'l’ordre choisi est respecté à l’intérieur de chaque groupe');
+  assert.deepEqual(filtrer(dossiers), ['a-traiter-recent', 'a-traiter-ancien', 'attente-recent', 'clos-recent']);
 });
 
-test('l’onglet « Résolu » ne montre que les dossiers clos', () => {
-  const ids = filtrer(
-    [d('ouvert', 'CLIENT_A_PREVENIR', 1), d('clos', 'RESOLU', 2)],
-    'RESOLU',
-  );
-  assert.deepEqual(ids, ['clos']);
+test('un chiffre du haut filtre sur le même drapeau que celui qu’il compte', () => {
+  const dossiers = [
+    d('a', 'A_TRAITER', 1, file({ aTraiter: true, repete: true })),
+    d('b', 'A_TRAITER', 1, file({ aTraiter: true, attenteClient: true })),
+    d('c', 'FOURNISSEUR_CONTACTE', 1, file({ attenteAtelier: true })),
+  ];
+  assert.deepEqual(filtrer(dossiers, 'aTraiter').sort(), ['a', 'b']);
+  assert.deepEqual(filtrer(dossiers, 'attenteClient'), ['b']);
+  assert.deepEqual(filtrer(dossiers, 'repete'), ['a']);
+  assert.deepEqual(filtrer(dossiers, 'attenteAtelier'), ['c']);
 });
 
-test('un onglet d’état reste un filtre strict', () => {
-  const ids = filtrer(
-    [d('a', 'A_TRAITER', 1), d('b', 'CLIENT_A_PREVENIR', 1), d('c', 'RESOLU', 1)],
-    'CLIENT_A_PREVENIR',
-  );
-  assert.deepEqual(ids, ['b']);
+test('un dossier clos ne compte dans aucun filtre', () => {
+  // Le serveur ne compte que les dossiers ouverts : la liste filtrée non plus.
+  const ids = filtrer([d('clos', 'RESOLU', 1, file({ aTraiter: true }))], 'aTraiter');
+  assert.deepEqual(ids, []);
 });
 
-test('un dossier clos n’a pas de case à cocher', () => {
-  // L'action groupée ne sait que clôturer : cocher un dossier déjà clos ne
-  // ferait que gonfler le compte du message de confirmation.
-  const lignes = extraire('function renderRuptureLignes');
-  assert.match(lignes, /d\.etat === 'RESOLU'\s*\?\s*''/);
-
-  const cablage = app.slice(app.indexOf("$('rup-all')?.addEventListener"));
-  assert.match(cablage.slice(0, 800), /if \(dossier\.etat === 'RESOLU'\) continue;/);
+test('un dossier clos n’a ni « Envoyer le mail » ni « À traiter »', () => {
+  assert.match(extraire('function mailDeLaLigne'), /if \(d\.etat === 'RESOLU'\) return '';/);
+  assert.match(extraire('function decisionDeLaLigne'), /if \(d\.etat === 'RESOLU'\) return '';/);
 });
 
 test('la clôture ne supprime rien', () => {

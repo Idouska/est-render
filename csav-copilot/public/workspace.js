@@ -1151,6 +1151,7 @@ function ouvrirSignalement(order) {
   state.issueKind = 'PHONE';
   state.issueArticle = 0;
   state.issuePhotos = [];
+  state.issueInfo = null;
   $('issue-note').value = '';
   $('issue-num').value = '';
   $('issue-find-res').innerHTML = '';
@@ -1173,6 +1174,8 @@ function fermerSignalement() {
 function preparerSignalement(order) {
   state.issueOrder = order;
   state.issueArticle = 0;
+  // Une rupture peut toucher plusieurs articles : le premier est coché d'office.
+  state.issueCoches = new Set(order?.lineItems?.length ? [0] : []);
   $('issue-fiche').hidden = !order;
   $('issue-find').hidden = Boolean(order);
   $('issue-fiche').innerHTML = order ? ficheCommande(order) : '';
@@ -1232,7 +1235,17 @@ function renderSignalement() {
   // `data-tph` suit le problème : un changement de langue garde le bon indice.
   const note = $('issue-note');
   note.dataset.tph = `issue.hint.${kind}`;
+  /* Une rupture se dit en cochant les articles : la note n'est plus qu'une
+     précision, et le délai se donne d'une puce. */
+  const rupture = kind === 'STOCK';
+  if (rupture) note.dataset.tph = 'issue.hint.STOCKopt';
   note.placeholder = t(note.dataset.tph);
+  $('issue-infos').hidden = !rupture;
+  document.querySelector('#issue-modal .sig-requis[data-t="issue.required"]').hidden = rupture;
+  $('issue-facultatif').hidden = !rupture;
+  for (const puce of $('issue-infos').querySelectorAll('[data-info]')) {
+    puce.setAttribute('aria-checked', String(puce.dataset.info === state.issueInfo));
+  }
   renderContexte();
   majEnvoiSignalement();
 }
@@ -1291,6 +1304,23 @@ function renderContexte() {
 
 /* Les articles de la commande, à toucher plutôt qu'à retaper. */
 function listeArticles(articles, kind) {
+  /* Une rupture : plusieurs articles peuvent manquer, chacun aura son dossier. */
+  if (kind === 'STOCK') {
+    const coches = state.issueCoches ?? new Set();
+    return `<p class="sig-titre" id="issue-article-titre">${esc(t('issue.whichMissingMany'))} <span class="sig-requis">· ${esc(
+      t('issue.nOf', { n: coches.size, total: articles.length }),
+    )}</span></p>
+    <div class="sig-articles" role="group" aria-labelledby="issue-article-titre">${articles
+      .map(
+        (article, i) => `<button type="button" class="sig-article sig-coche" role="checkbox" data-article="${i}"
+          aria-checked="${coches.has(i)}"><span class="sig-rond" aria-hidden="true"></span>${vignette(
+            article,
+          )}<span class="sig-article-txt"><b>${esc(article.title)}</b><span>${esc(
+            [article.variantTitle, article.sku].filter(Boolean).join(' · '),
+          )}</span></span><span class="sig-qte">× ${esc(article.quantity)}</span></button>`,
+      )
+      .join('')}</div>`;
+  }
   const choisi = articles[state.issueArticle] ?? articles[0];
   return `<p class="sig-titre" id="issue-article-titre">${esc(
     t(kind === 'STOCK' ? 'issue.whichMissing' : 'issue.whichDamaged'),
@@ -1372,8 +1402,25 @@ function pastillesAvertissement(avertissements) {
 
 function signalementPret() {
   // Trois caractères : le minimum que le serveur accepte pour une note.
-  return Boolean(state.issueOrder) && $('issue-note').value.trim().length >= 3;
+  return Boolean(state.issueOrder) && ($('issue-note').value.trim().length >= 3 || rupturePrete());
 }
+
+/* Une rupture se suffit d'un article coché — ou, sans articles à toucher, d'un modèle saisi. */
+function rupturePrete() {
+  if (state.issueKind !== 'STOCK') return false;
+  return state.issueOrder?.lineItems?.length
+    ? (state.issueCoches?.size ?? 0) > 0
+    : Boolean($('issue-product').value.trim() || $('issue-sku').value.trim());
+}
+
+/* Les puces sont envoyées en français : c'est le marchand qui les lit, et
+   l'outil en tire le délai annoncé (« sous 10 jours »). */
+const INFOS_RUPTURE = {
+  j10: 'Réassort sous 10 jours.',
+  m1: 'Réassort sous 1 mois.',
+  fin: 'Plus fabriqué.',
+  inconnue: 'Date de réassort inconnue.',
+};
 
 function majEnvoiSignalement() {
   const pret = signalementPret();
@@ -1485,6 +1532,17 @@ $('issue-contexte')?.addEventListener('click', (event) => {
   }
   const ligne = event.target.closest('[data-article]');
   if (!ligne) return;
+  if (state.issueKind === 'STOCK') {
+    const rang = Number(ligne.dataset.article);
+    const coches = state.issueCoches ?? new Set();
+    if (coches.has(rang)) coches.delete(rang);
+    else coches.add(rang);
+    state.issueCoches = coches;
+    renderContexte();
+    majEnvoiSignalement();
+    $('issue-contexte').querySelector(`[data-article="${rang}"]`)?.focus();
+    return;
+  }
   state.issueArticle = Number(ligne.dataset.article);
   remplirArticle(state.issueOrder?.lineItems?.[state.issueArticle]);
   renderContexte();
@@ -1500,6 +1558,16 @@ $('issue-contexte')?.addEventListener('change', (event) => {
 });
 
 $('issue-note').addEventListener('input', majEnvoiSignalement);
+$('issue-product')?.addEventListener('input', majEnvoiSignalement);
+$('issue-sku')?.addEventListener('input', majEnvoiSignalement);
+
+/* Une puce à la fois ; la retoucher la retire. */
+$('issue-infos')?.addEventListener('click', (event) => {
+  const puce = event.target.closest('[data-info]');
+  if (!puce) return;
+  state.issueInfo = state.issueInfo === puce.dataset.info ? null : puce.dataset.info;
+  renderSignalement();
+});
 
 $('issue-cancel').addEventListener('click', fermerSignalement);
 $('issue-cancel-top')?.addEventListener('click', fermerSignalement);
@@ -1513,17 +1581,41 @@ document.addEventListener('keydown', (event) => {
 });
 
 $('issue-send').addEventListener('click', async () => {
-  const note = $('issue-note').value.trim();
+  const kind = state.issueKind;
+  const rupture = kind === 'STOCK';
+  // La puce d'abord, puis la précision : « Réassort sous 10 jours. Taille 38 seulement. »
+  const note = [rupture && state.issueInfo ? INFOS_RUPTURE[state.issueInfo] : null, $('issue-note').value.trim()]
+    .filter(Boolean)
+    .join(' ');
   if (!state.issueOrder) {
     toast(t('ticket.needOrder'), true);
     return;
   }
-  if (note.length < 3) {
-    toast(t('issue.needNote'), true);
+  if (rupture ? !rupturePrete() : note.length < 3) {
+    toast(t(rupture ? 'issue.needItem' : 'issue.needNote'), true);
     return;
   }
 
-  const kind = state.issueKind;
+  /* Les articles cochés, un dossier chacun : le marchand décidera pour chacun. */
+  const lignes = state.issueOrder.lineItems ?? [];
+  const articles =
+    rupture && lignes.length
+      ? [...(state.issueCoches ?? [])]
+          .sort((a, b) => a - b)
+          .map((rang) => lignes[rang])
+          .filter(Boolean)
+          .map((article) => {
+            const { couleur, taille } = repartirDeclinaison(article.variantTitle);
+            return {
+              product: article.title ?? null,
+              color: couleur || null,
+              size: taille || null,
+              sku: article.sku ?? null,
+              quantity: article.quantity ?? null,
+            };
+          })
+      : null;
+
   $('issue-send').disabled = true;
   $('issue-send-top').disabled = true;
 
@@ -1535,7 +1627,8 @@ $('issue-send').addEventListener('click', async () => {
         orderName: state.issueOrder.name,
         customerEmail: state.issueOrder.customer?.email ?? null,
         kind,
-        note,
+        note: note || null,
+        ...(articles?.length ? { articles } : {}),
         // Champs d'article : envoyés pour une rupture ou un article abîmé —
         // l'agent sait alors lequel sans rouvrir la commande — et seulement
         // s'ils sont remplis : un champ vide n'apprend rien au marchand.
@@ -1553,7 +1646,7 @@ $('issue-send').addEventListener('click', async () => {
     });
 
     fermerSignalement();
-    toast(t('issue.sent'));
+    toast(articles && articles.length > 1 ? t('issue.sentMany', { n: articles.length }) : t('issue.sent'));
   } catch (error) {
     toast(error.message, true);
   } finally {

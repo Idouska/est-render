@@ -514,7 +514,15 @@
 
           <section class="sig-bloc">
             <label class="sig-titre" for="issue-note"><span data-t="issue.note">Détail</span>
-              <span class="sig-requis" data-t="issue.required">· requis</span></label>
+              <span class="sig-requis" data-t="issue.required">· requis</span>
+              <span class="sig-requis" id="issue-facultatif" data-t="issue.optional" hidden>· facultatif</span></label>
+            <!-- Une rupture : le délai en un geste, sans rien écrire. -->
+            <div class="sig-infos" id="issue-infos" role="radiogroup" aria-label="Info rapide" hidden>
+              <button type="button" role="radio" aria-checked="false" data-info="j10" data-t="issue.info.j10">Réassort sous 10 jours</button>
+              <button type="button" role="radio" aria-checked="false" data-info="m1" data-t="issue.info.m1">Réassort sous 1 mois</button>
+              <button type="button" role="radio" aria-checked="false" data-info="fin" data-t="issue.info.fin">Plus fabriqué</button>
+              <button type="button" role="radio" aria-checked="false" data-info="inconnue" data-t="issue.info.inconnue">Date inconnue</button>
+            </div>
             <textarea id="issue-note" rows="3" data-tph="issue.hint.PHONE"
               placeholder="Ex. : il manque un chiffre au numéro."></textarea>
           </section>
