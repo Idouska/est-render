@@ -154,18 +154,19 @@ test('la page demande la confirmation, puis renvoie la correction confirmée', a
     const questions: string[] = [];
     const corriger = new Function(
       'api',
-      'confirm',
+      'confirmer',
       't',
       'state',
       'supplierId',
       `${source} return corrigerColis;`,
     )(
       api,
-      (question: string) => {
+      // L'alerte façon Apple : une promesse, comme la vraie.
+      async (question: string) => {
         questions.push(question);
         return accepte;
       },
-      (cle: string, v: Record<string, string>) => `${cle}:${v.old}→${v.number}`,
+      (cle: string, v?: Record<string, string>) => (v ? `${cle}:${v.old}→${v.number}` : cle),
       { testMode: false },
       'fournisseur',
     ) as (pid: string, corps: object) => Promise<unknown>;

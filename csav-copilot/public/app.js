@@ -1,3 +1,5 @@
+import { demander, informer } from './alerte.js';
+
 /**
  * Dashboard cSAV Copilot.
  *
@@ -6,6 +8,17 @@
  */
 
 const $ = (id) => document.getElementById(id);
+
+/*
+ * Les confirmations, en alerte façon Apple plutôt qu'en fenêtre du
+ * navigateur. Une question écrite « Titre ?\n\nPrécision » garde sa forme :
+ * la première phrase devient le titre en gras, le reste la précision.
+ */
+function confirmer(message, options = {}) {
+  const [titre, ...reste] = String(message).split('\n\n');
+  return demander({ titre, texte: reste.join('\n\n'), ...options });
+}
+
 
 const state = {
   me: null,
@@ -1349,9 +1362,10 @@ async function renderOrphans() {
 
   $('orphans-purge').addEventListener('click', async () => {
     if (
-      !confirm(
+      !await confirmer(
         `Effacer ${count} message${count > 1 ? 's' : ''} venus de boîtes débranchées ?\n\n` +
           'Les brouillons et pièces jointes partent avec eux. Irréversible.',
+        { action: 'Effacer', danger: true, icone: 'corbeille' },
       )
     ) {
       return;
@@ -1829,9 +1843,9 @@ async function loadQueue({ append = false } = {}) {
  * marchand, le jeton se recalcule à la demande.
  */
 async function openSupplierLink(supplierId, revoke = false) {
-  if (revoke && !confirm(
-    'Révoquer le lien coupe l’accès de ce fournisseur immédiatement, y compris '
-      + 'celui qu’il a déjà enregistré. Un nouveau lien sera généré. Continuer ?',
+  if (revoke && !await confirmer(
+    'Révoquer le lien du fournisseur ?\n\nSon accès est coupé immédiatement, y compris le lien qu’il a déjà enregistré. Un nouveau lien sera généré.',
+    { action: 'Révoquer', danger: true, icone: 'lien' },
   )) {
     return;
   }
@@ -1861,7 +1875,10 @@ async function openSupplierLink(supplierId, revoke = false) {
 async function openAgencyLink(agencyId, revoke = false) {
   if (
     revoke &&
-    !confirm('Renouveler le lien coupe l’accès de cette agence immédiatement, y compris celui qu’elle a déjà enregistré. Continuer ?')
+    !await confirmer(
+      'Renouveler le lien de l’agence ?\n\nSon accès est coupé immédiatement, y compris le lien qu’elle a déjà enregistré.',
+      { action: 'Renouveler', danger: true, icone: 'lien' },
+    )
   ) {
     return;
   }
@@ -2606,8 +2623,8 @@ function renderComposeSignatureBadge(signature) {
     ? '<b aria-hidden="true">✓</b> Signature automatique activée'
     : 'Aucune signature — <button type="button" class="linkish" id="compose-sig-set">la configurer</button>';
 
-  $('compose-sig-set')?.addEventListener('click', () => {
-    if (!closeCompose()) return;
+  $('compose-sig-set')?.addEventListener('click', async () => {
+    if (!(await closeCompose())) return;
     voletReglages = 'boutique';
     setView('settings');
   });
@@ -2631,12 +2648,14 @@ function composeDirty() {
  * envoi, clôture, changement de ticket — où la question n'aurait pas de sens.
  * Rend `false` si l'utilisateur a préféré garder sa fenêtre.
  */
-function closeCompose({ force = false } = {}) {
+async function closeCompose({ force = false } = {}) {
   const zone = $('compose');
   if (zone.hidden) return true;
 
   if (!force && composeDirty()) {
-    if (!confirm('Abandonner ce message ? Le texte saisi sera perdu.')) return false;
+    if (!(await confirmer('Abandonner ce message ?\n\nLe texte saisi sera perdu.', { action: 'Abandonner', danger: true, icone: 'message' }))) {
+      return false;
+    }
   }
 
   setComposeOpen(false);
@@ -5031,7 +5050,7 @@ const BULK_CONFIRM = {
 async function runBulk(action, extra, button) {
   const ids = [...state.picked];
   const ask = BULK_CONFIRM[action];
-  if (ask && !confirm(ask.replace('%n', String(ids.length)))) return;
+  if (ask && !await confirmer(ask.replace('%n', String(ids.length)), { action: 'Supprimer', danger: true, icone: 'corbeille' })) return;
 
   if (button) button.disabled = true;
 
@@ -5328,10 +5347,11 @@ function renderTicketLabels(ticket) {
 
   $('d-delete')?.addEventListener('click', async () => {
     if (
-      !confirm(
+      !await confirmer(
         `Supprimer définitivement « ${ticket.subject ?? '(sans objet)'} » ?\n\n` +
           'Le fil, les brouillons et les pièces jointes partent avec lui, et la ' +
           'conversation va à la corbeille de Gmail (récupérable 30 jours depuis Gmail).',
+        { action: 'Supprimer', danger: true, icone: 'corbeille' },
       )
     ) {
       return;
@@ -7577,7 +7597,7 @@ $('sup-f-save').addEventListener('click', async () => {
 $('sup-f-delete').addEventListener('click', async () => {
   const id = state.editingSupplier;
   if (!id) return;
-  if (!confirm('Supprimer ce contact définitivement ?')) return;
+  if (!await confirmer('Supprimer ce contact ?\n\nIl disparaît définitivement de la liste des fournisseurs.', { action: 'Supprimer', danger: true, icone: 'corbeille' })) return;
 
   try {
     await api(`/api/suppliers/${id}`, { method: 'DELETE' });
@@ -11768,7 +11788,7 @@ $('ret-body')?.addEventListener('click', async (event) => {
   const suppr = event.target.closest('[data-ech-suppr]');
   if (suppr) {
     const item = state.returns.cases.find((dossier) => dossier.id === suppr.dataset.echSuppr);
-    if (!confirm(`Supprimer l’échange ${item?.orderName ?? ''} ?\n\nUne paire du stock réservée pour lui y retourne.`)) return;
+    if (!await confirmer(`Supprimer l’échange ${item?.orderName ?? ''} ?\n\nUne paire du stock réservée pour lui y retourne.`, { action: 'Supprimer', danger: true, icone: 'corbeille' })) return;
     try {
       await api(`/api/returns/${suppr.dataset.echSuppr}`, { method: 'DELETE' });
       toast('Échange supprimé.');
@@ -12473,7 +12493,7 @@ $('ret-body').addEventListener('click', async (event) => {
 
   const delAgency = event.target.closest('[data-agency-del]');
   if (delAgency) {
-    if (!confirm('Supprimer cette agence ?')) return;
+    if (!await confirmer('Supprimer cette agence ?\n\nSes dossiers restent, sans agence rattachée.', { action: 'Supprimer', danger: true, icone: 'corbeille' })) return;
     try {
       await api(`/api/return-agencies/${delAgency.dataset.agencyDel}`, { method: 'DELETE' });
       await loadReturns();
@@ -12529,7 +12549,7 @@ $('ret-body').addEventListener('click', async (event) => {
 
   const annuler = event.target.closest('[data-ret-echange-annuler]');
   if (annuler) {
-    if (!confirm('Annuler cet envoi ? La paire réservée retourne au stock et pourra servir ailleurs.')) return;
+    if (!await confirmer('Annuler cet envoi ?\n\nLa paire réservée retourne au stock et pourra servir ailleurs.', { action: 'Annuler l’envoi', annuler: 'Garder', danger: true, icone: 'retour' })) return;
     annuler.disabled = true;
     try {
       await api(`/api/returns/${annuler.dataset.retEchangeAnnuler}/echange/annuler`, { method: 'POST' });
@@ -12571,8 +12591,9 @@ $('ret-body').addEventListener('click', async (event) => {
     const ou = `${nomPays(proposition.paysStock)}${proposition.agence?.nom ? `, ${proposition.agence.nom}` : ''}`;
     const combien = proposition.paires.length > 1 ? `${proposition.paires.length} paires` : 'une paire';
     if (
-      !confirm(
-        `Servir ${proposition.commande} avec ${combien} du stock retours (${ou}) ? La commande disparaîtra de la liste de l’atelier, qui ne l’expédiera pas.`,
+      !await confirmer(
+        `Servir ${proposition.commande} avec ${combien} du stock retours ?\n\n${ou}. La commande disparaît de la liste de l’atelier, qui ne l’expédiera pas.`,
+        { action: 'Servir', icone: 'retour' },
       )
     )
       return;
@@ -12599,8 +12620,9 @@ $('ret-body').addEventListener('click', async (event) => {
   const liberer = event.target.closest('[data-ret-liberer]');
   if (liberer) {
     if (
-      !confirm(
-        `Libérer ${liberer.dataset.retOrder} ? Les paires reviennent au stock, et la commande revient dans la liste de l’atelier.`,
+      !await confirmer(
+        `Libérer ${liberer.dataset.retOrder} ?\n\nLes paires reviennent au stock, et la commande revient dans la liste de l’atelier.`,
+        { action: 'Libérer', icone: 'retour' },
       )
     )
       return;
@@ -12668,7 +12690,7 @@ $('ret-body').addEventListener('click', async (event) => {
 
   const del = event.target.closest('[data-ret-del]');
   if (del) {
-    if (!confirm('Supprimer ce dossier de retour ?')) return;
+    if (!await confirmer('Supprimer ce dossier de retour ?\n\nUne paire du stock réservée pour lui y retourne.', { action: 'Supprimer', danger: true, icone: 'corbeille' })) return;
     try {
       await api(`/api/returns/${del.dataset.retDel}`, { method: 'DELETE' });
       await loadReturns();
@@ -14045,7 +14067,7 @@ function modifierDemande(id) {
 }
 
 async function annulerDemande(bouton) {
-  if (!confirm('Annuler cette demande ? Elle disparaît aussi de l’espace du fournisseur.')) return;
+  if (!await confirmer('Annuler cette demande ?\n\nElle disparaît aussi de l’espace du fournisseur.', { action: 'Annuler la demande', annuler: 'Garder', danger: true, icone: 'message' })) return;
   bouton.disabled = true;
   try {
     await api(`/api/changes/${bouton.dataset.chgCancel}`, { method: 'DELETE' });
@@ -15838,10 +15860,11 @@ function renderSettings() {
         const address = button.closest('.mbx')?.querySelector('code')?.textContent ?? '';
 
         if (
-          !confirm(
+          !await confirmer(
             `Effacer TOUS les messages venus de ${address} ?\n\n` +
               'Les messages, brouillons et pièces jointes partent avec eux. ' +
               'Irréversible.',
+            { action: 'Effacer', danger: true, icone: 'corbeille' },
           )
         ) {
           return;
@@ -15905,17 +15928,19 @@ function renderSettings() {
   // brouillons dont on détient l'identifiant Gmail sont touchés. Un brouillon
   // tapé à la main dans Gmail n'est jamais supprimé, l'outil ignore jusqu'à
   // son existence.
-  $('btn-drafts-purge-all')?.addEventListener('click', function () {
+  $('btn-drafts-purge-all')?.addEventListener('click', async function () {
+    const bouton = this;
     if (
-      !confirm(
+      !await confirmer(
         'Supprimer tous les brouillons générés par l’IA ?\n\n' +
           'Tickets ouverts compris — l’IA les regénérera au prochain traitement. ' +
           'Vos brouillons écrits à la main dans Gmail ne sont pas touchés.',
+        { action: 'Supprimer', danger: true, icone: 'corbeille' },
       )
     ) {
       return;
     }
-    void runDraftsCleanup(this, 'all');
+    void runDraftsCleanup(bouton, 'all');
   });
 
   renderOrphans();
@@ -16013,10 +16038,11 @@ function renderSettings() {
         const address = button.closest('.mbx')?.querySelector('code')?.textContent ?? '';
 
         if (
-          !confirm(
+          !await confirmer(
             `Analyser les 6 derniers mois de ${address} ?\n\n` +
               'Les échanges déjà traités serviront de modèle de ton à l’IA. ' +
               'Ils restent invisibles dans la file et dans les statistiques.',
+            { action: 'Analyser', icone: 'message' },
           )
         ) {
           return;
@@ -16052,7 +16078,7 @@ function renderSettings() {
           (m) => m.id === button.dataset.mbxOff,
         );
 
-        if (!confirm(messageDebranchement(boite))) {
+        if (!await confirmer(messageDebranchement(boite), { action: 'Débrancher', danger: true, icone: 'attention' })) {
           return;
         }
 
@@ -16182,13 +16208,34 @@ $('set-testmode').addEventListener('change', async (event) => {
 });
 
 $('test-effacer').addEventListener('click', async () => {
-  if (!confirm('Effacer tout ce qui a été créé pendant le mode test — colis, remboursements, signalements et ruptures, décisions envoyées aux ateliers, mails de rupture, retours et échanges ? Les données réelles ne sont pas touchées.')) {
+  if (
+    !await confirmer(
+      'Effacer les données de test ?\n\nTout ce qui a été créé pendant le mode test : colis, remboursements, ruptures, décisions aux ateliers, mails, retours et échanges. Les données réelles ne sont pas touchées.',
+      { action: 'Effacer', danger: true, icone: 'test' },
+    )
+  ) {
     return;
   }
   try {
     const r = await api('/api/mode-test/effacer', { method: 'POST' });
-    toast(
-      `Données de test effacées — colis : ${r.colis}, remboursements : ${r.remboursements}, signalements : ${r.signalements ?? 0}, décisions : ${r.decisions ?? 0}, mails : ${r.mails ?? 0}, retours et échanges : ${r.retours ?? 0}.`,
+    /* Ce qui est parti, ligne à ligne ; et, s'il n'y avait rien, le dire
+       sans une rangée de zéros. */
+    const lignes = [
+      ['Colis', r.colis],
+      ['Remboursements', r.remboursements],
+      ['Signalements et ruptures', r.signalements],
+      ['Décisions aux ateliers', r.decisions],
+      ['Mails de rupture', r.mails],
+      ['Retours et échanges', r.retours],
+    ].filter(([, n]) => n > 0);
+    await informer(
+      lignes.length
+        ? { titre: 'Données de test effacées', icone: 'ok', lignes: lignes.map(([nom, n]) => [nom, String(n)]) }
+        : {
+            titre: 'Rien à effacer',
+            icone: 'test',
+            texte: 'Aucune donnée n’a été créée en mode test. Les essais faits avant son activation se suppriment un par un, depuis leur ligne.',
+          },
     );
     // Les écrans déjà chargés relisent : sinon les lignes effacées resteraient affichées.
     void loadRuptures?.();
@@ -16282,9 +16329,10 @@ $('set-policies').addEventListener('click', async () => {
 
   if (
     current &&
-    !confirm(
+    !await confirmer(
       'Remplacer le contenu actuel par vos politiques Shopify ?\n\n' +
         'Ce que vous avez écrit à la main sera perdu.',
+      { action: 'Remplacer', danger: true, icone: 'attention' },
     )
   ) {
     return;
@@ -17005,7 +17053,7 @@ $('canned-f-save').addEventListener('click', async () => {
 
 $('canned-f-delete').addEventListener('click', async () => {
   if (!state.editingCanned) return;
-  if (!confirm('Supprimer cette réponse type ?')) return;
+  if (!await confirmer('Supprimer cette réponse type ?\n\nElle ne sera plus proposée dans les brouillons.', { action: 'Supprimer', danger: true, icone: 'corbeille' })) return;
 
   try {
     await api(`/api/canned-replies/${state.editingCanned}`, { method: 'DELETE' });
@@ -19116,7 +19164,7 @@ function renderARembourser() {
 $('refunds-afaire-liste')?.addEventListener('click', async (event) => {
   const suppr = event.target.closest('[data-af-suppr]');
   if (suppr) {
-    if (!confirm('Supprimer cette ligne « À rembourser » ?\n\nRien n’est remboursé ni annulé chez Shopify.')) return;
+    if (!await confirmer('Supprimer cette ligne « À rembourser » ?\n\nRien n’est remboursé ni annulé chez Shopify.', { action: 'Supprimer', danger: true, icone: 'corbeille' })) return;
     try {
       await api(`/api/refunds/a-faire/${suppr.dataset.afSuppr}`, { method: 'DELETE' });
       toast('Ligne supprimée.');
@@ -21128,7 +21176,7 @@ async function supprimerRupture(d) {
     d.origine === 'atelier'
       ? 'Le signalement de l’atelier, ses décisions et sa ligne « À rembourser » seront effacés.'
       : 'Le dossier, ses décisions et sa ligne « À rembourser » seront effacés ; le mail du client reste dans le SAV.';
-  if (!confirm(`Supprimer le dossier de rupture ${d.commande?.nom ?? ''} ?\n\n${quoi}`)) return;
+  if (!await confirmer(`Supprimer le dossier de rupture ${d.commande?.nom ?? ''} ?\n\n${quoi}`, { action: 'Supprimer', danger: true, icone: 'corbeille' })) return;
   try {
     await api(`/api/ruptures/${d.id}`, { method: 'DELETE' });
     state.ruptures.courant = null;

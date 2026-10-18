@@ -1,4 +1,5 @@
 import { LANGS, LOCALES, pickLang, saveLang, translator } from './agence.i18n.js';
+import { confirmer } from './alerte.js';
 
 /**
  * Le portail d'une agence de retours.
@@ -331,7 +332,7 @@ async function expedier(formulaire) {
         ancien: erreur.donnees?.ancien ?? '',
         numero: suivi,
       });
-      if (!confirm(question)) return;
+      if (!(await confirmer(question, { action: t('al.replace'), annuler: t('al.cancel'), icone: 'attention' }))) return;
       resultat = await envoyer({ orderId, trackingNumber: suivi, carrier: transporteur, prevenirClient: true });
     }
 
