@@ -16416,3 +16416,37 @@ button.rup-chiffre:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--
 .ech-geste .ico-del:hover,
 .rmb-af-geste .ico-del:hover { background: var(--crit-soft); color: var(--crit-ink); }
 .rup-actions [data-rup-act="supprimer"] { color: var(--crit-ink); }
+
+/*
+ * Ruptures : chaque colonne défile de son côté.
+ *
+ * La liste au milieu, les modèles et le dossier à droite — la barre de
+ * gauche défile déjà seule. Descendre un long dossier ne fait plus perdre sa
+ * ligne dans la liste, et inversement.
+ */
+@media (min-width: 1280px) {
+  #view-ruptures .rup-main,
+  #view-ruptures .rup-cote {
+    position: sticky;
+    top: 8px;
+    max-height: calc(100vh - 24px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+  #view-ruptures .rup-main .rup-liste-tete { position: sticky; top: 0; z-index: 2; background: var(--surface); }
+  #view-ruptures .rup-main .table-wrap { overflow: visible; }
+}
+
+/* La date de la demande, en couleur : plus elle vieillit, plus elle se voit. */
+.age { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.age::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.age-frais { background: var(--ok-soft); color: var(--ok-ink); }
+.age-jour { background: var(--warn-soft); color: var(--warn-ink); }
+.age-vieux { background: var(--crit-soft); color: var(--crit-ink); }
+.age-clos { background: var(--inset); color: var(--ink-mute); }
+.rmb-af-qui { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rmb-af-par small,
+.ech-cell small { display: flex; align-items: center; gap: 6px; }
+.rmb-af-par .age,
+.ech-cell .age { padding: 0 6px; font-size: 11px; }

@@ -750,6 +750,30 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
     );
   });
 
+  /**
+   * Les modèles du catalogue pour un nom tapé — « Modifier le modèle ».
+   *
+   * Chaque mot doit se retrouver dans le titre : « mind blue » trouve « Nike
+   * Mind 001 Blackened Blue ». Les déclinaisons en stock d'abord ; celles à
+   * zéro restent visibles, l'atelier peut en avoir sous la main.
+   */
+  app.get('/api/catalogue/variantes', async (request, reply) => {
+    const parsed = z.object({ q: z.string().trim().max(120).default('') }).safeParse(request.query);
+    if (!parsed.success) return reply.code(400).send({ error: 'Paramètres invalides' });
+    const mots = parsed.data.q
+      .split(/\s+/)
+      .map((mot) => mot.replace(/[^\p{L}\p{N}-]/gu, ''))
+      .filter((mot) => mot.length >= 2)
+      .slice(0, 5);
+    if (!mots.length) return reply.send({ options: [] });
+
+    return serveShopify(request, reply, 'Recherche de modèles en échec', async (client) => {
+      const options = await listVariants(client, { query: mots.map((mot) => `title:*${mot}*`).join(' AND '), limit: 40 });
+      options.sort((a, b) => Number(b.availableForSale) - Number(a.availableForSale) || (b.inventoryQuantity ?? 0) - (a.inventoryQuantity ?? 0));
+      return { options };
+    });
+  });
+
   app.get('/api/collections', async (request, reply) => {
     const parsed = listQuery.safeParse(request.query);
     if (!parsed.success) return reply.code(400).send({ error: 'Paramètres invalides' });
