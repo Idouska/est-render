@@ -17,6 +17,8 @@ export const LANGS = [
 
 export const STRINGS = {
   fr: {
+    'al.replace': 'Remplacer',
+    'al.cancel': 'Annuler',
     'ag.title': 'Expéditions depuis votre stock',
     'ag.refresh': 'Rafraîchir',
     'ag.toShip': 'À expédier',
@@ -65,6 +67,8 @@ export const STRINGS = {
     'test.title': 'Mode test',
   },
   en: {
+    'al.replace': 'Replace',
+    'al.cancel': 'Cancel',
     'ag.title': 'Shipments from your stock',
     'ag.refresh': 'Refresh',
     'ag.toShip': 'To ship',
@@ -113,6 +117,8 @@ export const STRINGS = {
     'test.title': 'Test mode',
   },
   es: {
+    'al.replace': 'Sustituir',
+    'al.cancel': 'Cancelar',
     'ag.title': 'Envíos desde su stock',
     'ag.refresh': 'Actualizar',
     'ag.toShip': 'Por enviar',
@@ -161,6 +167,8 @@ export const STRINGS = {
     'test.title': 'Modo de prueba',
   },
   it: {
+    'al.replace': 'Sostituisci',
+    'al.cancel': 'Annulla',
     'ag.title': 'Spedizioni dal vostro stock',
     'ag.refresh': 'Aggiorna',
     'ag.toShip': 'Da spedire',

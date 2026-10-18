@@ -8,6 +8,7 @@
 
 import { LANGS, LOCALES, pickLang, saveLang, translator } from './workspace.i18n.js';
 import { verifierAdresse, verifierTelephone } from './workspace.verif.js';
+import { confirmer } from './alerte.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -1131,7 +1132,7 @@ async function corrigerColis(pid, corps) {
       old: error.donnees?.ancien ?? '',
       number: corps.trackingNumber,
     });
-    if (!confirm(question)) return null;
+    if (!(await confirmer(question, { action: t('al.replace'), annuler: t('al.cancel'), icone: 'attention' }))) return null;
     return api(chemin, { method: 'PATCH', body: { ...corps, prevenirClient: true } });
   }
 }
@@ -2080,7 +2081,7 @@ function ouvrirCorrection(ligne, pid) {
 
 /** Suppression d'un colis, avec confirmation nommant le numéro. */
 async function deleteParcel(parcelId, number, button) {
-  if (!confirm(t('parcel.deleteAsk', { number }))) return;
+  if (!(await confirmer(t('parcel.deleteAsk', { number }), { action: t('al.delete'), annuler: t('al.cancel'), danger: true, icone: 'corbeille' }))) return;
 
   if (button) button.disabled = true;
   try {
