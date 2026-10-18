@@ -11698,6 +11698,7 @@ function renderEchanges(box) {
         const [etat, sous, ton] = etatEchange(item);
         const change = item.wantedTitle && item.wantedTitle !== item.productTitle;
         const fait = Boolean(item.exchangeStockCaseId || item.exchangeSupplierId);
+        const supprimer = `<button class="ico ico-del ech-suppr" type="button" data-ech-suppr="${esc(item.id)}" title="Supprimer" aria-label="Supprimer l’échange">${ico('close')}</button>`;
         const geste = fait
           ? `<span class="rmb-af-ok">${ico('check')}${esc(item.exchangeStockCaseId ? 'Pris dans le stock' : 'Atelier prévenu')}</span>`
           : item.status === 'RECEIVED'
@@ -11710,7 +11711,7 @@ function renderEchanges(box) {
           <span class="ech-cell"><b>${esc(nomPaire(item.wantedTitle, item.wantedVariantTitle))}</b><small class="${change ? 'ech-change' : ''}">${esc(change ? 'modèle changé' : 'même modèle, autre déclinaison')}</small></span>
           <span class="ech-cell"><span class="mono">${esc(item.trackingNumber ?? '—')}</span><small>${esc(item.labelSent ? 'bon fourni' : 'bon à envoyer')}</small></span>
           <span class="ech-cell"><span class="rup-file rup-file-${ton}">${esc(etat)}</span><small class="rup-file-sous">${esc(sous)}</small></span>
-          <span class="ech-geste">${geste}</span>
+          <span class="ech-geste">${geste}${supprimer}</span>
         </div>`;
       })
       .join('')}`
@@ -11763,7 +11764,20 @@ function fermerControleEchange() {
   fenEch.dossier = null;
 }
 
-$('ret-body')?.addEventListener('click', (event) => {
+$('ret-body')?.addEventListener('click', async (event) => {
+  const suppr = event.target.closest('[data-ech-suppr]');
+  if (suppr) {
+    const item = state.returns.cases.find((dossier) => dossier.id === suppr.dataset.echSuppr);
+    if (!confirm(`Supprimer l’échange ${item?.orderName ?? ''} ?\n\nUne paire du stock réservée pour lui y retourne.`)) return;
+    try {
+      await api(`/api/returns/${suppr.dataset.echSuppr}`, { method: 'DELETE' });
+      toast('Échange supprimé.');
+      await loadReturns();
+    } catch (error) {
+      toast(error.message, true);
+    }
+    return;
+  }
   const bouton = event.target.closest('[data-ech-controler]');
   if (!bouton) return;
   ouvrirControleEchange(state.returns.cases.find((item) => item.id === bouton.dataset.echControler));
@@ -19093,13 +19107,25 @@ function renderARembourser() {
                     ? `<button class="btn btn-small btn-primary" type="button" data-af-rembourser="${esc(ligne.id)}">Rembourser</button>`
                     : ''
                 }<button class="linkish" type="button" data-af-fait="${esc(ligne.id)}">Marquer fait</button>`
-          }</span>
+          }<button class="ico ico-del" type="button" data-af-suppr="${esc(ligne.id)}" title="Supprimer" aria-label="Supprimer la ligne">${ico('close')}</button></span>
         </div>`,
       )
       .join('')}`;
 }
 
 $('refunds-afaire-liste')?.addEventListener('click', async (event) => {
+  const suppr = event.target.closest('[data-af-suppr]');
+  if (suppr) {
+    if (!confirm('Supprimer cette ligne « À rembourser » ?\n\nRien n’est remboursé ni annulé chez Shopify.')) return;
+    try {
+      await api(`/api/refunds/a-faire/${suppr.dataset.afSuppr}`, { method: 'DELETE' });
+      toast('Ligne supprimée.');
+      await chargerARembourser();
+    } catch (error) {
+      toast(error.message, true);
+    }
+    return;
+  }
   const rembourser = event.target.closest('[data-af-rembourser]');
   const fait = event.target.closest('[data-af-fait]');
   if (rembourser) {
@@ -21027,6 +21053,11 @@ function renderRuptureActions(d) {
       label: 'Marquer résolu',
       faire: () => void resoudreRupture(d),
     },
+    {
+      cle: 'supprimer',
+      label: 'Supprimer',
+      faire: () => void supprimerRupture(d),
+    },
   ].filter(Boolean);
 
   boite.innerHTML = gestes
@@ -21089,6 +21120,23 @@ function cloreRupture(d) {
   return d.origine === 'atelier'
     ? api(`/api/tickets/${d.ticketId}/resolve`, { method: 'POST', body: '{}' })
     : api(`/api/escalations/${d.id}/resolve`, { method: 'POST', body: '{}' });
+}
+
+/* Supprimer un dossier : un essai, une erreur. Le mail d'un client reste dans le SAV. */
+async function supprimerRupture(d) {
+  const quoi =
+    d.origine === 'atelier'
+      ? 'Le signalement de l’atelier, ses décisions et sa ligne « À rembourser » seront effacés.'
+      : 'Le dossier, ses décisions et sa ligne « À rembourser » seront effacés ; le mail du client reste dans le SAV.';
+  if (!confirm(`Supprimer le dossier de rupture ${d.commande?.nom ?? ''} ?\n\n${quoi}`)) return;
+  try {
+    await api(`/api/ruptures/${d.id}`, { method: 'DELETE' });
+    state.ruptures.courant = null;
+    toast('Dossier supprimé.');
+    await loadRuptures();
+  } catch (error) {
+    toast(error.message, true);
+  }
 }
 
 async function resoudreRupture(d) {

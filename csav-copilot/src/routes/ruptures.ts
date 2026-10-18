@@ -673,6 +673,53 @@ export async function ruptureRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
+  /**
+   * Supprimer un dossier de rupture — un essai, une erreur de saisie.
+   *
+   * Un signalement d'atelier est un ticket à lui seul : il part, avec ses
+   * messages, ses décisions et sa ligne « À rembourser ». Une escalade du
+   * marchand vit sur le mail d'un client : l'escalade, les décisions et la
+   * ligne partent, le mail du client reste dans le SAV.
+   */
+  app.delete<{ Params: { id: string } }>(
+    '/api/ruptures/:id',
+    { preHandler: requirePermission('configure') },
+    async (request, reply) => {
+      const { merchantId, userId } = request.session;
+      const id = request.params.id;
+
+      const signalement = await prisma.ticket.findFirst({
+        where: { id, merchantId, gmailThreadId: { startsWith: 'supplier:', endsWith: ':STOCK' } },
+        select: { id: true },
+      });
+      if (signalement) {
+        await prisma.ticket.delete({ where: { id: signalement.id } });
+      } else {
+        const escalade = await prisma.supplierEscalation.findFirst({
+          where: { id, merchantId, reason: 'OUT_OF_STOCK' },
+          select: { id: true, ticketId: true },
+        });
+        if (!escalade) return reply.code(404).send({ code: 'introuvable', error: 'Dossier introuvable.' });
+        await prisma.$transaction([
+          prisma.remboursementAFaire.deleteMany({ where: { merchantId, ticketId: escalade.ticketId } }),
+          prisma.ruptureConsigne.deleteMany({ where: { merchantId, ticketId: escalade.ticketId } }),
+          prisma.supplierEscalation.delete({ where: { id: escalade.id } }),
+        ]);
+      }
+
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId: userId,
+        action: 'rupture.deleted',
+        targetType: signalement ? 'Ticket' : 'SupplierEscalation',
+        targetId: id,
+        ipAddress: request.ip,
+      });
+      return reply.send({ ok: true });
+    },
+  );
+
   /* ----------------------------------------------------- mail au client -- */
 
   /**
