@@ -60,7 +60,7 @@ test('sur grand écran, la liste des tickets et le ticket ouvert tiennent côte 
   // Le ticket qui quitte la liste cède sa place au suivant.
   assert.match(rendu, /visibles\.find\(\(item\) => item\.id === state\.tk\.choisi\) \?\? visibles\[0\]/);
   // Chaque ticket a un identifiant stable, par source.
-  for (const prefixe of ['upd:', 'rup:', 'sig:', 'ech:']) assert.match(js, new RegExp(`id: \`${prefixe}\\$\\{`), prefixe);
+  for (const prefixe of ['upd:', 'rup:', 'sig:']) assert.match(js, new RegExp(`id: \`${prefixe}\\$\\{`), prefixe);
 });
 
 test('sur téléphone, la liste s’ouvre sur un ticket plein écran, et revient', () => {

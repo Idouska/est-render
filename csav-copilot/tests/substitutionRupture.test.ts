@@ -164,9 +164,10 @@ test('le formulaire s’en sert', () => {
 
 const html = lire('public/workspace.html');
 
-test('quatre entrées de menu, et l’accueil d’abord', () => {
+test('cinq entrées de menu, et l’accueil d’abord', () => {
   const entrees = [...html.matchAll(/data-view="(\w+)"/g)].map((m) => m[1]!);
-  assert.deepEqual(entrees, ['home', 'orders', 'catalog', 'tickets']);
+  // Les échanges ont retrouvé leur onglet : un tableau, demandé par la note Retour/Échange.
+  assert.deepEqual(entrees, ['home', 'orders', 'catalog', 'tickets', 'echanges']);
   assert.match(workspace, /view: 'home',/);
 });
 
@@ -178,7 +179,7 @@ test('le contenu n’a pas disparu : il a changé de place', () => {
   assert.match(workspace, /tickets: \['tickets'\]/);
   // Changements, ruptures, signalements et échanges : tous dans la liste unique.
   const chargement = workspace.slice(workspace.indexOf('async function chargerTickets'));
-  for (const carte of ['carteUpdate(update)', 'carteRupture(demande', 'carteRupture(signalement', 'echangeMarkup(echange']) {
+  for (const carte of ['carteUpdate(update)', 'carteRupture(demande', 'carteRupture(signalement']) {
     assert.ok(chargement.includes(carte), carte);
   }
 });

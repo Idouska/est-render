@@ -3620,3 +3620,44 @@ html:has(.wsapp ~ .modal-wrap.open) { overflow: hidden; }
 @media (max-width: 640px) {
   .wsapp ~ .modal-wrap .sig-infos button { height: 34px; font-size: 15px; }
 }
+
+/* L'onglet Échanges : un tableau, la pointure en colonne. */
+.wsapp .ech-vue { display: flex; flex-direction: column; gap: 12px; }
+.wsapp .ech-titre { margin: 0; font-size: 26px; font-weight: 700; }
+.wsapp .ech-aide,
+.wsapp .ech-vide { margin: 0; font-size: 13px; color: #6e6e73; }
+.wsapp .ech-tab { overflow: hidden; border-radius: 14px; background: #fff; box-shadow: 0 0 0 0.5px rgba(0,0,0,0.08); }
+.wsapp .ech-tr {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr) 90px minmax(120px, 190px) minmax(300px, 380px);
+  align-items: center;
+  column-gap: 14px;
+  min-height: 60px;
+  padding: 8px 16px;
+  font-size: 13px;
+}
+.wsapp .ech-tr + .ech-tr { border-top: 0.5px solid #e5e5ea; }
+.wsapp .ech-th { min-height: 34px; font-size: 12px; font-weight: 500; color: #6e6e73; }
+.wsapp .ech-faite { opacity: 0.7; }
+.wsapp .ech-modele,
+.wsapp .ech-client { min-width: 0; display: flex; flex-direction: column; }
+.wsapp .ech-modele b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wsapp .ech-modele small,
+.wsapp .ech-client small { font-size: 12px; color: #6e6e73; }
+.wsapp .ech-taille { font-size: 16px; }
+.wsapp .ech-tr .ech-suivi { display: flex; flex-direction: row; align-items: center; gap: 6px; margin: 0; padding: 0; border: 0; background: none; }
+.wsapp .ech-tr .ech-suivi input { width: auto; min-width: 0; flex: 1; height: 30px; margin: 0; padding: 0 9px; border: 0; border-radius: 8px; background: #f2f2f7; font: inherit; }
+.wsapp .ech-tr .ech-suivi input[data-champ="transporteur"] { flex: 0.7; }
+.wsapp .ech-tr .ech-suivi .btn { flex: none; height: 30px; white-space: nowrap; }
+@media (max-width: 900px) {
+  .wsapp .ech-th { display: none; }
+  .wsapp .ech-tr { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'modele taille' 'cmd cmd' 'client client' 'suivi suivi'; row-gap: 4px; padding: 12px 14px; }
+  .wsapp .ech-modele { grid-area: modele; }
+  .wsapp .ech-modele b { font-size: 16px; }
+  .wsapp .ech-taille { grid-area: taille; font-size: 20px; }
+  .wsapp .ech-cmd { grid-area: cmd; font-weight: 500; color: #6e6e73; }
+  .wsapp .ech-client { grid-area: client; }
+  .wsapp .ech-tr .ech-suivi { grid-area: suivi; flex-wrap: wrap; padding-top: 6px; }
+  .wsapp .ech-tr .ech-suivi input { flex-basis: 45%; height: 40px; font-size: 16px; }
+  .wsapp .ech-tr .ech-suivi .btn { flex-basis: 100%; height: 42px; font-size: 15px; }
+}

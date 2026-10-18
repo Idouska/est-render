@@ -71,7 +71,8 @@ test('une source en panne éteint sa part de la pastille, et la liste le dit', (
   const chargement = js.slice(js.indexOf('async function chargerTickets'), js.indexOf('async function loadTickets'));
   assert.match(chargement, /setBadge\(updates \? \(updates\.pending \?\? 0\) : 0\)/);
   assert.match(chargement, /if \(!ruptures\) setRuptureBadge\(0\);/);
-  assert.match(chargement, /setEchangeBadge\(echanges \? \(echanges\.aEnvoyer \?\? \[\]\)\.length : 0\)/);
+  // Les échanges ont leur onglet : leur pastille se relève à part.
+  assert.match(chargement, /void rafraichirPastilleEchanges\(\);/);
   assert.match(js, /t\('tk\.partial', \{ quoi: erreurs\.join\(', '\) \}\)/);
 });
 

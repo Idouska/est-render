@@ -73,6 +73,17 @@
           <span class="wsnav-badge" id="ws-tickets-badge" hidden>0</span>
         </button>
 
+        <!-- Les échanges : une paire à envoyer contre une paire retournée,
+             contrôlée chez le marchand. Un tableau à part, comme la note le
+             demande : la pointure se lit d'un coup d'œil. -->
+        <button type="button" data-view="echanges">
+          <span class="wsnav-tuile t-orange" aria-hidden="true"><svg viewBox="0 0 20 20">
+            <path d="M4 7h10l-3-3M16 13H6l3 3" />
+          </svg></span>
+          <span data-t="nav.echanges">Échanges</span>
+          <span class="wsnav-badge" id="ws-echanges-badge" hidden>0</span>
+        </button>
+
         <!-- Réglages rarement touchés, donc rangés en bas : la langue se
              choisit une fois, l'export se prend une fois par jour. -->
         <div class="wsnav-foot">
@@ -370,6 +381,12 @@
              marchand : ses demandes (changements, ruptures, échanges) et ce
              que l'atelier a signalé. Triée par ce qu'il faut en faire, puis
              par type — au lieu de trois onglets à ouvrir un par un. -->
+        <section id="view-echanges" class="ech-vue" hidden>
+          <h1 class="ech-titre" data-t="nav.echanges">Échanges</h1>
+          <p class="ech-aide" data-t="ech.hint">Pas de commande à expédier : le marchand prévient lui-même son client avec votre numéro.</p>
+          <div id="ech-table"></div>
+        </section>
+
         <section id="view-tickets" hidden>
           <header class="wshead tk-head">
             <h1 data-t="tk.title">Tickets</h1>

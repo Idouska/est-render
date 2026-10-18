@@ -1222,6 +1222,11 @@ model ReturnCase {
   /// Entrée au stock : les paires les plus anciennes partent en premier.
   restockedAt DateTime?
 
+  /// La paire retournée a été reçue et contrôlée — pointure et modèle,
+  /// propreté, boîte. C'est ce qui ouvre « Valider l'échange » : avant, on
+  /// enverrait une paire neuve contre un colis qui n'est peut-être jamais parti.
+  controleLe DateTime?
+
   /// D'où vient la paire : « RETOUR » d'un client, ou « MANUEL » — ajoutée
   /// au stock à la main (fin de série, paire d'exposition…). Une paire
   /// manuelle sert les commandes comme les autres, mais n'est pas un retour :

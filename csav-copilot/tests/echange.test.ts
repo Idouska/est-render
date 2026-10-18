@@ -127,7 +127,8 @@ test('sans paire et sans atelier, l’outil le dit au lieu de choisir au hasard'
 /* ---- la réservation ---- */
 
 const retours = sansCommentaires(lire('src/routes/returns.ts'));
-const organiser = retours.slice(retours.indexOf("'/api/returns/:id/echange/organiser'"));
+// La règle vit dans `organiserEchange`, partagée par « Organiser » et « Valider ».
+const organiser = retours.slice(retours.indexOf('async function organiserEchange('));
 
 test('la paire est réservée par une écriture conditionnelle, et un second clic ne prend rien', () => {
   const prise = organiser.indexOf('prisma.returnCase.updateMany');
@@ -249,11 +250,25 @@ test('l’atelier lit ses échanges dans sa langue', () => {
 });
 
 test('la section des échanges existe des deux côtés', () => {
-  // Les échanges ne sont plus un onglet : ils sont une ligne de la liste
-  // unique des tickets, de type « Échange », à expédier ou expédiés.
+  // Les échanges ont leur onglet, en tableau (note Retour/Échange) : une
+  // ligne par paire, la pointure en colonne, le suivi saisi sur la ligne.
   const atelier = lire('public/workspace.js');
   assert.match(atelier, /api\(`\/api\/workspace\/\$\{supplierId\}\/echanges`\)/);
-  assert.match(atelier, /type: 'ECHANGE',[\s\S]*?html: echangeMarkup\(echange, faite\)/);
+  assert.match(atelier, /lignes\.map\(\(\[echange, faite\]\) => ligneEchange\(echange, faite\)\)/);
+  assert.match(lire('public/workspace.html'), /id="view-echanges"/);
   assert.match(lire('public/agence.html'), /id="ag-sec-echanges"/);
   assert.match(lire('public/agence.js'), /ag-sec-echanges'\)\.hidden = echanges\.length === 0/);
+});
+
+test('valider l’échange : la paire reçue, les trois points du contrôle, puis le stock', () => {
+  const valider = retours.slice(retours.indexOf("'/api/returns/:id/echange/valider'"));
+  assert.match(valider, /conforme: z\.literal\(true\), propre: z\.literal\(true\), complet: z\.literal\(true\)/);
+  const garde = valider.indexOf("['RECEIVED', 'RESTOCKED'].includes(dossier.status)");
+  assert.ok(garde > 0, 'pas de validation avant la réception');
+  assert.ok(garde < valider.indexOf('organiserEchange('), 'la garde précède l’envoi');
+  // La paire retournée entre au stock, sauf défaut.
+  assert.match(valider, /status: 'RESTOCKED', restockedAt: maintenant/);
+  assert.match(valider, /status: 'UNUSABLE'/);
+  // Et une paire ne sert jamais son propre échange.
+  assert.match(organiser, /reusedAt: null, id: \{ not: id \}/);
 });
