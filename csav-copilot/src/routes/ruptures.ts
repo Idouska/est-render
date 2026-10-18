@@ -10,6 +10,7 @@ import { CHOIX_CONSIGNE, lireDateConsigne } from '../services/ruptures/consigneT
 import { chiffresRuptures, fileDossier, modelesEnRupture, type DossierDuTableau } from '../services/ruptures/tableau.ts';
 import { delaiAnnonce, envoyerMailRupture, MailImpossible, mailRupture } from '../services/ruptures/mailClient.ts';
 import { compteARembourser } from '../services/ruptures/aRembourser.ts';
+import { enModeTest } from '../services/modeTest.ts';
 import { getShopifyClient, ShopifyError } from '../services/shopify/client.ts';
 import { getOrderById, listOrders, quoteSearchValue } from '../services/shopify/orders.ts';
 import { fournisseurDuFil, lireArticle } from '../services/suppliers/signalement.ts';
@@ -901,6 +902,7 @@ export async function ruptureRoutes(app: FastifyInstance): Promise<void> {
               montant: prix.montant,
               devise: prix.devise,
               demandeParId: userId ?? null,
+              test: await enModeTest(merchantId),
             },
           });
         }

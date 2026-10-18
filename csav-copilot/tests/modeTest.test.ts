@@ -208,7 +208,14 @@ test('l’effacement ne touche que les données de test, du seul marchand connec
   const effacement = route.slice(0, route.indexOf('app.patch('));
   assert.match(effacement, /requirePermission\("configure"\)/);
   const suppressions = [...effacement.matchAll(/deleteMany\(\{ where: ([^}]*\}) \}\)/g)].map((m) => m[1]);
-  assert.deepEqual(suppressions, ['{ merchantId, test: true }', '{ merchantId, test: true }']);
+  // Colis, remboursements, lignes « À rembourser », décisions, retours, signalements :
+  // toujours bornés au marchand et aux lignes marquées « test ».
+  assert.equal(suppressions.length, 6);
+  for (const condition of suppressions) assert.equal(condition, '{ merchantId, test: true }');
+  // Les mails de rupture n'ont pas de colonne : leur trace porte « :test ».
+  assert.match(effacement, /message\.deleteMany\(\{ where: \{ merchantId, gmailMessageId: \{ startsWith: 'rupture-', endsWith: ':test' \} \} \}\)/);
+  // Et rien d'autre n'est supprimé.
+  assert.equal([...effacement.matchAll(/deleteMany\(/g)].length, 7);
 });
 
 /* ---- ce que voient le marchand et l'atelier ---- */

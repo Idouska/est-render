@@ -1918,6 +1918,7 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
       const subject = `${MOTIFS_SIGNALEMENT[donnees.kind].libelle} — ${donnees.orderName ?? 'commande'}`;
       const photos = (donnees.photos ?? []).map(decodePhoto);
 
+      const test = await enModeTest(workspace.merchantId);
       const tickets: { id: string; subject: string | null }[] = [];
       const nouveaux: string[] = [];
       for (const [rang, ligne] of articles.entries()) {
@@ -1956,6 +1957,7 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
             shopifyOrderId: donnees.shopifyOrderId,
             orderName: donnees.orderName ?? null,
             lastMessageAt: new Date(),
+            test,
           },
           update: { status: 'NEEDS_REVIEW', lastMessageAt: new Date() },
           select: { id: true, subject: true },

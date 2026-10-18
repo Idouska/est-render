@@ -3,6 +3,7 @@ import { prisma } from '../../lib/prisma.ts';
 import { sendPlainEmail } from '../gmail/send.ts';
 import { getShopifyClient } from '../shopify/client.ts';
 import { getOrderById } from '../shopify/orders.ts';
+import { enModeTest } from '../modeTest.ts';
 import { lireArticle } from '../suppliers/signalement.ts';
 import { MODELE_RUPTURE, TITRE_REPONSE_TYPE, delaiAnnonce, remplirMail, type ValeursMail } from './mailTexte.ts';
 
@@ -128,12 +129,14 @@ export async function envoyerMailRupture(params: {
     fromName: boutique?.brandName || boutique?.name || boutique?.shopDomain || null,
   });
   const maintenant = new Date();
+  // En mode test, le mail n'est pas parti : sa trace se marque pour être effacée.
+  const test = await enModeTest(params.merchantId);
   await prisma.message.create({
     data: {
       merchantId: params.merchantId,
       ticketId: params.ticketId,
       // Le préfixe dit d'où vient le message : « automatique » se lit sur la ligne.
-      gmailMessageId: `${params.auto ? 'rupture-auto' : 'rupture-mail'}:${params.ticketId}:${envoi.gmailMessageId ?? maintenant.getTime()}`,
+      gmailMessageId: `${params.auto ? 'rupture-auto' : 'rupture-mail'}:${params.ticketId}:${envoi.gmailMessageId ?? maintenant.getTime()}${test ? ':test' : ''}`,
       direction: 'OUTBOUND',
       fromEmail: envoi.fromEmail,
       toEmail: params.a,
