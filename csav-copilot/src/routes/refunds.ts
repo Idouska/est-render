@@ -12,9 +12,12 @@ import { getShopifyClient } from '../services/shopify/client.ts';
 import { enModeTest } from '../services/modeTest.ts';
 import { createRefund, getRefundableTransactions } from '../services/shopify/refunds.ts';
 import { oublierStatsRemboursements, statsRemboursements } from '../services/refunds/stats.ts';
+import { compteARembourser, listeARembourser, marquerRembourse } from '../services/ruptures/aRembourser.ts';
 
 const refundBody = z.object({
   ticketId: z.string().optional(),
+  /** La ligne « À rembourser » que ce remboursement solde, quand il part de là. */
+  aFaireId: z.string().optional(),
   orderId: z.string().min(1),
   amount: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Montant attendu au format 12.34'),
   reason: z.string().min(3).max(500),
@@ -68,7 +71,7 @@ export async function refundRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const { merchantId, userId } = request.session;
-    const { orderId, amount, reason, ticketId, confirmationToken } = parsed.data;
+    const { orderId, amount, reason, ticketId, aFaireId, confirmationToken } = parsed.data;
 
     if (!isValidConfirmationToken(confirmationToken, merchantId, orderId)) {
       return reply.code(400).send({
@@ -152,6 +155,11 @@ export async function refundRoutes(app: FastifyInstance): Promise<void> {
         ipAddress: request.ip,
       });
 
+      // Un remboursement décidé sur une rupture : la ligne « À rembourser » se
+      // solde, et le dossier de rupture se ferme. Sans ligne, rien ne bouge.
+      await marquerRembourse({ merchantId, ticketId, id: aFaireId, refundId: record.id }).catch((error) =>
+        request.log.warn({ err: error, merchantId }, 'Ligne « À rembourser » non soldée'),
+      );
       // Les statistiques gardées en cache ne comptent pas encore celui-ci.
       oublierStatsRemboursements(merchantId);
       return reply.send({ id: record.id, shopifyRefundId: refundId, status: 'COMPLETED' });
@@ -178,6 +186,36 @@ export async function refundRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(502).send({ error: `Shopify a refusé le remboursement : ${message}` });
     }
   });
+
+  /*
+   * « À rembourser » : les remboursements décidés dans Ruptures de stock, que
+   * l'administration fait — ici, ou dans Shopify, puis « Marquer fait ».
+   */
+  app.get('/api/refunds/a-faire', async (request, reply) => {
+    const { merchantId } = request.session;
+    const [lignes, compte] = await Promise.all([listeARembourser(merchantId), compteARembourser(merchantId)]);
+    return reply.send({ lignes, compte });
+  });
+
+  app.post<{ Params: { id: string } }>(
+    '/api/refunds/a-faire/:id/fait',
+    { preHandler: requirePermission('refund') },
+    async (request, reply) => {
+      const { merchantId, userId } = request.session;
+      const soldees = await marquerRembourse({ merchantId, id: request.params.id });
+      if (!soldees) return reply.code(404).send({ code: 'introuvable', error: 'Ligne introuvable, ou déjà soldée.' });
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId: userId,
+        action: 'refund.marked_done',
+        targetType: 'RemboursementAFaire',
+        targetId: request.params.id,
+        ipAddress: request.ip,
+      });
+      return reply.send({ ok: true });
+    },
+  );
 
   /*
    * Les statistiques : combien, pourquoi, sur quels produits. Même fenêtre

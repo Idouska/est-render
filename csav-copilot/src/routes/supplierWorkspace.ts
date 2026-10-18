@@ -36,6 +36,7 @@ import {
   ReponseRefusee,
 } from '../services/ruptures/consigne.ts';
 import { consigneSurLaCommande } from '../services/ruptures/consigneTexte.ts';
+import { mailRuptureAutomatique } from '../services/ruptures/mailClient.ts';
 
 const TRENTE_JOURS = 30 * 24 * 60 * 60 * 1000;
 /** Photos jointes à un signalement : assez pour montrer un défaut sous trois angles. */
@@ -1856,13 +1857,22 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
       const workspace = await authorize(request, reply);
       if (!workspace) return;
 
+      const article = z.object({
+        product: z.string().max(200).nullish(),
+        color: z.string().max(80).nullish(),
+        size: z.string().max(40).nullish(),
+        sku: z.string().max(80).nullish(),
+        quantity: z.number().int().min(1).max(999).nullish(),
+      });
       const parsed = z
         .object({
           shopifyOrderId: z.string().min(1).max(120),
           orderName: z.string().max(60).nullish(),
           customerEmail: z.string().email().max(200).nullish(),
           kind: z.enum(['PHONE', 'ADDRESS', 'STOCK', 'DAMAGE', 'OTHER']),
-          note: z.string().min(3).max(2000),
+          /* La note : obligatoire, sauf pour une rupture — les articles cochés
+             disent déjà tout, et « Info rapide » n'est qu'un complément. */
+          note: z.string().trim().max(2000).nullish(),
           /*
            * Détail de l'article, pour une rupture.
            *
@@ -1872,11 +1882,11 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
            * signalé. Les champs sont libres et facultatifs : un formulaire
            * strict ferait renoncer au signalement.
            */
-          product: z.string().max(200).nullish(),
-          color: z.string().max(80).nullish(),
-          size: z.string().max(40).nullish(),
-          sku: z.string().max(80).nullish(),
-          quantity: z.number().int().min(1).max(999).nullish(),
+          ...article.shape,
+          /* Plusieurs articles d'une même commande en rupture : un dossier par
+             article, puisque chacun aura sa propre décision — attendre l'un,
+             remplacer l'autre. */
+          articles: z.array(article).min(1).max(20).nullish(),
           /*
            * Les photos d'un article abîmé. Une semelle décollée se voit d'un
            * coup d'œil sur une photo, et c'est elle qui décide du
@@ -1890,88 +1900,121 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
       if (!parsed.success) {
         return reply.code(400).send({ error: 'Signalement incomplet' });
       }
+      const donnees = parsed.data;
+      const note = donnees.note?.trim() ?? '';
+      const rupture = donnees.kind === 'STOCK';
+      if (!rupture && note.length < 3) return reply.code(400).send({ error: 'Signalement incomplet' });
+
+      const articles =
+        rupture && donnees.articles?.length
+          ? donnees.articles
+          : [{ product: donnees.product, color: donnees.color, size: donnees.size, sku: donnees.sku, quantity: donnees.quantity }];
+      if (rupture && !note && !articles.some((ligne) => ligne.product?.trim() || ligne.sku?.trim())) {
+        return reply.code(400).send({ error: 'Signalement incomplet' });
+      }
 
       // Les libellés vivent avec la clé du fil : c'est le même module qui
       // relit le motif côté marchand.
-      const subject = `${MOTIFS_SIGNALEMENT[parsed.data.kind].libelle} — ${parsed.data.orderName ?? 'commande'}`;
+      const subject = `${MOTIFS_SIGNALEMENT[donnees.kind].libelle} — ${donnees.orderName ?? 'commande'}`;
+      const photos = (donnees.photos ?? []).map(decodePhoto);
 
-      // Le fil est identifié par la commande et le motif : deux signalements
-      // identiques le même jour ne créent pas deux tickets concurrents.
-      const threadId = `supplier:${workspace.supplierId}:${parsed.data.shopifyOrderId}:${parsed.data.kind}`;
+      const tickets: { id: string; subject: string | null }[] = [];
+      const nouveaux: string[] = [];
+      for (const [rang, ligne] of articles.entries()) {
+        /* Le fil est identifié par la commande et le motif : deux signalements
+           identiques le même jour ne créent pas deux tickets concurrents. Avec
+           plusieurs articles, chacun a son fil — sa référence, sinon son nom —
+           et la clé finit toujours par le motif, que relit `motifDuFil`. */
+        const cleArticle =
+          articles.length > 1
+            ? `${(ligne.sku?.trim() || [ligne.product, ligne.color, ligne.size].filter(Boolean).join(' ') || String(rang + 1))
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-|-$/g, '')
+                .slice(0, 60)}:`
+            : '';
+        const threadId = `supplier:${workspace.supplierId}:${donnees.shopifyOrderId}:${cleArticle}${donnees.kind}`;
 
-      const ticket = await prisma.ticket.upsert({
-        where: {
-          merchantId_gmailThreadId: { merchantId: workspace.merchantId, gmailThreadId: threadId },
-        },
-        create: {
-          merchantId: workspace.merchantId,
-          gmailThreadId: threadId,
-          subject,
-          // Le fournisseur n'est pas le client : sans email client connu, on
-          // note l'origine plutôt que d'inventer une adresse.
-          customerEmail: parsed.data.customerEmail ?? `fournisseur+${workspace.supplierId}@local`,
-          customerName: workspace.supplierName,
-          status: 'NEEDS_REVIEW',
-          intent: 'OTHER',
-          shopifyOrderId: parsed.data.shopifyOrderId,
-          orderName: parsed.data.orderName ?? null,
-          lastMessageAt: new Date(),
-        },
-        update: { status: 'NEEDS_REVIEW', lastMessageAt: new Date() },
-        select: { id: true, subject: true },
-      });
-
-      const message = await prisma.message.create({
-        data: {
-          merchantId: workspace.merchantId,
-          ticketId: ticket.id,
-          gmailMessageId: `${threadId}:${Date.now()}`,
-          direction: 'INBOUND',
-          fromEmail: `fournisseur+${workspace.supplierId}@local`,
-          subject,
-          // L'extrait de la file : la note de l'atelier, comme les premiers
-          // mots d'un mail. Sans lui, la ligne n'avait pas de troisième étage.
-          snippet: parsed.data.note.replace(/\s+/g, ' ').trim().slice(0, 200),
-          bodyText: [
-            `Signalé par ${workspace.supplierName} depuis l'atelier.`,
-            '',
-            // Le détail de l'article avant la note libre : c'est ce qui décide
-            // de la réponse au client, la note ne fait que l'expliquer.
-            // Le format vit dans `signalement.ts`, qui sait aussi le relire :
-            // la page des ruptures en extrait la taille et la référence.
-            lignesArticle({
-              produit: parsed.data.product ?? null,
-              couleur: parsed.data.color ?? null,
-              taille: parsed.data.size ?? null,
-              reference: parsed.data.sku ?? null,
-              quantite: parsed.data.quantity ?? null,
-            }).join('\n'),
-            '',
-            parsed.data.note,
-          ]
-            .filter((line) => line !== '' || true)
-            .join('\n')
-            .replace(/\n{3,}/g, '\n\n'),
-          receivedAt: new Date(),
-        },
-        select: { id: true },
-      });
-
-      /* Les photos, en pièces jointes du message : le SAV les montre déjà sous
-         chaque message, en vignettes. Aucun mail derrière — le contenu est en
-         base (`Attachment.data`), comme celui des photos d'étiquettes. */
-      const photos = (parsed.data.photos ?? []).map(decodePhoto);
-      if (photos.length) {
-        await prisma.attachment.createMany({
-          data: photos.map((photo, i) => ({
-            merchantId: workspace.merchantId,
-            messageId: message.id,
-            filename: `photo-${i + 1}.${photo.mime.split('/')[1] === 'jpeg' ? 'jpg' : photo.mime.split('/')[1]}`,
-            mimeType: photo.mime,
-            size: photo.data.byteLength,
-            data: photo.data,
-          })),
+        const existant = await prisma.ticket.findUnique({
+          where: { merchantId_gmailThreadId: { merchantId: workspace.merchantId, gmailThreadId: threadId } },
+          select: { id: true },
         });
+        const ticket = await prisma.ticket.upsert({
+          where: {
+            merchantId_gmailThreadId: { merchantId: workspace.merchantId, gmailThreadId: threadId },
+          },
+          create: {
+            merchantId: workspace.merchantId,
+            gmailThreadId: threadId,
+            subject,
+            // Le fournisseur n'est pas le client : sans email client connu, on
+            // note l'origine plutôt que d'inventer une adresse.
+            customerEmail: donnees.customerEmail ?? `fournisseur+${workspace.supplierId}@local`,
+            customerName: workspace.supplierName,
+            status: 'NEEDS_REVIEW',
+            intent: 'OTHER',
+            shopifyOrderId: donnees.shopifyOrderId,
+            orderName: donnees.orderName ?? null,
+            lastMessageAt: new Date(),
+          },
+          update: { status: 'NEEDS_REVIEW', lastMessageAt: new Date() },
+          select: { id: true, subject: true },
+        });
+        tickets.push(ticket);
+        if (!existant) nouveaux.push(ticket.id);
+
+        const detail = lignesArticle({
+          produit: ligne.product ?? null,
+          couleur: ligne.color ?? null,
+          taille: ligne.size ?? null,
+          reference: ligne.sku ?? null,
+          quantite: ligne.quantity ?? null,
+        });
+        const message = await prisma.message.create({
+          data: {
+            merchantId: workspace.merchantId,
+            ticketId: ticket.id,
+            gmailMessageId: `${threadId}:${Date.now()}`,
+            direction: 'INBOUND',
+            fromEmail: `fournisseur+${workspace.supplierId}@local`,
+            subject,
+            // L'extrait de la file : la note de l'atelier, comme les premiers
+            // mots d'un mail — ou l'article, quand la note est restée vide.
+            snippet: (note || detail.join(' · ')).replace(/\s+/g, ' ').trim().slice(0, 200),
+            bodyText: [
+              `Signalé par ${workspace.supplierName} depuis l'atelier.`,
+              '',
+              // Le détail de l'article avant la note libre : c'est ce qui décide
+              // de la réponse au client, la note ne fait que l'expliquer.
+              // Le format vit dans `signalement.ts`, qui sait aussi le relire :
+              // la page des ruptures en extrait la taille et la référence.
+              detail.join('\n'),
+              '',
+              note,
+            ]
+              .join('\n')
+              .replace(/\n{3,}/g, '\n\n')
+              .trim(),
+            receivedAt: new Date(),
+          },
+          select: { id: true },
+        });
+
+        /* Les photos, en pièces jointes du message : le SAV les montre déjà sous
+           chaque message, en vignettes. Aucun mail derrière — le contenu est en
+           base (`Attachment.data`), comme celui des photos d'étiquettes. */
+        if (photos.length) {
+          await prisma.attachment.createMany({
+            data: photos.map((photo, i) => ({
+              merchantId: workspace.merchantId,
+              messageId: message.id,
+              filename: `photo-${i + 1}.${photo.mime.split('/')[1] === 'jpeg' ? 'jpg' : photo.mime.split('/')[1]}`,
+              mimeType: photo.mime,
+              size: photo.data.byteLength,
+              data: photo.data,
+            })),
+          });
+        }
       }
 
       await recordAudit({
@@ -1980,12 +2023,22 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
         actorId: workspace.supplierId,
         action: 'supplier.issue_reported',
         targetType: 'Ticket',
-        targetId: ticket.id,
-        metadata: { kind: parsed.data.kind, orderName: parsed.data.orderName, photos: photos.length },
+        targetId: tickets[0]!.id,
+        metadata: { kind: donnees.kind, orderName: donnees.orderName, photos: photos.length, articles: tickets.length },
         ipAddress: request.ip,
       });
 
-      return reply.send({ ticket });
+      /* Le mail au client, quand le marchand l'a voulu automatique : il part
+         après la réponse, l'atelier n'a pas à attendre Shopify ni Gmail. */
+      if (rupture) {
+        for (const ticketId of nouveaux) {
+          void mailRuptureAutomatique(workspace.merchantId, ticketId).catch((error) =>
+            request.log.warn({ err: error, ticketId }, 'Mail de rupture automatique non envoyé'),
+          );
+        }
+      }
+
+      return reply.send({ ticket: tickets[0], tickets });
     },
   );
 

@@ -204,9 +204,9 @@ test('clôturer un signalement passe par la route des tickets', () => {
   assert.match(corps, /\/api\/tickets\/\$\{d\.ticketId\}\/resolve/);
   assert.match(corps, /\/api\/escalations\/\$\{d\.id\}\/resolve/);
 
-  // Et la clôture groupée emprunte la même porte.
-  const groupe = app.slice(app.indexOf("$('rup-bulk')?.addEventListener"));
-  assert.match(groupe.slice(0, 1400), /await cloreRupture\(dossier\)/);
+  // Et « Marquer résolu », dans le dossier, emprunte la même porte.
+  const resoudre = app.slice(app.indexOf('async function resoudreRupture'));
+  assert.match(resoudre.slice(0, 300), /await cloreRupture\(d\)/);
 });
 
 test('on n’écrit jamais au client via l’adresse de repli de l’atelier', () => {

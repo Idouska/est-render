@@ -3600,3 +3600,23 @@ html:has(.wsapp ~ .modal-wrap.open) { overflow: hidden; }
   .wsapp .csg-titre { font-size: 18px; }
   .wsapp .csg-boutons .btn { flex: 1; min-height: 48px; font-size: 16px; }
 }
+
+/* Une rupture : le délai d'une puce, au-dessus de la précision facultative. */
+.wsapp ~ .modal-wrap .sig-infos { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.wsapp ~ .modal-wrap .sig-infos button {
+  height: 28px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface, #fff);
+  box-shadow: inset 0 0 0 1px var(--sig-filet, #d1d1d6);
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.wsapp ~ .modal-wrap .sig-infos button[aria-checked="true"] { background: var(--brand); box-shadow: none; color: #fff; font-weight: 600; }
+.wsapp ~ .modal-wrap .sig-infos button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+@media (max-width: 640px) {
+  .wsapp ~ .modal-wrap .sig-infos button { height: 34px; font-size: 15px; }
+}

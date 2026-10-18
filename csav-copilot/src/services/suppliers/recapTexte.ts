@@ -29,6 +29,11 @@ export interface ConsigneDuRecap {
   court: string;
 }
 
+/** Un réassort attendu dont la date de relance du client est arrivée. */
+export interface RelanceDuRecap {
+  orderName: string | null;
+}
+
 type EnAttente<T> = T & { jours: number };
 
 const deuxPointsDe = (langue: LangueAtelier) => (langue === 'fr' ? ' : ' : langue === 'zh' ? '：' : ': ');
@@ -69,6 +74,10 @@ export function ligneConsigne(consigne: ConsigneDuRecap, langue: LangueAtelier =
   return `- ${consigne.orderName ?? mots.sansCommande} — ${mots.reponseMarchand}${deuxPointsDe(langue)}${consigne.court}`;
 }
 
+export function ligneRelance(relance: RelanceDuRecap, langue: LangueAtelier = 'fr'): string {
+  return `- ${relance.orderName ?? MOTS[langue].sansCommande} — ${MOTS[langue].relanceRestock}`;
+}
+
 export function recapDuJour(contexte: {
   langue?: LangueAtelier;
   merchantName: string;
@@ -76,6 +85,7 @@ export function recapDuJour(contexte: {
     demandes: readonly DemandeDuRecap[];
     ruptures: readonly RuptureDuRecap[];
     consignes?: readonly ConsigneDuRecap[];
+    relances?: readonly RelanceDuRecap[];
   };
   enAttente: {
     demandes: ReadonlyArray<EnAttente<DemandeDuRecap>>;
@@ -92,6 +102,7 @@ export function recapDuJour(contexte: {
     ...contexte.nouvelles.demandes.map((demande) => ligneDemande(demande, langue)),
     ...contexte.nouvelles.ruptures.map((rupture) => ligneRupture(rupture, langue)),
     ...(contexte.nouvelles.consignes ?? []).map((consigne) => ligneConsigne(consigne, langue)),
+    ...(contexte.nouvelles.relances ?? []).map((relance) => ligneRelance(relance, langue)),
   ];
   const enAttente = [
     ...contexte.enAttente.demandes.map((demande) => ligneDemande(demande, langue) + depuis(demande.jours)),

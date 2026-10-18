@@ -7,6 +7,9 @@ import { requirePermission, requireSession } from '../plugins/auth.ts';
 import { atelierDuDossier, ouvrirDossierRupture, proposerSubstitutions } from '../services/ruptures/substitution.ts';
 import { consignesDesTickets, envoyerConsigne, prevenirSansAttendre } from '../services/ruptures/consigne.ts';
 import { CHOIX_CONSIGNE, lireDateConsigne } from '../services/ruptures/consigneTexte.ts';
+import { chiffresRuptures, fileDossier, modelesEnRupture, type DossierDuTableau } from '../services/ruptures/tableau.ts';
+import { delaiAnnonce, envoyerMailRupture, MailImpossible, mailRupture } from '../services/ruptures/mailClient.ts';
+import { compteARembourser } from '../services/ruptures/aRembourser.ts';
 import { getShopifyClient, ShopifyError } from '../services/shopify/client.ts';
 import { getOrderById, listOrders, quoteSearchValue } from '../services/shopify/orders.ts';
 import { fournisseurDuFil, lireArticle } from '../services/suppliers/signalement.ts';
@@ -60,7 +63,7 @@ export async function ruptureRoutes(app: FastifyInstance): Promise<void> {
        signalements d'atelier dont le ticket n'est pas clos. Ne compter que les
        premières ferait afficher « 2 » dans le menu au-dessus d'une page qui en
        montre 9 — les sept signalés par l'atelier. */
-    const [escalades, signalements] = await Promise.all([
+    const [escalades, signalements, aRembourser] = await Promise.all([
       prisma.supplierEscalation.count({
         where: { merchantId, reason: 'OUT_OF_STOCK', status: { not: 'RESOLVED' } },
       }),
@@ -71,9 +74,12 @@ export async function ruptureRoutes(app: FastifyInstance): Promise<void> {
           status: { notIn: ['CLOSED', 'AUTO_SENT'] },
         },
       }),
+      // La pastille d'Annulation/Remboursement : ce que l'administration doit
+      // rembourser. Relevée ici pour ne pas ajouter un appel de plus par minute.
+      compteARembourser(merchantId),
     ]);
 
-    return reply.send({ ouverts: escalades + signalements });
+    return reply.send({ ouverts: escalades + signalements, aRembourser });
   });
 
   app.get('/api/ruptures', async (request, reply) => {
@@ -158,11 +164,17 @@ export async function ruptureRoutes(app: FastifyInstance): Promise<void> {
       }),
     ]);
 
+    const reglages = await prisma.merchant.findUnique({ where: { id: merchantId }, select: { mailRuptureAuto: true } });
+    const mailRuptureAuto = reglages?.mailRuptureAuto ?? false;
+
     if (signalements.length === 0 && escalations.length === 0) {
       return reply.send({
         dossiers: [],
         kpis: kpisRuptures([]),
         compteurs: compteursVues([]),
+        chiffres: chiffresRuptures([]),
+        modeles: [],
+        mailRuptureAuto,
         shopifyError: null,
       });
     }
@@ -191,7 +203,16 @@ export async function ruptureRoutes(app: FastifyInstance): Promise<void> {
       ...escalations.map((escalade) => escalade.ticketId),
     ];
 
-    const [dernieresReponses, remboursements, consignes] = await Promise.all([
+    const commandesIds = [
+      ...new Set(
+        [
+          ...signalements.map((ticket) => ticket.shopifyOrderId),
+          ...escalations.map((escalade) => escalade.ticket.shopifyOrderId),
+        ].filter((id): id is string => Boolean(id)),
+      ),
+    ];
+
+    const [dernieresReponses, remboursements, consignes, sortants, colis, aRembourser] = await Promise.all([
       prisma.message.groupBy({
         by: ['ticketId'],
         where: { merchantId, ticketId: { in: ticketIds }, direction: 'OUTBOUND' },
@@ -204,6 +225,25 @@ export async function ruptureRoutes(app: FastifyInstance): Promise<void> {
       }),
       // Ce que le marchand a déjà répondu à l'atelier, et ce qu'il en a dit.
       consignesDesTickets(merchantId, ticketIds),
+      // Le premier mail au client depuis la rupture : la date, et s'il est parti tout seul.
+      prisma.message.findMany({
+        where: { merchantId, ticketId: { in: ticketIds }, direction: 'OUTBOUND' },
+        orderBy: { receivedAt: 'asc' },
+        select: { ticketId: true, receivedAt: true, gmailMessageId: true },
+      }),
+      // Le nouveau colis : c'est lui qui dit que l'atelier a traité.
+      commandesIds.length
+        ? prisma.parcel.findMany({
+            where: { merchantId, shopifyOrderId: { in: commandesIds } },
+            orderBy: { createdAt: 'asc' },
+            select: { shopifyOrderId: true, trackingNumber: true, createdAt: true },
+          })
+        : [],
+      prisma.remboursementAFaire.findMany({
+        where: { merchantId, ticketId: { in: ticketIds } },
+        orderBy: { createdAt: 'asc' },
+        select: { ticketId: true, faitLe: true, montant: true, devise: true },
+      }),
     ]);
 
     const reponduLe = new Map(
@@ -458,8 +498,57 @@ export async function ruptureRoutes(app: FastifyInstance): Promise<void> {
       }),
     ];
 
+    /*
+     * Le suivi de chaque dossier : le mail au client, le nouveau colis, le
+     * remboursement — et ce qu'il en reste à faire.
+     */
+    const premierApres = <T extends { createdAt?: Date; receivedAt?: Date }>(liste: readonly T[], depuis: Date) =>
+      liste.find((element) => (element.receivedAt ?? element.createdAt)! > depuis) ?? null;
+    const tableau: DossierDuTableau[] = [];
+    const suivis = dossiers.map((dossier, rang) => {
+      const brut = bruts[rang]!;
+      const creeLe = new Date(dossier.creeLe);
+      const mail = premierApres(sortants.filter((message) => message.ticketId === dossier.ticketId), creeLe);
+      const parcel = dossier.commande.shopifyId
+        ? premierApres(colis.filter((ligne) => ligne.shopifyOrderId === dossier.commande.shopifyId), creeLe)
+        : null;
+      const remboursement = aRembourser.filter((ligne) => ligne.ticketId === dossier.ticketId).at(-1) ?? null;
+      const cle = cleProduit(brut);
+      const pourTableau: DossierDuTableau = {
+        resolu: dossier.etat === 'RESOLU',
+        creeLe,
+        mailClientLe: mail?.receivedAt ?? null,
+        nouveauSuiviLe: parcel?.createdAt ?? null,
+        remboursementFait: remboursement ? Boolean(remboursement.faitLe) : null,
+        joursAnnonces: dossier.origine === 'atelier' ? delaiAnnonce(dossier.signalement) : null,
+        consignes: dossier.consignes,
+        produit: {
+          cle,
+          nom: dossier.article?.titre ?? null,
+          variante: dossier.article?.variante ?? null,
+        },
+      };
+      tableau.push(pourTableau);
+      return {
+        ...dossier,
+        suivi: {
+          mailClientLe: mail?.receivedAt ?? null,
+          mailAuto: Boolean(mail?.gmailMessageId.startsWith('rupture-auto:')),
+          nouveauSuiviLe: parcel?.createdAt ?? null,
+          nouveauSuivi: parcel?.trackingNumber ?? null,
+          remboursement: remboursement
+            ? { faitLe: remboursement.faitLe, montant: montant(remboursement.montant), devise: remboursement.devise }
+            : null,
+          file: fileDossier(pourTableau),
+        },
+      };
+    });
+
     return reply.send({
-      dossiers,
+      dossiers: suivis,
+      chiffres: chiffresRuptures(tableau),
+      modeles: modelesEnRupture(tableau),
+      mailRuptureAuto,
       kpis: kpisRuptures(bruts),
       compteurs: compteursVues(bruts),
       /** Nommé plutôt que masqué : l'écran affiche ce qui manque, et pourquoi. */
@@ -583,6 +672,86 @@ export async function ruptureRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
+  /* ----------------------------------------------------- mail au client -- */
+
+  /**
+   * Le mail « Rupture de stock », rempli pour ce dossier, à relire.
+   *
+   * Il ne part pas d'ici : la fenêtre le montre d'abord. Un mail envoyé au
+   * client en son nom, le marchand doit l'avoir lu — sauf s'il a choisi
+   * l'envoi automatique.
+   */
+  app.get<{ Params: { ticketId: string } }>('/api/ruptures/:ticketId/mail', async (request, reply) => {
+    try {
+      return reply.send(await mailRupture(request.session.merchantId, request.params.ticketId));
+    } catch (error) {
+      if (error instanceof MailImpossible) {
+        return reply.code(error.code === 'introuvable' ? 404 : 409).send({ code: error.code, error: error.message });
+      }
+      throw error;
+    }
+  });
+
+  app.post<{ Params: { ticketId: string } }>(
+    '/api/ruptures/:ticketId/mail',
+    { preHandler: requirePermission('reply') },
+    async (request, reply) => {
+      const { merchantId, userId } = request.session;
+      const parsed = z
+        .object({ sujet: z.string().trim().min(1).max(300), corps: z.string().trim().min(10).max(8000) })
+        .safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ code: 'invalide', error: 'Le mail est vide.' });
+
+      try {
+        // L'adresse se relit au serveur : jamais celle que la page enverrait.
+        const prevu = await mailRupture(merchantId, request.params.ticketId);
+        const le = await envoyerMailRupture({
+          merchantId,
+          ticketId: request.params.ticketId,
+          a: prevu.a,
+          sujet: parsed.data.sujet,
+          corps: parsed.data.corps,
+          auto: false,
+        });
+        await recordAudit({
+          merchantId,
+          actorType: 'USER',
+          actorId: userId,
+          action: 'rupture.mail_client',
+          targetType: 'Ticket',
+          targetId: request.params.ticketId,
+          ipAddress: request.ip,
+        });
+        return reply.send({ envoyeLe: le });
+      } catch (error) {
+        if (error instanceof MailImpossible) {
+          return reply.code(error.code === 'introuvable' ? 404 : 409).send({ code: error.code, error: error.message });
+        }
+        throw error;
+      }
+    },
+  );
+
+  /** Au clic, ou dès que l'atelier signale. */
+  app.put('/api/ruptures/reglages', { preHandler: requirePermission('configure') }, async (request, reply) => {
+    const { merchantId, userId } = request.session;
+    const parsed = z.object({ mailRuptureAuto: z.boolean() }).safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ code: 'invalide', error: 'Réglage invalide.' });
+
+    await prisma.merchant.update({ where: { id: merchantId }, data: { mailRuptureAuto: parsed.data.mailRuptureAuto } });
+    await recordAudit({
+      merchantId,
+      actorType: 'USER',
+      actorId: userId,
+      action: 'rupture.mail_auto',
+      targetType: 'Merchant',
+      targetId: merchantId,
+      metadata: { mailRuptureAuto: parsed.data.mailRuptureAuto },
+      ipAddress: request.ip,
+    });
+    return reply.send({ mailRuptureAuto: parsed.data.mailRuptureAuto });
+  });
+
   /* ----------------------------------------------------------- consigne -- */
 
   /**
@@ -618,6 +787,16 @@ export async function ruptureRoutes(app: FastifyInstance): Promise<void> {
             .max(4)
             .nullish(),
           mot: z.string().max(1000).nullish(),
+          /** Restock : relancer le client dans tant de jours. */
+          relancerDans: z.number().int().min(1).max(60).nullish(),
+          /** L'article en rupture, pour la ligne « À rembourser ». */
+          article: z
+            .object({
+              titre: z.string().trim().max(300).nullish(),
+              variante: z.string().trim().max(120).nullish(),
+              sku: z.string().trim().max(120).nullish(),
+            })
+            .nullish(),
         })
         .safeParse(request.body);
       if (!parsed.success) {
@@ -668,10 +847,15 @@ export async function ruptureRoutes(app: FastifyInstance): Promise<void> {
          le reste ou rien. Une lecture de la commande ; si Shopify ne répond
          pas, la consigne part quand même, sans promettre l'un ou l'autre. */
       let articlesCommande: number | null = null;
+      // Le prix de l'article, pour la ligne « À rembourser » : celui de la commande.
+      let prix: { montant: string | null; devise: string | null } = { montant: null, devise: null };
       if (choix === 'ANNULER' && ticket.shopifyOrderId) {
         try {
           const commande = await getOrderById(await getShopifyClient(merchantId), ticket.shopifyOrderId);
           articlesCommande = commande ? commande.lineItems.reduce((total, ligne) => total + ligne.quantity, 0) : null;
+          const sku = parsed.data.article?.sku?.trim();
+          const ligne = commande?.lineItems.find((item) => sku && item.sku === sku) ?? (commande?.lineItems.length === 1 ? commande.lineItems[0] : undefined);
+          prix = { montant: ligne?.price ? String(ligne.price) : null, devise: commande?.currency ?? null };
         } catch (error) {
           request.log.warn({ err: error, ticketId: ticket.id }, 'Commande non relue pour la consigne');
         }
@@ -688,8 +872,39 @@ export async function ruptureRoutes(app: FastifyInstance): Promise<void> {
         modeles,
         articlesCommande,
         mot,
+        // Restock : le jour où le dossier revient dans « À traiter » pour relancer le client.
+        relancerLe:
+          choix === 'ATTENDRE' && parsed.data.relancerDans
+            ? new Date(Date.now() + parsed.data.relancerDans * 86_400_000)
+            : null,
         createdById: userId ?? null,
       });
+
+      /* Remboursement : l'administration le voit dans Annulation/Remboursement.
+         Une seule ligne ouverte par dossier — changer d'avis et revenir au
+         remboursement ne la double pas. */
+      if (choix === 'ANNULER') {
+        const ouverte = await prisma.remboursementAFaire.findFirst({
+          where: { merchantId, ticketId: ticket.id, faitLe: null },
+          select: { id: true },
+        });
+        if (!ouverte) {
+          const article = parsed.data.article;
+          await prisma.remboursementAFaire.create({
+            data: {
+              merchantId,
+              ticketId: ticket.id,
+              consigneId: consigne.id,
+              orderName: ticket.orderName,
+              shopifyOrderId: ticket.shopifyOrderId,
+              article: [article?.titre, article?.variante].filter(Boolean).join(' · ') || 'Article en rupture',
+              montant: prix.montant,
+              devise: prix.devise,
+              demandeParId: userId ?? null,
+            },
+          });
+        }
+      }
 
       const boutique = await prisma.merchant.findUnique({
         where: { id: merchantId },

@@ -11394,6 +11394,7 @@ const ICONS = {
   // La fenêtre de rédaction : agrandir, restaurer, fermer.
   expand: '<path d="M9.5 2.5h4v4M6.5 13.5h-4v-4M13.5 2.5 9 7M2.5 13.5 7 9"/>',
   collapse: '<path d="M13.5 6.5h-4v-4M2.5 9.5h4v4M13.5 2.5 9.5 6.5M2.5 13.5 6.5 9.5"/>',
+  check: '<path d="M3.5 8.5l3 3 6-7"/>',
   close: '<path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/>',
   // Des chevrons, pas des flèches : précédent et suivant, comme dans Mail.
   prec: '<path d="M10 3.5 5.5 8l4.5 4.5"/>',
@@ -13265,6 +13266,8 @@ async function refreshChangesCount() {
       // En échec, la pastille garde sa valeur : un compteur qui rate un tour
       // ne doit ni s'éteindre ni retomber à zéro, ce qui dirait « plus rien ».
       ruptures: ruptures?.ouverts ?? state.navCounts?.ruptures ?? 0,
+      // Les remboursements décidés sur une rupture, que l'administration doit faire.
+      refunds: ruptures?.aRembourser ?? state.navCounts?.refunds ?? 0,
     };
     renderNav();
   } catch {
@@ -13318,7 +13321,7 @@ function renderNav() {
            */
           const mute = ['orders', 'customers', 'catalog'].includes(view);
           const dim = view === 'tracking';
-          const hot = ['changes', 'suppliers', 'retour', 'ruptures', 'envoi'].includes(view) && tally > 0;
+          const hot = ['changes', 'suppliers', 'retour', 'ruptures', 'envoi', 'refunds'].includes(view) && tally > 0;
           const shown = tally > 9999 ? '9999+' : tally;
           const badge = tally && !mute;
           const courant = meta.alias
@@ -14101,7 +14104,11 @@ const VIEW_LOADERS = {
   envoi: () => loadEnvoi(),
   returns: () => loadReturns(),
   tracking: () => loadTracking(),
-  refunds: () => chargerVueRemboursements(),
+  refunds: () => {
+    // Une pastille rouge mène à ce qu'elle compte : la liste à rembourser.
+    if ((state.navCounts?.refunds ?? 0) > 0) vueRemboursements = 'afaire';
+    chargerVueRemboursements();
+  },
   disputes: () => loadDisputes(),
   team: () => loadTeam(),
   stats: () => loadStats(),
@@ -16339,8 +16346,14 @@ function closeModal() {
   state.refund = null;
 }
 
-$('btn-refund').addEventListener('click', async () => {
-  const ticket = state.detail?.ticket;
+/**
+ * Ouvre la fenêtre de remboursement sur une commande.
+ *
+ * Deux entrées : le message client, et la ligne « À rembourser » d'une
+ * rupture — qui propose le prix de l'article plutôt que la commande entière,
+ * et se solde quand le remboursement part.
+ */
+async function ouvrirRemboursement(ticket, options = {}) {
   if (!ticket?.shopifyOrderId) return;
 
   try {
@@ -16350,12 +16363,17 @@ $('btn-refund').addEventListener('click', async () => {
       `/api/refunds/preview?orderId=${encodeURIComponent(ticket.shopifyOrderId)}`,
     );
 
-    state.refund = { ticket, preview };
+    state.refund = { ticket, preview, aFaireId: options.aFaireId ?? null, apres: options.apres ?? null };
 
+    const propose =
+      typeof options.montant === 'number' && options.montant > 0
+        ? Math.min(options.montant, Number(preview.refundableAmount))
+        : Number(preview.refundableAmount);
     $('r-order').textContent = ticket.orderName ?? '';
     $('r-max').textContent = euro(preview.refundableAmount, preview.currency);
-    $('r-amount').value = Number(preview.refundableAmount).toFixed(2);
-    $('r-echo').textContent = euro(preview.refundableAmount, preview.currency);
+    $('r-amount').value = propose.toFixed(2);
+    $('r-echo').textContent = euro(propose, preview.currency);
+    if (options.motif) $('r-reason').value = options.motif;
     $('r-check').checked = false;
     $('r-go').disabled = true;
 
@@ -16364,7 +16382,9 @@ $('btn-refund').addEventListener('click', async () => {
   } catch (error) {
     toast(error.message, true);
   }
-});
+}
+
+$('btn-refund').addEventListener('click', () => void ouvrirRemboursement(state.detail?.ticket));
 
 $('r-amount').addEventListener('input', () => {
   const value = Number($('r-amount').value.replace(',', '.')) || 0;
@@ -16388,7 +16408,7 @@ document.addEventListener('keydown', (event) => {
 $('r-go').addEventListener('click', async () => {
   if (!state.refund) return;
 
-  const { ticket, preview } = state.refund;
+  const { ticket, preview, aFaireId, apres } = state.refund;
   const amount = $('r-amount').value.replace(',', '.');
 
   $('r-go').disabled = true;
@@ -16398,6 +16418,7 @@ $('r-go').addEventListener('click', async () => {
       method: 'POST',
       body: JSON.stringify({
         ticketId: ticket.id,
+        ...(aFaireId ? { aFaireId } : {}),
         orderId: ticket.shopifyOrderId,
         amount,
         reason: $('r-reason').value,
@@ -16407,6 +16428,7 @@ $('r-go').addEventListener('click', async () => {
 
     closeModal();
     toast(`Remboursement de ${euro(amount, preview.currency)} effectué.`);
+    if (apres) await apres();
     await loadAudit();
   } catch (error) {
     $('r-go').disabled = false;
@@ -18808,7 +18830,8 @@ $('refunds-range')?.addEventListener('click', (event) => {
  */
 let vueRemboursements = (() => {
   try {
-    return localStorage.getItem('csav.remb.vue') === 'liste' ? 'liste' : 'stats';
+    const vue = localStorage.getItem('csav.remb.vue');
+    return vue === 'liste' || vue === 'afaire' ? vue : 'stats';
   } catch {
     return 'stats';
   }
@@ -18822,17 +18845,103 @@ const PERIODES_REMB = { 30: '30 jours', 90: '90 jours', 180: '6 mois', 365: '12 
 
 function chargerVueRemboursements() {
   const stats = vueRemboursements === 'stats';
+  const aFaire = vueRemboursements === 'afaire';
   $('refunds-stats').hidden = !stats;
-  $('refunds-liste').hidden = stats;
+  $('refunds-liste').hidden = vueRemboursements !== 'liste';
+  $('refunds-afaire').hidden = !aFaire;
+  // La période ne dit rien de ce qui reste à faire : elle se retire.
+  $('refunds-range').hidden = aFaire;
   $('refunds-vue')
     .querySelectorAll('[data-vue]')
     .forEach((onglet) => onglet.setAttribute('aria-selected', String(onglet.dataset.vue === vueRemboursements)));
   $('refunds-range')
     .querySelectorAll('[data-days]')
     .forEach((bouton) => bouton.setAttribute('aria-pressed', String(Number(bouton.dataset.days) === refundDays)));
+  void chargerARembourser();
   if (stats) void chargerStatsRemboursements();
-  else void loadRefunds();
+  else if (!aFaire) void loadRefunds();
 }
+
+/*
+ * « À rembourser » : ce que l'équipe a décidé sur une rupture, et que
+ * l'administration fait.
+ *
+ * « Rembourser » ouvre la fenêtre de toujours, avec le prix de l'article ; le
+ * remboursement parti, la ligne se solde et le dossier de rupture se ferme.
+ * Fait à la main dans Shopify, « Marquer fait » solde la ligne de la même façon.
+ */
+let aRembourser = { lignes: [], compte: 0 };
+
+async function chargerARembourser() {
+  try {
+    aRembourser = await api('/api/refunds/a-faire');
+  } catch (error) {
+    if (vueRemboursements === 'afaire') {
+      $('refunds-afaire-liste').innerHTML = `<p class="rmb-vide">${esc(error.message)}</p>`;
+    }
+    return;
+  }
+  $('refunds-n-afaire').textContent = aRembourser.compte ? String(aRembourser.compte) : '';
+  state.navCounts = { ...state.navCounts, refunds: aRembourser.compte };
+  renderNav();
+  renderARembourser();
+}
+
+function renderARembourser() {
+  const boite = $('refunds-afaire-liste');
+  const lignes = aRembourser.lignes ?? [];
+  if (!lignes.length) {
+    boite.innerHTML = '<p class="rmb-vide">Rien à rembourser : les remboursements décidés sur une rupture arriveront ici.</p>';
+    return;
+  }
+  const jour = (date) => new Date(date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+  boite.innerHTML = `<div class="rmb-af-tete" aria-hidden="true"><span>Client</span><span>Commande</span><span>Article et raison</span><span>Demandé par</span><span class="num">Montant</span><span></span></div>
+    ${lignes
+      .map(
+        (ligne) => `<div class="rmb-af-ligne${ligne.faitLe ? ' rmb-af-fait' : ''}">
+          <span class="rmb-af-client"><b>${esc(ligne.client?.nom ?? ligne.client?.email ?? 'Client')}</b>${
+            ligne.client?.nom && ligne.client?.email ? `<small>${esc(ligne.client.email)}</small>` : ''
+          }</span>
+          <b class="rmb-af-cmd">${esc(ligne.orderName ?? '—')}</b>
+          <span class="rmb-af-art"><b>${esc(ligne.article)}</b><small>Rupture · l’atelier n’expédie pas cet article</small></span>
+          <span class="rmb-af-par"><span>${esc(ligne.demandePar ?? 'L’équipe')}</span><small>depuis Ruptures de stock · ${esc(jour(ligne.demandeLe))}</small></span>
+          <b class="rmb-af-montant num">${typeof ligne.montant === 'number' ? esc(euro(ligne.montant, ligne.devise ?? 'EUR')) : '—'}</b>
+          <span class="rmb-af-geste">${
+            ligne.faitLe
+              ? `<span class="rmb-af-ok">${ico('check')}Remboursé · ${esc(jour(ligne.faitLe))}</span>`
+              : `${
+                  ligne.shopifyOrderId
+                    ? `<button class="btn btn-small btn-primary" type="button" data-af-rembourser="${esc(ligne.id)}">Rembourser</button>`
+                    : ''
+                }<button class="linkish" type="button" data-af-fait="${esc(ligne.id)}">Marquer fait</button>`
+          }</span>
+        </div>`,
+      )
+      .join('')}`;
+}
+
+$('refunds-afaire-liste')?.addEventListener('click', async (event) => {
+  const rembourser = event.target.closest('[data-af-rembourser]');
+  const fait = event.target.closest('[data-af-fait]');
+  if (rembourser) {
+    const ligne = aRembourser.lignes.find((candidat) => candidat.id === rembourser.dataset.afRembourser);
+    if (!ligne) return;
+    await ouvrirRemboursement(
+      { id: ligne.ticketId, shopifyOrderId: ligne.shopifyOrderId, orderName: ligne.orderName },
+      { montant: ligne.montant, aFaireId: ligne.id, motif: 'Article en rupture de stock', apres: chargerARembourser },
+    );
+  } else if (fait) {
+    fait.disabled = true;
+    try {
+      await api(`/api/refunds/a-faire/${fait.dataset.afFait}/fait`, { method: 'POST', body: '{}' });
+      toast('Marqué remboursé : le dossier de rupture est clos.');
+      await chargerARembourser();
+    } catch (error) {
+      fait.disabled = false;
+      toast(error.message, true);
+    }
+  }
+});
 
 $('refunds-vue').addEventListener('click', (event) => {
   const onglet = event.target.closest('[data-vue]');
@@ -19352,15 +19461,17 @@ state.ruptures = {
   dossiers: [],
   kpis: null,
   compteurs: {},
+  /** Les cinq chiffres du haut, calculés au serveur (`tableau.ts`). */
+  chiffres: null,
+  /** Les modèles en rupture sur quatre-vingt-dix jours. */
+  modeles: [],
+  /** Le mail au client part au clic, ou dès que l'atelier signale. */
+  mailRuptureAuto: false,
   shopifyError: null,
   vue: 'tous',
   q: '',
-  fournisseur: '',
-  priorite: '',
-  tri: 'recent',
   page: 1,
-  taille: 10,
-  cochees: new Set(),
+  taille: 25,
   courant: null,
   chargement: false,
   erreur: null,
@@ -19368,35 +19479,29 @@ state.ruptures = {
   alternatives: null,
 };
 
-const RUP_LIBELLES = {
-  A_TRAITER: 'À traiter',
-  CLIENT_A_PREVENIR: 'Client à prévenir',
-  FOURNISSEUR_EN_ATTENTE: 'Fournisseur en attente',
-  FOURNISSEUR_CONTACTE: 'Fournisseur contacté',
-  REMBOURSEMENT: 'Remboursement',
-  RESOLU: 'Résolu',
-};
-
-/* Les trois temps, pour l'infobulle de la barre de couleur : une couleur seule
-   ne dit rien à qui ne connaît pas le code, et rien du tout à qui ne
-   distingue pas le rouge du vert. */
+/* Les trois temps, pour l'infobulle de la ligne : une couleur seule ne dit
+   rien à qui ne connaît pas le code, et rien du tout à qui ne distingue pas
+   le rouge du vert. */
 const RUP_PHASES = {
   cree: 'Créé — le client n’a pas encore eu de réponse',
   traite: 'Traité — le client a eu une réponse',
   classe: 'Classé — dossier clos',
 };
 
-/* L'ordre des vues suit celui du travail : ce qui n'a pas commencé, ce qui
-   attend quelqu'un d'autre, ce qui attend un geste de nous, puis l'archive. */
-const RUP_VUES = [
-  'tous',
-  'A_TRAITER',
-  'CLIENT_A_PREVENIR',
-  'FOURNISSEUR_EN_ATTENTE',
-  'FOURNISSEUR_CONTACTE',
-  'REMBOURSEMENT',
-  'RESOLU',
-];
+/*
+ * Les chiffres du haut sont aussi les filtres de la liste.
+ *
+ * Un chiffre qu'on ne peut pas ouvrir oblige à chercher les dossiers qu'il
+ * compte ; cliquer « 3 À traiter » doit montrer ces trois-là. Chacun lit le
+ * même drapeau que le serveur a posé sur le dossier (`suivi.file`), pour que
+ * le chiffre et la liste filtrée ne se contredisent jamais.
+ */
+const RUP_FILTRES = {
+  aTraiter: { titre: 'À traiter', sous: 'sans décision envoyée', ton: 'crit', garde: (file) => file.aTraiter },
+  attenteClient: { titre: 'En attente du client', sous: 'mail parti, pas de réponse', ton: 'accent', garde: (file) => file.attenteClient },
+  repete: { titre: 'Ruptures répétées', sous: 'le 2e choix manque aussi', ton: 'warn', garde: (file) => file.repete },
+  attenteAtelier: { titre: 'En attente de l’atelier', sous: 'pas encore de nouveau suivi', ton: 'violet', garde: (file) => file.attenteAtelier },
+};
 
 async function loadRuptures() {
   const r = state.ruptures;
@@ -19409,6 +19514,9 @@ async function loadRuptures() {
     r.dossiers = data.dossiers ?? [];
     r.kpis = data.kpis ?? null;
     r.compteurs = data.compteurs ?? {};
+    r.chiffres = data.chiffres ?? null;
+    r.modeles = data.modeles ?? [];
+    r.mailRuptureAuto = Boolean(data.mailRuptureAuto);
     r.shopifyError = data.shopifyError ?? null;
 
     /* La pastille suit la page sans attendre la relève. Clôturer un dossier
@@ -19421,7 +19529,6 @@ async function loadRuptures() {
     // Une sélection qui ne désigne plus rien laisserait un panneau figé sur un
     // dossier disparu, ce qui se lit comme un écran qui ne se rafraîchit pas.
     const ids = new Set(r.dossiers.map((d) => d.id));
-    for (const id of [...r.cochees]) if (!ids.has(id)) r.cochees.delete(id);
     if (r.courant && !ids.has(r.courant)) r.courant = null;
   } catch (error) {
     r.erreur = error.message;
@@ -19431,19 +19538,30 @@ async function loadRuptures() {
   }
 }
 
-/** Les dossiers de la vue courante, filtrés et triés — la liste avant pagination. */
+/** La file du dossier, telle que le serveur l'a jugée ; un repli prudent sinon. */
+const fileDe = (d) =>
+  d.suivi?.file ?? {
+    cle: d.etat === 'RESOLU' ? 'RESOLU' : 'A_TRAITER',
+    libelle: d.etat === 'RESOLU' ? 'Résolu' : 'À traiter',
+    sous: '',
+    ton: d.etat === 'RESOLU' ? 'neutre' : 'crit',
+    aTraiter: d.etat !== 'RESOLU',
+    attenteClient: false,
+    repete: false,
+    attenteAtelier: false,
+  };
+
+/** Les dossiers du filtre courant, cherchés et triés — la liste avant pagination. */
 function rupturesFiltrees() {
   const r = state.ruptures;
   const terme = r.q.trim().toLowerCase();
+  const filtre = RUP_FILTRES[r.vue];
 
-  let liste = r.dossiers.filter((d) => {
+  const liste = r.dossiers.filter((d) => {
     // « Tous » garde les dossiers clos : les en retirer faisait disparaître
     // un dossier au moment où on le marquait résolu, ce qui se lit comme une
-    // suppression. Il reste visible, en vert, sous le travail restant.
-    if (r.vue !== 'tous' && d.etat !== r.vue) return false;
-
-    if (r.fournisseur && d.fournisseur?.id !== r.fournisseur) return false;
-    if (r.priorite && d.priorite !== r.priorite) return false;
+    // suppression. Il reste visible, sous le travail restant.
+    if (filtre && (d.etat === 'RESOLU' || !filtre.garde(fileDe(d)))) return false;
 
     if (!terme) return true;
     return [
@@ -19459,36 +19577,25 @@ function rupturesFiltrees() {
       .some((champ) => String(champ).toLowerCase().includes(terme));
   });
 
-  const rang = { haute: 0, moyenne: 1, basse: 2 };
-  const date = (d) => new Date(d.creeLe).getTime();
-
-  if (r.tri === 'ancien') liste = [...liste].sort((a, b) => date(a) - date(b));
-  else if (r.tri === 'impact')
-    liste = [...liste].sort((a, b) => b.commandesImpactees - a.commandesImpactees || date(b) - date(a));
-  else if (r.tri === 'priorite')
-    liste = [...liste].sort(
-      (a, b) => (rang[a.priorite] ?? 3) - (rang[b.priorite] ?? 3) || date(b) - date(a),
-    );
-  else liste = [...liste].sort((a, b) => date(b) - date(a));
-
   /*
-   * Les dossiers clos descendent sous les autres, quel que soit le tri.
+   * Ce qui attend une décision d'abord, puis le plus récent.
    *
-   * Sinon, un dossier résolu à l'instant resterait en tête d'une liste
-   * « plus récent », au-dessus de ceux qu'il faut encore traiter, et l'œil
-   * le relirait à chaque passage. Tri stable : l'ordre choisi est respecté à
-   * l'intérieur de chacun des deux groupes.
+   * Les dossiers clos descendent sous les autres : sinon, un dossier résolu à
+   * l'instant resterait en tête, au-dessus de ceux qu'il faut encore traiter,
+   * et l'œil le relirait à chaque passage.
    */
-  return [...liste].sort((a, b) => (a.etat === 'RESOLU') - (b.etat === 'RESOLU'));
+  const date = (d) => new Date(d.creeLe).getTime();
+  const rang = (d) => (d.etat === 'RESOLU' ? 2 : fileDe(d).aTraiter ? 0 : 1);
+  return [...liste].sort((a, b) => rang(a) - rang(b) || date(b) - date(a));
 }
 
 function renderRuptures() {
   const r = state.ruptures;
   if (!$('rup-rows')) return;
 
-  renderRuptureKpis();
-  renderRuptureTabs();
-  renderRuptureFiltres();
+  renderRuptureChiffres();
+  renderRuptureEntete();
+  renderRuptureModeles();
 
   const boite = $('rup-shopify');
   boite.hidden = !r.shopifyError;
@@ -19506,120 +19613,92 @@ function renderRuptures() {
   renderRuptureLignes(page, liste.length);
   renderRupturePager(liste.length, pages);
   renderRupturePanneau();
-
-  $('rup-count').textContent = liste.length
-    ? `${liste.length} dossier${liste.length > 1 ? 's' : ''}`
-    : '';
-
-  const bulk = $('rup-bulk');
-  bulk.hidden = r.cochees.size === 0;
-  bulk.textContent = `Marquer ${r.cochees.size} dossier${
-    r.cochees.size > 1 ? 's' : ''
-  } résolu${r.cochees.size > 1 ? 's' : ''}`;
 }
 
-function renderRuptureKpis() {
-  const k = state.ruptures.kpis;
+/** « 3,2 j », « 18 h » : le délai moyen, à l'échelle qui se lit. */
+function delaiRupture(heures) {
+  if (typeof heures !== 'number') return '—';
+  if (heures < 48) return `${heures} h`;
+  return `${(heures / 24).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} j`;
+}
+
+function renderRuptureChiffres() {
+  const r = state.ruptures;
+  const c = r.chiffres;
   const n = (valeur) => (typeof valeur === 'number' ? String(valeur) : '—');
+  const valeurs = {
+    aTraiter: c?.aTraiter,
+    attenteClient: c?.attenteClient,
+    repete: c?.repetees,
+    attenteAtelier: c?.attenteAtelier,
+  };
 
-  /*
-   * Cinq chiffres, et le cinquième porte son effectif.
-   *
-   * Le visuel de référence montre une évolution sous chaque KPI — « ↓ 25 % vs
-   * 30 derniers jours ». Rien en base ne conserve l'état d'hier : l'afficher
-   * demanderait de l'inventer, c'est-à-dire de mettre une flèche verte sur un
-   * chiffre qui n'a été comparé à rien. La sous-ligne dit donc ce que le
-   * chiffre couvre, ce qui est vrai et plus utile qu'une tendance fausse.
-   */
-  const cartes = [
-    ['box', 'Ruptures actives', n(k?.rupturesActives), 'références bloquées'],
-    ['bag', 'Commandes impactées', n(k?.commandesImpactees), 'dossiers ouverts'],
-    // Vaut pour les deux origines : la rupture est connue — signalée par
-    // l'atelier ou confirmée en réponse — et le client ne le sait pas.
-    ['users', 'Clients à prévenir', n(k?.clientsAPrevenir), 'rupture connue, client pas prévenu'],
-    ['truck', 'En attente fournisseur', n(k?.enAttenteFournisseur), 'sans réponse'],
-    [
-      'clock',
-      'Délai moyen de résolution',
-      typeof k?.resolutionMinutes === 'number' ? duration(k.resolutionMinutes) : '—',
-      k?.resolutionMesuree
-        ? `sur ${k.resolutionMesuree} dossier${k.resolutionMesuree > 1 ? 's' : ''} clos`
-        : 'aucun dossier clos',
-    ],
-  ];
-
-  $('rup-kpis').innerHTML = cartes
-    .map(
-      ([icone, label, valeur, sous]) => `<div class="kpi">
-        <span class="kpi-ico" data-ico="${esc(icone)}" aria-hidden="true"></span>
-        <span class="kpi-body">
-          <span class="kpi-label">${esc(label)}</span>
-          <span class="kpi-value">${esc(valeur)}</span>
-          <span class="kpi-note rup-kpi-sub">${esc(sous)}</span>
-        </span>
-      </div>`,
-    )
-    .join('');
-
-  paintKpiIcons($('rup-kpis'));
+  $('rup-chiffres').innerHTML =
+    Object.entries(RUP_FILTRES)
+      .map(
+        ([cle, filtre]) => `<button class="rup-chiffre" type="button" data-rup-filtre="${esc(cle)}"
+          aria-pressed="${r.vue === cle}">
+          <span class="rup-chiffre-t"><i class="rup-point rup-point-${esc(filtre.ton)}" aria-hidden="true"></i>${esc(filtre.titre)}</span>
+          <b>${esc(n(valeurs[cle]))}</b>
+          <small>${esc(filtre.sous)}</small>
+        </button>`,
+      )
+      .join('') +
+    // Le délai n'est pas un filtre : il mesure, il ne désigne aucun dossier.
+    `<div class="rup-chiffre rup-chiffre-fixe">
+      <span class="rup-chiffre-t"><i class="rup-point rup-point-ok" aria-hidden="true"></i>Délai moyen</span>
+      <b>${esc(delaiRupture(c?.delaiMoyenHeures))}</b>
+      <small>${esc(c?.delaiMesure ? 'de la rupture au nouveau suivi' : 'aucun nouveau suivi encore')}</small>
+    </div>`;
 }
 
-function renderRuptureTabs() {
+function renderRuptureEntete() {
   const r = state.ruptures;
+  const filtre = RUP_FILTRES[r.vue];
+  $('rup-liste-t').textContent = filtre ? filtre.titre : 'Toutes les ruptures';
+  // Le filtre se retire là où il se lit : à côté du titre qu'il a changé.
+  $('rup-filtre').hidden = !filtre;
 
-  $('rup-tabs').innerHTML = RUP_VUES.map((vue) => {
-    const compte = r.compteurs[vue] ?? 0;
-    const label = vue === 'tous' ? 'Tous' : RUP_LIBELLES[vue];
-    return `<button class="rup-tab" type="button" role="tab" data-rup-vue="${esc(vue)}"
-      aria-selected="${vue === r.vue}">${esc(label)}${
-        compte ? `<span class="rup-tab-n">${compte}</span>` : ''
-      }</button>`;
-  }).join('');
-}
+  $('rup-mailauto').querySelectorAll('[data-auto]').forEach((bouton) => {
+    bouton.setAttribute('aria-checked', String((bouton.dataset.auto === 'true') === r.mailRuptureAuto));
+  });
 
-function renderRuptureFiltres() {
-  const r = state.ruptures;
-
-  // La liste des fournisseurs vient des dossiers eux-mêmes : proposer un
-  // fournisseur qui ne filtre rien donne un menu qui ne sert qu'à échouer.
-  const vus = new Map();
-  for (const d of r.dossiers) if (d.fournisseur) vus.set(d.fournisseur.id, d.fournisseur.name);
-
-  const select = $('rup-f-supplier');
-  const attendu =
-    `<option value="">Fournisseur</option>` +
-    [...vus.entries()]
-      .sort((a, b) => a[1].localeCompare(b[1], 'fr'))
-      .map(([id, nom]) => `<option value="${esc(id)}">${esc(nom)}</option>`)
-      .join('');
-
-  // Reconstruire à chaque rendu perdrait la sélection en cours de frappe.
-  if (select.innerHTML !== attendu) {
-    select.innerHTML = attendu;
-    select.value = r.fournisseur;
+  const ouverts = r.chiffres?.aTraiter ?? 0;
+  if (state.view === 'ruptures' && $('view-sub')) {
+    $('view-sub').hidden = false;
+    $('view-sub').textContent = ouverts
+      ? `${ouverts} dossier${ouverts > 1 ? 's attendent' : ' attend'} votre décision`
+      : 'Rien n’attend votre décision';
   }
-
-  $('rup-reset').hidden = !(r.q || r.fournisseur || r.priorite || r.vue !== 'tous' || r.tri !== 'recent');
 }
 
-/*
- * Sous le statut : où en est la réponse à l'atelier, sinon qui a signalé.
- *
- * C'est ce qu'on cherche en parcourant la liste — « lui ai-je répondu ? a-t-il
- * confirmé ? » — sans ouvrir chaque dossier.
- */
-function sousEtatRupture(d) {
+/* Le mail au client, sur la ligne : parti (et quand), ou le bouton pour l'envoyer. */
+function mailDeLaLigne(d) {
+  const le = d.suivi?.mailClientLe;
+  if (le) {
+    const jour = new Date(le).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+    return `<span class="rup-mail-ok">${ico('check')}${esc(d.suivi.mailAuto ? `Mail auto, ${jour}` : `Mail envoyé · ${jour}`)}</span>`;
+  }
+  if (d.etat === 'RESOLU') return '';
+  return `<button class="btn btn-small rup-b-mail" type="button" data-rup-mail="${esc(d.id)}">Envoyer le mail</button>`;
+}
+
+/* La décision, sur la ligne : « À traiter » tant qu'il en faut une, sinon ce qui a été décidé. */
+function decisionDeLaLigne(d) {
+  const file = fileDe(d);
+  if (d.etat === 'RESOLU') return '';
+  if (file.aTraiter) {
+    return `<button class="btn btn-small btn-primary rup-b-traiter" type="button" data-rup-traiter="${esc(d.id)}">${esc(
+      file.libelle === 'Client à relancer' ? 'Relancer' : 'À traiter',
+    )}</button>`;
+  }
   const consigne = consigneCouranteDe(d);
-  if (consigne) {
-    const [texte, ton] = {
-      ENVOYEE: ['atelier prévenu, sans confirmation', 'warn'],
-      COMPRISE: ['confirmé par l’atelier', 'ok'],
-      IMPOSSIBLE: ['l’atelier ne pourra pas', 'crit'],
-      REPONDUE: ['l’atelier a répondu', 'ok'],
-    }[consigne.etat] ?? ['', ''];
-    if (texte) return `<small class="rup-orig rup-orig-${ton}">${esc(texte)}</small>`;
-  }
-  return d.origine === 'atelier' ? '<small class="rup-orig">signalé par l’atelier</small>' : '';
+  const texte = !consigne
+    ? file.libelle
+    : consigne.choix === 'ATTENDRE'
+      ? `Restock · ${dateConsigneFr(consigne.relancerLe ?? consigne.expedierAvant ?? consigne.envoyeeLe)}`
+      : { REMPLACER: 'Modèle modifié', ANNULER: 'Remboursement', MESSAGE: 'Message envoyé' }[consigne.choix];
+  return `<button class="btn btn-small rup-b-decision" type="button" data-rup-ouvrir="${esc(d.id)}">${esc(texte)}</button>`;
 }
 
 function renderRuptureLignes(page, total) {
@@ -19631,7 +19710,7 @@ function renderRuptureLignes(page, total) {
     // page fait attendre sans rien dire de ce qui arrive.
     corps.innerHTML = Array.from({ length: 6 })
       .map(
-        () => `<tr><td colspan="11"><span class="skel-row">
+        () => `<tr><td colspan="6"><span class="skel-row">
           <span class="skel"></span><span class="skel"></span>
         </span></td></tr>`,
       )
@@ -19640,7 +19719,7 @@ function renderRuptureLignes(page, total) {
   }
 
   if (r.erreur) {
-    corps.innerHTML = `<tr><td colspan="11" class="empty" style="padding:22px 14px">
+    corps.innerHTML = `<tr><td colspan="6" class="empty" style="padding:22px 14px">
       ${esc(r.erreur)}
       <button class="linkish" type="button" id="rup-retry">Réessayer</button>
     </td></tr>`;
@@ -19649,15 +19728,15 @@ function renderRuptureLignes(page, total) {
   }
 
   if (total === 0) {
-    const filtre = r.q || r.fournisseur || r.priorite || r.vue !== 'tous';
-    corps.innerHTML = `<tr><td colspan="11" class="empty" style="padding:26px 14px">
+    const filtre = r.q || r.vue !== 'tous';
+    corps.innerHTML = `<tr><td colspan="6" class="empty" style="padding:26px 14px">
       <b style="display:block;font-size:13.5px;color:var(--ink)">${
-        filtre ? 'Aucun dossier dans cette vue.' : 'Aucune rupture de stock à traiter.'
+        filtre ? 'Aucun dossier ici.' : 'Aucune rupture de stock à traiter.'
       }</b>
       ${esc(
         filtre
-          ? 'Changez de vue ou réinitialisez les filtres.'
-          : 'Les commandes concernées apparaîtront ici dès qu’une rupture sera signalée au fournisseur.',
+          ? 'Retirez le filtre pour revoir toutes les ruptures.'
+          : 'Les commandes concernées apparaîtront ici dès qu’une rupture sera signalée.',
       )}
     </td></tr>`;
     return;
@@ -19665,115 +19744,122 @@ function renderRuptureLignes(page, total) {
 
   corps.innerHTML = page
     .map((d) => {
-      const initiales = initials(d.client?.nom ?? d.client?.email ?? '?');
+      const file = fileDe(d);
       const age = formatSpan(Date.now() - new Date(d.creeLe).getTime());
+      const titre = d.article?.titre ?? (d.origine === 'atelier' ? 'Article non précisé' : 'Article non lu');
+      const detail = [d.article?.variante, d.article?.sku].filter(Boolean).join(' · ');
+      const qui = [d.client?.nom, d.commande?.nom].filter(Boolean).join(' · ');
 
       return `<tr data-rup="${esc(d.id)}" data-phase="${esc(d.phase ?? 'cree')}" tabindex="0"
         aria-selected="${d.id === r.courant}"
         title="${esc(RUP_PHASES[d.phase] ?? '')}">
-        <td class="rup-pick">${
-          // Un dossier clos n'a rien à faire dans l'action groupée, qui ne
-          // sait que clôturer : sa case disparaît plutôt que de le laisser
-          // « re-clôturer » et gonfler le compte du message de confirmation.
-          d.etat === 'RESOLU'
-            ? ''
-            : `<input type="checkbox" data-rup-pick="${esc(d.id)}"${
-                r.cochees.has(d.id) ? ' checked' : ''
-              } aria-label="Sélectionner ce dossier" />`
-        }</td>
-        <td><span class="rup-who">
-          <span class="qav" aria-hidden="true">${esc(initiales)}</span>
-          <span style="min-width:0">
-            <b>${esc(d.client?.nom ?? 'Client inconnu')}</b>
-            <small>${esc(d.client?.email ?? '')}</small>
-          </span>
+        <td class="rup-c-client"><span class="rup-who">
+          <b>${esc(d.client?.nom ?? d.client?.email ?? 'Client inconnu')}</b>
+          ${d.client?.nom && d.client?.email ? `<small>${esc(d.client.email)}</small>` : ''}
         </span></td>
-        <td><b style="font-size:12.5px">${esc(d.commande?.nom ?? '—')}</b></td>
-        <td><span class="rup-prod">
+        <td class="rup-c-cmd"><b>${esc(d.commande?.nom ?? '—')}</b></td>
+        <td class="rup-c-art"><span class="rup-prod">
           ${
             d.article?.image
               ? `<img src="${esc(d.article.image)}" alt="" loading="lazy" />`
               : '<span class="rup-blank"></span>'
           }
           <span style="min-width:0">
-            <b>${esc(
-              d.article?.titre ??
-                // « Non lu » dit que Shopify n'a pas répondu ; un atelier qui
-                // n'a rien précisé est une autre situation, qui se lit dans
-                // son message.
-                (d.origine === 'atelier' ? 'Article non précisé' : 'Article non lu'),
-            )}</b>
-            <small>${esc(d.article?.sku ?? '—')}</small>
+            <b>${esc(titre)}</b>
+            <small>${esc(detail || '—')}</small>
+            ${qui ? `<small class="rup-qui">${esc(qui)}</small>` : ''}
+            ${file.repete ? '<span class="rup-repete">2e choix, aussi en rupture</span>' : ''}
           </span>
         </span></td>
-        <td class="rup-c-var">${esc(d.article?.variante ?? '—')}</td>
-        <td class="rup-c-four">${esc(d.fournisseur?.name ?? '—')}</td>
-        <td class="num"><span class="rup-impact${
-          d.commandesImpactees > 1 ? ' rup-impact-fort' : ''
-        }">${d.commandesImpactees}</span></td>
-        <td><span class="rup-etat rup-${esc(d.etat)}">${esc(RUP_LIBELLES[d.etat] ?? d.etat)}</span>${
-          /* Sous le statut et non dans la colonne Fournisseur : celle-ci
-             s'escamote sous 1 760 px, et savoir qui a signalé change la
-             lecture du dossier — un fait rapporté par l'atelier n'est pas une
-             question posée par le marchand. */
-          sousEtatRupture(d)
+        <td class="rup-c-etat"><span class="rup-file rup-file-${esc(file.ton)}">${esc(file.libelle)}</span>${
+          file.sous ? `<small class="rup-file-sous">${esc(file.sous)}</small>` : ''
         }</td>
-        <td class="rup-age">${esc(age)}</td>
-        <td>${
-          d.priorite
-            ? `<span class="rup-prio rup-prio-${esc(d.priorite)}">${esc(
-                d.priorite[0].toUpperCase() + d.priorite.slice(1),
-              )}</span>`
-            : '<span class="rup-prio rup-prio-basse">—</span>'
-        }</td>
-        <td class="rup-go" aria-hidden="true">${ico('suiv')}</td>
+        <td class="rup-c-depuis rup-age">${esc(age)}</td>
+        <td class="rup-c-act"><span class="rup-gestes">${mailDeLaLigne(d)}${decisionDeLaLigne(d)}</span></td>
       </tr>`;
     })
     .join('');
 
-  corps.querySelectorAll('[data-rup-pick]').forEach((case_) =>
-    case_.addEventListener('click', (event) => {
-      event.stopPropagation();
-      const id = case_.dataset.rupPick;
-      if (case_.checked) r.cochees.add(id);
-      else r.cochees.delete(id);
-      renderRuptures();
-    }),
-  );
-
   corps.querySelectorAll('[data-rup]').forEach((ligne) => {
     const ouvrir = () => ouvrirRupture(ligne.dataset.rup);
-    ligne.addEventListener('click', ouvrir);
+    ligne.addEventListener('click', (event) => {
+      // Les boutons de la ligne font leur geste, sans ouvrir le dossier en plus.
+      if (event.target.closest('button')) return;
+      ouvrir();
+    });
     // Une ligne cliquable qui ne répond pas au clavier exclut ceux qui n'ont
     // pas de souris : la table est le seul chemin vers le dossier.
     ligne.addEventListener('keydown', (event) => {
+      if (event.target !== ligne) return;
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
         ouvrir();
       }
     });
   });
+
+  const dossier = (id) => r.dossiers.find((candidat) => candidat.id === id);
+  corps.querySelectorAll('[data-rup-mail]').forEach((bouton) =>
+    bouton.addEventListener('click', () => void ouvrirMailRupture(dossier(bouton.dataset.rupMail))),
+  );
+  corps.querySelectorAll('[data-rup-traiter]').forEach((bouton) =>
+    bouton.addEventListener('click', () => ouvrirReponseAtelier(dossier(bouton.dataset.rupTraiter))),
+  );
+  corps.querySelectorAll('[data-rup-ouvrir]').forEach((bouton) =>
+    bouton.addEventListener('click', () => ouvrirRupture(bouton.dataset.rupOuvrir)),
+  );
+}
+
+/*
+ * Les modèles en rupture, et combien de fois, sur quatre-vingt-dix jours.
+ *
+ * Le même modèle qui manque trois fois n'est plus une rupture : c'est une
+ * référence à retirer, ou à commander autrement. La liste le dit avant
+ * qu'un quatrième client ne le découvre.
+ */
+function renderRuptureModeles() {
+  const modeles = state.ruptures.modeles ?? [];
+  const boite = $('rup-modeles');
+  boite.hidden = modeles.length === 0;
+  if (!modeles.length) return (boite.innerHTML = '');
+
+  const image = new Map(
+    state.ruptures.dossiers
+      .filter((d) => d.article?.image && d.article?.titre)
+      .map((d) => [d.article.titre.toLowerCase(), d.article.image]),
+  );
+  boite.innerHTML = `<div class="rup-modeles-t"><h2>Modèles en rupture</h2><span>90 jours</span></div>
+    ${modeles
+      .map((modele) => {
+        const depuis = formatSpan(Date.now() - new Date(modele.derniereLe).getTime());
+        const detail = [
+          modele.variante,
+          modele.deuxiemeChoix ? `dont ${modele.deuxiemeChoix} en 2e choix` : `dernière il y a ${depuis}`,
+        ]
+          .filter(Boolean)
+          .join(' · ');
+        const vignette = image.get(modele.nom.toLowerCase());
+        return `<button class="rup-modele" type="button" data-rup-modele="${esc(modele.nom)}">
+          ${vignette ? `<img src="${esc(vignette)}" alt="" loading="lazy" />` : '<span class="rup-blank" aria-hidden="true"></span>'}
+          <span class="rup-modele-txt"><b>${esc(modele.nom)}</b><small>${esc(detail)}</small></span>
+          <span class="rup-modele-n"><b>${modele.fois}</b><small>fois</small></span>
+        </button>`;
+      })
+      .join('')}`;
 }
 
 function renderRupturePager(total, pages) {
   const r = state.ruptures;
   const boite = $('rup-pager');
-  boite.hidden = total === 0;
-  if (total === 0) return;
+  // Une page suffit le plus souvent : la barre n'apparaît que s'il y en a plusieurs.
+  boite.hidden = pages <= 1;
+  if (pages <= 1) return;
 
   const debut = (r.page - 1) * r.taille + 1;
   const fin = Math.min(total, r.page * r.taille);
 
   boite.innerHTML = `
     <span>${debut}–${fin} sur ${total}</span>
-    <label style="display:flex;align-items:center;gap:6px">
-      Lignes
-      <select id="rup-size" aria-label="Lignes par page">
-        ${[10, 25, 50]
-          .map((n) => `<option value="${n}"${n === r.taille ? ' selected' : ''}>${n}</option>`)
-          .join('')}
-      </select>
-    </label>
     <span class="rup-pages">
       <button class="btn btn-small" type="button" id="rup-prev"${
         r.page === 1 ? ' disabled' : ''
@@ -19784,11 +19870,6 @@ function renderRupturePager(total, pages) {
       } aria-label="Page suivante">${ico('suiv')}</button>
     </span>`;
 
-  $('rup-size').addEventListener('change', (event) => {
-    r.taille = Number(event.target.value);
-    r.page = 1;
-    renderRuptures();
-  });
   $('rup-prev').addEventListener('click', () => {
     r.page -= 1;
     renderRuptures();
@@ -19798,7 +19879,6 @@ function renderRupturePager(total, pages) {
     renderRuptures();
   });
 }
-
 
 /* ---- le panneau de droite ---- */
 
@@ -19917,7 +19997,8 @@ function reponseAtelierMarkup(d) {
     if (d.etat === 'RESOLU') return '<p class="empty">Dossier clos sans réponse à l’atelier.</p>';
     return `<div class="rup-ra rup-ra-attend">
       <p>${esc(atelier)} attend votre décision pour cette commande.</p>
-      <button class="btn btn-primary" type="button" data-rup-repondre="1">Répondre à l’atelier</button>
+      <button class="btn btn-primary" type="button" data-rup-repondre="1">À traiter</button>
+      <button class="linkish" type="button" data-rup-ecrire="1">Écrire à l’atelier</button>
     </div>`;
   }
 
@@ -19934,9 +20015,10 @@ function reponseAtelierMarkup(d) {
     ${noteDeLAtelier(consigne)}
     ${
       relancer
-        ? '<button class="btn btn-primary" type="button" data-rup-repondre="1">Répondre à l’atelier</button>'
+        ? '<button class="btn btn-primary" type="button" data-rup-repondre="1">À traiter</button>'
         : ''
     }
+    <button class="linkish rup-ra-ecrire" type="button" data-rup-ecrire="1">Écrire à l’atelier</button>
   </div>`;
 }
 
@@ -19979,7 +20061,7 @@ function renderRupturePanneau() {
   panneau.innerHTML = `
     <div class="rup-panel-head">
       <button class="rup-retour" type="button" id="rup-retour">${ico('prec')}Ruptures</button>
-      <span class="rup-etat rup-${esc(d.etat)}">${esc(RUP_LIBELLES[d.etat] ?? d.etat)}</span>
+      <span class="rup-file rup-file-${esc(fileDe(d).ton)}">${esc(fileDe(d).libelle)}</span>
       <button class="ico-btn rup-fermer" type="button" id="rup-close" aria-label="Fermer le panneau">${ico('close')}</button>
     </div>
 
@@ -20011,6 +20093,11 @@ function renderRupturePanneau() {
            </div>`
         : ''
     }
+
+    <div class="rup-sec">
+      <h3>Le dossier</h3>
+      ${datesDuDossier(d)}
+    </div>
 
     <div class="rup-sec">
       <h3>Réponse à l’atelier</h3>
@@ -20054,11 +20141,6 @@ function renderRupturePanneau() {
 
     <div class="rup-sec">
       <div class="rup-actions" id="rup-actions"></div>
-    </div>
-
-    <div class="rup-sec">
-      <h3>Historique</h3>
-      <ul class="rup-hist">${histoireRupture(d)}</ul>
     </div>`;
 
   $('rup-close').addEventListener('click', () => {
@@ -20080,6 +20162,9 @@ function renderRupturePanneau() {
 
   panneau.querySelectorAll('[data-rup-repondre]').forEach((bouton) =>
     bouton.addEventListener('click', () => ouvrirReponseAtelier(d)),
+  );
+  panneau.querySelectorAll('[data-rup-ecrire]').forEach((bouton) =>
+    bouton.addEventListener('click', () => ouvrirReponseAtelier(d, { choix: 'MESSAGE' })),
   );
   panneau.querySelector('[data-rup-act="client"]')?.addEventListener('click', () => ecrireAuClientDepuisRupture(d));
 
@@ -20216,10 +20301,14 @@ function delaiAnnonce(d) {
 
 const fenRa = {
   dossier: null,
-  choix: 'ATTENDRE',
+  choix: 'REMPLACER',
   date: '',
   aideDate: '',
+  /** Restock : relancer le client dans tant de jours. */
+  relance: 10,
+  /** Le modèle de remplacement : un seul, choisi au catalogue ou tapé tel quel. */
   choisis: [],
+  saisie: '',
   options: null,
   optionsErreur: null,
   supplierId: null,
@@ -20227,13 +20316,22 @@ const fenRa = {
   envoi: false,
 };
 
+/* Les trois décisions, et l'écriture libre ; ce que dit le pied de la fenêtre pour chacune. */
+const PIED_RA = {
+  REMPLACER: 'Rien ne part au client : le mail est sur la ligne.',
+  ANNULER: 'L’administration le voit dans Annulation/Remboursement.',
+  ATTENDRE: 'Alerte à l’atelier et à l’équipe le jour de la relance.',
+  MESSAGE: 'Rien ne part au client.',
+};
+
 /**
- * Ouvre la fenêtre « Répondre à l'atelier » sur un dossier.
+ * Ouvre la fenêtre « À traiter » sur un dossier.
  *
- * Elle reprend la consigne en cours quand il y en a une : « Modifier » doit
+ * Elle reprend la décision en cours quand il y en a une : « Modifier » doit
  * repartir de ce qu'on a dit, pas d'une page blanche.
  */
 function ouvrirReponseAtelier(d, options = {}) {
+  if (!d) return;
   const courante = consigneCouranteDe(d);
   const delai = delaiAnnonce(d);
   const depart = d.creeLe ? new Date(d.creeLe) : new Date();
@@ -20241,23 +20339,28 @@ function ouvrirReponseAtelier(d, options = {}) {
     `${depart.getFullYear()}-${String(depart.getMonth() + 1).padStart(2, '0')}-${String(depart.getDate()).padStart(2, '0')}`,
     delai.jours,
   );
+  /* Un modèle qui manquait aussi ne se repropose pas : la fenêtre repart vide
+     sur « Modifier le modèle », pour en choisir un autre. */
+  const reprendre = courante && courante.etat !== 'IMPOSSIBLE';
 
   Object.assign(fenRa, {
     dossier: d,
-    choix: options.choix ?? courante?.choix ?? 'ATTENDRE',
+    choix: options.choix ?? (reprendre ? courante.choix : 'REMPLACER'),
     date:
-      courante?.choix === 'ATTENDRE' && courante.expedierAvant
+      reprendre && courante.choix === 'ATTENDRE' && courante.expedierAvant
         ? String(courante.expedierAvant).slice(0, 10)
         : proposee < aujourdhuiIso()
           ? decalerJour(aujourdhuiIso(), 1)
           : proposee,
     aideDate: delai.annonce
       ? `${delai.jours} jours après son signalement, comme il l’a annoncé.`
-      : 'Une semaine, faute de délai annoncé. La commande attend chez lui.',
+      : 'Une semaine, faute de délai annoncé.',
+    relance: 10,
     choisis:
-      courante?.choix === 'REMPLACER'
-        ? (courante.modeles ?? []).map((modele, rang) => ({ ...modele, cle: `courant-${rang}` }))
+      reprendre && courante.choix === 'REMPLACER'
+        ? (courante.modeles ?? []).slice(0, 1).map((modele, rang) => ({ ...modele, cle: `courant-${rang}` }))
         : [],
+    saisie: '',
     options: null,
     optionsErreur: null,
     supplierId: options.supplierId ?? null,
@@ -20267,27 +20370,33 @@ function ouvrirReponseAtelier(d, options = {}) {
 
   const atelier = d.fournisseur?.name ?? options.atelier ?? 'l’atelier';
   const langue = d.fournisseur?.langue ?? 'fr';
-  $('ra-title').textContent = `Répondre à ${atelier}`;
-  $('ra-sub').textContent =
-    langue in LANGUE_ATELIER_NOM
-      ? `La réponse arrive dans son ticket, traduite en ${LANGUE_ATELIER_NOM[langue]}. Rien ne part au client.`
-      : 'La réponse arrive dans son ticket. Rien ne part au client.';
+  fenRa.atelier = atelier;
+  const ecrire = fenRa.choix === 'MESSAGE';
+  $('ra-title').textContent = ecrire
+    ? `Écrire à ${atelier}`
+    : `À traiter${d.commande?.nom ? ` · ${d.commande.nom}` : ''}`;
+  $('ra-sub').textContent = [
+    d.client?.nom,
+    atelier,
+    langue in LANGUE_ATELIER_NOM ? `traduit en ${LANGUE_ATELIER_NOM[langue]} pour l’atelier` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  // Écrire n'est pas une décision : les trois tuiles n'ont rien à y faire.
+  $('ra-choix').closest('section').hidden = ecrire;
 
   const article = d.article;
   const note = noteDuSignalement(d.signalement);
   $('ra-contexte').innerHTML = `
     ${article?.image ? `<img src="${esc(article.image)}" alt="" loading="lazy" />` : '<span class="rup-blank" aria-hidden="true"></span>'}
     <span class="ra-contexte-txt">
-      <b>${esc([article?.titre ?? 'Article non précisé', article?.variante].filter(Boolean).join(' · '))}</b>
-      <small>${esc([article?.sku, d.commande?.nom ? `commande ${d.commande.nom}` : null, d.client?.nom].filter(Boolean).join(' · '))}</small>
+      <b>${esc(article?.titre ?? 'Article non précisé')}</b>
+      <small>${esc([article?.variante, article?.sku].filter(Boolean).join(' · ') || (d.commande?.nom ? `commande ${d.commande.nom}` : ''))}</small>
     </span>
     ${note ? `<span class="ra-contexte-dit">« ${esc(note)} »</span>` : ''}`;
 
   $('ra-mot').value = '';
-  $('ra-l-model').value = '';
-  $('ra-l-taille').value = '';
-  $('ra-l-ref').value = '';
-  $('ra-libre').open = false;
+  $('ra-nom').value = '';
   majReponseAtelier();
 
   $('ra-modal').hidden = false;
@@ -20296,7 +20405,9 @@ function ouvrirReponseAtelier(d, options = {}) {
   // réponse. Pas au doigt : un anneau de focus sur une feuille d'iPhone ne
   // signale rien.
   if (window.matchMedia('(hover: hover)').matches) {
-    requestAnimationFrame(() => $('ra-choix').querySelector('[aria-checked="true"]')?.focus());
+    requestAnimationFrame(() =>
+      (ecrire ? $('ra-mot') : $('ra-choix').querySelector('[aria-checked="true"]'))?.focus(),
+    );
   }
 
   void chargerOptionsRemplacement(d);
@@ -20318,10 +20429,10 @@ async function chargerOptionsRemplacement(d) {
   majReponseAtelier();
 }
 
-/** Ce qui manque pour envoyer, ou rien. */
+/** Ce qui manque pour valider, ou rien. */
 function manqueReponseAtelier() {
   if (fenRa.choix === 'ATTENDRE' && (!fenRa.date || fenRa.date < aujourdhuiIso())) return 'Choisissez une date à venir.';
-  if (fenRa.choix === 'REMPLACER' && fenRa.choisis.length === 0) return 'Choisissez au moins un modèle.';
+  if (fenRa.choix === 'REMPLACER' && fenRa.choisis.length === 0) return 'Choisissez le modèle, ou tapez son nom.';
   if (fenRa.choix === 'MESSAGE' && !$('ra-mot').value.trim()) return 'Écrivez votre message.';
   return null;
 }
@@ -20337,6 +20448,23 @@ function apercuReponseAtelier() {
   return mots[fenRa.choix]();
 }
 
+/*
+ * Les modèles proposés pour le nom tapé.
+ *
+ * Chaque mot tapé doit se retrouver dans le modèle, sa déclinaison ou sa
+ * référence : « halo 39 » trouve « Runner Halo · Noir · 39 ». Sans saisie,
+ * les premiers modèles en stock, ceux que le catalogue rapproche déjà.
+ */
+function suggestionsRemplacement() {
+  const mots = fenRa.saisie.toLowerCase().split(/\s+/).filter(Boolean);
+  return (fenRa.options ?? [])
+    .filter((option) => {
+      const texte = [option.productTitle, option.variantTitle, option.sku].filter(Boolean).join(' ').toLowerCase();
+      return mots.every((mot) => texte.includes(mot));
+    })
+    .slice(0, 6);
+}
+
 function majReponseAtelier() {
   const d = fenRa.dossier;
   if (!d) return;
@@ -20350,61 +20478,76 @@ function majReponseAtelier() {
   $('ra-remplacer').hidden = fenRa.choix !== 'REMPLACER';
   $('ra-annuler').hidden = fenRa.choix !== 'ANNULER';
 
+  /* Restock : la date d'expédition, puis la relance du client. */
   $('ra-date').value = fenRa.date;
   $('ra-date').min = aujourdhuiIso();
   $('ra-date-aide').textContent = fenRa.aideDate;
+  $('ra-relances').querySelectorAll('[data-ra-relance]').forEach((bouton) => {
+    bouton.setAttribute('aria-checked', String(Number(bouton.dataset.raRelance) === fenRa.relance));
+  });
+  $('ra-relance-le').innerHTML = `Relance du client le <b>${esc(
+    dateConsigneFr(decalerJour(aujourdhuiIso(), fenRa.relance), true),
+  )}</b>.`;
 
-  // Les modèles en stock, cochés s'ils sont déjà choisis.
-  const options = fenRa.options;
-  $('ra-options').innerHTML =
-    options === null
-      ? '<p class="empty">Recherche des références en stock…</p>'
-      : options.length
-        ? options
-            .slice(0, 8)
-            .map((option) => {
-              const coche = fenRa.choisis.some((choisi) => choisi.cle === option.id);
-              return `<label class="ra-opt">
-                <input type="checkbox" data-ra-opt="${esc(option.id)}"${coche ? ' checked' : ''} />
-                ${option.image ? `<img src="${esc(option.image)}" alt="" loading="lazy" />` : '<span class="rup-blank" aria-hidden="true"></span>'}
-                <span class="ra-opt-txt">
-                  <b>${esc(option.productTitle)}</b>
-                  <small>${esc([option.variantTitle, option.sku].filter(Boolean).join(' · ') || '—')}</small>
-                </span>
-                <span class="ra-opt-stock">${option.inventoryQuantity ?? 0} en stock</span>
-              </label>`;
-            })
-            .join('')
-        : `<p class="empty">${esc(fenRa.optionsErreur ?? 'Aucune référence équivalente en stock.')}</p>`;
-
-  // Ceux qui ne viennent pas de la liste : saisis à la main, ou repris de la consigne.
-  const horsListe = fenRa.choisis.filter((choisi) => !(options ?? []).some((option) => option.id === choisi.cle));
-  $('ra-choisis').innerHTML = horsListe
-    .map(
-      (choisi) => `<div class="ra-opt ra-opt-libre">
-        <span class="rup-blank" aria-hidden="true"></span>
-        <span class="ra-opt-txt">
-          <b>${esc(choisi.productTitle)}</b>
-          <small>${esc([choisi.variantTitle, choisi.sku].filter(Boolean).join(' · ') || (choisi.libre ? 'hors catalogue' : '—'))}</small>
-        </span>
-        <button class="linkish" type="button" data-ra-retirer="${esc(choisi.cle)}">Retirer</button>
-      </div>`,
-    )
-    .join('');
+  /* Modifier le modèle : le catalogue d'abord, puis le nom tapé tel quel. */
+  const choisi = fenRa.choisis[0] ?? null;
+  const suggestions = suggestionsRemplacement();
+  const saisie = fenRa.saisie.trim();
+  const ligne = (option) => {
+    const on = choisi?.cle === option.id;
+    return `<button class="ra-sug" type="button" role="option" aria-selected="${on}" data-ra-opt="${esc(option.id)}">
+      ${option.image ? `<img src="${esc(option.image)}" alt="" loading="lazy" />` : '<span class="rup-blank" aria-hidden="true"></span>'}
+      <span class="ra-sug-txt">
+        <b>${esc([option.productTitle, option.variantTitle].filter(Boolean).join(' · '))}</b>
+        <small>${esc(option.sku || '—')}</small>
+      </span>
+      <span class="ra-sug-stock">${option.inventoryQuantity ?? 0} en stock</span>
+      <span class="ra-sug-coche" aria-hidden="true">${on ? ico('check') : ''}</span>
+    </button>`;
+  };
+  const horsCatalogue =
+    choisi && !(fenRa.options ?? []).some((option) => option.id === choisi.cle)
+      ? `<button class="ra-sug" type="button" role="option" aria-selected="true" data-ra-libre="1">
+          <span class="rup-blank" aria-hidden="true"></span>
+          <span class="ra-sug-txt"><b>${esc([choisi.productTitle, choisi.variantTitle].filter(Boolean).join(' · '))}</b>
+            <small>${esc(choisi.sku || 'hors catalogue')}</small></span>
+          <span class="ra-sug-coche" aria-hidden="true">${ico('check')}</span>
+        </button>`
+      : '';
+  const telQuel =
+    saisie && !(choisi?.libre && choisi.productTitle === saisie)
+      ? `<button class="ra-sug" type="button" role="option" aria-selected="false" data-ra-tel-quel="1">
+          <span class="rup-blank" aria-hidden="true"></span>
+          <span class="ra-sug-txt"><b>Utiliser « ${esc(saisie)} » tel quel</b>
+            <small>un modèle que l’atelier a sous la main</small></span>
+        </button>`
+      : '';
+  const liste = fenRa.options === null
+    ? '<p class="empty">Recherche des modèles en stock…</p>'
+    : suggestions.map(ligne).join('') ||
+      (saisie ? '' : `<p class="empty">${esc(fenRa.optionsErreur ?? 'Aucun modèle en stock à proposer.')}</p>`);
+  $('ra-options').innerHTML = horsCatalogue + liste + telQuel;
 
   const client = d.client?.nom ?? 'le client';
-  $('ra-annuler-texte').textContent = `L’atelier n’expédie pas cet article ; s’il y en a d’autres dans la commande, il les expédie. Pensez à rembourser ${client}, ou à annuler la commande dans Shopify.`;
+  const article = [d.article?.titre, d.article?.variante].filter(Boolean).join(' · ') || 'L’article';
+  $('ra-annuler-texte').innerHTML = `<b>${esc(article)}</b>
+    <ol>
+      <li>${esc(fenRa.atelier ?? 'L’atelier')} est prévenu : il n’expédie pas cet article.</li>
+      <li>Une ligne « À rembourser » s’ajoute dans Annulation/Remboursement, pour l’administration.</li>
+      <li>Le remboursement de ${esc(client)} se fait de là, en un clic, dans Shopify.</li>
+    </ol>`;
 
   const message = fenRa.choix === 'MESSAGE';
   $('ra-mot-t').textContent = message ? 'Votre message' : 'Un mot pour l’atelier (facultatif)';
   $('ra-mot').placeholder = message
     ? 'Par exemple : pouvez-vous vérifier le stock dans la taille au-dessus ?'
-    : 'Par exemple : le client préfère attendre. Merci !';
+    : 'Traduit pour l’atelier.';
   $('ra-apercu').textContent = apercuReponseAtelier();
 
   const manque = manqueReponseAtelier();
-  $('ra-pied').textContent = manque ?? 'Rien ne part au client.';
+  $('ra-pied').textContent = manque ?? PIED_RA[fenRa.choix];
   $('ra-pied').classList.toggle('ra-pied-manque', Boolean(manque));
+  $('ra-envoyer').textContent = message ? 'Envoyer' : 'Valider';
   $('ra-envoyer').disabled = Boolean(manque) || fenRa.envoi;
 }
 
@@ -20481,55 +20624,42 @@ $('ra-plus')?.addEventListener('click', () => {
   fenRa.date = decalerJour(fenRa.date || aujourdhuiIso(), 1);
   majReponseAtelier();
 });
+$('ra-relances')?.addEventListener('click', (event) => {
+  const bouton = event.target.closest('[data-ra-relance]');
+  if (!bouton) return;
+  fenRa.relance = Number(bouton.dataset.raRelance);
+  majReponseAtelier();
+});
 
-$('ra-remplacer')?.addEventListener('change', (event) => {
-  const case_ = event.target.closest('[data-ra-opt]');
-  if (!case_) return;
-  const option = (fenRa.options ?? []).find((candidat) => candidat.id === case_.dataset.raOpt);
-  if (!option) return;
-  fenRa.choisis = fenRa.choisis.filter((choisi) => choisi.cle !== option.id);
-  if (case_.checked) {
-    // Quatre au plus : au-delà, l'atelier ne lit plus une consigne mais un catalogue.
-    if (fenRa.choisis.length >= 4) {
-      case_.checked = false;
-      return toast('Quatre modèles au plus.', true);
-    }
-    fenRa.choisis.push({
-      cle: option.id,
-      productTitle: option.productTitle,
-      variantTitle: option.variantTitle ?? null,
-      sku: option.sku ?? null,
-      image: option.image ?? null,
-      inventory: option.inventoryQuantity ?? null,
-      libre: false,
-    });
+$('ra-nom')?.addEventListener('input', (event) => {
+  fenRa.saisie = event.target.value;
+  // Un nom tapé tel quel suit la saisie : il ne reste choisi que s'il est confirmé.
+  if (fenRa.choisis[0]?.libre) fenRa.choisis = [];
+  majReponseAtelier();
+});
+
+$('ra-options')?.addEventListener('click', (event) => {
+  const bouton = event.target.closest('button');
+  if (!bouton) return;
+  if (bouton.dataset.raTelQuel) {
+    const nom = fenRa.saisie.trim();
+    if (!nom) return;
+    fenRa.choisis = [{ cle: `libre-${Date.now()}`, productTitle: nom, variantTitle: null, sku: null, image: null, inventory: null, libre: true }];
+  } else if (bouton.dataset.raOpt) {
+    const option = (fenRa.options ?? []).find((candidat) => candidat.id === bouton.dataset.raOpt);
+    if (!option) return;
+    fenRa.choisis = [
+      {
+        cle: option.id,
+        productTitle: option.productTitle,
+        variantTitle: option.variantTitle ?? null,
+        sku: option.sku ?? null,
+        image: option.image ?? null,
+        inventory: option.inventoryQuantity ?? null,
+        libre: false,
+      },
+    ];
   }
-  majReponseAtelier();
-});
-
-$('ra-remplacer')?.addEventListener('click', (event) => {
-  const retirer = event.target.closest('[data-ra-retirer]');
-  if (!retirer) return;
-  fenRa.choisis = fenRa.choisis.filter((choisi) => choisi.cle !== retirer.dataset.raRetirer);
-  majReponseAtelier();
-});
-
-$('ra-l-add')?.addEventListener('click', () => {
-  const modele = $('ra-l-model').value.trim();
-  if (!modele) return toast('Indiquez au moins le modèle.', true);
-  if (fenRa.choisis.length >= 4) return toast('Quatre modèles au plus.', true);
-  fenRa.choisis.push({
-    cle: `libre-${Date.now()}`,
-    productTitle: modele,
-    variantTitle: $('ra-l-taille').value.trim() || null,
-    sku: $('ra-l-ref').value.trim() || null,
-    image: null,
-    inventory: null,
-    libre: true,
-  });
-  $('ra-l-model').value = '';
-  $('ra-l-taille').value = '';
-  $('ra-l-ref').value = '';
   majReponseAtelier();
 });
 
@@ -20555,16 +20685,23 @@ $('ra-envoyer')?.addEventListener('click', async () => {
         ...(fenRa.supplierId ? { supplierId: fenRa.supplierId } : {}),
         choix: fenRa.choix,
         expedierAvant: fenRa.choix === 'ATTENDRE' ? fenRa.date : null,
+        relancerDans: fenRa.choix === 'ATTENDRE' ? fenRa.relance : null,
         modeles: fenRa.choix === 'REMPLACER' ? fenRa.choisis.map(({ cle, ...modele }) => modele) : null,
         mot: $('ra-mot').value.trim() || null,
+        article: d.article
+          ? { titre: d.article.titre ?? null, variante: d.article.variante ?? null, sku: d.article.sku ?? null }
+          : null,
       }),
     });
     const depuisTicket = fenRa.depuisTicket;
+    const choix = fenRa.choix;
     fermerReponseAtelier();
     toast(
-      resultat.parMail
-        ? `Envoyé à ${resultat.atelier} : dans son espace, et par mail tout de suite.`
-        : `Envoyé à ${resultat.atelier} : la réponse est dans son espace fournisseur.`,
+      choix === 'ANNULER'
+        ? `${resultat.atelier} n’expédiera pas l’article ; la ligne attend dans Annulation/Remboursement.`
+        : resultat.parMail
+          ? `Envoyé à ${resultat.atelier} : dans son espace, et par mail tout de suite.`
+          : `Envoyé à ${resultat.atelier} : c’est dans son espace fournisseur.`,
     );
     if (depuisTicket) {
       prefetched.delete(d.ticketId);
@@ -20572,6 +20709,8 @@ $('ra-envoyer')?.addEventListener('click', async () => {
     } else {
       await loadRuptures();
     }
+    if (choix === 'ANNULER') state.navCounts = { ...state.navCounts, refunds: (state.navCounts?.refunds ?? 0) + 1 };
+    renderNav();
   } catch (error) {
     fenRa.envoi = false;
     majReponseAtelier();
@@ -20587,48 +20726,93 @@ function dateCourte(iso) {
   });
 }
 
-/*
- * L'historique, tiré des dates que le dossier porte déjà.
- *
- * Pas d'appel au journal d'audit : il faudrait une requête par dossier ouvert,
- * et les dates qui comptent — ouverture, sollicitation, réponses, consignes —
- * sont déjà là. Le journal complet reste à un clic, dans le dossier.
- */
-function histoireRupture(d) {
-  const atelier = d.fournisseur?.name ?? 'l’atelier';
-  const consignes = (d.consignes ?? []).flatMap((consigne) => [
-    [consigne.envoyeeLe, `Réponse envoyée : ${(CONSIGNE_NOMS[consigne.choix] ?? '').toLowerCase()}`, 'accent'],
-    consigne.reponduLe
-      ? [
-          consigne.reponduLe,
-          {
-            COMPRIS: `Confirmé par ${atelier}`,
-            IMPOSSIBLE: `${atelier} ne pourra pas`,
-            REPONDU: `${atelier} a répondu`,
-          }[consigne.reponse] ?? 'Réponse de l’atelier',
-          consigne.reponse === 'IMPOSSIBLE' ? 'crit' : 'ok',
-        ]
-      : null,
-  ]);
-  const lignes = [
-    d.resoluLe ? [d.resoluLe, 'Dossier clôturé', 'ok'] : null,
-    d.reponseFournisseurLe ? [d.reponseFournisseurLe, 'Réponse du fournisseur', 'ok'] : null,
-    d.notifieLe ? [d.notifieLe, 'Demande envoyée au fournisseur', 'accent'] : null,
-    ...consignes,
-    [d.creeLe, d.origine === 'atelier' ? `Rupture signalée par ${atelier}` : 'Rupture signalée', 'gris'],
-  ]
-    .filter(Boolean)
-    .sort((a, b) => new Date(b[0]).getTime() - new Date(a[0]).getTime());
+/** « 22 min », « 5 h 30 », « 3 j » : le temps passé entre deux étapes. */
+function ecartRupture(ms) {
+  const minutes = Math.max(1, Math.round(ms / 60_000));
+  if (minutes < 60) return `${minutes} min`;
+  const heures = Math.floor(minutes / 60);
+  if (heures < 48) return minutes % 60 ? `${heures} h ${String(minutes % 60).padStart(2, '0')}` : `${heures} h`;
+  return `${Math.round(heures / 24)} j`;
+}
 
-  return lignes
-    .slice(0, 6)
-    .map(
-      ([date, texte, ton]) =>
-        `<li class="rup-hist-${ton}"><span>${esc(texte)}</span><time datetime="${esc(date)}">${esc(
-          `${dateCourte(date)} · ${new Date(date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`,
-        )}</time></li>`,
-    )
-    .join('');
+/*
+ * Les dates du dossier, et le temps entre chacune.
+ *
+ * La première rupture, le mail au client, la décision, la réponse de
+ * l'atelier, puis le nouveau suivi — le moment où le client a enfin un colis.
+ * C'est l'écart entre ces dates qui dit où le dossier a traîné : chez nous,
+ * chez l'atelier, ou chez le client.
+ *
+ * Tout vient de ce que le dossier porte déjà : pas d'appel au journal d'audit,
+ * qui coûterait une requête par dossier ouvert.
+ */
+function datesDuDossier(d) {
+  const atelier = d.fournisseur?.name ?? 'L’atelier';
+  const article = [d.article?.titre, d.article?.variante].filter(Boolean).join(' ');
+  const nom = (modele) => [modele?.productTitle, modele?.variantTitle].filter(Boolean).join(' ');
+  const evenements = [[d.creeLe, `1re rupture${article ? ` · ${article}` : ''}`, 'gris']];
+
+  if (d.suivi?.mailClientLe) {
+    evenements.push([d.suivi.mailClientLe, d.suivi.mailAuto ? 'Mail au client, parti seul' : 'Mail au client', 'accent']);
+  }
+  for (const consigne of d.consignes ?? []) {
+    const modele = consigne.modeles?.[0];
+    evenements.push([
+      consigne.envoyeeLe,
+      {
+        REMPLACER: `Modèle changé → ${nom(modele) || 'autre modèle'}`,
+        ATTENDRE: consigne.relancerLe
+          ? `Restock · relance du client le ${dateConsigneFr(consigne.relancerLe)}`
+          : 'Restock',
+        ANNULER: 'Remboursement décidé',
+        MESSAGE: 'Message à l’atelier',
+      }[consigne.choix] ?? 'Décision envoyée',
+      'accent',
+    ]);
+    if (consigne.reponduLe) {
+      evenements.push([
+        consigne.reponduLe,
+        consigne.reponse === 'IMPOSSIBLE'
+          ? consigne.choix === 'REMPLACER'
+            ? `${nom(modele) || 'Le modèle'} aussi en rupture — 2e choix`
+            : `${atelier} ne pourra pas`
+          : consigne.reponse === 'REPONDU'
+            ? `${atelier} a répondu`
+            : `Confirmé par ${atelier}`,
+        consigne.reponse === 'IMPOSSIBLE' ? 'warn' : 'ok',
+      ]);
+    }
+  }
+  if (d.suivi?.nouveauSuiviLe) {
+    evenements.push([
+      d.suivi.nouveauSuiviLe,
+      `Traité par ${atelier}${d.suivi.nouveauSuivi ? ` · suivi ${d.suivi.nouveauSuivi}` : ''}`,
+      'ok',
+    ]);
+  }
+  if (d.suivi?.remboursement?.faitLe) evenements.push([d.suivi.remboursement.faitLe, 'Remboursé', 'ok']);
+  if (d.resoluLe) evenements.push([d.resoluLe, 'Dossier clos', 'gris']);
+
+  evenements.sort((a, b) => new Date(a[0]).getTime() - new Date(b[0]).getTime());
+
+  const quand = (date) =>
+    `${new Date(date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} à ${new Date(date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
+  const debut = new Date(d.creeLe).getTime();
+  const fin = d.suivi?.nouveauSuiviLe ?? d.suivi?.remboursement?.faitLe ?? d.resoluLe ?? null;
+
+  return `<ol class="rup-dates">${evenements
+    .map(([date, texte, ton], rang) => {
+      const ecart = rang ? new Date(date).getTime() - new Date(evenements[rang - 1][0]).getTime() : 0;
+      return `<li class="rup-date-${ton}">
+        <b>${esc(texte)}</b>
+        <time datetime="${esc(date)}">${esc(quand(date))}</time>
+        ${ecart > 0 ? `<span class="rup-ecart">après ${esc(ecartRupture(ecart))}</span>` : ''}
+      </li>`;
+    })
+    .join('')}</ol>
+    <div class="rup-line rup-duree"><span>${fin ? 'Traité en' : 'En cours depuis'}</span><span>${esc(
+      ecartRupture((fin ? new Date(fin).getTime() : Date.now()) - debut),
+    )}</span></div>`;
 }
 
 /*
@@ -20815,6 +20999,76 @@ function renderRuptureAlternatives(d) {
 }
 
 
+/* ---- le mail au client ---- */
+
+const fenMail = { dossier: null, envoi: false };
+
+/*
+ * « Envoyer le mail » : la réponse type, remplie pour la commande, à relire.
+ *
+ * Le serveur la remplit — prénom, commande, article, délai annoncé par
+ * l'atelier — et relit l'adresse lui-même à l'envoi : la page ne choisit
+ * jamais le destinataire.
+ */
+async function ouvrirMailRupture(d) {
+  if (!d) return;
+  try {
+    const mail = await api(`/api/ruptures/${d.ticketId}/mail`);
+    Object.assign(fenMail, { dossier: d, envoi: false });
+    $('rm-a').textContent = mail.nom ? `${mail.nom} <${mail.a}>` : mail.a;
+    $('rm-sujet').value = mail.sujet;
+    $('rm-texte').value = mail.corps;
+    majMailRupture();
+    $('rm-modal').hidden = false;
+    $('rm-modal').classList.add('open');
+    if (window.matchMedia('(hover: hover)').matches) requestAnimationFrame(() => $('rm-texte').focus());
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+function majMailRupture() {
+  const vide = !$('rm-sujet').value.trim() || $('rm-texte').value.trim().length < 10;
+  $('rm-pied').textContent = vide ? 'Le mail est vide.' : 'Il part de votre boîte, et s’inscrit au dossier.';
+  $('rm-pied').classList.toggle('ra-pied-manque', vide);
+  $('rm-envoyer').disabled = vide || fenMail.envoi;
+}
+
+function fermerMailRupture() {
+  $('rm-modal').hidden = true;
+  $('rm-modal').classList.remove('open');
+  fenMail.dossier = null;
+}
+
+$('rm-sujet')?.addEventListener('input', majMailRupture);
+$('rm-texte')?.addEventListener('input', majMailRupture);
+$('rm-fermer')?.addEventListener('click', fermerMailRupture);
+$('rm-modal')?.addEventListener('click', (event) => {
+  if (event.target === event.currentTarget) fermerMailRupture();
+});
+$('rm-modal')?.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') fermerMailRupture();
+});
+$('rm-envoyer')?.addEventListener('click', async () => {
+  const d = fenMail.dossier;
+  if (!d || fenMail.envoi) return;
+  fenMail.envoi = true;
+  majMailRupture();
+  try {
+    await api(`/api/ruptures/${d.ticketId}/mail`, {
+      method: 'POST',
+      body: JSON.stringify({ sujet: $('rm-sujet').value.trim(), corps: $('rm-texte').value.trim() }),
+    });
+    fermerMailRupture();
+    toast(`Mail envoyé à ${d.client?.nom ?? 'la cliente'}.`);
+    await loadRuptures();
+  } catch (error) {
+    fenMail.envoi = false;
+    majMailRupture();
+    toast(error.message, true);
+  }
+});
+
 /* ---- câblage de la console des ruptures ---- */
 
 /*
@@ -20822,10 +21076,18 @@ function renderRuptureAlternatives(d) {
  * statique, et un écouteur par rafraîchissement en empilerait un de plus à
  * chaque fois — au bout de dix relèves, un clic déclencherait dix requêtes.
  */
-$('rup-tabs')?.addEventListener('click', (event) => {
-  const onglet = event.target.closest('[data-rup-vue]');
-  if (!onglet) return;
-  state.ruptures.vue = onglet.dataset.rupVue;
+$('rup-chiffres')?.addEventListener('click', (event) => {
+  const chiffre = event.target.closest('[data-rup-filtre]');
+  if (!chiffre) return;
+  const r = state.ruptures;
+  // Un second clic sur le même chiffre retire le filtre, comme un bouton bascule.
+  r.vue = r.vue === chiffre.dataset.rupFiltre ? 'tous' : chiffre.dataset.rupFiltre;
+  r.page = 1;
+  renderRuptures();
+});
+
+$('rup-filtre')?.addEventListener('click', () => {
+  state.ruptures.vue = 'tous';
   state.ruptures.page = 1;
   renderRuptures();
 });
@@ -20836,88 +21098,39 @@ $('rup-q')?.addEventListener('input', (event) => {
   renderRuptures();
 });
 
-$('rup-f-supplier')?.addEventListener('change', (event) => {
-  state.ruptures.fournisseur = event.target.value;
-  state.ruptures.page = 1;
-  renderRuptures();
-});
-
-$('rup-f-priority')?.addEventListener('change', (event) => {
-  state.ruptures.priorite = event.target.value;
-  state.ruptures.page = 1;
-  renderRuptures();
-});
-
-$('rup-sort')?.addEventListener('change', (event) => {
-  state.ruptures.tri = event.target.value;
-  renderRuptures();
-});
-
-$('rup-reset')?.addEventListener('click', () => {
+/* Un modèle de la liste : les dossiers où il manque. */
+$('rup-modeles')?.addEventListener('click', (event) => {
+  const modele = event.target.closest('[data-rup-modele]');
+  if (!modele) return;
   const r = state.ruptures;
-  Object.assign(r, { vue: 'tous', q: '', fournisseur: '', priorite: '', tri: 'recent', page: 1 });
-  $('rup-q').value = '';
-  $('rup-f-supplier').value = '';
-  $('rup-f-priority').value = '';
-  $('rup-sort').value = 'recent';
-  renderRuptures();
-});
-
-/* La case d'en-tête coche la PAGE affichée, pas les deux cents dossiers du
-   lot : « tout sélectionner » doit désigner ce qu'on voit, sinon un geste
-   groupé porte sur des dossiers qu'on n'a pas regardés. */
-$('rup-all')?.addEventListener('change', (event) => {
-  const r = state.ruptures;
-  const page = rupturesFiltrees().slice((r.page - 1) * r.taille, r.page * r.taille);
-
-  for (const dossier of page) {
-    if (dossier.etat === 'RESOLU') continue;
-    if (event.target.checked) r.cochees.add(dossier.id);
-    else r.cochees.delete(dossier.id);
-  }
+  Object.assign(r, { q: modele.dataset.rupModele, vue: 'tous', page: 1 });
+  $('rup-q').value = r.q;
   renderRuptures();
 });
 
 /*
- * L'action groupée : clôturer, et rien d'autre.
+ * Le mail au client : au clic, ou dès que l'atelier signale.
  *
- * Le visuel de référence suggère un menu d'actions de masse. Une seule est
- * proposée ici, et c'est délibéré : clôturer est réversible et sans effet
- * externe. Rembourser vingt clients d'un clic ne l'est pas — l'argent part, et
- * aucun écran de confirmation ne rattrape une case cochée par erreur. Tant
- * qu'un garde-fou sérieux n'existe pas, ce geste reste dossier par dossier.
+ * Le choix vaut pour toute la boutique — c'est un réglage, pas une
+ * préférence d'écran : il se demande à qui peut régler, et revient en
+ * arrière si le serveur refuse.
  */
-$('rup-bulk')?.addEventListener('click', async () => {
+$('rup-mailauto')?.addEventListener('click', async (event) => {
+  const bouton = event.target.closest('[data-auto]');
+  if (!bouton) return;
   const r = state.ruptures;
-  const ids = [...r.cochees];
-  if (ids.length === 0) return;
-
-  const bouton = $('rup-bulk');
-  bouton.disabled = true;
-
-  // En série, pas en parallèle : vingt requêtes simultanées sur la même base
-  // se gênent, et un échec au milieu doit laisser un état lisible.
-  let faits = 0;
-  for (const id of ids) {
-    const dossier = r.dossiers.find((candidat) => candidat.id === id);
-    if (!dossier) continue;
-    try {
-      await cloreRupture(dossier);
-      faits += 1;
-    } catch {
-      // On continue : un dossier déjà clos ne doit pas bloquer les autres.
-    }
+  const voulu = bouton.dataset.auto === 'true';
+  if (voulu === r.mailRuptureAuto) return;
+  r.mailRuptureAuto = voulu;
+  renderRuptureEntete();
+  try {
+    await api('/api/ruptures/reglages', { method: 'PUT', body: JSON.stringify({ mailRuptureAuto: voulu }) });
+    toast(voulu ? 'Le mail partira dès que l’atelier signale une rupture.' : 'Le mail partira quand vous cliquerez « Envoyer le mail ».');
+  } catch (error) {
+    r.mailRuptureAuto = !voulu;
+    renderRuptureEntete();
+    toast(error.message, true);
   }
-
-  r.cochees.clear();
-  bouton.disabled = false;
-  toast(
-    faits === ids.length
-      ? `${faits} dossier${faits > 1 ? 's' : ''} clôturé${faits > 1 ? 's' : ''}.`
-      : `${faits} sur ${ids.length} clôturés — les autres ont refusé.`,
-    faits !== ids.length,
-  );
-  await loadRuptures();
 });
 
 /* ------------------------------------------------- commandes du jour ---- */

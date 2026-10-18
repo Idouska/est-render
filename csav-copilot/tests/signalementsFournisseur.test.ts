@@ -67,9 +67,9 @@ test('les libellés du marchand sont ceux que l’atelier choisit', () => {
   for (const [motif, { libelle }] of Object.entries(MOTIFS_SIGNALEMENT)) {
     assert.equal(fr[`issue.kind.${motif}`], libelle, motif);
   }
-  assert.match(espace, /MOTIFS_SIGNALEMENT\[parsed\.data\.kind\]\.libelle/);
-  // Et la note devient l'extrait de la file.
-  assert.match(espace, /snippet: parsed\.data\.note\.replace/);
+  assert.match(espace, /MOTIFS_SIGNALEMENT\[donnees\.kind\]\.libelle/);
+  // Et la note devient l'extrait de la file — l'article, quand elle est vide.
+  assert.match(espace, /snippet: \(note \|\| detail\.join\(' · '\)\)\.replace/);
 });
 
 test('la page ne montre que les mots de l’atelier', () => {

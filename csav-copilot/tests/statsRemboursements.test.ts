@@ -150,11 +150,13 @@ test('Shopify muet : on compte ce que l’outil sait, et on le dit', () => {
   assert.deepEqual(stats.nonAttribues, { nombre: 1, montant: 20 });
 });
 
-test('l’écran : deux vues, quatre périodes, et le serveur ne compte ni test ni échec', () => {
+test('l’écran : trois vues, quatre périodes, et le serveur ne compte ni test ni échec', () => {
   const html = lire('public/dashboard.html');
   const vue = html.slice(html.indexOf('id="view-refunds"'), html.indexOf('id="view-disputes"'));
   assert.match(vue, /data-vue="stats" aria-selected="true">Statistiques</);
   assert.match(vue, /data-vue="liste" aria-selected="false">Liste</);
+  // « À rembourser » d'abord : ce que l'administration doit faire.
+  assert.match(vue, /data-vue="afaire" aria-selected="false">À rembourser</);
   assert.deepEqual([...vue.matchAll(/data-days="(\d+)"/g)].map((m) => m[1]), ['30', '90', '180', '365']);
 
   const service = lire('src/services/refunds/stats.ts');
@@ -167,7 +169,7 @@ test('l’écran : deux vues, quatre périodes, et le serveur ne compte ni test 
   assert.match(route, /oublierStatsRemboursements\(merchantId\);\n\s+return reply\.send\(\{ id: record\.id/);
 
   const app = lire('public/app.js');
-  assert.match(app, /refunds: \(\) => chargerVueRemboursements\(\),/);
+  assert.match(app, /refunds: \(\) => \{\n\s+\/\/[^\n]*\n\s+if \(\(state\.navCounts\?\.refunds \?\? 0\) > 0\) vueRemboursements = 'afaire';\n\s+chargerVueRemboursements\(\);/);
   // La phrase ne met « Sans motif » en avant que s'il l'emporte vraiment.
   assert.match(app, /if \(partSans >= 0\.9\)/);
 });
