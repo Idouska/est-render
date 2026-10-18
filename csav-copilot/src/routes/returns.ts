@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.ts';
+import { enModeTest } from '../services/modeTest.ts';
 import { recordAudit } from '../lib/audit.ts';
 import { requirePermission, requireSession } from '../plugins/auth.ts';
 import { decodePhoto, photoSchema } from './parcels.ts';
@@ -178,6 +179,7 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
         merchantId,
         ...parsed.data,
         trackingNumber: bon,
+        test: await enModeTest(merchantId),
         ...(bon ? { labelSent: true, labelSentAt: new Date(), status: 'LABEL_SENT' as const } : {}),
       },
     });
@@ -230,9 +232,11 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
     if (parsed.data.agencyId && !agence) return reply.code(404).send({ error: 'Agence introuvable' });
 
     const maintenant = new Date();
+    const test = await enModeTest(merchantId);
     await prisma.returnCase.createMany({
       data: Array.from({ length: parsed.data.quantite }, () => ({
         merchantId,
+        test,
         origine: 'MANUEL',
         status: 'RESTOCKED' as const,
         restockedAt: maintenant,

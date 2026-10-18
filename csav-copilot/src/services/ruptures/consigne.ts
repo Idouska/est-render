@@ -2,6 +2,7 @@ import type { Prisma } from '@prisma/client';
 
 import { logger } from '../../lib/logger.ts';
 import { prisma } from '../../lib/prisma.ts';
+import { enModeTest } from '../modeTest.ts';
 import { translateToFrench, traduireDuFrancais } from '../ai/translate.ts';
 import { sendPlainEmail } from '../gmail/send.ts';
 import { langueAtelier, MOTS } from '../suppliers/langueAtelier.ts';
@@ -166,6 +167,7 @@ export async function envoyerConsigne(params: {
   const mot = params.mot?.trim() || null;
   const traduit = mot ? await avecDelai(traduireDuFrancais(mot)) : null;
   const maintenant = new Date();
+  const test = await enModeTest(params.merchantId);
 
   const [, creee] = await prisma.$transaction([
     prisma.ruptureConsigne.updateMany({
@@ -185,6 +187,7 @@ export async function envoyerConsigne(params: {
         mot,
         motTraduit: traduit ? { en: traduit.en, zh: traduit.zh } : undefined,
         createdById: params.createdById,
+        test,
       },
       select: champs,
     }),

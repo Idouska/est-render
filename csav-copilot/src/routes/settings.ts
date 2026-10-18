@@ -1360,9 +1360,29 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const { merchantId, userId } = request.session;
 
-      const [colis, remboursements] = await prisma.$transaction([
+      /* Une paire du stock réservée pour un échange de test retourne au stock :
+         sinon elle resterait « prise » par un dossier qui n'existe plus. */
+      const retoursTest = await prisma.returnCase.findMany({ where: { merchantId, test: true }, select: { id: true } });
+      const idsRetours = retoursTest.map((retour) => retour.id);
+
+      const [colis, remboursements, , aFaire, consignes, mails, , retours, tickets] = await prisma.$transaction([
         prisma.parcel.deleteMany({ where: { merchantId, test: true } }),
         prisma.refund.deleteMany({ where: { merchantId, test: true } }),
+        prisma.returnCase.updateMany({
+          where: { merchantId, test: false, reusedReturnCaseId: { in: idsRetours } },
+          data: { reusedReturnCaseId: null, reusedAt: null, status: 'RESTOCKED' },
+        }),
+        prisma.remboursementAFaire.deleteMany({ where: { merchantId, test: true } }),
+        prisma.ruptureConsigne.deleteMany({ where: { merchantId, test: true } }),
+        prisma.message.deleteMany({ where: { merchantId, gmailMessageId: { startsWith: 'rupture-', endsWith: ':test' } } }),
+        // Un échange de test validé sur un vrai dossier : la paire réservée revient.
+        prisma.returnCase.updateMany({
+          where: { merchantId, test: false, exchangeStockCaseId: { in: idsRetours } },
+          data: { exchangeStockCaseId: null },
+        }),
+        prisma.returnCase.deleteMany({ where: { merchantId, test: true } }),
+        // Les signalements d'atelier de test ; leurs messages et décisions partent avec.
+        prisma.ticket.deleteMany({ where: { merchantId, test: true } }),
       ]);
 
       await recordAudit({
@@ -1372,11 +1392,26 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
         action: "merchant.test_data_cleared",
         targetType: "Merchant",
         targetId: merchantId,
-        metadata: { colis: colis.count, remboursements: remboursements.count },
+        metadata: {
+          colis: colis.count,
+          remboursements: remboursements.count,
+          signalements: tickets.count,
+          decisions: consignes.count,
+          aRembourser: aFaire.count,
+          mails: mails.count,
+          retours: retours.count,
+        },
         ipAddress: request.ip,
       });
 
-      return reply.send({ colis: colis.count, remboursements: remboursements.count });
+      return reply.send({
+        colis: colis.count,
+        remboursements: remboursements.count + aFaire.count,
+        signalements: tickets.count,
+        decisions: consignes.count,
+        mails: mails.count,
+        retours: retours.count,
+      });
     },
   );
 

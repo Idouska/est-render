@@ -16168,12 +16168,17 @@ $('set-testmode').addEventListener('change', async (event) => {
 });
 
 $('test-effacer').addEventListener('click', async () => {
-  if (!confirm('Effacer les colis et remboursements créés pendant le mode test ? Les données réelles ne sont pas touchées.')) {
+  if (!confirm('Effacer tout ce qui a été créé pendant le mode test — colis, remboursements, signalements et ruptures, décisions envoyées aux ateliers, mails de rupture, retours et échanges ? Les données réelles ne sont pas touchées.')) {
     return;
   }
   try {
-    const { colis, remboursements } = await api('/api/mode-test/effacer', { method: 'POST' });
-    toast(`Données de test effacées — colis : ${colis}, remboursements : ${remboursements}.`);
+    const r = await api('/api/mode-test/effacer', { method: 'POST' });
+    toast(
+      `Données de test effacées — colis : ${r.colis}, remboursements : ${r.remboursements}, signalements : ${r.signalements ?? 0}, décisions : ${r.decisions ?? 0}, mails : ${r.mails ?? 0}, retours et échanges : ${r.retours ?? 0}.`,
+    );
+    // Les écrans déjà chargés relisent : sinon les lignes effacées resteraient affichées.
+    void loadRuptures?.();
+    void loadReturns?.();
   } catch (error) {
     toast(error.message, true);
   }

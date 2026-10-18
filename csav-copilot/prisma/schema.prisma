@@ -245,6 +245,8 @@ model GmailConnection {
 model Ticket {
   id            String @id @default(cuid())
   merchantId    String
+  /// Créé pendant le mode test : « Effacer les données de test » l'emporte.
+  test Boolean @default(false)
   gmailThreadId String
 
   subject       String?
@@ -836,6 +838,8 @@ model RuptureSubstitution {
 model RuptureConsigne {
   id         String @id @default(cuid())
   merchantId String
+  /// Créé pendant le mode test : « Effacer les données de test » l'emporte.
+  test Boolean @default(false)
   ticketId   String
   supplierId String
 
@@ -898,6 +902,8 @@ model RuptureConsigne {
 model RemboursementAFaire {
   id         String @id @default(cuid())
   merchantId String
+  /// Créé pendant le mode test : « Effacer les données de test » l'emporte.
+  test Boolean @default(false)
   ticketId   String
   consigneId String?
 
@@ -1136,6 +1142,8 @@ enum SupplierAlertStatus {
 model ReturnCase {
   id         String @id @default(cuid())
   merchantId String
+  /// Créé pendant le mode test : « Effacer les données de test » l'emporte.
+  test Boolean @default(false)
 
   orderName      String?
   shopifyOrderId String?
