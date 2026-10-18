@@ -11725,7 +11725,7 @@ function renderEchanges(box) {
             ? `<button class="btn btn-small btn-primary" type="button" data-ech-controler="${esc(item.id)}">Contrôler et valider</button>`
             : '<span class="ech-attente" title="« Valider » s’ouvre quand la paire est reçue par l’agence">Valider · à la réception</span>';
         return `<div class="ech-ligne">
-          <span class="ech-cell"><b>${esc(item.customerName ?? '—')}</b><small>${esc(RETURN_COUNTRIES[item.country] ?? item.country ?? '')}</small></span>
+          <span class="ech-cell"><b>${esc(item.customerName ?? '—')}</b><small>${ageMarkup(item.createdAt, fait)} ${esc(RETURN_COUNTRIES[item.country] ?? item.country ?? '')}</small></span>
           <b>${esc(item.orderName ?? '—')}</b>
           <span class="ech-cell"><b>${esc(nomPaire(item.productTitle, item.variantTitle))}</b><small>${esc(RETURN_REASONS[item.reason] ?? '')}</small></span>
           <span class="ech-cell"><b>${esc(nomPaire(item.wantedTitle, item.wantedVariantTitle))}</b><small class="${change ? 'ech-change' : ''}">${esc(change ? 'modèle changé' : 'même modèle, autre déclinaison')}</small></span>
@@ -19145,7 +19145,7 @@ function renderARembourser() {
           }</span>
           <b class="rmb-af-cmd">${esc(ligne.orderName ?? '—')}</b>
           <span class="rmb-af-art"><b>${esc(ligne.article)}</b><small>Rupture · l’atelier n’expédie pas cet article</small></span>
-          <span class="rmb-af-par"><span>${esc(ligne.demandePar ?? 'L’équipe')}</span><small>depuis Ruptures de stock · ${esc(jour(ligne.demandeLe))}</small></span>
+          <span class="rmb-af-par"><span class="rmb-af-qui">${esc(ligne.demandePar ?? 'L’équipe')}</span><small>${ageMarkup(ligne.demandeLe, Boolean(ligne.faitLe))} depuis Ruptures de stock</small></span>
           <b class="rmb-af-montant num">${typeof ligne.montant === 'number' ? esc(euro(ligne.montant, ligne.devise ?? 'EUR')) : '—'}</b>
           <span class="rmb-af-geste">${
             ligne.faitLe
@@ -19868,6 +19868,19 @@ function renderRuptures() {
   renderRupturePanneau();
 }
 
+/*
+ * L'âge d'une demande, en couleur : vert le premier jour, orange jusqu'à
+ * trois jours, rouge au-delà. Un dossier clos reste gris — son âge ne
+ * réclame plus rien.
+ */
+function ageMarkup(date, clos = false) {
+  const ms = Date.now() - new Date(date).getTime();
+  const ton = clos ? 'clos' : ms < 86_400_000 ? 'frais' : ms < 3 * 86_400_000 ? 'jour' : 'vieux';
+  return `<span class="age age-${ton}" title="${esc(new Date(date).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' }))}">${esc(
+    formatSpan(ms),
+  )}</span>`;
+}
+
 /** « 3,2 j », « 18 h » : le délai moyen, à l'échelle qui se lit. */
 function delaiRupture(heures) {
   if (typeof heures !== 'number') return '—';
@@ -19998,7 +20011,6 @@ function renderRuptureLignes(page, total) {
   corps.innerHTML = page
     .map((d) => {
       const file = fileDe(d);
-      const age = formatSpan(Date.now() - new Date(d.creeLe).getTime());
       const titre = d.article?.titre ?? (d.origine === 'atelier' ? 'Article non précisé' : 'Article non lu');
       const detail = [d.article?.variante, d.article?.sku].filter(Boolean).join(' · ');
       const qui = [d.client?.nom, d.commande?.nom].filter(Boolean).join(' · ');
@@ -20027,7 +20039,7 @@ function renderRuptureLignes(page, total) {
         <td class="rup-c-etat"><span class="rup-file rup-file-${esc(file.ton)}">${esc(file.libelle)}</span>${
           file.sous ? `<small class="rup-file-sous">${esc(file.sous)}</small>` : ''
         }</td>
-        <td class="rup-c-depuis rup-age">${esc(age)}</td>
+        <td class="rup-c-depuis">${ageMarkup(d.creeLe, d.etat === 'RESOLU')}</td>
         <td class="rup-c-act"><span class="rup-gestes">${mailDeLaLigne(d)}${decisionDeLaLigne(d)}</span></td>
       </tr>`;
     })
@@ -20564,6 +20576,9 @@ const fenRa = {
   saisie: '',
   options: null,
   optionsErreur: null,
+  /** Le catalogue pour le nom tapé — ou, champ vide, pour le modèle en rupture. */
+  catalogue: [],
+  rechercheCatalogue: 0,
   supplierId: null,
   depuisTicket: false,
   envoi: false,
@@ -20616,6 +20631,8 @@ function ouvrirReponseAtelier(d, options = {}) {
     saisie: '',
     options: null,
     optionsErreur: null,
+    catalogue: [],
+    chercheCatalogue: false,
     supplierId: options.supplierId ?? null,
     depuisTicket: Boolean(options.depuisTicket),
     envoi: false,
@@ -20664,6 +20681,38 @@ function ouvrirReponseAtelier(d, options = {}) {
   }
 
   void chargerOptionsRemplacement(d);
+  void chercherCatalogue();
+}
+
+/*
+ * Le catalogue Shopify, cherché pendant qu'on tape.
+ *
+ * Champ vide, on cherche la gamme du modèle en rupture — « Nike Mind » pour
+ * « Nike Mind 001 Blackened Blue » : la liste est pleine dès le clic, avec
+ * les autres coloris et pointures. Chaque frappe relance, après un court
+ * temps mort ; une réponse arrivée trop tard ne remplace pas une plus récente.
+ */
+let minuteurCatalogue = 0;
+function chercherCatalogue({ apres = 0 } = {}) {
+  clearTimeout(minuteurCatalogue);
+  minuteurCatalogue = setTimeout(async () => {
+    const d = fenRa.dossier;
+    if (!d) return;
+    const gamme = (d.article?.titre ?? '').split(/\s+/).slice(0, 2).join(' ');
+    const terme = fenRa.saisie.trim() || gamme;
+    const tour = ++fenRa.rechercheCatalogue;
+    if (!terme) return;
+    fenRa.chercheCatalogue = true;
+    try {
+      const { options } = await api(`/api/catalogue/variantes?q=${encodeURIComponent(terme)}`);
+      if (tour !== fenRa.rechercheCatalogue || fenRa.dossier !== d) return;
+      fenRa.catalogue = options ?? [];
+    } catch {
+      if (tour === fenRa.rechercheCatalogue) fenRa.catalogue = [];
+    }
+    if (tour === fenRa.rechercheCatalogue) fenRa.chercheCatalogue = false;
+    majReponseAtelier();
+  }, apres);
 }
 
 /* Les modèles en stock, cherchés une fois par ouverture : le même croisement
@@ -20709,13 +20758,20 @@ function apercuReponseAtelier() {
  * les premiers modèles en stock, ceux que le catalogue rapproche déjà.
  */
 function suggestionsRemplacement() {
-  const mots = fenRa.saisie.toLowerCase().split(/\s+/).filter(Boolean);
-  return (fenRa.options ?? [])
+  // Champ vide : la gamme du modèle en rupture sert de filtre — la liste
+  // propose ses autres coloris et pointures, pas tout le catalogue.
+  const gamme = (fenRa.dossier?.article?.titre ?? '').split(/\s+/).slice(0, 2).join(' ');
+  const mots = (fenRa.saisie.trim() || gamme).toLowerCase().split(/\s+/).filter(Boolean);
+  // Les équivalents de la commande d'abord, puis le catalogue — sans doublon.
+  const vus = new Set();
+  return [...(fenRa.options ?? []), ...(fenRa.catalogue ?? [])]
     .filter((option) => {
+      if (vus.has(option.id)) return false;
+      vus.add(option.id);
       const texte = [option.productTitle, option.variantTitle, option.sku].filter(Boolean).join(' ').toLowerCase();
       return mots.every((mot) => texte.includes(mot));
     })
-    .slice(0, 6);
+    .slice(0, 8);
 }
 
 function majReponseAtelier() {
@@ -20745,6 +20801,7 @@ function majReponseAtelier() {
   /* Modifier le modèle : le catalogue d'abord, puis le nom tapé tel quel. */
   const choisi = fenRa.choisis[0] ?? null;
   const suggestions = suggestionsRemplacement();
+  const tousLesModeles = [...(fenRa.options ?? []), ...(fenRa.catalogue ?? [])];
   const saisie = fenRa.saisie.trim();
   const ligne = (option) => {
     const on = choisi?.cle === option.id;
@@ -20754,12 +20811,14 @@ function majReponseAtelier() {
         <b>${esc([option.productTitle, option.variantTitle].filter(Boolean).join(' · '))}</b>
         <small>${esc(option.sku || '—')}</small>
       </span>
-      <span class="ra-sug-stock">${option.inventoryQuantity ?? 0} en stock</span>
+      <span class="ra-sug-stock${(option.inventoryQuantity ?? 0) > 0 ? '' : ' ra-sug-epuise'}">${
+        (option.inventoryQuantity ?? 0) > 0 ? `${option.inventoryQuantity} en stock` : 'épuisé'
+      }</span>
       <span class="ra-sug-coche" aria-hidden="true">${on ? ico('check') : ''}</span>
     </button>`;
   };
   const horsCatalogue =
-    choisi && !(fenRa.options ?? []).some((option) => option.id === choisi.cle)
+    choisi && !tousLesModeles.some((option) => option.id === choisi.cle)
       ? `<button class="ra-sug" type="button" role="option" aria-selected="true" data-ra-libre="1">
           <span class="rup-blank" aria-hidden="true"></span>
           <span class="ra-sug-txt"><b>${esc([choisi.productTitle, choisi.variantTitle].filter(Boolean).join(' · '))}</b>
@@ -20775,10 +20834,13 @@ function majReponseAtelier() {
             <small>un modèle que l’atelier a sous la main</small></span>
         </button>`
       : '';
-  const liste = fenRa.options === null
-    ? '<p class="empty">Recherche des modèles en stock…</p>'
-    : suggestions.map(ligne).join('') ||
-      (saisie ? '' : `<p class="empty">${esc(fenRa.optionsErreur ?? 'Aucun modèle en stock à proposer.')}</p>`);
+  const liste =
+    suggestions.map(ligne).join('') ||
+    (fenRa.options === null || fenRa.chercheCatalogue
+      ? saisie
+        ? ''
+        : '<p class="empty">Recherche dans le catalogue…</p>'
+      : `<p class="empty">${esc(fenRa.optionsErreur ?? 'Aucun modèle à proposer.')}</p>`);
   $('ra-options').innerHTML = horsCatalogue + liste + telQuel;
 
   const client = d.client?.nom ?? 'le client';
@@ -20889,6 +20951,11 @@ $('ra-nom')?.addEventListener('input', (event) => {
   // Un nom tapé tel quel suit la saisie : il ne reste choisi que s'il est confirmé.
   if (fenRa.choisis[0]?.libre) fenRa.choisis = [];
   majReponseAtelier();
+  chercherCatalogue({ apres: 250 });
+});
+// Au clic dans le champ, la liste est déjà là ; vide, elle se remplit.
+$('ra-nom')?.addEventListener('focus', () => {
+  if (!fenRa.catalogue?.length) chercherCatalogue();
 });
 
 $('ra-options')?.addEventListener('click', (event) => {
@@ -20899,7 +20966,7 @@ $('ra-options')?.addEventListener('click', (event) => {
     if (!nom) return;
     fenRa.choisis = [{ cle: `libre-${Date.now()}`, productTitle: nom, variantTitle: null, sku: null, image: null, inventory: null, libre: true }];
   } else if (bouton.dataset.raOpt) {
-    const option = (fenRa.options ?? []).find((candidat) => candidat.id === bouton.dataset.raOpt);
+    const option = [...(fenRa.options ?? []), ...(fenRa.catalogue ?? [])].find((candidat) => candidat.id === bouton.dataset.raOpt);
     if (!option) return;
     fenRa.choisis = [
       {
