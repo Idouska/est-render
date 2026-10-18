@@ -1,0 +1,29 @@
+<!doctype html><meta charset="utf-8"><body>
+<script type="module">
+import { cutout } from '/shopify/assets/maillots-portant.js';
+window.cut = async (url, tune) => {
+  const res = await fetch(url, { mode: 'cors', credentials: 'omit' });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const img = await createImageBitmap(await res.blob());
+  const cut = cutout(img, 1024, tune || {});
+  if (!cut) return null;
+  const sil = new OffscreenCanvas(cut.w, cut.h);
+  const d = new ImageData(cut.w, cut.h);
+  for (let i = 0; i < cut.w * cut.h; i++) { d.data[i*4]=d.data[i*4+1]=d.data[i*4+2]=255; d.data[i*4+3]=cut.fg[i]?255:0; }
+  sil.getContext('2d').putImageData(d, 0, 0);
+  const b = cut.box, k = cut.k;
+  const sx = b.x0 / k, sy = b.y0 / k, sw = (b.x1-b.x0+1)/k, sh = (b.y1-b.y0+1)/k;
+  const f = Math.min(1400 / Math.max(sw, sh), 1);
+  const tw = Math.max(8, Math.round(sw*f)), th = Math.max(8, Math.round(sh*f));
+  const c = new OffscreenCanvas(tw, th), ctx = c.getContext('2d');
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, tw, th);
+  ctx.globalCompositeOperation = 'destination-in';
+  ctx.filter = 'blur(0.6px)';
+  ctx.drawImage(sil, b.x0, b.y0, b.x1-b.x0+1, b.y1-b.y0+1, 0, 0, tw, th);
+  img.close();
+  const blob = await c.convertToBlob({ type: 'image/png' });
+  return await new Promise((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(blob); });
+};
+window.ready = true;
+</script></body>

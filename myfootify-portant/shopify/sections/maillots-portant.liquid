@@ -1,0 +1,409 @@
+{%- comment -%}
+  Portant de maillots — hero 3D (voir myfootify-portant/README.md).
+
+  Chaque maillot est reconstruit en volume à partir de ses photos :
+  - la face : la photo principale du produit (fond blanc ou uni, ou PNG détouré) ;
+  - le dos : la première photo dont le texte alternatif parle du dos
+    (« vue de dos », « dos du maillot », « vue arrière »…).
+  Les métachamps custom.portant_face et custom.portant_dos (fichier image)
+  remplacent ce choix automatique quand ils sont remplis.
+{%- endcomment -%}
+{{ 'maillots-portant.css' | asset_url | stylesheet_tag }}
+
+{%- liquid
+  assign source = section.settings.products
+  if source == blank
+    assign source = section.settings.collection.products
+  endif
+  assign shoes_source = section.settings.shoes_products
+  if shoes_source == blank
+    assign shoes_source = section.settings.shoes_collection.products
+  endif
+-%}
+
+{%- liquid
+  assign hero = section.settings.hero
+  assign titre_tag = 'h2'
+  if hero
+    assign titre_tag = 'h1'
+  endif
+-%}
+{%- if hero -%}
+  {%- comment -%} Hero : Three.js est demandé tout de suite, en parallèle du reste de la page. {%- endcomment -%}
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js" crossorigin>
+{%- endif -%}
+
+<div
+  {%- liquid
+    assign room_photo_url = ''
+    if section.settings.ambiance == 'vestiaire' and section.settings.room_photo_on
+      if section.settings.room_photo != blank
+        assign room_photo_url = section.settings.room_photo | image_url: width: 2000
+      else
+        assign room_photo_url = 'vestiaire-fond.jpg' | asset_url
+      endif
+    endif
+  -%}
+  class="mfp{% if hero %} mfp--hero{% endif %} mfp--{{ section.settings.ambiance | default: 'claire' }}{% if room_photo_url != blank %} mfp--photo{% endif %}"
+  id="mfp-{{ section.id }}"
+  data-mfp
+  data-ambiance="{{ section.settings.ambiance | default: 'claire' }}"
+  style="--mfp-bg: {{ section.settings.background }}; --mfp-ink: {{ section.settings.text }}; --mfp-accent: {{ section.settings.accent }};"
+>
+  {%- if section.settings.ambiance == 'vestiaire' -%}
+    <div class="mfp__room" aria-hidden="true">
+      {%- if room_photo_url != blank -%}
+        <i class="mfp__room-photo" style="background-image: url('{{ room_photo_url }}')"></i>
+      {%- endif -%}
+      <i class="mfp__room-tunnel"></i>
+      <i class="mfp__room-spots"></i>
+      <i class="mfp__room-floor"></i>
+      {%- if section.settings.wall_logo != blank -%}
+        <i class="mfp__room-logo">{{ section.settings.wall_logo | image_url: width: 220 | image_tag: loading: 'lazy', alt: '' }}</i>
+      {%- elsif section.settings.wall_text != blank -%}
+        <i class="mfp__room-logo"><span>{{ section.settings.wall_text | escape }}</span></i>
+      {%- endif -%}
+    </div>
+  {%- endif -%}
+  <div class="mfp__inner">
+    <header class="mfp__head">
+      <div class="mfp__intro">
+        {%- if section.settings.eyebrow != blank -%}
+          <p class="mfp__eyebrow">{{ section.settings.eyebrow | escape }}</p>
+        {%- endif -%}
+        <{{ titre_tag }} class="mfp__title">{{ section.settings.heading | escape }}{%- if section.settings.heading_accent != blank -%}<span class="mfp__accent">{{ section.settings.heading_accent | escape }}</span>{%- endif -%}</{{ titre_tag }}>
+        {%- if section.settings.subheading != blank -%}
+          <p class="mfp__sub">{{ section.settings.subheading | escape }}</p>
+        {%- endif -%}
+      </div>
+      <div class="mfp__edition">
+        <span>{{ section.settings.edition_top | escape }}</span>
+        <span>{{ section.settings.edition_bottom | escape }}</span>
+      </div>
+    </header>
+
+    <div data-mfp-body>
+      {%- if source == blank -%}
+        {%- if request.design_mode -%}
+          <p class="mfp__empty">Choisissez une collection de maillots dans les réglages de la section.</p>
+        {%- endif -%}
+      {%- else -%}
+        <div class="mfp__stage">
+          <div class="mfp__loading">On accroche les maillots<span>…</span></div>
+        </div>
+        {%- comment -%} Si le portant 3D ne peut pas se charger, cette rangée prend le relais. {%- endcomment -%}
+        <ul class="mfp__flat" data-mfp-fallback>
+          {%- for product in source limit: section.settings.limit -%}
+            <li>
+              <a href="{{ product.url }}">
+                {%- if product.featured_media -%}
+                  {{ product.featured_media | image_url: width: 480 | image_tag: loading: 'lazy', alt: product.title }}
+                {%- endif -%}
+                <span>{{ product.title | escape }}</span>
+              </a>
+            </li>
+          {%- endfor -%}
+        </ul>
+      {%- endif -%}
+    </div>
+
+    {%- if section.settings.button_1_label != blank or section.settings.button_2_label != blank -%}
+      <div class="mfp__actions">
+        {%- if section.settings.button_1_label != blank -%}
+          <a class="mfp__cta" href="{{ section.settings.button_1_link | default: routes.all_products_collection_url }}">{{ section.settings.button_1_label | escape }}</a>
+        {%- endif -%}
+        {%- if section.settings.button_2_label != blank -%}
+          <a class="mfp__cta mfp__cta--ghost" href="{{ section.settings.button_2_link | default: routes.all_products_collection_url }}">{{ section.settings.button_2_label | escape }}</a>
+        {%- endif -%}
+      </div>
+    {%- endif -%}
+  </div>
+
+  <script type="application/json" data-mfp-products>
+    [
+      {%- for product in source limit: section.settings.limit -%}
+        {%- liquid
+          assign front_url = ''
+          assign back_url = ''
+          if product.metafields.custom.portant_face_det != blank
+            assign front_url = product.metafields.custom.portant_face_det.value | image_url: width: 1200
+          elsif product.metafields.custom.portant_face != blank
+            assign front_url = product.metafields.custom.portant_face.value | image_url: width: 1200
+          elsif product.featured_media != blank
+            assign front_url = product.featured_media | image_url: width: 1200
+          endif
+
+          if product.metafields.custom.portant_dos_det != blank
+            assign back_url = product.metafields.custom.portant_dos_det.value | image_url: width: 1200
+          elsif product.metafields.custom.portant_dos != blank
+            assign back_url = product.metafields.custom.portant_dos.value | image_url: width: 1200
+          else
+            for media in product.media
+              if media.media_type == 'image' and media.id != product.featured_media.id
+                assign alt = media.alt | downcase
+                if alt contains 'vue de dos' or alt contains 'dos du maillot' or alt contains 'vue arrière' or alt contains 'vue arriere' or alt contains 'back view'
+                  assign back_url = media | image_url: width: 1200
+                  break
+                endif
+              endif
+            endfor
+            if back_url == blank
+              for media in product.media
+                if media.media_type == 'image' and media.id != product.featured_media.id
+                  assign alt = media.alt | downcase | prepend: ' '
+                  if alt contains ' dos ' or alt contains ' dos,' or alt contains 'arrière' or alt contains ' back'
+                    assign back_url = media | image_url: width: 1200
+                    break
+                  endif
+                endif
+              endfor
+            endif
+          endif
+        -%}
+        {
+          "title": {{ product.title | json }},
+          "type": {{ product.type | json }},
+          "url": {{ product.url | json }},
+          "price": {{ product.price | money | json }},
+          "front": {{ front_url | json }},
+          "back": {{ back_url | json }}
+        }
+        {%- unless forloop.last -%},{%- endunless -%}
+      {%- endfor -%}
+      {%- comment -%} Les chaussures, posées sur le banc (ambiance vestiaire). {%- endcomment -%}
+      {%- assign shoe_count = 0 -%}
+      {%- for product in shoes_source limit: section.settings.shoes_limit -%}
+        {%- liquid
+          assign shoe_front = ''
+          if product.metafields.custom.portant_face_det != blank
+            assign shoe_front = product.metafields.custom.portant_face_det.value | image_url: width: 900
+          elsif product.metafields.custom.portant_face != blank
+            assign shoe_front = product.metafields.custom.portant_face.value | image_url: width: 900
+          elsif product.featured_media != blank
+            assign shoe_front = product.featured_media | image_url: width: 900
+          endif
+        -%}
+        {%- if shoe_front != blank -%}
+          {%- if shoe_count > 0 or source != blank -%},{%- endif -%}
+          {%- assign shoe_count = shoe_count | plus: 1 -%}
+          {
+            "kind": "chaussure",
+            "title": {{ product.title | json }},
+            "type": {{ product.type | json }},
+            "url": {{ product.url | json }},
+            "price": {{ product.price | money | json }},
+            "front": {{ shoe_front | json }},
+            "back": null
+          }
+        {%- endif -%}
+      {%- endfor -%}
+    ]
+  </script>
+
+  {%- comment -%}
+    Filet de sécurité : si le module (ou Three.js, chargé depuis jsDelivr) n'a
+    pas pris la main au bout de 8 s, on montre la rangée de maillots.
+  {%- endcomment -%}
+  <script>
+    setTimeout(function () {
+      var root = document.getElementById('mfp-{{ section.id }}');
+      if (root && !root.portant) root.classList.add('mfp--flat');
+    }, 8000);
+  </script>
+</div>
+
+<script type="module" src="{{ 'maillots-portant.js' | asset_url }}"></script>
+
+{% schema %}
+{
+  "name": "Portant de maillots",
+  "tag": "section",
+  "class": "section-maillots-portant",
+  "settings": [
+    {
+      "type": "checkbox",
+      "id": "hero",
+      "label": "Utiliser comme hero (haut de page)",
+      "info": "Plein écran sous l'en-tête, titre en H1 (un seul H1 par page) et Three.js chargé en priorité.",
+      "default": false
+    },
+    {
+      "type": "header",
+      "content": "Textes"
+    },
+    {
+      "type": "text",
+      "id": "eyebrow",
+      "label": "Sur-titre"
+    },
+    {
+      "type": "text",
+      "id": "heading_accent",
+      "label": "Deuxième ligne du titre (en orange)",
+      "info": "Par exemple « le vestiaire. » — laissée vide, le titre reste sur une ligne."
+    },
+    {
+      "type": "checkbox",
+      "id": "room_photo_on",
+      "label": "Fond photoréaliste (ambiance vestiaire)",
+      "default": true,
+      "info": "Photo du vestiaire vide derrière les maillots. Décochée, le décor reste en dégradés CSS."
+    },
+    {
+      "type": "image_picker",
+      "id": "room_photo",
+      "label": "Photo du vestiaire",
+      "info": "Laissez vide pour utiliser l'image fournie (vestiaire-fond.jpg)."
+    },
+    {
+      "type": "image_picker",
+      "id": "wall_logo",
+      "label": "Logo mural (ambiance vestiaire)",
+      "info": "Intégré en relief discret sur le mur de gauche. Sans image, le texte ci-dessous est gravé à la place."
+    },
+    {
+      "type": "text",
+      "id": "wall_text",
+      "label": "Texte mural (si pas de logo)",
+      "default": "MyFootify"
+    },
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Titre",
+      "default": "La collection."
+    },
+    {
+      "type": "text",
+      "id": "subheading",
+      "label": "Sous-titre"
+    },
+    {
+      "type": "text",
+      "id": "button_1_label",
+      "label": "Bouton principal"
+    },
+    {
+      "type": "url",
+      "id": "button_1_link",
+      "label": "Lien du bouton principal"
+    },
+    {
+      "type": "text",
+      "id": "button_2_label",
+      "label": "Bouton secondaire"
+    },
+    {
+      "type": "url",
+      "id": "button_2_link",
+      "label": "Lien du bouton secondaire"
+    },
+    {
+      "type": "text",
+      "id": "edition_top",
+      "label": "Mention à droite (haut)",
+      "default": "Le portant"
+    },
+    {
+      "type": "text",
+      "id": "edition_bottom",
+      "label": "Mention à droite (bas)",
+      "default": "Saison 2026/27"
+    },
+    {
+      "type": "header",
+      "content": "Maillots"
+    },
+    {
+      "type": "collection",
+      "id": "collection",
+      "label": "Collection"
+    },
+    {
+      "type": "product_list",
+      "id": "products",
+      "label": "Ou les maillots, un par un",
+      "limit": 12,
+      "info": "Si des maillots sont choisis ici, ils remplacent la collection."
+    },
+    {
+      "type": "header",
+      "content": "Chaussures sur le banc (ambiance vestiaire)"
+    },
+    {
+      "type": "collection",
+      "id": "shoes_collection",
+      "label": "Collection de chaussures"
+    },
+    {
+      "type": "product_list",
+      "id": "shoes_products",
+      "label": "Ou les chaussures, une par une",
+      "limit": 8
+    },
+    {
+      "type": "range",
+      "id": "shoes_limit",
+      "min": 2,
+      "max": 8,
+      "step": 1,
+      "label": "Nombre de chaussures sur le banc",
+      "default": 5
+    },
+    {
+      "type": "range",
+      "id": "limit",
+      "min": 3,
+      "max": 12,
+      "step": 1,
+      "label": "Nombre de maillots sur le portant",
+      "default": 9
+    },
+    {
+      "type": "paragraph",
+      "content": "Détourage : les métachamps custom.portant_face_det / portant_dos_det (images détourées, posées automatiquement) passent avant tout. Face : la photo principale du produit, sur fond blanc ou uni. Dos : la photo dont le texte alternatif contient « vue de dos », « dos du maillot » ou « vue arrière »."
+    },
+    {
+      "type": "header",
+      "content": "Couleurs"
+    },
+    {
+      "type": "select",
+      "id": "ambiance",
+      "label": "Ambiance",
+      "options": [
+        { "value": "claire", "label": "Claire (portant sur fond uni)" },
+        { "value": "galerie", "label": "Galerie minimaliste (fond noir, barre suspendue)" },
+        { "value": "penderie", "label": "Penderie sombre éclairée (LED)" },
+        { "value": "vestiaire", "label": "Vestiaire (tringle en chêne, banc et chaussures)" }
+      ],
+      "default": "claire",
+      "info": "Penderie : caisson en noyer, réglette LED, maillots éclairés par le haut. Pensez à un fond sombre et un texte clair ci-dessous."
+    },
+    {
+      "type": "color",
+      "id": "background",
+      "label": "Fond",
+      "default": "#f5f5f1"
+    },
+    {
+      "type": "color",
+      "id": "text",
+      "label": "Texte",
+      "default": "#20211f"
+    },
+    {
+      "type": "color",
+      "id": "accent",
+      "label": "Accent",
+      "default": "#aa3527"
+    }
+  ],
+  "presets": [
+    {
+      "name": "Portant de maillots"
+    }
+  ]
+}
+{% endschema %}
