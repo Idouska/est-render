@@ -1463,6 +1463,7 @@
       <section class="browse" id="view-returns" hidden aria-label="Reshipment">
         <div class="browse-bar">
           <div class="filters" id="ret-tabs" role="group">
+            <button type="button" class="chip" data-rtab="echanges" aria-pressed="false">Échanges <span class="count" id="ret-n-ech">0</span></button>
             <button type="button" class="chip" data-rtab="cases" aria-pressed="true">Dossiers <span class="count" id="ret-n-open">0</span></button>
             <button type="button" class="chip" data-rtab="matches" aria-pressed="false">Match <span class="count" id="ret-n-match">0</span></button>
             <button type="button" class="chip" data-rtab="stock" aria-pressed="false">Stock retours <span class="count" id="ret-n-stock">0</span></button>
@@ -1571,6 +1572,11 @@
                 <p class="ret-dispo" id="ret-f-dispo" hidden></p>
               </div>
 
+              <div class="field">
+                <label for="ret-f-bon">N° du bon de retour</label>
+                <input type="text" id="ret-f-bon" autocomplete="off" spellcheck="false" placeholder="Ex. : LP 4821 0093" />
+                <small>Facultatif : il suit le colis jusqu’à l’agence. Saisi, le bon compte comme envoyé.</small>
+              </div>
               <div class="field">
                 <label for="ret-f-agency">Agence de retour</label>
                 <select id="ret-f-agency"><option value="">—</option></select>
@@ -2424,6 +2430,32 @@ Remboursement : sous 5 jours ouvrés après réception du retour."></textarea>
 
     <!-- Le mail au client sur une rupture : la réponse type « Rupture de
          stock », remplie pour la commande, à relire avant de l'envoyer. -->
+    <!-- Retour/Échange : la paire retournée est reçue, on la contrôle, et
+         l'échange part — du stock retours si une paire identique y dort,
+         sinon chez l'atelier. -->
+    <div class="backdrop" id="ech-modal" role="dialog" aria-modal="true" aria-labelledby="ech-title" hidden>
+      <div class="modal modal-wide ech-fen">
+        <div class="modal-head">
+          <h2 id="ech-title">Contrôle</h2>
+          <p id="ech-sub"></p>
+        </div>
+        <div class="modal-body ech-corps">
+          <div class="ech-paire" id="ech-revient"></div>
+          <div class="ech-criteres" role="group" aria-label="Contrôle de la paire">
+            <label><input type="checkbox" data-ech-critere="conforme" /> Pointure et modèle conformes</label>
+            <label><input type="checkbox" data-ech-critere="propre" /> Paire propre, non portée</label>
+            <label><input type="checkbox" data-ech-critere="complet" /> Boîte et accessoires présents</label>
+          </div>
+          <div class="ech-paire ech-envoi" id="ech-envoyer"></div>
+        </div>
+        <div class="modal-foot ra-pied-barre">
+          <span class="ra-pied" id="ech-pied"></span>
+          <button class="btn" type="button" id="ech-fermer">Annuler</button>
+          <button class="btn btn-primary" type="button" id="ech-valider" disabled>Valider l’échange</button>
+        </div>
+      </div>
+    </div>
+
     <div class="backdrop" id="rm-modal" role="dialog" aria-modal="true" aria-labelledby="rm-title" hidden>
       <div class="modal modal-wide rm-fen">
         <div class="modal-head">

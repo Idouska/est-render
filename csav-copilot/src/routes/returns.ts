@@ -55,6 +55,8 @@ const caseBody = z.object({
   resolution: z.enum(['EXCHANGE', 'REFUND']).optional(),
   agencyId: z.string().max(40).nullish(),
   note: z.string().max(4000).nullish(),
+  /** Le n° du bon de retour, saisi à l'ouverture : il suit le colis jusqu'à l'agence. */
+  trackingNumber: z.string().trim().max(120).nullish(),
 });
 
 const casePatch = caseBody.partial().extend({
@@ -169,8 +171,15 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
     const parsed = caseBody.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Champs invalides' });
 
+    // Un bon saisi à l'ouverture : il est donc fourni, le dossier attend le colis.
+    const bon = parsed.data.trackingNumber?.trim() || null;
     const created = await prisma.returnCase.create({
-      data: { merchantId, ...parsed.data },
+      data: {
+        merchantId,
+        ...parsed.data,
+        trackingNumber: bon,
+        ...(bon ? { labelSent: true, labelSentAt: new Date(), status: 'LABEL_SENT' as const } : {}),
+      },
     });
 
     await recordAudit({
@@ -632,142 +641,214 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
    * proposée en même temps à une commande, et l'un des deux clients
    * attendrait une paire déjà partie.
    */
+  /**
+   * Qui envoie la paire d'échange — une paire du stock d'abord, sinon l'atelier.
+   *
+   * Partagé par « Organiser l'envoi » et par « Valider l'échange » : la règle
+   * est la même, seul le moment change.
+   */
+  const repondre = (code: number, corps: unknown) => ({ code, corps });
+  async function organiserEchange(merchantId: string, userId: string | undefined, id: string, ip: string) {
+
+    const dossier = await prisma.returnCase.findFirst({
+      where: { id: id, merchantId },
+      select: {
+        id: true,
+        country: true,
+        resolution: true,
+        wantedTitle: true,
+        wantedVariantTitle: true,
+        wantedSku: true,
+        exchangeStockCaseId: true,
+        exchangeSupplierId: true,
+      },
+    });
+    if (!dossier) return repondre(404, { code: 'introuvable', error: 'Dossier introuvable' });
+    if (dossier.resolution !== 'EXCHANGE' || !dossier.wantedTitle) {
+      return repondre(400, {
+        code: 'pas_un_echange',
+        error: 'Ce dossier n’attend pas d’échange : indiquez ce que le client veut à la place.',
+      });
+    }
+    if (dossier.exchangeStockCaseId || dossier.exchangeSupplierId) {
+      return repondre(409, { code: 'deja_organise', error: 'L’envoi de cet échange est déjà organisé.' });
+    }
+
+    const [enStock, ateliers] = await Promise.all([
+      prisma.returnCase.findMany({
+        where: { merchantId, status: 'RESTOCKED', reusedAt: null, id: { not: id } },
+        select: {
+          id: true,
+          country: true,
+          sku: true,
+          productTitle: true,
+          variantTitle: true,
+          orderName: true,
+          restockedAt: true,
+          updatedAt: true,
+          agency: { select: { id: true, name: true, country: true } },
+        },
+      }),
+      prisma.supplier.findMany({
+        where: { merchantId, active: true },
+        select: { id: true, name: true, skuPrefixes: true, isDefault: true, joursCommande: true },
+      }),
+    ]);
+
+    const stock: PaireEnStock[] = enStock.map((paire) => ({
+      id: paire.id,
+      pays: paire.agency?.country ?? paire.country ?? null,
+      agenceId: paire.agency?.id ?? null,
+      agenceNom: paire.agency?.name ?? null,
+      sku: paire.sku,
+      titre: paire.productTitle,
+      declinaison: paire.variantTitle,
+      depuis: paire.restockedAt ?? paire.updatedAt,
+      retourDe: paire.orderName,
+    }));
+
+    const choix = choisirSource(
+      {
+        pays: dossier.country,
+        titre: dossier.wantedTitle,
+        declinaison: dossier.wantedVariantTitle,
+        sku: dossier.wantedSku,
+      },
+      stock,
+      ateliers.map((atelier): AtelierCandidat => ({
+        id: atelier.id,
+        nom: atelier.name,
+        skuPrefixes: atelier.skuPrefixes,
+        isDefault: atelier.isDefault,
+        joursCommande: atelier.joursCommande,
+      })),
+    );
+
+    if (choix.source === 'AUCUNE') {
+      return repondre(409, {
+        code: 'personne',
+        error: 'Aucune paire en stock, et aucun atelier ne prend ce modèle : désignez un atelier par défaut.',
+      });
+    }
+
+    if (choix.source === 'STOCK') {
+      // La paire quitte le stock au moment où elle est promise : une
+      // écriture conditionnelle, pour que deux clics n'en promettent pas
+      // deux fois la même.
+      const prise = await prisma.returnCase.updateMany({
+        where: { id: choix.paire.id, merchantId, status: 'RESTOCKED', reusedAt: null },
+        data: { reusedReturnCaseId: dossier.id, reusedAt: new Date(), status: 'CLOSED' },
+      });
+      if (prise.count !== 1) {
+        return repondre(409, {
+          code: 'plus_disponible',
+          error: 'Cette paire vient d’être prise : rechargez l’écran.',
+        });
+      }
+      await prisma.returnCase.update({
+        where: { id: dossier.id },
+        data: { exchangeStockCaseId: choix.paire.id },
+      });
+    } else {
+      await prisma.returnCase.update({
+        where: { id: dossier.id },
+        data: { exchangeSupplierId: choix.atelier.id },
+      });
+    }
+
+    await recordAudit({
+      merchantId,
+      actorType: 'USER',
+      actorId: userId,
+      action: 'return.exchange_arranged',
+      targetType: 'return',
+      targetId: dossier.id,
+      metadata:
+        choix.source === 'STOCK'
+          ? { source: 'STOCK', paire: choix.paire.id, agence: choix.paire.agenceNom }
+          : { source: 'ATELIER', atelier: choix.atelier.nom },
+      ipAddress: ip,
+    });
+
+    return repondre(200, 
+      choix.source === 'STOCK'
+        ? {
+            source: 'STOCK',
+            agence: choix.paire.agenceNom,
+            pays: choix.paire.pays,
+            voisin: choix.paire.pays !== dossier.country,
+          }
+        : { source: 'ATELIER', atelier: choix.atelier.nom },
+    );
+  }
+
   app.post<{ Params: { id: string } }>(
     '/api/returns/:id/echange/organiser',
     { preHandler: requirePermission('reply') },
     async (request, reply) => {
       const { merchantId, userId } = request.session;
+      const resultat = await organiserEchange(merchantId, userId, request.params.id, request.ip);
+      return reply.code(resultat.code).send(resultat.corps);
+    },
+  );
+
+  /**
+   * Valider l'échange : la paire retournée est reçue et contrôlée.
+   *
+   * Les trois points du contrôle sont exigés ici, pas seulement à l'écran.
+   * La paire entre alors au stock retours — sauf défaut, elle sort comme
+   * inutilisable — puis l'échange part : du stock si une paire identique y
+   * dort, sinon chez l'atelier, dans son tableau Échanges.
+   */
+  app.post<{ Params: { id: string } }>(
+    '/api/returns/:id/echange/valider',
+    { preHandler: requirePermission('reply') },
+    async (request, reply) => {
+      const { merchantId, userId } = request.session;
+      const parsed = z
+        .object({ conforme: z.literal(true), propre: z.literal(true), complet: z.literal(true) })
+        .safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({ code: 'controle', error: 'Cochez les trois points du contrôle.' });
+      }
 
       const dossier = await prisma.returnCase.findFirst({
         where: { id: request.params.id, merchantId },
-        select: {
-          id: true,
-          country: true,
-          resolution: true,
-          wantedTitle: true,
-          wantedVariantTitle: true,
-          wantedSku: true,
-          exchangeStockCaseId: true,
-          exchangeSupplierId: true,
-        },
+        select: { id: true, status: true, reason: true, resolution: true, exchangeStockCaseId: true, exchangeSupplierId: true },
       });
       if (!dossier) return reply.code(404).send({ code: 'introuvable', error: 'Dossier introuvable' });
-      if (dossier.resolution !== 'EXCHANGE' || !dossier.wantedTitle) {
-        return reply.code(400).send({
-          code: 'pas_un_echange',
-          error: 'Ce dossier n’attend pas d’échange : indiquez ce que le client veut à la place.',
-        });
-      }
       if (dossier.exchangeStockCaseId || dossier.exchangeSupplierId) {
-        return reply.code(409).send({ code: 'deja_organise', error: 'L’envoi de cet échange est déjà organisé.' });
+        return reply.code(409).send({ code: 'deja_organise', error: 'Cet échange est déjà validé.' });
+      }
+      if (!['RECEIVED', 'RESTOCKED'].includes(dossier.status)) {
+        return reply.code(409).send({ code: 'pas_recue', error: 'La paire n’est pas encore reçue : validez à sa réception.' });
       }
 
-      const [enStock, ateliers] = await Promise.all([
-        prisma.returnCase.findMany({
-          where: { merchantId, status: 'RESTOCKED', reusedAt: null },
-          select: {
-            id: true,
-            country: true,
-            sku: true,
-            productTitle: true,
-            variantTitle: true,
-            orderName: true,
-            restockedAt: true,
-            updatedAt: true,
-            agency: { select: { id: true, name: true, country: true } },
-          },
-        }),
-        prisma.supplier.findMany({
-          where: { merchantId, active: true },
-          select: { id: true, name: true, skuPrefixes: true, isDefault: true, joursCommande: true },
-        }),
-      ]);
+      const maintenant = new Date();
+      const defaut = dossier.reason === 'DEFECT';
+      await prisma.returnCase.update({
+        where: { id: dossier.id },
+        data: defaut
+          ? { controleLe: maintenant, status: 'UNUSABLE', unusableAt: maintenant, unusableNote: 'Retour pour défaut, contrôlé à la réception.' }
+          : { controleLe: maintenant, status: 'RESTOCKED', restockedAt: maintenant },
+      });
 
-      const stock: PaireEnStock[] = enStock.map((paire) => ({
-        id: paire.id,
-        pays: paire.agency?.country ?? paire.country ?? null,
-        agenceId: paire.agency?.id ?? null,
-        agenceNom: paire.agency?.name ?? null,
-        sku: paire.sku,
-        titre: paire.productTitle,
-        declinaison: paire.variantTitle,
-        depuis: paire.restockedAt ?? paire.updatedAt,
-        retourDe: paire.orderName,
-      }));
-
-      const choix = choisirSource(
-        {
-          pays: dossier.country,
-          titre: dossier.wantedTitle,
-          declinaison: dossier.wantedVariantTitle,
-          sku: dossier.wantedSku,
-        },
-        stock,
-        ateliers.map((atelier): AtelierCandidat => ({
-          id: atelier.id,
-          nom: atelier.name,
-          skuPrefixes: atelier.skuPrefixes,
-          isDefault: atelier.isDefault,
-          joursCommande: atelier.joursCommande,
-        })),
-      );
-
-      if (choix.source === 'AUCUNE') {
-        return reply.code(409).send({
-          code: 'personne',
-          error: 'Aucune paire en stock, et aucun atelier ne prend ce modèle : désignez un atelier par défaut.',
-        });
+      const resultat = await organiserEchange(merchantId, userId, dossier.id, request.ip);
+      if (resultat.code !== 200) {
+        // L'échange n'a pas pu partir : la paire reste reçue, contrôle noté.
+        await prisma.returnCase.update({ where: { id: dossier.id }, data: { status: dossier.status } });
       }
-
-      if (choix.source === 'STOCK') {
-        // La paire quitte le stock au moment où elle est promise : une
-        // écriture conditionnelle, pour que deux clics n'en promettent pas
-        // deux fois la même.
-        const prise = await prisma.returnCase.updateMany({
-          where: { id: choix.paire.id, merchantId, status: 'RESTOCKED', reusedAt: null },
-          data: { reusedReturnCaseId: dossier.id, reusedAt: new Date(), status: 'CLOSED' },
-        });
-        if (prise.count !== 1) {
-          return reply.code(409).send({
-            code: 'plus_disponible',
-            error: 'Cette paire vient d’être prise : rechargez l’écran.',
-          });
-        }
-        await prisma.returnCase.update({
-          where: { id: dossier.id },
-          data: { exchangeStockCaseId: choix.paire.id },
-        });
-      } else {
-        await prisma.returnCase.update({
-          where: { id: dossier.id },
-          data: { exchangeSupplierId: choix.atelier.id },
-        });
-      }
-
       await recordAudit({
         merchantId,
         actorType: 'USER',
         actorId: userId,
-        action: 'return.exchange_arranged',
+        action: 'return.exchange_validated',
         targetType: 'return',
         targetId: dossier.id,
-        metadata:
-          choix.source === 'STOCK'
-            ? { source: 'STOCK', paire: choix.paire.id, agence: choix.paire.agenceNom }
-            : { source: 'ATELIER', atelier: choix.atelier.nom },
+        metadata: { enStock: !defaut },
         ipAddress: request.ip,
       });
-
-      return reply.send(
-        choix.source === 'STOCK'
-          ? {
-              source: 'STOCK',
-              agence: choix.paire.agenceNom,
-              pays: choix.paire.pays,
-              voisin: choix.paire.pays !== dossier.country,
-            }
-          : { source: 'ATELIER', atelier: choix.atelier.nom },
-      );
+      return reply.code(resultat.code).send(resultat.corps);
     },
   );
 

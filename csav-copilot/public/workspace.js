@@ -1779,6 +1779,7 @@ const VIEWS = {
   lots: loadLots,
   catalog: loadCatalog,
   tickets: loadTickets,
+  echanges: chargerEchanges,
 };
 
 /*
@@ -1795,8 +1796,9 @@ const ECRANS = {
   orders: ['orders', 'tracking', 'lots'],
   catalog: ['catalog'],
   tickets: ['tickets'],
+  echanges: ['echanges'],
 };
-const TOUTES = ['home', 'orders', 'tracking', 'lots', 'catalog', 'tickets'];
+const TOUTES = ['home', 'orders', 'tracking', 'lots', 'catalog', 'tickets', 'echanges'];
 
 function setView(view) {
   state.view = view;
@@ -2561,7 +2563,13 @@ function kindLabel(kind) {
 const attentes = { updates: 0, ruptures: 0, echanges: 0 };
 
 function majPastilleTickets() {
-  const total = attentes.updates + attentes.ruptures + attentes.echanges;
+  const total = attentes.updates + attentes.ruptures;
+  // Les échanges ont leur propre pastille, sur leur onglet.
+  const echanges = $('ws-echanges-badge');
+  if (echanges) {
+    echanges.hidden = attentes.echanges === 0;
+    echanges.textContent = String(attentes.echanges);
+  }
   const badge = $('ws-tickets-badge');
   if (badge) {
     badge.hidden = total === 0;
@@ -3132,45 +3140,83 @@ function setRuptureBadge(nombre) {
  * un changement de taille — l'ancien barré, le nouveau en couleur — parce que
  * c'est exactement ce que c'est, et que l'atelier connaît déjà cette forme.
  */
-function echangeMarkup(echange, faite) {
-  const voulu = [echange.voulu?.titre, echange.voulu?.declinaison].filter(Boolean).join(' · ');
-  const renvoye = [echange.renvoye?.titre, echange.renvoye?.declinaison].filter(Boolean).join(' · ');
-  const adresse = adresseTexte(echange.adresse);
-
-  return `<article class="upd ech${faite ? ' ech-faite' : ''}" data-echange="${esc(echange.id)}">
-    <div class="upd-head">
-      <b>${esc(t('ech.for', { commande: echange.commande ?? '—' }))}</b>
-      <span class="upd-when">${
-        faite && echange.expedieLe
-          ? esc(t('ech.sentOn', { date: new Date(echange.expedieLe).toLocaleDateString(locale) }))
-          : esc(echange.client ?? '')
-      }</span>
-    </div>
-
-    <div class="upd-swap">
-      <span class="upd-before">${esc(renvoye)}</span>
-      <span class="upd-arrow" aria-hidden="true">→</span>
-      <span class="upd-after">${esc(voulu)}</span>
-    </div>
-    ${echange.voulu?.sku ? `<p class="upd-note">${esc(echange.voulu.sku)}</p>` : ''}
-
-    ${
-      faite
-        ? ''
-        : `<p class="upd-msg"><b>${esc(t('ech.address'))}</b></p>
-           <pre class="ech-adresse">${esc(adresse)}</pre>
-           ${adresse ? `<p class="ech-copier"><button class="btn btn-small" type="button" data-copier="${esc(adresse)}">${esc(t('ech.copy'))}</button></p>` : ''}`
+/*
+ * L'onglet Échanges : un tableau, une ligne par paire à envoyer.
+ *
+ * Chaque ligne arrive quand le marchand a reçu et contrôlé la paire
+ * retournée, et qu'aucune paire identique n'était dans son stock. La
+ * pointure a sa colonne : c'est ce qu'on vérifie en prenant la boîte.
+ */
+async function chargerEchanges() {
+  const boite = $('ech-table');
+  if (!boite) return;
+  try {
+    const data = await api(`/api/workspace/${supplierId}/echanges`);
+    const lignes = [...(data.aEnvoyer ?? []).map((e) => [e, false]), ...(data.envoyes ?? []).map((e) => [e, true])];
+    setEchangeBadge((data.aEnvoyer ?? []).length);
+    if (!lignes.length) {
+      boite.innerHTML = `<p class="ech-vide">${esc(t('ech.none'))}</p>`;
+      return;
     }
+    boite.innerHTML = `${data.adressesIndisponibles ? `<p class="ech-vide">${esc(t('ech.addressDown'))}</p>` : ''}
+      <div class="ech-tab">
+        <div class="ech-tr ech-th" aria-hidden="true"><span>${esc(t('ech.col.order'))}</span><span>${esc(t('ech.col.model'))}</span><span>${esc(
+          t('ech.col.size'),
+        )}</span><span>${esc(t('ech.col.client'))}</span><span>${esc(t('ech.col.tracking'))}</span></div>
+        ${lignes.map(([echange, faite]) => ligneEchange(echange, faite)).join('')}
+      </div>`;
+    cablerEchanges(boite);
+  } catch (erreur) {
+    boite.innerHTML = `<p class="ech-vide">${esc(messageServeur(erreur, 'ech.err'))}</p>`;
+  }
+}
 
-    <form class="ech-form">
+/* « Graphite / 42 » : la pointure à part, le reste avec le modèle. */
+function pointureDe(declinaison) {
+  const morceaux = String(declinaison ?? '').split(/\s*[\/·]\s*/).filter(Boolean);
+  const taille = morceaux.findLast((morceau) => /\d/.test(morceau)) ?? null;
+  return { taille, reste: morceaux.filter((morceau) => morceau !== taille).join(' · ') };
+}
+
+function ligneEchange(echange, faite) {
+  const adresse = adresseTexte(echange.adresse);
+  const { taille, reste } = pointureDe(echange.voulu?.declinaison);
+  return `<div class="ech-tr${faite ? ' ech-faite' : ''}" data-echange="${esc(echange.id)}">
+    <b class="ech-cmd">${esc(echange.commande ?? '—')}</b>
+    <span class="ech-modele"><b>${esc([echange.voulu?.titre, reste].filter(Boolean).join(' · ') || '—')}</b><small>${esc(
+      [echange.voulu?.sku, t('ech.notOrder')].filter(Boolean).join(' · '),
+    )}</small></span>
+    <b class="ech-taille">${esc(taille ?? echange.voulu?.declinaison ?? '—')}</b>
+    <span class="ech-client">${esc(echange.client ?? '—')}<small>${esc(echange.pays ?? '')}${
+      adresse && !faite ? ` · <button class="sig-lien" type="button" data-copier="${esc(adresse)}">${esc(t('ech.copy'))}</button>` : ''
+    }</small></span>
+    <form class="ech-form ech-suivi">
       <input class="mono" data-champ="suivi" value="${esc(echange.suivi ?? '')}"
-        placeholder="${esc(t('parcel.tracking'))}" aria-label="${esc(t('parcel.tracking'))}"
-        autocomplete="off" spellcheck="false" />
+        placeholder="${esc(t('parcel.tracking'))}" aria-label="${esc(t('parcel.tracking'))}" autocomplete="off" spellcheck="false" />
       <input data-champ="transporteur" list="ws-carriers" value="${esc(echange.transporteur ?? '')}"
         placeholder="${esc(t('parcel.carrier'))}" aria-label="${esc(t('parcel.carrier'))}" />
-      <button class="btn ${faite ? '' : 'btn-primary'}" type="submit">${esc(t(faite ? 'ech.correct' : 'ech.save'))}</button>
+      <button class="btn ${faite ? '' : 'btn-primary'}" type="submit">${esc(t(faite ? 'ech.correct' : 'ech.sentShort'))}</button>
     </form>
-  </article>`;
+  </div>`;
+}
+
+function cablerEchanges(racine) {
+  for (const formulaire of racine.querySelectorAll('.ech-form')) {
+    formulaire.addEventListener('submit', (event) => {
+      event.preventDefault();
+      void envoyerEchange(formulaire);
+    });
+  }
+  for (const bouton of racine.querySelectorAll('[data-copier]')) {
+    bouton.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(bouton.dataset.copier);
+        toast(t('ech.copied'));
+      } catch {
+        toast(t('ech.copyFail'), true);
+      }
+    });
+  }
 }
 
 /** L'adresse, telle qu'elle doit être écrite sur le colis. */
@@ -3215,7 +3261,7 @@ async function envoyerEchange(formulaire) {
       body: { caseId, trackingNumber: suivi, carrier: transporteur },
     });
     toast(t('ech.saved'));
-    await loadTickets();
+    await (state.view === 'echanges' ? chargerEchanges() : loadTickets());
   } catch (erreur) {
     toast(messageServeur(erreur, 'ech.err'), true);
   } finally {
@@ -3722,11 +3768,10 @@ async function chargerTickets() {
   await state.chargementCommandes?.catch?.(() => {});
   const avecRuptures = state.fonctionnalites?.rupturesAtelier !== false;
 
-  const [updates, ruptures, signalements, echanges] = await Promise.all([
+  const [updates, ruptures, signalements] = await Promise.all([
     api(`/api/workspace/${supplierId}/updates`).catch(() => null),
     avecRuptures ? api(`/api/workspace/${supplierId}/ruptures`).catch(() => null) : { demandes: [] },
     api(`/api/workspace/${supplierId}/signalements`).catch(() => null),
-    api(`/api/workspace/${supplierId}/echanges`).catch(() => null),
   ]);
 
   const items = [];
@@ -3764,21 +3809,7 @@ async function chargerTickets() {
       html: carteRupture(signalement, signalement.phase ?? 'cree', signalement.signaleLe, false),
     });
   }
-  for (const [liste, faite] of [
-    [echanges?.aEnvoyer ?? [], false],
-    [echanges?.envoyes ?? [], true],
-  ]) {
-    for (const echange of liste) {
-      items.push({
-        id: `ech:${echange.id}`,
-        type: 'ECHANGE',
-        libelle: t('tk.type.echange'),
-        statut: faite ? 'CLOS' : 'A_REPONDRE',
-        date: echange.expedieLe ?? echange.depuis,
-        html: echangeMarkup(echange, faite),
-      });
-    }
-  }
+  // Les échanges ont leur onglet, en tableau : ils ne se mêlent plus aux tickets.
 
   /* Chaque source qui n'a pas répondu éteint sa part de la pastille : un
      chiffre qu'on n'a pas pu relire est un chiffre inventé. */
@@ -3788,18 +3819,18 @@ async function chargerTickets() {
     setRuptureBadge(
       items.filter((item) => ['RUPTURE', 'SIGNAL'].includes(item.type) && item.statut === 'A_REPONDRE').length,
     );
-  setEchangeBadge(echanges ? (echanges.aEnvoyer ?? []).length : 0);
+  // La pastille des échanges se relève à part : ils ont leur onglet.
+  void rafraichirPastilleEchanges();
 
   state.tk.items = items;
   state.tk.erreurs = [
     [updates, 'tk.src.updates'],
     [ruptures, 'tk.src.ruptures'],
     [signalements, 'tk.src.signal'],
-    [echanges, 'tk.src.echanges'],
   ]
     .filter(([donnees]) => !donnees)
     .map(([, cle]) => t(cle));
-  $('ws-ech-adresses').hidden = !echanges?.adressesIndisponibles;
+  $('ws-ech-adresses').hidden = true;
   return items;
 }
 

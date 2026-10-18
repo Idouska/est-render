@@ -4323,7 +4323,7 @@ function recommendation(ticket, order) {
     return {
       title: 'Ouvrir un dossier de retour',
       why: 'L’article revient en agence, puis au stock retours pour une réexpédition.',
-      cta: 'Reshipment',
+      cta: 'Échange ou retour',
       run: () => void openReshipment(ticket),
     };
   }
@@ -11488,7 +11488,7 @@ async function shrinkReturnPhoto(file) {
 
 const RETURN_COUNTRIES = { FR: 'France', ES: 'Espagne', IT: 'Italie', BE: 'Belgique' };
 
-state.returns = { cases: [], counts: {}, agencies: [], matches: [], tab: 'cases', country: 'FR' };
+state.returns = { cases: [], counts: {}, agencies: [], matches: [], tab: 'echanges', country: 'FR' };
 
 async function loadReturns() {
   try {
@@ -11582,10 +11582,13 @@ function blocEchange(item) {
       ? esc(item.exchangeAtelier)
       : '';
 
+  // L'échange ne part qu'une fois la paire retournée reçue et contrôlée.
   if (!qui) {
-    return `<div class="ret-echange">
-      <button class="btn btn-small btn-primary" data-ret-echange="${esc(item.id)}">Organiser l’envoi</button>
-    </div>`;
+    return item.status === 'RECEIVED'
+      ? `<div class="ret-echange">
+      <button class="btn btn-small btn-primary" data-ech-controler="${esc(item.id)}">Contrôler et valider</button>
+    </div>`
+      : '<div class="ret-echange"><small class="ret-veut">échange : à valider à la réception de la paire</small></div>';
   }
 
   if (!item.exchangeShippedAt) {
@@ -11617,16 +11620,185 @@ function renderReturns() {
   $('ret-n-open').textContent = String(r.counts.open ?? 0);
   $('ret-n-match').textContent = String(r.matches.length);
   $('ret-n-stock').textContent = String(r.counts.stock ?? 0);
+  $('ret-n-ech').textContent = String(echangesEnCours().filter((item) => !item.exchangeStockCaseId && !item.exchangeSupplierId).length);
 
   document
     .querySelectorAll('#ret-tabs [data-rtab]')
     .forEach((tab) => tab.setAttribute('aria-pressed', String(tab.dataset.rtab === r.tab)));
 
+  if (r.tab === 'echanges') return renderEchanges(box);
   if (r.tab === 'cases') return renderReturnCases(box);
   if (r.tab === 'matches') return renderReturnMatches(box);
   if (r.tab === 'stock') return renderReturnStock(box);
   renderReturnAgencies(box);
 }
+
+/* ------------------------------------------------------------ échanges -- */
+
+/*
+ * Les échanges : la paire revient, on la contrôle, on valide — l'échange part.
+ *
+ * Un tableau à part des retours remboursés : ce qu'on renvoie, et dans quelle
+ * pointure, est la question de la journée. « Valider » n'existe qu'une fois
+ * la paire reçue : envoyer une paire neuve contre un colis qui n'est peut-être
+ * jamais parti, c'est en offrir une.
+ */
+const QUATORZE_JOURS = 14 * 86_400_000;
+
+function echangesEnCours() {
+  return (state.returns.cases ?? []).filter(
+    (item) =>
+      item.origine !== 'MANUEL' &&
+      item.resolution === 'EXCHANGE' &&
+      item.wantedTitle &&
+      item.status !== 'CLOSED' &&
+      (!item.exchangeShippedAt || Date.now() - new Date(item.exchangeShippedAt).getTime() < QUATORZE_JOURS),
+  );
+}
+
+/** Où en est un échange : le mot, ce qui le précise, sa couleur. */
+function etatEchange(item) {
+  if (item.exchangeShippedAt) return ['Envoyé', `suivi ${item.exchangeTrackingNumber ?? ''}`.trim(), 'ok'];
+  if (item.exchangeStockCaseId) return ['Pris dans le stock', item.exchangeAgence ? `${item.exchangeAgence} l’expédie` : 'l’agence l’expédie', 'ok'];
+  if (item.exchangeSupplierId) return ['Chez l’atelier', `${item.exchangeAtelier ?? 'l’atelier'} prévenu`, 'ok'];
+  if (item.status === 'RECEIVED') return ['Reçue', 'à contrôler, puis valider', 'accent'];
+  if (['LABEL_SENT', 'SHIPPED', 'IN_TRANSIT'].includes(item.status) || item.labelSent) {
+    return ['En route', item.trackingNumber ? 'colis retour suivi' : 'bon envoyé au client', 'warn'];
+  }
+  return ['Bon à envoyer', 'le client attend son bon', 'crit'];
+}
+
+const nomPaire = (titre, variante) => [titre, variante].filter(Boolean).join(' · ');
+
+function renderEchanges(box) {
+  const items = echangesEnCours();
+  const ordre = (item) => (item.status === 'RECEIVED' && !item.exchangeStockCaseId && !item.exchangeSupplierId ? 0 : item.exchangeShippedAt ? 3 : item.exchangeStockCaseId || item.exchangeSupplierId ? 2 : 1);
+  items.sort((a, b) => ordre(a) - ordre(b) || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+  const compte = (garde) => items.filter(garde).length;
+  const chiffres = [
+    ['Bon à envoyer', compte((item) => etatEchange(item)[0] === 'Bon à envoyer'), 'le client n’a pas son bon', 'crit'],
+    ['En route', compte((item) => etatEchange(item)[0] === 'En route'), 'colis retour en transit', 'warn'],
+    ['À contrôler et valider', compte((item) => etatEchange(item)[0] === 'Reçue'), 'paire reçue par l’agence', 'accent'],
+    ['Envoyés, 14 jours', compte((item) => Boolean(item.exchangeStockCaseId || item.exchangeSupplierId)), 'stock ou atelier', 'ok'],
+  ];
+
+  box.innerHTML = `<div class="ech-chiffres">${chiffres
+    .map(
+      ([titre, n, sous, ton]) => `<div class="rup-chiffre rup-chiffre-fixe"><span class="rup-chiffre-t"><i class="rup-point rup-point-${ton}" aria-hidden="true"></i>${esc(titre)}</span><b>${n}</b><small>${esc(sous)}</small></div>`,
+    )
+    .join('')}</div>
+  <section class="ech-liste">
+    <div class="ech-tete"><b>Échanges en cours</b><span>La paire revient, on contrôle, on valide : l’échange part.</span></div>
+    ${
+      items.length
+        ? `<div class="ech-ligne ech-entete" aria-hidden="true"><span>Client</span><span>Commande</span><span>Revient</span><span>À renvoyer</span><span>Bon de retour</span><span>État</span><span></span></div>
+    ${items
+      .map((item) => {
+        const [etat, sous, ton] = etatEchange(item);
+        const change = item.wantedTitle && item.wantedTitle !== item.productTitle;
+        const fait = Boolean(item.exchangeStockCaseId || item.exchangeSupplierId);
+        const geste = fait
+          ? `<span class="rmb-af-ok">${ico('check')}${esc(item.exchangeStockCaseId ? 'Pris dans le stock' : 'Atelier prévenu')}</span>`
+          : item.status === 'RECEIVED'
+            ? `<button class="btn btn-small btn-primary" type="button" data-ech-controler="${esc(item.id)}">Contrôler et valider</button>`
+            : '<span class="ech-attente" title="« Valider » s’ouvre quand la paire est reçue par l’agence">Valider · à la réception</span>';
+        return `<div class="ech-ligne">
+          <span class="ech-cell"><b>${esc(item.customerName ?? '—')}</b><small>${esc(RETURN_COUNTRIES[item.country] ?? item.country ?? '')}</small></span>
+          <b>${esc(item.orderName ?? '—')}</b>
+          <span class="ech-cell"><b>${esc(nomPaire(item.productTitle, item.variantTitle))}</b><small>${esc(RETURN_REASONS[item.reason] ?? '')}</small></span>
+          <span class="ech-cell"><b>${esc(nomPaire(item.wantedTitle, item.wantedVariantTitle))}</b><small class="${change ? 'ech-change' : ''}">${esc(change ? 'modèle changé' : 'même modèle, autre déclinaison')}</small></span>
+          <span class="ech-cell"><span class="mono">${esc(item.trackingNumber ?? '—')}</span><small>${esc(item.labelSent ? 'bon fourni' : 'bon à envoyer')}</small></span>
+          <span class="ech-cell"><span class="rup-file rup-file-${ton}">${esc(etat)}</span><small class="rup-file-sous">${esc(sous)}</small></span>
+          <span class="ech-geste">${geste}</span>
+        </div>`;
+      })
+      .join('')}`
+        : '<p class="rmb-vide">Aucun échange en cours. Un échange s’ouvre depuis le mail du client, ou « Nouveau retour » avec « Un échange ».</p>'
+    }
+  </section>
+  <p class="ech-aide">« Valider » : si une paire identique dort dans le stock retours, elle part de l’agence ; sinon la notification arrive chez l’atelier, dans son tableau Échanges. La paire retournée entre d’elle-même dans Stock retours.</p>`;
+}
+
+const fenEch = { dossier: null, envoi: false };
+
+function ouvrirControleEchange(item) {
+  if (!item) return;
+  fenEch.dossier = item;
+  fenEch.envoi = false;
+  $('ech-title').textContent = `Contrôle · ${item.orderName ?? ''}`.trim();
+  $('ech-sub').textContent = [item.customerName, item.agency?.name ? `reçue par ${item.agency.name}` : 'paire reçue'].filter(Boolean).join(' · ');
+  $('ech-revient').innerHTML = `<b>${esc(nomPaire(item.productTitle, item.variantTitle))}</b><small>la paire qui revient${
+    item.reason === 'DEFECT' ? ' · défaut : elle sortira comme inutilisable' : ' · elle entrera au stock retours'
+  }</small>`;
+  // Qui enverra : une paire identique en stock, sinon l'atelier.
+  const voulue = (state.returns.cases ?? []).find(
+    (paire) =>
+      paire.id !== item.id &&
+      paire.status === 'RESTOCKED' &&
+      !paire.reusedAt &&
+      (item.wantedSku ? paire.sku === item.wantedSku : paire.productTitle === item.wantedTitle && (paire.variantTitle ?? '') === (item.wantedVariantTitle ?? '')),
+  );
+  $('ech-envoyer').innerHTML = `<b>À renvoyer : ${esc(nomPaire(item.wantedTitle, item.wantedVariantTitle))}</b><small>${esc(
+    voulue
+      ? `Une paire identique est dans le stock retours${voulue.agency?.name ? ` (${voulue.agency.name})` : ''} : elle partira de là.`
+      : 'Pas de paire identique en stock : la notification part chez l’atelier du modèle.',
+  )}</small>`;
+  $('ech-modal').querySelectorAll('[data-ech-critere]').forEach((caseACocher) => (caseACocher.checked = false));
+  majControleEchange();
+  $('ech-modal').hidden = false;
+  $('ech-modal').classList.add('open');
+}
+
+function majControleEchange() {
+  const tous = [...$('ech-modal').querySelectorAll('[data-ech-critere]')].every((caseACocher) => caseACocher.checked);
+  $('ech-pied').textContent = tous ? 'La paire retournée entre dans Stock retours.' : 'Cochez les trois points du contrôle.';
+  $('ech-pied').classList.toggle('ra-pied-manque', !tous);
+  $('ech-valider').disabled = !tous || fenEch.envoi;
+}
+
+function fermerControleEchange() {
+  $('ech-modal').hidden = true;
+  $('ech-modal').classList.remove('open');
+  fenEch.dossier = null;
+}
+
+$('ret-body')?.addEventListener('click', (event) => {
+  const bouton = event.target.closest('[data-ech-controler]');
+  if (!bouton) return;
+  ouvrirControleEchange(state.returns.cases.find((item) => item.id === bouton.dataset.echControler));
+});
+$('ech-modal')?.addEventListener('change', majControleEchange);
+$('ech-fermer')?.addEventListener('click', fermerControleEchange);
+$('ech-modal')?.addEventListener('click', (event) => {
+  if (event.target === event.currentTarget) fermerControleEchange();
+});
+$('ech-modal')?.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') fermerControleEchange();
+});
+$('ech-valider')?.addEventListener('click', async () => {
+  const item = fenEch.dossier;
+  if (!item || fenEch.envoi) return;
+  fenEch.envoi = true;
+  majControleEchange();
+  try {
+    const resultat = await api(`/api/returns/${item.id}/echange/valider`, {
+      method: 'POST',
+      body: JSON.stringify({ conforme: true, propre: true, complet: true }),
+    });
+    fermerControleEchange();
+    toast(
+      resultat.source === 'STOCK'
+        ? `Échange validé : la paire part du stock (${resultat.agence ?? 'agence'}).`
+        : `Échange validé : ${resultat.atelier ?? 'l’atelier'} est prévenu.`,
+    );
+    await loadReturns();
+  } catch (error) {
+    fenEch.envoi = false;
+    majControleEchange();
+    toast(error.message, true);
+  }
+});
 
 /** Les statuts qui terminent un dossier : il quitte les dossiers en cours. */
 const RETOURS_FINIS = ['CLOSED', 'UNUSABLE'];
@@ -12579,6 +12751,7 @@ function openReturnModal(prefill = {}) {
   $('ret-f-variant').value = prefill.variant ?? '';
   $('ret-f-sku').value = prefill.sku ?? '';
   $('ret-f-note').value = prefill.note ?? '';
+  $('ret-f-bon').value = '';
   $('ret-f-reason').value = 'SIZE';
   $('ret-f-resolution').value = 'EXCHANGE';
 
@@ -13074,6 +13247,7 @@ $('ret-f-save').addEventListener('click', async () => {
         resolution: $('ret-f-resolution').value,
         agencyId: $('ret-f-agency').value || null,
         note: $('ret-f-note').value.trim() || null,
+        trackingNumber: $('ret-f-bon').value.trim() || null,
       }),
     });
     $('return-modal').classList.remove('open');
