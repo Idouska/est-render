@@ -16407,3 +16407,12 @@ button.rup-chiffre:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--
   .ech-geste .ech-attente { flex: 1; text-align: center; }
   .ech-tete span { display: none; }
 }
+
+/* Supprimer : discret, au bout de la ligne, rouge au survol. */
+.ech-geste .ico-del,
+.rmb-af-geste .ico-del { width: 26px; height: 26px; margin-left: 8px; padding: 0; border: 0; border-radius: 7px; background: transparent; color: var(--ink-mute); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.ech-geste .ico-del svg,
+.rmb-af-geste .ico-del svg { width: 13px; height: 13px; }
+.ech-geste .ico-del:hover,
+.rmb-af-geste .ico-del:hover { background: var(--crit-soft); color: var(--crit-ink); }
+.rup-actions [data-rup-act="supprimer"] { color: var(--crit-ink); }

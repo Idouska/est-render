@@ -364,9 +364,15 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const { merchantId, userId } = request.session;
 
-      const deleted = await prisma.returnCase.deleteMany({
-        where: { id: request.params.id, merchantId },
-      });
+      // Une paire du stock réservée pour cet échange y retourne : sinon elle
+      // resterait « prise » par un dossier qui n'existe plus.
+      const [, deleted] = await prisma.$transaction([
+        prisma.returnCase.updateMany({
+          where: { merchantId, reusedReturnCaseId: request.params.id },
+          data: { reusedReturnCaseId: null, reusedAt: null, status: 'RESTOCKED' },
+        }),
+        prisma.returnCase.deleteMany({ where: { id: request.params.id, merchantId } }),
+      ]);
       if (deleted.count === 0) return reply.code(404).send({ error: 'Dossier introuvable' });
 
       await recordAudit({

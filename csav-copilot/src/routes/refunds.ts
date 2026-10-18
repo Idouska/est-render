@@ -197,6 +197,27 @@ export async function refundRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ lignes, compte });
   });
 
+  /** Supprimer une ligne « À rembourser » : un essai, une décision prise par erreur. */
+  app.delete<{ Params: { id: string } }>(
+    '/api/refunds/a-faire/:id',
+    { preHandler: requirePermission('configure') },
+    async (request, reply) => {
+      const { merchantId, userId } = request.session;
+      const supprimees = await prisma.remboursementAFaire.deleteMany({ where: { id: request.params.id, merchantId } });
+      if (!supprimees.count) return reply.code(404).send({ code: 'introuvable', error: 'Ligne introuvable.' });
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId: userId,
+        action: 'refund.todo_deleted',
+        targetType: 'RemboursementAFaire',
+        targetId: request.params.id,
+        ipAddress: request.ip,
+      });
+      return reply.send({ ok: true });
+    },
+  );
+
   app.post<{ Params: { id: string } }>(
     '/api/refunds/a-faire/:id/fait',
     { preHandler: requirePermission('refund') },
