@@ -16541,3 +16541,68 @@ button.rup-chiffre:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--
   #view-ruptures .rup-c-depuis { width: 76px; }
   #view-ruptures .rup-c-etat { width: 136px; }
 }
+
+/* ------------------------------------- échange contre un autre modèle -- */
+/* Le modèle se cherche par son nom ; chaque ligne dit son prix et l'écart
+   avec la paire qui revient — orange si le client paie, bleu si on rend,
+   vert si c'est le même prix. */
+.ret-modele { display: flex; flex-direction: column; gap: 6px; }
+.ret-modele[hidden] { display: none; }
+.ret-modele input { height: 36px; padding: 0 12px; border: 0; border-radius: 10px; background: var(--inset); color: var(--ink); font: inherit; font-size: 14px; }
+.ret-modele-liste { display: flex; flex-direction: column; gap: 3px; }
+.ret-modele-liste:not(:empty) { padding: 5px; border-radius: 12px; background: var(--inset); }
+.ret-modele-ligne {
+  display: flex; align-items: center; gap: 12px; width: 100%; padding: 7px 10px; border: 0; border-radius: 9px;
+  background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.ret-modele-ligne:hover { background: color-mix(in srgb, var(--ink) 4%, transparent); }
+.ret-modele-ligne[aria-selected='true'] { background: var(--surface); box-shadow: inset 0 0 0 2px var(--accent); }
+.ret-modele-ligne img, .ret-modele-ligne > i { width: 42px; height: 34px; flex: none; border-radius: 7px; object-fit: cover; background: var(--line); }
+.ret-modele-txt { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.ret-modele-txt b { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ret-modele-txt small { font-size: 12px; color: var(--ink-mute); }
+.ret-modele-prix { flex: none; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.ret-modele-ecart { flex: none; min-width: 78px; text-align: right; font-size: 13px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.ret-modele-ecart.plus { color: var(--warn-ink); }
+.ret-modele-ecart.moins { color: var(--accent-ink); }
+.ret-modele-ecart.egal { color: var(--ok-ink); }
+
+.ret-ecart { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 12px; background: var(--inset); font-size: 13px; color: var(--ink-soft); }
+.ret-ecart[hidden] { display: none; }
+.ret-ecart.plus { background: var(--warn-soft); }
+.ret-ecart.moins { background: var(--accent-soft); }
+.ret-ecart.egal { background: var(--ok-soft); }
+.ret-ecart-tete { display: flex; align-items: baseline; gap: 10px; color: var(--ink); }
+.ret-ecart-tete > b:first-child { flex: 1; font-size: 14px; }
+.ret-ecart-montant { font-size: 19px; font-variant-numeric: tabular-nums; }
+.ret-ecart.plus .ret-ecart-montant { color: var(--warn-ink); }
+.ret-ecart.moins .ret-ecart-montant { color: var(--accent-ink); }
+.ret-ecart.egal .ret-ecart-montant { color: var(--ok-ink); }
+.ret-ecart-choix { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.ret-ecart-choix button {
+  display: flex; flex-direction: column; gap: 2px; padding: 9px 12px; border: 0; border-radius: 10px;
+  background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); color: var(--ink); font: inherit; text-align: left; cursor: pointer;
+}
+.ret-ecart-choix button[aria-checked='true'] { box-shadow: inset 0 0 0 2px var(--accent); }
+.ret-ecart-choix b { font-size: 13px; }
+.ret-ecart-choix small { font-size: 11.5px; color: var(--ink-mute); }
+@media (max-width: 600px) {
+  .ret-ecart-choix { grid-template-columns: minmax(0, 1fr); }
+  .ret-modele-ecart { min-width: 0; }
+}
+
+/* Dans Échanges : l'écart sous la paire à renvoyer, et le geste du paiement. */
+.ech-ecart { display: block; margin-top: 2px; font-size: 12px; }
+.ech-ecart b { font-variant-numeric: tabular-nums; }
+.ech-ecart-ok { color: var(--ok-ink); }
+.ech-ecart-warn { color: var(--warn-ink); }
+.ech-ecart-crit { color: var(--crit-ink); }
+.ech-ecart-accent { color: var(--accent-ink); }
+.ech-paiement { display: inline-flex; flex-direction: column; align-items: stretch; gap: 4px; }
+/* La cellule met ses lignes en flex : l'écart reste une phrase, montant compris. */
+.ech-cell small.ech-ecart { display: block; white-space: normal; }
+.ech-cell .ech-ecart b { display: inline; overflow: visible; white-space: nowrap; }
+.ech-cell small.ech-ecart-ok { color: var(--ok-ink); }
+.ech-cell small.ech-ecart-warn { color: var(--warn-ink); }
+.ech-cell small.ech-ecart-crit { color: var(--crit-ink); }
+.ech-cell small.ech-ecart-accent { color: var(--accent-ink); }

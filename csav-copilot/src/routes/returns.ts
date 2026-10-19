@@ -19,6 +19,7 @@ import { choisirSource, type AtelierCandidat } from '../services/reshipment/echa
 import { datesDuGeste } from '../services/couts/datesRetour.ts';
 import { signAgencyToken } from '../lib/agencyToken.ts';
 import { env } from '../config/env.ts';
+import { calculerEcart, CHOIX_ECART, choixPourEcart, differenceReglee, envoyerLienDifference } from '../services/reshipment/difference.ts';
 
 /**
  * Reshipment — les retours clients, et ce qu'on en refait.
@@ -58,6 +59,12 @@ const caseBody = z.object({
   note: z.string().max(4000).nullish(),
   /** Le n° du bon de retour, saisi à l'ouverture : il suit le colis jusqu'à l'agence. */
   trackingNumber: z.string().trim().max(120).nullish(),
+});
+
+/** À la création seulement : la déclinaison voulue, et ce qu'on fait de l'écart de prix. */
+const creationBody = caseBody.extend({
+  wantedVariantId: z.string().max(120).nullish(),
+  ecartChoix: z.enum(CHOIX_ECART).nullish(),
 });
 
 const casePatch = caseBody.partial().extend({
@@ -169,20 +176,45 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/api/returns', { preHandler: requirePermission('reply') }, async (request, reply) => {
     const { merchantId, userId } = request.session;
-    const parsed = caseBody.safeParse(request.body);
+    const parsed = creationBody.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Champs invalides' });
+    const { wantedVariantId, ecartChoix: choixDemande, ...donnees } = parsed.data;
+
+    /*
+     * Un échange contre une déclinaison du catalogue : l'écart de prix, relu
+     * chez Shopify. Plus cher, le client paie ou on offre ; moins cher, on
+     * rend la différence ou non. Shopify muet : pas d'écart, l'échange part
+     * comme d'habitude — mieux vaut un geste oublié qu'un montant inventé.
+     */
+    const ecart =
+      donnees.resolution === 'EXCHANGE' && wantedVariantId
+        ? await calculerEcart(merchantId, {
+            shopifyOrderId: donnees.shopifyOrderId,
+            wantedVariantId,
+            sku: donnees.sku,
+            productTitle: donnees.productTitle,
+            variantTitle: donnees.variantTitle,
+          }).catch(() => null)
+        : null;
+    const ecartChoix = choixPourEcart(ecart?.ecart ?? null, choixDemande);
 
     // Un bon saisi à l'ouverture : il est donc fourni, le dossier attend le colis.
-    const bon = parsed.data.trackingNumber?.trim() || null;
+    const bon = donnees.trackingNumber?.trim() || null;
     const created = await prisma.returnCase.create({
       data: {
         merchantId,
-        ...parsed.data,
+        ...donnees,
         trackingNumber: bon,
         test: await enModeTest(merchantId),
         ...(bon ? { labelSent: true, labelSentAt: new Date(), status: 'LABEL_SENT' as const } : {}),
+        ...(ecart
+          ? { prixRetour: ecart.prixRetour, prixVoulu: ecart.prixVoulu, ecartPrix: ecart.ecart, devise: ecart.devise, ecartChoix }
+          : {}),
       },
     });
+
+    // Plus cher et « lien de paiement » : Shopify envoie la facture au client.
+    const lien = ecartChoix === 'LIEN' ? await envoyerLienDifference(merchantId, created.id) : null;
 
     await recordAudit({
       merchantId,
@@ -191,10 +223,11 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
       action: 'return.created',
       targetType: 'return',
       targetId: created.id,
-      metadata: { orderName: created.orderName, product: created.productTitle },
+      metadata: { orderName: created.orderName, product: created.productTitle, ecart: ecart?.ecart ?? null, ecartChoix },
     });
 
-    return reply.send({ case: created });
+    const dossier = lien ? await prisma.returnCase.findUnique({ where: { id: created.id } }) : created;
+    return reply.send({ case: dossier, lien });
   });
 
   /**
@@ -366,11 +399,13 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
 
       // Une paire du stock réservée pour cet échange y retourne : sinon elle
       // resterait « prise » par un dossier qui n'existe plus.
-      const [, deleted] = await prisma.$transaction([
+      // La différence à rembourser qui n'a pas encore été faite part avec lui.
+      const [, , deleted] = await prisma.$transaction([
         prisma.returnCase.updateMany({
           where: { merchantId, reusedReturnCaseId: request.params.id },
           data: { reusedReturnCaseId: null, reusedAt: null, status: 'RESTOCKED' },
         }),
+        prisma.remboursementAFaire.deleteMany({ where: { merchantId, returnCaseId: request.params.id, faitLe: null } }),
         prisma.returnCase.deleteMany({ where: { id: request.params.id, merchantId } }),
       ]);
       if (deleted.count === 0) return reply.code(404).send({ error: 'Dossier introuvable' });
@@ -683,6 +718,13 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
     if (dossier.exchangeStockCaseId || dossier.exchangeSupplierId) {
       return repondre(409, { code: 'deja_organise', error: 'L’envoi de cet échange est déjà organisé.' });
     }
+    // Plus cher, « lien de paiement » : la nouvelle paire attend le paiement.
+    if (!(await differenceReglee(merchantId, dossier.id))) {
+      return repondre(409, {
+        code: 'attente_paiement',
+        error: 'Le client n’a pas encore payé la différence de prix : l’échange part dès le paiement.',
+      });
+    }
 
     const [enStock, ateliers] = await Promise.all([
       prisma.returnCase.findMany({
@@ -792,6 +834,80 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
     );
   }
 
+  /*
+   * Moins cher, « rembourser la différence » : la ligne arrive dans « À
+   * rembourser » une fois la paire retournée contrôlée — jamais avant, on ne
+   * rend pas d'argent sur une paire qui n'est pas revenue. Une seule fois.
+   */
+  async function differenceARembourser(merchantId: string, userId: string | undefined, id: string) {
+    const dossier = await prisma.returnCase.findFirst({
+      where: { id, merchantId },
+      select: {
+        ecartChoix: true, ecartPrix: true, devise: true, orderName: true, shopifyOrderId: true,
+        customerName: true, customerEmail: true, wantedTitle: true, wantedVariantTitle: true, test: true,
+      },
+    });
+    if (!dossier || dossier.ecartChoix !== 'REMBOURSER' || !(Number(dossier.ecartPrix) < 0)) return;
+    const deja = await prisma.remboursementAFaire.count({ where: { merchantId, returnCaseId: id } });
+    if (deja) return;
+    await prisma.remboursementAFaire.create({
+      data: {
+        merchantId,
+        test: dossier.test,
+        returnCaseId: id,
+        orderName: dossier.orderName,
+        shopifyOrderId: dossier.shopifyOrderId,
+        article: `Différence de prix · échange contre ${[dossier.wantedTitle, dossier.wantedVariantTitle].filter(Boolean).join(' · ')}`,
+        montant: Math.abs(Number(dossier.ecartPrix)),
+        devise: dossier.devise,
+        motif: 'Échange contre un modèle moins cher',
+        clientNom: dossier.customerName,
+        clientEmail: dossier.customerEmail,
+        demandeParId: userId ?? null,
+      },
+    });
+  }
+
+  /** Renvoyer le lien de paiement — après une reconnexion de Shopify, par exemple. */
+  app.post<{ Params: { id: string } }>(
+    '/api/returns/:id/lien',
+    { preHandler: requirePermission('reply') },
+    async (request, reply) => {
+      const { merchantId } = request.session;
+      const resultat = await envoyerLienDifference(merchantId, request.params.id);
+      return reply.code(resultat.envoye ? 200 : 409).send(resultat.envoye ? resultat : { code: 'lien', error: resultat.erreur });
+    },
+  );
+
+  /** Payée autrement (virement, en boutique, mode test) : on le note à la main. */
+  app.post<{ Params: { id: string } }>(
+    '/api/returns/:id/paye',
+    { preHandler: requirePermission('reply') },
+    async (request, reply) => {
+      const { merchantId, userId } = request.session;
+      const maj = await prisma.returnCase.updateMany({
+        where: { id: request.params.id, merchantId, ecartChoix: 'LIEN', payeLe: null },
+        data: { payeLe: new Date() },
+      });
+      if (!maj.count) return reply.code(404).send({ error: 'Aucune différence en attente sur ce dossier.' });
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId: userId,
+        action: 'return.difference_paid',
+        targetType: 'return',
+        targetId: request.params.id,
+      });
+      return reply.send({ paye: true });
+    },
+  );
+
+  /** Relire chez Shopify si le lien a été payé. */
+  app.get<{ Params: { id: string } }>('/api/returns/:id/paiement', async (request, reply) => {
+    const { merchantId } = request.session;
+    return reply.send({ paye: await differenceReglee(merchantId, request.params.id) });
+  });
+
   app.post<{ Params: { id: string } }>(
     '/api/returns/:id/echange/organiser',
     { preHandler: requirePermission('reply') },
@@ -847,6 +963,8 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
       if (resultat.code !== 200) {
         // L'échange n'a pas pu partir : la paire reste reçue, contrôle noté.
         await prisma.returnCase.update({ where: { id: dossier.id }, data: { status: dossier.status } });
+      } else {
+        await differenceARembourser(merchantId, userId, dossier.id);
       }
       await recordAudit({
         merchantId,

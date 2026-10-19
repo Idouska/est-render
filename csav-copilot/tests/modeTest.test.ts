@@ -140,7 +140,14 @@ test('toute écriture Shopify du code est connue de la simulation', () => {
   };
   parcourir(dossier.replace(/\/$/, ''));
 
-  assert.deepEqual([...trouvees].sort(), ['CreateFulfillment', 'CreateRefund', 'UpdateFulfillmentTracking']);
+  // Le lien de paiement d'une différence de prix : simulé, aucun mail ne part.
+  assert.deepEqual([...trouvees].sort(), [
+    'CreateFulfillment',
+    'CreateRefund',
+    'CreerLienDifference',
+    'EnvoyerLienDifference',
+    'UpdateFulfillmentTracking',
+  ]);
   for (const nom of trouvees) {
     assert.doesNotThrow(() => ecritureSimulee(`mutation ${nom}($x: X) { x }`), `${nom} doit être simulée`);
   }
