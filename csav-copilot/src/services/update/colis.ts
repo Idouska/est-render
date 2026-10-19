@@ -2,7 +2,7 @@ import { prisma } from '../../lib/prisma.ts';
 import { getCredentials } from '../platform/credentials.ts';
 import { getShopifyClient } from '../shopify/client.ts';
 import { getOrderById } from '../shopify/orders.ts';
-import { getTracking, TRACK_STATUS_LABELS, type TrackInfo } from '../tracking/index.ts';
+import { getTracking, registerTracking, TRACK_STATUS_LABELS, type TrackInfo } from '../tracking/index.ts';
 
 /**
  * La page Update : où en sont les colis qui ne bougent plus.
@@ -118,6 +118,10 @@ async function suivi(numeros: string[]): Promise<Map<string, TrackInfo>> {
     } else aLire.push(numero);
   }
   if (aLire.length) {
+    // 17TRACK ne suit que les numéros qu'on lui a déclarés : sans cela, un
+    // colis jamais affiché dans Suivi colis passerait pour bloqué. Déclarer
+    // un numéro déjà connu ne coûte rien de plus.
+    await registerTracking(aLire).catch(() => {});
     const lus = await getTracking(aLire).catch(() => new Map<string, TrackInfo>());
     for (const numero of aLire) {
       const info = lus.get(numero);
