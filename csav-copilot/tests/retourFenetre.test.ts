@@ -146,7 +146,9 @@ test('l’article voulu n’est envoyé que pour un échange', () => {
 });
 
 test('la fenêtre est faite de trois temps, et le bouton part désactivé', () => {
-  assert.equal((html.match(/class="ret-etape"/g) ?? []).length, 3);
+  // La fenêtre « Nouveau retour » seule : la fenêtre Renvoi reprend sa forme.
+  const fenetre = html.slice(html.indexOf('id="return-modal"'), html.indexOf('id="ret-f-save"'));
+  assert.equal((fenetre.match(/class="ret-etape"/g) ?? []).length, 3);
   assert.match(html, /id="ret-f-save" disabled/);
   assert.match(html, /data-veut="SIZE"[\s\S]{0,400}data-veut="COLOR"[\s\S]{0,400}data-veut="BOTH"/);
 });
