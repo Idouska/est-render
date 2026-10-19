@@ -22,6 +22,7 @@ const ICONES = {
   lien: ['#0a84ff', '#0040dd', 'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1'],
   message: ['#30d158', '#248a3d', 'M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.5 3.5V17A2.5 2.5 0 0 1 4 14.5z'],
   retour: ['#64d2ff', '#0a84ff', 'M4 8h11l-3-3M20 16H9l3 3'],
+  annuler: ['#ff9f0a', '#c25400', 'M12 21a9 9 0 1 0 0-18a9 9 0 0 0 0 18M9 9l6 6M15 9l-6 6'],
   ok: ['#30d158', '#248a3d', 'M6 12.5l4 4 8-9'],
   info: ['#0a84ff', '#0040dd', 'M12 21a9 9 0 1 0 0-18a9 9 0 0 0 0 18M12 11v5.5M12 7.8h.01'],
 };
@@ -55,18 +56,24 @@ const STYLE = `
 .al-boutons button:focus-visible { outline: 3px solid rgb(10 132 255 / 50%); outline-offset: 1px; }
 @keyframes al-fondu { from { opacity: 0; } }
 @keyframes al-entree { from { opacity: 0; transform: scale(1.08); } }
+/* Trop long pour deux boutons côte à côte : on les empile, le verbe en haut,
+   comme macOS — plutôt qu'un libellé coupé sur deux lignes. */
+.al-boutons button { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.al-boutons.al-empile { flex-direction: column-reverse; }
+.al-boutons.al-empile button { flex: none; }
+/* Le thème de l'outil prime sur celui du système : une page claire garde une
+   alerte claire, même sur un Mac réglé en sombre. :where() garde la
+   spécificité basse, pour que le rouge d'« Annuler la demande » l'emporte. */
 @media (prefers-color-scheme: dark) {
-  .al { background: rgb(40 40 42 / 92%); color: #f5f5f7; box-shadow: 0 0 0 0.5px rgb(255 255 255 / 14%), 0 22px 60px -10px rgb(0 0 0 / 70%); }
-  .al-texte, .al-lignes li span:first-child { color: #c7c7cc; }
-  .al-lignes { background: rgb(255 255 255 / 7%); }
-  .al-boutons button { background: rgb(255 255 255 / 14%); color: #f5f5f7; }
+  :where(:root:not([data-theme='light'])) .al { background: rgb(40 40 42 / 92%); color: #f5f5f7; box-shadow: 0 0 0 0.5px rgb(255 255 255 / 14%), 0 22px 60px -10px rgb(0 0 0 / 70%); }
+  :where(:root:not([data-theme='light'])) .al-texte, :where(:root:not([data-theme='light'])) .al-lignes li span:first-child { color: #c7c7cc; }
+  :where(:root:not([data-theme='light'])) .al-lignes { background: rgb(255 255 255 / 7%); }
+  :where(:root:not([data-theme='light'])) .al-boutons button { background: rgb(255 255 255 / 14%); color: #f5f5f7; }
 }
-:root[data-theme='dark'] .al { background: rgb(40 40 42 / 92%); color: #f5f5f7; }
-:root[data-theme='dark'] .al-texte { color: #c7c7cc; }
-:root[data-theme='dark'] .al-boutons button { background: rgb(255 255 255 / 14%); color: #f5f5f7; }
-:root[data-theme='light'] .al { background: rgb(246 246 246 / 92%); color: #1d1d1f; }
-:root[data-theme='light'] .al-texte { color: #3c3c43; }
-:root[data-theme='light'] .al-boutons button { background: rgb(0 0 0 / 7%); color: #1d1d1f; }
+:where(:root[data-theme='dark']) .al { background: rgb(40 40 42 / 92%); color: #f5f5f7; box-shadow: 0 0 0 0.5px rgb(255 255 255 / 14%), 0 22px 60px -10px rgb(0 0 0 / 70%); }
+:where(:root[data-theme='dark']) .al-texte, :where(:root[data-theme='dark']) .al-lignes li span:first-child { color: #c7c7cc; }
+:where(:root[data-theme='dark']) .al-lignes { background: rgb(255 255 255 / 7%); }
+:where(:root[data-theme='dark']) .al-boutons button { background: rgb(255 255 255 / 14%); color: #f5f5f7; }
 @media (max-width: 700px) {
   .al { width: 270px; padding: 20px 0 0; border-radius: 14px; }
   .al-ico { width: 48px; height: 48px; border-radius: 11px; margin-bottom: 10px; }
@@ -78,6 +85,7 @@ const STYLE = `
   .al-fond .al-boutons button, .al-fond .al-boutons button:hover, .al-fond .al-boutons button:active, .al-fond .al-boutons .al-action, .al-fond .al-boutons .al-danger {
     height: 44px; background-image: none; border-radius: 0; background: transparent; box-shadow: none; color: #0a84ff; font-size: 17px; font-weight: 400; }
   .al-boutons button + button { border-left: 0.5px solid rgb(60 60 67 / 29%); }
+  .al-boutons.al-empile button + button { border-left: 0; border-bottom: 0.5px solid rgb(60 60 67 / 29%); }
   .al-fond .al-boutons .al-action { font-weight: 600; }
   .al-fond .al-boutons .al-danger { color: #ff3b30; font-weight: 600; }
   .al-fond .al-boutons button:active { background: rgb(0 0 0 / 6%); }
@@ -155,6 +163,8 @@ function ouvrir({ titre, texte = '', lignes = null, icone: nom = 'info', action 
     });
     document.addEventListener('keydown', clavier, true);
     document.body.append(fond);
+    const rangee = fond.querySelector('.al-boutons');
+    if ([...rangee.children].some((bouton) => bouton.scrollWidth > bouton.clientWidth)) rangee.classList.add('al-empile');
     // Entrée valide le bouton qui a le focus : le verbe, sauf quand il détruit.
     // Au doigt, pas de focus : un anneau sur une alerte d'iPhone ne dit rien.
     if (window.matchMedia('(hover: hover)').matches) {
