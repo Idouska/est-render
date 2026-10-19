@@ -11919,16 +11919,22 @@ function renderEchanges(box) {
         const change = item.wantedTitle && item.wantedTitle !== item.productTitle;
         const fait = Boolean(item.exchangeStockCaseId || item.exchangeSupplierId);
         const supprimer = `<button class="ico ico-del ech-suppr" type="button" data-ech-suppr="${esc(item.id)}" title="Supprimer" aria-label="Supprimer l’échange">${ico('close')}</button>`;
+        // Plus cher, lien de paiement : tant que ce n'est pas payé, l'échange attend.
+        const attentePaiement = item.ecartChoix === 'LIEN' && !item.payeLe && !fait;
         const geste = fait
           ? `<span class="rmb-af-ok">${ico('check')}${esc(item.exchangeStockCaseId ? 'Pris dans le stock' : 'Atelier prévenu')}</span>`
-          : item.status === 'RECEIVED'
+          : attentePaiement
+            ? `<span class="ech-paiement"><button class="btn btn-small" type="button" data-ech-lien="${esc(item.id)}">${
+                item.lienEnvoyeLe ? 'Renvoyer le lien' : 'Envoyer le lien'
+              }</button><button class="linkish" type="button" data-ech-paye="${esc(item.id)}">Marquer payé</button></span>`
+            : item.status === 'RECEIVED'
             ? `<button class="btn btn-small btn-primary" type="button" data-ech-controler="${esc(item.id)}">Contrôler et valider</button>`
             : '<span class="ech-attente" title="« Valider » s’ouvre quand la paire est reçue par l’agence">Valider · à la réception</span>';
         return `<div class="ech-ligne">
           <span class="ech-cell"><b>${esc(item.customerName ?? '—')}</b><small>${ageMarkup(item.createdAt, fait)} ${esc(RETURN_COUNTRIES[item.country] ?? item.country ?? '')}</small></span>
           <b>${esc(item.orderName ?? '—')}</b>
           <span class="ech-cell"><b>${esc(nomPaire(item.productTitle, item.variantTitle))}</b><small>${esc(RETURN_REASONS[item.reason] ?? '')}</small></span>
-          <span class="ech-cell"><b>${esc(nomPaire(item.wantedTitle, item.wantedVariantTitle))}</b><small class="${change ? 'ech-change' : ''}">${esc(change ? 'modèle changé' : 'même modèle, autre déclinaison')}</small></span>
+          <span class="ech-cell"><b>${esc(nomPaire(item.wantedTitle, item.wantedVariantTitle))}</b><small class="${change ? 'ech-change' : ''}">${esc(change ? 'modèle changé' : 'même modèle, autre déclinaison')}</small>${ecartEchangeMarkup(item)}</span>
           <span class="ech-cell"><span class="mono">${esc(item.trackingNumber ?? '—')}</span><small>${esc(item.labelSent ? 'bon fourni' : 'bon à envoyer')}</small></span>
           <span class="ech-cell"><span class="rup-file rup-file-${ton}">${esc(etat)}</span><small class="rup-file-sous">${esc(sous)}</small></span>
           <span class="ech-geste">${geste}${supprimer}</span>
@@ -11939,6 +11945,26 @@ function renderEchanges(box) {
     }
   </section>
   <p class="ech-aide">« Valider » : si une paire identique dort dans le stock retours, elle part de l’agence ; sinon la notification arrive chez l’atelier, dans son tableau Échanges. La paire retournée entre d’elle-même dans Stock retours.</p>`;
+}
+
+/* L'écart de prix d'un échange, sous la paire à renvoyer : qui paie quoi, et où on en est. */
+function ecartEchangeMarkup(item) {
+  const ecart = Number(item.ecartPrix);
+  if (item.ecartPrix === null || item.ecartPrix === undefined || !Number.isFinite(ecart) || Math.abs(ecart) < 0.005) return '';
+  const montant = `${ecart > 0 ? '+' : '−'} ${euro(Math.abs(ecart), item.devise ?? 'EUR')}`;
+  const [texte, ton] = {
+    LIEN: item.payeLe
+      ? ['différence payée', 'ok']
+      : item.lienErreur
+        ? [`lien non envoyé : ${item.lienErreur}`, 'crit']
+        : item.lienEnvoyeLe
+          ? ['lien envoyé, en attente du paiement', 'warn']
+          : ['lien à envoyer', 'warn'],
+    OFFERT: ['différence offerte', 'ok'],
+    REMBOURSER: ['à rembourser après le contrôle', 'accent'],
+    GARDER: ['rien à rembourser', 'ok'],
+  }[item.ecartChoix] ?? ['', 'ok'];
+  return `<small class="ech-ecart ech-ecart-${ton}"><b>${esc(montant)}</b> · ${esc(texte)}</small>`;
 }
 
 const fenEch = { dossier: null, envoi: false };
@@ -11985,6 +12011,30 @@ function fermerControleEchange() {
 }
 
 $('ret-body')?.addEventListener('click', async (event) => {
+  const lien = event.target.closest('[data-ech-lien]');
+  if (lien) {
+    lien.disabled = true;
+    try {
+      await api(`/api/returns/${lien.dataset.echLien}/lien`, { method: 'POST', body: '{}' });
+      toast('Lien de paiement envoyé au client.');
+    } catch (error) {
+      toast(error.message, true);
+    }
+    await loadReturns();
+    return;
+  }
+  const paye = event.target.closest('[data-ech-paye]');
+  if (paye) {
+    if (!(await confirmer('Marquer la différence comme payée ?\n\nL’échange pourra partir. À faire seulement si le client a bien réglé.', { action: 'Marquer payé', icone: 'ok' }))) return;
+    try {
+      await api(`/api/returns/${paye.dataset.echPaye}/paye`, { method: 'POST', body: '{}' });
+      toast('Différence notée comme payée : l’échange peut partir.');
+    } catch (error) {
+      toast(error.message, true);
+    }
+    await loadReturns();
+    return;
+  }
   const suppr = event.target.closest('[data-ech-suppr]');
   if (suppr) {
     const item = state.returns.cases.find((dossier) => dossier.id === suppr.dataset.echSuppr);
@@ -13016,6 +13066,9 @@ function openReturnModal(prefill = {}) {
     veutType: 'SIZE',
     couleur: null,
     dispo: null,
+    modele: null,
+    modeles: [],
+    ecartChoix: null,
   };
   retLookupEmail = prefill.email ?? null;
   retLookupOrderId = prefill.orderId ?? null;
@@ -13024,6 +13077,10 @@ function openReturnModal(prefill = {}) {
     'Tapez le numéro : le client, son pays et ses articles arrivent seuls.';
   $('ret-f-veut-options').innerHTML = '';
   $('ret-f-dispo').hidden = true;
+  $('ret-f-modele').hidden = true;
+  $('ret-f-modele-q').value = '';
+  $('ret-f-modele-liste').innerHTML = '';
+  $('ret-f-ecart').hidden = true;
   // La saisie libre reste ouverte tant qu'aucune commande n'a rempli la fiche.
   $('ret-f-libre').hidden = retFormulaire.articles.length > 0;
 
@@ -13048,7 +13105,7 @@ function openReturnModal(prefill = {}) {
 }
 
 /** L'état du formulaire de retour, le temps qu'il est ouvert. */
-let retFormulaire = { articles: [], choisi: null, veutType: 'SIZE', couleur: null, dispo: null };
+let retFormulaire = { articles: [], choisi: null, veutType: 'SIZE', couleur: null, dispo: null, modele: null, modeles: [], ecartChoix: null };
 
 /**
  * La carte du client, quand la commande a été trouvée.
@@ -13315,12 +13372,194 @@ $('ret-f-veut-type').addEventListener('click', (event) => {
   if (!bouton) return;
   retFormulaire.veutType = bouton.dataset.veut;
   retFormulaire.couleur = null;
+  retFormulaire.modele = null;
+  retFormulaire.ecartChoix = null;
   $('ret-f-want-title').value = '';
   $('ret-f-want-variant').value = '';
   $('ret-f-dispo').hidden = true;
+  $('ret-f-ecart').hidden = true;
   renderReturnChoix();
   majRetourFormulaire();
+  // Un autre modèle : on le cherche par son nom ; sinon, les déclinaisons du modèle.
+  const autre = retFormulaire.veutType === 'MODELE';
+  $('ret-f-modele').hidden = !autre;
+  if (autre) {
+    $('ret-f-veut-options').innerHTML = '';
+    renderModelesRetour();
+    $('ret-f-modele-q').focus();
+    if ($('ret-f-modele-q').value.trim().length >= 2) void chercherModeleRetour();
+    return;
+  }
   void chargerOptionsVoulu();
+});
+
+/* ------------------------------------------- échange : un autre modèle -- */
+
+/*
+ * Un autre modèle, pris dans le catalogue.
+ *
+ * Le client renvoie des Nike Mind et veut des Pegasus : on tape le nom, le
+ * catalogue propose les déclinaisons — la même pointure d'abord — avec leur
+ * prix et l'écart avec la paire qui revient. L'écart affiché est indicatif :
+ * le serveur relit les deux prix chez Shopify avant d'en faire quoi que ce
+ * soit.
+ */
+
+/** Le prix payé pour la paire qui revient, à l'unité, ou `null`. */
+function prixArticleRetour() {
+  const article = retFormulaire.articles?.[retFormulaire.choisi];
+  const total = Number(article?.price);
+  if (!article || !article.price || !Number.isFinite(total)) return null;
+  return Math.round((total / Math.max(1, article.quantity ?? 1)) * 100) / 100;
+}
+
+/** La pointure de la paire qui revient, pour proposer la même d'abord. */
+function pointureRetour() {
+  const variante = ($('ret-f-variant').value || '').split(/\s+\/\s+/);
+  return variante.find((morceau) => /^\d{1,2}([.,]\d)?(\s+\d\/\d)?$/.test(morceau.trim()))?.trim() ?? null;
+}
+
+let minuteurModeleRetour = 0;
+let tourModeleRetour = 0;
+function chercherModeleRetour() {
+  clearTimeout(minuteurModeleRetour);
+  minuteurModeleRetour = setTimeout(async () => {
+    const terme = $('ret-f-modele-q').value.trim();
+    const tour = ++tourModeleRetour;
+    if (terme.length < 2) {
+      retFormulaire.modeles = [];
+      return renderModelesRetour();
+    }
+    $('ret-f-modele-liste').innerHTML = '<span class="ret-attente">Lecture du catalogue…</span>';
+    try {
+      const { options = [] } = await api(`/api/catalogue/variantes?q=${encodeURIComponent(terme)}`);
+      if (tour !== tourModeleRetour) return;
+      const taille = pointureRetour();
+      // La même pointure d'abord, puis ce qui est en stock.
+      retFormulaire.modeles = [...options].sort(
+        (a, b) =>
+          Number(Boolean(taille) && (b.variantTitle ?? '').includes(taille)) -
+            Number(Boolean(taille) && (a.variantTitle ?? '').includes(taille)) ||
+          (b.inventoryQuantity ?? 0) - (a.inventoryQuantity ?? 0),
+      );
+    } catch (error) {
+      if (tour !== tourModeleRetour) return;
+      retFormulaire.modeles = [];
+      $('ret-f-modele-liste').innerHTML = `<span class="ret-attente">${esc(error.message)}</span>`;
+      return;
+    }
+    renderModelesRetour();
+  }, 250);
+}
+
+/** L'écart d'une déclinaison avec la paire qui revient, ou `null`. */
+function ecartAvec(option) {
+  const retour = prixArticleRetour();
+  const voulu = Number(option?.price);
+  if (retour === null || !option?.price || !Number.isFinite(voulu)) return null;
+  return Math.round((voulu - retour) * 100) / 100;
+}
+
+function texteEcart(ecart) {
+  if (ecart === null) return '';
+  if (Math.abs(ecart) < 0.005) return 'même prix';
+  return `${ecart > 0 ? '+' : '−'} ${euro(Math.abs(ecart), 'EUR')}`;
+}
+
+function renderModelesRetour() {
+  const liste = $('ret-f-modele-liste');
+  const modeles = (retFormulaire.modeles ?? []).slice(0, 8);
+  if (!modeles.length) {
+    liste.innerHTML = $('ret-f-modele-q').value.trim().length >= 2
+      ? '<span class="ret-attente">Aucun modèle trouvé : essayez un autre mot.</span>'
+      : '';
+    return;
+  }
+  liste.innerHTML = modeles
+    .map((option) => {
+      const ecart = ecartAvec(option);
+      const ton = ecart === null ? '' : Math.abs(ecart) < 0.005 ? 'egal' : ecart > 0 ? 'plus' : 'moins';
+      const on = retFormulaire.modele?.id === option.id;
+      return `<button type="button" class="ret-modele-ligne" role="option" aria-selected="${on}" data-ret-modele="${esc(option.id)}">
+        ${option.image ? `<img src="${esc(option.image)}" alt="" loading="lazy" />` : '<i aria-hidden="true"></i>'}
+        <span class="ret-modele-txt"><b>${esc(option.productTitle)}</b><small>${esc(
+          [option.variantTitle, (option.inventoryQuantity ?? 0) > 0 ? `${option.inventoryQuantity} en stock` : 'épuisé']
+            .filter(Boolean)
+            .join(' · '),
+        )}</small></span>
+        <b class="ret-modele-prix">${option.price ? esc(euro(option.price, 'EUR')) : '—'}</b>
+        <span class="ret-modele-ecart ${ton}">${esc(texteEcart(ecart))}</span>
+      </button>`;
+    })
+    .join('');
+}
+
+/* Ce qu'on fait de l'écart : deux choix selon son sens, le premier d'office. */
+const CHOIX_ECART_RETOUR = {
+  plus: [
+    ['LIEN', 'Envoyer un lien de paiement', 'Lien Shopify par mail ; l’échange part dès le paiement'],
+    ['OFFERT', 'Offrir la différence', 'Geste commercial : rien à payer'],
+  ],
+  moins: [
+    ['REMBOURSER', 'Rembourser la différence', 'Dans « À rembourser », une fois la paire retournée contrôlée'],
+    ['GARDER', 'Ne rien rembourser', 'Le client l’accepte'],
+  ],
+};
+
+function renderEcartRetour() {
+  const boite = $('ret-f-ecart');
+  const ecart = ecartAvec(retFormulaire.modele);
+  if (!retFormulaire.modele || ecart === null) {
+    boite.hidden = !retFormulaire.modele;
+    boite.className = 'ret-ecart';
+    boite.innerHTML = retFormulaire.modele
+      ? '<span>Prix de la paire qui revient inconnu : l’écart sera calculé à l’enregistrement, d’après Shopify.</span>'
+      : '';
+    return;
+  }
+  boite.hidden = false;
+  if (Math.abs(ecart) < 0.005) {
+    retFormulaire.ecartChoix = null;
+    boite.className = 'ret-ecart egal';
+    boite.innerHTML = '<div class="ret-ecart-tete"><b>Même prix</b><b class="ret-ecart-montant">0,00 €</b></div><span>Rien à payer, rien à rembourser : l’échange part comme d’habitude.</span>';
+    return;
+  }
+  const sens = ecart > 0 ? 'plus' : 'moins';
+  const choix = CHOIX_ECART_RETOUR[sens];
+  if (!choix.some(([cle]) => cle === retFormulaire.ecartChoix)) retFormulaire.ecartChoix = choix[0][0];
+  boite.className = `ret-ecart ${sens}`;
+  boite.innerHTML = `<div class="ret-ecart-tete"><b>${
+    sens === 'plus' ? 'Plus cher : le client paie la différence' : 'Moins cher : on rend la différence'
+  }</b><b class="ret-ecart-montant">${esc(texteEcart(ecart))}</b></div>
+    <span>${sens === 'plus' ? 'La nouvelle paire ne part qu’une fois la différence réglée.' : 'Remboursée quand l’agence a contrôlé la paire retournée.'}</span>
+    <div class="ret-ecart-choix" role="radiogroup">${choix
+      .map(
+        ([cle, nom, detail]) => `<button type="button" role="radio" aria-checked="${cle === retFormulaire.ecartChoix}" data-ret-ecart="${cle}">
+          <b>${esc(nom)}</b><small>${esc(detail)}</small></button>`,
+      )
+      .join('')}</div>`;
+}
+
+$('ret-f-modele-q')?.addEventListener('input', () => void chercherModeleRetour());
+$('ret-f-modele-liste')?.addEventListener('click', (event) => {
+  const ligne = event.target.closest('[data-ret-modele]');
+  if (!ligne) return;
+  const option = retFormulaire.modeles.find((candidat) => candidat.id === ligne.dataset.retModele);
+  if (!option) return;
+  retFormulaire.modele = option;
+  retFormulaire.ecartChoix = null;
+  $('ret-f-want-title').value = option.productTitle;
+  $('ret-f-want-variant').value = option.variantTitle ?? '';
+  renderModelesRetour();
+  renderEcartRetour();
+  majRetourFormulaire();
+  void verifierStockVoulu();
+});
+$('ret-f-ecart')?.addEventListener('click', (event) => {
+  const choix = event.target.closest('[data-ret-ecart]');
+  if (!choix) return;
+  retFormulaire.ecartChoix = choix.dataset.retEcart;
+  renderEcartRetour();
 });
 
 /*
@@ -13464,7 +13703,7 @@ $('ret-f-save').addEventListener('click', async () => {
   const echange = $('ret-f-resolution').value === 'EXCHANGE';
 
   try {
-    await api('/api/returns', {
+    const cree = await api('/api/returns', {
       method: 'POST',
       body: JSON.stringify({
         orderName: $('ret-f-order').value.trim() || null,
@@ -13479,6 +13718,14 @@ $('ret-f-save').addEventListener('click', async () => {
         // Ce que le client veut à la place n'a de sens que pour un échange.
         wantedTitle: echange ? $('ret-f-want-title').value.trim() || null : null,
         wantedVariantTitle: echange ? $('ret-f-want-variant').value.trim() || null : null,
+        // Un autre modèle : sa déclinaison, pour que le serveur relise son prix.
+        ...(echange && retFormulaire.veutType === 'MODELE' && retFormulaire.modele
+          ? {
+              wantedSku: retFormulaire.modele.sku ?? null,
+              wantedVariantId: retFormulaire.modele.id,
+              ecartChoix: retFormulaire.ecartChoix,
+            }
+          : {}),
         reason: $('ret-f-reason').value,
         resolution: $('ret-f-resolution').value,
         agencyId: $('ret-f-agency').value || null,
@@ -13487,7 +13734,10 @@ $('ret-f-save').addEventListener('click', async () => {
       }),
     });
     $('return-modal').classList.remove('open');
-    toast('Dossier de retour créé. Prochaine étape : fournir le bon de retour au client.');
+    // La différence à payer : le lien est parti, ou on dit pourquoi pas.
+    if (cree?.lien?.envoye) toast('Dossier créé, lien de paiement envoyé au client : l’échange partira dès le paiement.');
+    else if (cree?.lien?.erreur) toast(`Dossier créé, mais le lien de paiement n’est pas parti : ${cree.lien.erreur}`, true);
+    else toast('Dossier de retour créé. Prochaine étape : fournir le bon de retour au client.');
     /*
      * Recharger seulement l'écran qu'on regarde.
      *
@@ -19344,8 +19594,10 @@ function renderARembourser() {
             ligne.client?.nom && ligne.client?.email ? `<small>${esc(ligne.client.email)}</small>` : ''
           }</span>
           <b class="rmb-af-cmd">${esc(ligne.orderName ?? '—')}</b>
-          <span class="rmb-af-art"><b>${esc(ligne.article)}</b><small>Rupture · l’atelier n’expédie pas cet article</small></span>
-          <span class="rmb-af-par"><span class="rmb-af-qui">${esc(ligne.demandePar ?? 'L’équipe')}</span><small>${ageMarkup(ligne.demandeLe, Boolean(ligne.faitLe))} depuis Ruptures de stock</small></span>
+          <span class="rmb-af-art"><b>${esc(ligne.article)}</b><small>${esc(ligne.motif ?? 'Rupture · l’atelier n’expédie pas cet article')}</small></span>
+          <span class="rmb-af-par"><span class="rmb-af-qui">${esc(ligne.demandePar ?? 'L’équipe')}</span><small>${ageMarkup(ligne.demandeLe, Boolean(ligne.faitLe))} ${
+            ligne.returnCaseId ? 'depuis Retour/Échange' : 'depuis Ruptures de stock'
+          }</small></span>
           <b class="rmb-af-montant num">${typeof ligne.montant === 'number' ? esc(euro(ligne.montant, ligne.devise ?? 'EUR')) : '—'}</b>
           <span class="rmb-af-geste">${
             ligne.faitLe
@@ -19381,7 +19633,7 @@ $('refunds-afaire-liste')?.addEventListener('click', async (event) => {
     if (!ligne) return;
     await ouvrirRemboursement(
       { id: ligne.ticketId, shopifyOrderId: ligne.shopifyOrderId, orderName: ligne.orderName },
-      { montant: ligne.montant, aFaireId: ligne.id, motif: 'Article en rupture de stock', apres: chargerARembourser },
+      { montant: ligne.montant, aFaireId: ligne.id, motif: ligne.returnCaseId ? 'Différence de prix d’un échange' : 'Article en rupture de stock', apres: chargerARembourser },
     );
   } else if (fait) {
     fait.disabled = true;

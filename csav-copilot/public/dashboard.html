@@ -1567,8 +1567,17 @@
                   <button type="button" data-veut="SIZE" aria-pressed="true">Une autre taille</button>
                   <button type="button" data-veut="COLOR" aria-pressed="false">Une autre couleur</button>
                   <button type="button" data-veut="BOTH" aria-pressed="false">Les deux</button>
+                  <button type="button" data-veut="MODELE" aria-pressed="false">Un autre modèle</button>
+                </div>
+                <!-- Un autre modèle : cherché dans le catalogue, avec son prix et
+                     l'écart avec la paire qui revient. -->
+                <div class="ret-modele" id="ret-f-modele" hidden>
+                  <input type="search" id="ret-f-modele-q" placeholder="Tapez le nom du modèle…" autocomplete="off" />
+                  <div class="ret-modele-liste" id="ret-f-modele-liste" role="listbox" aria-label="Modèles du catalogue"></div>
                 </div>
                 <div class="ret-options" id="ret-f-veut-options"></div>
+                <!-- L'écart de prix, et ce qu'on en fait. -->
+                <div class="ret-ecart" id="ret-f-ecart" hidden></div>
                 <p class="ret-dispo" id="ret-f-dispo" hidden></p>
               </div>
 
@@ -2310,6 +2319,7 @@ Remboursement : sous 5 jours ouvrés après réception du retour."></textarea>
               <option>Geste commercial</option>
               <option>Retour reçu et accepté</option>
               <option>Article en rupture de stock</option>
+              <option>Différence de prix d’un échange</option>
             </select>
           </div>
           <div class="warnbox">

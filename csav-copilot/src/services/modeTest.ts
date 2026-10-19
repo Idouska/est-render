@@ -55,6 +55,17 @@ export function ecritureSimulee(query: string): unknown {
       };
     case 'CreateRefund':
       return { refundCreate: { refund: { id: `${SIMULE}/Refund/${Date.now()}` }, userErrors: [] } };
+    // Le lien de paiement d'une différence de prix : rien n'est créé chez
+    // Shopify, aucun mail ne part ; le dossier attend un « Marquer payé ».
+    case 'CreerLienDifference':
+      return {
+        draftOrderCreate: {
+          draftOrder: { id: `${SIMULE}/DraftOrder/${Date.now()}`, invoiceUrl: null },
+          userErrors: [],
+        },
+      };
+    case 'EnvoyerLienDifference':
+      return { draftOrderInvoiceSend: { draftOrder: { id: `${SIMULE}/DraftOrder` }, userErrors: [] } };
     case 'UpdateFulfillmentTracking':
       return {
         fulfillmentTrackingInfoUpdate: { fulfillment: { id: `${SIMULE}/Fulfillment/${Date.now()}` }, userErrors: [] },

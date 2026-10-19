@@ -296,7 +296,13 @@ function toGraphQL(order: MockOrder) {
       createdAt: order.customerSince,
       amountSpent: { amount: order.customerSpent },
     },
-    lineItems: { nodes: order.items },
+    // Le montant de la ligne, comme Shopify le donne : remises comprises.
+    lineItems: {
+      nodes: order.items.map((item, rang) => ({
+        ...item,
+        discountedTotalSet: { shopMoney: { amount: prixFictif(rang + 2), currencyCode: 'EUR' } },
+      })),
+    },
     fulfillments: order.fulfillments.map((f) => ({
       // Comme l'API : `status` ne dit que « l'expédition existe », l'état du
       // colis chez le transporteur est dans `displayStatus`.
@@ -561,13 +567,35 @@ export function createMockShopifyClient(shopDomain: string): ShopifyClient {
             id: `gid://shopify/ProductVariant/${index + 1}`,
             title: item.variantTitle ?? 'Default Title',
             sku: null,
-            price: '49.00',
+            price: prixFictif(index + 1),
             inventoryQuantity: 6,
             availableForSale: true,
             image: null,
             product: { id: `gid://shopify/Product/${item.title}`, title: item.title, featuredMedia: null },
           }));
         return { productVariants: { nodes } } as T;
+      }
+
+      // Lien de paiement d'une différence de prix : la commande provisoire
+      // fictive se paie d'elle-même au premier coup d'œil, pour qu'on voie
+      // l'échange se libérer en démonstration.
+      if (query.includes('mutation CreerLienDifference')) {
+        return {
+          draftOrderCreate: {
+            draftOrder: { id: `gid://shopify/DraftOrder/${Date.now()}`, invoiceUrl: 'https://boutique-fictive.myshopify.com/invoices/demo' },
+            userErrors: [],
+          },
+        } as T;
+      }
+      if (query.includes('mutation EnvoyerLienDifference')) {
+        return { draftOrderInvoiceSend: { draftOrder: { id: String(variables?.id ?? '') }, userErrors: [] } } as T;
+      }
+      if (query.includes('query StatutLienDifference')) {
+        return { draftOrder: { status: 'COMPLETED' } } as T;
+      }
+      if (query.includes('query PrixDeclinaison')) {
+        const rang = Number(String(variables?.id ?? '').split('/').pop()) || 1;
+        return { productVariant: { price: prixFictif(rang) } } as T;
       }
 
       if (query.includes('query ListCollections')) {
@@ -813,4 +841,9 @@ function filtreRepond(filtre: string, champs: Record<string, string>): boolean {
   return filtre
     .split(/\s+AND\s+/)
     .every((groupe) => groupe.replace(/^\(|\)$/g, '').split(/\s+OR\s+/).some(terme));
+}
+
+/** Des prix qui varient d'une déclinaison à l'autre : un échange montre son écart. */
+function prixFictif(rang: number): string {
+  return (39 + ((rang * 17) % 7) * 10).toFixed(2);
 }

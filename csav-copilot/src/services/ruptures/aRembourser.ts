@@ -27,6 +27,10 @@ export async function listeARembourser(merchantId: string) {
       demandeParId: true,
       createdAt: true,
       faitLe: true,
+      motif: true,
+      clientNom: true,
+      clientEmail: true,
+      returnCaseId: true,
       ticket: { select: { customerName: true, customerEmail: true, gmailThreadId: true } },
     },
   });
@@ -41,8 +45,10 @@ export async function listeARembourser(merchantId: string) {
 
   return lignes.map((ligne) => {
     // Un signalement d'atelier porte le nom de l'atelier en guise de client.
-    const signalement = ligne.ticket.gmailThreadId.startsWith('supplier:');
-    const email = ligne.ticket.customerEmail.startsWith('fournisseur+') ? null : ligne.ticket.customerEmail;
+    // Sans ticket — la différence d'un échange —, le client est sur la ligne.
+    const signalement = ligne.ticket?.gmailThreadId.startsWith('supplier:') ?? false;
+    const courriel = ligne.ticket?.customerEmail ?? ligne.clientEmail ?? null;
+    const email = courriel?.startsWith('fournisseur+') ? null : courriel;
     return {
       id: ligne.id,
       ticketId: ligne.ticketId,
@@ -51,7 +57,9 @@ export async function listeARembourser(merchantId: string) {
       article: ligne.article,
       montant: ligne.montant === null ? null : Number(ligne.montant),
       devise: ligne.devise,
-      client: { nom: signalement ? null : ligne.ticket.customerName, email },
+      client: { nom: signalement ? null : (ligne.ticket?.customerName ?? ligne.clientNom ?? null), email },
+      motif: ligne.motif,
+      returnCaseId: ligne.returnCaseId,
       demandePar: ligne.demandeParId ? (noms.get(ligne.demandeParId) ?? null) : null,
       demandeLe: ligne.createdAt,
       faitLe: ligne.faitLe,
@@ -85,7 +93,7 @@ export async function marquerRembourse(params: {
   if (lignes.length === 0) return 0;
 
   const maintenant = new Date();
-  const tickets = [...new Set(lignes.map((ligne) => ligne.ticketId))];
+  const tickets = [...new Set(lignes.map((ligne) => ligne.ticketId).filter((id): id is string => Boolean(id)))];
   await prisma.$transaction([
     prisma.remboursementAFaire.updateMany({
       where: { id: { in: lignes.map((ligne) => ligne.id) } },

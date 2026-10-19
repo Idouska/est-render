@@ -904,8 +904,15 @@ model RemboursementAFaire {
   merchantId String
   /// Créé pendant le mode test : « Effacer les données de test » l'emporte.
   test Boolean @default(false)
-  ticketId   String
-  consigneId String?
+  /// Le dossier d'origine : un ticket (rupture), ou un dossier de retour
+  /// (la différence de prix d'un échange contre un modèle moins cher).
+  ticketId     String?
+  returnCaseId String?
+  consigneId   String?
+  /// Pourquoi rembourser, en clair, et à qui quand il n'y a pas de ticket.
+  motif       String?
+  clientNom   String?
+  clientEmail String?
 
   orderName      String?
   shopifyOrderId String?
@@ -922,7 +929,7 @@ model RemboursementAFaire {
   refundId     String?
 
   merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
-  ticket   Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  ticket   Ticket?  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
   @@index([merchantId, faitLe])
   @@index([ticketId])
@@ -1165,6 +1172,24 @@ model ReturnCase {
   wantedTitle        String?
   wantedVariantTitle String?
   wantedSku          String?
+
+  /// Échange contre un autre modèle : les deux prix, relus chez Shopify, et
+  /// l'écart (voulu − retourné). Positif : le client paie la différence ;
+  /// négatif : on la lui rend.
+  prixRetour Decimal? @db.Decimal(12, 2)
+  prixVoulu  Decimal? @db.Decimal(12, 2)
+  ecartPrix  Decimal? @db.Decimal(12, 2)
+  devise     String?
+  /// Ce qu'on fait de l'écart : LIEN (lien de paiement), OFFERT (geste
+  /// commercial), REMBOURSER (la différence, après contrôle), GARDER.
+  ecartChoix String?
+  /// Le lien de paiement Shopify (commande provisoire) et son suivi. La paire
+  /// voulue ne part qu'une fois `payeLe` posé.
+  draftOrderId  String?
+  lienPaiement  String?
+  lienEnvoyeLe  DateTime?
+  lienErreur    String?
+  payeLe        DateTime?
 
   /// Pourquoi le client renvoie : c'est la première question du marchand,
   /// et la statistique qui dit quel modèle taille petit.
