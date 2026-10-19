@@ -154,6 +154,15 @@ function buildTicketWhere(
     // explicite les montre — importer trois cents échanges et ne rien pouvoir
     // consulter donne l'impression que rien n'a eu lieu.
     isHistorical: filters.historical === true,
+    /*
+     * Les ruptures signalées par l'atelier ne sont pas des mails à traiter :
+     * elles ont leur page, « Ruptures de stock », où elles se décident. Les
+     * laisser aussi dans le SAV client les montrait deux fois, et la file se
+     * remplissait de « Réassort sous 10 jours » qui n'attendent aucune
+     * réponse au client. Le fil se reconnaît à sa clé : `supplier:…:STOCK`.
+     * Clé `NOT` de premier niveau : `AND` et `OR` sont déjà pris plus bas.
+     */
+    NOT: { gmailThreadId: { startsWith: 'supplier:', endsWith: ':STOCK' } },
     ...(options.withStatus && filters.status ? { status: filters.status } : {}),
     ...(filters.intent ? { intent: filters.intent } : {}),
     ...(filters.assignee === 'none'
