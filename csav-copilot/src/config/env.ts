@@ -49,6 +49,11 @@ const schema = z.object({
   ANTHROPIC_MODEL: z.string().optional(),
 
   DEEPSEEK_API_KEY: z.string().optional(),
+  // Suivi transporteur (Suivi colis, page Update) : 17TRACK, ou ParcelsApp
+  // qui prime quand les deux sont là. Lues ici aussi, pas seulement depuis la
+  // console : sans ces lignes, une clé posée dans Render était ignorée.
+  TRACK17_API_KEY: z.string().optional(),
+  PARCELSAPP_API_KEY: z.string().optional(),
   DEEPSEEK_MODEL: z.string().optional(),
   DEEPSEEK_BASE_URL: z.string().optional(),
 
