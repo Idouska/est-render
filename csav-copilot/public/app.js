@@ -21010,7 +21010,7 @@ function majReponseAtelier() {
       ${option.image ? `<img src="${esc(option.image)}" alt="" loading="lazy" />` : '<span class="rup-blank" aria-hidden="true"></span>'}
       <span class="ra-sug-txt">
         <b>${esc([option.productTitle, option.variantTitle].filter(Boolean).join(' · '))}</b>
-        <small>${esc(option.sku || '—')}</small>
+        ${option.sku ? `<small>${esc(option.sku)}</small>` : ''}
       </span>
       <span class="ra-sug-stock${(option.inventoryQuantity ?? 0) > 0 ? '' : ' ra-sug-epuise'}">${
         (option.inventoryQuantity ?? 0) > 0 ? `${option.inventoryQuantity} en stock` : 'épuisé'

@@ -12,7 +12,7 @@ import { syncTicketThread } from '../services/gmail/thread.ts';
 import { NON_LU, PORTEE_NON_LU } from '../services/gmail/unreadScope.ts';
 import { sendPlainEmail } from '../services/gmail/send.ts';
 import { getShopifyClient, ShopifyError } from '../services/shopify/client.ts';
-import { listVariants } from '../services/shopify/catalog.ts';
+import { listVariants, requeteGammes } from '../services/shopify/catalog.ts';
 import { getOrderById, quoteSearchValue, searchOrders } from '../services/shopify/orders.ts';
 import { QUEUE_SELECT } from './queueFields.ts';
 import { processTicket } from '../services/tickets/process.ts';
@@ -1239,8 +1239,8 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
 
       // Un seul appel plutôt qu'un par article : les titres partagent le plus
       // souvent la même gamme, et Shopify limite le débit des requêtes.
-      const query = titles.map((title) => `title:*${title.split(/\s+/)[0]}*`).join(' OR ');
-      const options = await listVariants(shopify, { query });
+      const query = requeteGammes(titles);
+      const options = query ? await listVariants(shopify, { query }) : [];
 
       return reply.send({
         options: options.filter((option) => option.availableForSale),
