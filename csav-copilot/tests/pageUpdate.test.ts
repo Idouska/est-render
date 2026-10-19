@@ -73,6 +73,9 @@ test('les routes : lire, relancer, attendre encore ; demander passe par les dema
   assert.match(routes, /where: \{ id: request\.params\.id, merchantId, kind: 'TRACKING', status: 'PENDING' \},/);
   assert.match(routes, /app\.post\('\/api\/updates\/reporter'/);
   assert.match(lire('src/server.ts'), /await app\.register\(updateRoutes\);/);
+  // Un numéro jamais déclaré à 17TRACK n'a pas de suivi : on le déclare avant de le lire.
+  const service = lire('src/services/update/colis.ts');
+  assert.ok(service.indexOf('await registerTracking(aLire)') < service.indexOf('await getTracking(aLire)'));
   const app = lire('public/app.js');
   assert.match(app, /kind: 'TRACKING',\n\s+message,\n\s+beforeValue: \(numeros\.length/);
 });
