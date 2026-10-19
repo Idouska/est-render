@@ -3083,6 +3083,12 @@ async function ouvrirRenvoi(ticket) {
     .filter(Boolean)
     .join(' · ');
   $('rv-paires').innerHTML = '<p class="rv-vide">Recherche dans le stock…</p>';
+  // Une commande déjà remboursée : le renvoi reste possible, mais on prévient.
+  const rembourse = ['REFUNDED', 'PARTIALLY_REFUNDED'].includes(order?.displayFinancialStatus);
+  $('rv-alerte').hidden = !rembourse;
+  $('rv-alerte').textContent = rembourse
+    ? `Commande ${order.displayFinancialStatus === 'REFUNDED' ? 'remboursée' : 'remboursée en partie'} : vérifiez avant de renvoyer une paire.`
+    : '';
   renderRenvoiProduits();
   $('rv-modal').hidden = false;
   $('rv-modal').classList.add('open');
@@ -12261,7 +12267,18 @@ $('ret-body')?.addEventListener('click', (event) => {
 });
 
 /** Un pays, en toutes lettres. */
-const nomPays = (code) => RETURN_COUNTRIES[code] ?? code ?? '—';
+/* Les pays des agences d'abord ; les autres en toutes lettres, en français
+   (« États-Unis », pas « US ») — un client peut commander de partout. */
+const nomsDeRegions = typeof Intl.DisplayNames === 'function' ? new Intl.DisplayNames(['fr'], { type: 'region' }) : null;
+const nomPays = (code) => {
+  if (!code) return '—';
+  if (RETURN_COUNTRIES[code]) return RETURN_COUNTRIES[code];
+  try {
+    return (/^[A-Z]{2}$/.test(code) && nomsDeRegions?.of(code)) || code;
+  } catch {
+    return code;
+  }
+};
 
 /** L'adresse de livraison, telle que l'agence l'écrira sur le colis. */
 function adresseTexte(adresse) {

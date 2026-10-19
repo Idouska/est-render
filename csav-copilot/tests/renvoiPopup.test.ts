@@ -41,3 +41,16 @@ test('un renvoi sert une commande déjà expédiée, et le dit au serveur', () =
   assert.match(retours, /renvoi: z\.boolean\(\)\.optional\(\),/);
   assert.match(retours, /if \(colis > 0 && !renvoi\) \{/);
 });
+
+test('les pays s’écrivent en toutes lettres, et une commande remboursée est signalée', () => {
+  const debut = app.indexOf('const nomsDeRegions');
+  const source = app.slice(debut, app.indexOf('\n};\n', debut) + 4);
+  const nomPays = new Function('RETURN_COUNTRIES', `${source} return nomPays;`)({ FR: 'France' }) as (code: string | null) => string;
+  assert.equal(nomPays('FR'), 'France');
+  assert.equal(nomPays('US'), 'États-Unis');
+  assert.equal(nomPays(null), '—');
+  assert.equal(nomPays('Bretagne'), 'Bretagne');
+
+  assert.match(html, /<p class="rv-alerte" id="rv-alerte" role="status" hidden><\/p>/);
+  assert.match(app, /const rembourse = \['REFUNDED', 'PARTIALLY_REFUNDED'\]\.includes\(order\?\.displayFinancialStatus\);/);
+});
