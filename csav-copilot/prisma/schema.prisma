@@ -137,6 +137,7 @@ model Merchant {
   consignes     RuptureConsigne[]
   aRembourser   RemboursementAFaire[]
   envoisFournisseur EnvoiFournisseur[]
+  commandesLaissees CommandeLaissee[]
   @@index([organizationId])
 }
 
@@ -754,7 +755,7 @@ model Parcel {
 enum SupplierOrderAccess {
   NONE // aucun accès au carnet de commandes
   ASSIGNED // seulement les commandes qui lui ont été confiées
-  ALL // tout le carnet — données clients comprises
+  ALL // ancien « tout le carnet » : n'est plus proposé, et vaut ASSIGNED
 }
 
 enum EscalationReason {
@@ -1421,6 +1422,22 @@ model EnvoiCommande {
 
   @@unique([merchantId, shopifyOrderId])
   @@index([envoiId])
+}
+
+/// Une commande que le stock retours pouvait servir, et que le marchand a
+/// choisi de laisser au fournisseur. Gardé en base : l'envoi automatique
+/// retient les commandes non tranchées, et ce choix doit survivre à un
+/// rechargement de page pour qu'elles partent.
+model CommandeLaissee {
+  id             String   @id @default(cuid())
+  merchantId     String
+  shopifyOrderId String
+  userId         String?
+  createdAt      DateTime @default(now())
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@unique([merchantId, shopifyOrderId])
 }
 
 /// Une appli Shopify propre à une boutique.

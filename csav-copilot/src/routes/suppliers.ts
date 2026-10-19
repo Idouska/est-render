@@ -44,7 +44,9 @@ function signalementsOuverts(merchantId: string) {
 const supplierBody = z.object({
   name: z.string().min(1).max(200),
   contactEmail: z.string().email(),
-  ordersAccess: z.enum(['NONE', 'ASSIGNED', 'ALL']).optional(),
+  // « Tout le carnet » n'est plus proposé : l'atelier ne voit une commande
+  // qu'après le rapprochement du stock retours.
+  ordersAccess: z.enum(['NONE', 'ASSIGNED']).optional(),
   contactName: z.string().max(200).nullish(),
   phone: z.string().max(40).nullish(),
   notes: z.string().max(2000).nullish(),

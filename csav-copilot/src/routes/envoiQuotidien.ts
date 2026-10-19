@@ -73,6 +73,37 @@ export async function envoiQuotidienRoutes(app: FastifyInstance): Promise<void> 
     },
   );
 
+  /*
+   * « Laisser au fournisseur » : le stock pouvait servir la commande, le
+   * marchand choisit l'atelier. Gardé en base, pour que l'envoi automatique
+   * la laisse partir et qu'un rechargement ne la repose pas.
+   */
+  app.post(
+    '/api/envoi-du-jour/laisser',
+    { preHandler: requirePermission('escalate') },
+    async (request, reply) => {
+      const parsed = z.object({ orderId: z.string().min(1).max(200) }).safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Commande invalide' });
+
+      const { merchantId, userId } = request.session;
+      await prisma.commandeLaissee.upsert({
+        where: { merchantId_shopifyOrderId: { merchantId, shopifyOrderId: parsed.data.orderId } },
+        create: { merchantId, shopifyOrderId: parsed.data.orderId, userId },
+        update: {},
+      });
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId: userId,
+        action: 'envoi_du_jour.left_to_supplier',
+        targetType: 'Order',
+        targetId: parsed.data.orderId,
+        ipAddress: request.ip,
+      });
+      return reply.send({ ok: true });
+    },
+  );
+
   app.patch(
     '/api/envoi-du-jour/reglage',
     { preHandler: requirePermission('configure') },

@@ -98,3 +98,13 @@ test('pas de bouton « Plus » : en vue simple, tout se voit', () => {
   assert.match(html, /<div class="cs-actions" id="ws-plus-menu">/);
   assert.doesNotMatch(js, /\['ws-plus', 'ws-plus-menu'\]/);
 });
+
+test('une demande de changement montre la paire concernée, nom et photo', () => {
+  const route = lire('src/routes/supplierWorkspace.ts');
+  const updates = route.slice(route.indexOf("'/api/workspace/:id/updates',"), route.indexOf("'/api/workspace/:id/updates/:alertId/respond'"));
+  assert.match(updates, /const order = await getOrderById\(client, id\)\.catch\(\(\) => null\);/);
+  assert.match(updates, /articles: \(update\.shopifyOrderId && articles\.get\(update\.shopifyOrderId\)\) \|\| \[\],/);
+  assert.match(js, /\$\{articleDeDemande\(update\)\}/);
+  // Les boutons Excel, CSV… ne servent qu'aux commandes.
+  assert.match(js, /for \(const id of \['cmd-tete', 'cmd-barre', 'ws-plus-menu'\]\) \{/);
+});

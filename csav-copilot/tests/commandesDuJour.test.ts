@@ -172,3 +172,27 @@ test('l’écran dit où est la paire et qui l’expédie', () => {
   // Le lieu porte le pictogramme de l'outil, plus un emoji.
   assert.match(app, /<span class="envoi-lieu">\$\{ico\('pin'\)\}\$\{\s*c\.agence \? [\s\S]*? : 'Chez vous'\s*\}/);
 });
+
+test('en automatique, une commande que le stock peut servir attend le choix du marchand', () => {
+  const envoi = service.slice(service.indexOf('export async function envoyerAuxFournisseurs'));
+  assert.match(envoi, /const retenues = mode === 'AUTO' \? retenuesPourLeStock\(etat\) : new Set<string>\(\);/);
+  assert.match(envoi, /if \(!commande\.fournisseur \|\| retenues\.has\(commande\.id\)\) continue;/);
+  // « Laisser » est gardé en base : la commande sort des « à trancher » et part.
+  assert.match(service, /aEnvoyer\.filter\(\(order\) => !tranchees\.has\(order\.id\)\)\.map/);
+  const routes = lire('src/routes/envoiQuotidien.ts');
+  assert.match(routes, /'\/api\/envoi-du-jour\/laisser',/);
+  assert.match(routes, /prisma\.commandeLaissee\.upsert\(/);
+  const app = lire('public/app.js');
+  assert.match(app, /await api\('\/api\/envoi-du-jour\/laisser', \{/);
+  assert.doesNotMatch(app, /state\.envoi\.laissees/);
+});
+
+test('l’atelier ne voit une commande qu’après le contrôle du stock : plus de « tout le carnet »', () => {
+  assert.doesNotMatch(lire('src/routes/supplierWorkspace.ts'), /ordersAccess === 'ALL'/);
+  assert.match(lire('src/routes/suppliers.ts'), /ordersAccess: z\.enum\(\['NONE', 'ASSIGNED'\]\)\.optional\(\),/);
+  assert.doesNotMatch(lire('public/dashboard.html'), /<option value="ALL">Tout le carnet de commandes<\/option>/);
+  assert.match(
+    lire('prisma/migrations/20261020090000_stock_avant_atelier/migration.sql'),
+    /UPDATE "Supplier" SET "ordersAccess" = 'ASSIGNED' WHERE "ordersAccess" = 'ALL';/,
+  );
+});

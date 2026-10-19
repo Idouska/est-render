@@ -27,6 +27,10 @@ import { ordersForSupplier, type RoutingRules } from '../suppliers/routing.ts';
  * marchand. Celles qu'il décide de servir par le stock sont réservées — et
  * retirées du fichier. Le reste part, une seule fois : une commande transmise est notée,
  * et ne repartira jamais.
+ *
+ * L'envoi automatique ne tranche pas à la place du marchand : une commande que
+ * le stock peut servir, ni réservée ni laissée, attend son choix au lieu de
+ * partir à l'heure dite.
  */
 
 /** Le marchand travaille à l'heure de Paris, quel que soit le serveur. */
@@ -88,7 +92,8 @@ export interface EtatDuJour {
   jusqua: string;
   /** À envoyer : ni transmises, ni servies par le stock, ni commencées. */
   commandes: CommandeDuJour[];
-  /** Celles du lot que le stock retours peut servir en entier. */
+  /** Celles du lot que le stock retours peut servir en entier, et que le
+   *  marchand n'a pas encore laissées au fournisseur : à trancher. */
   correspondances: CorrespondanceStock[];
   /** Celles du lot déjà réservées au stock : elles ne partiront pas. */
   reservees: Array<{ id: string; name: string; paires: string[] }>;
@@ -160,7 +165,7 @@ export async function etatDuJour(merchantId: string, maintenant = new Date()): P
   });
 
   const ids = dansLaFenetre.map((order) => order.id);
-  const [envoyees, colis, servies, enStock, suppliers] = await Promise.all([
+  const [envoyees, colis, servies, enStock, suppliers, laissees] = await Promise.all([
     prisma.envoiCommande.findMany({
       where: { merchantId, shopifyOrderId: { in: ids } },
       select: { shopifyOrderId: true },
@@ -193,6 +198,12 @@ export async function etatDuJour(merchantId: string, maintenant = new Date()): P
       where: { merchantId, active: true },
       orderBy: { createdAt: 'asc' },
       select: { id: true, name: true, vendors: true, skuPrefixes: true, isDefault: true, joursCommande: true },
+    }),
+    // « Laisser au fournisseur » : le stock pouvait la servir, le marchand
+    // a choisi l'atelier. Elle ne se tranche plus.
+    prisma.commandeLaissee.findMany({
+      where: { merchantId, shopifyOrderId: { in: ids } },
+      select: { shopifyOrderId: true },
     }),
   ]);
 
@@ -235,9 +246,10 @@ export async function etatDuJour(merchantId: string, maintenant = new Date()): P
       quantite: ligne.quantity,
     }));
 
+  const tranchees = new Set(laissees.map((ligne) => ligne.shopifyOrderId));
   const correspondances = rapprocherAvantEnvoi(
     stock,
-    aEnvoyer.map((order) => ({
+    aEnvoyer.filter((order) => !tranchees.has(order.id)).map((order) => ({
       id: order.id,
       nom: order.name,
       client: order.customer?.displayName ?? null,
@@ -320,6 +332,11 @@ export interface ResultatEnvoi {
  * Le stock n'est jamais touché ici : réserver une paire est une décision du
  * marchand, prise sur l'écran — l'envoi automatique ne la prend pas à sa place.
  */
+/** Les commandes que l'envoi automatique garde : le stock peut les servir, et rien n'est tranché. */
+export function retenuesPourLeStock(etat: Pick<EtatDuJour, 'correspondances'>): Set<string> {
+  return new Set(etat.correspondances.map((correspondance) => correspondance.commandeId));
+}
+
 export async function envoyerAuxFournisseurs(params: {
   merchantId: string;
   mode: 'MANUEL' | 'AUTO';
@@ -329,10 +346,13 @@ export async function envoyerAuxFournisseurs(params: {
   const { merchantId, mode } = params;
   const maintenant = params.maintenant ?? new Date();
   const etat = await etatDuJour(merchantId, maintenant);
+  // En automatique, ce que le stock peut servir attend le choix du marchand.
+  // À la main, il a vu l'avertissement et envoie en connaissance de cause.
+  const retenues = mode === 'AUTO' ? retenuesPourLeStock(etat) : new Set<string>();
 
   const parFournisseur = new Map<string, CommandeDuJour[]>();
   for (const commande of etat.commandes) {
-    if (!commande.fournisseur) continue;
+    if (!commande.fournisseur || retenues.has(commande.id)) continue;
     parFournisseur.set(commande.fournisseur.id, [...(parFournisseur.get(commande.fournisseur.id) ?? []), commande]);
   }
   if (parFournisseur.size === 0) return [];

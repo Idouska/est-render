@@ -7277,7 +7277,8 @@ function openSupplierForm(id) {
 
   // Le lien n'existe que pour un fournisseur déjà enregistré : il porte son
   // identifiant.
-  $('sup-f-access').value = supplier?.ordersAccess ?? 'ASSIGNED';
+  // Un ancien « tout le carnet » s'affiche « confiées » : c'est ce qu'il vaut.
+  $('sup-f-access').value = supplier?.ordersAccess === 'NONE' ? 'NONE' : 'ASSIGNED';
   $('sup-f-vendors').value = (supplier?.vendors ?? []).join(', ');
   $('sup-f-skus').value = (supplier?.skuPrefixes ?? []).join(', ');
   $('sup-f-default').checked = supplier?.isDefault ?? false;
@@ -7736,21 +7737,18 @@ $('sup-f-link').addEventListener('click', async (event) => {
 });
 
 /*
- * « Tout le carnet » communique des noms, adresses et téléphones de clients à
- * un tiers : le choix doit être éclairé au moment où on le fait, pas découvert
- * après coup.
+ * Ce que l'atelier voit depuis son lien, dit au moment du choix. « Tout le
+ * carnet » n'est plus proposé : il montrait une commande avant le contrôle du
+ * stock retours.
  */
 const SUPPLIER_ACCESS_HELP = {
   ASSIGNED:
-    'Seules les commandes escaladées vers lui ou dont il a saisi un colis. Recommandé.',
-  ALL:
-    'Il verra tous vos clients — noms, adresses, téléphones — y compris ceux qu’il ne prépare pas. À réserver au prestataire qui expédie réellement tout.',
+    'Celles que vous lui avez envoyées depuis « Commandes du jour », donc après le contrôle de votre stock retours, plus celles escaladées vers lui ou dont il a saisi un colis.',
   NONE: 'Il ne peut que répondre aux escalades. Aucun accès aux commandes.',
 };
 
 function describeSupplierAccess() {
   $('sup-f-access-help').textContent = SUPPLIER_ACCESS_HELP[$('sup-f-access').value] ?? '';
-  $('sup-f-access-help').classList.toggle('set-alert', $('sup-f-access').value === 'ALL');
 }
 
 $('sup-f-access').addEventListener('change', describeSupplierAccess);
@@ -21990,7 +21988,7 @@ $('rup-mailauto')?.addEventListener('click', async (event) => {
  * lui-même. Une correspondance qu'on laisse n'est pas enregistrée : elle part
  * simplement avec le reste, comme en mode automatique.
  */
-state.envoi = { donnees: null, laissees: new Set() };
+state.envoi = { donnees: null };
 
 const lignesTexte = (lignes) =>
   lignes
@@ -22086,7 +22084,8 @@ function renderEnvoi() {
   $('envoi-periode').textContent = `Jusqu’au ${jour} · depuis le ${depuis}`;
 
   const parId = new Map(d.commandes.map((commande) => [commande.id, commande]));
-  const aTrancher = d.correspondances.filter((c) => !state.envoi.laissees.has(c.commandeId));
+  // Le serveur ne renvoie que ce qui reste à trancher : « Laisser » y est gardé.
+  const aTrancher = d.correspondances;
   const enStock = new Set(aTrancher.map((c) => c.commandeId));
   const partiront = d.commandes;
   const groupes = commandesParFournisseur(partiront);
@@ -22177,7 +22176,11 @@ function renderEnvoi() {
                   <b class="el-nom">${esc(commande.name)}</b>
                   <span class="el-client">${esc(commande.client ?? '')}</span>
                   <span class="el-articles">${esc(lignesTexte(commande.lignes))}</span>
-                  ${enStock.has(commande.id) ? `<span class="el-stock">${ico('box')}aussi en stock</span>` : ''}
+                  ${
+                    enStock.has(commande.id)
+                      ? `<span class="el-stock">${ico('box')}${auto ? 'en stock · attend votre choix' : 'aussi en stock'}</span>`
+                      : ''
+                  }
                 </div>`,
               )
               .join('')}</div>
@@ -22249,7 +22252,11 @@ function renderEnvoi() {
       : null,
     d.tronque ? 'Plus de mille commandes sur la période : seules les mille premières sont affichées.' : null,
     auto && aTrancher.length
-      ? `Envoi automatique à ${String(d.reglage.heure).padStart(2, '0')} h : les paires en stock que vous n’avez pas tranchées d’ici là partiront au fournisseur.`
+      ? `${nombreDe(aTrancher.length, 'commande peut', 'commandes peuvent')} partir de votre stock : l’envoi automatique de ${String(
+          d.reglage.heure,
+        ).padStart(2, '0')} h ${aTrancher.length > 1 ? 'les garde' : 'la garde'} jusqu’à votre choix. Réservez-${
+          aTrancher.length > 1 ? 'les' : 'la'
+        } ou laissez-${aTrancher.length > 1 ? 'les' : 'la'} au fournisseur.`
       : null,
   ].filter(Boolean);
   $('envoi-notice').hidden = notes.length === 0;
@@ -22268,8 +22275,19 @@ $('view-envoi')?.addEventListener('click', async (event) => {
   if (!d) return;
 
   if (laisser) {
-    state.envoi.laissees.add(laisser.dataset.envoiLaisser);
-    renderEnvoi();
+    // Gardé en base : l'envoi automatique la laissera partir, et un
+    // rechargement ne la repose pas.
+    laisser.disabled = true;
+    try {
+      await api('/api/envoi-du-jour/laisser', {
+        method: 'POST',
+        body: JSON.stringify({ orderId: laisser.dataset.envoiLaisser }),
+      });
+      await loadEnvoi();
+    } catch (error) {
+      laisser.disabled = false;
+      toast(error.message, true);
+    }
     return;
   }
 
@@ -22327,7 +22345,7 @@ function ouvrirEnvoiFournisseur() {
   const groupes = commandesParFournisseur(d.commandes.filter((commande) => commande.fournisseur));
   const envoyables = groupes.reduce((total, groupe) => total + groupe.commandes.length, 0);
   if (!envoyables) return;
-  const nonTranchees = d.correspondances.filter((c) => !state.envoi.laissees.has(c.commandeId)).length;
+  const nonTranchees = d.correspondances.length;
 
   $('envoi-m-titre').textContent = `Envoyer ${nombreDe(envoyables, 'commande', 'commandes')} au fournisseur ?`;
   $('envoi-m-lignes').innerHTML = groupes
@@ -22368,7 +22386,6 @@ async function envoyerAuFournisseur() {
           : 'Rien n’était à envoyer.',
       ratees.length > 0,
     );
-    state.envoi.laissees.clear();
     fermerEnvoiFournisseur();
     await loadEnvoi();
   } catch (error) {
