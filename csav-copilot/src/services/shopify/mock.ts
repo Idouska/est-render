@@ -521,7 +521,7 @@ export function createMockShopifyClient(shopDomain: string): ShopifyClient {
         const term = String(variables?.query ?? '').toLowerCase();
 
         const nodes = titles
-          .filter((title) => !term || title.toLowerCase().includes(term))
+          .filter((title) => !term || filtreRepond(term, { title, product_title: title }))
           .map((title, index) => ({
             id: `gid://shopify/Product/${index + 1}`,
             title,
@@ -788,12 +788,16 @@ export function createMockShopifyClient(shopDomain: string): ShopifyClient {
  * d'un mot. Des groupes reliés par AND, faits de termes reliés par OR.
  */
 function varianteRepond(filtre: string, item: { title: string; variantTitle?: string | null; sku?: string | null }): boolean {
-  if (!filtre.trim()) return true;
-  const champs: Record<string, string> = {
+  return filtreRepond(filtre, {
     product_title: item.title,
     title: item.variantTitle ?? 'Default Title',
     sku: item.sku ?? '',
-  };
+  });
+}
+
+/** Un filtre de recherche Shopify, appliqué aux champs d'un élément du catalogue. */
+function filtreRepond(filtre: string, champs: Record<string, string>): boolean {
+  if (!filtre.trim()) return true;
   const terme = (brut: string) => {
     const [, champ = '', valeur = ''] = /^(\w+):"?([^"]*)"?$/.exec(brut.trim()) ?? [];
     const texte = (champs[champ] ?? Object.values(champs).join(' ')).toLowerCase();

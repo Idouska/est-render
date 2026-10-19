@@ -261,8 +261,16 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
          */
         if (scope === 'COLOR') {
           const family = product.split(/\s+/).slice(0, 3).join(' ');
+          /* Chaque mot de la famille au début d'un mot du titre : Shopify
+             n'accepte pas de joker après une expression entre guillemets
+             (`title:"Nike Mind 001"*` ne trouvait rien). Le préfixe exact
+             est revérifié plus bas. */
+          const motsFamille = family
+            .split(/\s+/)
+            .map((mot) => mot.replace(/[^\p{L}\p{N}-]/gu, ''))
+            .filter(Boolean);
           const page = await listProducts(client, {
-            query: family ? `title:${quoteSearchValue(family)}*` : term,
+            query: motsFamille.length ? motsFamille.map((mot) => `title:${mot}*`).join(' AND ') : term,
             limit: 60,
           });
 
@@ -280,9 +288,11 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
             if (term && !color.toLowerCase().includes(term.toLowerCase())) continue;
             if (seen.has(color)) continue;
 
+            // Le titre complet en détail : c'est le modèle dont on choisira
+            // ensuite la taille (« Les deux »). La marque n'y suffisait pas.
             seen.set(color, {
               value: color,
-              detail: item.vendor ?? '',
+              detail: item.title,
               image: item.image,
               stock: item.totalInventory,
             });
