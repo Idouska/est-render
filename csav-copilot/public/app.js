@@ -15320,29 +15320,31 @@ function ouvrirUpdateLibre() {
   $('upd-order').focus();
 }
 
+/*
+ * Un numéro de commande tapé : la commande se cherche chez Shopify — par le
+ * ticket quand il y en a un, ce qui ramène aussi ses expéditions — et ses
+ * colis s'affichent à cocher.
+ */
 $('upd-order')?.addEventListener('change', async () => {
   const modal = $('upd-modal');
-  if (modal.dataset.libre !== '1') return;
-  const nom = $('upd-order').value.trim();
-  if (!nom) return;
+  const saisi = $('upd-order').value.trim();
+  if (!saisi) return;
+  const nom = saisi.startsWith('#') ? saisi : `#${saisi}`;
   try {
-    const { parcels } = await api(`/api/parcels?orderName=${encodeURIComponent(nom.startsWith('#') ? nom : `#${nom}`)}`);
-    modal.dataset.order = parcels?.find((parcel) => parcel.shopifyOrderId)?.shopifyOrderId ?? '';
-    // Pas de colis saisi : la commande se cherche chez Shopify, pour que la
-    // demande se range sous elle dans Update.
-    if (!modal.dataset.order) {
+    let commande = null;
+    if (modal.dataset.ticket) {
+      const { orders } = await api(`/api/tickets/${modal.dataset.ticket}/order-candidates?q=${encodeURIComponent(nom)}`);
+      commande = (orders ?? []).find((order) => order.name === nom) ?? orders?.[0] ?? null;
+    } else {
       const trouvee = await api(`/api/returns/order-lookup?name=${encodeURIComponent(nom)}`).catch(() => null);
-      modal.dataset.order = trouvee?.order?.shopifyOrderId ?? '';
+      if (trouvee?.order) commande = { id: trouvee.order.shopifyOrderId, name: trouvee.order.orderName, fulfillments: [] };
     }
-    const numeros = [...new Set((parcels ?? []).map((parcel) => parcel.trackingNumber).filter(Boolean))];
-    $('upd-tracks').innerHTML = numeros.length
-      ? numeros
-          .map(
-            (numero) => `<label><input type="checkbox" value="${esc(numero)}"${numeros.length === 1 ? ' checked' : ''} />
-              <span class="mono">${esc(numero)}</span></label>`,
-          )
-          .join('')
-      : '<p class="empty">Aucun colis saisi sur cette commande : précisez la demande ci-dessous.</p>';
+    if (!commande) {
+      modal.dataset.order = '';
+      afficherColisUpdate([], false);
+      return toast(`Commande ${nom} introuvable.`, true);
+    }
+    await choisirCommandeUpdate(commande);
   } catch (error) {
     toast(error.message, true);
   }
@@ -23141,19 +23143,89 @@ async function ouvrirUpdate(ticket) {
       // Les expéditions Shopify suffisent.
     }
   }
-  const liste = [...numeros];
-  $('upd-tracks').innerHTML = liste.length
-    ? liste
-        .map(
-          (numero) => `<label><input type="checkbox" value="${esc(numero)}"${liste.length === 1 ? ' checked' : ''} />
-            <span class="mono">${esc(numero)}</span></label>`,
-        )
-        .join('')
-    : '<p class="empty">Aucun numéro de suivi sur cette commande : précisez la demande ci-dessous.</p>';
+  afficherColisUpdate([...numeros], Boolean(modal.dataset.order));
+  $('upd-candidats').hidden = true;
+  modal.dataset.rattacher = '';
 
   modal.hidden = false;
   modal.classList.add('open');
+
+  // Mail sans commande — souvent le formulaire de contact du site : les
+  // commandes de cette adresse se proposent, la bonne se choisit d'un clic.
+  if (!modal.dataset.order) {
+    $('upd-order').focus();
+    try {
+      const { orders } = await api(`/api/tickets/${ticket.id}/order-candidates`);
+      proposerCommandesUpdate(orders ?? []);
+    } catch {
+      // La saisie du numéro reste possible.
+    }
+  }
 }
+
+/* Les numéros de suivi à cocher, ou ce qui manque pour en avoir. */
+function afficherColisUpdate(numeros, commandeConnue) {
+  $('upd-tracks').innerHTML = numeros.length
+    ? numeros
+        .map(
+          // Tous cochés : on demande d'ordinaire où en est toute la commande.
+          (numero) => `<label><input type="checkbox" value="${esc(numero)}" checked />
+            <span class="mono">${esc(numero)}</span></label>`,
+        )
+        .join('')
+    : `<p class="empty">${
+        commandeConnue
+          ? 'Aucun numéro de suivi sur cette commande : précisez la demande ci-dessous.'
+          : 'Ce mail n’est rattaché à aucune commande : choisissez-la ci-dessus, ou tapez son numéro.'
+      }</p>`;
+}
+
+const commandesUpdate = new Map();
+
+function proposerCommandesUpdate(commandes) {
+  commandesUpdate.clear();
+  for (const commande of commandes) commandesUpdate.set(commande.id, commande);
+  const boite = $('upd-candidats');
+  boite.hidden = commandes.length === 0;
+  boite.innerHTML = commandes.length
+    ? `<span>Commandes de cette adresse :</span>${commandes
+        .slice(0, 6)
+        .map(
+          (commande) => `<button type="button" class="upd-candidat" data-upd-commande="${esc(commande.id)}">${esc(commande.name)}<small>${esc(
+            [commande.createdAt ? new Date(commande.createdAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '', commande.lineItems?.[0]?.title]
+              .filter(Boolean)
+              .join(' · '),
+          )}</small></button>`,
+        )
+        .join('')}`
+    : '';
+}
+
+/* Une commande choisie : son numéro, ses colis (Shopify et atelier). */
+async function choisirCommandeUpdate(commande) {
+  const modal = $('upd-modal');
+  modal.dataset.order = commande.id;
+  // Le mail n'avait pas de commande : il sera rattaché à celle-ci à l'envoi.
+  if (modal.dataset.ticket && !state.detail?.order) modal.dataset.rattacher = commande.id;
+  $('upd-order').value = commande.name ?? '';
+  document.querySelectorAll('#upd-candidats [data-upd-commande]').forEach((bouton) =>
+    bouton.setAttribute('aria-pressed', String(bouton.dataset.updCommande === commande.id)),
+  );
+  const numeros = new Set((commande.fulfillments ?? []).map((f) => f.trackingNumber).filter(Boolean));
+  try {
+    const { parcels } = await api(`/api/parcels?orderId=${encodeURIComponent(commande.id)}`);
+    for (const parcel of parcels ?? []) if (parcel.trackingNumber) numeros.add(parcel.trackingNumber);
+  } catch {
+    // Les expéditions Shopify suffisent.
+  }
+  afficherColisUpdate([...numeros], true);
+}
+
+$('upd-candidats')?.addEventListener('click', (event) => {
+  const bouton = event.target.closest('[data-upd-commande]');
+  const commande = bouton && commandesUpdate.get(bouton.dataset.updCommande);
+  if (commande) void choisirCommandeUpdate(commande);
+});
 
 function fermerUpdate() {
   $('upd-modal').hidden = true;
@@ -23179,6 +23251,14 @@ $('upd-send')?.addEventListener('click', async () => {
   const bouton = $('upd-send');
   bouton.disabled = true;
   try {
+    // Le mail est rattaché à la commande choisie : la page Update et la fiche
+    // du ticket la retrouvent.
+    if (modal.dataset.rattacher && modal.dataset.ticket) {
+      await api(`/api/tickets/${modal.dataset.ticket}/order`, {
+        method: 'POST',
+        body: JSON.stringify({ orderId: modal.dataset.rattacher }),
+      }).catch(() => {});
+    }
     const result = await api(`/api/suppliers/${supplierId}/alert`, {
       method: 'POST',
       body: JSON.stringify({

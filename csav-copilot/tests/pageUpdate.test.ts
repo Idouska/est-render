@@ -89,3 +89,12 @@ test('la page a son entrée sous Modification, sa pastille rouge et sa fiche au 
   assert.match(html, /<section class="browse mod upd-page" id="view-update" hidden aria-label="Update">/);
   assert.match(lire('public/styles.css'), /#view-update\.pile-fiche > \.mod-liste,/);
 });
+
+test('un mail sans commande : les commandes de l’adresse se proposent, et un numéro tapé charge ses colis', () => {
+  const app = lire('public/app.js');
+  assert.match(app, /const \{ orders \} = await api\(`\/api\/tickets\/\$\{ticket\.id\}\/order-candidates`\);/);
+  assert.match(app, /await api\(`\/api\/tickets\/\$\{modal\.dataset\.ticket\}\/order-candidates\?q=\$\{encodeURIComponent\(nom\)\}`\);/);
+  // Le mail est rattaché à la commande choisie à l'envoi.
+  assert.match(app, /await api\(`\/api\/tickets\/\$\{modal\.dataset\.ticket\}\/order`, \{/);
+  assert.match(lire('public/dashboard.html'), /<div class="upd-candidats" id="upd-candidats" hidden><\/div>/);
+});
