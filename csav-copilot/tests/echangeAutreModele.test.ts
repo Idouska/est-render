@@ -111,3 +111,11 @@ test('un stock à zéro ne s’affiche pas « épuisé » : seul Shopify dit qu�
   assert.equal(mentionStock({ inventoryQuantity: 0, availableForSale: false }), 'épuisé');
   assert.doesNotMatch(app, /\? `\$\{option\.inventoryQuantity\} en stock` : 'épuisé'/);
 });
+
+test('le modèle choisi referme le sélecteur, et la commande donne ses prix', () => {
+  const app = lire('public/app.js');
+  assert.match(app, /const ferme = Boolean\(retFormulaire\.modele\) && !retFormulaire\.modeleOuvert;/);
+  assert.match(app, /data-ret-modele-changer>Changer<\/button>/);
+  // Sans prix dans la recherche de commande, l'écart restait « inconnu ».
+  assert.match(lire('src/routes/returns.ts'), /price: item\.price \?\? null,/);
+});

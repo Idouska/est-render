@@ -13079,7 +13079,9 @@ function openReturnModal(prefill = {}) {
   $('ret-f-dispo').hidden = true;
   $('ret-f-modele').hidden = true;
   $('ret-f-modele-q').value = '';
+  $('ret-f-modele-q').hidden = false;
   $('ret-f-modele-liste').innerHTML = '';
+  $('ret-f-modele-liste').classList.remove('ret-modele-ferme');
   $('ret-f-ecart').hidden = true;
   // La saisie libre reste ouverte tant qu'aucune commande n'a rempli la fiche.
   $('ret-f-libre').hidden = retFormulaire.articles.length > 0;
@@ -13373,6 +13375,7 @@ $('ret-f-veut-type').addEventListener('click', (event) => {
   retFormulaire.veutType = bouton.dataset.veut;
   retFormulaire.couleur = null;
   retFormulaire.modele = null;
+  retFormulaire.modeleOuvert = false;
   retFormulaire.ecartChoix = null;
   $('ret-f-want-title').value = '';
   $('ret-f-want-variant').value = '';
@@ -13468,7 +13471,12 @@ function texteEcart(ecart) {
 
 function renderModelesRetour() {
   const liste = $('ret-f-modele-liste');
-  const modeles = (retFormulaire.modeles ?? []).slice(0, 8);
+  /* Choisi, le sélecteur se referme : il ne reste que le modèle retenu, et
+     « Changer » pour rouvrir la recherche. */
+  const ferme = Boolean(retFormulaire.modele) && !retFormulaire.modeleOuvert;
+  $('ret-f-modele-q').hidden = ferme;
+  liste.classList.toggle('ret-modele-ferme', ferme);
+  const modeles = ferme ? [retFormulaire.modele] : (retFormulaire.modeles ?? []).slice(0, 8);
   if (!modeles.length) {
     liste.innerHTML = $('ret-f-modele-q').value.trim().length >= 2
       ? '<span class="ret-attente">Aucun modèle trouvé : essayez un autre mot.</span>'
@@ -13491,7 +13499,7 @@ function renderModelesRetour() {
         <span class="ret-modele-ecart ${ton}">${esc(texteEcart(ecart))}</span>
       </button>`;
     })
-    .join('');
+    .join('') + (ferme ? '<button type="button" class="ret-modele-changer" data-ret-modele-changer>Changer</button>' : '');
 }
 
 /* Ce qu'on fait de l'écart : deux choix selon son sens, le premier d'office. */
@@ -13542,11 +13550,25 @@ function renderEcartRetour() {
 
 $('ret-f-modele-q')?.addEventListener('input', () => void chercherModeleRetour());
 $('ret-f-modele-liste')?.addEventListener('click', (event) => {
+  if (event.target.closest('[data-ret-modele-changer]')) {
+    retFormulaire.modeleOuvert = true;
+    renderModelesRetour();
+    $('ret-f-modele-q').focus();
+    return;
+  }
   const ligne = event.target.closest('[data-ret-modele]');
   if (!ligne) return;
+  // Un clic sur le modèle déjà retenu, sélecteur fermé : on rouvre.
+  if (!retFormulaire.modeleOuvert && retFormulaire.modele?.id === ligne.dataset.retModele) {
+    retFormulaire.modeleOuvert = true;
+    renderModelesRetour();
+    $('ret-f-modele-q').focus();
+    return;
+  }
   const option = retFormulaire.modeles.find((candidat) => candidat.id === ligne.dataset.retModele);
   if (!option) return;
   retFormulaire.modele = option;
+  retFormulaire.modeleOuvert = false;
   retFormulaire.ecartChoix = null;
   $('ret-f-want-title').value = option.productTitle;
   $('ret-f-want-variant').value = option.variantTitle ?? '';
