@@ -73,3 +73,22 @@ test('« 知道了 » confirme la demande du marchand sur la bande même', () =>
   // L'ancien bouton menait vers un écran qui n'existe plus.
   assert.doesNotMatch(js, /setView\('updates'\)/);
 });
+
+test('le transporteur tient sur une ligne, les champs ne s’ouvrent que sur « modifier »', () => {
+  const carte = js.slice(js.indexOf('function carteCommande'), js.indexOf('function majBoutonCarte'));
+  assert.match(carte, /transporteur && !state\.csReglages\.has\(order\.id\)/);
+  // Repliée, la carte garde ses valeurs pour « 发货 ✓ ».
+  assert.match(carte, /<input type="hidden" data-cs-carrier value="\$\{esc\(transporteur\)\}" \/>/);
+  assert.match(carte, /<input type="hidden" data-cs-total value="\$\{total\}" \/>/);
+  assert.match(js, /if \(event\.target\.closest\('\[data-cs-reglages\]'\)\) \{\n    state\.csReglages\.add\(order\.id\);/);
+  assert.equal(table.zh!['cs.change'], '修改');
+});
+
+test('le code-barres ne se propose qu’au doigt, et « Par modèle » se voit en vue simple', () => {
+  assert.match(js, /const scanPossible = \(\) => 'BarcodeDetector' in window && matchMedia\('\(pointer: coarse\)'\)\.matches;/);
+  assert.doesNotMatch(js, /'BarcodeDetector' in window\n\s+\?/);
+  const css = lire('public/workspace.css');
+  assert.doesNotMatch(css, /body\.ws-simple \.wsapp #ws-filter,/);
+  assert.match(css, /body\.ws-simple \.wsapp #ws-filter \.cmd-switch,/);
+  assert.match(js, /if \(tri\) tri\.hidden = state\.simple;/);
+});

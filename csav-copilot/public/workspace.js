@@ -268,6 +268,10 @@ async function shrinkPhoto(file) {
  */
 let scanStream = null;
 
+/* Un ordinateur n'a pas de caméra tournée vers l'étiquette : le bouton ne
+   sert qu'au téléphone et à la tablette, qui seuls se pilotent au doigt. */
+const scanPossible = () => 'BarcodeDetector' in window && matchMedia('(pointer: coarse)').matches;
+
 async function scanInto(input) {
   const modal = $('scan-modal');
   const video = $('scan-video');
@@ -403,7 +407,7 @@ function parcelCard(order, index, total, saved) {
         // doigt sont la vraie perte de temps de la journée, et la vraie source
         // de colis introuvables. Le bouton n'apparaît que si le navigateur
         // sait lire les codes — un bouton qui échoue toujours est un piège.
-        'BarcodeDetector' in window
+        scanPossible()
           ? `<button type="button" class="pk-scan" data-scan="1"
                title="${esc(t('scan.button'))}" aria-label="${esc(t('scan.button'))}">
                <svg viewBox="0 0 20 20" aria-hidden="true">
@@ -1891,6 +1895,7 @@ $('ws-sort')?.addEventListener('click', () => {
   state.sort = state.sort === 'model' ? 'time' : 'model';
   localStorage.setItem(`ws.sort.${supplierId}`, state.sort);
   renderOrders();
+  majMenuPlus();
 });
 
 // « Masquer les préparées » : allumé, la file ne montre que ce qui reste.
@@ -4848,6 +4853,8 @@ function ouvrirRupturePour(order) {
 state.csOnglet = 'todo';
 state.csEdit = null;
 state.csPhotos = {};
+// Les cartes dont l'atelier a ouvert « modifier » sous le numéro de suivi.
+state.csReglages = new Set();
 
 function dessinerCartes() {
   document.body.classList.remove('ws-focus', 'ws-colonnes');
@@ -4874,6 +4881,9 @@ function dessinerCartes() {
     )
     .join('')}</div>`;
 
+  // « Par modèle » se voit à côté de la recherche : quinze paires du même
+  // article s'emballent d'affilée.
+  $('ws-sort')?.setAttribute('aria-pressed', String(state.sort === 'model'));
   const liste = (state.sort === 'model'
     ? [...state.orders].sort((a, b) =>
         (a.lineItems?.[0]?.title ?? '').localeCompare(b.lineItems?.[0]?.title ?? '', locale),
@@ -4921,7 +4931,7 @@ function carteCommande(order) {
         autocapitalize="characters" autocomplete="off" spellcheck="false" enterkeyhint="done"
         aria-label="${esc(t('parcel.tracking'))}" />
       ${
-        'BarcodeDetector' in window
+        scanPossible()
           ? `<button type="button" class="cs-carre" data-cs-scan="${index}" aria-label="${esc(t('scan.button'))}" title="${esc(t('scan.button'))}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6V3.5h3M17 6V3.5h-3M3 14v2.5h3M17 14v2.5h-3M5.5 7v6M8 7v6M10.5 7v6M12.5 7v6M14.5 7v6" /></svg></button>`
           : ''
       }
@@ -4938,6 +4948,22 @@ function carteCommande(order) {
   }).join('');
 
   const transporteur = order.parcels?.find((parcel) => parcel.carrier)?.carrier ?? lastCarrier();
+  /* Transporteur et nombre de colis changent rarement d'une commande à
+     l'autre : une ligne discrète les rappelle, et les champs ne s'ouvrent
+     que la première fois — aucun transporteur connu — ou sur « modifier ». */
+  const reglages =
+    transporteur && !state.csReglages.has(order.id)
+      ? `<div class="cs-reglages cs-reglages-ligne">
+           <input type="hidden" data-cs-carrier value="${esc(transporteur)}" />
+           <input type="hidden" data-cs-total value="${total}" />
+           <span>${esc(transporteur)} · ${esc(t('cs.nParcels', { n: total }))} · <button type="button" class="cs-modif" data-cs-reglages="1">${esc(t('cs.change'))}</button></span>
+         </div>`
+      : `<div class="cs-reglages">
+           <label class="cs-mini"><span>${esc(t('cs.carrier'))}</span><input data-cs-carrier list="ws-carriers" value="${esc(transporteur)}" autocomplete="off" /></label>
+           <label class="cs-mini"><span>${esc(t('cs.parcels'))}</span><select data-cs-total>${[1, 2, 3, 4, 5, 6]
+             .map((n) => `<option value="${n}"${n === total ? ' selected' : ''}>${n}</option>`)
+             .join('')}</select></label>
+         </div>`;
 
   return `<article class="cs-carte${faite ? ' cs-faite' : ''}" data-cs="${esc(order.id)}">
     <div class="cs-haut">
@@ -4953,12 +4979,7 @@ function carteCommande(order) {
     ${
       edition
         ? `${saisie}
-           <div class="cs-reglages">
-             <label class="cs-mini"><span>${esc(t('cs.carrier'))}</span><input data-cs-carrier list="ws-carriers" value="${esc(transporteur)}" autocomplete="off" /></label>
-             <label class="cs-mini"><span>${esc(t('cs.parcels'))}</span><select data-cs-total>${[1, 2, 3, 4, 5, 6]
-               .map((n) => `<option value="${n}"${n === total ? ' selected' : ''}>${n}</option>`)
-               .join('')}</select></label>
-           </div>
+           ${reglages}
            <div class="cs-boutons">
              <button type="button" class="cs-envoyer" data-cs-envoyer="1">${esc(t('cs.ship'))} ${ICO_COCHE}</button>
              <button type="button" class="cs-probleme" data-cs-probleme="1">${esc(t('cs.problem'))}</button>
@@ -5022,6 +5043,7 @@ async function expedierCarte(carte, bouton) {
     }
     if (carrier) rememberCarrier(carrier);
     if (state.csTotal) delete state.csTotal[order.id];
+    state.csReglages.delete(order.id);
     if (dernier) {
       const { shopify, clientPrevenu } = dernier;
       if (clientPrevenu) toast(t(state.testMode ? 'parcel.correctedTest' : 'parcel.correctedNotified'));
@@ -5037,6 +5059,21 @@ async function expedierCarte(carte, bouton) {
     bouton.disabled = false;
   }
   renderOrders();
+}
+
+/* Redessine une carte en gardant ce qui est déjà tapé. */
+function redessinerCarte(carte, order) {
+  const tapes = [...carte.querySelectorAll('[data-cs-suivi]')].map((champ) => [champ.dataset.csSuivi, champ.value]);
+  const transporteur = carte.querySelector('[data-cs-carrier]')?.value;
+  carte.outerHTML = carteCommande(order);
+  const neuve = document.querySelector(`[data-cs="${CSS.escape(order.id)}"]`);
+  for (const [index, valeur] of tapes) {
+    const champ = neuve.querySelector(`[data-cs-suivi="${index}"]`);
+    if (champ) champ.value = valeur;
+  }
+  if (transporteur !== undefined) neuve.querySelector('[data-cs-carrier]').value = transporteur;
+  majBoutonCarte(neuve);
+  return neuve;
 }
 
 $('ws-orders').addEventListener('click', (event) => {
@@ -5057,6 +5094,11 @@ $('ws-orders').addEventListener('click', (event) => {
     state.csEdit = order.id;
     renderOrders();
     document.querySelector(`[data-cs="${CSS.escape(order.id)}"] [data-cs-suivi]`)?.focus();
+    return;
+  }
+  if (event.target.closest('[data-cs-reglages]')) {
+    state.csReglages.add(order.id);
+    redessinerCarte(carte, order).querySelector('input[data-cs-carrier]')?.focus();
     return;
   }
   const scan = event.target.closest('[data-cs-scan]');
@@ -5084,18 +5126,7 @@ $('ws-orders').addEventListener('change', async (event) => {
   if (!carte) return;
   const order = state.orders.find((candidate) => candidate.id === carte.dataset.cs);
   // Le nombre de colis ou une photo redessinent la carte, en gardant ce qui est déjà tapé.
-  const redessiner = () => {
-    const tapes = [...carte.querySelectorAll('[data-cs-suivi]')].map((champ) => [champ.dataset.csSuivi, champ.value]);
-    const transporteur = carte.querySelector('[data-cs-carrier]')?.value;
-    carte.outerHTML = carteCommande(order);
-    const neuve = document.querySelector(`[data-cs="${CSS.escape(order.id)}"]`);
-    for (const [index, valeur] of tapes) {
-      const champ = neuve.querySelector(`[data-cs-suivi="${index}"]`);
-      if (champ) champ.value = valeur;
-    }
-    if (transporteur !== undefined) neuve.querySelector('[data-cs-carrier]').value = transporteur;
-    majBoutonCarte(neuve);
-  };
+  const redessiner = () => void redessinerCarte(carte, order);
   if (event.target.matches('[data-cs-total]')) {
     state.csTotal = { ...(state.csTotal ?? {}), [order.id]: Number(event.target.value) };
     return redessiner();
@@ -5286,7 +5317,10 @@ $('pb-envoyer').addEventListener('click', async () => {
 
 function majMenuPlus() {
   $('ws-plus-vue').textContent = t(state.simple ? 'cs.detailed' : 'cs.simple');
-  document.querySelector('#ws-plus-menu [data-plus="tri"]')?.setAttribute('aria-checked', String(state.sort === 'model'));
+  const tri = document.querySelector('#ws-plus-menu [data-plus="tri"]');
+  tri?.setAttribute('aria-checked', String(state.sort === 'model'));
+  // En vue simple, le tri est déjà à côté de la recherche.
+  if (tri) tri.hidden = state.simple;
   const masse = state.fonctionnalites?.importEnMasse !== false;
   const importer = document.querySelector('#ws-plus-menu [data-plus="import"]');
   if (importer) importer.hidden = !masse;

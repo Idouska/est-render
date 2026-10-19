@@ -3853,9 +3853,19 @@ html:has(.wsapp ~ .modal-wrap.open) { overflow: hidden; }
 body.ws-simple .wsapp .cs-plus { display: inline-flex; }
 body.ws-simple .wsapp .cmd-dl,
 body.ws-simple .wsapp #ws-modes,
-body.ws-simple .wsapp #ws-filter,
+body.ws-simple .wsapp #ws-filter .cmd-switch,
+body.ws-simple .wsapp #ws-compte,
 body.ws-simple .wsapp #cmd-barre[data-onglet='orders'] { display: none; }
-body.ws-simple .wsapp #cmd-outils { margin-bottom: 12px; }
+body.ws-simple .wsapp #cmd-outils { flex-direction: row; align-items: center; gap: 10px; margin-bottom: 12px; }
+body.ws-simple .wsapp #ws-cmd-search { flex: 1; min-width: 0; }
+/* « Par modèle » à côté de la recherche, à la taille du doigt. */
+body.ws-simple .wsapp #ws-filter { flex: none; }
+body.ws-simple .wsapp #ws-sort {
+  min-height: 44px; padding: 0 14px; border-radius: 12px; background: var(--card);
+  box-shadow: var(--shadow); font-size: 16px; font-weight: 600; white-space: nowrap;
+}
+body.ws-simple .wsapp #ws-sort svg { width: 17px; height: 17px; }
+body.ws-simple .wsapp #ws-sort[aria-pressed='true'] { background: var(--brand-soft); box-shadow: inset 0 0 0 2px var(--brand); }
 .wsapp #ws-plus svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 3.2; stroke-linecap: round; }
 
 .wsapp .cs-onglets { display: flex; padding: 4px; margin-bottom: 14px; border-radius: 16px; background: #e5e5ea; }
@@ -3899,6 +3909,11 @@ body.ws-simple .wsapp #cmd-outils { margin-bottom: 12px; }
   font-size: 15px; color: var(--ink);
 }
 .wsapp .cs-mini input { width: 140px; }
+.wsapp .cs-reglages-ligne { font-size: 15px; color: var(--ink-soft); }
+.wsapp .cs-modif {
+  padding: 4px 2px; border: 0; background: none; color: var(--brand);
+  font: inherit; font-weight: 600; cursor: pointer;
+}
 .wsapp .cs-boutons { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 10px; }
 .wsapp .cs-envoyer, .wsapp .cs-probleme {
   display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 68px;
