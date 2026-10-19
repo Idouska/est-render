@@ -3881,101 +3881,95 @@ body.ws-simple .wsapp #ws-sort {
 body.ws-simple .wsapp #ws-sort svg { width: 17px; height: 17px; }
 body.ws-simple .wsapp #ws-sort[aria-pressed='true'] { background: var(--brand-soft); box-shadow: inset 0 0 0 2px var(--brand); }
 
-.wsapp .cs-onglets { display: flex; padding: 4px; margin-bottom: 14px; border-radius: 16px; background: #e5e5ea; }
+.wsapp .cs-onglets { display: flex; padding: 3px; margin-bottom: 12px; border-radius: 13px; background: #e5e5ea; }
 .wsapp .cs-onglets button {
   flex: 1; display: flex; align-items: center; justify-content: center; gap: 10px;
-  height: 56px; border: 0; border-radius: 12px; background: transparent; color: var(--ink);
-  font-size: 22px; font-weight: 800; cursor: pointer;
+  height: 42px; border: 0; border-radius: 10px; background: transparent; color: var(--ink);
+  font-size: 17px; font-weight: 700; cursor: pointer;
 }
 .wsapp .cs-onglets button[aria-selected='true'] { background: #fff; box-shadow: 0 1px 3px rgb(0 0 0 / 15%); }
-.wsapp .cs-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 14px; }
+.wsapp .cs-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 12px; }
 .wsapp .cs-carte {
-  display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 18px;
-  border-radius: 22px; background: var(--card); box-shadow: var(--shadow);
+  display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 14px;
+  border-radius: 18px; background: var(--card); box-shadow: var(--shadow);
 }
-.wsapp .cs-haut { display: flex; gap: 14px; min-width: 0; }
-.wsapp .cs-photo { width: 104px; height: 104px; flex: none; border-radius: 16px; object-fit: cover; background: #e5e5ea; }
+.wsapp .cs-haut { display: flex; gap: 12px; min-width: 0; }
+.wsapp .cs-photo { width: 72px; height: 72px; flex: none; border-radius: 12px; object-fit: cover; background: #e5e5ea; }
 .wsapp .cs-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.wsapp .cs-num { font-size: 30px; line-height: 1.1; }
-.wsapp .cs-art { font-size: 19px; line-height: 1.25; overflow-wrap: anywhere; }
+.wsapp .cs-num { font-size: 21px; line-height: 1.15; }
+.wsapp .cs-art { font-size: 15px; line-height: 1.3; overflow-wrap: anywhere; }
 .wsapp .cs-qte { color: #ff3b30; }
-.wsapp .cs-gris { font-size: 16px; color: var(--ink-soft); }
+.wsapp .cs-gris { font-size: 13.5px; color: var(--ink-soft); }
 .wsapp .cs-carte .ord-consigne { margin: 0; }
-.wsapp .cs-suivi { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.wsapp .cs-colis { flex-basis: 100%; font-size: 15px; font-weight: 700; color: var(--ink-soft); }
+.wsapp .cs-suivi { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.wsapp .cs-colis { flex-basis: 100%; font-size: 13px; font-weight: 700; color: var(--ink-soft); }
 .wsapp .cs-suivi input {
-  flex: 1; min-width: 0; height: 62px; padding: 0 16px; border: 0; border-radius: 16px;
-  background: #f2f2f7; color: var(--ink); font-size: 22px; font-weight: 700; letter-spacing: 0.5px;
+  flex: 1; min-width: 0; height: 46px; padding: 0 14px; border: 0; border-radius: 12px;
+  background: #f2f2f7; color: var(--ink); font-size: 17px; font-weight: 650; letter-spacing: 0.3px;
 }
 .wsapp .cs-suivi input::placeholder { color: #8e8e93; font-weight: 600; }
 .wsapp .cs-carre {
-  display: grid; place-items: center; width: 62px; height: 62px; flex: none; overflow: hidden;
-  border: 0; border-radius: 16px; background: #f2f2f7; color: var(--ink); cursor: pointer;
+  display: grid; place-items: center; width: 46px; height: 46px; flex: none; overflow: hidden;
+  border: 0; border-radius: 12px; background: #f2f2f7; color: var(--ink); cursor: pointer;
 }
-.wsapp .cs-carre svg { width: 28px; height: 28px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.wsapp .cs-carre svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 .wsapp .cs-carre img { width: 100%; height: 100%; object-fit: cover; }
 .wsapp .cs-carre-ok { box-shadow: inset 0 0 0 3px #34c759; }
 .wsapp .cs-reglages { display: flex; gap: 10px; flex-wrap: wrap; }
-.wsapp .cs-mini { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink-soft); }
+.wsapp .cs-mini { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-soft); }
 .wsapp .cs-mini input, .wsapp .cs-mini select {
-  height: 36px; padding: 0 10px; border: 1px solid var(--line); border-radius: 10px; background: #fff;
-  font-size: 15px; color: var(--ink);
+  height: 32px; padding: 0 8px; border: 1px solid var(--line); border-radius: 8px; background: #fff;
+  font-size: 14px; color: var(--ink);
 }
 .wsapp .cs-mini input { width: 140px; }
-.wsapp .cs-reglages-ligne { font-size: 15px; color: var(--ink-soft); }
+.wsapp .cs-mini select { min-height: 0; }
+.wsapp .cs-reglages-ligne { font-size: 13.5px; color: var(--ink-soft); }
 .wsapp .cs-modif {
   padding: 4px 2px; border: 0; background: none; color: var(--brand);
   font: inherit; font-weight: 600; cursor: pointer;
 }
-.wsapp .cs-boutons { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 10px; }
+.wsapp .cs-boutons { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 8px; }
 .wsapp .cs-envoyer, .wsapp .cs-probleme {
-  display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 68px;
-  border-radius: 18px; font-size: 24px; font-weight: 800; cursor: pointer; touch-action: manipulation;
+  display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 48px;
+  border-radius: 13px; font-size: 18px; font-weight: 750; cursor: pointer; touch-action: manipulation;
 }
 .wsapp .cs-envoyer { border: 0; background: #c7c7cc; color: #fff; }
 .wsapp .cs-envoyer.pret { background: #34c759; }
-.wsapp .cs-envoyer .ws-ico { width: 24px; height: 24px; stroke-width: 2.6; }
-.wsapp .cs-probleme { border: 3px solid #ff9500; background: #fff7eb; color: #b25e00; font-size: 21px; }
+.wsapp .cs-envoyer .ws-ico { width: 19px; height: 19px; stroke-width: 2.6; }
+.wsapp .cs-probleme { border: 2px solid #ff9500; background: #fff7eb; color: #b25e00; font-size: 16px; }
 .wsapp .cs-parti {
-  display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-radius: 16px;
-  background: #e8f8ec; color: #1b7a35; font-size: 20px; font-weight: 750; overflow-wrap: anywhere;
+  display: flex; align-items: center; gap: 8px; padding: 11px 13px; border-radius: 12px;
+  background: #e8f8ec; color: #1b7a35; font-size: 15.5px; font-weight: 700; overflow-wrap: anywhere;
 }
-.wsapp .cs-parti .ws-ico { width: 24px; height: 24px; flex: none; stroke-width: 2.6; }
-.wsapp .cs-boutons-petits .cs-probleme { min-height: 54px; font-size: 18px; }
+.wsapp .cs-parti .ws-ico { width: 19px; height: 19px; flex: none; stroke-width: 2.6; }
+.wsapp .cs-boutons-petits .cs-probleme { min-height: 42px; font-size: 15px; }
 .wsapp .cs-lien {
-  min-height: 54px; border: 0; border-radius: 16px; background: #f2f2f7; color: var(--ink);
-  font-size: 18px; font-weight: 700; cursor: pointer;
+  min-height: 42px; border: 0; border-radius: 12px; background: #f2f2f7; color: var(--ink);
+  font-size: 15px; font-weight: 650; cursor: pointer;
 }
 
 /* Les demandes urgentes du marchand : une bande par demande, « 知道了 » à droite. */
 .wsapp .alert {
-  display: flex; align-items: center; gap: 16px; padding: 16px 18px; margin-bottom: 12px;
-  border: 0; border-left: 10px solid var(--c); border-radius: 18px; background: #fff; box-shadow: var(--shadow);
+  display: flex; align-items: center; gap: 14px; padding: 12px 16px; margin-bottom: 10px;
+  border: 0; border-left: 6px solid var(--c); border-radius: 14px; background: #fff; box-shadow: var(--shadow);
 }
 .wsapp .alert-rouge { --c: #ff3b30; }
 .wsapp .alert-orange { --c: #ff9500; }
 .wsapp .alert .alert-txt { flex: 1; min-width: 0; }
-.wsapp .alert .alert-txt > b { font-size: 21px; color: var(--c); }
-.wsapp .alert .alert-txt p { margin: 4px 0 0; font-size: 18px; }
-.wsapp .alert .alert-swap { font-size: 20px; color: var(--c); }
+.wsapp .alert .alert-txt > b { font-size: 16.5px; color: var(--c); }
+.wsapp .alert .alert-txt p { margin: 3px 0 0; font-size: 15px; }
+.wsapp .alert .alert-swap { font-size: 15.5px; color: var(--c); }
 .wsapp .alert-acts { display: flex; flex-direction: column; align-items: stretch; gap: 6px; flex: none; }
 .wsapp .alert-ok {
-  min-height: 56px; padding: 0 22px; border: 0; border-radius: 14px; background: var(--c);
-  color: #fff; font-size: 21px; font-weight: 800; cursor: pointer;
+  min-height: 42px; padding: 0 18px; border: 0; border-radius: 11px; background: var(--c);
+  color: #fff; font-size: 16px; font-weight: 750; cursor: pointer;
 }
-.wsapp .alert-voir { border: 0; background: none; color: var(--ink-soft); font-size: 14px; text-decoration: underline; cursor: pointer; }
+.wsapp .alert-voir { border: 0; background: none; color: var(--ink-soft); font-size: 12.5px; text-decoration: underline; cursor: pointer; }
 
 @media (max-width: 880px) {
-  .wsapp .cs-onglets button { font-size: 20px; }
-  .wsapp .cs-carte { padding: 15px; }
-  .wsapp .cs-photo { width: 84px; height: 84px; }
-  .wsapp .cs-num { font-size: 27px; }
-  .wsapp .cs-art { font-size: 18px; }
-  .wsapp .cs-envoyer { font-size: 22px; }
-  .wsapp .cs-probleme { font-size: 19px; }
+  .wsapp .cs-carte { padding: 13px; }
   .wsapp .alert { padding: 12px 14px; gap: 10px; }
-  .wsapp .alert .alert-txt > b { font-size: 18px; }
-  .wsapp .alert-ok { min-height: 50px; padding: 0 14px; font-size: 18px; }
+  .wsapp .alert-ok { padding: 0 14px; }
 }
 
 /* ==========================================================================
