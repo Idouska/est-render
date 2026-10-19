@@ -59,7 +59,7 @@ const state = {
      une façon de travailler, pas un réglage du matin. */
   sort: localStorage.getItem(`ws.sort.${supplierId}`) ?? 'time',
   /* La vue simple — une carte par commande — sauf si l'atelier a choisi la
-     vue détaillée dans « 更多 ». Mémorisée : c'est une façon de travailler. */
+     vue détaillée sous le titre. Mémorisée : c'est une façon de travailler. */
   simple: localStorage.getItem(`ws.vue.${supplierId}`) !== 'detail',
   parcels: [],
   catalog: null,
@@ -159,6 +159,8 @@ function applyLang(lang) {
     node.title = t(node.dataset.tip);
   }
   majPeriode();
+  // « Vue détaillée » ou « Vue simple » : le texte suit la vue, pas la clé.
+  if (pret) majMenuPlus();
 
   renderLangPicker();
   // Les écrans construits en JavaScript se refont : ils ne portent pas de
@@ -1948,7 +1950,6 @@ for (const id of ['ws-since', 'ws-until']) {
 const MENUS_COMMANDES = [
   ['ws-periode', 'ws-periode-menu'],
   ['ws-dl-plus', 'ws-dl-menu'],
-  ['ws-plus', 'ws-plus-menu'],
 ];
 
 function fermerMenusCommandes(sauf = null) {
@@ -4845,8 +4846,9 @@ function ouvrirRupturePour(order) {
 
    Une grosse carte par commande : la photo, le numéro, l'article, le client.
    Dessous, le numéro de suivi, un bouton vert « 发货 ✓ » et un bouton orange
-   « 有问题 ». Deux onglets seulement — à expédier, expédiées. Tout le reste
-   (fichiers, import, lots, tri) est rangé dans « 更多 ». La vue détaillée —
+   « 有问题 ». Deux onglets seulement — à expédier, expédiées. Le reste
+   (fichiers, import, colis, lots) est en boutons sous le titre, sans menu
+   à ouvrir, et « Par modèle » à côté de la recherche. La vue détaillée —
    la file et le guichet — reste à un clic, pour qui en a l'habitude.
    ========================================================================== */
 
@@ -5313,14 +5315,10 @@ $('pb-envoyer').addEventListener('click', async () => {
   }
 });
 
-/* --------------------------------------------------------------- 更多 -- */
+/* ------------------------------------------- boutons de la vue simple -- */
 
 function majMenuPlus() {
   $('ws-plus-vue').textContent = t(state.simple ? 'cs.detailed' : 'cs.simple');
-  const tri = document.querySelector('#ws-plus-menu [data-plus="tri"]');
-  tri?.setAttribute('aria-checked', String(state.sort === 'model'));
-  // En vue simple, le tri est déjà à côté de la recherche.
-  if (tri) tri.hidden = state.simple;
   const masse = state.fonctionnalites?.importEnMasse !== false;
   const importer = document.querySelector('#ws-plus-menu [data-plus="import"]');
   if (importer) importer.hidden = !masse;
@@ -5339,10 +5337,6 @@ $('ws-plus-menu').addEventListener('click', (event) => {
   } else if (quoi === 'tracking' || quoi === 'lots') {
     state.sous = { ...(state.sous ?? {}), orders: quoi };
     setView('orders');
-  } else if (quoi === 'tri') {
-    state.sort = state.sort === 'model' ? 'time' : 'model';
-    localStorage.setItem(`ws.sort.${supplierId}`, state.sort);
-    renderOrders();
   } else if (quoi === 'vue') {
     state.simple = !state.simple;
     localStorage.setItem(`ws.vue.${supplierId}`, state.simple ? 'simple' : 'detail');

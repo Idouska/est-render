@@ -3846,11 +3846,25 @@ html:has(.wsapp ~ .modal-wrap.open) { overflow: hidden; }
 
    Une carte par commande, et deux boutons qu'on ne peut pas confondre :
    vert pour « c'est parti », orange pour « ça coince ». En vue simple,
-   l'en-tête ne garde que la période, l'avancement et « 更多 ».
+   l'en-tête garde la période et l'avancement ; une rangée de boutons suit.
    ========================================================================== */
 
-.wsapp .cs-plus { display: none; }
-body.ws-simple .wsapp .cs-plus { display: inline-flex; }
+.wsapp .cs-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: -4px 0 14px; }
+/* En vue détaillée, seul « Vue simple » reste : le chemin du retour. */
+body:not(.ws-simple) .wsapp .cs-action:not([data-plus='vue']) { display: none; }
+.wsapp .cs-action {
+  display: inline-flex; align-items: center; gap: 7px; min-height: 42px; padding: 0 14px;
+  border: 0; border-radius: 12px; background: var(--card); box-shadow: var(--shadow);
+  color: var(--ink); font: inherit; font-size: 15px; font-weight: 600; text-decoration: none;
+  white-space: nowrap; cursor: pointer;
+}
+.wsapp .cs-action[hidden] { display: none; }
+/* Au téléphone, deux par ligne : tout reste visible sans pousser les commandes trop bas. */
+@media (max-width: 700px) {
+  body.ws-simple .wsapp .cs-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .wsapp .cs-action { min-height: 44px; padding: 0 12px; font-size: 14.5px; white-space: normal; line-height: 1.2; }
+}
+.wsapp .cs-action svg { width: 17px; height: 17px; flex: none; fill: none; stroke: var(--brand); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 body.ws-simple .wsapp .cmd-dl,
 body.ws-simple .wsapp #ws-modes,
 body.ws-simple .wsapp #ws-filter .cmd-switch,
@@ -3866,7 +3880,6 @@ body.ws-simple .wsapp #ws-sort {
 }
 body.ws-simple .wsapp #ws-sort svg { width: 17px; height: 17px; }
 body.ws-simple .wsapp #ws-sort[aria-pressed='true'] { background: var(--brand-soft); box-shadow: inset 0 0 0 2px var(--brand); }
-.wsapp #ws-plus svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 3.2; stroke-linecap: round; }
 
 .wsapp .cs-onglets { display: flex; padding: 4px; margin-bottom: 14px; border-radius: 16px; background: #e5e5ea; }
 .wsapp .cs-onglets button {
@@ -4039,12 +4052,6 @@ body.ws-simple .wsapp #ws-sort[aria-pressed='true'] { background: var(--brand-so
 }
 .wsapp .cs-mini span { white-space: nowrap; }
 .wsapp .alert .alert-swap b { display: inline; font-size: inherit; color: inherit; }
-/* « 更多 » : tout au même alignement, et la coche du tri comme dans un menu du Mac. */
-.wsapp #ws-plus-menu .cmd-item { position: relative; padding-left: 30px; }
-.wsapp #ws-plus-menu .cmd-item[aria-checked='true']::before {
-  content: ''; position: absolute; left: 12px; top: 50%; width: 4px; height: 8px; margin-top: -6px;
-  border-right: 2px solid var(--brand); border-bottom: 2px solid var(--brand); transform: rotate(45deg);
-}
 .wsapp .alert .alert-swap { display: block; }
 /* La feuille passe au-dessus de la barre d'onglets, et ses boutons restent visibles. */
 .wsapp ~ .pb-wrap { z-index: 80; }
