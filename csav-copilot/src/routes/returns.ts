@@ -484,6 +484,9 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
             // plus vite qu'à sa référence.
             image: item.image ?? null,
             quantity: item.quantity,
+            // Le montant de la ligne : l'écart d'un échange contre un autre
+            // modèle se montre avant l'enregistrement.
+            price: item.price ?? null,
           })),
         },
       });
