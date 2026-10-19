@@ -15641,6 +15641,15 @@ button.foa-chiffre:focus-visible { outline: none; box-shadow: var(--mac-halo); }
 /* --- Update : les colis qui ne bougent plus -------------------------------- */
 #view-update.mod { grid-template-columns: minmax(0, 1fr) clamp(360px, 32vw, 460px); }
 .upd-regle { white-space: nowrap; }
+/* La fenêtre Update : les commandes de l'adresse du client, en un clic. */
+.upd-candidats { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: -4px 0 12px; font-size: 12.5px; color: var(--ink-mute); }
+.upd-candidat {
+  display: inline-flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 5px 10px;
+  border: 0; border-radius: 8px; background: var(--inset); color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.upd-candidat small { font-size: 11.5px; font-weight: 400; color: var(--ink-mute); }
+.upd-candidat[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
+.upd-candidat[aria-pressed="true"] small { color: color-mix(in srgb, var(--on-accent) 85%, transparent); }
 #view-update .mod-barre .btn { margin-left: auto; }
 .upd-sans-suivi { margin: 0 14px 8px; }
 .upl-tete,
