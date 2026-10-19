@@ -63,7 +63,7 @@ test('cinq tuiles de problème, et « 缺货 » mène à sa page', () => {
 test('la vue simple par défaut, la vue détaillée à un clic', () => {
   assert.match(js, /simple: localStorage\.getItem\(`ws\.vue\.\$\{supplierId\}`\) !== 'detail',/);
   assert.match(js, /if \(state\.simple\) \{\n\s+\$\('ws-orders'\)\.before\(\$\('cmd-outils'\)\);\n\s+return dessinerCartes\(\);/);
-  for (const geste of ['import', 'tracking', 'lots', 'tri', 'vue']) {
+  for (const geste of ['import', 'tracking', 'lots', 'vue']) {
     assert.match(html, new RegExp(`data-plus="${geste}"`), geste);
   }
 });
@@ -90,5 +90,11 @@ test('le code-barres ne se propose qu’au doigt, et « Par modèle » se voit e
   const css = lire('public/workspace.css');
   assert.doesNotMatch(css, /body\.ws-simple \.wsapp #ws-filter,/);
   assert.match(css, /body\.ws-simple \.wsapp #ws-filter \.cmd-switch,/);
-  assert.match(js, /if \(tri\) tri\.hidden = state\.simple;/);
+});
+
+test('pas de bouton « Plus » : en vue simple, tout se voit', () => {
+  assert.doesNotMatch(html, /id="ws-plus"/);
+  assert.doesNotMatch(html, /role="menu"[^>]*id="ws-plus-menu"|id="ws-plus-menu"[^>]*role="menu"/);
+  assert.match(html, /<div class="cs-actions" id="ws-plus-menu">/);
+  assert.doesNotMatch(js, /\['ws-plus', 'ws-plus-menu'\]/);
 });
