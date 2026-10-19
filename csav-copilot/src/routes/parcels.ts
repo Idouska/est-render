@@ -117,10 +117,12 @@ export async function parcelRoutes(app: FastifyInstance): Promise<void> {
           photoMime: true,
           photoTakenAt: true,
           updatedAt: true,
+          shopifyOrderId: true,
         },
       });
 
-      return reply.send({ parcels: parcels.map(toParcelView) });
+      // La commande Shopify : « Nouvelle demande » sur la page Update s'y rattache.
+      return reply.send({ parcels: parcels.map((parcel) => ({ ...toParcelView(parcel), shopifyOrderId: parcel.shopifyOrderId })) });
     },
   );
 

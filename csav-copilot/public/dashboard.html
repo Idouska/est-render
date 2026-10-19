@@ -1364,6 +1364,39 @@
       </section>
 
       <!-- ============================================================
+           UPDATE — les colis qui ne bougent plus.
+
+           Trois états, le chemin d'un colis bloqué : à demander à
+           l'atelier, en attente de sa réponse, réponse à transmettre au
+           client. La même liste et la même fiche que Modification ; au
+           téléphone, la fiche se pousse par-dessus.
+           ============================================================ -->
+      <section class="browse mod upd-page" id="view-update" hidden aria-label="Update">
+        <div class="mod-liste">
+          <div class="mod-barre">
+            <div class="rmb-onglets fo-segments" id="upd-filtres" role="group" aria-label="Afficher"></div>
+            <button class="btn btn-primary" id="upd-nouvelle" type="button">Nouvelle demande</button>
+          </div>
+          <div class="notice notice-warn upd-sans-suivi" id="upd-sans-suivi" hidden>
+            <span class="notice-mark">Suivi</span>
+            <div>Aucune clé de suivi transporteur (17TRACK ou ParcelsApp) : les colis bloqués ne peuvent pas être repérés tout seuls. Les demandes faites depuis un mail s'affichent quand même ici.</div>
+          </div>
+          <div class="fo-table">
+            <div class="upl-tete" aria-hidden="true"><span>Article</span><span>Commande</span><span>Client</span><span>Dernier scan</span><span>État</span></div>
+            <div id="upd-rows" role="list" aria-label="Colis à suivre"></div>
+          </div>
+          <div class="mod-pied"><span><span id="upd-count"></span> <span class="upd-regle" id="upd-regle"></span></span><span>Les changements de taille, d’adresse ou d’annulation restent dans Modification.</span></div>
+        </div>
+        <aside class="fo-fiche mod-fiche" id="upd-fiche" aria-label="Colis">
+          <button type="button" class="fo-retour" id="upd-retour">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"
+              stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>Update
+          </button>
+          <div id="upd-fiche-corps"></div>
+        </aside>
+      </section>
+
+      <!-- ============================================================
            RUPTURES DE STOCK — la console.
 
            Une rupture n'est pas un mail : c'est une escalade fournisseur

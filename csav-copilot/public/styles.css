@@ -15270,7 +15270,8 @@ html.sta-fige { overflow: hidden; }
 
 .fo { container: fo / inline-size; gap: 14px; }
 .fo-retour,
-#changes-retour { display: none; }
+#changes-retour,
+#upd-retour { display: none; }
 .fo-bloc { display: flex; flex-direction: column; gap: 10px; }
 .fo-bloc[hidden] { display: none; }
 .fo-h { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 2px 4px 0; }
@@ -15611,7 +15612,8 @@ button.foa-chiffre:focus-visible { outline: none; box-shadow: var(--mac-halo); }
 .fof-commande-txt span { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-mute); }
 
 /* --- Modification -------------------------------------------------------- */
-#view-changes.mod { display: grid; grid-template-columns: minmax(0, 1fr) clamp(340px, 30vw, 440px); gap: 12px; align-items: start; }
+#view-changes.mod,
+#view-update.mod { display: grid; grid-template-columns: minmax(0, 1fr) clamp(340px, 30vw, 440px); gap: 12px; align-items: start; }
 .mod-liste { min-width: 0; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: var(--r-xl); background: var(--surface); }
 .mod-barre { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 14px 8px; }
 .mod-cherche {
@@ -15633,22 +15635,131 @@ button.foa-chiffre:focus-visible { outline: none; box-shadow: var(--mac-halo); }
 .mod-cherche input:focus { outline: none; }
 .mod-cherche:focus-within { box-shadow: var(--mac-halo); }
 .mod-barre .btn { height: 28px; padding: 0 12px; font-size: 13px; white-space: nowrap; }
-#view-changes .fo-table { padding-top: 0; border: 0; border-radius: 0; }
+#view-changes .fo-table,
+#view-update .fo-table { padding-top: 0; border: 0; border-radius: 0; }
+
+/* --- Update : les colis qui ne bougent plus -------------------------------- */
+#view-update.mod { grid-template-columns: minmax(0, 1fr) clamp(360px, 32vw, 460px); }
+.upd-regle { white-space: nowrap; }
+#view-update .mod-barre .btn { margin-left: auto; }
+.upd-sans-suivi { margin: 0 14px 8px; }
+.upl-tete,
+.upl {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 70px minmax(0, 130px) minmax(0, 170px) 96px;
+  align-items: center;
+  gap: 8px;
+}
+.upl-tete { height: 30px; padding: 0 10px; border-bottom: 1px solid var(--line); color: var(--ink-mute); font-size: 12px; font-weight: 500; }
+.upl-tete span:last-child { text-align: right; }
+.upl {
+  width: 100%;
+  min-height: 52px;
+  margin-top: 2px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+.upl:hover { background: color-mix(in srgb, var(--ink) 4%, transparent); }
+.upl:focus-visible { outline: none; box-shadow: var(--mac-halo); }
+.upl-art { min-width: 0; display: flex; align-items: center; gap: 10px; }
+.upl-art img,
+.upl-art > i { width: 34px; height: 34px; flex: none; border-radius: 8px; object-fit: cover; background: var(--inset); }
+.upl-art > span,
+.upl-client,
+.upl-scan { min-width: 0; display: flex; flex-direction: column; }
+.upl-art b,
+.upl-art span span,
+.upl-client span,
+.upl-scan span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.upl-art b { font-weight: 600; }
+.upl-art span span,
+.upl-client span + span { font-size: 12px; color: var(--ink-mute); }
+.upl-client span:first-child { font-weight: 500; }
+.upl-num { font-weight: 600; font-variant-numeric: tabular-nums; }
+.upl-scan span + span { font-size: 12px; font-weight: 600; }
+.upl-j-rouge { color: var(--crit-ink); }
+.upl-j-orange { color: var(--warn-ink); }
+.upl-j-vert { color: var(--ok-ink); }
+.upl-etat { justify-self: end; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.upl[aria-current="true"] { background: var(--accent); color: var(--on-accent); }
+.upl[aria-current="true"] .upl-art span span,
+.upl[aria-current="true"] .upl-client span + span,
+.upl[aria-current="true"] .upl-scan span + span { color: color-mix(in srgb, var(--on-accent) 85%, transparent); }
+.upl[aria-current="true"] .fod-point { background: var(--on-accent); }
+
+/* Étroite : deux lignes, comme une liste de Mail. */
+@container fotable (max-width: 640px) {
+  .upl-tete { display: none; }
+  .upl {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "art etat" "scan scan";
+    row-gap: 3px;
+    padding: 9px 10px;
+  }
+  .upl-art { grid-area: art; }
+  .upl-etat { grid-area: etat; align-self: start; font-size: 12.5px; }
+  .upl-scan { grid-area: scan; flex-direction: row; gap: 6px; padding-left: 44px; font-size: 12.5px; }
+  .upl-scan span + span::before { content: '· '; color: var(--ink-mute); font-weight: 400; }
+  .upl-num,
+  .upl-client { display: none; }
+}
+
+/* La fiche : le suivi, puis la seule chose à faire maintenant. */
+.upf-tete { display: flex; align-items: center; gap: 12px; }
+.upf-tete img,
+.upf-tete > i { width: 52px; height: 52px; flex: none; border-radius: 11px; object-fit: cover; background: var(--inset); }
+.upf-tete .fof-titre { font-size: 20px; }
+.upf-suivi { padding: 10px 12px; border-radius: 12px; background: var(--inset); }
+.upf-suivi-l { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.upf-suivi-l b { font-weight: 600; overflow-wrap: anywhere; }
+.upf-scans { margin-top: 4px; padding: 0; background: none; }
+.upf-rien { margin: 6px 0 0; color: var(--ink-mute); font-size: 13px; }
+.upf-bloc { display: flex; flex-direction: column; gap: 8px; }
+.upf-bloc-t { font-size: 14px; font-weight: 650; }
+.fof-attente .upf-bloc-t { color: var(--warn-ink); }
+.fof-faite .upf-bloc-t { color: var(--ok-ink); }
+.fof-refusee .upf-bloc-t { color: var(--crit-ink); }
+.upf-neutre { background: var(--inset); }
+.upf-cite { margin: 0; color: var(--ink-soft); overflow-wrap: anywhere; }
+#upf-message {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  resize: vertical;
+}
+.upf-danger { color: var(--crit-ink); }
+.upf-origine { white-space: normal; font-size: 13px; color: var(--ink); }
 .mod-pied { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; padding: 8px 14px 10px; border-top: 1px solid var(--line-soft); font-size: 12px; color: var(--ink-mute); }
 
 /* --- Tablette et téléphone : la fiche se pousse par-dessus ---------------- */
 @media (max-width: 900px) {
   .fo-dem,
-  #view-changes.mod { grid-template-columns: minmax(0, 1fr); }
+  #view-changes.mod,
+  #view-update.mod { grid-template-columns: minmax(0, 1fr); }
   .fo-fiche { position: static; }
   #view-suppliers:not(.fo-pile-fiche) .fo-fiche,
-  #view-changes:not(.pile-fiche) > .mod-fiche { display: none; }
+  #view-changes:not(.pile-fiche) > .mod-fiche,
+  #view-update:not(.pile-fiche) > .mod-fiche { display: none; }
   #view-changes.pile-fiche > .mod-liste,
+  #view-update.pile-fiche > .mod-liste,
   #view-suppliers.fo-pile-fiche > :not(.fo-retour):not(.fo-demandes),
   #view-suppliers.fo-pile-fiche .fo-demandes > .fo-h,
   #view-suppliers.fo-pile-fiche .fo-table { display: none; }
   .fo-pile > .fo-retour,
-  .pile-fiche #changes-retour {
+  .pile-fiche #changes-retour,
+  .pile-fiche #upd-retour {
     display: inline-flex;
     align-items: center;
     gap: 2px;
@@ -15663,7 +15774,8 @@ button.foa-chiffre:focus-visible { outline: none; box-shadow: var(--mac-halo); }
     cursor: pointer;
   }
   .fo-retour svg,
-  #changes-retour svg { width: 22px; height: 22px; }
+  #changes-retour svg,
+  #upd-retour svg { width: 22px; height: 22px; }
 }
 
 @media (max-width: 760px) {

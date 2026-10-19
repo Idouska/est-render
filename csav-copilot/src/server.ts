@@ -12,6 +12,7 @@ import { adminRoutes } from './routes/admin.ts';
 import { commerceRoutes } from './routes/commerce.ts';
 import { devRoutes } from './routes/dev.ts';
 import { envoiQuotidienRoutes } from './routes/envoiQuotidien.ts';
+import { updateRoutes } from './routes/updates.ts';
 import { evenementRoutes } from './routes/evenements.ts';
 import { refundRoutes } from './routes/refunds.ts';
 import { cannedReplyRoutes } from './routes/cannedReplies.ts';
@@ -182,6 +183,7 @@ export async function buildServer() {
   await app.register(ruptureRoutes);
   await app.register(returnRoutes);
   await app.register(envoiQuotidienRoutes);
+  await app.register(updateRoutes);
   await app.register(teamRoutes);
   await app.register(evenementRoutes);
   await app.register(supplierPortalRoutes);

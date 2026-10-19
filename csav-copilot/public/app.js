@@ -11611,6 +11611,8 @@ const ICONS = {
   truck:
     '<path d="M1.5 4.5h8v6h-8z"/><path d="M9.5 7h3l2 2v1.5h-5z"/><circle cx="4.5" cy="12" r="1.4"/><circle cx="11.5" cy="12" r="1.4"/>',
   pin: '<path d="M8 14s5-4.5 5-8A5 5 0 0 0 3 6c0 3.5 5 8 5 8z"/><circle cx="8" cy="6" r="1.8"/>',
+  // Update : une loupe sur un colis qui attend.
+  suivi: '<circle cx="7" cy="7" r="4.5"/><path d="m10.4 10.4 3.6 3.6"/><path d="M7 4.6v2.6l1.7 1.1"/>',
   euro: '<path d="M12 4.2A4.5 4.5 0 0 0 5 8a4.5 4.5 0 0 0 7 3.8M3 7h5M3 9.4h5"/>',
   shield: '<path d="M8 2l5 2v4.2c0 3-2.2 4.8-5 5.6-2.8-.8-5-2.6-5-5.6V4z"/>',
   swatch: '<circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="5.6" r="1"/><circle cx="10.2" cy="9" r="1"/><circle cx="5.8" cy="9" r="1"/>',
@@ -14069,6 +14071,8 @@ const VIEW_META = {
     title: 'Fournisseurs',
   },
   changes: { icon: 'pencil', label: 'Modification', group: 'Fournisseur', title: 'Modification' },
+  // Les colis qui ne bougent plus : ce qu'on demande à l'atelier, et ce qu'il répond.
+  update: { icon: 'suivi', label: 'Update', group: 'Fournisseur', title: 'Update', sous: 'Où en sont les colis qui ne bougent plus' },
   refunds: { icon: 'card', label: 'Annulation/\u200bRemboursement', group: 'Fournisseur', title: 'Annulations et remboursements' },
   renvoi: { icon: 'cycle', label: 'Renvoi', group: 'Fournisseur', title: 'Renvoi — stock retours', alias: 'returns', onglet: 'stock' },
   retour: { icon: 'uturn', label: 'Retour', group: 'Fournisseur', title: 'Retours clients', alias: 'returns', onglet: 'cases' },
@@ -14179,6 +14183,14 @@ async function refreshChangesCount() {
       // Shopify : la relève a lieu chaque minute.
       api('/api/ruptures/compte').catch(() => null),
     ]);
+    // Update : les colis bloqués et les réponses à transmettre. À part : le
+    // suivi transporteur peut être lent, il ne retarde pas les autres pastilles.
+    void api('/api/updates?compte=1')
+      .then((donnees) => {
+        state.navCounts = { ...state.navCounts, update: compteUpdate(donnees) };
+        renderNav();
+      })
+      .catch(() => {});
 
     // La pastille dit ce que l'écran montre d'abord : les clients à prévenir.
     const pending = modificationsAPrevenir(demandes);
@@ -14258,7 +14270,7 @@ function renderNav() {
            */
           const mute = ['orders', 'customers', 'catalog'].includes(view);
           const dim = view === 'tracking';
-          const hot = ['changes', 'suppliers', 'retour', 'ruptures', 'envoi', 'refunds'].includes(view) && tally > 0;
+          const hot = ['changes', 'update', 'suppliers', 'retour', 'ruptures', 'envoi', 'refunds'].includes(view) && tally > 0;
           const shown = tally > 9999 ? '9999+' : tally;
           const badge = tally && !mute;
           const courant = meta.alias
@@ -14930,6 +14942,412 @@ $('changes-new')?.addEventListener('click', () => {
   $('alert-order').focus();
 });
 
+/* ------------------------------------------------------------- Update ---- *
+ * Les colis qui ne bougent plus : à demander à l'atelier, en attente de sa
+ * réponse, réponse à transmettre au client. La même liste et la même fiche
+ * que Modification ; le message à l'atelier est déjà écrit.
+ */
+
+state.update = { donnees: null, filtre: null, choisi: null, envoi: false };
+
+const FILTRES_UPDATE = [
+  ['DEMANDER', 'À demander'],
+  ['ATTENTE', 'En attente de l’atelier'],
+  ['REPONDUE', 'Répondues'],
+  ['', 'Tout'],
+];
+
+/** Ce qui réclame un geste : la pastille du menu. */
+function compteUpdate(donnees) {
+  const c = donnees?.compte;
+  return c ? c.demander + c.aRelancer + c.repondues : 0;
+}
+
+/** « aujourd’hui », « hier », « il y a 3 j ». */
+function ilYa(date) {
+  if (!date) return '';
+  const jours = Math.floor((Date.now() - new Date(date).getTime()) / 86_400_000);
+  return jours <= 0 ? 'aujourd’hui' : jours === 1 ? 'hier' : `il y a ${jours} j`;
+}
+
+function etatLigneUpdate(ligne) {
+  if (ligne.aRelancer) return { mot: 'À relancer', ton: 'refusee' };
+  if (ligne.etat === 'DEMANDER') return { mot: 'À demander', ton: 'attente' };
+  if (ligne.etat === 'ATTENTE') return { mot: 'En attente', ton: 'gris' };
+  if (ligne.etat === 'PREVENU') return { mot: 'Client prévenu', ton: 'bleu' };
+  return ligne.demande?.status === 'REFUSED' ? { mot: 'Problème', ton: 'refusee' } : { mot: 'Répondu', ton: 'faite' };
+}
+
+function origineCourte(ligne) {
+  const o = ligne.origine;
+  if (o.type === 'CLIENT') return `Le client a écrit ${ilYa(o.depuis)}`;
+  if (o.type === 'MARCHAND') return 'Demandée à la main';
+  return 'Repéré automatiquement';
+}
+
+/** Le colis qui inquiète : celui qui est immobile depuis le plus longtemps. */
+function colisBloque(ligne) {
+  return [...ligne.colis].filter((colis) => !colis.livre).sort((a, b) => b.joursSansScan - a.joursSansScan)[0] ?? null;
+}
+
+function scanTexte(ligne) {
+  const colis = colisBloque(ligne);
+  if (!colis) return ligne.colis.length ? 'Livré' : 'Pas de colis saisi';
+  if (!colis.dernierScan) return 'Aucun scan du transporteur';
+  return [colis.dernierScan.quoi, colis.dernierScan.lieu].filter(Boolean).join(', ');
+}
+
+const tonJours = (jours) => (jours >= 5 ? 'rouge' : jours >= 3 ? 'orange' : 'vert');
+
+async function loadUpdate() {
+  const rows = $('upd-rows');
+  if (!state.update.donnees) rows.innerHTML = '<p class="fo-vide">Chargement…</p>';
+  try {
+    state.update.donnees = await api('/api/updates');
+  } catch (error) {
+    rows.innerHTML = `<p class="fo-vide">${esc(error.message)}</p>`;
+    return;
+  }
+  state.navCounts = { ...state.navCounts, update: compteUpdate(state.update.donnees) };
+  renderNav();
+  renderUpdate();
+}
+
+function renderUpdate() {
+  const d = state.update.donnees;
+  if (!d) return;
+  const lignes = d.lignes ?? [];
+  // Au premier affichage : là où il y a quelque chose à faire.
+  if (state.update.filtre === null) {
+    state.update.filtre = d.compte.repondues ? 'REPONDUE' : d.compte.demander ? 'DEMANDER' : d.compte.attente ? 'ATTENTE' : '';
+  }
+  const filtre = state.update.filtre;
+  const passe = (ligne, cle) => !cle || ligne.etat === cle;
+
+  $('upd-filtres').innerHTML = FILTRES_UPDATE.map(([cle, nom]) => {
+    const n = lignes.filter((ligne) => passe(ligne, cle)).length;
+    const action = cle && cle !== 'ATTENTE' && n;
+    return `<button type="button" data-updf="${cle}" aria-pressed="${cle === filtre}">${esc(nom)}<span class="fo-seg-n${
+      action ? ' fo-seg-n-action' : ''
+    }">${n}</span></button>`;
+  }).join('');
+  $('upd-regle').textContent = `· bloqué = ${d.seuilJours} jours sans scan`;
+  $('upd-sans-suivi').hidden = d.suiviActif;
+
+  const visibles = lignes.filter((ligne) => passe(ligne, filtre));
+  const choisie =
+    visibles.find((ligne) => ligne.orderId === state.update.choisi) ??
+    (PILE_TICKETS.matches ? lignes.find((ligne) => ligne.orderId === state.update.choisi) : visibles[0]);
+  $('upd-count').textContent = visibles.length ? `${visibles.length} commande${visibles.length > 1 ? 's' : ''}` : '';
+  $('upd-rows').innerHTML =
+    visibles
+      .map((ligne) => {
+        const etat = etatLigneUpdate(ligne);
+        const article = ligne.article;
+        return `<div role="listitem"><button type="button" class="upl" data-upl="${esc(ligne.orderId)}" aria-current="${
+          ligne.orderId === choisie?.orderId
+        }">
+          <span class="upl-art">${
+            article?.image ? `<img src="${esc(article.image)}" alt="" loading="lazy" />` : '<i aria-hidden="true"></i>'
+          }<span><b>${esc(article ? nomPaire(article.titre, article.declinaison) : ligne.orderName ?? '—')}</b><span>${esc(origineCourte(ligne))}</span></span></span>
+          <b class="upl-num">${esc(ligne.orderName ?? '—')}</b>
+          <span class="upl-client"><span>${esc(ligne.client ?? '—')}</span><span>${esc(ligne.atelier?.name ?? '—')}</span></span>
+          <span class="upl-scan"><span>${esc(scanTexte(ligne))}</span><span class="upl-j-${tonJours(ligne.joursSansScan)}">${esc(
+            ligne.joursSansScan ? `immobile depuis ${ligne.joursSansScan} j` : 'avance normalement',
+          )}</span></span>
+          <span class="upl-etat"><i class="fod-point fod-${etat.ton}" aria-hidden="true"></i>${esc(etat.mot)}</span>
+        </button></div>`;
+      })
+      .join('') ||
+    `<p class="fo-vide">${
+      filtre === 'DEMANDER'
+        ? d.suiviActif
+          ? 'Aucun colis bloqué : tout avance.'
+          : 'Sans clé de suivi, aucun colis ne peut être repéré tout seul.'
+        : filtre === 'ATTENTE'
+          ? 'Aucune demande en attente : les ateliers sont à jour.'
+          : filtre === 'REPONDUE'
+            ? 'Toutes les réponses ont été transmises aux clients.'
+            : 'Rien à suivre pour l’instant.'
+    }</p>`;
+  $('upd-fiche-corps').innerHTML = ficheUpdateMarkup(choisie);
+}
+
+function ficheUpdateMarkup(ligne) {
+  if (!ligne) return '<p class="fo-vide fof-vide">Choisissez un colis dans la liste.</p>';
+  const atelier = ligne.atelier?.name ?? 'l’atelier';
+  const article = ligne.article;
+  const bloque = colisBloque(ligne);
+  const titre =
+    ligne.etat === 'REPONDUE' || ligne.etat === 'PREVENU'
+      ? ligne.demande?.status === 'REFUSED'
+        ? 'Problème sur le colis'
+        : 'L’atelier a répondu'
+      : ligne.joursSansScan
+        ? `Bloqué depuis ${ligne.joursSansScan} jour${ligne.joursSansScan > 1 ? 's' : ''}`
+        : 'Le colis avance';
+
+  const suivis = ligne.colis
+    .map(
+      (colis) => `<div class="upf-suivi">
+        <div class="upf-suivi-l"><b>${esc(colis.transporteur ?? 'Transporteur')} · <span class="mono">${esc(colis.numero)}</span></b>
+          <a class="fof-lien" href="${esc(trackUrl(colis.numero))}" target="_blank" rel="noopener">Ouvrir le suivi</a></div>
+        ${
+          colis.evenements.length
+            ? `<ul class="fof-histoire upf-scans">${colis.evenements
+                .map(
+                  (evenement, i) => `<li><i class="fod-point fod-${
+                    i ? 'gris' : colis.livre ? 'faite' : colis.joursSansScan >= 3 ? 'attente' : 'faite'
+                  }" aria-hidden="true"></i><span>${esc([evenement.quoi, evenement.lieu].filter(Boolean).join(', '))}</span><time>${esc(
+                    ilYa(evenement.at),
+                  )}</time></li>`,
+                )
+                .join('')}</ul>`
+            : `<p class="upf-rien">${esc(colis.livre ? 'Livré.' : 'Pas encore d’information du transporteur sur ce numéro.')}</p>`
+        }
+      </div>`,
+    )
+    .join('');
+
+  const demande = ligne.demande;
+  let bloc = '';
+  if (ligne.etat === 'DEMANDER') {
+    bloc = ligne.atelier
+      ? `<div class="fof-etat fof-attente upf-bloc">
+          <b class="upf-bloc-t">Demander à ${esc(atelier)} où en est le colis</b>
+          <textarea id="upf-message" rows="4" maxlength="1000" aria-label="Message à l’atelier">${esc(ligne.messagePropose)}</textarea>
+          <div class="fof-gestes">
+            <button class="btn btn-primary" type="button" data-upf-envoyer>Envoyer à ${esc(atelier)}</button>
+            <button class="btn" type="button" data-upf-reporter>Attendre encore</button>
+          </div>
+        </div>`
+      : '<p class="fof-etat fof-attente">Aucun fournisseur actif : ajoutez-en un dans Fournisseur pour lui demander où en est le colis.</p>';
+  } else if (ligne.etat === 'ATTENTE' && demande) {
+    const jours = Math.floor((Date.now() - new Date(demande.createdAt).getTime()) / 86_400_000);
+    const titreAttente = demande.remindedAt
+      ? `Relancé ${ilYa(demande.remindedAt)} · demandé ${ilYa(demande.createdAt)}`
+      : jours
+        ? `Envoyé à ${atelier} ${ilYa(demande.createdAt)} · pas de réponse`
+        : `Envoyé à ${atelier} aujourd’hui`;
+    bloc = `<div class="fof-etat ${ligne.aRelancer ? 'fof-refusee' : 'upf-neutre'} upf-bloc">
+        <b class="upf-bloc-t">${esc(titreAttente)}</b>
+        ${demande.message ? `<p class="upf-cite">« ${esc(demande.message)} »</p>` : ''}
+        <div class="fof-gestes">
+          <button class="btn${ligne.aRelancer ? ' btn-primary' : ''}" type="button" data-upf-relancer="${esc(demande.id)}">Relancer l’atelier</button>
+          <button class="btn upf-danger" type="button" data-upf-annuler="${esc(demande.id)}">Annuler la demande</button>
+        </div>
+      </div>`;
+  } else if (demande) {
+    const refusee = demande.status === 'REFUSED';
+    bloc = `<div class="fof-etat ${refusee ? 'fof-refusee' : 'fof-faite'} upf-bloc">
+        <b class="upf-bloc-t">${esc(refusee ? `${atelier} : impossible` : `${atelier} a répondu`)} <span class="fof-quand">${esc(
+          ilYa(demande.acknowledgedAt),
+        )}</span></b>
+        ${demande.supplierNote ? `<p class="fof-note upf-cite">« ${esc(demande.supplierNote)} »</p>` : '<p class="upf-cite">Sans précision de l’atelier.</p>'}
+        ${
+          ligne.etat === 'PREVENU'
+            ? `<p class="fof-prevenu">${COCHE_FICHE}<span>Client prévenu ${esc(ilYa(demande.handledAt))}</span></p>`
+            : `<div class="fof-gestes">
+                ${ligne.origine.ticketId ? `<button class="btn" type="button" data-upf-ticket="${esc(ligne.origine.ticketId)}">Répondre au client</button>` : ''}
+                <button class="btn btn-primary" type="button" data-upf-prevenu="${esc(demande.id)}">Client prévenu</button>
+              </div>`
+        }
+      </div>`;
+  }
+
+  const origine =
+    ligne.origine.type === 'CLIENT'
+      ? `Le client a écrit ${ilYa(ligne.origine.depuis)}${ligne.origine.sujet ? ` : « ${ligne.origine.sujet} »` : ''}`
+      : ligne.origine.type === 'MARCHAND'
+        ? 'Demande faite à la main, sans mail du client.'
+        : `Aucun scan depuis plus de ${state.update.donnees?.seuilJours ?? 3} jours : repéré par l’outil.`;
+
+  return `<div class="fof">
+    <div class="upf-tete">
+      ${article?.image ? `<img src="${esc(article.image)}" alt="" />` : '<i aria-hidden="true"></i>'}
+      <div class="fof-tete">
+        <span class="fof-sur">${esc([ligne.orderName, ligne.client, ligne.atelier?.name].filter(Boolean).join(' · '))}</span>
+        <h3 class="fof-titre">${esc(titre)}</h3>
+        <span class="fof-sous">${esc(article ? nomPaire(article.titre, article.declinaison) : '')}${
+          ligne.autresArticles ? ` · + ${ligne.autresArticles} autre${ligne.autresArticles > 1 ? 's' : ''}` : ''
+        }</span>
+      </div>
+    </div>
+    ${suivis || '<p class="upf-rien">Aucun numéro de suivi saisi sur cette commande.</p>'}
+    ${bloc}
+    <div>
+      <p class="fof-t">D’où vient la demande</p>
+      <div class="fof-commande"><span class="fof-commande-txt"><span class="upf-origine">${esc(origine)}</span></span>${
+        ligne.origine.ticketId
+          ? `<button class="fof-lien" type="button" data-upf-ticket="${esc(ligne.origine.ticketId)}">Ouvrir le ticket</button>`
+          : `<button class="fof-lien" type="button" data-upf-commande="${esc(ligne.orderId)}">Voir la commande</button>`
+      }</div>
+    </div>
+    ${bloque ? '' : ''}
+  </div>`;
+}
+
+let defilementUpdate = 0;
+
+function ouvrirPileUpdate() {
+  const vue = $('view-update');
+  if (!PILE_TICKETS.matches || !vue) return;
+  if (!vue.classList.contains('pile-fiche')) {
+    defilementUpdate = scrollY;
+    vue.classList.add('pile-fiche');
+    history.pushState({ csavUpdate: true }, '');
+  }
+  requestAnimationFrame(() => scrollTo(0, 0));
+}
+
+function fermerPileUpdate({ parHistorique = false } = {}) {
+  const vue = $('view-update');
+  if (!vue?.classList.contains('pile-fiche')) return;
+  vue.classList.remove('pile-fiche');
+  if (!parHistorique && history.state?.csavUpdate) history.back();
+  requestAnimationFrame(() => scrollTo(0, defilementUpdate));
+}
+
+addEventListener('popstate', () => fermerPileUpdate({ parHistorique: true }));
+
+/** Un geste de la fiche : le bouton se grise, la page se relit, l'erreur se dit. */
+async function gesteUpdate(bouton, faire, message) {
+  bouton.disabled = true;
+  try {
+    const resultat = await faire();
+    toast(typeof message === 'function' ? message(resultat) : message);
+    await loadUpdate();
+  } catch (error) {
+    toast(error.message, true);
+    bouton.disabled = false;
+  }
+}
+
+$('view-update')?.addEventListener('click', async (event) => {
+  const cible = (selecteur) => event.target.closest(selecteur);
+  if (cible('#upd-retour')) return fermerPileUpdate();
+  const segment = cible('[data-updf]');
+  if (segment) {
+    state.update.filtre = segment.dataset.updf;
+    state.update.choisi = null;
+    return renderUpdate();
+  }
+  const ligneBouton = cible('[data-upl]');
+  if (ligneBouton) {
+    state.update.choisi = ligneBouton.dataset.upl;
+    renderUpdate();
+    return ouvrirPileUpdate();
+  }
+  if (cible('#upd-nouvelle')) return ouvrirUpdateLibre();
+
+  const ligne = (state.update.donnees?.lignes ?? []).find((candidate) => candidate.orderId === state.update.choisi) ??
+    (state.update.donnees?.lignes ?? []).find((candidate) => candidate.orderId === $('upd-rows').querySelector('[aria-current="true"]')?.dataset.upl);
+
+  let bouton;
+  if ((bouton = cible('[data-upf-envoyer]')) && ligne?.atelier) {
+    const message = $('upf-message')?.value.trim() || ligne.messagePropose;
+    const numeros = ligne.colis.filter((colis) => !colis.livre).map((colis) => colis.numero);
+    return gesteUpdate(
+      bouton,
+      () =>
+        api(`/api/suppliers/${ligne.atelier.id}/alert`, {
+          method: 'POST',
+          body: JSON.stringify({
+            kind: 'TRACKING',
+            message,
+            beforeValue: (numeros.length ? numeros : ligne.colis.map((colis) => colis.numero)).join(', ') || null,
+            orderName: ligne.orderName,
+            shopifyOrderId: ligne.orderId,
+            ticketId: ligne.origine.ticketId,
+          }),
+        }),
+      (resultat) =>
+        resultat.emailed
+          ? `Demande envoyée à ${ligne.atelier.name}.`
+          : `Demande affichée dans l’espace de ${ligne.atelier.name} ; elle part aussi dans son récapitulatif de 9 h.`,
+    );
+  }
+  if ((bouton = cible('[data-upf-reporter]')) && ligne) {
+    return gesteUpdate(
+      bouton,
+      () => api('/api/updates/reporter', { method: 'POST', body: JSON.stringify({ orderId: ligne.orderId }) }),
+      'Colis laissé au transporteur : il revient dans deux jours s’il ne bouge toujours pas.',
+    );
+  }
+  if ((bouton = cible('[data-upf-relancer]'))) {
+    return gesteUpdate(bouton, () => api(`/api/updates/${bouton.dataset.upfRelancer}/relancer`, { method: 'POST', body: '{}' }), 'Atelier relancé par mail.');
+  }
+  if ((bouton = cible('[data-upf-annuler]'))) {
+    if (!(await confirmer('Annuler cette demande ?\n\nElle disparaît aussi de l’espace du fournisseur.', { action: 'Annuler la demande', annuler: 'Garder', danger: true, icone: 'message' }))) return;
+    return gesteUpdate(bouton, () => api(`/api/changes/${bouton.dataset.upfAnnuler}`, { method: 'DELETE' }), 'Demande annulée.');
+  }
+  if ((bouton = cible('[data-upf-prevenu]'))) {
+    return gesteUpdate(bouton, () => api(`/api/changes/${bouton.dataset.upfPrevenu}/handled`, { method: 'POST', body: '{}' }), 'Noté : client prévenu.');
+  }
+  if ((bouton = cible('[data-upf-ticket]'))) {
+    fermerPileUpdate();
+    setView('tickets');
+    return void selectTicket(bouton.dataset.upfTicket);
+  }
+  if ((bouton = cible('[data-upf-commande]'))) {
+    fermerPileUpdate();
+    setView('orders');
+    return void ouvrirCommande(bouton.dataset.upfCommande);
+  }
+});
+
+/*
+ * « Nouvelle demande » : la fenêtre Update, vide. Le numéro de commande
+ * tapé va chercher ses colis, pour qu'on coche le bon.
+ */
+function ouvrirUpdateLibre() {
+  if (activeSuppliers().length === 0) {
+    toast('Ajoutez d’abord un fournisseur dans l’écran Fournisseur.', true);
+    return;
+  }
+  const modal = $('upd-modal');
+  modal.dataset.ticket = '';
+  modal.dataset.order = '';
+  modal.dataset.libre = '1';
+  $('upd-order').value = '';
+  $('upd-message').value = '';
+  $('upd-supplier').innerHTML = activeSuppliers()
+    .map((supplier) => `<option value="${esc(supplier.id)}"${supplier.isDefault ? ' selected' : ''}>${esc(supplier.name)}</option>`)
+    .join('');
+  $('upd-tracks').innerHTML = '<p class="empty">Tapez le numéro de commande : ses colis s’affichent ici.</p>';
+  modal.hidden = false;
+  modal.classList.add('open');
+  $('upd-order').focus();
+}
+
+$('upd-order')?.addEventListener('change', async () => {
+  const modal = $('upd-modal');
+  if (modal.dataset.libre !== '1') return;
+  const nom = $('upd-order').value.trim();
+  if (!nom) return;
+  try {
+    const { parcels } = await api(`/api/parcels?orderName=${encodeURIComponent(nom.startsWith('#') ? nom : `#${nom}`)}`);
+    modal.dataset.order = parcels?.find((parcel) => parcel.shopifyOrderId)?.shopifyOrderId ?? '';
+    // Pas de colis saisi : la commande se cherche chez Shopify, pour que la
+    // demande se range sous elle dans Update.
+    if (!modal.dataset.order) {
+      const trouvee = await api(`/api/returns/order-lookup?name=${encodeURIComponent(nom)}`).catch(() => null);
+      modal.dataset.order = trouvee?.order?.shopifyOrderId ?? '';
+    }
+    const numeros = [...new Set((parcels ?? []).map((parcel) => parcel.trackingNumber).filter(Boolean))];
+    $('upd-tracks').innerHTML = numeros.length
+      ? numeros
+          .map(
+            (numero) => `<label><input type="checkbox" value="${esc(numero)}"${numeros.length === 1 ? ' checked' : ''} />
+              <span class="mono">${esc(numero)}</span></label>`,
+          )
+          .join('')
+      : '<p class="empty">Aucun colis saisi sur cette commande : précisez la demande ci-dessous.</p>';
+  } catch (error) {
+    toast(error.message, true);
+  }
+});
+
 /* --------------------------------------- écran Fournisseur : demandes ---- */
 
 // Toutes les demandes, triées par atelier, par type et par statut. Le statut
@@ -15037,6 +15455,7 @@ const VIEW_LOADERS = {
     void chargerDemandesFournisseur();
   },
   changes: () => loadChanges(),
+  update: () => loadUpdate(),
   ruptures: () => loadRuptures(),
   envoi: () => loadEnvoi(),
   returns: () => loadReturns(),
@@ -22692,6 +23111,7 @@ async function ouvrirUpdate(ticket) {
   const order = state.detail?.order;
   const modal = $('upd-modal');
   modal.dataset.ticket = ticket.id;
+  modal.dataset.libre = '';
   modal.dataset.order = order?.id ?? ticket.shopifyOrderId ?? '';
   $('upd-order').value = order?.name ?? ticket.orderName ?? '';
   $('upd-message').value = '';
@@ -22771,6 +23191,8 @@ $('upd-send')?.addEventListener('click', async () => {
       }),
     });
     fermerUpdate();
+    modal.dataset.libre = '';
+    if (state.view === 'update') void loadUpdate();
     // Un point sur un colis n'est pas urgent : il part dans le récapitulatif
     // du matin, et s'affiche dans son atelier dès maintenant.
     toast(

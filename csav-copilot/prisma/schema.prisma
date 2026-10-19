@@ -138,6 +138,7 @@ model Merchant {
   aRembourser   RemboursementAFaire[]
   envoisFournisseur EnvoiFournisseur[]
   commandesLaissees CommandeLaissee[]
+  updatesReportes   UpdateReporte[]
   @@index([organizationId])
 }
 
@@ -1450,6 +1451,21 @@ model EnvoiCommande {
 
   @@unique([merchantId, shopifyOrderId])
   @@index([envoiId])
+}
+
+/// « Attendre encore » sur la page Update : un colis bloqué qu'on laisse
+/// au transporteur quelques jours avant de déranger l'atelier.
+model UpdateReporte {
+  id             String   @id @default(cuid())
+  merchantId     String
+  shopifyOrderId String
+  jusqua         DateTime
+  userId         String?
+  createdAt      DateTime @default(now())
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@unique([merchantId, shopifyOrderId])
 }
 
 /// Une commande que le stock retours pouvait servir, et que le marchand a
