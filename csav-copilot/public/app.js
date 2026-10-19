@@ -2845,6 +2845,10 @@ function actionBlockedReason(key, ticket) {
    * reste à poser.
    */
   if (key === 'reshipment' && !canI('reply')) return 'Vous êtes en lecture seule.';
+  if (key === 'renvoi') {
+    if (!canI('reply')) return 'Vous êtes en lecture seule.';
+    if (!ticket.shopifyOrderId) return 'Aucune commande rattachée à ce message.';
+  }
   return null;
 }
 
@@ -3033,6 +3037,201 @@ async function openReshipment(ticket) {
     orderId: ticket.shopifyOrderId ?? order?.id ?? null,
   });
 }
+
+/*
+ * Renvoi, depuis le message du client.
+ *
+ * « Je n'ai jamais reçu mes Runner Halo » : la commande et ses produits sont
+ * déjà là, et dessous les paires du stock retours qui leur correspondent —
+ * même référence, ou même modèle et même déclinaison, comme le rapprochement
+ * du serveur. On en choisit une ; elle est réservée à la commande, et
+ * l'agence qui la garde la renvoie au client.
+ */
+const renvoi = { order: null, ticket: null, article: 0, paire: null, paires: [] };
+
+const sansAccents = (texte) =>
+  (texte ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
+/** La paire convient-elle à l'article ? Même règle que `correspond` côté serveur. */
+function paireCorrespond(paire, article) {
+  const skuPaire = sansAccents(paire.sku);
+  const skuArticle = sansAccents(article?.sku);
+  if (skuPaire && skuArticle) return skuPaire === skuArticle;
+  return (
+    sansAccents(paire.productTitle) === sansAccents(article?.title) &&
+    sansAccents(paire.variantTitle) === sansAccents(article?.variantTitle)
+  );
+}
+
+async function ouvrirRenvoi(ticket) {
+  const order = state.detail?.order;
+  if (!order && !ticket.shopifyOrderId) return toast('Aucune commande rattachée à ce message.', true);
+  Object.assign(renvoi, { order, ticket, article: 0, paire: null, paires: [] });
+  const adresse = order?.shippingAddress ?? {};
+  $('rv-commande').value = order?.name ?? ticket.orderName ?? '';
+  // Le client de la commande : le message peut venir de l'atelier.
+  const pays = adresse.countryCode ?? adresse.country;
+  $('rv-client').value = [
+    adresse.name ?? order?.customer?.displayName ?? ticket.customerName,
+    [adresse.city, pays ? nomPays(pays) : null].filter(Boolean).join(', '),
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  $('rv-paires').innerHTML = '<p class="rv-vide">Recherche dans le stock…</p>';
+  renderRenvoiProduits();
+  $('rv-modal').hidden = false;
+  $('rv-modal').classList.add('open');
+  try {
+    // Le stock de l'instant : une paire réservée entre-temps ne doit pas être proposée.
+    const data = await api('/api/returns');
+    state.returns.cases = data.cases ?? [];
+  } catch (error) {
+    $('rv-paires').innerHTML = `<p class="rv-vide">${esc(error.message)}</p>`;
+    return;
+  }
+  renderRenvoiPaires();
+}
+
+function fermerRenvoi() {
+  $('rv-modal').hidden = true;
+  $('rv-modal').classList.remove('open');
+}
+
+function renderRenvoiProduits() {
+  const articles = renvoi.order?.lineItems ?? [];
+  $('rv-produits').innerHTML = articles.length
+    ? articles
+        .map(
+          (article, i) => `<button type="button" class="rv-ligne" role="radio" data-rv-article="${i}" aria-checked="${i === renvoi.article}">
+            <span class="rv-rond" aria-hidden="true"></span>
+            ${article.image ? `<img src="${esc(article.image)}" alt="" loading="lazy" />` : '<i aria-hidden="true"></i>'}
+            <span class="rv-txt"><b>${esc(article.title ?? '')}</b><small>${esc(
+              [article.variantTitle, article.sku].filter(Boolean).join(' · '),
+            )}</small></span>
+          </button>`,
+        )
+        .join('')
+    : '<p class="rv-vide">La commande ne liste aucun produit.</p>';
+}
+
+function renderRenvoiPaires() {
+  const article = renvoi.order?.lineItems?.[renvoi.article];
+  const adresse = renvoi.order?.shippingAddress ?? {};
+  const pays = adresse.countryCode ?? adresse.country ?? null;
+  const joursDepuis = (date) => Math.max(0, Math.floor((Date.now() - new Date(date).getTime()) / 86_400_000));
+  const paysDe = (paire) => paire.agency?.country ?? paire.country ?? null;
+  // Le même pays d'abord — livré en trois jours —, puis la plus ancienne en stock.
+  renvoi.paires = article
+    ? state.returns.cases
+        .filter((paire) => paire.status === 'RESTOCKED' && !paire.reusedAt && paireCorrespond(paire, article))
+        .sort(
+          (a, b) =>
+            Number(paysDe(b) === pays) - Number(paysDe(a) === pays) ||
+            new Date(a.restockedAt ?? a.updatedAt) - new Date(b.restockedAt ?? b.updatedAt),
+        )
+    : [];
+  if (!renvoi.paires.some((paire) => paire.id === renvoi.paire)) renvoi.paire = renvoi.paires[0]?.id ?? null;
+
+  // Une paire déjà réservée à cette commande : le serveur refuserait la seconde.
+  const orderId = renvoi.ticket?.shopifyOrderId ?? renvoi.order?.id;
+  const reservee = state.returns.cases.find((paire) => orderId && paire.reusedShopifyOrderId === orderId);
+  if (reservee) {
+    renvoi.paires = [];
+    renvoi.paire = null;
+    $('rv-paires').innerHTML = `<p class="rv-vide">Une paire du stock est déjà réservée à ${esc(
+      renvoi.order?.name ?? 'cette commande',
+    )} : ${esc([reservee.productTitle, reservee.variantTitle].filter(Boolean).join(' · '))}${
+      reservee.reshippedAt ? `, expédiée (${esc(reservee.reshipTrackingNumber ?? '')})` : ', pas encore expédiée'
+    }.</p>`;
+    $('rv-note').textContent = 'Pour la libérer, passez par la page Renvoi.';
+    $('rv-send').disabled = true;
+    return;
+  }
+
+  $('rv-paires').innerHTML = renvoi.paires.length
+    ? renvoi.paires
+        .map((paire) => {
+          const ou =
+            paire.origine === 'MANUEL' && !paire.agency
+              ? 'Chez vous'
+              : [paire.agency?.name, nomPays(paysDe(paire))].filter(Boolean).join(' · ');
+          const detail = [
+            paire.origine === 'MANUEL' ? `Ajout manuel${paire.note ? ` · ${paire.note}` : ''}` : `Retour ${paire.orderName ?? '—'} · contrôlée`,
+            `en stock depuis ${joursDepuis(paire.restockedAt ?? paire.updatedAt)} j`,
+          ].join(' · ');
+          const memePays = !pays || paysDe(paire) === pays;
+          return `<button type="button" class="rv-ligne" role="radio" data-rv-paire="${esc(paire.id)}" aria-checked="${paire.id === renvoi.paire}">
+            <span class="rv-rond" aria-hidden="true"></span>
+            <span class="rv-txt"><b>${esc(ou)}</b><small>${esc(detail)}</small></span>
+            <span class="rv-tag ${memePays ? 'ok' : 'warn'}">${memePays ? 'Même pays' : 'Autre pays'}</span>
+          </button>`;
+        })
+        .join('')
+    : `<div class="rv-vide">Aucune paire « ${esc([article?.title, article?.variantTitle].filter(Boolean).join(' · ') || 'de ce produit')} » en stock.
+        <button type="button" class="rv-lien" data-rv-fournisseur>Demander au fournisseur</button></div>`;
+
+  const choisie = renvoi.paires.find((paire) => paire.id === renvoi.paire);
+  $('rv-note').textContent = choisie
+    ? choisie.agency
+      ? `La paire est réservée à ${renvoi.order?.name ?? 'la commande'} et l’agence ${choisie.agency.name} la renvoie au client.`
+      : `La paire est réservée à ${renvoi.order?.name ?? 'la commande'} : c’est à vous de l’expédier.`
+    : 'Rien à renvoyer depuis le stock : la demande peut partir chez le fournisseur.';
+  $('rv-send').disabled = !choisie || !canI('reply');
+}
+
+$('rv-modal')?.addEventListener('click', (event) => {
+  if (event.target === event.currentTarget) return fermerRenvoi();
+  const article = event.target.closest('[data-rv-article]');
+  if (article) {
+    renvoi.article = Number(article.dataset.rvArticle);
+    renvoi.paire = null;
+    renderRenvoiProduits();
+    return renderRenvoiPaires();
+  }
+  const paire = event.target.closest('[data-rv-paire]');
+  if (paire) {
+    renvoi.paire = paire.dataset.rvPaire;
+    return renderRenvoiPaires();
+  }
+  if (event.target.closest('[data-rv-fournisseur]')) {
+    fermerRenvoi();
+    openChangeRequest(renvoi.ticket);
+  }
+});
+$('rv-close')?.addEventListener('click', fermerRenvoi);
+$('rv-cancel')?.addEventListener('click', fermerRenvoi);
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && $('rv-modal')?.classList.contains('open')) fermerRenvoi();
+});
+
+$('rv-send')?.addEventListener('click', async () => {
+  const { order, ticket } = renvoi;
+  const choisie = renvoi.paires.find((paire) => paire.id === renvoi.paire);
+  if (!choisie) return;
+  const orderId = ticket?.shopifyOrderId ?? order?.id;
+  const orderName = order?.name ?? ticket?.orderName ?? '';
+  $('rv-send').disabled = true;
+  try {
+    const reponse = await api('/api/returns/reemploi', {
+      method: 'POST',
+      body: JSON.stringify({ orderId, orderName, returnIds: [choisie.id], renvoi: true }),
+    });
+    fermerRenvoi();
+    toast(
+      reponse.agence
+        ? `${orderName} : l’agence ${reponse.agence.name} renvoie la paire au client.`
+        : `${orderName} : la paire de votre stock lui est réservée.`,
+    );
+  } catch (error) {
+    toast(error.message, true);
+    $('rv-send').disabled = false;
+  }
+});
 
 /**
  * Demande de changement adressée au fournisseur, depuis le mail du client.
@@ -5290,8 +5489,9 @@ function renderTicketLabels(ticket) {
     modification: () => openChangeRequest(ticket, { motifs: ['SIZE', 'PRODUCT', 'ADDRESS'], titre: 'Modification' }),
     annulation: () => ouvrirCommandeShopify(state.detail?.order),
     update: () => void ouvrirUpdate(ticket),
-    // Même porte que la barre latérale : même titre, même entrée surlignée.
-    renvoi: () => document.querySelector('.nav-item[data-view="renvoi"]')?.click(),
+    // Une fenêtre sur le message, la commande déjà remplie : on ne quitte
+    // pas le client pour aller chercher une paire dans une autre page.
+    renvoi: () => void ouvrirRenvoi(ticket),
     reshipment: () => void openReshipment(ticket),
   };
 

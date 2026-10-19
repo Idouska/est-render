@@ -1070,16 +1070,23 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
           orderId: z.string().min(1).max(120),
           orderName: z.string().min(1).max(60),
           returnIds: z.array(z.string().min(1).max(40)).min(1).max(20),
+          /*
+           * Un renvoi, depuis le message du client : la commande est déjà
+           * partie (colis perdu, article à remplacer), et c'est justement
+           * pour ça qu'on la ressert. Le colis de l'atelier n'est alors pas
+           * un double envoi à empêcher, c'est la raison du renvoi.
+           */
+          renvoi: z.boolean().optional(),
         })
         .safeParse(request.body);
       if (!parsed.success) return reply.code(400).send({ error: 'Réemploi invalide' });
-      const { orderId, orderName, returnIds } = parsed.data;
+      const { orderId, orderName, returnIds, renvoi } = parsed.data;
 
       const [colis, dejaServie] = await Promise.all([
         prisma.parcel.count({ where: { merchantId, shopifyOrderId: orderId } }),
         prisma.returnCase.count({ where: { merchantId, reusedShopifyOrderId: orderId } }),
       ]);
-      if (colis > 0) {
+      if (colis > 0 && !renvoi) {
         return reply.code(409).send({
           code: 'commencee',
           error: `L’atelier a déjà saisi un colis pour ${orderName} : la paire est partie de chez lui.`,
@@ -1131,7 +1138,7 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
         action: 'return.reused',
         targetType: 'order',
         targetId: orderId,
-        metadata: { orderName, returnIds },
+        metadata: { orderName, returnIds, renvoi: Boolean(renvoi) },
       });
 
       const agence = await prisma.returnCase.findFirst({
