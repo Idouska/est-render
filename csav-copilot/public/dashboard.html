@@ -2451,6 +2451,8 @@ Remboursement : sous 5 jours ouvrés après réception du retour."></textarea>
           <p id="ech-sub"></p>
         </div>
         <div class="modal-body ech-corps">
+          <!-- Les photos de la paire retournée : trois au moins avant de décider. -->
+          <div class="ech-photos" id="ech-photos"></div>
           <div class="ech-paire" id="ech-revient"></div>
           <div class="ech-criteres" role="group" aria-label="Contrôle de la paire">
             <label><input type="checkbox" data-ech-critere="conforme" /> Pointure et modèle conformes</label>
@@ -2458,11 +2460,46 @@ Remboursement : sous 5 jours ouvrés après réception du retour."></textarea>
             <label><input type="checkbox" data-ech-critere="complet" /> Boîte et accessoires présents</label>
           </div>
           <div class="ech-paire ech-envoi" id="ech-envoyer"></div>
+          <!-- Refuser au vu des photos : le motif reste au dossier, pour répondre au client. -->
+          <div class="ech-refus" id="ech-refus" hidden>
+            <label for="ech-refus-motif">Pourquoi refuser ce retour ?</label>
+            <textarea id="ech-refus-motif" rows="3" maxlength="600" placeholder="Paire portée, semelles usées, boîte manquante…"></textarea>
+          </div>
         </div>
         <div class="modal-foot ra-pied-barre">
           <span class="ra-pied" id="ech-pied"></span>
           <button class="btn" type="button" id="ech-fermer">Annuler</button>
+          <button class="btn btn-danger" type="button" id="ech-refuser" disabled>Refuser le retour</button>
           <button class="btn btn-primary" type="button" id="ech-valider" disabled>Valider l’échange</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Les photos d'un retour : celles du client, de l'agence et les vôtres.
+         Trois au moins avant de valider ou de refuser. -->
+    <div class="backdrop" id="rp-modal" role="dialog" aria-modal="true" aria-labelledby="rp-title" hidden>
+      <div class="modal modal-wide rp-fen">
+        <div class="modal-head">
+          <h2 id="rp-title">Photos du retour</h2>
+          <p id="rp-sub"></p>
+        </div>
+        <div class="modal-body rp-corps">
+          <p class="rp-compte" id="rp-compte"></p>
+          <div class="rp-grille" id="rp-grille"></div>
+          <div class="rp-ajout">
+            <div class="seg" id="rp-source" role="group" aria-label="Qui a pris ces photos">
+              <button type="button" data-rp-source="MARCHAND" aria-pressed="true">Prises par vous</button>
+              <button type="button" data-rp-source="CLIENT" aria-pressed="false">Envoyées par le client</button>
+            </div>
+            <label class="btn btn-primary btn-small">Ajouter des photos<input type="file" accept="image/*" multiple hidden id="rp-fichiers" /></label>
+          </div>
+          <div class="rp-mails" id="rp-mails-bloc" hidden>
+            <h3>Dans les mails du client</h3>
+            <div class="rp-grille" id="rp-mails"></div>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn" type="button" id="rp-fermer">Fermer</button>
         </div>
       </div>
     </div>

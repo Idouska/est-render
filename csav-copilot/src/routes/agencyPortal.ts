@@ -9,6 +9,8 @@ import { getShopifyClient, type ShopifyClient } from '../services/shopify/client
 import { corrigerSuivi, expeditionPortant, fulfillOrder } from '../services/shopify/fulfill.ts';
 import { listOrders, quoteSearchValue, type ShippingAddress } from '../services/shopify/orders.ts';
 import { abimeParExcel } from '../services/suppliers/importColis.ts';
+import { ajouterPhoto, manquePhotos, nombrePhotos, PHOTOS_MIN } from '../services/reshipment/photosRetour.ts';
+import { decodePhoto, photoSchema } from './parcels.ts';
 
 /**
  * Le portail d'une agence de retours.
@@ -492,6 +494,162 @@ export async function agencyPortalRoutes(app: FastifyInstance): Promise<void> {
       });
 
       return reply.send({ envoye: true });
+    },
+  );
+
+  /*
+   * Les retours qui arrivent à l'agence.
+   *
+   * L'agence photographie chaque paire à la réception — trois photos au
+   * moins — avant de la déclarer reçue : c'est sur ces photos que le marchand
+   * valide l'échange ou le remboursement, ou refuse le retour.
+   */
+  app.get<{ Params: { id: string }; Querystring: { token?: string } }>(
+    '/api/agence/:id/retours',
+    async (request, reply) => {
+      const agence = await autoriser(request, reply);
+      if (!agence) return;
+
+      const dossiers = await prisma.returnCase.findMany({
+        where: {
+          merchantId: agence.merchantId,
+          agencyId: agence.id,
+          origine: 'RETOUR',
+          controleLe: null,
+          refuseLe: null,
+          status: { in: ['LABEL_SENT', 'SHIPPED', 'IN_TRANSIT', 'RECEIVED'] },
+        },
+        orderBy: { createdAt: 'asc' },
+        take: 100,
+        select: {
+          id: true,
+          orderName: true,
+          customerName: true,
+          productTitle: true,
+          variantTitle: true,
+          sku: true,
+          reason: true,
+          trackingNumber: true,
+          status: true,
+          receivedAt: true,
+          photos: { orderBy: { createdAt: 'asc' }, select: { id: true, source: true } },
+        },
+      });
+
+      return reply.send({
+        min: PHOTOS_MIN,
+        retours: dossiers.map(({ photos, ...dossier }) => ({
+          ...dossier,
+          recu: dossier.status === 'RECEIVED',
+          photos,
+          // La réception se déclare sur SES photos : celles du client montrent la paire avant le voyage.
+          photosAgence: photos.filter((photo) => photo.source === 'AGENCE').length,
+        })),
+      });
+    },
+  );
+
+  app.get<{ Params: { id: string; photoId: string }; Querystring: { token?: string } }>(
+    '/api/agence/:id/retours/photos/:photoId',
+    async (request, reply) => {
+      const agence = await autoriser(request, reply);
+      if (!agence) return;
+      const photo = await prisma.returnPhoto.findFirst({
+        where: { id: request.params.photoId, merchantId: agence.merchantId, returnCase: { agencyId: agence.id } },
+        select: { data: true, mime: true },
+      });
+      if (!photo) return reply.code(404).send({ error: 'Photo introuvable' });
+      return reply.type(photo.mime).header('Cache-Control', 'private, max-age=3600').send(Buffer.from(photo.data));
+    },
+  );
+
+  app.post<{ Params: { id: string; caseId: string }; Querystring: { token?: string } }>(
+    '/api/agence/:id/retours/:caseId/photos',
+    { bodyLimit: 4 * 1024 * 1024 },
+    async (request, reply) => {
+      const agence = await autoriser(request, reply);
+      if (!agence) return;
+      const parsed = z.object({ photo: photoSchema }).safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ code: 'photo', error: 'Photo illisible : reprenez-la.' });
+
+      const dossier = await prisma.returnCase.findFirst({
+        where: { id: request.params.caseId, merchantId: agence.merchantId, agencyId: agence.id, controleLe: null, refuseLe: null },
+        select: { id: true },
+      });
+      if (!dossier) return reply.code(404).send({ code: 'introuvable', error: 'Ce retour n’est pas confié à votre agence.' });
+
+      const image = decodePhoto(parsed.data.photo);
+      const photo = await ajouterPhoto({
+        merchantId: agence.merchantId,
+        returnCaseId: dossier.id,
+        source: 'AGENCE',
+        mime: image.mime,
+        data: image.data,
+      });
+      await recordAudit({
+        merchantId: agence.merchantId,
+        actorType: 'SUPPLIER',
+        actorId: `agence:${agence.id}`,
+        action: 'agency.return_photo',
+        targetType: 'return',
+        targetId: dossier.id,
+        metadata: { photoId: photo.id },
+        ipAddress: request.ip,
+      });
+      return reply.code(201).send({ id: photo.id, photosAgence: await nombrePhotos(agence.merchantId, dossier.id, 'AGENCE') });
+    },
+  );
+
+  /** Une photo ratée : l'agence la retire tant que le retour n'est pas décidé. */
+  app.delete<{ Params: { id: string; photoId: string }; Querystring: { token?: string } }>(
+    '/api/agence/:id/retours/photos/:photoId',
+    async (request, reply) => {
+      const agence = await autoriser(request, reply);
+      if (!agence) return;
+      const supprimees = await prisma.returnPhoto.deleteMany({
+        where: {
+          id: request.params.photoId,
+          merchantId: agence.merchantId,
+          source: 'AGENCE',
+          returnCase: { agencyId: agence.id, controleLe: null, refuseLe: null },
+        },
+      });
+      if (!supprimees.count) return reply.code(404).send({ error: 'Photo introuvable' });
+      return reply.send({ deleted: true });
+    },
+  );
+
+  /** « Reçue » : seulement avec trois photos prises par l'agence. */
+  app.post<{ Params: { id: string; caseId: string }; Querystring: { token?: string } }>(
+    '/api/agence/:id/retours/:caseId/recue',
+    async (request, reply) => {
+      const agence = await autoriser(request, reply);
+      if (!agence) return;
+      const dossier = await prisma.returnCase.findFirst({
+        where: { id: request.params.caseId, merchantId: agence.merchantId, agencyId: agence.id, controleLe: null, refuseLe: null },
+        select: { id: true, receivedAt: true },
+      });
+      if (!dossier) return reply.code(404).send({ code: 'introuvable', error: 'Ce retour n’est pas confié à votre agence.' });
+
+      const n = await nombrePhotos(agence.merchantId, dossier.id, 'AGENCE');
+      if (n < PHOTOS_MIN) {
+        return reply.code(409).send({ code: 'photos', manque: PHOTOS_MIN - n, error: manquePhotos(n) });
+      }
+      await prisma.returnCase.update({
+        where: { id: dossier.id },
+        data: { status: 'RECEIVED', receivedAt: dossier.receivedAt ?? new Date() },
+      });
+      await recordAudit({
+        merchantId: agence.merchantId,
+        actorType: 'SUPPLIER',
+        actorId: `agence:${agence.id}`,
+        action: 'agency.return_received',
+        targetType: 'return',
+        targetId: dossier.id,
+        metadata: { photos: n },
+        ipAddress: request.ip,
+      });
+      return reply.send({ recu: true });
     },
   );
 }

@@ -16372,7 +16372,51 @@ button.rup-chiffre:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--
 .ech-geste { display: flex; justify-content: flex-end; white-space: nowrap; }
 .ech-attente { padding: 5px 10px; border-radius: 8px; background: var(--inset); color: var(--ink-mute); font-size: 12.5px; }
 .ech-aide { margin: 10px 0 0; font-size: 12.5px; color: var(--ink-mute); }
-.ech-fen { width: min(560px, 100%); }
+.ech-fen { width: min(620px, 100%); }
+/* Les photos de la paire, en tête du contrôle : on décide en les regardant. */
+.ech-photos { display: flex; flex-direction: column; gap: 8px; }
+.ech-photos-tete { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.ech-photos-tete b { font-size: 13.5px; font-weight: 600; }
+.ech-photos-manque { color: var(--warn-ink); }
+.ech-photos-ok { color: var(--ok-ink); }
+.ech-photos-rang { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+.ech-photos-rang .rp-vignette { width: 132px; height: 132px; flex: none; }
+.ech-photos-vide { margin: 0; padding: 12px; border-radius: 12px; background: var(--warn-soft); color: var(--warn-ink); font-size: 13px; }
+.ech-refus { display: flex; flex-direction: column; gap: 6px; }
+.ech-refus label { font-size: 13px; font-weight: 600; }
+.ech-refus textarea { padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; font: inherit; font-size: 13.5px; resize: vertical; }
+
+/* La fenêtre des photos d'un retour. */
+.rp-fen { width: min(720px, 100%); }
+.rp-corps { gap: 14px; }
+.rp-compte { margin: 0; font-size: 13.5px; font-weight: 600; color: var(--ok-ink); }
+.rp-compte.rp-manque { color: var(--warn-ink); }
+.rp-grille { display: flex; flex-wrap: wrap; gap: 10px; }
+.rp-vignette { position: relative; display: block; width: 120px; height: 120px; }
+.rp-vignette img { width: 100%; height: 100%; border-radius: 12px; object-fit: cover; background: var(--inset); }
+.rp-vignette i {
+  position: absolute; left: 6px; bottom: 6px; padding: 1px 7px; border-radius: 7px;
+  background: rgb(0 0 0 / 58%); color: #fff; font-size: 11px; font-style: normal;
+}
+.rp-vignette > button[data-rp-suppr] {
+  position: absolute; top: -7px; right: -7px; display: grid; place-items: center; width: 26px; height: 26px;
+  border: 0; border-radius: 13px; background: var(--ink); color: #fff; cursor: pointer;
+}
+.rp-vignette > button[data-rp-suppr] svg { width: 12px; height: 12px; }
+.rp-mail { height: auto; display: flex; flex-direction: column; gap: 6px; }
+.rp-mail img { height: 120px; }
+.rp-ajout { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.rp-mails h3 { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--ink-mute); }
+.rp-vide { margin: 0; font-size: 13px; color: var(--ink-mute); }
+
+/* Le compte des photos sur la ligne du dossier : orange tant qu'il en manque. */
+.ret-photos {
+  display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 8px; border: 0; border-radius: 8px;
+  background: var(--warn-soft); color: var(--warn-ink); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; vertical-align: middle;
+}
+.ret-photos svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; }
+.ret-photos-ok { background: var(--ok-soft); color: var(--ok-ink); }
+.ret-refus { display: block; margin-top: 4px; color: #c9342f; font-size: 12px; }
 .ech-corps { gap: 10px; }
 .ech-paire { display: flex; flex-direction: column; padding: 10px 12px; border-radius: 12px; background: var(--inset); }
 .ech-paire b { font-weight: 600; }

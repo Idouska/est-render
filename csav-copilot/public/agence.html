@@ -35,6 +35,15 @@
         <span data-t="ag.testBanner">Vos saisies sont enregistrées, mais aucune commande n’est expédiée et aucun client n’est prévenu.</span>
       </p>
 
+      <!-- Les retours qui arrivent : trois photos à la réception, puis « Reçue ».
+           C'est sur ces photos que le marchand décide de l'échange ou du
+           remboursement. Cachée quand il n'y a rien à recevoir. -->
+      <section id="ag-sec-retours" hidden>
+        <h1 data-t="ag.returns">Retours à recevoir</h1>
+        <p class="ag-note" data-t="ag.returnsHint">À l’arrivée du colis : 3 photos au moins de la paire (vue d’ensemble, semelles, boîte et étiquette, défaut s’il y en a), puis « Reçue ».</p>
+        <div id="ag-retours"></div>
+      </section>
+
       <section>
         <h1 data-t="ag.toShip">À expédier</h1>
         <p class="ag-note" id="ag-adresses" hidden data-t="ag.addressDown">
