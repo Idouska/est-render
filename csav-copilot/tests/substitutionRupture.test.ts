@@ -167,7 +167,8 @@ const html = lire('public/workspace.html');
 test('cinq entrées de menu, et l’accueil d’abord', () => {
   const entrees = [...html.matchAll(/data-view="(\w+)"/g)].map((m) => m[1]!);
   // Les échanges ont retrouvé leur onglet : un tableau, demandé par la note Retour/Échange.
-  assert.deepEqual(entrees, ['home', 'orders', 'catalog', 'tickets', 'echanges']);
+  // « 缺货 » juste après les commandes : une rupture se découvre en emballant.
+  assert.deepEqual(entrees, ['home', 'orders', 'rupture', 'catalog', 'tickets', 'echanges']);
   assert.match(workspace, /view: 'home',/);
 });
 

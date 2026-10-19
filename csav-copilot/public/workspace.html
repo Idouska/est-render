@@ -49,6 +49,18 @@
           <span class="wsnav-compte" id="ws-orders-count" hidden>0</span>
         </button>
 
+        <!-- 缺货 : une rupture se signale en trois gestes, et la réponse du
+             marchand s'y confirme d'un bouton. Le premier écran qu'un atelier
+             doit trouver sans lire : rouge, en tête. -->
+        <button type="button" data-view="rupture" id="ws-nav-rupture">
+          <span class="wsnav-tuile t-rouge" aria-hidden="true"><svg viewBox="0 0 20 20">
+            <path d="M10 3.5 17.5 16.5h-15z" />
+            <path d="M10 8.5v3.5M10 14.3v.2" />
+          </svg></span>
+          <span data-t="nav.ruptures">Ruptures</span>
+          <span class="wsnav-badge" id="ws-rupture-badge" hidden>0</span>
+        </button>
+
         <button type="button" data-view="catalog">
           <span class="wsnav-tuile t-violet" aria-hidden="true"><svg viewBox="0 0 20 20">
             <rect x="3" y="3.5" width="6" height="6" rx="1.4" />
@@ -184,6 +196,26 @@
                 </svg>
                 <span data-t="head.import">Importer un fichier</span>
               </button>
+            </span>
+            <!-- « 更多 » : en vue simple, tout ce qui sert une fois par jour —
+                 fichiers, import, colis, lots, tri — se range ici, et l'écran
+                 ne garde que les commandes. -->
+            <span class="cmd-pop cs-plus">
+              <button type="button" class="btn" id="ws-plus" aria-haspopup="menu" aria-expanded="false">
+                <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 10h.01M10 10h.01M15 10h.01" /></svg>
+                <span data-t="cs.more">Plus</span>
+              </button>
+              <div class="cmd-menu cmd-menu-droite" id="ws-plus-menu" role="menu" hidden>
+                <a class="cmd-item" id="ws-plus-xlsx" download data-t="head.xlsxItem">Excel (.xlsx)</a>
+                <a class="cmd-item" id="ws-plus-csv" download data-t="head.csv">CSV</a>
+                <button type="button" class="cmd-item" data-plus="import" data-t="head.import">Importer un fichier</button>
+                <hr class="cmd-sep" />
+                <button type="button" class="cmd-item" data-plus="tracking" data-t="sous.parcels">Colis enregistrés</button>
+                <button type="button" class="cmd-item" data-plus="lots" data-t="sous.lots">Lots reçus</button>
+                <hr class="cmd-sep" />
+                <button type="button" class="cmd-item" data-plus="tri" role="menuitemcheckbox" aria-checked="false" data-t="sort.model">Par modèle</button>
+                <button type="button" class="cmd-item" data-plus="vue" id="ws-plus-vue" data-t="cs.detailed">Vue détaillée</button>
+              </div>
             </span>
           </div>
         </header>
@@ -343,6 +375,28 @@
               placeholder="Numéro de suivi ou commande" />
           </label>
           <div id="track-rows"></div>
+        </section>
+
+        <!-- =============================================== 缺货 ========== -->
+        <!-- Pensé pour être compris sans lire : trois étapes numérotées, des
+             tuiles qu'on touche, des boutons de couleur. Sur ordinateur, « Mes
+             ruptures » à droite ; au téléphone, un second onglet. -->
+        <section id="view-rupture" class="oos" hidden>
+          <header class="oos-tete">
+            <span class="oos-logo" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 4.5 21 19.5H3zM12 10v4.5M12 17.2h.01" /></svg></span>
+            <h1 data-t="nav.ruptures">Ruptures</h1>
+          </header>
+          <div class="oos-onglets" id="oos-onglets" role="tablist">
+            <button type="button" role="tab" data-oos-onglet="signaler" aria-selected="true"><span data-t="oos.tabReport">Signaler</span></button>
+            <button type="button" role="tab" data-oos-onglet="mes" aria-selected="false"><span data-t="oos.mine">Mes ruptures</span><b class="oos-pastille" id="oos-n" hidden></b></button>
+          </div>
+          <div class="oos-cols" id="oos-cols" data-onglet="signaler">
+            <div class="oos-form" id="oos-form"></div>
+            <aside class="oos-mes" aria-labelledby="oos-mes-t">
+              <h2 id="oos-mes-t" data-t="oos.mine">Mes ruptures</h2>
+              <div id="oos-mes"></div>
+            </aside>
+          </div>
         </section>
 
         <!-- =========================================== CATALOGUE ========= -->
@@ -547,6 +601,44 @@
         <div class="modal-foot sig-pied">
           <button class="btn" id="issue-cancel" data-t="issue.cancel">Annuler</button>
           <button class="btn btn-primary" id="issue-send" data-t="issue.send" disabled>Envoyer au marchand</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 有问题 : un problème sur une commande, en un geste.
+         Cinq grosses tuiles de couleur ; ce que la commande sait déjà
+         s'affiche dessous (l'adresse, le téléphone) ; rien à écrire, sauf
+         pour « Autre ». Au téléphone, une feuille qui monte du bas. -->
+    <div class="modal-wrap pb-wrap" id="pb-modal">
+      <div class="modal pb" role="dialog" aria-modal="true" aria-labelledby="pb-titre">
+        <div class="pb-tete" id="pb-tete"></div>
+        <h2 class="pb-titre" id="pb-titre" data-t="pb.ask">Quel problème ?</h2>
+        <div class="pb-tuiles" id="pb-tuiles" role="radiogroup" aria-labelledby="pb-titre">
+          <button type="button" class="pb-tuile" role="radio" aria-checked="false" data-pb="ADDRESS" style="--c: #ff9500">
+            <span class="pb-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11zM12 12.5a2.5 2.5 0 1 0 0-5a2.5 2.5 0 0 0 0 5z" /></svg></span>
+            <span data-t="pb.ADDRESS">Adresse fausse</span>
+          </button>
+          <button type="button" class="pb-tuile" role="radio" aria-checked="false" data-pb="PHONE" style="--c: #0a84ff">
+            <span class="pb-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6.6 3.5h2.6l1.4 4-2 1.3a11 11 0 0 0 6.6 6.6l1.3-2 4 1.4v2.6a2 2 0 0 1-2.2 2A17.5 17.5 0 0 1 4.6 5.7a2 2 0 0 1 2-2.2z" /></svg></span>
+            <span data-t="pb.PHONE">Téléphone faux</span>
+          </button>
+          <button type="button" class="pb-tuile" role="radio" aria-checked="false" data-pb="DAMAGE" style="--c: #af52de">
+            <span class="pb-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 8.5h16v11H4zM8.5 8.5V6a1.5 1.5 0 0 1 1.5-1.5h4A1.5 1.5 0 0 1 15.5 6v2.5M10 12l4 4M14 12l-4 4" /></svg></span>
+            <span data-t="pb.DAMAGE">Abîmé</span>
+          </button>
+          <button type="button" class="pb-tuile" role="radio" aria-checked="false" data-pb="STOCK" style="--c: #ff3b30">
+            <span class="pb-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 4.5 21 19.5H3zM12 10v4.5M12 17.2h.01" /></svg></span>
+            <span data-t="pb.STOCK">Rupture</span>
+          </button>
+          <button type="button" class="pb-tuile" role="radio" aria-checked="false" data-pb="OTHER" style="--c: #8e8e93">
+            <span class="pb-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.5 3.5V17A2.5 2.5 0 0 1 4 14.5z" /></svg></span>
+            <span data-t="pb.OTHER">Autre</span>
+          </button>
+        </div>
+        <div class="pb-info" id="pb-info"></div>
+        <div class="pb-pied">
+          <button type="button" class="pb-annuler" id="pb-annuler" data-t="issue.cancel">Annuler</button>
+          <button type="button" class="pb-envoyer" id="pb-envoyer" data-t="pb.send" disabled>Envoyer au marchand</button>
         </div>
       </div>
     </div>
