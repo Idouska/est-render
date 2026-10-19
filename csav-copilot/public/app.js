@@ -11797,8 +11797,18 @@ function echangeLien(item) {
  * Ce bloc n'apparaît que pour un échange dont on sait ce que le client veut —
  * sans cela, personne ne saurait quoi envoyer.
  */
+/* Les photos du dossier, comptées : en orange tant qu'il en manque pour décider. */
+function photosChip(item) {
+  const n = item.photos ?? 0;
+  return `<button class="ret-photos${n >= 3 ? ' ret-photos-ok' : ''}" type="button" data-ret-photos="${esc(item.id)}"
+    title="${esc(n >= 3 ? 'Photos du retour' : `Photos du retour : ${3 - n} de plus avant de décider`)}" aria-label="Photos du retour (${n})">
+    <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="5.5" width="15" height="11" rx="2" /><circle cx="10" cy="11" r="3.2" /><path d="M7 5.5 8.2 3.5h3.6L13 5.5" /></svg>${n}/3
+  </button>`;
+}
+
 function blocEchange(item) {
-  if (item.resolution !== 'EXCHANGE' || !item.wantedTitle) return '';
+  // Refusé au vu des photos : plus rien à envoyer, le motif est sous les étiquettes.
+  if (item.resolution !== 'EXCHANGE' || !item.wantedTitle || item.refuseLe) return '';
 
   const qui = item.exchangeAgence
     ? `${esc(item.exchangeAgence)}${item.exchangePays ? ` (${esc(nomPays(item.exchangePays))})` : ''}`
@@ -11941,7 +11951,7 @@ function renderEchanges(box) {
           <span class="ech-cell"><b>${esc(nomPaire(item.wantedTitle, item.wantedVariantTitle))}</b><small class="${change ? 'ech-change' : ''}">${esc(change ? 'modèle changé' : 'même modèle, autre déclinaison')}</small>${ecartEchangeMarkup(item)}</span>
           <span class="ech-cell"><span class="mono">${esc(item.trackingNumber ?? '—')}</span><small>${esc(item.labelSent ? 'bon fourni' : 'bon à envoyer')}</small></span>
           <span class="ech-cell"><span class="rup-file rup-file-${ton}">${esc(etat)}</span><small class="rup-file-sous">${esc(sous)}</small></span>
-          <span class="ech-geste">${geste}${supprimer}</span>
+          <span class="ech-geste">${fait ? '' : photosChip(item)}${geste}${supprimer}</span>
         </div>`;
       })
       .join('')}`
@@ -11971,13 +11981,157 @@ function ecartEchangeMarkup(item) {
   return `<small class="ech-ecart ech-ecart-${ton}"><b>${esc(montant)}</b> · ${esc(texte)}</small>`;
 }
 
-const fenEch = { dossier: null, envoi: false };
+const fenEch = { dossier: null, envoi: false, photos: null, refus: false, mode: 'echange' };
+
+/** Qui a apporté la photo. */
+const SOURCE_PHOTO = { CLIENT: 'Client', AGENCE: 'Agence', MARCHAND: 'Vous' };
+
+/* ---------------------------------------------------- photos d'un retour --
+ * Celles du client (jointes à ses mails, ou reçues autrement), celles de
+ * l'agence à la réception, les vôtres. Trois au moins avant de décider.
+ */
+const fenPhotos = { dossier: null, source: 'MARCHAND', donnees: null, apres: null };
+
+async function ouvrirPhotosRetour(item, apres = null) {
+  if (!item) return;
+  fenPhotos.dossier = item;
+  fenPhotos.apres = apres;
+  fenPhotos.donnees = null;
+  $('rp-sub').textContent = [item.orderName, item.customerName, nomPaire(item.productTitle, item.variantTitle)].filter(Boolean).join(' · ');
+  renderPhotosRetour();
+  $('rp-modal').hidden = false;
+  $('rp-modal').classList.add('open');
+  await chargerPhotosRetour();
+}
+
+async function chargerPhotosRetour() {
+  const item = fenPhotos.dossier;
+  if (!item) return;
+  try {
+    fenPhotos.donnees = await api(`/api/returns/${item.id}/photos`);
+  } catch (error) {
+    toast(error.message, true);
+    fenPhotos.donnees = { min: 3, photos: [], mails: [] };
+  }
+  renderPhotosRetour();
+}
+
+function renderPhotosRetour() {
+  const d = fenPhotos.donnees;
+  document.querySelectorAll('#rp-source [data-rp-source]').forEach((bouton) =>
+    bouton.setAttribute('aria-pressed', String(bouton.dataset.rpSource === fenPhotos.source)),
+  );
+  if (!d) {
+    $('rp-compte').textContent = 'Chargement…';
+    $('rp-grille').innerHTML = '';
+    $('rp-mails-bloc').hidden = true;
+    return;
+  }
+  const manque = Math.max(0, d.min - d.photos.length);
+  $('rp-compte').textContent = manque
+    ? `${d.photos.length} photo${d.photos.length > 1 ? 's' : ''} · encore ${manque} avant de pouvoir valider ou refuser.`
+    : `${d.photos.length} photos · assez pour décider.`;
+  $('rp-compte').classList.toggle('rp-manque', manque > 0);
+  $('rp-grille').innerHTML = d.photos.length
+    ? d.photos
+        .map(
+          (photo) => `<span class="rp-vignette">
+            <a href="/api/returns/photos/${esc(photo.id)}" target="_blank" rel="noopener"><img src="/api/returns/photos/${esc(photo.id)}" alt="" loading="lazy" /></a>
+            <i>${esc(SOURCE_PHOTO[photo.source] ?? '')}</i>
+            <button type="button" data-rp-suppr="${esc(photo.id)}" title="Retirer la photo" aria-label="Retirer la photo">${ico('close')}</button>
+          </span>`,
+        )
+        .join('')
+    : '<p class="rp-vide">Aucune photo pour l’instant.</p>';
+  $('rp-mails-bloc').hidden = !d.mails?.length;
+  $('rp-mails').innerHTML = (d.mails ?? [])
+    .map(
+      (piece) => `<span class="rp-vignette rp-mail">
+        <a href="/api/attachments/${esc(piece.id)}" target="_blank" rel="noopener"><img src="/api/attachments/${esc(piece.id)}" alt="${esc(piece.filename)}" loading="lazy" /></a>
+        <button class="btn btn-small" type="button" data-rp-mail="${esc(piece.id)}">Ajouter</button>
+      </span>`,
+    )
+    .join('');
+}
+
+function fermerPhotosRetour() {
+  $('rp-modal').hidden = true;
+  $('rp-modal').classList.remove('open');
+  const apres = fenPhotos.apres;
+  fenPhotos.dossier = null;
+  fenPhotos.apres = null;
+  apres?.();
+  void loadReturns();
+}
+
+$('rp-fermer')?.addEventListener('click', fermerPhotosRetour);
+$('rp-modal')?.addEventListener('click', async (event) => {
+  if (event.target === event.currentTarget) return fermerPhotosRetour();
+  const source = event.target.closest('[data-rp-source]');
+  if (source) {
+    fenPhotos.source = source.dataset.rpSource;
+    renderPhotosRetour();
+    return;
+  }
+  const item = fenPhotos.dossier;
+  if (!item) return;
+  const mail = event.target.closest('[data-rp-mail]');
+  if (mail) {
+    mail.disabled = true;
+    try {
+      await api(`/api/returns/${item.id}/photos`, { method: 'POST', body: JSON.stringify({ attachmentId: mail.dataset.rpMail }) });
+      toast('Photo du client ajoutée au dossier.');
+    } catch (error) {
+      toast(error.message, true);
+    }
+    await chargerPhotosRetour();
+    return;
+  }
+  const suppr = event.target.closest('[data-rp-suppr]');
+  if (suppr) {
+    if (!(await confirmer('Retirer cette photo du dossier ?', { action: 'Retirer', danger: true, icone: 'corbeille' }))) return;
+    try {
+      await api(`/api/returns/photos/${suppr.dataset.rpSuppr}`, { method: 'DELETE' });
+    } catch (error) {
+      toast(error.message, true);
+    }
+    await chargerPhotosRetour();
+  }
+});
+$('rp-modal')?.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') fermerPhotosRetour();
+});
+$('rp-fichiers')?.addEventListener('change', async (event) => {
+  const item = fenPhotos.dossier;
+  const fichiers = [...(event.target.files ?? [])];
+  event.target.value = '';
+  if (!item || !fichiers.length) return;
+  try {
+    for (const fichier of fichiers) {
+      const photo = await shrinkReturnPhoto(fichier);
+      await api(`/api/returns/${item.id}/photos`, { method: 'POST', body: JSON.stringify({ photo, source: fenPhotos.source }) });
+    }
+    toast(fichiers.length > 1 ? `${fichiers.length} photos ajoutées.` : 'Photo ajoutée.');
+  } catch (error) {
+    toast(error.message, true);
+  }
+  await chargerPhotosRetour();
+});
 
 function ouvrirControleEchange(item) {
   if (!item) return;
   fenEch.dossier = item;
   fenEch.envoi = false;
+  fenEch.photos = null;
+  fenEch.refus = false;
+  // Un échange se valide en renvoyant une paire ; un remboursement, en le
+  // faisant passer dans « À rembourser ». Les deux sur les mêmes photos.
+  fenEch.mode = item.resolution === 'REFUND' ? 'remboursement' : 'echange';
   $('ech-title').textContent = `Contrôle · ${item.orderName ?? ''}`.trim();
+  $('ech-refus').hidden = true;
+  $('ech-refus-motif').value = '';
+  $('ech-refuser').textContent = 'Refuser le retour';
+  $('ech-valider').textContent = fenEch.mode === 'remboursement' ? 'Valider le remboursement' : 'Valider l’échange';
   $('ech-sub').textContent = [item.customerName, item.agency?.name ? `reçue par ${item.agency.name}` : 'paire reçue'].filter(Boolean).join(' · ');
   $('ech-revient').innerHTML = `<b>${esc(nomPaire(item.productTitle, item.variantTitle))}</b><small>la paire qui revient${
     item.reason === 'DEFECT' ? ' · défaut : elle sortira comme inutilisable' : ' · elle entrera au stock retours'
@@ -11990,22 +12144,84 @@ function ouvrirControleEchange(item) {
       !paire.reusedAt &&
       (item.wantedSku ? paire.sku === item.wantedSku : paire.productTitle === item.wantedTitle && (paire.variantTitle ?? '') === (item.wantedVariantTitle ?? '')),
   );
-  $('ech-envoyer').innerHTML = `<b>À renvoyer : ${esc(nomPaire(item.wantedTitle, item.wantedVariantTitle))}</b><small>${esc(
-    voulue
-      ? `Une paire identique est dans le stock retours${voulue.agency?.name ? ` (${voulue.agency.name})` : ''} : elle partira de là.`
-      : 'Pas de paire identique en stock : la notification part chez l’atelier du modèle.',
-  )}</small>`;
+  $('ech-envoyer').innerHTML =
+    fenEch.mode === 'remboursement'
+      ? '<b>Remboursement</b><small>Il passera dans « À rembourser », au prix payé sur la commande.</small>'
+      : `<b>À renvoyer : ${esc(nomPaire(item.wantedTitle, item.wantedVariantTitle))}</b><small>${esc(
+          voulue
+            ? `Une paire identique est dans le stock retours${voulue.agency?.name ? ` (${voulue.agency.name})` : ''} : elle partira de là.`
+            : 'Pas de paire identique en stock : la notification part chez l’atelier du modèle.',
+        )}</small>`;
   $('ech-modal').querySelectorAll('[data-ech-critere]').forEach((caseACocher) => (caseACocher.checked = false));
+  renderPhotosControle();
   majControleEchange();
   $('ech-modal').hidden = false;
   $('ech-modal').classList.add('open');
+  void chargerPhotosControle();
+}
+
+/* Les photos de la paire, en tête de la fenêtre : la décision se prend dessus. */
+async function chargerPhotosControle() {
+  const item = fenEch.dossier;
+  if (!item) return;
+  try {
+    const donnees = await api(`/api/returns/${item.id}/photos`);
+    if (fenEch.dossier !== item) return;
+    fenEch.photos = donnees;
+  } catch (error) {
+    fenEch.photos = { min: 3, photos: [], mails: [], erreur: error.message };
+  }
+  renderPhotosControle();
+  majControleEchange();
+}
+
+function renderPhotosControle() {
+  const d = fenEch.photos;
+  if (!d) {
+    $('ech-photos').innerHTML = '<p class="ech-photos-vide">Chargement des photos…</p>';
+    return;
+  }
+  const manque = Math.max(0, d.min - d.photos.length);
+  $('ech-photos').innerHTML = `<div class="ech-photos-tete">
+      <b class="${manque ? 'ech-photos-manque' : 'ech-photos-ok'}">${d.photos.length} photo${d.photos.length > 1 ? 's' : ''} · ${
+        manque ? `encore ${manque} avant de décider` : 'assez pour décider'
+      }</b>
+      <button class="btn btn-small" type="button" data-ech-photos>${manque ? 'Ajouter des photos' : 'Gérer les photos'}</button>
+    </div>
+    ${
+      d.photos.length
+        ? `<div class="ech-photos-rang">${d.photos
+            .map(
+              (photo) => `<a class="rp-vignette" href="/api/returns/photos/${esc(photo.id)}" target="_blank" rel="noopener">
+                <img src="/api/returns/photos/${esc(photo.id)}" alt="" loading="lazy" /><i>${esc(SOURCE_PHOTO[photo.source] ?? '')}</i></a>`,
+            )
+            .join('')}</div>`
+        : `<p class="ech-photos-vide">${esc(
+            d.erreur ?? (d.mails?.length ? 'Pas encore de photo au dossier : le client en a joint à ses mails.' : 'Pas encore de photo : ni du client, ni de l’agence.'),
+          )}</p>`
+    }`;
 }
 
 function majControleEchange() {
   const tous = [...$('ech-modal').querySelectorAll('[data-ech-critere]')].every((caseACocher) => caseACocher.checked);
-  $('ech-pied').textContent = tous ? 'La paire retournée entre dans Stock retours.' : 'Cochez les trois points du contrôle.';
-  $('ech-pied').classList.toggle('ra-pied-manque', !tous);
-  $('ech-valider').disabled = !tous || fenEch.envoi;
+  const d = fenEch.photos;
+  const manque = d ? Math.max(0, d.min - d.photos.length) : null;
+  const photosOk = manque === 0;
+  $('ech-pied').textContent =
+    manque === null
+      ? 'Chargement des photos…'
+      : !photosOk
+        ? `Il manque ${manque} photo${manque > 1 ? 's' : ''} de la paire : 3 au moins avant de décider.`
+        : fenEch.refus
+          ? 'Le retour sera refusé : ni échange ni remboursement.'
+          : !tous
+            ? 'Cochez les trois points du contrôle.'
+            : fenEch.dossier?.reason === 'DEFECT'
+              ? 'La paire sortira du stock comme défectueuse.'
+              : 'La paire retournée entre dans Stock retours.';
+  $('ech-pied').classList.toggle('ra-pied-manque', !photosOk || (!tous && !fenEch.refus));
+  $('ech-valider').disabled = !tous || !photosOk || fenEch.envoi || fenEch.refus;
+  $('ech-refuser').disabled = !photosOk || fenEch.envoi;
 }
 
 function fermerControleEchange() {
@@ -12013,6 +12229,47 @@ function fermerControleEchange() {
   $('ech-modal').classList.remove('open');
   fenEch.dossier = null;
 }
+
+$('ech-photos')?.addEventListener('click', (event) => {
+  if (!event.target.closest('[data-ech-photos]') || !fenEch.dossier) return;
+  // La fenêtre des photos s'ouvre par-dessus ; à sa fermeture, le contrôle se relit.
+  void ouvrirPhotosRetour(fenEch.dossier, () => chargerPhotosControle());
+});
+
+/*
+ * « Refuser le retour » : un premier clic demande pourquoi, le second refuse.
+ * Le motif reste au dossier — c'est lui qu'on répondra au client.
+ */
+$('ech-refuser')?.addEventListener('click', async () => {
+  const item = fenEch.dossier;
+  if (!item || fenEch.envoi) return;
+  if (!fenEch.refus) {
+    fenEch.refus = true;
+    $('ech-refus').hidden = false;
+    $('ech-refuser').textContent = 'Confirmer le refus';
+    $('ech-refus-motif').focus();
+    majControleEchange();
+    return;
+  }
+  const motif = $('ech-refus-motif').value.trim();
+  if (motif.length < 3) {
+    toast('Dites pourquoi le retour est refusé.', true);
+    $('ech-refus-motif').focus();
+    return;
+  }
+  fenEch.envoi = true;
+  majControleEchange();
+  try {
+    await api(`/api/returns/${item.id}/refuser`, { method: 'POST', body: JSON.stringify({ motif }) });
+    fermerControleEchange();
+    toast(`Retour ${item.orderName ?? ''} refusé : ni échange ni remboursement.`);
+    await loadReturns();
+  } catch (error) {
+    fenEch.envoi = false;
+    majControleEchange();
+    toast(error.message, true);
+  }
+});
 
 $('ret-body')?.addEventListener('click', async (event) => {
   const lien = event.target.closest('[data-ech-lien]');
@@ -12052,6 +12309,11 @@ $('ret-body')?.addEventListener('click', async (event) => {
     }
     return;
   }
+  const photos = event.target.closest('[data-ret-photos]');
+  if (photos) {
+    void ouvrirPhotosRetour(state.returns.cases.find((item) => item.id === photos.dataset.retPhotos));
+    return;
+  }
   const bouton = event.target.closest('[data-ech-controler]');
   if (!bouton) return;
   ouvrirControleEchange(state.returns.cases.find((item) => item.id === bouton.dataset.echControler));
@@ -12070,15 +12332,18 @@ $('ech-valider')?.addEventListener('click', async () => {
   fenEch.envoi = true;
   majControleEchange();
   try {
-    const resultat = await api(`/api/returns/${item.id}/echange/valider`, {
+    const remboursement = fenEch.mode === 'remboursement';
+    const resultat = await api(`/api/returns/${item.id}/${remboursement ? 'remboursement' : 'echange'}/valider`, {
       method: 'POST',
       body: JSON.stringify({ conforme: true, propre: true, complet: true }),
     });
     fermerControleEchange();
     toast(
-      resultat.source === 'STOCK'
-        ? `Échange validé : la paire part du stock (${resultat.agence ?? 'agence'}).`
-        : `Échange validé : ${resultat.atelier ?? 'l’atelier'} est prévenu.`,
+      remboursement
+        ? 'Remboursement validé : il attend dans « À rembourser ».'
+        : resultat.source === 'STOCK'
+          ? `Échange validé : la paire part du stock (${resultat.agence ?? 'agence'}).`
+          : `Échange validé : ${resultat.atelier ?? 'l’atelier'} est prévenu.`,
     );
     await loadReturns();
   } catch (error) {
@@ -12170,7 +12435,9 @@ function renderReturnCases(box) {
               <span class="ret-tag ${item.resolution === 'REFUND' ? 'warn' : 'ok'}">${esc(
                 RETURN_RESOLUTIONS[item.resolution] ?? item.resolution,
               )}</span>
+              ${item.refuseLe ? '<span class="ret-tag bad">Refusé</span>' : ''}
             </div>
+            ${item.refuseLe && item.refusMotif ? `<small class="ret-refus">Refusé : ${esc(item.refusMotif)}</small>` : ''}
           </td>
           <td>
             <label class="switch" style="margin:0">
@@ -12204,13 +12471,18 @@ function renderReturnCases(box) {
                 .join('')}
             </select>
             ${
-              // Le contrôle à la réception : deux gestes, pas un menu.
-              item.status === 'RECEIVED'
+              // Le contrôle à la réception : un remboursement se décide sur les
+              // photos, dans la fenêtre de contrôle ; un échange a son bloc.
+              item.status === 'RECEIVED' && !item.controleLe && item.resolution === 'REFUND'
                 ? `<div class="ret-controle">
-                    <button class="btn btn-small" data-ret-restock="${esc(item.id)}">En stock</button>
-                    <button class="btn btn-small btn-danger" data-ret-defect="${esc(item.id)}">Défectueux</button>
+                    <button class="btn btn-small btn-primary" data-ech-controler="${esc(item.id)}">Contrôler et décider</button>
                   </div>`
-                : ''
+                : item.status === 'RECEIVED'
+                  ? `<div class="ret-controle">
+                      <button class="btn btn-small" data-ret-restock="${esc(item.id)}">En stock</button>
+                      <button class="btn btn-small btn-danger" data-ret-defect="${esc(item.id)}">Défectueux</button>
+                    </div>`
+                  : ''
             }
           </td>
           <td style="white-space:nowrap">
@@ -12220,25 +12492,7 @@ function renderReturnCases(box) {
                     title="Relancer ce client sur WhatsApp" aria-label="Relancer sur WhatsApp">${ico('whatsapp')}</button>`
                 : ''
             }
-            ${
-              item.hasPhoto
-                ? `<a class="ico" href="/api/returns/${esc(item.id)}/photo" target="_blank"
-                    rel="noopener" title="Voir la photo de l’article" aria-label="Voir la photo">
-                    <svg viewBox="0 0 20 20" aria-hidden="true">
-                      <rect x="2.5" y="5.5" width="15" height="11" rx="2" />
-                      <circle cx="10" cy="11" r="3.2" />
-                    </svg>
-                  </a>`
-                : ''
-            }
-            <label class="ico" title="${item.hasPhoto ? 'Remplacer la photo' : 'Ajouter une photo de l’article'}">
-              <svg viewBox="0 0 20 20" aria-hidden="true">
-                <rect x="2.5" y="5.5" width="15" height="11" rx="2" />
-                <circle cx="10" cy="11" r="3.2" />
-                <path d="M7 5.5 8.2 3.5h3.6L13 5.5" />
-              </svg>
-              <input type="file" accept="image/*" hidden data-ret-photo="${esc(item.id)}" />
-            </label>
+            ${photosChip(item)}
             <button class="ico ico-del" data-ret-del="${esc(item.id)}" title="Supprimer">
               <svg viewBox="0 0 20 20" aria-hidden="true">
                 <path d="M4 6h12M8.5 6V4.5h3V6M6 6l.8 10h6.4L14 6M8.4 9v4.6M11.6 9v4.6" />
@@ -12966,22 +13220,6 @@ $('ret-body').addEventListener('click', async (event) => {
 });
 
 $('ret-body').addEventListener('change', async (event) => {
-  const photoInput = event.target.closest('[data-ret-photo]');
-  if (photoInput?.files?.[0]) {
-    try {
-      const photo = await shrinkReturnPhoto(photoInput.files[0]);
-      await api(`/api/returns/${photoInput.dataset.retPhoto}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ photo }),
-      });
-      toast('Photo ajoutée au dossier.');
-      await loadReturns();
-    } catch (error) {
-      toast(error.message, true);
-    }
-    return;
-  }
-
   const track = event.target.closest('[data-ret-track]');
   const label = event.target.closest('[data-ret-label]');
   const status = event.target.closest('[data-ret-status]');

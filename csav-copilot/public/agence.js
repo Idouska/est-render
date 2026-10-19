@@ -17,7 +17,7 @@ const $ = (id) => document.getElementById(id);
 const agencyId = window.location.pathname.split('/').pop();
 const token = new URLSearchParams(window.location.search).get('token');
 
-const state = { lang: pickLang(), testMode: false, aExpedier: [], expediees: [], echanges: [], echangesEnvoyes: [] };
+const state = { lang: pickLang(), testMode: false, aExpedier: [], expediees: [], echanges: [], echangesEnvoyes: [], retours: [], min: 3 };
 let t = translator(state.lang);
 let locale = LOCALES[state.lang] ?? 'fr-FR';
 
@@ -95,7 +95,13 @@ function renderLangues() {
 
 async function charger() {
   try {
-    const data = await api(`/api/agence/${agencyId}/expeditions`);
+    const [data, retours] = await Promise.all([
+      api(`/api/agence/${agencyId}/expeditions`),
+      // Les retours à recevoir : une section en plus, qui ne bloque pas le reste.
+      api(`/api/agence/${agencyId}/retours`).catch(() => ({ retours: [] })),
+    ]);
+    state.retours = retours.retours ?? [];
+    state.min = retours.min ?? 3;
     state.testMode = Boolean(data.testMode);
     state.aExpedier = data.aExpedier ?? [];
     state.expediees = data.expediees ?? [];
@@ -206,7 +212,78 @@ function echangeMarkup(echange, faite) {
   </article>`;
 }
 
+/*
+ * Un retour qui arrive : la paire attendue, ses photos, et « Reçue » — qui ne
+ * s'allume qu'à la troisième photo prise par l'agence.
+ */
+function retourMarkup(retour) {
+  const photoUrl = (id) =>
+    `/api/agence/${encodeURIComponent(agencyId)}/retours/photos/${encodeURIComponent(id)}?token=${encodeURIComponent(token ?? '')}`;
+  const manque = Math.max(0, state.min - retour.photosAgence);
+  return `<article class="ag-cmd ag-retour" data-retour="${esc(retour.id)}">
+    <header>
+      <b>${esc(t('ag.returnOf', { commande: retour.orderName ?? '—' }))}</b>
+      <small>${esc(retour.recu ? t('ag.received') : retour.customerName ?? '')}</small>
+    </header>
+    <div class="ag-paire">
+      <div>
+        <b>${esc(retour.productTitle)}</b>
+        <small>${esc([retour.variantTitle, retour.sku].filter(Boolean).join(' · '))}</small>
+        ${retour.reason === 'DEFECT' ? `<small class="ag-defaut">${esc(t('ag.defect'))}</small>` : ''}
+        ${retour.trackingNumber ? `<small class="ag-sub mono">${esc(retour.trackingNumber)}</small>` : ''}
+      </div>
+    </div>
+    <div class="ag-photos">
+      ${retour.photos
+        .map(
+          (photo) => `<span class="ag-vignette">
+            <a href="${photoUrl(photo.id)}" target="_blank" rel="noopener"><img src="${photoUrl(photo.id)}" alt="" loading="lazy" /></a>
+            ${
+              photo.source === 'AGENCE' && !retour.recu
+                ? `<button type="button" data-photo-suppr="${esc(photo.id)}" aria-label="${esc(t('ag.photoDelete'))}">×</button>`
+                : `<i>${esc(t(`ag.src.${photo.source}`))}</i>`
+            }
+          </span>`,
+        )
+        .join('')}
+      <label class="ag-ajout">
+        <input type="file" accept="image/*" capture="environment" multiple hidden data-photo-ajout="${esc(retour.id)}" />
+        <span aria-hidden="true">+</span>${esc(t('ag.takePhoto'))}
+      </label>
+    </div>
+    ${
+      retour.recu
+        ? manque
+          ? `<p class="ag-manque">${esc(t('ag.receivedMissing', { n: manque }))}</p>`
+          : `<p class="ag-ok">${esc(t('ag.receivedHint'))}</p>`
+        : `<div class="ag-recu">
+            <small class="${manque ? 'ag-manque' : 'ag-pret'}">${esc(
+              manque ? t('ag.photosMissing', { n: manque }) : t('ag.photosReady'),
+            )}</small>
+            <button class="btn ${manque ? '' : 'btn-primary'}" type="button" data-recue="${esc(retour.id)}"${manque ? ' disabled' : ''}>${esc(
+              t('ag.markReceived'),
+            )}</button>
+          </div>`
+    }
+  </article>`;
+}
+
+/** La photo du téléphone, réduite avant l'envoi : quelques centaines de Ko. */
+async function reduirePhoto(fichier) {
+  const image = await createImageBitmap(fichier);
+  const echelle = Math.min(1, 1600 / Math.max(image.width, image.height));
+  const toile = document.createElement('canvas');
+  toile.width = Math.round(image.width * echelle);
+  toile.height = Math.round(image.height * echelle);
+  toile.getContext('2d').drawImage(image, 0, 0, toile.width, toile.height);
+  image.close?.();
+  return toile.toDataURL('image/jpeg', 0.78);
+}
+
 function render() {
+  $('ag-sec-retours').hidden = state.retours.length === 0;
+  $('ag-retours').innerHTML = state.retours.map(retourMarkup).join('');
+
   $('ag-a-expedier').innerHTML = state.aExpedier.length
     ? state.aExpedier
         .map(
@@ -389,6 +466,50 @@ async function envoyerEchange(formulaire) {
     bouton.textContent = libelle;
   }
 }
+
+/* ------------------------------------------------------------ les retours */
+
+$('ag-retours').addEventListener('change', async (event) => {
+  const champ = event.target.closest('[data-photo-ajout]');
+  if (!champ?.files?.length) return;
+  const caseId = champ.dataset.photoAjout;
+  const fichiers = [...champ.files];
+  toast(t('ag.photoSending'));
+  try {
+    for (const fichier of fichiers) {
+      const photo = await reduirePhoto(fichier);
+      await api(`/api/agence/${agencyId}/retours/${caseId}/photos`, { method: 'POST', body: { photo } });
+    }
+    toast(t('ag.photoSaved', { n: fichiers.length }));
+  } catch (erreur) {
+    toast(messageServeur(erreur), true);
+  }
+  await charger();
+});
+
+$('ag-retours').addEventListener('click', async (event) => {
+  const suppr = event.target.closest('[data-photo-suppr]');
+  if (suppr) {
+    suppr.disabled = true;
+    try {
+      await api(`/api/agence/${agencyId}/retours/photos/${suppr.dataset.photoSuppr}`, { method: 'DELETE' });
+    } catch (erreur) {
+      toast(messageServeur(erreur), true);
+    }
+    await charger();
+    return;
+  }
+  const recue = event.target.closest('[data-recue]');
+  if (!recue) return;
+  recue.disabled = true;
+  try {
+    await api(`/api/agence/${agencyId}/retours/${recue.dataset.recue}/recue`, { method: 'POST', body: {} });
+    toast(t('ag.receivedOk'));
+  } catch (erreur) {
+    toast(messageServeur(erreur), true);
+  }
+  await charger();
+});
 
 $('ag-refresh').addEventListener('click', () => void charger());
 

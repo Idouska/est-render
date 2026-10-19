@@ -1274,6 +1274,11 @@ model ReturnCase {
 
   note String? @db.Text
 
+  /// Retour refusé au vu des photos (paire portée, abîmée, incomplète…) :
+  /// ni échange ni remboursement, et le motif pour répondre au client.
+  refuseLe   DateTime?
+  refusMotif String?   @db.Text
+
   /// Dernier échange avec le client, pour repérer les dossiers silencieux :
   /// trois jours sans nouvelle et la relance WhatsApp se propose d'elle-même.
   lastContactAt DateTime @default(now())
@@ -1283,12 +1288,35 @@ model ReturnCase {
 
   merchant Merchant      @relation(fields: [merchantId], references: [id], onDelete: Cascade)
   agency   ReturnAgency? @relation(fields: [agencyId], references: [id], onDelete: SetNull)
+  photos   ReturnPhoto[]
 
   @@index([merchantId, status])
   @@index([merchantId, sku])
   @@index([merchantId, reusedShopifyOrderId])
   @@index([merchantId, exchangeSupplierId])
   @@index([merchantId, exchangeStockCaseId])
+}
+
+/// Une photo de la paire retournée. Trois au moins avant de décider : on ne
+/// rembourse ni ne renvoie une paire sur la foi d'une case cochée.
+///
+/// `source` dit qui l'a prise : CLIENT (jointe à son mail, ou transmise par le
+/// marchand), AGENCE (à la réception), MARCHAND.
+model ReturnPhoto {
+  id           String   @id @default(cuid())
+  merchantId   String
+  returnCaseId String
+  source       String
+  data         Bytes
+  mime         String
+  /// La pièce jointe du mail client d'où elle vient : la même ne s'ajoute pas deux fois.
+  attachmentId String?
+  createdAt    DateTime @default(now())
+
+  returnCase ReturnCase @relation(fields: [returnCaseId], references: [id], onDelete: Cascade)
+
+  @@index([returnCaseId])
+  @@index([merchantId])
 }
 
 enum ReturnReason {

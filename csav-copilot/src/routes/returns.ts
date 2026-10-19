@@ -19,7 +19,17 @@ import { choisirSource, type AtelierCandidat } from '../services/reshipment/echa
 import { datesDuGeste } from '../services/couts/datesRetour.ts';
 import { signAgencyToken } from '../lib/agencyToken.ts';
 import { env } from '../config/env.ts';
-import { calculerEcart, CHOIX_ECART, choixPourEcart, differenceReglee, envoyerLienDifference } from '../services/reshipment/difference.ts';
+import { calculerEcart, CHOIX_ECART, choixPourEcart, differenceReglee, envoyerLienDifference, prixPaye } from '../services/reshipment/difference.ts';
+import {
+  ajouterPhoto,
+  comptePhotos,
+  lirePieceJointe,
+  manquePhotos,
+  nombrePhotos,
+  photosDesMailsClient,
+  PHOTOS_MIN,
+} from '../services/reshipment/photosRetour.ts';
+import { getOrderById } from '../services/shopify/orders.ts';
 
 /**
  * Reshipment — les retours clients, et ce qu'on en refait.
@@ -108,6 +118,9 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
         include: { agency: { select: { id: true, name: true, country: true } } },
       })
     ).map(({ photoMime, ...item }) => ({ ...item, hasPhoto: Boolean(photoMime) }));
+    // Combien de photos : il en faut trois pour décider.
+    const photos = await comptePhotos(merchantId, cases.map((item) => item.id));
+    for (const item of cases) Object.assign(item, { photos: photos.get(item.id) ?? 0 });
 
     // Les dossiers silencieux : ouverts, et sans contact depuis trois jours.
     // C'est le compte qui doit faire mal — un retour qu'on laisse mourir est
@@ -335,9 +348,17 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
 
       const existing = await prisma.returnCase.findFirst({
         where: { id: request.params.id, merchantId },
-        select: { id: true, labelSentAt: true, receivedAt: true, unusableAt: true },
+        select: { id: true, labelSentAt: true, receivedAt: true, unusableAt: true, origine: true, controleLe: true, status: true },
       });
       if (!existing) return reply.code(404).send({ error: 'Dossier introuvable' });
+
+      // « En stock » ou « Défectueux » sur un retour client, c'est décider de
+      // son sort : pas sans les photos de la paire.
+      const decide = (parsed.data.status === 'RESTOCKED' || parsed.data.status === 'UNUSABLE') && parsed.data.status !== existing.status;
+      if (decide && existing.origine === 'RETOUR' && !existing.controleLe) {
+        const n = await nombrePhotos(merchantId, existing.id);
+        if (n < PHOTOS_MIN) return reply.code(409).send({ code: 'photos', error: manquePhotos(n) });
+      }
 
       const { touch, reusedOrderName, photo, ...fields } = parsed.data;
       const dates = datesDuGeste(existing, fields, new Date());
@@ -440,6 +461,266 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
       .header('Cache-Control', 'private, max-age=300')
       .send(Buffer.from(item.photoData));
   });
+
+  /*
+   * Les photos du dossier : trois au moins avant de décider. Le client les
+   * joint à ses mails, l'agence les prend à la réception, le marchand en
+   * ajoute — chacune garde qui l'a apportée.
+   */
+  app.get<{ Params: { id: string } }>('/api/returns/:id/photos', async (request, reply) => {
+    const { merchantId } = request.session;
+    const dossier = await prisma.returnCase.findFirst({
+      where: { id: request.params.id, merchantId },
+      select: { id: true, shopifyOrderId: true, customerEmail: true },
+    });
+    if (!dossier) return reply.code(404).send({ error: 'Dossier introuvable' });
+
+    const [photos, mails] = await Promise.all([
+      prisma.returnPhoto.findMany({
+        where: { merchantId, returnCaseId: dossier.id },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, source: true, createdAt: true, attachmentId: true },
+      }),
+      photosDesMailsClient(merchantId, dossier),
+    ]);
+    const dejaAjoutees = new Set(photos.map((photo) => photo.attachmentId).filter(Boolean));
+    return reply.send({
+      min: PHOTOS_MIN,
+      photos: photos.map(({ attachmentId, ...photo }) => photo),
+      // Les photos des mails du client qui ne sont pas encore au dossier.
+      mails: mails.filter((piece) => !dejaAjoutees.has(piece.id)),
+    });
+  });
+
+  app.get<{ Params: { photoId: string } }>('/api/returns/photos/:photoId', async (request, reply) => {
+    const { merchantId } = request.session;
+    const photo = await prisma.returnPhoto.findFirst({
+      where: { id: request.params.photoId, merchantId },
+      select: { data: true, mime: true },
+    });
+    if (!photo) return reply.code(404).send({ error: 'Photo introuvable' });
+    return reply.type(photo.mime).header('Cache-Control', 'private, max-age=3600').send(Buffer.from(photo.data));
+  });
+
+  app.post<{ Params: { id: string } }>(
+    '/api/returns/:id/photos',
+    { preHandler: requirePermission('reply'), bodyLimit: 4 * 1024 * 1024 },
+    async (request, reply) => {
+      const { merchantId, userId } = request.session;
+      const parsed = z
+        .object({
+          photo: photoSchema.optional(),
+          /** Une photo jointe par le client à un de ses mails. */
+          attachmentId: z.string().min(1).max(120).optional(),
+          /** Une photo que le client a envoyée autrement (WhatsApp…) : elle reste « client ». */
+          source: z.enum(['CLIENT', 'MARCHAND']).optional(),
+        })
+        .refine((corps) => Boolean(corps.photo) !== Boolean(corps.attachmentId))
+        .safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Photo invalide' });
+
+      const dossier = await prisma.returnCase.findFirst({
+        where: { id: request.params.id, merchantId },
+        select: { id: true },
+      });
+      if (!dossier) return reply.code(404).send({ error: 'Dossier introuvable' });
+
+      let image: { mime: string; data: Uint8Array<ArrayBuffer> } | null;
+      if (parsed.data.attachmentId) {
+        const deja = await prisma.returnPhoto.count({
+          where: { merchantId, returnCaseId: dossier.id, attachmentId: parsed.data.attachmentId },
+        });
+        if (deja) return reply.code(409).send({ error: 'Cette photo est déjà au dossier.' });
+        image = await lirePieceJointe(merchantId, parsed.data.attachmentId).catch(() => null);
+        if (!image) return reply.code(502).send({ error: 'Cette pièce jointe n’a pas pu être relue chez Gmail.' });
+      } else {
+        image = decodePhoto(parsed.data.photo!);
+      }
+
+      const photo = await ajouterPhoto({
+        merchantId,
+        returnCaseId: dossier.id,
+        source: parsed.data.attachmentId ? 'CLIENT' : (parsed.data.source ?? 'MARCHAND'),
+        mime: image.mime,
+        data: image.data,
+        attachmentId: parsed.data.attachmentId ?? null,
+      });
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId: userId,
+        action: 'return.photo_added',
+        targetType: 'return',
+        targetId: dossier.id,
+        metadata: { photoId: photo.id, depuisMail: Boolean(parsed.data.attachmentId) },
+      });
+      return reply.code(201).send({ id: photo.id, photos: await nombrePhotos(merchantId, dossier.id) });
+    },
+  );
+
+  app.delete<{ Params: { photoId: string } }>(
+    '/api/returns/photos/:photoId',
+    { preHandler: requirePermission('reply') },
+    async (request, reply) => {
+      const { merchantId, userId } = request.session;
+      const photo = await prisma.returnPhoto.findFirst({
+        where: { id: request.params.photoId, merchantId },
+        select: { id: true, returnCaseId: true, returnCase: { select: { controleLe: true, refuseLe: true } } },
+      });
+      if (!photo) return reply.code(404).send({ error: 'Photo introuvable' });
+      // Une décision prise garde ses preuves.
+      if (photo.returnCase.controleLe || photo.returnCase.refuseLe) {
+        return reply.code(409).send({ error: 'Le retour est déjà décidé : ses photos restent au dossier.' });
+      }
+      await prisma.returnPhoto.delete({ where: { id: photo.id } });
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId: userId,
+        action: 'return.photo_deleted',
+        targetType: 'return',
+        targetId: photo.returnCaseId,
+      });
+      return reply.send({ deleted: true });
+    },
+  );
+
+  /*
+   * Valider un remboursement : la paire est reçue, photographiée, contrôlée.
+   * Elle entre au stock (ou sort, si c'est un défaut) et le remboursement
+   * arrive dans « À rembourser », au prix payé sur la commande.
+   */
+  app.post<{ Params: { id: string } }>(
+    '/api/returns/:id/remboursement/valider',
+    { preHandler: requirePermission('reply') },
+    async (request, reply) => {
+      const { merchantId, userId } = request.session;
+      const parsed = z
+        .object({ conforme: z.literal(true), propre: z.literal(true), complet: z.literal(true) })
+        .safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({ code: 'controle', error: 'Cochez les trois points du contrôle.' });
+      }
+      const dossier = await prisma.returnCase.findFirst({
+        where: { id: request.params.id, merchantId },
+        select: {
+          id: true, status: true, reason: true, resolution: true, controleLe: true, refuseLe: true, test: true,
+          orderName: true, shopifyOrderId: true, customerName: true, customerEmail: true,
+          productTitle: true, variantTitle: true, sku: true, prixRetour: true, devise: true,
+        },
+      });
+      if (!dossier) return reply.code(404).send({ code: 'introuvable', error: 'Dossier introuvable' });
+      if (dossier.resolution !== 'REFUND') {
+        return reply.code(409).send({ code: 'pas_remboursement', error: 'Ce retour est un échange : validez l’échange.' });
+      }
+      if (dossier.controleLe || dossier.refuseLe) {
+        return reply.code(409).send({ code: 'deja_decide', error: 'Ce retour est déjà décidé.' });
+      }
+      if (!['RECEIVED', 'RESTOCKED'].includes(dossier.status)) {
+        return reply.code(409).send({ code: 'pas_recue', error: 'La paire n’est pas encore reçue : validez à sa réception.' });
+      }
+      const photos = await nombrePhotos(merchantId, dossier.id);
+      if (photos < PHOTOS_MIN) return reply.code(409).send({ code: 'photos', error: manquePhotos(photos) });
+
+      // Le prix payé, relu sur la commande : jamais un montant venu de l'écran.
+      let montant = dossier.prixRetour === null ? null : Number(dossier.prixRetour);
+      let devise = dossier.devise;
+      if (montant === null && dossier.shopifyOrderId) {
+        const client = await getShopifyClient(merchantId).catch(() => null);
+        const commande = client ? await getOrderById(client, dossier.shopifyOrderId).catch(() => null) : null;
+        if (commande) {
+          montant = prixPaye(commande.lineItems, dossier);
+          devise = devise ?? commande.currency ?? null;
+        }
+      }
+
+      const maintenant = new Date();
+      const defaut = dossier.reason === 'DEFECT';
+      await prisma.$transaction([
+        prisma.returnCase.update({
+          where: { id: dossier.id },
+          data: defaut
+            ? { controleLe: maintenant, status: 'UNUSABLE', unusableAt: maintenant, unusableNote: 'Retour pour défaut, contrôlé à la réception.' }
+            : { controleLe: maintenant, status: 'RESTOCKED', restockedAt: maintenant },
+        }),
+        prisma.remboursementAFaire.create({
+          data: {
+            merchantId,
+            test: dossier.test,
+            returnCaseId: dossier.id,
+            orderName: dossier.orderName,
+            shopifyOrderId: dossier.shopifyOrderId,
+            article: [dossier.productTitle, dossier.variantTitle].filter(Boolean).join(' · '),
+            montant,
+            devise,
+            motif: 'Retour contrôlé, photos à l’appui',
+            clientNom: dossier.customerName,
+            clientEmail: dossier.customerEmail,
+            demandeParId: userId ?? null,
+          },
+        }),
+      ]);
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId: userId,
+        action: 'return.refund_validated',
+        targetType: 'return',
+        targetId: dossier.id,
+        metadata: { photos, montant },
+      });
+      return reply.send({ ok: true, montant, devise });
+    },
+  );
+
+  /*
+   * Refuser le retour au vu des photos : ni échange ni remboursement. Le
+   * motif reste au dossier — c'est lui qu'on répondra au client.
+   */
+  app.post<{ Params: { id: string } }>(
+    '/api/returns/:id/refuser',
+    { preHandler: requirePermission('reply') },
+    async (request, reply) => {
+      const { merchantId, userId } = request.session;
+      const parsed = z.object({ motif: z.string().trim().min(3).max(600) }).safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ code: 'motif', error: 'Dites pourquoi le retour est refusé.' });
+
+      const dossier = await prisma.returnCase.findFirst({
+        where: { id: request.params.id, merchantId },
+        select: { id: true, controleLe: true, refuseLe: true, exchangeStockCaseId: true, exchangeSupplierId: true },
+      });
+      if (!dossier) return reply.code(404).send({ code: 'introuvable', error: 'Dossier introuvable' });
+      if (dossier.controleLe || dossier.refuseLe || dossier.exchangeStockCaseId || dossier.exchangeSupplierId) {
+        return reply.code(409).send({ code: 'deja_decide', error: 'Ce retour est déjà décidé.' });
+      }
+      const photos = await nombrePhotos(merchantId, dossier.id);
+      if (photos < PHOTOS_MIN) return reply.code(409).send({ code: 'photos', error: manquePhotos(photos) });
+
+      await prisma.$transaction([
+        prisma.returnCase.update({
+          where: { id: dossier.id },
+          data: { refuseLe: new Date(), refusMotif: parsed.data.motif, status: 'CLOSED' },
+        }),
+        // Une paire du stock promise à cet échange y retourne.
+        prisma.returnCase.updateMany({
+          where: { merchantId, reusedReturnCaseId: dossier.id },
+          data: { reusedReturnCaseId: null, reusedAt: null, status: 'RESTOCKED' },
+        }),
+        // La différence de prix ne se rembourse pas sur un retour refusé.
+        prisma.remboursementAFaire.deleteMany({ where: { merchantId, returnCaseId: dossier.id, faitLe: null } }),
+      ]);
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId: userId,
+        action: 'return.refused',
+        targetType: 'return',
+        targetId: dossier.id,
+        metadata: { motif: parsed.data.motif, photos },
+      });
+      return reply.send({ ok: true });
+    },
+  );
 
   /**
    * Pré-remplissage du dossier depuis le numéro de commande.
@@ -916,6 +1197,9 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
     { preHandler: requirePermission('reply') },
     async (request, reply) => {
       const { merchantId, userId } = request.session;
+      // Pas de paire envoyée sans les photos de celle qui revient.
+      const photos = await nombrePhotos(merchantId, request.params.id);
+      if (photos < PHOTOS_MIN) return reply.code(409).send({ code: 'photos', error: manquePhotos(photos) });
       const resultat = await organiserEchange(merchantId, userId, request.params.id, request.ip);
       return reply.code(resultat.code).send(resultat.corps);
     },
@@ -952,6 +1236,8 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
       if (!['RECEIVED', 'RESTOCKED'].includes(dossier.status)) {
         return reply.code(409).send({ code: 'pas_recue', error: 'La paire n’est pas encore reçue : validez à sa réception.' });
       }
+      const photos = await nombrePhotos(merchantId, dossier.id);
+      if (photos < PHOTOS_MIN) return reply.code(409).send({ code: 'photos', error: manquePhotos(photos) });
 
       const maintenant = new Date();
       const defaut = dossier.reason === 'DEFECT';
@@ -1329,9 +1615,14 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
 
       const paire = await prisma.returnCase.findFirst({
         where: { id: request.params.id, merchantId },
-        select: { id: true, status: true, reusedOrderName: true, reusedShopifyOrderId: true, receivedAt: true },
+        select: { id: true, status: true, reusedOrderName: true, reusedShopifyOrderId: true, receivedAt: true, origine: true, controleLe: true },
       });
       if (!paire) return reply.code(404).send({ error: 'Dossier introuvable' });
+      // À la réception, « Défectueux » décide du retour : pas sans ses photos.
+      if (paire.origine === 'RETOUR' && !paire.controleLe && paire.status !== 'RESTOCKED') {
+        const n = await nombrePhotos(merchantId, paire.id);
+        if (n < PHOTOS_MIN) return reply.code(409).send({ code: 'photos', error: manquePhotos(n) });
+      }
       if (paire.reusedShopifyOrderId) {
         return reply.code(409).send({
           code: 'reservee',

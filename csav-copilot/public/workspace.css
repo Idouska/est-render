@@ -1788,6 +1788,30 @@ input:focus, select:focus, textarea:focus {
   text-decoration: none;
 }
 
+/* Les retours à recevoir : les photos d'abord, « Reçue » à la troisième. */
+.ag-photos { display: flex; flex-wrap: wrap; gap: 8px; }
+.ag-vignette { position: relative; width: 84px; height: 84px; }
+.ag-vignette img { width: 100%; height: 100%; border-radius: 10px; object-fit: cover; background: var(--paper); }
+.ag-vignette button {
+  position: absolute; top: -7px; right: -7px; width: 26px; height: 26px; border: 0; border-radius: 13px;
+  background: var(--ink); color: #fff; font-size: 16px; line-height: 1; cursor: pointer;
+}
+.ag-vignette i {
+  position: absolute; left: 4px; bottom: 4px; padding: 1px 6px; border-radius: 6px;
+  background: rgb(0 0 0 / 55%); color: #fff; font-size: 10.5px; font-style: normal;
+}
+.ag-ajout {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  width: 84px; height: 84px; border: 2px dashed var(--brand); border-radius: 10px;
+  color: var(--brand); font-size: 11.5px; font-weight: 600; text-align: center; cursor: pointer;
+}
+.ag-ajout span { font-size: 24px; line-height: 1; }
+.ag-recu { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.ag-manque { color: var(--warn-ink, #b25e00); font-weight: 600; }
+.ag-pret { color: var(--ok-ink, #1b7a35); font-weight: 600; }
+.ag-ok { margin: 0; color: var(--ok-ink, #1b7a35); font-size: 13.5px; font-weight: 600; }
+.ag-defaut { color: var(--bad, #c0392b) !important; font-weight: 600; }
+
 .ag-envoi,
 .ag-echange { display: flex; flex-wrap: wrap; gap: 8px; }
 .ag-envoi input,
