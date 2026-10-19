@@ -47,3 +47,10 @@ test('le catalogue fictif lit le filtre comme Shopify', async () => {
   const anciens = await listVariants(client, { query: `title:${mot}*`, limit: 100 });
   assert.ok(!anciens.some((option) => option.productTitle === nom && !(option.variantTitle ?? '').toLowerCase().includes(mot.toLowerCase())));
 });
+
+test('les ruptures de l’atelier restent dans « Ruptures de stock », pas dans le SAV client', async () => {
+  const { readFileSync } = await import('node:fs');
+  const tickets = readFileSync(new URL('../src/routes/tickets.ts', import.meta.url), 'utf8');
+  const filtre = tickets.slice(tickets.indexOf('function buildTicketWhere'), tickets.indexOf('function buildTicketWhere') + 3000);
+  assert.match(filtre, /NOT: \{ gmailThreadId: \{ startsWith: 'supplier:', endsWith: ':STOCK' \} \},/);
+});
