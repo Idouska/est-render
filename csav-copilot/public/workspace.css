@@ -2616,6 +2616,15 @@ input:focus, select:focus, textarea:focus {
 .wsapp .upd.rup-p-traite .upd-head .pill { background: var(--warn-soft); color: var(--warn-ink); }
 .wsapp .upd.rup-p-classe .upd-head .pill { background: var(--ok-soft); color: var(--ok-ink); }
 
+/* La paire concernée, avant le changement : on sait laquelle prendre en main. */
+.wsapp .upd-article { display: flex; align-items: center; gap: 12px; min-width: 0; margin: 2px 0 10px; }
+.wsapp .upd-article img, .wsapp .upd-article > i {
+  width: 64px; height: 64px; flex: none; border-radius: 12px; object-fit: cover; background: #e5e5ea;
+}
+.wsapp .upd-article span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.wsapp .upd-article b { font-size: 16px; line-height: 1.3; overflow-wrap: anywhere; }
+.wsapp .upd-article small { font-size: 13.5px; color: var(--ink-soft); }
+
 /* Avant, barré ; après, en grand : on lit le changement d'un coup d'œil. */
 .wsapp .upd-swap {
   flex-direction: column;
@@ -3852,6 +3861,7 @@ html:has(.wsapp ~ .modal-wrap.open) { overflow: hidden; }
 .wsapp .cs-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: -4px 0 14px; }
 /* En vue détaillée, seul « Vue simple » reste : le chemin du retour. */
 body:not(.ws-simple) .wsapp .cs-action:not([data-plus='vue']) { display: none; }
+.wsapp .cs-actions[hidden] { display: none; }
 .wsapp .cs-action {
   display: inline-flex; align-items: center; gap: 7px; min-height: 42px; padding: 0 14px;
   border: 0; border-radius: 12px; background: var(--card); box-shadow: var(--shadow);

@@ -16,7 +16,7 @@ import { verifySupplierWorkspaceToken } from '../lib/supplierToken.ts';
 import { ordersToCsv } from '../services/export/ordersCsv.ts';
 import { ordersToXlsx } from '../services/export/ordersXlsx.ts';
 import { getShopifyClient } from '../services/shopify/client.ts';
-import { listOrders, quoteSearchValue } from '../services/shopify/orders.ts';
+import { getOrderById, listOrders, quoteSearchValue } from '../services/shopify/orders.ts';
 import { listProducts, productWithVariants } from '../services/shopify/catalog.ts';
 import { corrigerSuivi, expeditionPortant, fulfillOrder } from '../services/shopify/fulfill.ts';
 import { draftChangeReply } from '../services/ai/changeReply.ts';
@@ -123,7 +123,9 @@ async function authorize(
  * `null` signifie « aucune restriction » ; un tableau vide, « rien à voir ».
  */
 async function allowedOrderIds(workspace: Workspace): Promise<string[] | null> {
-  if (workspace.ordersAccess === 'ALL') return null;
+  // Plus de « tout le carnet » : l'atelier voyait une commande avant que le
+  // marchand l'ait rapprochée du stock retours, et pouvait expédier une paire
+  // déjà servie par une agence. Un ancien réglage « ALL » vaut « confiées ».
   if (workspace.ordersAccess === 'NONE') return [];
 
   // Confiée = une escalade lui a été adressée, un colis de cette commande
@@ -1157,8 +1159,42 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
         },
       });
 
+      /*
+       * Le produit de chaque commande, nom et photo : « 36 → 38.5 » ne dit pas
+       * quelle paire changer. Relu chez Shopify pour les vingt commandes les
+       * plus utiles — en attente d'abord, l'ordre de la liste. Une commande
+       * introuvable laisse la carte telle qu'avant, sans photo.
+       */
+      const aRelire = [
+        ...new Set(updates.map((update) => update.shopifyOrderId).filter((id): id is string => Boolean(id))),
+      ].slice(0, 20);
+      const articles = new Map<string, Array<{ title: string; variantTitle: string | null; quantity: number; image: string | null }>>();
+      if (aRelire.length) {
+        const client = await getShopifyClient(workspace.merchantId).catch(() => null);
+        if (client) {
+          await Promise.all(
+            aRelire.map(async (id) => {
+              const order = await getOrderById(client, id).catch(() => null);
+              if (!order) return;
+              articles.set(
+                id,
+                (order.lineItems ?? []).map((ligne) => ({
+                  title: ligne.title,
+                  variantTitle: ligne.variantTitle ?? null,
+                  quantity: ligne.quantity,
+                  image: ligne.image ?? null,
+                })),
+              );
+            }),
+          );
+        }
+      }
+
       return reply.send({
-        updates,
+        updates: updates.map((update) => ({
+          ...update,
+          articles: (update.shopifyOrderId && articles.get(update.shopifyOrderId)) || [],
+        })),
         pending: updates.filter((update) => update.status === 'PENDING').length,
       });
     },

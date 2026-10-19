@@ -2208,8 +2208,9 @@ Remboursement : sous 5 jours ouvrés après réception du retour."></textarea>
           <div class="field">
             <label for="sup-f-access">Commandes visibles depuis son lien</label>
             <select id="sup-f-access">
+              <!-- Plus de « tout le carnet » : l'atelier verrait une commande
+                   avant le contrôle du stock retours. -->
               <option value="ASSIGNED">Celles qu'on lui a confiées</option>
-              <option value="ALL">Tout le carnet de commandes</option>
               <option value="NONE">Aucune</option>
             </select>
             <small id="sup-f-access-help"></small>

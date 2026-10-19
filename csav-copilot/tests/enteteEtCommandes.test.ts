@@ -112,7 +112,7 @@ test('l’en-tête commun suit l’onglet, sans se prendre pour un onglet', () =
   assert.match(espace, /<header class="wshead cmd-tete" id="cmd-tete" data-onglet="orders" hidden>/);
   assert.match(espace, /<div class="cmd-barre" id="cmd-barre" data-onglet="orders" hidden>/);
   const vue = corps(espaceJs, 'function setView(');
-  assert.match(vue, /for \(const id of \['cmd-tete', 'cmd-barre'\]\) \{\n\s+\$\(id\)\.hidden = view !== 'orders';\n\s+\$\(id\)\.dataset\.onglet = courant;/);
+  assert.match(vue, /for \(const id of \['cmd-tete', 'cmd-barre', 'ws-plus-menu'\]\) \{\n\s+\$\(id\)\.hidden = view !== 'orders';\n\s+\$\(id\)\.dataset\.onglet = courant;/);
   // Ce qui ne sert qu'à « À préparer » se retire sur les deux autres.
   assert.match(espaceCss, /\.wsapp \.cmd-tete:not\(\[data-onglet='orders'\]\) \.cmd-sous,\n\.wsapp \.cmd-tete:not\(\[data-onglet='orders'\]\) \.wshead-acts \{ display: none; \}/);
   // Le compte « À préparer » se voit sur l'onglet.

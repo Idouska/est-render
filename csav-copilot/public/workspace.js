@@ -1845,7 +1845,8 @@ function setView(view) {
 
   // L'en-tête des commandes est commun à leurs trois onglets ; ce qui ne
   // sert qu'à « À préparer » se retire sur les deux autres (CSS, `data-onglet`).
-  for (const id of ['cmd-tete', 'cmd-barre']) {
+  // Les boutons de la vue simple aussi : ils ne servent qu'aux commandes.
+  for (const id of ['cmd-tete', 'cmd-barre', 'ws-plus-menu']) {
     $(id).hidden = view !== 'orders';
     $(id).dataset.onglet = courant;
   }
@@ -2471,6 +2472,30 @@ $('catalog-marque')?.addEventListener('change', (event) => {
  * colis est déjà parti, le dire évite au marchand d'annoncer au client un
  * changement qui n'aura pas lieu.
  */
+/*
+ * La paire concernée, nom et photo : « 36 → 38.5 » ne dit pas laquelle
+ * changer. Celle dont la déclinaison porte l'ancienne valeur d'abord ; à
+ * défaut, la première de la commande.
+ */
+function articleDeDemande(update) {
+  const articles = update.articles ?? [];
+  if (!articles.length) return '';
+  const avant = (update.beforeValue ?? '').trim().toLowerCase();
+  const concerne =
+    (avant && articles.find((article) => (article.variantTitle ?? '').toLowerCase().split(/\s*\/\s*/).includes(avant))) ||
+    articles[0];
+  const autres = articles.length - 1;
+  return `<div class="upd-article">
+    ${concerne.image ? `<img src="${esc(concerne.image)}" alt="" loading="lazy" />` : '<i aria-hidden="true"></i>'}
+    <span>
+      <b>${esc(concerne.title)}</b>
+      <small>${esc(
+        [concerne.variantTitle, concerne.quantity > 1 ? `× ${concerne.quantity}` : null].filter(Boolean).join(' · '),
+      )}${autres > 0 ? ` · ${esc(t('cs.moreItems', { n: autres }))}` : ''}</small>
+    </span>
+  </div>`;
+}
+
 /** La carte d'une demande de changement : ce qui est demandé, et deux boutons. */
 function carteUpdate(update) {
   const STATUS = {
@@ -2487,6 +2512,7 @@ function carteUpdate(update) {
         <span class="tag tone-${status.cls}">${esc(status.label)}</span>
         <span class="upd-when">${new Date(update.createdAt).toLocaleDateString(locale)}</span>
       </div>
+      ${articleDeDemande(update)}
 
       ${
         update.kind === 'TRACKING' && update.beforeValue
