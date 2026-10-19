@@ -14806,7 +14806,7 @@ function modifierDemande(id) {
 }
 
 async function annulerDemande(bouton) {
-  if (!await confirmer('Annuler cette demande ?\n\nElle disparaît aussi de l’espace du fournisseur.', { action: 'Annuler la demande', annuler: 'Garder', danger: true, icone: 'message' })) return;
+  if (!await confirmer('Annuler cette demande ?\n\nElle disparaît aussi de l’espace du fournisseur.', { action: 'Annuler la demande', annuler: 'Garder', danger: true, icone: 'annuler' })) return;
   bouton.disabled = true;
   try {
     await api(`/api/changes/${bouton.dataset.chgCancel}`, { method: 'DELETE' });
@@ -15278,7 +15278,7 @@ $('view-update')?.addEventListener('click', async (event) => {
     return gesteUpdate(bouton, () => api(`/api/updates/${bouton.dataset.upfRelancer}/relancer`, { method: 'POST', body: '{}' }), 'Atelier relancé par mail.');
   }
   if ((bouton = cible('[data-upf-annuler]'))) {
-    if (!(await confirmer('Annuler cette demande ?\n\nElle disparaît aussi de l’espace du fournisseur.', { action: 'Annuler la demande', annuler: 'Garder', danger: true, icone: 'message' }))) return;
+    if (!(await confirmer('Annuler cette demande ?\n\nElle disparaît aussi de l’espace du fournisseur.', { action: 'Annuler la demande', annuler: 'Garder', danger: true, icone: 'annuler' }))) return;
     return gesteUpdate(bouton, () => api(`/api/changes/${bouton.dataset.upfAnnuler}`, { method: 'DELETE' }), 'Demande annulée.');
   }
   if ((bouton = cible('[data-upf-prevenu]'))) {
@@ -15709,8 +15709,9 @@ function applyAppearance() {
     theme === 'dark' ||
     (theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
 
-  if (dark) document.documentElement.dataset.theme = 'dark';
-  else delete document.documentElement.dataset.theme;
+  // « light » écrit en toutes lettres : sans lui, l'alerte suivrait le Mac en
+  // sombre au milieu d'une page claire.
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
 }
 
 /*
