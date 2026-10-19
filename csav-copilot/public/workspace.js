@@ -58,6 +58,9 @@ const state = {
      Pegasus d'affilée épargne quatorze changements de carton. Mémorisé : c'est
      une façon de travailler, pas un réglage du matin. */
   sort: localStorage.getItem(`ws.sort.${supplierId}`) ?? 'time',
+  /* La vue simple — une carte par commande — sauf si l'atelier a choisi la
+     vue détaillée dans « 更多 ». Mémorisée : c'est une façon de travailler. */
+  simple: localStorage.getItem(`ws.vue.${supplierId}`) !== 'detail',
   parcels: [],
   catalog: null,
   /* Fiche produit ouverte dans le catalogue, et fiches déjà chargées. */
@@ -516,6 +519,11 @@ function majCompteCommandes(n) {
  * champ de recherche garde le curseur si on était en train de taper.
  */
 function renderOrders() {
+  // Vue simple : les cartes, la recherche au-dessus (voir `dessinerCartes`).
+  if (state.simple) {
+    $('ws-orders').before($('cmd-outils'));
+    return dessinerCartes();
+  }
   const outils = $('cmd-outils');
   const champ = $('ws-cmd-q');
   const tapait = document.activeElement === champ;
@@ -935,6 +943,9 @@ async function load() {
     // L'étape 1 de l'import : la même feuille, pour la même période.
     $('bulk-xlsx').href = $('ws-xlsx').href;
     $('ws-dl-xlsx').href = $('ws-xlsx').href;
+    $('ws-plus-xlsx').href = $('ws-xlsx').href;
+    $('ws-plus-csv').href = $('ws-csv').href;
+    majMenuPlus();
 
     renderOrders();
   } catch (error) {
@@ -1676,29 +1687,31 @@ async function loadAlerts() {
     return;
   }
 
+  /*
+   * Une bande de couleur par demande : rouge quand il ne faut pas expédier,
+   * orange sinon. « 知道了 » la confirme d'un geste — la demande tient sur la
+   * bande, rien n'est caché derrière. Pour la refuser, « Voir » mène au ticket.
+   */
   const box = $('ws-alerts');
   box.innerHTML = alerts
-    .map(
-      (alert) => `<div class="alert" data-alert="${alert.id}">
-        <b>${escapeHtml(alertTitle(alert.kind))}${
-          alert.orderName ? ` · ${escapeHtml(alert.orderName)}` : ''
-        }</b>
-        ${
-          alert.afterValue
-            ? `<p class="alert-swap">${escapeHtml(alert.beforeValue ?? '—')} → <b>${escapeHtml(
-                alert.afterValue,
-              )}</b></p>`
-            : ''
-        }
-        ${alert.message ? `<p>${escapeHtml(alert.message)}</p>` : ''}
-        <button class="btn btn-small" data-open-updates="1">${escapeHtml(
-          // « Voir » et non « C'est fait » : ce bouton ouvre l'écran, il ne
-          // confirme rien. Une étiquette qui promet une action que le clic ne
-          // fait pas est celle qu'on presse sans lire.
-          t('alert.open'),
-        )}</button>
-      </div>`,
-    )
+    .map((alert) => {
+      const rouge = ['HOLD', 'CANCEL'].includes(alert.kind);
+      return `<div class="alert alert-${rouge ? 'rouge' : 'orange'}" data-alert="${alert.id}">
+        <div class="alert-txt">
+          <b>${escapeHtml([alert.orderName, alertTitle(alert.kind)].filter(Boolean).join(' · '))}</b>
+          ${
+            alert.afterValue
+              ? `<p class="alert-swap">${alert.beforeValue ? `${escapeHtml(alert.beforeValue)} → ` : ''}<b>${escapeHtml(alert.afterValue)}</b></p>`
+              : ''
+          }
+          ${alert.message ? `<p>${escapeHtml(alert.message)}</p>` : ''}
+        </div>
+        <div class="alert-acts">
+          <button class="alert-ok" type="button" data-alert-ok="${alert.id}">${escapeHtml(t('cs.gotIt'))}</button>
+          <button class="alert-voir" type="button" data-open-updates="1">${escapeHtml(t('alert.open'))}</button>
+        </div>
+      </div>`;
+    })
     .join('');
 
   // Une notification système quand le navigateur l'autorise : le fournisseur
@@ -1713,7 +1726,13 @@ async function loadAlerts() {
   // demande se lit en entier. Valider « pris en compte » sans avoir vu ce qui
   // change n'engage personne.
   box.querySelectorAll('[data-open-updates]').forEach((button) =>
-    button.addEventListener('click', () => setView('updates')),
+    button.addEventListener('click', () => ouvrirTickets('A_REPONDRE')),
+  );
+  box.querySelectorAll('[data-alert-ok]').forEach((button) =>
+    button.addEventListener('click', () => {
+      button.disabled = true;
+      void respond(button.dataset.alertOk, 'ACKNOWLEDGED');
+    }),
   );
 
   setBadge(alerts.length);
@@ -1760,6 +1779,8 @@ function rafraichirPastilles() {
   void rafraichirPastilleUpdates();
   void rafraichirPastilleRuptures();
   void rafraichirPastilleEchanges();
+  // La pastille de « 缺货 » : relue avec « Mes ruptures », une fois tout déclaré.
+  if (pret) void chargerMesRuptures();
 }
 rafraichirPastilles();
 setInterval(rafraichirPastilles, 120000);
@@ -1781,6 +1802,7 @@ const VIEWS = {
   catalog: loadCatalog,
   tickets: loadTickets,
   echanges: chargerEchanges,
+  rupture: chargerRupture,
 };
 
 /*
@@ -1798,8 +1820,9 @@ const ECRANS = {
   catalog: ['catalog'],
   tickets: ['tickets'],
   echanges: ['echanges'],
+  rupture: ['rupture'],
 };
-const TOUTES = ['home', 'orders', 'tracking', 'lots', 'catalog', 'tickets', 'echanges'];
+const TOUTES = ['home', 'orders', 'tracking', 'lots', 'catalog', 'tickets', 'echanges', 'rupture'];
 
 function setView(view) {
   state.view = view;
@@ -1920,6 +1943,7 @@ for (const id of ['ws-since', 'ws-until']) {
 const MENUS_COMMANDES = [
   ['ws-periode', 'ws-periode-menu'],
   ['ws-dl-plus', 'ws-dl-menu'],
+  ['ws-plus', 'ws-plus-menu'],
 ];
 
 function fermerMenusCommandes(sauf = null) {
@@ -3359,6 +3383,9 @@ function appliquerFonctionnalites() {
   // Les ruptures éteintes ne sont plus demandées : la liste des tickets et
   // l'accueil les omettent, et leur part de la pastille tombe à zéro.
   if (!ruptures) setRuptureBadge(0);
+  // La page 缺货 suit le même interrupteur que les ruptures de l'atelier.
+  const entree = $('ws-nav-rupture');
+  if (entree) entree.hidden = !ruptures;
 }
 
 /** Un fichier choisi suit la même lecture qu'un fichier déposé. */
@@ -4428,6 +4455,871 @@ function saisirColisDuLot(numero) {
   void chercherCommande(numero);
 }
 
+/* ==========================================================================
+   缺货 — UNE RUPTURE EN TROIS GESTES
+
+   Pensé pour qui lit mal l'écran, ou pas du tout la langue : le numéro au
+   pavé, l'article en le touchant, le délai d'un bouton de couleur. Rien à
+   écrire. « Mes ruptures » montre ce que le marchand a répondu, avec deux
+   gros boutons pour le confirmer.
+   ========================================================================== */
+
+state.oos = { onglet: 'signaler', num: '', resultats: [], commande: null, coches: new Set(), info: null, envoye: false, mes: [] };
+
+/* Les quatre délais, et leur couleur : vert proche, bleu plus loin, rouge
+   jamais, gris on ne sait pas. Envoyés en français (`INFOS_RUPTURE`). */
+const INFOS_OOS = [
+  ['j10', '#34c759'],
+  ['m1', '#0a84ff'],
+  ['fin', '#ff3b30'],
+  ['inconnue', '#8e8e93'],
+];
+
+/* Au doigt, le pavé de la page suffit : le clavier du téléphone ne doit pas
+   monter par-dessus. Au clavier d'un ordinateur, le champ se tape. */
+const auDoigt = window.matchMedia('(pointer: coarse)');
+
+async function chargerRupture() {
+  renderOos();
+  await chargerMesRuptures();
+}
+
+function renderOos() {
+  const etat = state.oos;
+  $('oos-cols').dataset.onglet = etat.onglet;
+  document.querySelectorAll('#oos-onglets [data-oos-onglet]').forEach((bouton) =>
+    bouton.setAttribute('aria-selected', String(bouton.dataset.oosOnglet === etat.onglet)),
+  );
+  $('oos-form').innerHTML = etat.envoye ? oosMerci() : etat.commande ? oosCommande() : oosNumero();
+  if (!etat.commande && !etat.envoye && !auDoigt.matches) {
+    const champ = $('oos-num');
+    champ?.focus();
+    champ?.setSelectionRange(champ.value.length, champ.value.length);
+  }
+}
+
+function oosNumero() {
+  const { num, resultats } = state.oos;
+  const touches = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'efface', '0', 'ok'];
+  return `<section class="oos-carte oos-etape1">
+    <h2 class="oos-h">${esc(t('oos.step1'))}</h2>
+    <label class="oos-ecran"><span aria-hidden="true">#</span><input id="oos-num" value="${esc(num)}"
+      inputmode="${auDoigt.matches ? 'none' : 'numeric'}" autocomplete="off" maxlength="12"
+      aria-label="${esc(t('oos.step1'))}" /></label>
+    <div class="oos-pave">${touches
+      .map((touche) =>
+        touche === 'efface'
+          ? `<button type="button" data-oos-touche="efface" aria-label="${esc(t('oos.erase'))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5h11v14H9l-6-7zM12.5 9.5l5 5M17.5 9.5l-5 5" /></svg></button>`
+          : touche === 'ok'
+            ? `<button type="button" class="oos-pave-ok" data-oos-chercher="1">${esc(t('oos.find'))}</button>`
+            : `<button type="button" data-oos-touche="${touche}">${touche}</button>`,
+      )
+      .join('')}</div>
+    <div class="oos-resultats" id="oos-res" aria-live="polite">${
+      resultats === null
+        ? `<p class="oos-note">${esc(t('oos.notFound'))}</p>`
+        : resultats.length > 1
+          ? resultats
+              .map(
+                (order, i) => `<button type="button" class="oos-res" data-oos-pick="${i}">
+                  <b>${esc(order.name ?? '')}</b><span>${esc([clientDeLaCommande(order), order.shippingAddress?.city].filter(Boolean).join(' · '))}</span>
+                </button>`,
+              )
+              .join('')
+          : ''
+    }</div>
+  </section>`;
+}
+
+function oosCommande() {
+  const { commande, coches, info } = state.oos;
+  const articles = commande.lineItems ?? [];
+  const n = coches.size;
+  return `<section class="oos-carte oos-cmd">
+      <span class="oos-cmd-txt"><b>${esc(commande.name ?? '')}</b><span>${esc(
+        [clientDeLaCommande(commande), commande.shippingAddress?.city].filter(Boolean).join(' · '),
+      )}</span></span>
+      <button type="button" class="oos-x" data-oos-retour="1" aria-label="${esc(t('oos.other'))}">${ICO_CROIX}</button>
+    </section>
+    <h2 class="oos-h">${esc(t('oos.step2'))}</h2>
+    <div class="oos-articles">${
+      articles.length
+        ? articles
+            .map(
+              (article, i) => `<button type="button" class="oos-article" role="checkbox" aria-checked="${coches.has(i)}" data-oos-article="${i}">
+                ${article.image ? `<img src="${esc(article.image)}" alt="" loading="lazy" />` : '<i aria-hidden="true"></i>'}
+                <b>${esc(article.title ?? '')}</b>
+                <span>${esc([article.variantTitle, article.quantity > 1 ? `× ${article.quantity}` : ''].filter(Boolean).join(' · '))}</span>
+                <span class="oos-coche" aria-hidden="true">${ICO_COCHE}</span>
+              </button>`,
+            )
+            .join('')
+        : `<p class="oos-note">${esc(t('oos.noItems'))}</p>`
+    }</div>
+    <h2 class="oos-h">${esc(t('oos.step3'))}</h2>
+    <div class="oos-infos">${INFOS_OOS.map(
+      ([cle, couleur]) => `<button type="button" class="oos-info" data-oos-info="${cle}" aria-pressed="${info === cle}"
+        style="--c: ${couleur}">${esc(t(`issue.info.${cle}`))}</button>`,
+    ).join('')}</div>
+    <button type="button" class="oos-gros oos-envoyer" data-oos-envoyer="1" ${n ? '' : 'disabled'}>${esc(
+      n ? t('oos.send', { n }) : t('oos.touchFirst'),
+    )}</button>`;
+}
+
+function oosMerci() {
+  return `<section class="oos-carte oos-merci">
+    <span class="oos-merci-rond" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></span>
+    <b>${esc(t('oos.thanks'))}</b>
+    <button type="button" class="oos-gros oos-bleu" data-oos-retour="1">${esc(t('oos.another'))}</button>
+  </section>`;
+}
+
+async function chercherOos() {
+  const num = state.oos.num.trim();
+  if (num.length < 2) return toast(t('oos.typeNumber'), true);
+  try {
+    const data = await api(`/api/workspace/${supplierId}/orders/search?q=${encodeURIComponent(num)}`);
+    const orders = data.orders ?? [];
+    // Le numéro exact l'emporte : « 1289 » ne doit pas hésiter avec #12890.
+    const exacte = orders.find((order) => (order.name ?? '').replace(/\D/g, '') === num.replace(/\D/g, ''));
+    if (exacte || orders.length === 1) return choisirCommandeOos(exacte ?? orders[0]);
+    state.oos.resultats = orders.length ? orders : null;
+  } catch (error) {
+    toast(messageServeur(error, 'orders.err'), true);
+  }
+  renderOos();
+}
+
+/** La commande choisie : son premier article est coché d'office, comme au signalement. */
+function choisirCommandeOos(order) {
+  Object.assign(state.oos, {
+    commande: order,
+    coches: new Set(order?.lineItems?.length === 1 ? [0] : []),
+    info: null,
+    envoye: false,
+    resultats: [],
+    onglet: 'signaler',
+  });
+  renderOos();
+}
+
+async function envoyerOos(bouton) {
+  const { commande, coches, info } = state.oos;
+  const lignes = commande.lineItems ?? [];
+  const articles = [...coches]
+    .sort((a, b) => a - b)
+    .map((rang) => lignes[rang])
+    .filter(Boolean)
+    .map((article) => {
+      const { couleur, taille } = repartirDeclinaison(article.variantTitle);
+      return {
+        product: article.title ?? null,
+        color: couleur || null,
+        size: taille || null,
+        sku: article.sku ?? null,
+        quantity: article.quantity ?? null,
+      };
+    });
+  if (!articles.length) return toast(t('oos.touchFirst'), true);
+  bouton.disabled = true;
+  try {
+    await api(`/api/workspace/${supplierId}/issues`, {
+      method: 'POST',
+      body: {
+        shopifyOrderId: commande.id,
+        orderName: commande.name,
+        customerEmail: commande.customer?.email ?? null,
+        kind: 'STOCK',
+        note: info ? INFOS_RUPTURE[info] : null,
+        articles,
+      },
+    });
+    state.oos.envoye = true;
+    renderOos();
+    void chargerMesRuptures();
+  } catch (error) {
+    bouton.disabled = false;
+    toast(messageServeur(error, 'orders.err'), true);
+  }
+}
+
+/* --------------------------------------------------------- mes ruptures -- */
+
+async function chargerMesRuptures() {
+  try {
+    const { signalements } = await api(`/api/workspace/${supplierId}/signalements`);
+    const ruptures = (signalements ?? []).filter((dossier) => dossier.motif === 'STOCK');
+    // Ce qui attend l'atelier d'abord, puis ce qui attend le marchand, puis le reste.
+    const rang = (dossier) => ({ A_REPONDRE: 0, ATTENTE: 1, CLOS: 2 })[statutRupture(dossier, false)] ?? 3;
+    state.oos.mes = ruptures.sort((a, b) => rang(a) - rang(b)).slice(0, 30);
+  } catch {
+    state.oos.mes = null;
+  }
+  renderMesRuptures();
+}
+
+function renderMesRuptures() {
+  const mes = state.oos.mes;
+  const aFaire = (mes ?? []).filter((dossier) => statutRupture(dossier, false) === 'A_REPONDRE').length;
+  for (const id of ['oos-n', 'ws-rupture-badge']) {
+    $(id).hidden = !aFaire;
+    $(id).textContent = String(aFaire);
+  }
+  if (state.view !== 'rupture') return;
+  $('oos-mes').innerHTML =
+    mes === null
+      ? `<p class="oos-note">${esc(t('oos.loadErr'))}</p>`
+      : mes.length
+        ? mes.map(carteMaRupture).join('')
+        : `<p class="oos-note">${esc(t('oos.none'))}</p>`;
+}
+
+/* La photo de l'article, si la commande est dans la liste du jour. */
+function imageDeRupture(dossier) {
+  const commande = state.orders.find((order) => order.name === dossier.orderName);
+  const ligne = commande?.lineItems?.find((item) => item.title === dossier.article?.produit) ?? commande?.lineItems?.[0];
+  return ligne?.image ?? null;
+}
+
+function carteMaRupture(dossier) {
+  const consigne = consigneCourante(dossier);
+  const statut = statutRupture(dossier, false);
+  const image = imageDeRupture(dossier);
+  const titre = [dossier.article?.produit, dossier.article?.couleur, dossier.article?.taille].filter(Boolean).join(' · ');
+  const propositions = (dossier.substitutions ?? []).filter((proposition) => !proposition.reponduLe);
+
+  let corps = '';
+  let couleur = 'orange';
+  if (consigne && !consigne.reponse) {
+    couleur = 'bleu';
+    const modeles = consigne.choix === 'REMPLACER' ? (consigne.modeles ?? []) : [];
+    corps = `<div class="oos-rep"><span>${esc(t('oos.merchantSays'))}</span><b>${esc(texteDe(consigne).titre)}</b>${
+      motDe(consigne) ? `<small>${esc(cite(motDe(consigne)))}</small>` : ''
+    }</div>${
+      modeles.length > 1
+        ? `<div class="oos-modeles">${modeles
+            .map(
+              (modele, rang) => `<label class="oos-modele"><input type="radio" name="oos-m-${esc(consigne.id)}" value="${rang}" />${
+                modele.image ? `<img src="${esc(modele.image)}" alt="" loading="lazy" />` : '<i aria-hidden="true"></i>'
+              }<span>${esc([modele.productTitle, modele.variantTitle].filter(Boolean).join(' · '))}</span></label>`,
+            )
+            .join('')}</div>`
+        : ''
+    }${
+      consigne.choix === 'MESSAGE'
+        ? `<button type="button" class="oos-gros oos-bleu" data-oos-tickets="1">${esc(t('oos.reply'))}</button>`
+        : `<div class="oos-deux">
+             <button type="button" class="oos-gros oos-vert" data-oos-ok="${esc(consigne.id)}">${esc(t('oos.ok'))}</button>
+             <button type="button" class="oos-gros oos-rouge" data-oos-non="${esc(consigne.id)}">${esc(t('oos.cannot'))}</button>
+           </div>`
+    }`;
+  } else if (propositions.length) {
+    couleur = 'bleu';
+    corps = `<div class="oos-rep"><span>${esc(t('oos.merchantSays'))}</span><b>${esc(t('oos.proposed', { n: propositions.length }))}</b></div>
+      <button type="button" class="oos-gros oos-bleu" data-oos-tickets="1">${esc(t('oos.see'))}</button>`;
+  } else if (consigne?.reponse === 'COMPRIS') {
+    couleur = 'vert';
+    corps = `<span class="oos-etat oos-etat-vert">${ICO_COCHE}${esc(texteDe(consigne).court || t('oos.confirmed'))}</span>`;
+  } else if (consigne) {
+    couleur = 'gris';
+    corps = `<span class="oos-etat oos-etat-gris">${esc(t('oos.toldCannot'))}</span>`;
+  } else if (statut === 'CLOS') {
+    couleur = 'gris';
+    corps = `<span class="oos-etat oos-etat-gris">${esc(t('rup.closed'))}</span>`;
+  } else {
+    corps = `<span class="oos-etat oos-etat-orange">${esc(t('oos.waiting'))}</span>`;
+  }
+
+  return `<article class="oos-ma oos-ma-${couleur}">
+    <div class="oos-ma-tete">
+      ${image ? `<img src="${esc(image)}" alt="" loading="lazy" />` : '<i aria-hidden="true"></i>'}
+      <span><b>${esc(dossier.orderName ?? '')}</b><small>${esc(titre)}</small></span>
+    </div>
+    ${corps}
+  </article>`;
+}
+
+async function repondreMaRupture(id, reponse, bouton) {
+  let modele = null;
+  const choix = $('oos-mes').querySelectorAll(`input[name="oos-m-${CSS.escape(id)}"]`);
+  if (reponse === 'COMPRIS' && choix.length) {
+    const coche = [...choix].find((radio) => radio.checked);
+    if (!coche) return toast(t('csg.chooseModel'), true);
+    modele = Number(coche.value);
+  }
+  bouton.closest('.oos-ma')?.querySelectorAll('button').forEach((autre) => {
+    autre.disabled = true;
+  });
+  try {
+    await api(`/api/workspace/${supplierId}/consignes/${id}`, {
+      method: 'POST',
+      // « Impossible » se dit sans écrire : la phrase part toute faite.
+      body: { reponse, note: reponse === 'IMPOSSIBLE' ? t('oos.cannotNote') : null, modele, langue: state.lang },
+    });
+    toast(t(reponse === 'COMPRIS' ? 'csg.sentOk' : 'csg.sentNo'));
+  } catch (error) {
+    toast(messageServeur(error, 'csg.err'), true);
+  }
+  await chargerMesRuptures();
+  void rafraichirPastilleRuptures();
+}
+
+$('oos-onglets')?.addEventListener('click', (event) => {
+  const onglet = event.target.closest('[data-oos-onglet]');
+  if (!onglet) return;
+  state.oos.onglet = onglet.dataset.oosOnglet;
+  renderOos();
+});
+
+$('oos-form')?.addEventListener('click', (event) => {
+  const etat = state.oos;
+  const touche = event.target.closest('[data-oos-touche]');
+  if (touche) {
+    const valeur = touche.dataset.oosTouche;
+    etat.num = valeur === 'efface' ? etat.num.slice(0, -1) : `${etat.num}${valeur}`.slice(0, 12);
+    etat.resultats = [];
+    $('oos-num').value = etat.num;
+    $('oos-res').innerHTML = '';
+    return;
+  }
+  if (event.target.closest('[data-oos-chercher]')) return void chercherOos();
+  const pick = event.target.closest('[data-oos-pick]');
+  if (pick) return choisirCommandeOos(etat.resultats?.[Number(pick.dataset.oosPick)]);
+  if (event.target.closest('[data-oos-retour]')) {
+    Object.assign(etat, { commande: null, envoye: false, num: '', resultats: [], coches: new Set(), info: null });
+    return renderOos();
+  }
+  const article = event.target.closest('[data-oos-article]');
+  if (article) {
+    const rang = Number(article.dataset.oosArticle);
+    if (etat.coches.has(rang)) etat.coches.delete(rang);
+    else etat.coches.add(rang);
+    renderOos();
+    $('oos-form').querySelector(`[data-oos-article="${rang}"]`)?.focus();
+    return;
+  }
+  const info = event.target.closest('[data-oos-info]');
+  if (info) {
+    etat.info = etat.info === info.dataset.oosInfo ? null : info.dataset.oosInfo;
+    return renderOos();
+  }
+  const envoyer = event.target.closest('[data-oos-envoyer]');
+  if (envoyer) void envoyerOos(envoyer);
+});
+
+$('oos-form')?.addEventListener('input', (event) => {
+  if (event.target.id !== 'oos-num') return;
+  state.oos.num = event.target.value.replace(/[^\d]/g, '').slice(0, 12);
+  event.target.value = state.oos.num;
+  state.oos.resultats = [];
+  $('oos-res').innerHTML = '';
+});
+$('oos-form')?.addEventListener('keydown', (event) => {
+  if (event.target.id === 'oos-num' && event.key === 'Enter') {
+    event.preventDefault();
+    void chercherOos();
+  }
+});
+
+$('oos-mes')?.addEventListener('click', (event) => {
+  const ok = event.target.closest('[data-oos-ok]');
+  if (ok) return void repondreMaRupture(ok.dataset.oosOk, 'COMPRIS', ok);
+  const non = event.target.closest('[data-oos-non]');
+  if (non) return void repondreMaRupture(non.dataset.oosNon, 'IMPOSSIBLE', non);
+  if (event.target.closest('[data-oos-tickets]')) ouvrirTickets('A_REPONDRE');
+});
+
+/* Depuis une commande : « 有问题 » → « 缺货 » ouvre la page sur cette commande. */
+function ouvrirRupturePour(order) {
+  setView('rupture');
+  choisirCommandeOos(order);
+}
+
+/* ==========================================================================
+   COMMANDES, VUE SIMPLE
+
+   Une grosse carte par commande : la photo, le numéro, l'article, le client.
+   Dessous, le numéro de suivi, un bouton vert « 发货 ✓ » et un bouton orange
+   « 有问题 ». Deux onglets seulement — à expédier, expédiées. Tout le reste
+   (fichiers, import, lots, tri) est rangé dans « 更多 ». La vue détaillée —
+   la file et le guichet — reste à un clic, pour qui en a l'habitude.
+   ========================================================================== */
+
+state.csOnglet = 'todo';
+state.csEdit = null;
+state.csPhotos = {};
+
+function dessinerCartes() {
+  document.body.classList.remove('ws-focus', 'ws-colonnes');
+  const faites = state.orders.filter(orderIsDone);
+  const restent = state.orders.length - faites.length;
+  if (!state.lots?.length) majCompteCommandes(restent);
+  $('ws-sous-n').textContent = restent ? String(restent) : '';
+
+  const box = $('ws-progress');
+  box.hidden = state.orders.length === 0;
+  if (!box.hidden) {
+    $('ws-progress-fill').style.width = `${Math.round((faites.length / state.orders.length) * 100)}%`;
+    box.classList.toggle('full', faites.length === state.orders.length);
+    $('ws-progress-text').textContent = t('progress.orders', { done: faites.length, total: state.orders.length });
+  }
+
+  const onglets = `<div class="cs-onglets" role="tablist">${[
+    ['todo', t('cs.toShip'), restent],
+    ['done', t('cs.shipped'), faites.length],
+  ]
+    .map(
+      ([cle, nom, n]) =>
+        `<button type="button" role="tab" data-cs-onglet="${cle}" aria-selected="${state.csOnglet === cle}">${esc(nom)}<b>${n}</b></button>`,
+    )
+    .join('')}</div>`;
+
+  const liste = (state.sort === 'model'
+    ? [...state.orders].sort((a, b) =>
+        (a.lineItems?.[0]?.title ?? '').localeCompare(b.lineItems?.[0]?.title ?? '', locale),
+      )
+    : state.orders
+  ).filter(
+    // Une recherche montre tout ce qu'elle trouve, expédié ou non.
+    (order) => ($('ws-cmd-q').value.trim().length >= 2 ? true : orderIsDone(order) === (state.csOnglet === 'done')),
+  );
+
+  $('ws-orders').innerHTML = `${onglets}${
+    state.orders.length === 0
+      ? emptyState(t('orders.empty'))
+      : liste.length
+        ? `<div class="cs-grille">${liste.map(carteCommande).join('')}</div>`
+        : emptyState(t(state.csOnglet === 'todo' ? 'orders.allDone' : 'cs.noneShipped'), state.csOnglet === 'todo')
+  }`;
+}
+
+function carteCommande(order) {
+  const address = order.shippingAddress ?? {};
+  const articles = order.lineItems ?? [];
+  const premier = articles[0];
+  const faite = orderIsDone(order);
+  const edition = !faite || state.csEdit === order.id;
+  const total = state.csTotal?.[order.id] ?? parcelTotal(order);
+
+  const lignes = articles
+    .slice(0, 3)
+    .map(
+      (article) =>
+        `<b class="cs-art">${esc([article.title, article.variantTitle].filter(Boolean).join(' · '))}${
+          article.quantity > 1 ? ` <span class="cs-qte">× ${esc(article.quantity)}</span>` : ''
+        }</b>`,
+    )
+    .join('');
+
+  const saisie = Array.from({ length: total }, (unused, rang) => {
+    const index = rang + 1;
+    const colis = order.parcels?.find((parcel) => parcel.index === index);
+    const photo = state.csPhotos[`${order.id}:${index}`];
+    return `<div class="cs-suivi">
+      ${total > 1 ? `<span class="cs-colis">${esc(t('cs.parcelN', { i: index, n: total }))}</span>` : ''}
+      <input data-cs-suivi="${index}" value="${esc(colis?.trackingNumber ?? '')}" placeholder="${esc(t('parcel.tracking'))}"
+        autocapitalize="characters" autocomplete="off" spellcheck="false" enterkeyhint="done"
+        aria-label="${esc(t('parcel.tracking'))}" />
+      ${
+        'BarcodeDetector' in window
+          ? `<button type="button" class="cs-carre" data-cs-scan="${index}" aria-label="${esc(t('scan.button'))}" title="${esc(t('scan.button'))}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6V3.5h3M17 6V3.5h-3M3 14v2.5h3M17 14v2.5h-3M5.5 7v6M8 7v6M10.5 7v6M12.5 7v6M14.5 7v6" /></svg></button>`
+          : ''
+      }
+      <label class="cs-carre${photo || colis?.hasPhoto ? ' cs-carre-ok' : ''}" title="${esc(t('parcel.shoot'))}">
+        <input type="file" accept="image/*" capture="environment" data-cs-photo="${index}" hidden />
+        ${
+          photo
+            ? `<img src="${photo}" alt="${esc(t('parcel.label', { index }))}" />`
+            : `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3v11H4zM12 16.5a3.5 3.5 0 1 0 0-7a3.5 3.5 0 0 0 0 7" /></svg>`
+        }
+        <span class="sr-only">${esc(t('parcel.shoot'))}</span>
+      </label>
+    </div>`;
+  }).join('');
+
+  const transporteur = order.parcels?.find((parcel) => parcel.carrier)?.carrier ?? lastCarrier();
+
+  return `<article class="cs-carte${faite ? ' cs-faite' : ''}" data-cs="${esc(order.id)}">
+    <div class="cs-haut">
+      ${premier?.image ? `<img class="cs-photo" src="${esc(premier.image)}" alt="" loading="lazy" />` : '<span class="cs-photo cs-photo-vide" aria-hidden="true"></span>'}
+      <span class="cs-txt">
+        <b class="cs-num">${esc(order.name)}</b>
+        ${lignes}
+        ${articles.length > 3 ? `<span class="cs-gris">${esc(t('cs.moreItems', { n: articles.length - 3 }))}</span>` : ''}
+        <span class="cs-gris">${esc([order.customer?.displayName ?? address.name, address.city].filter(Boolean).join(' · '))}</span>
+      </span>
+    </div>
+    ${consigneDeCommandeMarkup(order, true)}
+    ${
+      edition
+        ? `${saisie}
+           <div class="cs-reglages">
+             <label class="cs-mini"><span>${esc(t('cs.carrier'))}</span><input data-cs-carrier list="ws-carriers" value="${esc(transporteur)}" autocomplete="off" /></label>
+             <label class="cs-mini"><span>${esc(t('cs.parcels'))}</span><select data-cs-total>${[1, 2, 3, 4, 5, 6]
+               .map((n) => `<option value="${n}"${n === total ? ' selected' : ''}>${n}</option>`)
+               .join('')}</select></label>
+           </div>
+           <div class="cs-boutons">
+             <button type="button" class="cs-envoyer" data-cs-envoyer="1">${esc(t('cs.ship'))} ${ICO_COCHE}</button>
+             <button type="button" class="cs-probleme" data-cs-probleme="1">${esc(t('cs.problem'))}</button>
+           </div>`
+        : `<div class="cs-parti">${ICO_COCHE}<span>${esc(t('cs.shippedOn'))} · <b>${esc(
+            (order.parcels ?? []).map((parcel) => parcel.trackingNumber).filter(Boolean).join(' · '),
+          )}</b></span></div>
+           <div class="cs-boutons cs-boutons-petits">
+             <button type="button" class="cs-lien" data-cs-modifier="1">${esc(t('cs.edit'))}</button>
+             <button type="button" class="cs-probleme" data-cs-probleme="1">${esc(t('cs.problem'))}</button>
+           </div>`
+    }
+  </article>`;
+}
+
+/* Le bouton vert : prêt quand chaque colis a son numéro. */
+function majBoutonCarte(carte) {
+  const champs = [...carte.querySelectorAll('[data-cs-suivi]')];
+  const bouton = carte.querySelector('[data-cs-envoyer]');
+  if (bouton) bouton.classList.toggle('pret', champs.length > 0 && champs.every((champ) => champ.value.trim()));
+}
+
+/*
+ * « 发货 ✓ » : chaque colis dont le numéro a changé part au serveur — créé
+ * s'il est nouveau, corrigé s'il existait. Le dernier colis expédie la
+ * commande chez Shopify, comme au guichet.
+ */
+async function expedierCarte(carte, bouton) {
+  const order = state.orders.find((candidate) => candidate.id === carte.dataset.cs);
+  if (!order) return;
+  const champs = [...carte.querySelectorAll('[data-cs-suivi]')];
+  if (!champs.every((champ) => champ.value.trim())) {
+    toast(t('parcel.needTracking'), true);
+    champs.find((champ) => !champ.value.trim())?.focus();
+    return;
+  }
+  const total = Number(carte.querySelector('[data-cs-total]')?.value ?? champs.length);
+  const carrier = carte.querySelector('[data-cs-carrier]')?.value.trim() || null;
+  bouton.disabled = true;
+  let dernier = null;
+  try {
+    for (const champ of champs) {
+      const index = Number(champ.dataset.csSuivi);
+      const trackingNumber = champ.value.trim();
+      const existant = order.parcels?.find((parcel) => parcel.index === index);
+      const photo = state.csPhotos[`${order.id}:${index}`] ?? null;
+      if (existant && existant.trackingNumber === trackingNumber && existant.total === total && !photo && (existant.carrier ?? null) === carrier) continue;
+      const reponse = existant
+        ? await corrigerColis(existant.id, { trackingNumber, carrier, photo })
+        : await api(`/api/workspace/${supplierId}/parcels`, {
+            method: 'POST',
+            body: { shopifyOrderId: order.id, orderName: order.name ?? null, trackingNumber, carrier, index, total, photo },
+          });
+      // Correction refusée à la question « le client a déjà ce numéro » : on s'arrête là.
+      if (!reponse) break;
+      dernier = reponse;
+      delete state.csPhotos[`${order.id}:${index}`];
+      order.parcels = [...(order.parcels ?? []).filter((parcel) => parcel.index !== index), reponse.parcel].sort(
+        (a, b) => a.index - b.index,
+      );
+    }
+    if (carrier) rememberCarrier(carrier);
+    if (state.csTotal) delete state.csTotal[order.id];
+    if (dernier) {
+      const { shopify, clientPrevenu } = dernier;
+      if (clientPrevenu) toast(t(state.testMode ? 'parcel.correctedTest' : 'parcel.correctedNotified'));
+      else if (shopify?.fulfilled && state.testMode) toast(t('test.parcelSaved'));
+      else if (shopify?.fulfilled) toast(t('parcel.shipped'));
+      else if (shopify?.reason) toast(t('parcel.shipFail', { reason: shopify.reason }), true);
+      else toast(t('cs.saved'));
+    }
+    state.csEdit = null;
+  } catch (error) {
+    toast(messageServeur(error, 'parcel.err'), true);
+  } finally {
+    bouton.disabled = false;
+  }
+  renderOrders();
+}
+
+$('ws-orders').addEventListener('click', (event) => {
+  if (!state.simple) return;
+  const onglet = event.target.closest('[data-cs-onglet]');
+  if (onglet) {
+    state.csOnglet = onglet.dataset.csOnglet;
+    state.csEdit = null;
+    return renderOrders();
+  }
+  const carte = event.target.closest('[data-cs]');
+  if (!carte) return;
+  const order = state.orders.find((candidate) => candidate.id === carte.dataset.cs);
+  const envoyer = event.target.closest('[data-cs-envoyer]');
+  if (envoyer) return void expedierCarte(carte, envoyer);
+  if (event.target.closest('[data-cs-probleme]')) return ouvrirProbleme(order);
+  if (event.target.closest('[data-cs-modifier]')) {
+    state.csEdit = order.id;
+    renderOrders();
+    document.querySelector(`[data-cs="${CSS.escape(order.id)}"] [data-cs-suivi]`)?.focus();
+    return;
+  }
+  const scan = event.target.closest('[data-cs-scan]');
+  if (scan) void scanInto(carte.querySelector(`[data-cs-suivi="${scan.dataset.csScan}"]`));
+});
+
+$('ws-orders').addEventListener('input', (event) => {
+  const carte = state.simple && event.target.closest('[data-cs]');
+  if (carte) majBoutonCarte(carte);
+});
+
+$('ws-orders').addEventListener('keydown', (event) => {
+  if (!state.simple || event.key !== 'Enter' || !event.target.matches('[data-cs-suivi]')) return;
+  event.preventDefault();
+  const carte = event.target.closest('[data-cs]');
+  const champs = [...carte.querySelectorAll('[data-cs-suivi]')];
+  const vide = champs.find((champ) => !champ.value.trim());
+  if (vide) vide.focus();
+  else carte.querySelector('[data-cs-envoyer]')?.click();
+});
+
+$('ws-orders').addEventListener('change', async (event) => {
+  if (!state.simple) return;
+  const carte = event.target.closest('[data-cs]');
+  if (!carte) return;
+  const order = state.orders.find((candidate) => candidate.id === carte.dataset.cs);
+  // Le nombre de colis ou une photo redessinent la carte, en gardant ce qui est déjà tapé.
+  const redessiner = () => {
+    const tapes = [...carte.querySelectorAll('[data-cs-suivi]')].map((champ) => [champ.dataset.csSuivi, champ.value]);
+    const transporteur = carte.querySelector('[data-cs-carrier]')?.value;
+    carte.outerHTML = carteCommande(order);
+    const neuve = document.querySelector(`[data-cs="${CSS.escape(order.id)}"]`);
+    for (const [index, valeur] of tapes) {
+      const champ = neuve.querySelector(`[data-cs-suivi="${index}"]`);
+      if (champ) champ.value = valeur;
+    }
+    if (transporteur !== undefined) neuve.querySelector('[data-cs-carrier]').value = transporteur;
+    majBoutonCarte(neuve);
+  };
+  if (event.target.matches('[data-cs-total]')) {
+    state.csTotal = { ...(state.csTotal ?? {}), [order.id]: Number(event.target.value) };
+    return redessiner();
+  }
+  const photo = event.target.closest('[data-cs-photo]');
+  if (photo?.files?.[0]) {
+    try {
+      state.csPhotos[`${order.id}:${photo.dataset.csPhoto}`] = await shrinkPhoto(photo.files[0]);
+      redessiner();
+    } catch {
+      toast(t('parcel.badPhoto'), true);
+    }
+  }
+});
+
+/* ------------------------------------------------------------- 有问题 -- */
+
+state.pb = { order: null, kind: null, article: 0, photos: [] };
+
+/* La phrase qui part au marchand, en français : c'est lui qui la lit. Ce que
+   l'atelier ajoute la suit. */
+const NOTES_PROBLEME = {
+  ADDRESS: 'L’adresse de livraison semble incorrecte.',
+  PHONE: 'Le numéro de téléphone semble incorrect.',
+  DAMAGE: 'Article abîmé.',
+};
+
+function ouvrirProbleme(order) {
+  if (!order) return;
+  state.pb = { order, kind: null, article: 0, photos: [] };
+  const premier = order.lineItems?.[0];
+  $('pb-tete').innerHTML = `${premier?.image ? `<img src="${esc(premier.image)}" alt="" />` : '<i aria-hidden="true"></i>'}
+    <span><b>${esc(order.name ?? '')}</b><small>${esc(clientDeLaCommande(order))}</small></span>`;
+  renderProbleme();
+  $('pb-modal').classList.add('open');
+  $('pb-tuiles').querySelector('[data-pb]')?.focus();
+}
+
+function fermerProbleme() {
+  $('pb-modal').classList.remove('open');
+}
+
+function renderProbleme() {
+  const { order, kind, photos } = state.pb;
+  for (const tuile of $('pb-tuiles').querySelectorAll('[data-pb]')) {
+    tuile.setAttribute('aria-checked', String(tuile.dataset.pb === kind));
+  }
+  const adresse = order.shippingAddress ?? {};
+  let html = '';
+  if (kind === 'ADDRESS') {
+    const lignes = adresse.formatted?.length
+      ? adresse.formatted
+      : [adresse.name, [adresse.address1, adresse.address2].filter(Boolean).join(' '), [adresse.zip, adresse.city].filter(Boolean).join(' '), adresse.country].filter(Boolean);
+    html = `<div class="pb-encart"><span>${esc(t('pb.address'))}</span><b>${lignes.map(esc).join('<br />') || esc(t('issue.noAddress'))}</b>${pastillesAvertissement(verifierAdresse(adresse))}</div>`;
+  } else if (kind === 'PHONE') {
+    const tel = adresse.phone ?? order.customer?.address?.phone ?? null;
+    html = `<div class="pb-encart"><span>${esc(t('pb.phone'))}</span><b>${esc(tel || t('issue.noPhone'))}</b>${pastillesAvertissement(verifierTelephone(tel, adresse.country))}</div>`;
+  } else if (kind === 'DAMAGE') {
+    const articles = order.lineItems ?? [];
+    html = `${
+      articles.length > 1
+        ? `<div class="pb-articles" role="radiogroup">${articles
+            .map(
+              (article, i) => `<button type="button" role="radio" class="pb-article" data-pb-article="${i}" aria-checked="${i === state.pb.article}">
+                ${article.image ? `<img src="${esc(article.image)}" alt="" />` : '<i aria-hidden="true"></i>'}<span>${esc(
+                  [article.title, article.variantTitle].filter(Boolean).join(' · '),
+                )}</span></button>`,
+            )
+            .join('')}</div>`
+        : ''
+    }<div class="pb-photos">${photos
+      .map((photo, i) => `<span class="pb-photo"><img src="${photo}" alt="" /><button type="button" data-pb-retirer="${i}" aria-label="${esc(t('issue.photoRemove'))}">${ICO_CROIX}</button></span>`)
+      .join('')}${
+      photos.length < PHOTOS_MAX
+        ? `<label class="pb-ajout"><input type="file" accept="image/*" multiple hidden data-pb-photos="1" /><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3v11H4zM12 16.5a3.5 3.5 0 1 0 0-7a3.5 3.5 0 0 0 0 7z" /></svg><span>${esc(t('pb.photo'))}</span></label>`
+        : ''
+    }</div>`;
+  } else if (!kind) {
+    html = `<p class="pb-aide">${esc(t('pb.touch'))}</p>`;
+  }
+  if (kind && kind !== 'STOCK') {
+    html += `<textarea class="pb-note" id="pb-note" rows="2" maxlength="1500" placeholder="${esc(
+      t(kind === 'OTHER' ? 'pb.writeHere' : 'pb.optional'),
+    )}">${esc(state.pb.note ?? '')}</textarea>`;
+  }
+  $('pb-info').innerHTML = html;
+  majEnvoiProbleme();
+}
+
+function majEnvoiProbleme() {
+  const { kind } = state.pb;
+  const note = ($('pb-note')?.value ?? '').trim();
+  $('pb-envoyer').disabled = !kind || (kind === 'OTHER' && note.length < 3);
+}
+
+$('pb-tuiles').addEventListener('click', (event) => {
+  const tuile = event.target.closest('[data-pb]');
+  if (!tuile) return;
+  // « 缺货 » mène à sa page, la commande déjà choisie.
+  if (tuile.dataset.pb === 'STOCK') {
+    const order = state.pb.order;
+    fermerProbleme();
+    if (state.fonctionnalites?.rupturesAtelier === false) {
+      ouvrirSignalement(order);
+      state.issueKind = 'STOCK';
+      renderSignalement();
+    } else {
+      ouvrirRupturePour(order);
+    }
+    return;
+  }
+  state.pb.note = $('pb-note')?.value ?? state.pb.note;
+  state.pb.kind = tuile.dataset.pb;
+  renderProbleme();
+  if (state.pb.kind === 'OTHER') $('pb-note')?.focus();
+});
+
+$('pb-info').addEventListener('click', (event) => {
+  const article = event.target.closest('[data-pb-article]');
+  if (article) {
+    state.pb.note = $('pb-note')?.value ?? '';
+    state.pb.article = Number(article.dataset.pbArticle);
+    return renderProbleme();
+  }
+  const retirer = event.target.closest('[data-pb-retirer]');
+  if (retirer) {
+    state.pb.note = $('pb-note')?.value ?? '';
+    state.pb.photos = state.pb.photos.filter((_, i) => i !== Number(retirer.dataset.pbRetirer));
+    renderProbleme();
+  }
+});
+$('pb-info').addEventListener('input', (event) => {
+  if (event.target.id === 'pb-note') majEnvoiProbleme();
+});
+$('pb-info').addEventListener('change', async (event) => {
+  if (!event.target.matches('[data-pb-photos]') || !event.target.files?.length) return;
+  state.pb.note = $('pb-note')?.value ?? '';
+  for (const fichier of [...event.target.files].slice(0, PHOTOS_MAX - state.pb.photos.length)) {
+    try {
+      state.pb.photos = [...state.pb.photos, await shrinkPhoto(fichier)];
+    } catch {
+      toast(t('issue.photoErr'), true);
+    }
+  }
+  renderProbleme();
+});
+
+$('pb-annuler').addEventListener('click', fermerProbleme);
+$('pb-modal').addEventListener('click', (event) => {
+  if (event.target === $('pb-modal')) fermerProbleme();
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && $('pb-modal').classList.contains('open')) fermerProbleme();
+});
+
+$('pb-envoyer').addEventListener('click', async () => {
+  const { order, kind, photos } = state.pb;
+  const ajout = ($('pb-note')?.value ?? '').trim();
+  const note = [NOTES_PROBLEME[kind], ajout].filter(Boolean).join(' ');
+  if (!kind || note.length < 3) return;
+  const article = kind === 'DAMAGE' ? (order.lineItems ?? [])[state.pb.article] : null;
+  const { couleur, taille } = repartirDeclinaison(article?.variantTitle);
+  $('pb-envoyer').disabled = true;
+  try {
+    await api(`/api/workspace/${supplierId}/issues`, {
+      method: 'POST',
+      body: {
+        shopifyOrderId: order.id,
+        orderName: order.name,
+        customerEmail: order.customer?.email ?? null,
+        kind,
+        note,
+        ...(article
+          ? { product: article.title ?? null, color: couleur || null, size: taille || null, sku: article.sku ?? null }
+          : {}),
+        ...(kind === 'DAMAGE' && photos.length ? { photos } : {}),
+      },
+    });
+    fermerProbleme();
+    toast(t('issue.sent'));
+  } catch (error) {
+    toast(messageServeur(error, 'orders.err'), true);
+    majEnvoiProbleme();
+  }
+});
+
+/* --------------------------------------------------------------- 更多 -- */
+
+function majMenuPlus() {
+  $('ws-plus-vue').textContent = t(state.simple ? 'cs.detailed' : 'cs.simple');
+  document.querySelector('#ws-plus-menu [data-plus="tri"]')?.setAttribute('aria-checked', String(state.sort === 'model'));
+  const masse = state.fonctionnalites?.importEnMasse !== false;
+  const importer = document.querySelector('#ws-plus-menu [data-plus="import"]');
+  if (importer) importer.hidden = !masse;
+  document.body.classList.toggle('ws-simple', state.simple);
+}
+
+$('ws-plus-menu').addEventListener('click', (event) => {
+  const choix = event.target.closest('[data-plus], a');
+  if (!choix) return;
+  fermerMenusCommandes();
+  const quoi = choix.dataset.plus;
+  if (quoi === 'import') {
+    state.sous = { ...(state.sous ?? {}), orders: 'orders' };
+    setView('orders');
+    setMode('masse');
+  } else if (quoi === 'tracking' || quoi === 'lots') {
+    state.sous = { ...(state.sous ?? {}), orders: quoi };
+    setView('orders');
+  } else if (quoi === 'tri') {
+    state.sort = state.sort === 'model' ? 'time' : 'model';
+    localStorage.setItem(`ws.sort.${supplierId}`, state.sort);
+    renderOrders();
+  } else if (quoi === 'vue') {
+    state.simple = !state.simple;
+    localStorage.setItem(`ws.vue.${supplierId}`, state.simple ? 'simple' : 'detail');
+    state.focus = null;
+    renderOrders();
+  }
+  majMenuPlus();
+});
+
 // Tout est déclaré : l'atelier arrive sur « Aujourd'hui ».
+majMenuPlus();
+void chargerMesRuptures();
 pret = true;
 setView(state.view);

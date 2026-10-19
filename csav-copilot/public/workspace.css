@@ -3661,3 +3661,381 @@ html:has(.wsapp ~ .modal-wrap.open) { overflow: hidden; }
   .wsapp .ech-tr .ech-suivi input { flex-basis: 45%; height: 40px; font-size: 16px; }
   .wsapp .ech-tr .ech-suivi .btn { flex-basis: 100%; height: 42px; font-size: 15px; }
 }
+
+/* ==========================================================================
+   缺货 — LA PAGE DES RUPTURES, POUR L'ATELIER
+
+   Des cibles de doigt, pas de souris : touches de 76 px, tuiles d'article
+   qu'on coche d'un tap, quatre boutons de couleur. Le formulaire à gauche,
+   « Mes ruptures » à droite ; au téléphone, deux onglets.
+   ========================================================================== */
+
+.wsapp .oos { display: flex; flex-direction: column; gap: 16px; }
+.wsapp .oos[hidden] { display: none; }
+.wsapp .oos-tete { display: flex; align-items: center; gap: 14px; }
+.wsapp .oos-tete h1 { font-size: 34px; letter-spacing: -0.02em; }
+.wsapp .oos-logo {
+  display: grid; place-items: center; width: 52px; height: 52px; flex: none;
+  border-radius: 15px; background: #ff3b30;
+}
+.wsapp .oos-logo svg { width: 30px; height: 30px; fill: none; stroke: #fff; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Les onglets n'existent qu'au téléphone : sur ordinateur, tout est visible. */
+.wsapp .oos-onglets { display: none; }
+.wsapp .oos-cols { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+.wsapp .oos-form, .wsapp .oos-mes { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.wsapp .oos-cols > aside { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.wsapp .oos-cols > aside h2 { font-size: 24px; }
+
+.wsapp .oos-carte {
+  display: flex; flex-direction: column; gap: 14px;
+  padding: 22px; border-radius: 24px; background: var(--card); box-shadow: var(--shadow);
+}
+.wsapp .oos-h { font-size: 22px; font-weight: 750; white-space: pre-wrap; }
+.wsapp .oos-ecran {
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  height: 96px; border-radius: 20px; background: #f2f2f7;
+  font-size: 54px; font-weight: 800; letter-spacing: 4px;
+}
+.wsapp .oos-ecran input {
+  width: 100%; min-width: 0; max-width: 7.5ch; border: 0; background: none; outline: none;
+  font: inherit; letter-spacing: inherit; color: var(--ink); padding: 0;
+}
+.wsapp .oos-pave { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.wsapp .oos-pave button {
+  height: 76px; border: 0; border-radius: 18px; background: #f2f2f7; color: var(--ink);
+  font-size: 34px; font-weight: 700; cursor: pointer; touch-action: manipulation;
+}
+.wsapp .oos-pave button:active { background: #e3e3ea; }
+.wsapp .oos-pave svg { width: 34px; height: 34px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.wsapp .oos-pave .oos-pave-ok { background: #0a84ff; color: #fff; font-size: 24px; }
+.wsapp .oos-gros {
+  width: 100%; min-height: 72px; padding: 10px 18px; border: 0; border-radius: 22px;
+  color: #fff; font-size: 26px; font-weight: 800; cursor: pointer; touch-action: manipulation;
+}
+.wsapp .oos-gros:disabled { background: #c7c7cc; cursor: default; }
+.wsapp .oos-bleu { background: #0a84ff; }
+.wsapp .oos-vert { background: #34c759; }
+.wsapp .oos-rouge { background: #ff3b30; }
+.wsapp .oos-envoyer { background: #34c759; min-height: 80px; }
+.wsapp .oos-note { font-size: 18px; color: var(--ink-soft); text-align: center; }
+.wsapp .oos-resultats { display: flex; flex-direction: column; gap: 10px; }
+.wsapp .oos-resultats:empty { display: none; }
+.wsapp .oos-res {
+  display: flex; align-items: baseline; gap: 14px; padding: 16px 18px; border: 3px solid #0a84ff;
+  border-radius: 18px; background: #fff; text-align: left; cursor: pointer;
+}
+.wsapp .oos-res b { font-size: 26px; }
+.wsapp .oos-res span { font-size: 18px; color: var(--ink-soft); }
+
+.wsapp .oos-cmd { flex-direction: row; align-items: center; padding: 16px 20px; }
+.wsapp .oos-cmd-txt { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.wsapp .oos-cmd-txt b { font-size: 32px; }
+.wsapp .oos-cmd-txt span { font-size: 18px; color: var(--ink-soft); }
+.wsapp .oos-x {
+  display: grid; place-items: center; width: 52px; height: 52px; border: 0; border-radius: 14px;
+  background: #f2f2f7; color: var(--ink); cursor: pointer;
+}
+.wsapp .oos-x .ws-ico { width: 22px; height: 22px; }
+
+.wsapp .oos-articles { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+.wsapp .oos-article {
+  position: relative; display: flex; flex-direction: column; gap: 8px; padding: 14px;
+  border: 4px solid transparent; border-radius: 22px; background: var(--card); box-shadow: var(--shadow);
+  text-align: left; cursor: pointer; color: var(--ink);
+}
+.wsapp .oos-article img, .wsapp .oos-article > i {
+  display: block; width: 100%; height: 110px; border-radius: 14px; object-fit: cover; background: #e5e5ea;
+}
+.wsapp .oos-article b { font-size: 21px; line-height: 1.2; }
+.wsapp .oos-article span { font-size: 18px; color: var(--ink-soft); }
+.wsapp .oos-article[aria-checked='true'] { border-color: #ff3b30; background: #fff1f0; }
+.wsapp .oos-coche {
+  position: absolute; top: 6px; right: 6px; display: none; place-items: center;
+  width: 50px; height: 50px; border-radius: 25px; background: #ff3b30; color: #fff;
+}
+.wsapp .oos-coche .ws-ico { width: 28px; height: 28px; stroke-width: 2.6; }
+.wsapp .oos-article[aria-checked='true'] .oos-coche { display: grid; }
+
+.wsapp .oos-infos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.wsapp .oos-info {
+  min-height: 66px; padding: 8px 12px; border: 3px solid var(--c); border-radius: 18px;
+  background: #fff; color: var(--c); font-size: 20px; font-weight: 750; cursor: pointer;
+}
+.wsapp .oos-info[aria-pressed='true'] { background: var(--c); color: #fff; }
+
+.wsapp .oos-merci { align-items: center; text-align: center; padding: 40px 24px; gap: 20px; }
+.wsapp .oos-merci b { font-size: 30px; }
+.wsapp .oos-merci-rond { display: grid; place-items: center; width: 120px; height: 120px; border-radius: 60px; background: #34c759; }
+.wsapp .oos-merci-rond svg { width: 70px; height: 70px; fill: none; stroke: #fff; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.wsapp .oos-merci .oos-gros { max-width: 360px; }
+
+/* Mes ruptures : une bande de couleur dit l'état avant qu'on lise. */
+.wsapp .oos-ma {
+  display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 22px;
+  background: var(--card); box-shadow: var(--shadow); border-left: 10px solid var(--c, #ff9500);
+}
+.wsapp .oos-ma-orange { --c: #ff9500; }
+.wsapp .oos-ma-bleu { --c: #0a84ff; }
+.wsapp .oos-ma-vert { --c: #34c759; }
+.wsapp .oos-ma-gris { --c: #aeaeb2; }
+.wsapp .oos-ma-tete { display: flex; align-items: center; gap: 14px; }
+.wsapp .oos-ma-tete img, .wsapp .oos-ma-tete > i {
+  width: 70px; height: 70px; flex: none; border-radius: 14px; object-fit: cover; background: #e5e5ea;
+}
+.wsapp .oos-ma-tete span { display: flex; flex-direction: column; min-width: 0; }
+.wsapp .oos-ma-tete b { font-size: 24px; }
+.wsapp .oos-ma-tete small { font-size: 18px; color: var(--ink-soft); }
+.wsapp .oos-rep { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: 16px; background: #e8f2ff; }
+.wsapp .oos-rep span { font-size: 16px; font-weight: 700; color: #0a6cd6; }
+.wsapp .oos-rep b { font-size: 22px; line-height: 1.3; }
+.wsapp .oos-rep small { font-size: 17px; color: var(--ink-soft); }
+.wsapp .oos-deux { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.wsapp .oos-deux .oos-gros { font-size: 21px; min-height: 70px; }
+.wsapp .oos-etat {
+  display: inline-flex; align-items: center; gap: 8px; align-self: flex-start;
+  padding: 8px 16px; border-radius: 14px; font-size: 20px; font-weight: 700;
+}
+.wsapp .oos-etat .ws-ico { width: 20px; height: 20px; stroke-width: 2.4; }
+.wsapp .oos-etat-orange { background: #fff4e5; color: #b25e00; }
+.wsapp .oos-etat-vert { background: #e8f8ec; color: #1b7a35; }
+.wsapp .oos-etat-gris { background: #f2f2f7; color: var(--ink-soft); }
+.wsapp .oos-modeles { display: flex; flex-direction: column; gap: 8px; }
+.wsapp .oos-modele {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 3px solid #d1d1d6;
+  border-radius: 16px; font-size: 19px; font-weight: 650; cursor: pointer;
+}
+.wsapp .oos-modele:has(input:checked) { border-color: #34c759; background: #e8f8ec; }
+.wsapp .oos-modele input { width: 26px; height: 26px; accent-color: #34c759; flex: none; }
+.wsapp .oos-modele img, .wsapp .oos-modele > i { width: 52px; height: 52px; border-radius: 12px; object-fit: cover; background: #e5e5ea; flex: none; }
+
+.wsapp #ws-rupture-badge { background: #ff3b30; }
+
+@media (max-width: 880px) {
+  .wsapp .oos-tete h1 { font-size: 30px; }
+  .wsapp .oos-tete { padding-right: 120px; }
+  .wsapp .oos-onglets {
+    display: flex; padding: 4px; border-radius: 16px; background: #e5e5ea;
+  }
+  .wsapp .oos-onglets button {
+    flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;
+    height: 56px; border: 0; border-radius: 12px; background: transparent; color: var(--ink);
+    font-size: 20px; font-weight: 800; cursor: pointer;
+  }
+  .wsapp .oos-onglets button[aria-selected='true'] { background: #fff; box-shadow: 0 1px 3px rgb(0 0 0 / 15%); }
+  .wsapp .oos-pastille {
+    display: inline-grid; place-items: center; min-width: 28px; height: 28px; padding: 0 8px;
+    border-radius: 14px; background: #ff3b30; color: #fff; font-size: 16px;
+  }
+  .wsapp .oos-pastille[hidden] { display: none; }
+  .wsapp .oos-cols { grid-template-columns: minmax(0, 1fr); }
+  .wsapp .oos-cols[data-onglet='signaler'] > aside,
+  .wsapp .oos-cols[data-onglet='mes'] > .oos-form { display: none; }
+  .wsapp .oos-cols > aside h2 { display: none; }
+  .wsapp .oos-carte { padding: 18px; }
+  .wsapp .oos-ecran { height: 84px; font-size: 46px; }
+  .wsapp .oos-articles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .wsapp .oos-article img, .wsapp .oos-article > i { height: 90px; }
+  .wsapp .oos-info { font-size: 18px; }
+  .wsapp .oos-gros { font-size: 23px; }
+  .wsapp .oos-deux .oos-gros { font-size: 18px; }
+}
+
+/* ==========================================================================
+   COMMANDES EN CARTES (vue simple)
+
+   Une carte par commande, et deux boutons qu'on ne peut pas confondre :
+   vert pour « c'est parti », orange pour « ça coince ». En vue simple,
+   l'en-tête ne garde que la période, l'avancement et « 更多 ».
+   ========================================================================== */
+
+.wsapp .cs-plus { display: none; }
+body.ws-simple .wsapp .cs-plus { display: inline-flex; }
+body.ws-simple .wsapp .cmd-dl,
+body.ws-simple .wsapp #ws-modes,
+body.ws-simple .wsapp #ws-filter,
+body.ws-simple .wsapp #cmd-barre[data-onglet='orders'] { display: none; }
+body.ws-simple .wsapp #cmd-outils { margin-bottom: 12px; }
+.wsapp #ws-plus svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 3.2; stroke-linecap: round; }
+
+.wsapp .cs-onglets { display: flex; padding: 4px; margin-bottom: 14px; border-radius: 16px; background: #e5e5ea; }
+.wsapp .cs-onglets button {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 10px;
+  height: 56px; border: 0; border-radius: 12px; background: transparent; color: var(--ink);
+  font-size: 22px; font-weight: 800; cursor: pointer;
+}
+.wsapp .cs-onglets button[aria-selected='true'] { background: #fff; box-shadow: 0 1px 3px rgb(0 0 0 / 15%); }
+.wsapp .cs-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 14px; }
+.wsapp .cs-carte {
+  display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 18px;
+  border-radius: 22px; background: var(--card); box-shadow: var(--shadow);
+}
+.wsapp .cs-haut { display: flex; gap: 14px; min-width: 0; }
+.wsapp .cs-photo { width: 104px; height: 104px; flex: none; border-radius: 16px; object-fit: cover; background: #e5e5ea; }
+.wsapp .cs-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.wsapp .cs-num { font-size: 30px; line-height: 1.1; }
+.wsapp .cs-art { font-size: 19px; line-height: 1.25; overflow-wrap: anywhere; }
+.wsapp .cs-qte { color: #ff3b30; }
+.wsapp .cs-gris { font-size: 16px; color: var(--ink-soft); }
+.wsapp .cs-carte .ord-consigne { margin: 0; }
+.wsapp .cs-suivi { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.wsapp .cs-colis { flex-basis: 100%; font-size: 15px; font-weight: 700; color: var(--ink-soft); }
+.wsapp .cs-suivi input {
+  flex: 1; min-width: 0; height: 62px; padding: 0 16px; border: 0; border-radius: 16px;
+  background: #f2f2f7; color: var(--ink); font-size: 22px; font-weight: 700; letter-spacing: 0.5px;
+}
+.wsapp .cs-suivi input::placeholder { color: #8e8e93; font-weight: 600; }
+.wsapp .cs-carre {
+  display: grid; place-items: center; width: 62px; height: 62px; flex: none; overflow: hidden;
+  border: 0; border-radius: 16px; background: #f2f2f7; color: var(--ink); cursor: pointer;
+}
+.wsapp .cs-carre svg { width: 28px; height: 28px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.wsapp .cs-carre img { width: 100%; height: 100%; object-fit: cover; }
+.wsapp .cs-carre-ok { box-shadow: inset 0 0 0 3px #34c759; }
+.wsapp .cs-reglages { display: flex; gap: 10px; flex-wrap: wrap; }
+.wsapp .cs-mini { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink-soft); }
+.wsapp .cs-mini input, .wsapp .cs-mini select {
+  height: 36px; padding: 0 10px; border: 1px solid var(--line); border-radius: 10px; background: #fff;
+  font-size: 15px; color: var(--ink);
+}
+.wsapp .cs-mini input { width: 140px; }
+.wsapp .cs-boutons { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 10px; }
+.wsapp .cs-envoyer, .wsapp .cs-probleme {
+  display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 68px;
+  border-radius: 18px; font-size: 24px; font-weight: 800; cursor: pointer; touch-action: manipulation;
+}
+.wsapp .cs-envoyer { border: 0; background: #c7c7cc; color: #fff; }
+.wsapp .cs-envoyer.pret { background: #34c759; }
+.wsapp .cs-envoyer .ws-ico { width: 24px; height: 24px; stroke-width: 2.6; }
+.wsapp .cs-probleme { border: 3px solid #ff9500; background: #fff7eb; color: #b25e00; font-size: 21px; }
+.wsapp .cs-parti {
+  display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-radius: 16px;
+  background: #e8f8ec; color: #1b7a35; font-size: 20px; font-weight: 750; overflow-wrap: anywhere;
+}
+.wsapp .cs-parti .ws-ico { width: 24px; height: 24px; flex: none; stroke-width: 2.6; }
+.wsapp .cs-boutons-petits .cs-probleme { min-height: 54px; font-size: 18px; }
+.wsapp .cs-lien {
+  min-height: 54px; border: 0; border-radius: 16px; background: #f2f2f7; color: var(--ink);
+  font-size: 18px; font-weight: 700; cursor: pointer;
+}
+
+/* Les demandes urgentes du marchand : une bande par demande, « 知道了 » à droite. */
+.wsapp .alert {
+  display: flex; align-items: center; gap: 16px; padding: 16px 18px; margin-bottom: 12px;
+  border: 0; border-left: 10px solid var(--c); border-radius: 18px; background: #fff; box-shadow: var(--shadow);
+}
+.wsapp .alert-rouge { --c: #ff3b30; }
+.wsapp .alert-orange { --c: #ff9500; }
+.wsapp .alert .alert-txt { flex: 1; min-width: 0; }
+.wsapp .alert .alert-txt > b { font-size: 21px; color: var(--c); }
+.wsapp .alert .alert-txt p { margin: 4px 0 0; font-size: 18px; }
+.wsapp .alert .alert-swap { font-size: 20px; color: var(--c); }
+.wsapp .alert-acts { display: flex; flex-direction: column; align-items: stretch; gap: 6px; flex: none; }
+.wsapp .alert-ok {
+  min-height: 56px; padding: 0 22px; border: 0; border-radius: 14px; background: var(--c);
+  color: #fff; font-size: 21px; font-weight: 800; cursor: pointer;
+}
+.wsapp .alert-voir { border: 0; background: none; color: var(--ink-soft); font-size: 14px; text-decoration: underline; cursor: pointer; }
+
+@media (max-width: 880px) {
+  .wsapp .cs-onglets button { font-size: 20px; }
+  .wsapp .cs-carte { padding: 15px; }
+  .wsapp .cs-photo { width: 84px; height: 84px; }
+  .wsapp .cs-num { font-size: 27px; }
+  .wsapp .cs-art { font-size: 18px; }
+  .wsapp .cs-envoyer { font-size: 22px; }
+  .wsapp .cs-probleme { font-size: 19px; }
+  .wsapp .alert { padding: 12px 14px; gap: 10px; }
+  .wsapp .alert .alert-txt > b { font-size: 18px; }
+  .wsapp .alert-ok { min-height: 50px; padding: 0 14px; font-size: 18px; }
+}
+
+/* ==========================================================================
+   有问题 — LA FEUILLE DES PROBLÈMES
+   ========================================================================== */
+
+.wsapp ~ .pb-wrap .pb {
+  display: flex; flex-direction: column; gap: 16px; width: min(760px, 100%); padding: 22px;
+  border-radius: 28px; color: var(--ink);
+}
+.wsapp ~ .pb-wrap .pb-tete { display: flex; align-items: center; gap: 14px; }
+.wsapp ~ .pb-wrap .pb-tete img, .wsapp ~ .pb-wrap .pb-tete > i { width: 64px; height: 64px; flex: none; border-radius: 14px; object-fit: cover; background: #e5e5ea; }
+.wsapp ~ .pb-wrap .pb-tete span { display: flex; flex-direction: column; min-width: 0; }
+.wsapp ~ .pb-wrap .pb-tete b { font-size: 28px; }
+.wsapp ~ .pb-wrap .pb-tete small { font-size: 18px; color: var(--ink-soft); }
+.wsapp ~ .pb-wrap .pb-titre { font-size: 24px; }
+.wsapp ~ .pb-wrap .pb-tuiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.wsapp ~ .pb-wrap .pb-tuile {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  min-height: 124px; padding: 10px; border: 3px solid var(--c); border-radius: 22px;
+  background: #fff; color: var(--ink); font-size: 22px; font-weight: 800; cursor: pointer;
+}
+.wsapp ~ .pb-wrap .pb-ico { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 14px; background: var(--c); }
+.wsapp ~ .pb-wrap .pb-ico svg { width: 30px; height: 30px; fill: none; stroke: #fff; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.wsapp ~ .pb-wrap .pb-tuile[aria-checked='true'] { background: var(--c); color: #fff; }
+.wsapp ~ .pb-wrap .pb-tuile[aria-checked='true'] .pb-ico { background: rgb(255 255 255 / 25%); }
+.wsapp ~ .pb-wrap .pb-info { display: flex; flex-direction: column; gap: 12px; }
+.wsapp ~ .pb-wrap .pb-info:empty { display: none; }
+.wsapp ~ .pb-wrap .pb-aide { font-size: 18px; color: var(--ink-soft); }
+.wsapp ~ .pb-wrap .pb-encart { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border-radius: 16px; background: #f2f2f7; }
+.wsapp ~ .pb-wrap .pb-encart > span { font-size: 15px; font-weight: 700; color: var(--ink-soft); }
+.wsapp ~ .pb-wrap .pb-encart > b { font-size: 21px; line-height: 1.35; }
+.wsapp ~ .pb-wrap .pb-note {
+  width: 100%; padding: 12px 14px; border: 2px solid var(--line); border-radius: 16px;
+  font: inherit; font-size: 18px; resize: vertical;
+}
+.wsapp ~ .pb-wrap .pb-articles { display: flex; flex-direction: column; gap: 8px; }
+.wsapp ~ .pb-wrap .pb-article {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 3px solid #d1d1d6;
+  border-radius: 16px; background: #fff; font-size: 18px; font-weight: 650; text-align: left; cursor: pointer;
+}
+.wsapp ~ .pb-wrap .pb-article[aria-checked='true'] { border-color: #af52de; background: #f6ecfb; }
+.wsapp ~ .pb-wrap .pb-article img, .wsapp ~ .pb-wrap .pb-article > i { width: 52px; height: 52px; flex: none; border-radius: 12px; object-fit: cover; background: #e5e5ea; }
+.wsapp ~ .pb-wrap .pb-photos { display: flex; flex-wrap: wrap; gap: 10px; }
+.wsapp ~ .pb-wrap .pb-photo { position: relative; width: 96px; height: 96px; }
+.wsapp ~ .pb-wrap .pb-photo img { width: 100%; height: 100%; border-radius: 14px; object-fit: cover; }
+.wsapp ~ .pb-wrap .pb-photo button {
+  position: absolute; top: -8px; right: -8px; display: grid; place-items: center; width: 30px; height: 30px;
+  border: 0; border-radius: 15px; background: var(--ink); color: #fff; cursor: pointer;
+}
+.wsapp ~ .pb-wrap .pb-ajout {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  min-width: 140px; height: 96px; padding: 0 14px; border: 3px dashed #af52de; border-radius: 14px;
+  color: #8a2fb8; font-size: 17px; font-weight: 750; cursor: pointer;
+}
+.wsapp ~ .pb-wrap .pb-ajout svg { width: 30px; height: 30px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.wsapp ~ .pb-wrap .pb-pied { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 12px; }
+.wsapp ~ .pb-wrap .pb-annuler, .wsapp ~ .pb-wrap .pb-envoyer {
+  min-height: 70px; border: 0; border-radius: 20px; font-size: 22px; font-weight: 800; cursor: pointer;
+}
+.wsapp ~ .pb-wrap .pb-annuler { background: #f2f2f7; color: var(--ink); }
+.wsapp ~ .pb-wrap .pb-envoyer { background: #34c759; color: #fff; }
+.wsapp ~ .pb-wrap .pb-envoyer:disabled { background: #c7c7cc; cursor: default; }
+
+@media (max-width: 700px) {
+  .wsapp ~ .pb-wrap { align-items: flex-end; padding: 0; }
+  .wsapp ~ .pb-wrap .pb {
+    width: 100%; max-height: 92vh; border-radius: 26px 26px 0 0;
+    padding: 20px 18px calc(18px + env(safe-area-inset-bottom));
+  }
+  .wsapp ~ .pb-wrap .pb-tuiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .wsapp ~ .pb-wrap .pb-tuile { min-height: 112px; font-size: 20px; }
+  .wsapp ~ .pb-wrap .pb-pied { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
+}
+.wsapp .cs-mini span { white-space: nowrap; }
+.wsapp .alert .alert-swap b { display: inline; font-size: inherit; color: inherit; }
+/* « 更多 » : tout au même alignement, et la coche du tri comme dans un menu du Mac. */
+.wsapp #ws-plus-menu .cmd-item { position: relative; padding-left: 30px; }
+.wsapp #ws-plus-menu .cmd-item[aria-checked='true']::before {
+  content: ''; position: absolute; left: 12px; top: 50%; width: 4px; height: 8px; margin-top: -6px;
+  border-right: 2px solid var(--brand); border-bottom: 2px solid var(--brand); transform: rotate(45deg);
+}
+.wsapp .alert .alert-swap { display: block; }
+/* La feuille passe au-dessus de la barre d'onglets, et ses boutons restent visibles. */
+.wsapp ~ .pb-wrap { z-index: 80; }
+@media (max-width: 700px) {
+  .wsapp ~ .pb-wrap .pb { gap: 12px; }
+  .wsapp ~ .pb-wrap .pb-tuile { min-height: 96px; gap: 6px; }
+  .wsapp ~ .pb-wrap .pb-ico { width: 44px; height: 44px; }
+  .wsapp ~ .pb-wrap .pb-pied { position: sticky; bottom: calc(-18px - env(safe-area-inset-bottom)); padding: 10px 0 0; background: var(--card); }
+}
