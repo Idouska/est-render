@@ -2627,36 +2627,27 @@ Remboursement : sous 5 jours ouvrés après réception du retour."></textarea>
          produits sont déjà là ; on choisit une paire du stock retours qui
          correspond, et l'agence la renvoie au client. -->
     <div class="backdrop" id="rv-modal" role="dialog" aria-modal="true" aria-labelledby="rv-title" hidden>
-      <div class="modal rv-modal">
-        <div class="modal-head rv-tete">
-          <span class="rv-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 13.7-5.7L20 8.5M20 4v4.5h-4.5M20 12a8 8 0 0 1-13.7 5.7L4 15.5M4 20v-4.5h4.5" /></svg></span>
-          <span class="rv-titres">
-            <h2 id="rv-title">Renvoi</h2>
-            <p>Renvoyer au client une paire du stock retours</p>
-          </span>
-          <button type="button" class="rv-x" id="rv-close" aria-label="Fermer">×</button>
+      <div class="modal modal-wide">
+        <div class="modal-head">
+          <h2 id="rv-title">Renvoi</h2>
+          <p>Trois temps : la commande, la paire à renvoyer, celle du stock qui part.</p>
         </div>
-        <div class="modal-body rv-corps">
-          <p class="rv-alerte" id="rv-alerte" role="status" hidden></p>
-          <div class="field-duo">
-            <div class="field">
-              <label for="rv-commande">Commande</label>
-              <input id="rv-commande" type="text" readonly />
-            </div>
-            <div class="field">
-              <label for="rv-client">Client</label>
-              <input id="rv-client" type="text" readonly />
-            </div>
-          </div>
-          <div class="field">
-            <span class="rv-label" id="rv-produits-t">Produit à renvoyer</span>
-            <div class="rv-liste" id="rv-produits" role="radiogroup" aria-labelledby="rv-produits-t"></div>
-          </div>
-          <div class="field">
-            <span class="rv-label" id="rv-paires-t">Dans le stock retours</span>
-            <div class="rv-liste" id="rv-paires" role="radiogroup" aria-labelledby="rv-paires-t"></div>
-          </div>
-          <p class="modal-hint" id="rv-note"></p>
+        <div class="modal-body ret-form">
+          <section class="ret-etape">
+            <h3><b class="ret-num">1</b> La commande</h3>
+            <!-- Le client en bloc, comme dans « Nouveau retour » : un nom ou
+                 une adresse longs passent à la ligne au lieu d'être coupés. -->
+            <div class="ret-client rv-client" id="rv-client"></div>
+          </section>
+          <section class="ret-etape">
+            <h3><b class="ret-num">2</b> La paire à renvoyer</h3>
+            <div class="ret-articles" id="rv-produits" role="radiogroup" aria-label="Produit à renvoyer"></div>
+          </section>
+          <section class="ret-etape">
+            <h3><b class="ret-num">3</b> Dans le stock retours</h3>
+            <div class="rv-liste" id="rv-paires" role="radiogroup" aria-label="Paires du stock retours"></div>
+            <p class="modal-hint" id="rv-note"></p>
+          </section>
         </div>
         <div class="modal-foot">
           <button class="btn" id="rv-cancel">Annuler</button>

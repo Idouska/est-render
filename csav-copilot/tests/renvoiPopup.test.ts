@@ -26,7 +26,7 @@ test('« Renvoi » ouvre la fenêtre, plus la page du stock', () => {
 
 test('la commande et ses produits sont déjà remplis', () => {
   const ouverture = app.slice(app.indexOf('async function ouvrirRenvoi'), app.indexOf('function fermerRenvoi'));
-  assert.match(ouverture, /\$\('rv-commande'\)\.value = order\?\.name \?\? ticket\.orderName \?\? '';/);
+  assert.match(ouverture, /order\?\.name \?\? ticket\.orderName,/);
   assert.match(ouverture, /renderRenvoiProduits\(\);/);
 });
 
@@ -51,6 +51,9 @@ test('les pays s’écrivent en toutes lettres, et une commande remboursée est 
   assert.equal(nomPays(null), '—');
   assert.equal(nomPays('Bretagne'), 'Bretagne');
 
-  assert.match(html, /<p class="rv-alerte" id="rv-alerte" role="status" hidden><\/p>/);
-  assert.match(app, /const rembourse = \['REFUNDED', 'PARTIALLY_REFUNDED'\]\.includes\(order\?\.displayFinancialStatus\);/);
+  // Une pastille discrète à côté du client, pas un bandeau.
+  assert.doesNotMatch(html, /rv-alerte/);
+  assert.match(app, /const statut = \{ REFUNDED: 'Remboursée', PARTIALLY_REFUNDED: 'Remboursée en partie' \}\[order\?\.displayFinancialStatus\];/);
+  // La même fenêtre en trois temps que « Nouveau retour ».
+  assert.match(html, /<h3><b class="ret-num">2<\/b> La paire à renvoyer<\/h3>/);
 });

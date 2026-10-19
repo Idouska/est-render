@@ -3073,22 +3073,22 @@ async function ouvrirRenvoi(ticket) {
   if (!order && !ticket.shopifyOrderId) return toast('Aucune commande rattachée à ce message.', true);
   Object.assign(renvoi, { order, ticket, article: 0, paire: null, paires: [] });
   const adresse = order?.shippingAddress ?? {};
-  $('rv-commande').value = order?.name ?? ticket.orderName ?? '';
-  // Le client de la commande : le message peut venir de l'atelier.
+  /* Le client, comme dans « Nouveau retour » : le nom, puis la commande,
+     la ville, le pays et l'e-mail. Une commande déjà remboursée le dit d'un
+     mot, à côté de son numéro — le renvoi reste possible. */
   const pays = adresse.countryCode ?? adresse.country;
-  $('rv-client').value = [
-    adresse.name ?? order?.customer?.displayName ?? ticket.customerName,
-    [adresse.city, pays ? nomPays(pays) : null].filter(Boolean).join(', '),
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  const statut = { REFUNDED: 'Remboursée', PARTIALLY_REFUNDED: 'Remboursée en partie' }[order?.displayFinancialStatus];
+  $('rv-client').innerHTML = `<b>${esc(adresse.name ?? order?.customer?.displayName ?? ticket.customerName ?? 'Client')}</b>
+    <span>${esc(
+      [
+        order?.name ?? ticket.orderName,
+        [adresse.city, pays ? nomPays(pays) : null].filter(Boolean).join(', '),
+        ticket.customerEmail ?? order?.customer?.email,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+    )}</span>${statut ? `<span class="rv-statut">${esc(statut)}</span>` : ''}`;
   $('rv-paires').innerHTML = '<p class="rv-vide">Recherche dans le stock…</p>';
-  // Une commande déjà remboursée : le renvoi reste possible, mais on prévient.
-  const rembourse = ['REFUNDED', 'PARTIALLY_REFUNDED'].includes(order?.displayFinancialStatus);
-  $('rv-alerte').hidden = !rembourse;
-  $('rv-alerte').textContent = rembourse
-    ? `Commande ${order.displayFinancialStatus === 'REFUNDED' ? 'remboursée' : 'remboursée en partie'} : vérifiez avant de renvoyer une paire.`
-    : '';
   renderRenvoiProduits();
   $('rv-modal').hidden = false;
   $('rv-modal').classList.add('open');
@@ -3110,15 +3110,16 @@ function fermerRenvoi() {
 
 function renderRenvoiProduits() {
   const articles = renvoi.order?.lineItems ?? [];
+  // Les mêmes cartes que l'article qui revient, dans « Nouveau retour ».
   $('rv-produits').innerHTML = articles.length
     ? articles
         .map(
-          (article, i) => `<button type="button" class="rv-ligne" role="radio" data-rv-article="${i}" aria-checked="${i === renvoi.article}">
-            <span class="rv-rond" aria-hidden="true"></span>
-            ${article.image ? `<img src="${esc(article.image)}" alt="" loading="lazy" />` : '<i aria-hidden="true"></i>'}
-            <span class="rv-txt"><b>${esc(article.title ?? '')}</b><small>${esc(
-              [article.variantTitle, article.sku].filter(Boolean).join(' · '),
-            )}</small></span>
+          (article, i) => `<button type="button" class="ret-article" role="radio" data-rv-article="${i}" aria-pressed="${i === renvoi.article}" aria-checked="${i === renvoi.article}">
+            ${article.image ? `<img src="${esc(article.image)}" alt="" loading="lazy" />` : '<span class="ret-article-vide" aria-hidden="true"></span>'}
+            <span>
+              <b>${esc(article.title ?? '')}</b>
+              <small>${esc([article.variantTitle, article.sku, article.quantity > 1 ? `×${article.quantity}` : null].filter(Boolean).join(' · '))}</small>
+            </span>
           </button>`,
         )
         .join('')
@@ -3209,7 +3210,6 @@ $('rv-modal')?.addEventListener('click', (event) => {
     openChangeRequest(renvoi.ticket);
   }
 });
-$('rv-close')?.addEventListener('click', fermerRenvoi);
 $('rv-cancel')?.addEventListener('click', fermerRenvoi);
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && $('rv-modal')?.classList.contains('open')) fermerRenvoi();
@@ -13177,8 +13177,10 @@ function renderReturnItems() {
             <span>
               <b>${esc(article.title)}</b>
               <small>${esc(
-                [article.variantTitle, article.sku].filter(Boolean).join(' · '),
-              )}${article.quantity > 1 ? ` · ×${article.quantity}` : ''}</small>
+                [article.variantTitle, article.sku, article.quantity > 1 ? `×${article.quantity}` : null]
+                  .filter(Boolean)
+                  .join(' · '),
+              )}</small>
             </span>
           </button>`,
         )
