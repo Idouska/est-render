@@ -54,3 +54,21 @@ test('les ruptures de l’atelier restent dans « Ruptures de stock », pas dans
   const filtre = tickets.slice(tickets.indexOf('function buildTicketWhere'), tickets.indexOf('function buildTicketWhere') + 3000);
   assert.match(filtre, /NOT: \{ gmailThreadId: \{ startsWith: 'supplier:', endsWith: ':STOCK' \} \},/);
 });
+
+test('« Les deux » : les autres coloris se cherchent mot par mot, et désignent le modèle complet', async () => {
+  const { createMockShopifyClient } = await import('../src/services/shopify/mock.ts');
+  const { listProducts } = await import('../src/services/shopify/catalog.ts');
+  const client = createMockShopifyClient('boutique.test');
+  // Le catalogue fictif lit le filtre comme Shopify : la famille « Applique »
+  // trouve ses deux modèles, l'ancienne forme entre guillemets ne trouve rien.
+  const freres = await listProducts(client, { query: 'title:Applique*', limit: 60 });
+  assert.deepEqual(freres.products.map((p) => p.title).sort(), ['Applique Halo', 'Applique Lune']);
+  const ancienne = await listProducts(client, { query: 'title:"Applique"*', limit: 60 });
+  assert.equal(ancienne.products.length, 0);
+
+  const { readFileSync } = await import('node:fs');
+  const commerce = readFileSync(new URL('../src/routes/commerce.ts', import.meta.url), 'utf8');
+  assert.match(commerce, /query: motsFamille\.length \? motsFamille\.map\(\(mot\) => `title:\$\{mot\}\*`\)\.join\(' AND '\) : term,/);
+  // Le détail porte le titre complet : la taille se choisit ensuite dans CE modèle.
+  assert.match(commerce, /value: color,\n\s+detail: item\.title,/);
+});
