@@ -20221,6 +20221,7 @@ function renderRuptureLignes(page, total) {
         <td class="rup-c-client"><span class="rup-who">
           <b>${esc(d.client?.nom ?? d.client?.email ?? 'Client inconnu')}</b>
           ${d.client?.nom && d.client?.email ? `<small>${esc(d.client.email)}</small>` : ''}
+          ${d.commande?.nom ? `<small class="rup-cmd-mini">${esc(d.commande.nom)}</small>` : ''}
         </span></td>
         <td class="rup-c-cmd"><b>${esc(d.commande?.nom ?? '—')}</b></td>
         <td class="rup-c-art"><span class="rup-prod">
