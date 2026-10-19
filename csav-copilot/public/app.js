@@ -13483,7 +13483,7 @@ function renderModelesRetour() {
       return `<button type="button" class="ret-modele-ligne" role="option" aria-selected="${on}" data-ret-modele="${esc(option.id)}">
         ${option.image ? `<img src="${esc(option.image)}" alt="" loading="lazy" />` : '<i aria-hidden="true"></i>'}
         <span class="ret-modele-txt"><b>${esc(option.productTitle)}</b><small>${esc(
-          [option.variantTitle, (option.inventoryQuantity ?? 0) > 0 ? `${option.inventoryQuantity} en stock` : 'épuisé']
+          [option.variantTitle, mentionStock(option)]
             .filter(Boolean)
             .join(' · '),
         )}</small></span>
@@ -13609,7 +13609,7 @@ async function chargerOptionsVoulu() {
           ${option.image ? `<img src="${esc(option.image)}" alt="" loading="lazy" />` : ''}
           <span><b>${esc(option.value)}</b>${
             option.stock !== null && option.stock !== undefined
-              ? `<small>${option.stock > 0 ? `${option.stock} en stock` : 'épuisé'}</small>`
+              ? `<small>${option.stock > 0 ? `${option.stock} en stock` : ''}</small>`
               : ''
           }</span>
         </button>`,
@@ -21184,6 +21184,19 @@ async function chargerOptionsRemplacement(d) {
   majReponseAtelier();
 }
 
+/*
+ * Le stock d'une déclinaison, tel qu'on peut l'affirmer.
+ *
+ * Un `0` ne veut pas dire « épuisé » : une boutique qui ne suit pas ses
+ * stocks — le cas du dropshipping — reçoit zéro pour tout le catalogue, et
+ * chaque modèle s'affichait « épuisé ». Seul Shopify dit qu'un article ne se
+ * vend plus (`availableForSale`) ; un stock positif se montre, le reste se tait.
+ */
+function mentionStock(option) {
+  if ((option?.inventoryQuantity ?? 0) > 0) return `${option.inventoryQuantity} en stock`;
+  return option?.availableForSale === false ? 'épuisé' : '';
+}
+
 /** Ce qui manque pour valider, ou rien. */
 function manqueReponseAtelier() {
   if (fenRa.choix === 'ATTENDRE' && (!fenRa.date || fenRa.date < aujourdhuiIso())) return 'Choisissez une date à venir.';
@@ -21264,9 +21277,7 @@ function majReponseAtelier() {
         <b>${esc([option.productTitle, option.variantTitle].filter(Boolean).join(' · '))}</b>
         ${option.sku ? `<small>${esc(option.sku)}</small>` : ''}
       </span>
-      <span class="ra-sug-stock${(option.inventoryQuantity ?? 0) > 0 ? '' : ' ra-sug-epuise'}">${
-        (option.inventoryQuantity ?? 0) > 0 ? `${option.inventoryQuantity} en stock` : 'épuisé'
-      }</span>
+      <span class="ra-sug-stock${option.availableForSale === false ? ' ra-sug-epuise' : ''}">${esc(mentionStock(option))}</span>
       <span class="ra-sug-coche" aria-hidden="true">${on ? ico('check') : ''}</span>
     </button>`;
   };

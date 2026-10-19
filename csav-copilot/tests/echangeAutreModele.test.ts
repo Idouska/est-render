@@ -99,3 +99,15 @@ test('l’écran propose « Un autre modèle », et l’outil demande l’autori
     assert.match(lire(fichier), /write_draft_orders/, fichier);
   }
 });
+
+test('un stock à zéro ne s’affiche pas « épuisé » : seul Shopify dit qu’un article ne se vend plus', () => {
+  const app = lire('public/app.js');
+  const debut = app.indexOf('function mentionStock');
+  const source = app.slice(debut, app.indexOf('\n}\n', debut) + 2);
+  const mentionStock = new Function(`${source} return mentionStock;`)() as (option: unknown) => string;
+  // Dropshipping : stocks non suivis, Shopify renvoie 0 partout.
+  assert.equal(mentionStock({ inventoryQuantity: 0, availableForSale: true }), '');
+  assert.equal(mentionStock({ inventoryQuantity: 4, availableForSale: true }), '4 en stock');
+  assert.equal(mentionStock({ inventoryQuantity: 0, availableForSale: false }), 'épuisé');
+  assert.doesNotMatch(app, /\? `\$\{option\.inventoryQuantity\} en stock` : 'épuisé'/);
+});
