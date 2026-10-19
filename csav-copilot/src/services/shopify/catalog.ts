@@ -328,6 +328,39 @@ interface RawVariant {
   };
 }
 
+/*
+ * Chercher des déclinaisons par le nom du modèle.
+ *
+ * Sur `productVariants`, `title:` est le titre de la DÉCLINAISON (« 45 1/3 »,
+ * « Noir / 39 ») : y chercher « hoka » ne trouvait jamais rien, et la liste
+ * restait vide en production — le catalogue fictif, lui, ignorait le filtre.
+ * Le nom du modèle se cherche dans `product_title`. Shopify n'accepte le
+ * joker qu'en fin de mot (« hok* ») : on cherche donc le début de chaque mot.
+ */
+const motDeRecherche = (mot: string) => mot.replace(/[^\p{L}\p{N}-]/gu, '');
+
+/**
+ * La requête pour ce qu'on a tapé : chaque mot doit se retrouver au début
+ * d'un mot du modèle, de la déclinaison ou de la référence — « hoka 45 »
+ * trouve « Hoka Mafate Speed X · 45 1/3 ».
+ */
+export function requeteVariantes(texte: string): string {
+  return texte
+    .split(/\s+/)
+    .map(motDeRecherche)
+    .filter((mot) => mot.length >= 2)
+    .slice(0, 5)
+    .map((mot) => `(product_title:${mot}* OR title:${mot}* OR sku:${mot}*)`)
+    .join(' AND ');
+}
+
+/** Les modèles d'une gamme : le premier mot de chaque titre, l'un ou l'autre. */
+export function requeteGammes(titres: readonly string[]): string {
+  return [...new Set(titres.map((titre) => motDeRecherche(titre.split(/\s+/)[0] ?? '')).filter((mot) => mot.length >= 2))]
+    .map((mot) => `product_title:${mot}*`)
+    .join(' OR ');
+}
+
 /**
  * Variantes candidates pour un remplacement, les mieux pourvues d'abord.
  *

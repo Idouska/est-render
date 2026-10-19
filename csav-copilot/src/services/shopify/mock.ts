@@ -548,10 +548,9 @@ export function createMockShopifyClient(shopDomain: string): ShopifyClient {
       // pour qu'une paire ajoutée au stock corresponde à ce qui se commande.
       if (query.includes('query ListVariants')) {
         const filtre = String(variables?.query ?? '');
-        const titre = /product_title:"?([^"]+)"?/.exec(filtre)?.[1]?.toLowerCase() ?? '';
         const vues = new Set<string>();
         const nodes = ORDERS.flatMap((o) => o.items)
-          .filter((item) => !titre || item.title.toLowerCase() === titre)
+          .filter((item) => varianteRepond(filtre, item))
           .filter((item) => {
             const cle = `${item.title}|${item.variantTitle ?? ''}`;
             if (vues.has(cle)) return false;
@@ -778,4 +777,36 @@ export function createMockShopifyClient(shopDomain: string): ShopifyClient {
       throw new Error(`Requête non gérée par la boutique fictive : ${query.slice(0, 60)}`);
     },
   };
+}
+
+/*
+ * Le filtre de `productVariants`, lu comme Shopify le lit.
+ *
+ * Le catalogue fictif ignorait le filtre : une recherche sur le mauvais champ
+ * marchait ici et ne trouvait rien en production. `title` est le titre de la
+ * déclinaison, `product_title` celui du modèle ; « hok* » cherche le début
+ * d'un mot. Des groupes reliés par AND, faits de termes reliés par OR.
+ */
+function varianteRepond(filtre: string, item: { title: string; variantTitle?: string | null; sku?: string | null }): boolean {
+  if (!filtre.trim()) return true;
+  const champs: Record<string, string> = {
+    product_title: item.title,
+    title: item.variantTitle ?? 'Default Title',
+    sku: item.sku ?? '',
+  };
+  const terme = (brut: string) => {
+    const [, champ = '', valeur = ''] = /^(\w+):"?([^"]*)"?$/.exec(brut.trim()) ?? [];
+    const texte = (champs[champ] ?? Object.values(champs).join(' ')).toLowerCase();
+    const cherche = (champ ? valeur : brut.trim().replace(/^"|"$/g, '')).toLowerCase();
+    // Sans champ, Shopify cherche le texte partout.
+    if (!champ) return texte.includes(cherche.replace(/\*$/, ''));
+    if (cherche.endsWith('*')) {
+      const debut = cherche.slice(0, -1);
+      return texte.split(/[^\p{L}\p{N}]+/u).some((mot) => mot.startsWith(debut));
+    }
+    return texte === cherche;
+  };
+  return filtre
+    .split(/\s+AND\s+/)
+    .every((groupe) => groupe.replace(/^\(|\)$/g, '').split(/\s+OR\s+/).some(terme));
 }

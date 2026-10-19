@@ -317,10 +317,15 @@ export async function ruptureRoutes(app: FastifyInstance): Promise<void> {
     const articleSignale = (ticket: (typeof signalements)[number]) => {
       const declare = lireArticle(ticket.messages[0]?.bodyText);
       const commande = commandeDe(ticket.orderName);
-      const ligne =
-        declare.reference && commande?.lineItems
+      /* Sans référence, le même modèle à l'identique : sur ce catalogue le
+         coloris fait partie du nom, la photo est donc la bonne. */
+      const memeNom = (item: { title?: string | null }) =>
+        Boolean(declare.produit) && (item.title ?? '').trim().toLowerCase() === declare.produit!.trim().toLowerCase();
+      const ligne = commande?.lineItems
+        ? declare.reference
           ? (commande.lineItems.find((item) => item.sku === declare.reference) ?? null)
-          : null;
+          : (commande.lineItems.find(memeNom) ?? null)
+        : null;
 
       const titre = declare.produit ?? ligne?.title ?? null;
       if (!titre && !declare.reference && !declare.taille) return { declare, article: null };

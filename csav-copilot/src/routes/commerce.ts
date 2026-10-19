@@ -13,7 +13,7 @@ import {
 } from '../services/tracking/index.ts';
 import { requireSession } from '../plugins/auth.ts';
 import { getShopifyClient, ShopifyError, ShopifyScopeError } from '../services/shopify/client.ts';
-import { listCollections, listDisputes, listProducts, listVariants } from '../services/shopify/catalog.ts';
+import { listCollections, listDisputes, listProducts, listVariants, requeteVariantes } from '../services/shopify/catalog.ts';
 import { listCustomers } from '../services/shopify/customers.ts';
 import { countOrders, getOrderById, listOrders, quoteSearchValue } from '../services/shopify/orders.ts';
 import { customerOrderNames, missingOrderIds } from '../services/customers/sheet.ts';
@@ -760,15 +760,11 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/catalogue/variantes', async (request, reply) => {
     const parsed = z.object({ q: z.string().trim().max(120).default('') }).safeParse(request.query);
     if (!parsed.success) return reply.code(400).send({ error: 'Paramètres invalides' });
-    const mots = parsed.data.q
-      .split(/\s+/)
-      .map((mot) => mot.replace(/[^\p{L}\p{N}-]/gu, ''))
-      .filter((mot) => mot.length >= 2)
-      .slice(0, 5);
-    if (!mots.length) return reply.send({ options: [] });
+    const query = requeteVariantes(parsed.data.q);
+    if (!query) return reply.send({ options: [] });
 
     return serveShopify(request, reply, 'Recherche de modèles en échec', async (client) => {
-      const options = await listVariants(client, { query: mots.map((mot) => `title:*${mot}*`).join(' AND '), limit: 40 });
+      const options = await listVariants(client, { query, limit: 40 });
       options.sort((a, b) => Number(b.availableForSale) - Number(a.availableForSale) || (b.inventoryQuantity ?? 0) - (a.inventoryQuantity ?? 0));
       return { options };
     });
