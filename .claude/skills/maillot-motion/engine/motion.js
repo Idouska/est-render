@@ -178,9 +178,11 @@
     const sx = (p.sx == null ? 1 : p.sx) * s;
     const sy = (p.sy == null ? 1 : p.sy) * s;
     const o = p.o == null ? 1 : clamp(p.o);
+    // rx, ry : inclinaison 3D (degrés), vue avec une perspective de `persp` px.
+    const tilt = Math.abs(p.rx || 0) > 0.01 || Math.abs(p.ry || 0) > 0.01 ? `perspective(${p.persp || 2600}px) rotateX(${(p.rx || 0).toFixed(3)}deg) rotateY(${(p.ry || 0).toFixed(3)}deg) ` : '';
     n.style.transform =
       `translate(${(p.x || 0).toFixed(2)}px,${(p.y || 0).toFixed(2)}px) ` +
-      `translate(${-ax * 100}%,${-ay * 100}%) rotate(${(p.r || 0).toFixed(3)}deg) scale(${sx.toFixed(4)},${sy.toFixed(4)})`;
+      `translate(${-ax * 100}%,${-ay * 100}%) ${tilt}rotate(${(p.r || 0).toFixed(3)}deg) scale(${sx.toFixed(4)},${sy.toFixed(4)})`;
     n.style.transformOrigin = `${ax * 100}% ${ay * 100}%`;
     n.style.opacity = o.toFixed(4);
     n.style.visibility = o < 0.002 ? 'hidden' : 'visible';

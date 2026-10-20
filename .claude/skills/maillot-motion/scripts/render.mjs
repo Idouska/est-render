@@ -91,7 +91,9 @@ if (typeof spec.marque === 'string') {
 spec.marque = spec.marque || {};
 
 const modele = spec.modele || 'drop';
-const templatePath = join(SKILL, 'templates', modele + '.js');
+// Un modèle propre au projet : chemin d'un fichier .js, relatif au fichier de scène.
+const customTemplate = /\.js$/.test(modele) ? resolve(specDir, modele) : null;
+const templatePath = customTemplate || join(SKILL, 'templates', modele + '.js');
 if (!existsSync(templatePath)) {
   const list = spawnSync('ls', [join(SKILL, 'templates')]).stdout.toString().trim().replace(/\.js/g, '').split('\n');
   fail(`Modèle « ${modele} » inconnu. Modèles disponibles : ${list.join(', ')}`);
@@ -117,13 +119,13 @@ if (modele === 'flocage' && !P.image_dos) {
   P.image_dos = demo('maillot-domicile-dos.svg');
   warnings.push('Pas de produit.image_dos : dos de démonstration utilisé.');
 }
-// Tous les champs « image » et « image_dos » du fichier de scène (produit, produits,
-// match.domicile…) deviennent des URL servies par la route mm.local.
+// Tous les champs « image », « image_dos » et « logo… » du fichier de scène (produit,
+// produits, match.domicile…) deviennent des URL servies par la route mm.local.
 (function resolveImages(o, path) {
   if (Array.isArray(o)) return o.forEach((v, i) => resolveImages(v, `${path}[${i}]`));
   if (!o || typeof o !== 'object') return;
   for (const [k, v] of Object.entries(o)) {
-    if ((k === 'image' || k === 'image_dos') && typeof v === 'string') o[k] = asset(v, specDir, `${path}.${k}`);
+    if (/^(image|image_dos|logo\w*)$/.test(k) && typeof v === 'string') o[k] = asset(v, specDir, `${path}.${k}`);
     else if (k !== 'marque') resolveImages(v, path ? `${path}.${k}` : k);
   }
 })(spec, '');
@@ -195,7 +197,7 @@ function pageHtml(fmt) {
 <script src="${HOST}/skill/engine/motion.js"></script>
 <script src="${HOST}/skill/engine/ui.js"></script>
 <script src="${HOST}/skill/engine/cinema.js"></script>
-<script src="${HOST}/skill/templates/${modele}.js"></script>
+<script src="${customTemplate ? HOST + '/fs' + encodeURI(customTemplate) : `${HOST}/skill/templates/${modele}.js`}"></script>
 </body></html>`;
 }
 

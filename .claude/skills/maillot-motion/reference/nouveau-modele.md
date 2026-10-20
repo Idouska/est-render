@@ -84,6 +84,19 @@ avec `L.W` et `L.H` (il peut déborder). On distingue trois cas :
 | `ticker(ctx, { text, y, size, tin })` | Bandeau défilant décoratif |
 | `letters(ctx, str, { product, fx, fy, size, t0, step, arc })` | Lettres posées sur le maillot (flocage) |
 
+`curseur(ctx, { points: [[t, x, y], …], clics: [t], tin, tout, size })` dessine une flèche de souris
+qui se déplace sur ressort, s'enfonce et fait une onde à chaque clic (son « clic »). Elle vit dans
+`ctx.world` : elle suit la caméra, comme dans un enregistrement d'écran.
+
+`MM.put` accepte `rx`, `ry` (inclinaison 3D en degrés) et `persp`. `product` a les pistes
+correspondantes : une fenêtre peut entrer inclinée puis se redresser. L'option `flouOpacite: false`
+supprime le flou des fondus, ce qui est utile pour enchaîner deux captures d'écran.
+
+**Calques très agrandis** : un élément du monde agrandi par la caméra au-delà de ~16 000 px
+(grande ombre, contour géant, SVG plein écran ×2) est abandonné sans erreur par le compositeur.
+Pour un voile plein écran, dessine-le dans `ctx.hud` en convertissant les positions avec
+`ctx.cam.toScreen(t, x, y)`.
+
 `product` accepte aussi `halo: '#couleur'`, un halo coloré derrière le maillot. Les pistes
 `lum` (0 : silhouette noire, 1 : éclairé) et `halo` s'animent avec `.move()`. `p.blur = (t) => px`
 ajoute un flou de profondeur.

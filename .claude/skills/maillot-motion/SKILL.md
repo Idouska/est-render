@@ -256,6 +256,12 @@ Lis `reference/droits.md` avant de publier. L'essentiel :
 
 ## Créer ou modifier un modèle
 
+Un projet peut avoir **son propre modèle** sans toucher au skill : `"modele": "presentation.js"` charge
+ce fichier, relatif au fichier de scène. C'est la voie pour une vidéo hors catalogue, par exemple
+la présentation d'un logiciel filmée sur ses vrais écrans (voir `videos/csav/` dans ce dépôt) :
+captures d'écran en double définition, caméra qui zoome sur chaque zone, projecteur qui assombrit
+le reste, curseur qui clique (`ui.curseur`), fenêtre qui entre inclinée (pistes `rx` et `ry`).
+
 `reference/nouveau-modele.md` décrit l'API du moteur (`MM.film`, `ctx`, `Track`, ressorts, caméra,
 composants `ui.*`, sons, marquage `data-qa`) et la marche à suivre : copier le modèle le plus
 proche, le régler avec `--planche` et `--controle`, puis rendre.

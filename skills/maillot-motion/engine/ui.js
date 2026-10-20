@@ -437,12 +437,14 @@
       s: new Track(st.s ?? 1),
       r: new Track(st.r ?? 0),
       o: new Track(st.o ?? 1),
+      rx: new Track(st.rx ?? 0), // inclinaison 3D
+      ry: new Track(st.ry ?? 0),
       lum: new Track(st.lum ?? 1), // luminosité du maillot (0 : silhouette noire)
       halo: new Track(st.halo ?? 1), // intensité du halo de couleur
       shines: [],
       floatFrom: o.floatFrom,
       move(t, to, sp = SP.vif) {
-        for (const k of ['x', 'y', 's', 'r', 'o', 'lum', 'halo']) if (to[k] != null) p[k].to(t, to[k], sp);
+        for (const k of ['x', 'y', 's', 'r', 'o', 'lum', 'halo', 'rx', 'ry']) if (to[k] != null) p[k].to(t, to[k], sp);
         return p;
       },
       shine(t) {
@@ -475,7 +477,7 @@
       },
       seek(t) {
         const s = p.state(t);
-        put(wrap, { x: s.x, y: s.y, s: s.s, r: s.r, o: s.o, b: (1 - clamp(s.o)) * 14 + (p.blur ? p.blur(t) : 0) });
+        put(wrap, { x: s.x, y: s.y, s: s.s, r: s.r, rx: p.rx.at(t), ry: p.ry.at(t), o: s.o, b: (o.flouOpacite === false ? 0 : (1 - clamp(s.o)) * 14) + (p.blur ? p.blur(t) : 0) });
         const lum = p.lum.at(t);
         im.style.filter = lum < 0.995 ? `brightness(${Math.max(0, lum).toFixed(3)})` : '';
         if (wrap.mmGlow) wrap.mmGlow.style.opacity = clamp(p.halo.at(t)).toFixed(3);
@@ -850,6 +852,53 @@
   }
 
   /* ------------------------------------------------------------------------
+   * Curseur de souris : se déplace sur ressort, s'enfonce et fait une onde
+   * à chaque clic. points : [[t, x, y], …] dans le repère du calque choisi
+   * (ctx.world par défaut : il suit la caméra, comme dans un enregistrement d'écran).
+   * ---------------------------------------------------------------------- */
+
+  function curseur(ctx, o) {
+    const C = colors(ctx);
+    const size = o.size || ctx.L.u * 3.2;
+    const parent = o.parent || ctx.world;
+    const n = el('div', {
+      parent,
+      html: `<svg viewBox="0 0 24 24" width="${size}" height="${size}" style="display:block;overflow:visible;filter:drop-shadow(0 ${size * 0.08}px ${size * 0.12}px rgba(0,0,0,.45))"><path d="M3 2l15.5 9.2-6.6 1.5 3.9 7.6-3 1.5-3.9-7.6L4 18.6z" fill="#fff" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/></svg>`,
+    });
+    const ring = el('div', { parent, style: { width: size * 1.2 + 'px', height: size * 1.2 + 'px', borderRadius: '50%', border: `${Math.max(2, size * 0.09)}px solid ${o.couleur || C.accent}` } });
+    const pts = o.points;
+    const X = new Track(pts[0][1]);
+    const Y = new Track(pts[0][2]);
+    for (const [t, x, y] of pts.slice(1)) {
+      X.to(t, x, o.sp || SP.vif);
+      Y.to(t, y, o.sp || SP.vif);
+    }
+    const clicks = o.clics || [];
+    clicks.forEach((tc) => ctx.cue(tc, 'clic', { gain: 0.9 }));
+    return ctx.add({
+      seek(t) {
+        const v = vis(t, o.tin, o.tout, { sp: SP.pop });
+        let dip = 1;
+        let rk = -1;
+        let rx = 0;
+        let ry = 0;
+        for (const tc of clicks) {
+          dip -= 0.18 * Math.exp(-Math.pow((t - tc) / 0.06, 2));
+          if (t >= tc && t < tc + 0.5) {
+            rk = (t - tc) / 0.5;
+            rx = X.at(tc);
+            ry = Y.at(tc);
+          }
+        }
+        const x = X.at(t);
+        const y = Y.at(t);
+        put(n, { x, y, ax: 0.12, ay: 0.08, s: dip * (0.6 + 0.4 * clamp(v.e)), o: v.o });
+        put(ring, { x: rx, y: ry, s: rk < 0 ? 1 : 0.6 + E.outCubic(rk) * 1.6, o: rk < 0 ? 0 : (1 - rk) * 0.8 });
+      },
+    });
+  }
+
+  /* ------------------------------------------------------------------------
    * Bandeau défilant (décoratif) : « AUTHENTIQUE • LIVRAISON OFFERTE • ».
    * ---------------------------------------------------------------------- */
 
@@ -950,5 +999,5 @@
     });
   }
 
-  window.MM.ui = { colors, inSafeX, fmtPrice, icon, background, title, text, product, callout, odometer, price, button, badge, logo, ticker, letters };
+  window.MM.ui = { colors, inSafeX, fmtPrice, curseur, icon, background, title, text, product, callout, odometer, price, button, badge, logo, ticker, letters };
 })();
