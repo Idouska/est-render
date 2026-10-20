@@ -1,0 +1,15 @@
+{
+  "nom": "MyFootify",
+  "logo": "logo-clair.png",
+  "couleurs": {
+    "fond": "#121212",
+    "fond2": "#242833",
+    "texte": "#f4f5f7",
+    "texte_doux": "#a7abb4",
+    "accent": "#ff6600",
+    "accent_texte": "#ffffff"
+  },
+  "fond": {
+    "halo": 0.09
+  }
+}

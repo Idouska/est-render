@@ -65,9 +65,11 @@
    * Éclairs (flash) et volets de couleur (wipe) sur les temps forts.
    * ---------------------------------------------------------------------- */
 
-  function background(ctx, o = {}) {
+  function background(ctx, opts = {}) {
     const { L } = ctx;
     const C = colors(ctx);
+    // Réglages par défaut de la marque (« fond » dans marque.json), puis ceux du modèle.
+    const o = Object.assign({}, (ctx.spec.marque && ctx.spec.marque.fond) || {}, opts);
     // Tout le fond est dessiné dans un seul canvas : une image précalculée
     // (dégradé, rayures, grain), deux halos, les volets et les éclairs. Des
     // calques DOM plein cadre coûteraient ~150 ms par capture.

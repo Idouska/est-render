@@ -18,6 +18,7 @@ résultat image par image. Tu ne livres jamais une vidéo que tu n'as pas regard
 |---|---|
 | `scripts/render.mjs` | Rendu : contrôle des textes, planche, vidéos, son, vérification du MP4 |
 | `scripts/audio.py` | Bruitages synthétisés, fond rythmique de maquette, analyse de tempo d'une musique |
+| `scripts/detourer.py` | Détourage des photos produit sur fond blanc (PNG à fond transparent) |
 | `templates/*.js` | Les quatre modèles : `drop`, `promo`, `flocage`, `collection` |
 | `engine/motion.js` | Moteur : ressorts, caméra, zones sûres, contrôle automatique |
 | `engine/ui.js` | Composants : fond, titre, produit, point d'intérêt, prix à rouleaux, bouton, pastille, bandeau, flocage |
@@ -30,7 +31,7 @@ Les chemins ci-dessous sont relatifs au dossier du skill : `skills/maillot-motio
 
 ## Prérequis
 
-Node ≥ 20, Playwright avec Chromium, ffmpeg, Python 3 avec numpy. Vérifie en une commande :
+Node ≥ 20, Playwright avec Chromium, ffmpeg, Python 3 avec numpy (et Pillow pour le détourage). Vérifie en une commande :
 
 ```bash
 node scripts/render.mjs exemples/drop.json --formats 9:16 --controle
@@ -56,9 +57,13 @@ Où trouver les données :
 - **Connecteur Shopify** disponible : récupère nom, prix, prix barré et URL des images avec
   ses outils produit, puis télécharge l'image en local (`curl -L -o …`). Le rendu refuse les URL.
 - **Photo avec fond** : le modèle la montre dans une carte arrondie. C'est propre, mais un PNG
-  **détouré** (fond transparent) rend bien mieux : reflet, ombre portée, flocage. Si le
-  connecteur Canva est là, son outil de suppression d'arrière-plan fait l'affaire ; sinon,
-  demande un PNG détouré.
+  **détouré** (fond transparent) rend bien mieux : reflet, ombre portée, flocage.
+  - **Fond blanc ou uni clair**, le cas courant des photos e-commerce : détoure-la toi-même avec
+    `python3 scripts/detourer.py photo.jpg --sortie images/`. Ajoute `--ombre` si une ombre grise
+    reste sous le maillot (jamais pour un maillot blanc ou gris). Regarde toujours le résultat
+    sur un fond sombre avant de l'utiliser.
+  - **Autre fond** (mannequin, décor) : l'outil de suppression d'arrière-plan du connecteur Canva,
+    sinon demande un PNG détouré.
 - **Marque** : un `marque.json` partagé par toutes les vidéos (nom, logo, couleurs). Crée-le une
   fois, à partir des couleurs du site si l'utilisateur ne les donne pas, et réutilise-le.
 
@@ -162,6 +167,9 @@ Champs communs :
 ```
 
 Le logo est facultatif : sans logo, le nom est écrit en lettrage. Les polices sont facultatives.
+`"fond": { "halo": 0.1, "rayures": false }` règle le fond : intensité des halos de couleur d'accent
+(0,2 par défaut ; baisse-la pour un accent chaud comme l'orange, qui salit vite un fond sombre),
+rayures fines.
 Utilise une seule couleur d'accent, celle de la marque.
 
 | Modèle | Champs propres | Durée à 120 BPM |
@@ -169,7 +177,7 @@ Utilise une seule couleur d'accent, celle de la marque.
 | `drop` | `produit` : `nom`, `club`, `saison`, `image`, `prix`, `prix_barre`, `detoure`.<br>`textes` : `atouts` (3 au plus ; texte simple, ou `{ "texte", "x", "y" }` pour placer le point sur la photo, en fractions de 0 à 1), `mention` (défaut « Produit authentique », ou `false`) | 12 s |
 | `promo` | `promo` : `remise` (en %), `code`, `fin`.<br>`produits` : 1 à 4 objets `{ nom, image, prix, prix_promo }` (le prix remisé est calculé si `prix_promo` est absent).<br>`textes` : `code_label` | 11 s |
 | `flocage` | `produit` : `nom`, `image_dos`, `prix`.<br>`flocage` : `nom`, `numero`, `couleur`, `prix`, `zone_nom` et `zone_numero` (`{x, y}` en fractions de la photo), `arc`, `taille_nom`, `taille_numero` | 12 s |
-| `collection` | `produits` : 2 à 6 objets `{ nom, image, prix, prix_barre }`.<br>`textes` : `titre` | 7 s + 1 s par maillot |
+| `collection` | `produits` : 2 à 6 objets `{ nom, image, prix, prix_barre }`.<br>`rythme` : temps par maillot (2,5 par défaut).<br>`textes` : `titre` | 7 s + 1,25 s par maillot |
 
 À un autre tempo, toutes les durées suivent : à 128 BPM, le drop dure 11,25 s.
 

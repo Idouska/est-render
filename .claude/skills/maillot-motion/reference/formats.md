@@ -47,7 +47,7 @@ courants, pas des spécifications officielles. Meta recommande parfois de laisse
 | drop | 12 s | 11,25 s |
 | promo | 11 s | 10,3 s |
 | flocage | 12 s | 11,25 s |
-| collection (3 maillots) | 10 s | 9,4 s |
+| collection (3 maillots) | 10,75 s | 10,1 s |
 
 Plus le tempo est rapide, plus la vidéo est courte. Il vaut mieux accélérer le
 tempo que retirer des temps.

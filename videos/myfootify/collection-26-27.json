@@ -1,0 +1,46 @@
+{
+  "modele": "collection",
+  "nom": "myfootify-collection-26-27",
+  "marque": "marque.json",
+  "formats": [
+    "9:16",
+    "4:5",
+    "16:9"
+  ],
+  "produits": [
+    {
+      "nom": "France 2026",
+      "image": "images/france-2026-domicile.png",
+      "prix": 59.9
+    },
+    {
+      "nom": "PSG 26/27",
+      "image": "images/psg-2026-27-domicile.png",
+      "prix": 59.9
+    },
+    {
+      "nom": "Barça 26/27",
+      "image": "images/barcelone-2026-27-domicile.png",
+      "prix": 59.9
+    },
+    {
+      "nom": "Brésil 2026",
+      "image": "images/bresil-2026-domicile.png",
+      "prix": 59.9
+    },
+    {
+      "nom": "Real Madrid",
+      "image": "images/real-madrid-2026-27-third-rose.png",
+      "prix": 59.9
+    }
+  ],
+  "textes": {
+    "accroche": [
+      "Les",
+      "maillots",
+      "26/27"
+    ],
+    "titre": "Maillots 2026/27",
+    "cta": "myfootify.com"
+  }
+}

@@ -1,13 +1,14 @@
 /**
- * Modèle « collection » : 2 à 6 maillots. 14 + 2 × N temps (12 s pour 3 maillots).
+ * Modèle « collection » : 2 à 6 maillots. 14 + 2,5 × N temps (≈ 10,8 s pour 3 maillots).
  *
  *   0–3      accroche sur la grille assombrie
  *   4        temps fort : les maillots se posent en grille, un par croche
- *   6 …      la caméra zoome sur chaque maillot (2 temps chacun) : nom, prix
- *   6 + 2N   recul sur toute la grille ; titre, bouton, logo
+ *   6 …      la caméra zoome sur chaque maillot (« rythme » temps chacun, 2,5 par défaut) : nom, prix
+ *   6 + R·N  recul sur toute la grille ; titre, bouton, logo
  */
 (function () {
   const { SP, ui, lines } = window.MM;
+  const CAM = { w: 11, z: 1 };
 
   MM.film({
     async build(ctx) {
@@ -20,13 +21,15 @@
       const side = !L.portrait && !(L.H / L.W > 1.1);
       const imgs = [];
       for (const it of items) imgs.push(await ctx.image(it.image));
-      ctx.duration = B(14 + 2 * N);
+      // Temps par maillot : assez pour lire un nom de 2 à 3 mots et son prix.
+      const R = spec.rythme || 2.5;
+      ctx.duration = B(14 + R * N);
       ctx.tempsFort = B(4);
 
       ctx.bg = ui.background(ctx);
 
       // ---- Grille ------------------------------------------------------------
-      const cols = L.wide ? Math.min(N, 4) : side ? Math.min(N, 3) : N <= 1 ? 1 : 2;
+      const cols = L.wide ? (N <= 5 ? N : 3) : side ? Math.min(N, 3) : N <= 2 ? N : N <= 4 ? 2 : 3;
       const rows = Math.ceil(N / cols);
       const area = side
         ? { x: S.x, y: S.y + S.h * 0.14, w: S.w, h: S.h * 0.66 }
@@ -85,12 +88,13 @@
       const nameY = S.y + S.h * (side ? 0.74 : 0.8);
       const priceY = S.y + S.h * (side ? 0.88 : 0.9);
       items.forEach((it, i) => {
-        const t0 = B(6 + i * 2);
-        const t1 = B(8 + i * 2);
+        const t0 = B(6 + i * R);
+        const t1 = B(6 + (i + 1) * R);
         const c = cells[i];
-        ctx.cam.frame(t0 - 0.25, c.x - (sx - L.W / 2) / z, c.y - (sy - L.H / 2) / z, z);
+        // Caméra rapide et amortie : le maillot doit être cadré pendant presque tout son temps.
+        ctx.cam.frame(t0 - 0.3, c.x - (sx - L.W / 2) / z, c.y - (sy - L.H / 2) / z, z, CAM);
         ctx.cue(t0 - 0.2, 'whoosh', { gain: 0.5 });
-        prods.forEach((p, j) => p.o.to(t0 - 0.25, j === i ? 1 : 0.25, SP.vif));
+        prods.forEach((p, j) => p.o.to(t0 - 0.3, j === i ? 1 : 0.25, SP.vif));
         prods[i].shine(t0 + 0.15);
         ui.text(ctx, it.nom || `Maillot ${i + 1}`, {
           x: S.cx,
@@ -98,7 +102,7 @@
           size: side ? S.h * 0.07 : S.h * 0.05,
           maxW: S.w,
           upper: true,
-          tin: t0,
+          tin: t0 - 0.02,
           tout: t1 - 0.2,
         });
         if (it.prix != null) {
@@ -110,15 +114,15 @@
             y: priceY - (it.prix_barre ? S.h * 0.02 : 0),
             size: side ? S.h * 0.1 : S.h * 0.07,
             tin: t0 + 0.1,
-            tout: t1 - 0.15,
+            tout: t1 - 0.12,
             roll: 0.55,
           });
         }
       });
 
       // ---- Recul sur la grille et fin ----------------------------------------
-      const tb = B(6 + 2 * N);
-      ctx.cam.frame(tb - 0.2, L.W / 2, L.H / 2, 1);
+      const tb = B(6 + R * N);
+      ctx.cam.frame(tb - 0.25, L.W / 2, L.H / 2, 1, CAM);
       prods.forEach((p) => p.o.to(tb - 0.2, 1, SP.vif));
       ctx.cue(tb - 0.15, 'swipe', { gain: 0.6 });
       ui.text(ctx, T.titre || 'Toute la collection', {
