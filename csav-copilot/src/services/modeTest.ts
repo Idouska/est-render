@@ -1,3 +1,4 @@
+import { env } from '../config/env.ts';
 import { prisma } from '../lib/prisma.ts';
 
 /**
@@ -19,9 +20,26 @@ import { prisma } from '../lib/prisma.ts';
 export async function enModeTest(merchantId: string): Promise<boolean> {
   const merchant = await prisma.merchant.findUnique({
     where: { id: merchantId },
-    select: { testMode: true },
+    select: { testMode: true, demo: true },
   });
-  return merchant?.testMode ?? false;
+  // La boutique de démonstration est en mode test pour toujours : elle se
+  // montre à n'importe qui, rien de ce qu'on y fait ne doit sortir.
+  return Boolean(merchant?.testMode || merchant?.demo);
+}
+
+/** La boutique de démonstration (`services/demo/`) : Shopify et Gmail y sont fictifs. */
+export async function boutiqueDemo(merchantId: string): Promise<boolean> {
+  const merchant = await prisma.merchant.findUnique({ where: { id: merchantId }, select: { demo: true } });
+  return merchant?.demo ?? false;
+}
+
+/**
+ * Gmail est-il simulé pour ce marchand ? En développement (`GMAIL_MOCK`), ou
+ * pour la boutique de démonstration, qui n'a pas de boîte : ses mails sont
+ * en base, et rien n'en part.
+ */
+export async function gmailSimule(merchantId: string): Promise<boolean> {
+  return env.GMAIL_MOCK || (await boutiqueDemo(merchantId));
 }
 
 /** Une action refusée parce que le mode test est allumé. */

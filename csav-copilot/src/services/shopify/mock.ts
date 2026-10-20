@@ -9,7 +9,7 @@ import type { ShopifyClient } from './client.ts';
  * octets change.
  */
 
-interface MockOrder {
+export interface MockOrder {
   id: string;
   name: string;
   createdAt: string;
@@ -22,7 +22,16 @@ interface MockOrder {
   customerSince: string;
   customerOrders: number;
   customerSpent: string;
-  items: Array<{ title: string; quantity: number; variantTitle: string | null }>;
+  items: Array<{
+    title: string;
+    quantity: number;
+    variantTitle: string | null;
+    sku?: string;
+    vendor?: string;
+    image?: string;
+    /** Prix unitaire. Absent, la ligne prend un prix fictif. */
+    prix?: number;
+  }>;
   fulfillments: Array<{
     status: string;
     updatedAt: string;
@@ -40,6 +49,38 @@ interface MockOrder {
     country: string;
     phone?: string;
   };
+}
+
+/** Un produit du catalogue fictif, avec ses déclinaisons. */
+export interface ProduitFictif {
+  id: string;
+  titre: string;
+  type: string;
+  image: string | null;
+  statut: 'ACTIVE' | 'DRAFT';
+  majLe: string;
+  variantes: Array<{ id: string; titre: string; sku: string; prix: number; stock: number; image: string | null }>;
+}
+
+/*
+ * Un jeu de données fictif : la boutique de développement (des luminaires,
+ * plus bas) ou la boutique de démonstration (`services/demo/`). Le client
+ * fictif est le même ; seules les données changent.
+ */
+export interface JeuFictif {
+  nom: string;
+  vendeur: string;
+  typeProduit: string;
+  commandes: MockOrder[];
+  /** Le catalogue complet. Absent, il se déduit des articles commandés. */
+  produits?: ProduitFictif[];
+  collections: string[];
+  /** Modèles des remboursements de l'historique : [titre, déclinaisons, prix]. */
+  produitsStats: Array<[string, Array<string | null>, number]>;
+  /** Le litige bancaire ouvert. */
+  litige: { commande: string; montant: string };
+  /** Les remboursements récents de l'écran Finance. */
+  remboursementsRecents: Array<{ commande: MockOrder; montant: string; note: string; ilYaJours: number }>;
 }
 
 const ORDERS: MockOrder[] = [
@@ -281,6 +322,20 @@ const ORDERS: MockOrder[] = [
 ];
 
 function toGraphQL(order: MockOrder) {
+  const lignes = order.items.map((item, rang) => ({
+    title: item.title,
+    quantity: item.quantity,
+    variantTitle: item.variantTitle,
+    sku: item.sku ?? null,
+    vendor: item.vendor ?? null,
+    image: item.image ? { url: item.image } : null,
+    discountedTotalSet: {
+      shopMoney: {
+        amount: item.prix !== undefined ? (item.prix * item.quantity).toFixed(2) : prixFictif(rang + 2),
+        currencyCode: 'EUR',
+      },
+    },
+  }));
   return {
     id: order.id,
     name: order.name,
@@ -297,12 +352,7 @@ function toGraphQL(order: MockOrder) {
       amountSpent: { amount: order.customerSpent },
     },
     // Le montant de la ligne, comme Shopify le donne : remises comprises.
-    lineItems: {
-      nodes: order.items.map((item, rang) => ({
-        ...item,
-        discountedTotalSet: { shopMoney: { amount: prixFictif(rang + 2), currencyCode: 'EUR' } },
-      })),
-    },
+    lineItems: { nodes: lignes },
     fulfillments: order.fulfillments.map((f) => ({
       // Comme l'API : `status` ne dit que « l'expédition existe », l'état du
       // colis chez le transporteur est dans `displayStatus`.
@@ -352,16 +402,17 @@ function valeurs(query: string, champ: string): string[] {
 }
 
 /** Interprète les filtres `email:"…"`, `name:"#…"` et d'état de la recherche Shopify. */
-function runSearch(query: string): MockOrder[] {
+function runSearch(ORDERS: MockOrder[], query: string): MockOrder[] {
   const email = query.match(/email:"([^"]+)"/i)?.[1]?.toLowerCase();
-  const name = query.match(/name:"([^"]+)"/i)?.[1];
+  // Plusieurs numéros reliés par OR : `name:"#1" OR name:"#2"`.
+  const noms = [...query.matchAll(/name:"([^"]+)"/gi)].map((m) => m[1]!);
   const free = query.match(/^"([^"]+)"/)?.[1]?.toLowerCase();
   const paiements = valeurs(query, 'financial_status');
   const expeditions = valeurs(query, 'fulfillment_status');
 
   let result = ORDERS;
   if (email) result = result.filter((o) => o.customerEmail.toLowerCase() === email);
-  if (name) result = result.filter((o) => o.name === name);
+  if (noms.length) result = result.filter((o) => noms.includes(o.name));
   if (free) result = result.filter((o) => o.customerName.toLowerCase().includes(free));
   if (paiements.length) result = result.filter((o) => paiements.includes(o.displayFinancialStatus.toLowerCase()));
   if (expeditions.length) result = result.filter((o) => expeditions.some((v) => EXPEDITION[v]?.(o)));
@@ -375,7 +426,7 @@ function runSearch(query: string): MockOrder[] {
  * avec et sans articles précisés, des partiels. Déterministe : un graphique
  * de démonstration qui change à chaque appel ferait douter du vrai.
  */
-const PRODUITS_FICTIFS: Array<[string, Array<string | null>, number]> = [
+const PRODUITS_FICTIFS: JeuFictif['produitsStats'] = [
   ['Lampe Perce-neige', ['Laiton', 'Noir'], 89],
   ['Applique Halo', ['Noir mat', 'Laiton'], 74],
   ['Lampe Rosée', ['Verre soufflé'], 96],
@@ -395,9 +446,9 @@ const NOTES_FICTIVES = [
   'Le client a changé d’avis',
 ];
 
-function remboursementsFictifs() {
+function remboursementsFictifs(produits: JeuFictif['produitsStats']) {
   return Array.from({ length: 72 }, (_, i) => {
-    const [titre, variantes, prix] = PRODUITS_FICTIFS[(i * 7 + (i >> 2)) % PRODUITS_FICTIFS.length]!;
+    const [titre, variantes, prix] = produits[(i * 7 + (i >> 2)) % produits.length]!;
     const quantite = i % 5 === 0 ? 2 : 1;
     const totalLigne = Math.round(prix * quantite * 100) / 100;
     const partiel = i % 4 === 0;
@@ -435,14 +486,41 @@ function remboursementsFictifs() {
   });
 }
 
-export function createMockShopifyClient(shopDomain: string): ShopifyClient {
+/** La boutique de développement : des luminaires, et trois commandes ambiguës. */
+const JEU_DEV: JeuFictif = {
+  nom: 'Boutique fictive',
+  vendeur: 'Atelier Lumen',
+  typeProduit: 'Luminaire',
+  commandes: ORDERS,
+  collections: ['Luminaires', 'Nouveautés', 'Fin de série'],
+  produitsStats: PRODUITS_FICTIFS,
+  litige: { commande: '#10428', montant: '128.40' },
+  remboursementsRecents: [
+    { commande: ORDERS.find((o) => o.name === '#10391')!, montant: '74.00', note: 'Article endommagé', ilYaJours: 3 },
+  ],
+};
+
+export function createMockShopifyClient(shopDomain: string, jeu: JeuFictif = JEU_DEV): ShopifyClient {
   const refunds = new Map<string, string>();
+  const ORDERS = jeu.commandes;
+  // Le catalogue : celui du jeu, sinon les articles des commandes.
+  const produits: ProduitFictif[] =
+    jeu.produits ??
+    [...new Set(ORDERS.flatMap((o) => o.items.map((i) => i.title)))].map((titre, index) => ({
+      id: `gid://shopify/Product/${index + 1}`,
+      titre,
+      type: jeu.typeProduit,
+      image: null,
+      statut: index % 5 === 4 ? 'DRAFT' : 'ACTIVE',
+      majLe: new Date(Date.UTC(2026, 1, 20 - index)).toISOString(),
+      variantes: [],
+    }));
 
   return {
     shopDomain,
     async request<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
       if (query.includes('query SearchOrders')) {
-        const found = runSearch(String(variables?.query ?? '')).slice(
+        const found = runSearch(ORDERS, String(variables?.query ?? '')).slice(
           0,
           Number(variables?.limit ?? 10),
         );
@@ -453,7 +531,7 @@ export function createMockShopifyClient(shopDomain: string): ShopifyClient {
         return Object.fromEntries(
           Object.entries(variables ?? {}).map(([cle, filtre]) => [
             cle,
-            { count: runSearch(String(filtre ?? '')).length, precision: 'EXACT' },
+            { count: runSearch(ORDERS, String(filtre ?? '')).length, precision: 'EXACT' },
           ]),
         ) as T;
       }
@@ -463,7 +541,7 @@ export function createMockShopifyClient(shopDomain: string): ShopifyClient {
       if (query.includes('query ListOrders')) {
         // Le tri de l'écran Commandes, comme Shopify : date ou montant.
         const cle = (o: MockOrder) => (variables?.sortKey === 'TOTAL_PRICE' ? Number(o.total) : o.createdAt);
-        const found = runSearch(String(variables?.query ?? ''))
+        const found = runSearch(ORDERS, String(variables?.query ?? ''))
           .sort((a, b) => (cle(a) < cle(b) ? -1 : cle(a) > cle(b) ? 1 : 0) * (variables?.reverse === false ? 1 : -1))
           .slice(0, Number(variables?.limit ?? 25));
         return {
@@ -523,27 +601,31 @@ export function createMockShopifyClient(shopDomain: string): ShopifyClient {
       // Catalogue fictif : les articles cités dans les commandes ci-dessus,
       // pour que le mode démonstration reste cohérent d'un écran à l'autre.
       if (query.includes('query ListProducts')) {
-        const titles = [...new Set(ORDERS.flatMap((o) => o.items.map((i) => i.title)))];
         const term = String(variables?.query ?? '').toLowerCase();
 
-        const nodes = titles
-          .filter((title) => !term || filtreRepond(term, { title, product_title: title }))
-          .map((title, index) => ({
-            id: `gid://shopify/Product/${index + 1}`,
-            title,
-            handle: title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-            status: index % 5 === 4 ? 'DRAFT' : 'ACTIVE',
-            vendor: 'Atelier Lumen',
-            productType: 'Luminaire',
-            totalInventory: index % 4 === 3 ? 0 : 12 + index * 3,
-            updatedAt: new Date(Date.UTC(2026, 1, 20 - index)).toISOString(),
-            featuredMedia: null,
-            variantsCount: { count: 1 + (index % 3) },
-            priceRangeV2: {
-              minVariantPrice: { amount: String(29 + index * 7), currencyCode: 'EUR' },
-              maxVariantPrice: { amount: String(29 + index * 11) },
-            },
-          }));
+        const nodes = produits
+          .filter((produit) => !term || filtreRepond(term, { title: produit.titre, product_title: produit.titre }))
+          .map((produit, index) => {
+            const prix = produit.variantes.map((v) => v.prix);
+            return {
+              id: produit.id,
+              title: produit.titre,
+              handle: produit.titre.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+              status: produit.statut,
+              vendor: jeu.vendeur,
+              productType: produit.type,
+              totalInventory: produit.variantes.length
+                ? produit.variantes.reduce((somme, v) => somme + v.stock, 0)
+                : index % 4 === 3 ? 0 : 12 + index * 3,
+              updatedAt: produit.majLe,
+              featuredMedia: produit.image ? { preview: { image: { url: produit.image } } } : null,
+              variantsCount: { count: produit.variantes.length || 1 + (index % 3) },
+              priceRangeV2: {
+                minVariantPrice: { amount: String(prix.length ? Math.min(...prix) : 29 + index * 7), currencyCode: 'EUR' },
+                maxVariantPrice: { amount: String(prix.length ? Math.max(...prix) : 29 + index * 11) },
+              },
+            };
+          });
 
         return {
           products: { pageInfo: { hasNextPage: false, endCursor: null }, nodes },
@@ -552,6 +634,33 @@ export function createMockShopifyClient(shopDomain: string): ShopifyClient {
 
       // Les déclinaisons du catalogue fictif : celles des commandes ci-dessus,
       // pour qu'une paire ajoutée au stock corresponde à ce qui se commande.
+      if (query.includes('query ListVariants') && jeu.produits) {
+        const filtre = String(variables?.query ?? '');
+        const nodes = jeu.produits
+          .flatMap((produit) => produit.variantes.map((variante) => ({ produit, variante })))
+          .filter(({ produit, variante }) =>
+            varianteRepond(filtre, { title: produit.titre, variantTitle: variante.titre, sku: variante.sku }),
+          )
+          .slice(0, Number(variables?.limit ?? 20))
+          .map(({ produit, variante }) => varianteGraphQL(produit, variante));
+        return { productVariants: { nodes } } as T;
+      }
+
+      if (query.includes('query ProductVariants')) {
+        const produit = produits.find((p) => p.id === variables?.id);
+        return {
+          product: produit
+            ? {
+                id: produit.id,
+                title: produit.titre,
+                vendor: jeu.vendeur,
+                featuredMedia: produit.image ? { preview: { image: { url: produit.image } } } : null,
+                variants: { nodes: produit.variantes.map((variante) => varianteGraphQL(produit, variante)) },
+              }
+            : null,
+        } as T;
+      }
+
       if (query.includes('query ListVariants')) {
         const filtre = String(variables?.query ?? '');
         const vues = new Set<string>();
@@ -599,7 +708,7 @@ export function createMockShopifyClient(shopDomain: string): ShopifyClient {
       }
 
       if (query.includes('query ListCollections')) {
-        const nodes = ['Luminaires', 'Nouveautés', 'Fin de série'].map((title, index) => ({
+        const nodes = jeu.collections.map((title, index) => ({
           id: `gid://shopify/Collection/${index + 1}`,
           title,
           handle: title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
@@ -622,13 +731,13 @@ export function createMockShopifyClient(shopDomain: string): ShopifyClient {
               nodes: [
                 {
                   id: 'gid://shopify/ShopifyPaymentsDispute/1',
-                  amount: { amount: '128.40', currencyCode: 'EUR' },
+                  amount: { amount: jeu.litige.montant, currencyCode: 'EUR' },
                   reasonDetails: { reason: 'PRODUCT_NOT_RECEIVED' },
                   status: 'NEEDS_RESPONSE',
                   type: 'CHARGEBACK',
                   evidenceDueBy: new Date(Date.now() + 4 * 86400000).toISOString(),
                   initiatedAt: new Date(Date.now() - 3 * 86400000).toISOString(),
-                  order: { name: '#10428' },
+                  order: { name: jeu.litige.commande },
                 },
               ],
             },
@@ -667,7 +776,7 @@ export function createMockShopifyClient(shopDomain: string): ShopifyClient {
 
       if (query.includes('query RefundStats')) {
         const depuis = String(variables?.query ?? '').match(/updated_at:>=(\d{4}-\d{2}-\d{2})/)?.[1];
-        const nodes = remboursementsFictifs().filter(
+        const nodes = remboursementsFictifs(jeu.produitsStats).filter(
           (commande) => !depuis || commande.refunds[0]!.createdAt.slice(0, 10) >= depuis,
         );
         return { orders: { pageInfo: { hasNextPage: false, endCursor: null }, nodes } } as T;
@@ -677,22 +786,20 @@ export function createMockShopifyClient(shopDomain: string): ShopifyClient {
         return {
           orders: {
             pageInfo: { hasNextPage: false, endCursor: null },
-            nodes: [
-              {
-                id: 'gid://shopify/Order/10391',
-                name: '#10391',
-                totalPriceSet: { shopMoney: { amount: '74.00' } },
-                customer: { displayName: 'Marc Delaunay', email: 'm.delaunay@orange.fr' },
-                refunds: [
-                  {
-                    id: 'gid://shopify/Refund/9001',
-                    createdAt: new Date(Date.now() - 3 * 86_400_000).toISOString(),
-                    note: 'Article endommagé',
-                    totalRefundedSet: { shopMoney: { amount: '74.00', currencyCode: 'EUR' } },
-                  },
-                ],
-              },
-            ],
+            nodes: jeu.remboursementsRecents.map((recent, rang) => ({
+              id: recent.commande.id,
+              name: recent.commande.name,
+              totalPriceSet: { shopMoney: { amount: recent.commande.total } },
+              customer: { displayName: recent.commande.customerName, email: recent.commande.customerEmail },
+              refunds: [
+                {
+                  id: `gid://shopify/Refund/${9001 + rang}`,
+                  createdAt: new Date(Date.now() - recent.ilYaJours * 86_400_000).toISOString(),
+                  note: recent.note,
+                  totalRefundedSet: { shopMoney: { amount: recent.montant, currencyCode: 'EUR' } },
+                },
+              ],
+            })),
           },
         } as T;
       }
@@ -771,7 +878,7 @@ export function createMockShopifyClient(shopDomain: string): ShopifyClient {
       if (query.includes('query ShopPolicies')) {
         return {
           shop: {
-            name: 'Boutique fictive',
+            name: jeu.nom,
             contactEmail: 'contact@exemple.test',
             shipsToCountries: ['FR', 'BE', 'CH'],
             shippingPolicy: {
@@ -801,6 +908,25 @@ export function createMockShopifyClient(shopDomain: string): ShopifyClient {
         refunds.set(input.orderId, id);
         return { refundCreate: { refund: { id }, userErrors: [] } } as T;
       }
+
+      // Une commande pas encore expédiée a une expédition ouverte : l'atelier
+      // peut y saisir son numéro de suivi.
+      if (query.includes('query FulfillmentOrders')) {
+        const found = ORDERS.find((o) => o.id === variables?.id);
+        return {
+          order: found
+            ? { fulfillmentOrders: { nodes: [{ id: `${found.id}/fo`, status: found.fulfillments.length ? 'CLOSED' : 'OPEN' }] } }
+            : null,
+        } as T;
+      }
+
+      // Les autres écritures reçoivent la réponse qu'aurait donnée Shopify,
+      // comme en mode test : rien n'existe, rien ne part.
+      // Import tardif : `modeTest` lit la configuration du serveur, que les
+      // tests du catalogue fictif ne chargent pas.
+      const { ecritureSimulee } = await import('../modeTest.ts');
+      const simulee = ecritureSimulee(query);
+      if (simulee !== null) return simulee as T;
 
       throw new Error(`Requête non gérée par la boutique fictive : ${query.slice(0, 60)}`);
     },
@@ -841,6 +967,23 @@ function filtreRepond(filtre: string, champs: Record<string, string>): boolean {
   return filtre
     .split(/\s+AND\s+/)
     .every((groupe) => groupe.replace(/^\(|\)$/g, '').split(/\s+OR\s+/).some(terme));
+}
+
+function varianteGraphQL(produit: ProduitFictif, variante: ProduitFictif['variantes'][number]) {
+  return {
+    id: variante.id,
+    title: variante.titre,
+    sku: variante.sku,
+    price: variante.prix.toFixed(2),
+    inventoryQuantity: variante.stock,
+    availableForSale: variante.stock > 0,
+    image: variante.image ? { url: variante.image } : null,
+    product: {
+      id: produit.id,
+      title: produit.titre,
+      featuredMedia: produit.image ? { preview: { image: { url: produit.image } } } : null,
+    },
+  };
 }
 
 /** Des prix qui varient d'une déclinaison à l'autre : un échange montre son écart. */

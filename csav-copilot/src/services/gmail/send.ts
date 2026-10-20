@@ -1,5 +1,4 @@
-import { env } from '../../config/env.ts';
-import { ENVOI_SIMULE, enModeTest } from '../modeTest.ts';
+import { ENVOI_SIMULE, enModeTest, gmailSimule } from '../modeTest.ts';
 import { logger } from '../../lib/logger.ts';
 import { getGmailClient } from './client.ts';
 import { buildRawEmail, type PieceJointe } from './mime.ts';
@@ -33,7 +32,7 @@ export async function sendPlainEmail(params: {
   memeEnModeTest?: boolean;
   attachments?: readonly PieceJointe[];
 }): Promise<{ gmailMessageId: string | null; fromEmail: string }> {
-  if (env.GMAIL_MOCK) {
+  if (await gmailSimule(params.merchantId)) {
     logger.info({ to: params.to, subject: params.subject }, 'Gmail simulé : envoi direct non effectué');
     return { gmailMessageId: null, fromEmail: 'simulation@local' };
   }

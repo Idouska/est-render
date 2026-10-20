@@ -82,7 +82,7 @@ test('le client Shopify applique le mode test AVANT tout appel réseau', () => {
   assert.ok(garde >= 0, 'la requête doit consulter le mode test');
   assert.ok(requete.indexOf('ecritureSimulee(query)') > garde);
   assert.ok(garde < requete.indexOf('await fetch(endpoint'), 'le blocage doit précéder le réseau');
-  assert.match(client, /select: \{ shopDomain: true, testMode: true \}/);
+  assert.match(client, /select: \{ shopDomain: true, testMode: true, demo: true \}/);
 });
 
 test('une expédition simulée est comprise comme réussie, sans que Shopify reçoive l’écriture', async () => {
@@ -229,7 +229,7 @@ test('l’effacement ne touche que les données de test, du seul marchand connec
 
 test('le bandeau du mode test existe des deux côtés', () => {
   assert.match(lire('public/dashboard.html'), /id="test-notice" hidden/);
-  assert.match(lire('public/app.js'), /\$\('test-notice'\)\.hidden = !me\.merchant\.testMode;/);
+  assert.match(lire('public/app.js'), /\$\('test-notice'\)\.hidden = demo \|\| !me\.merchant\.testMode;/);
   assert.match(lire('public/workspace.html'), /id="ws-test" hidden/);
   assert.match(lire('public/workspace.js'), /\$\('ws-test'\)\.hidden = !state\.testMode;/);
 });

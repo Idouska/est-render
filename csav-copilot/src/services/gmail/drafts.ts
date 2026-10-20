@@ -1,5 +1,4 @@
-import { env } from '../../config/env.ts';
-import { ENVOI_SIMULE, enModeTest } from '../modeTest.ts';
+import { ENVOI_SIMULE, enModeTest, gmailSimule } from '../modeTest.ts';
 import { logger } from '../../lib/logger.ts';
 import { getGmailClient } from './client.ts';
 
@@ -19,7 +18,7 @@ export async function createReplyDraft(params: {
   body: string;
   inReplyToMessageId?: string | null;
 }): Promise<{ draftId: string }> {
-  if (env.GMAIL_MOCK) {
+  if (await gmailSimule(params.merchantId)) {
     logger.info({ threadId: params.threadId }, 'Gmail simulé : brouillon non écrit');
     return { draftId: `mock-draft-${Date.now()}` };
   }
@@ -67,7 +66,7 @@ export async function deleteReplyDraft(
   draftId: string,
   mailboxId?: string | null,
 ): Promise<void> {
-  if (env.GMAIL_MOCK) return;
+  if (await gmailSimule(merchantId)) return;
 
   const { gmail } = await getGmailClient(merchantId, mailboxId);
   try {
@@ -97,7 +96,7 @@ export async function updateDraftBody(params: {
   subject: string;
   body: string;
 }): Promise<void> {
-  if (env.GMAIL_MOCK) return;
+  if (await gmailSimule(params.merchantId)) return;
 
   const { gmail, emailAddress } = await getGmailClient(params.merchantId, params.mailboxId);
 
@@ -151,7 +150,7 @@ export async function sendReplyInThread(params: {
   body: string;
   inReplyToMessageId?: string | null;
 }): Promise<{ gmailMessageId: string | null; fromEmail: string }> {
-  if (env.GMAIL_MOCK) {
+  if (await gmailSimule(params.merchantId)) {
     logger.info({ threadId: params.threadId }, 'Gmail simulé : aucun mail envoyé');
     return { gmailMessageId: null, fromEmail: 'simulation@local' };
   }
@@ -190,7 +189,7 @@ export async function sendDraft(
   draftId: string,
   mailboxId?: string | null,
 ): Promise<{ gmailMessageId: string | null; fromEmail: string }> {
-  if (env.GMAIL_MOCK) {
+  if (await gmailSimule(merchantId)) {
     logger.info({ draftId }, 'Gmail simulé : aucun mail envoyé');
     return { gmailMessageId: null, fromEmail: 'simulation@local' };
   }

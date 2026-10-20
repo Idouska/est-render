@@ -620,6 +620,10 @@ body {
    fond : 4,68:1 en clair, 7,18:1 en sombre. */
 .notice-warn { background: var(--warn-soft); color: var(--warn-ink); }
 
+/* La démonstration : une ligne discrète, pas une alerte — on la montre à
+   quelqu'un, le bandeau ne doit pas voler la vedette à l'écran. */
+.notice-demo { padding: 8px 14px; align-items: baseline; }
+
 /* ========================================================== indicateurs == */
 
 .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(196px, 1fr)); gap: 13px; }

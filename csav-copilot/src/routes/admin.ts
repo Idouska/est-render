@@ -24,6 +24,10 @@ import { CLES_FONCTIONNALITES, FONCTIONNALITES, fonctionnalitesDe } from '../ser
 import { prisma } from '../lib/prisma.ts';
 import { recordAudit } from '../lib/audit.ts';
 import { collectHealth } from '../services/supervision/collect.ts';
+import { DEMO } from '../services/demo/catalogue.ts';
+import { preparerDemo } from '../services/demo/remplir.ts';
+import { signLoginToken } from '../lib/loginToken.ts';
+import { SESSION_COOKIE, signSession } from '../lib/session.ts';
 
 /**
  * Console d'administration de la plateforme.
@@ -297,6 +301,47 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       });
     },
   );
+
+  /*
+   * La boutique de démonstration.
+   *
+   * Une boutique fictive (`services/demo/`) pour montrer l'outil : on la crée
+   * ou la remet à neuf, on l'ouvre dans ce navigateur, ou l'on obtient un lien
+   * à partager — valable sept jours, comme une invitation. Le lien donne accès
+   * à la démo seule : son marchand n'a aucun lien avec les vraies boutiques.
+   */
+  app.get('/api/admin/demo', { preHandler: requireAdmin }, async (request, reply) => {
+    const demo = await prisma.merchant.findUnique({
+      where: { id: DEMO.merchantId },
+      select: { createdAt: true, _count: { select: { tickets: true } } },
+    });
+    return reply.send({ existe: Boolean(demo), preparee: demo?.createdAt ?? null, tickets: demo?._count.tickets ?? 0 });
+  });
+
+  app.post('/api/admin/demo', { preHandler: requireAdmin }, async (request, reply) => {
+    const resultat = await preparerDemo();
+    logger.info({ tickets: resultat.tickets }, 'Boutique de démonstration préparée');
+    return reply.send({ ok: true, tickets: resultat.tickets });
+  });
+
+  app.get('/api/admin/demo/ouvrir', { preHandler: requireAdmin }, async (request, reply) => {
+    const demo = await prisma.merchant.findUnique({ where: { id: DEMO.merchantId }, select: { id: true } });
+    if (!demo) return reply.code(404).send({ error: 'Préparez d’abord la démo.' });
+    reply.setCookie(SESSION_COOKIE, signSession({ merchantId: DEMO.merchantId, userId: DEMO.proprietaire.id }), {
+      httpOnly: true,
+      secure: env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+    });
+    return reply.redirect('/dashboard');
+  });
+
+  app.post('/api/admin/demo/lien', { preHandler: requireAdmin }, async (request, reply) => {
+    const demo = await prisma.merchant.findUnique({ where: { id: DEMO.merchantId }, select: { id: true } });
+    if (!demo) return reply.code(404).send({ error: 'Préparez d’abord la démo.' });
+    const token = signLoginToken({ userId: DEMO.proprietaire.id, merchantId: DEMO.merchantId, kind: 'invite' });
+    return reply.send({ url: `${env.APP_URL}/auth/link?token=${token}`, valableJours: 7 });
+  });
 
   /*
    * Les applis Shopify par boutique.

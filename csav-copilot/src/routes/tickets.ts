@@ -286,7 +286,9 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
          */
         emailSignature: merchant.emailSignature,
         // Le bandeau « Mode test » s'affiche sur toutes les pages tant qu'il est allumé.
-        testMode: merchant.testMode,
+        testMode: merchant.testMode || merchant.demo,
+        // La boutique de démonstration remplace les deux bandeaux par le sien.
+        demo: merchant.demo,
         logoUrl: merchant.logoUrl,
         hasLogo: Boolean(merchant.logoMime),
         autoSendEnabled: merchant.autoSendEnabled,
@@ -302,12 +304,13 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
       previewing: request.session.role !== request.session.realRole,
       shopify: {
         connected: Boolean(merchant.shopify && !merchant.shopify.uninstalledAt),
-        simulated: env.SHOPIFY_MOCK,
+        simulated: env.SHOPIFY_MOCK || merchant.demo,
       },
       gmail: {
-        connected: merchant.mailboxes.length > 0,
+        // La démo n'a pas de boîte, mais ses mails sont là : rien à brancher.
+        connected: merchant.mailboxes.length > 0 || merchant.demo,
         // Adresse de la boîte principale, pour la barre haute.
-        emailAddress: merchant.mailboxes[0]?.emailAddress ?? null,
+        emailAddress: merchant.mailboxes[0]?.emailAddress ?? (merchant.demo ? 'sav@kairo-demo.test' : null),
         mailboxes: merchant.mailboxes.map((mailbox) => ({
           id: mailbox.id,
           emailAddress: mailbox.emailAddress,

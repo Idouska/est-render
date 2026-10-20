@@ -1,5 +1,6 @@
 import { prisma } from '../../lib/prisma.ts';
 import { getCredentials } from '../platform/credentials.ts';
+import { boutiqueDemo } from '../modeTest.ts';
 import { getShopifyClient } from '../shopify/client.ts';
 import { getOrderById } from '../shopify/orders.ts';
 import { getTracking, registerTracking, TRACK_STATUS_LABELS, type TrackInfo } from '../tracking/index.ts';
@@ -149,7 +150,8 @@ export async function etatUpdate(
   const maintenant = options.maintenant ?? Date.now();
   // Sans détails (la pastille du menu), pas un appel à Shopify.
   const details = options.details ?? true;
-  const actif = await suiviActif();
+  // La démonstration a son suivi inventé : il est toujours « branché ».
+  const actif = (await suiviActif()) || (await boutiqueDemo(merchantId));
   const depuis = new Date(maintenant - FENETRE_JOURS * JOUR);
 
   const [colis, demandes, reportes, fournisseurs] = await Promise.all([
