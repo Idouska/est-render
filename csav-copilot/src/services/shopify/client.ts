@@ -50,16 +50,19 @@ export interface ShopifyClient {
 export async function getShopifyClient(merchantId: string): Promise<ShopifyClient> {
   const connection = await prisma.shopifyConnection.findUnique({
     where: { merchantId },
-    include: { merchant: { select: { shopDomain: true, testMode: true } } },
+    include: { merchant: { select: { shopDomain: true, testMode: true, demo: true } } },
   });
 
-  if (env.SHOPIFY_MOCK) {
+  // La boutique de démonstration a son propre jeu fictif, en production
+  // comme en développement : elle n'a pas de vraie boutique derrière elle.
+  // Elle n'a pas non plus de connexion : son drapeau se lit sur le marchand.
+  const fictive =
+    connection?.merchant ??
+    (await prisma.merchant.findUnique({ where: { id: merchantId }, select: { shopDomain: true, demo: true } }));
+  if (env.SHOPIFY_MOCK || fictive?.demo) {
     const { createMockShopifyClient } = await import('./mock.ts');
-    const merchant = await prisma.merchant.findUnique({
-      where: { id: merchantId },
-      select: { shopDomain: true },
-    });
-    return createMockShopifyClient(merchant?.shopDomain ?? 'boutique-fictive.myshopify.com');
+    const jeu = fictive?.demo ? (await import('../demo/boutique.ts')).jeuDemo() : undefined;
+    return createMockShopifyClient(fictive?.shopDomain ?? 'boutique-fictive.myshopify.com', jeu);
   }
 
   if (!connection || connection.uninstalledAt) {

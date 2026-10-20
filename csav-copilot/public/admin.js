@@ -208,6 +208,80 @@ async function load() {
   void loadFonctionnalites();
   void loadNouveautes();
   void loadApplis();
+  void loadDemo();
+}
+
+/* ------------------------------------------------------- démonstration */
+
+/*
+ * La boutique de démonstration : une boutique de baskets inventée, avec ses
+ * trente mails, ses colis, ses retours et deux mois de statistiques. Rien n'y
+ * sort — Shopify et Gmail y sont simulés, le mode test ne s'éteint pas.
+ */
+async function loadDemo() {
+  try {
+    renderDemo(await api('/api/admin/demo'));
+  } catch (error) {
+    $('demo-body').innerHTML = `<p class="empty">${esc(error.message)}</p>`;
+  }
+}
+
+function renderDemo(demo) {
+  $('demo-body').innerHTML = `
+    <p class="set-help">Une boutique de baskets inventée — trente mails clients, commandes, colis bloqués,
+      retours avec photos, deux ateliers et deux mois de statistiques. Shopify et Gmail y sont simulés :
+      rien ne part, ni mail ni remboursement. La réinitialiser remet tout à neuf, dates comprises.</p>
+    <p class="set-help">${
+      demo.existe
+        ? `Préparée le <b>${esc(dateTime(demo.preparee))}</b> · ${demo.tickets} conversations.`
+        : 'Pas encore préparée.'
+    }</p>
+    <div class="actions">
+      <button class="btn${demo.existe ? '' : ' btn-primary'}" id="demo-preparer">${demo.existe ? 'Réinitialiser la démo' : 'Créer la démo'}</button>
+      ${
+        demo.existe
+          ? `<a class="btn btn-primary" href="/api/admin/demo/ouvrir">Ouvrir la démo</a>
+             <button class="btn" id="demo-lien">Lien à partager</button>`
+          : ''
+      }
+    </div>
+    <div class="field admin-field" id="demo-lien-champ" hidden>
+      <label for="demo-lien-url">Lien de démonstration — valable 7 jours, ouvre la démo sans mot de passe</label>
+      <input type="text" id="demo-lien-url" readonly />
+    </div>
+    ${demo.existe ? '<p class="set-help">« Ouvrir la démo » remplace la session de ce navigateur : pour garder votre boutique ouverte à côté, utilisez une fenêtre privée.</p>' : ''}`;
+
+  $('demo-preparer').addEventListener('click', (event) => void preparerDemo(event.currentTarget));
+  $('demo-lien')?.addEventListener('click', () => void lienDemo());
+}
+
+async function preparerDemo(bouton) {
+  bouton.disabled = true;
+  bouton.textContent = 'Préparation…';
+  try {
+    const { tickets } = await api('/api/admin/demo', { method: 'POST', body: '{}' });
+    toast(`Démo prête : ${tickets} conversations.`);
+    await loadDemo();
+  } catch (error) {
+    toast(error.message, true);
+    bouton.disabled = false;
+  }
+}
+
+async function lienDemo() {
+  try {
+    const { url } = await api('/api/admin/demo/lien', { method: 'POST', body: '{}' });
+    const champ = $('demo-lien-url');
+    champ.value = url;
+    $('demo-lien-champ').hidden = false;
+    champ.select();
+    await navigator.clipboard?.writeText(url).then(
+      () => toast('Lien copié.'),
+      () => {},
+    );
+  } catch (error) {
+    toast(error.message, true);
+  }
 }
 
 /* ------------------------------------------------ applis Shopify par boutique */

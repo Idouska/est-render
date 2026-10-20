@@ -3,6 +3,7 @@ import { z } from "zod";
 import { env } from "../config/env.ts";
 import { recordAudit } from "../lib/audit.ts";
 import { decryptSecret } from "../lib/crypto.ts";
+import { boutiqueDemo } from "../services/modeTest.ts";
 import { prisma } from "../lib/prisma.ts";
 import { PREVIEW_COOKIE, requirePermission, requireSession } from "../plugins/auth.ts";
 import { generateReply } from "../services/ai/generate.ts";
@@ -165,7 +166,8 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
         hasLogo: Boolean(merchant.logoMime),
         logoUpdatedAt: merchant.updatedAt,
         trackingUrlTemplate: merchant.trackingUrlTemplate,
-        testMode: merchant.testMode,
+        testMode: merchant.testMode || merchant.demo,
+        demo: merchant.demo,
         playbook: merchant.playbook,
         emailSignature: merchant.emailSignature,
         slaHours: merchant.slaHours,
@@ -187,7 +189,9 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
             connected: Boolean(
               merchant.shopify && !merchant.shopify.uninstalledAt,
             ),
-            simulated: env.SHOPIFY_MOCK,
+            // La démonstration n'a ni Shopify ni Gmail : tout y est simulé,
+            // et l'écran n'offre donc aucun bouton pour en brancher un.
+            simulated: env.SHOPIFY_MOCK || merchant.demo,
             scopes: granted,
             // Le jeton conserve les autorisations obtenues le jour de
             // l'installation : élargir la liste demandée ne change rien tant que
@@ -202,7 +206,7 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
         })(),
         gmail: {
           connected: merchant.mailboxes.length > 0,
-          simulated: env.GMAIL_MOCK,
+          simulated: env.GMAIL_MOCK || merchant.demo,
           // Boîtes listées une à une : chacune a son propre watch, et une
           // seule expirée suffit à faire disparaître silencieusement une
           // partie du courrier.
@@ -1445,6 +1449,8 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
       }
 
       const { logo, ...fields } = parsed.data;
+      // La démonstration reste en mode test, quoi qu'on coche.
+      if (fields.testMode === false && (await boutiqueDemo(merchantId))) delete fields.testMode;
 
       const logoFields =
         logo === undefined

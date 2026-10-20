@@ -1,4 +1,5 @@
 import { getCredentials } from '../platform/credentials.ts';
+import { estColisDemo, suiviColisDemo } from '../demo/suivi.ts';
 import { getParcelsAppTracking } from './parcelsapp.ts';
 import {
   getTracking as get17Tracking,
@@ -16,6 +17,9 @@ export { TRACK_STATUS_LABELS, type TrackEvent, type TrackInfo } from './track17.
  * le coût pour fusionner des chronologies qui racontent la même chose.
  */
 export async function registerTracking(numbers: string[]): Promise<void> {
+  // Les colis de la démonstration n'existent chez aucun transporteur.
+  numbers = numbers.filter((number) => !estColisDemo(number));
+  if (numbers.length === 0) return;
   const { PARCELSAPP_API_KEY } = await getCredentials();
   // ParcelsApp n'a pas d'étape d'enregistrement : la première interrogation
   // déclenche le suivi. Ne rien faire ici est le comportement voulu.
@@ -24,7 +28,17 @@ export async function registerTracking(numbers: string[]): Promise<void> {
 }
 
 export async function getTracking(numbers: string[]): Promise<Map<string, TrackInfo>> {
+  // Ceux de la démonstration se racontent ici, sans appel ni coût.
+  const reels = numbers.filter((number) => !estColisDemo(number));
   const { PARCELSAPP_API_KEY } = await getCredentials();
-  if (PARCELSAPP_API_KEY) return getParcelsAppTracking(numbers);
-  return get17Tracking(numbers);
+  const lus = reels.length === 0
+    ? new Map<string, TrackInfo>()
+    : PARCELSAPP_API_KEY
+      ? await getParcelsAppTracking(reels)
+      : await get17Tracking(reels);
+  for (const number of numbers) {
+    const demo = suiviColisDemo(number);
+    if (demo) lus.set(number, demo);
+  }
+  return lus;
 }

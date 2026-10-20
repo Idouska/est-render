@@ -10,6 +10,7 @@ import { SESSION_COOKIE, verifySession } from '../lib/session.ts';
 import { requireSession } from '../plugins/auth.ts';
 import { createOAuthClient } from '../services/gmail/client.ts';
 import { startWatch } from '../services/gmail/watch.ts';
+import { boutiqueDemo } from '../services/modeTest.ts';
 
 const STATE_COOKIE = 'csav_google_state';
 
@@ -40,6 +41,11 @@ async function sessionOuConnexion(request: FastifyRequest, reply: FastifyReply):
 
 export async function googleAuthRoutes(app: FastifyInstance): Promise<void> {
   app.get('/auth/google', { preHandler: requireSession }, async (request, reply) => {
+    // Une boîte réelle n'a rien à faire dans la boutique de démonstration :
+    // ses mails s'y mêleraient aux mails fictifs, sous les yeux des visiteurs.
+    if (await boutiqueDemo(request.session.merchantId)) {
+      return reply.code(403).type('text/plain; charset=utf-8').send('Boutique de démonstration : aucune boîte Gmail ne s’y branche.');
+    }
     const state = randomBytes(24).toString('hex');
 
     reply.setCookie(STATE_COOKIE, state, {

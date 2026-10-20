@@ -895,6 +895,7 @@ $('cc-dnd')?.addEventListener('click', () => {
 $('auto-refresh')?.addEventListener('change', () => rendreCentre());
 
 $('cc-test')?.addEventListener('click', async () => {
+  if (state.me?.merchant?.demo) return toast('Boutique de démonstration : le mode test reste allumé.');
   const actif = !state.me?.merchant?.testMode;
   const message = actif
     ? 'Mode test activé : rien ne sortira.'
@@ -1109,8 +1110,12 @@ function renderMe() {
       me.merchant.autoSendEnabled ? '' : ' warn'
     }"></span> Envoi auto ${me.merchant.autoSendEnabled ? 'activé' : 'désactivé'}`;
   }
-  $('mock-notice').hidden = !me.shopify.simulated;
-  $('test-notice').hidden = !me.merchant.testMode;
+  // La démonstration a son propre bandeau : simulation et mode test y vont
+  // de soi, les deux autres ne feraient que répéter la même chose.
+  const demo = Boolean(me.merchant.demo);
+  $('demo-notice').hidden = !demo;
+  $('mock-notice').hidden = demo || !me.shopify.simulated;
+  $('test-notice').hidden = demo || !me.merchant.testMode;
 }
 
 /* ------------------------------------------------------- sélecteur boutique */
@@ -17260,6 +17265,8 @@ function renderSettings() {
   $('set-tracking').value = merchant.trackingUrlTemplate ?? '';
   $('set-autosend').checked = merchant.autoSendEnabled;
   $('set-testmode').checked = Boolean(merchant.testMode);
+  // La démonstration ne s'éteint pas : rien de ce qu'on y fait ne doit sortir.
+  $('set-testmode').disabled = Boolean(merchant.demo);
   $('reg-test-pastille').hidden = !merchant.testMode;
   $('set-threshold').value = merchant.autoSendThreshold;
   $('set-threshold-echo').textContent = `${Math.round(merchant.autoSendThreshold * 100)} %`;
