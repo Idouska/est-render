@@ -1,0 +1,13 @@
+{
+  "modele": "match",
+  "nom": "myfootify-paris-marseille",
+  "marque": "marque.json",
+  "formats": ["9:16", "4:5", "16:9"],
+  "match": {
+    "domicile": { "ville": "Paris", "nom": "PSG 26/27", "image": "images/psg-2026-27-domicile.png", "prix": 59.90, "couleur": "#2b5cff" },
+    "exterieur": { "ville": "Marseille", "nom": "OM 26/27", "image": "images/om-2026-27-domicile.png", "prix": 59.90, "couleur": "#38bdf8" },
+    "intro": ["Deux villes.", "Une rivalité."],
+    "titre": ["Choisis", "ton camp"]
+  },
+  "textes": { "cta": "myfootify.com", "mention": "Flocage nom & numéro" }
+}

@@ -79,9 +79,27 @@ claque au temps fort. Ne jamais commencer sur un écran vide ni sur un fondu au 
 - Un bruitage par événement visible, jamais plus. Pas de son sans mouvement.
 - Mixage : la musique domine, les bruitages ponctuent. Volume final −14 LUFS.
 
+## Le mode cinéma (modèle « match »)
+
+Une bande-annonce suit d'autres règles qu'une fiche produit animée : l'émotion d'abord,
+l'information ensuite.
+
+- **Contraste et silence** : on commence dans le noir et le calme (cœur, fumée, un seul
+  projecteur). Un vrai silence juste avant l'impact rend l'impact énorme : la lumière
+  tombe et la nappe se coupe.
+- **La lumière raconte** : un maillot s'allume quand il entre en scène, et reste en
+  contre-jour avant. Le halo coloré derrière chaque maillot porte l'identité du club.
+- **Les impacts s'additionnent** : sur un temps fort, on combine son grave, éclair,
+  secousse de caméra, aberration chromatique et étincelles. Garde ces impacts pour
+  3 ou 4 moments au plus ; partout ailleurs, ils deviennent du bruit.
+- **Le texte est rare et lent** : des sous-titres espacés qui se resserrent, puis un seul
+  grand titre métallique. Jamais de liste ni de détails avant la fin.
+- **La fin redevient commerciale** : produits nets, prix, bouton.
+
 ## Ce qui est interdit
 
-- Rebonds élastiques, explosions de particules, lueurs néon, dégradés arc-en-ciel.
+- Rebonds élastiques, lueurs néon et dégradés arc-en-ciel.
+- Étincelles et particules hors du mode cinéma, et dans le mode cinéma, hors des impacts.
 - Plus d'une police de titre. Anton pour les titres, Barlow Condensed pour le texte.
 - Du texte qui apparaît et disparaît avant d'avoir pu être lu.
 - Des temps morts : plus d'un temps sans aucun mouvement avant l'image de fin.

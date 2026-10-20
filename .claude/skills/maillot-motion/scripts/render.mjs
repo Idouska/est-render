@@ -10,6 +10,7 @@
  *
  * Options : --formats 9:16,4:5,1:1,16:9  --fps 30  --flou 4  --travailleurs 3
  *           --sortie <dossier>  --sans-son  --sans-musique
+ *           --son-seulement   refait le son d'un MP4 déjà rendu, sans recalculer l'image
  *
  * Chaque image est une fonction pure du temps (engine/motion.js) : la page est
  * ouverte dans Chromium, positionnée à l'instant voulu, capturée, puis les
@@ -107,17 +108,25 @@ function asset(p, base = specDir, label = 'fichier') {
 }
 const demo = (n) => join(SKILL, 'assets', 'demo', n);
 const P = (spec.produit = spec.produit || {});
-if (!P.image && !(spec.produits && spec.produits.length) && modele !== 'flocage') {
+if (['drop', 'promo'].includes(modele) && !P.image && !(spec.produits && spec.produits.length)) {
   P.image = demo('maillot-domicile-face.svg');
   warnings.push('Pas de produit.image : maillot de démonstration utilisé.');
 }
-if (P.image) P.image = asset(P.image, specDir, 'produit.image');
+
 if (modele === 'flocage' && !P.image_dos) {
   P.image_dos = demo('maillot-domicile-dos.svg');
   warnings.push('Pas de produit.image_dos : dos de démonstration utilisé.');
 }
-if (P.image_dos) P.image_dos = asset(P.image_dos, specDir, 'produit.image_dos');
-for (const [i, q] of (spec.produits || []).entries()) q.image = asset(q.image, specDir, `produits[${i}].image`);
+// Tous les champs « image » et « image_dos » du fichier de scène (produit, produits,
+// match.domicile…) deviennent des URL servies par la route mm.local.
+(function resolveImages(o, path) {
+  if (Array.isArray(o)) return o.forEach((v, i) => resolveImages(v, `${path}[${i}]`));
+  if (!o || typeof o !== 'object') return;
+  for (const [k, v] of Object.entries(o)) {
+    if ((k === 'image' || k === 'image_dos') && typeof v === 'string') o[k] = asset(v, specDir, `${path}.${k}`);
+    else if (k !== 'marque') resolveImages(v, path ? `${path}.${k}` : k);
+  }
+})(spec, '');
 if (spec.marque.logo) spec.marque.logo = asset(spec.marque.logo, brandDir, 'marque.logo');
 const fontsOverride = spec.marque.polices || {};
 
@@ -185,6 +194,7 @@ function pageHtml(fmt) {
 <script>window.SPEC=${JSON.stringify(spec)};window.FORMAT=${JSON.stringify(fmt)};</script>
 <script src="${HOST}/skill/engine/motion.js"></script>
 <script src="${HOST}/skill/engine/ui.js"></script>
+<script src="${HOST}/skill/engine/cinema.js"></script>
 <script src="${HOST}/skill/templates/${modele}.js"></script>
 </body></html>`;
 }
@@ -267,7 +277,10 @@ async function qa(pg, info, duration) {
       t,
       items: a.map((x) => {
         const y = bm.get(x.id);
-        const stable = !!y && Math.abs(y.x - x.x) < 3 && Math.abs(y.y - x.y) < 3 && Math.abs(y.w - x.w) < 3;
+        // Lisible si l'élément bouge à moins de ~50 px/s (~170 px/s pour un texte
+        // de bande-annonce qui glisse ou se resserre lentement).
+        const tol = x.mouvant ? 10 : 3;
+        const stable = !!y && Math.abs(y.x - x.x) < tol && Math.abs(y.y - x.y) < tol && Math.abs(y.w - x.w) < tol;
         return { ...x, stable };
       }),
     });
@@ -347,7 +360,7 @@ function ffmpegSegment(file, W, H) {
     'ffmpeg',
     ['-loglevel', 'error', '-y', '-f', 'image2pipe', '-c:v', 'mjpeg', '-framerate', String(fps * sub), '-i', '-',
       '-vf', vf.join(','), '-r', String(fps), '-c:v', 'libx264', '-preset', draft ? 'veryfast' : 'medium', '-crf', draft ? '23' : '17',
-      '-profile:v', 'high', '-pix_fmt', 'yuv420p', '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-color_range', 'tv',
+      '-profile:v', 'high', '-maxrate', draft ? '6M' : '16M', '-bufsize', draft ? '12M' : '32M', '-pix_fmt', 'yuv420p', '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-color_range', 'tv',
       '-g', String(fps * 2), file],
     { stdio: ['pipe', 'inherit', 'inherit'] },
   );
@@ -403,14 +416,26 @@ function renderAudio(info, duration, cues, file) {
   const a = [audioPy, 'mix', cueFile, '--sortie', file];
   if (music) a.push('--musique', music.file, '--debut', String(music.start), '--gain-musique', String(spec.musique.volume ?? 0.8));
   else if (args['sans-musique'] || spec.musique === false || (spec.musique && spec.musique.fond === 'aucun')) a.push('--fond', 'aucun');
-  else a.push('--fond', 'synthe');
+  else a.push('--fond', info.ambiance === 'cinema' ? 'cinema' : 'synthe');
   const r = spawnSync(PY, a, { encoding: 'utf8' });
   if (r.status !== 0) fail('Création du son impossible :\n' + r.stderr);
 }
 
+// Normalisation en deux passes, linéaire : un seul gain pour tout le film,
+// qui garde les contrastes (le silence avant un impact reste un silence).
+function loudnormFilter(audio) {
+  const target = 'I=-14:TP=-1.5:LRA=20';
+  const r = spawnSync('ffmpeg', ['-hide_banner', '-nostats', '-i', audio, '-af', `loudnorm=${target}:print_format=json`, '-f', 'null', '-'], { encoding: 'utf8' });
+  const m = /\{[\s\S]*\}/.exec(r.stderr || '');
+  // Limiteur de sécurité ensuite : crête ≤ −2,5 dBFS avant l'encodage AAC, qui déborde d'environ 1 dB.
+  if (!m) return `loudnorm=${target},alimiter=limit=0.75:level=false`;
+  const j = JSON.parse(m[0]);
+  return `loudnorm=${target}:measured_I=${j.input_i}:measured_TP=${j.input_tp}:measured_LRA=${j.input_lra}:measured_thresh=${j.input_thresh}:offset=${j.target_offset}:linear=true,alimiter=limit=0.75:level=false`;
+}
+
 function mux(video, audio, file) {
   const a = ['-loglevel', 'error', '-y', '-i', video];
-  if (audio) a.push('-i', audio, '-map', '0:v', '-map', '1:a', '-af', 'loudnorm=I=-14:TP=-1.5:LRA=11', '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-shortest');
+  if (audio) a.push('-i', audio, '-map', '0:v', '-map', '1:a', '-af', loudnormFilter(audio), '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-shortest');
   a.push('-c:v', 'copy', '-movflags', '+faststart', file);
   const r = spawnSync('ffmpeg', a, { encoding: 'utf8' });
   if (r.status !== 0) fail('Assemblage image et son impossible :\n' + r.stderr);
@@ -470,9 +495,13 @@ for (const fmt of formats) {
   await pg.page.close();
   if (args.planche) continue;
 
-  const silent = join(tmp, `${tag}-image.mp4`);
-  await renderVideo(fmt, duration, silent);
   const final = join(outDir, `${slug}-${tag}${draft ? '-brouillon' : ''}.mp4`);
+  const silent = join(tmp, `${tag}-image.mp4`);
+  if (args['son-seulement']) {
+    // Refait seulement le son : l'image est reprise telle quelle du MP4 existant.
+    if (!existsSync(final)) fail(`--son-seulement : ${final} n'existe pas encore, fais d'abord le rendu complet.`);
+    spawnSync('ffmpeg', ['-loglevel', 'error', '-y', '-i', final, '-map', '0:v', '-c', 'copy', silent]);
+  } else await renderVideo(fmt, duration, silent);
   let audio = null;
   if (!args['sans-son']) {
     audio = join(tmp, 'audio.wav');

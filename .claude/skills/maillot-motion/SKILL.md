@@ -1,6 +1,6 @@
 ---
 name: maillot-motion
-description: Fabrique des vidéos publicitaires animées (motion design) pour des maillots de foot et produits de la boutique, en MP4 prêts pour Reels, TikTok, Stories, fil Meta, YouTube et Google (9:16, 4:5, 1:1, 16:9), avec son synchronisé sur le tempo. Quatre modèles - lancement d'un nouveau maillot (drop), promotion ou code promo (promo), personnalisation nom et numéro (flocage), collection de plusieurs maillots (collection). Utilise ce skill dès qu'on demande une vidéo produit, une pub animée, un Reel, un TikTok, une story animée ou du motion design pour un maillot, une promo, un flocage ou une collection, même sans le mot « motion ». Pas pour animer l'interface d'un site ou d'une application.
+description: Fabrique des vidéos publicitaires animées (motion design) pour des maillots de foot et produits de la boutique, en MP4 prêts pour Reels, TikTok, Stories, fil Meta, YouTube et Google (9:16, 4:5, 1:1, 16:9), avec son synchronisé sur le tempo. Cinq modèles - lancement d'un nouveau maillot (drop), promotion ou code promo (promo), personnalisation nom et numéro (flocage), collection de plusieurs maillots (collection), et bande-annonce cinématographique de choc entre deux équipes façon annonce de match télé (match : projecteurs, fumée, VS, sifflet, foule). Utilise ce skill dès qu'on demande une vidéo produit, une pub animée, un Reel, un TikTok, une story animée, une vidéo « cinématographique », « avec de l'émotion » ou « comme une annonce de match », ou du motion design pour un maillot, une promo, un flocage ou une collection, même sans le mot « motion ». Pas pour animer l'interface d'un site ou d'une application.
 ---
 
 # maillot-motion : vidéos produit animées
@@ -19,9 +19,10 @@ résultat image par image. Tu ne livres jamais une vidéo que tu n'as pas regard
 | `scripts/render.mjs` | Rendu : contrôle des textes, planche, vidéos, son, vérification du MP4 |
 | `scripts/audio.py` | Bruitages synthétisés, fond rythmique de maquette, analyse de tempo d'une musique |
 | `scripts/detourer.py` | Détourage des photos produit sur fond blanc (PNG à fond transparent) |
-| `templates/*.js` | Les quatre modèles : `drop`, `promo`, `flocage`, `collection` |
+| `templates/*.js` | Les cinq modèles : `drop`, `promo`, `flocage`, `collection`, `match` |
 | `engine/motion.js` | Moteur : ressorts, caméra, zones sûres, contrôle automatique |
 | `engine/ui.js` | Composants : fond, titre, produit, point d'intérêt, prix à rouleaux, bouton, pastille, bandeau, flocage |
+| `engine/cinema.js` | Effets de cinéma : stade, projecteurs volumétriques, fumée, poussière, étincelles, reflets anamorphiques, barres cinémascope, grain, aberration chromatique, textes de bande-annonce |
 | `exemples/*.json` | Un fichier de scène par modèle, et `marque.json` |
 | `assets/demo/` | Maillots génériques (sans club ni marque) pour essayer sans photo |
 | `fonts/` | Anton et Barlow Condensed (licence OFL, incluses) |
@@ -126,6 +127,7 @@ Options utiles :
 - `--flou 2` : rendu plus rapide, flou de mouvement plus léger.
 - `--sortie <dossier>` : dossier de sortie.
 - `--travailleurs 4` : nombre de captures en parallèle.
+- `--son-seulement` : refait le son d'un MP4 déjà rendu (nouvelle musique), sans recalculer l'image.
 
 ### 6. Livrer
 
@@ -178,8 +180,38 @@ Utilise une seule couleur d'accent, celle de la marque.
 | `promo` | `promo` : `remise` (en %), `code`, `fin`.<br>`produits` : 1 à 4 objets `{ nom, image, prix, prix_promo }` (le prix remisé est calculé si `prix_promo` est absent).<br>`textes` : `code_label` | 11 s |
 | `flocage` | `produit` : `nom`, `image_dos`, `prix`.<br>`flocage` : `nom`, `numero`, `couleur`, `prix`, `zone_nom` et `zone_numero` (`{x, y}` en fractions de la photo), `arc`, `taille_nom`, `taille_numero` | 12 s |
 | `collection` | `produits` : 2 à 6 objets `{ nom, image, prix, prix_barre }`.<br>`rythme` : temps par maillot (2,5 par défaut).<br>`textes` : `titre` | 7 s + 1,25 s par maillot |
+| `match` | `match.domicile` et `match.exterieur` : `{ ville, nom, image, prix, prix_barre, couleur }` (`couleur` : halo derrière le maillot).<br>`match` : `intro` (2 sous-titres), `titre` (2 lignes), `vs`.<br>`textes` : `cta`, `mention` | 13 s |
 
 À un autre tempo, toutes les durées suivent : à 128 BPM, le drop dure 11,25 s.
+
+## Le modèle « match » : quand on veut de l'émotion
+
+C'est le modèle à choisir quand l'utilisateur trouve les vidéos « trop simples », veut du
+« cinématographique », de « l'émotion », une « annonce de match ». C'est une bande-annonce en
+quatre actes :
+
+1. **Le silence** : stade de nuit, fumée, battements de cœur. Les deux maillots en contre-jour,
+   les projecteurs s'allument un à un, deux sous-titres espacés.
+2. **Le face-à-face** : cuivres graves (« braam »), chaque maillot s'allume avec le nom de sa
+   ville, puis « VS » claque au centre, avec étincelles, reflet, secousse et aberration chromatique.
+3. **Le coup d'envoi** : sifflet, éclair blanc, la foule gronde, « Choisis / ton camp » en
+   lettres métalliques sur les maillots floutés.
+4. **La fin** : les deux maillots, leurs prix, le logo, le bouton.
+
+Pour l'écrire :
+
+- Choisis **une vraie rivalité** que la boutique vend : deux clubs d'une même ligue, ou deux
+  sélections. Le domicile de l'un et le domicile de l'autre donnent le meilleur contraste.
+- **Les deux photos doivent être détourées.** Pour un maillot blanc sur fond blanc, utilise
+  `scripts/detourer.py --seuil 8`.
+- Donne à chaque maillot sa **couleur de halo** : la couleur dominante du club.
+- Les sous-titres d'intro tiennent en 2 ou 3 mots chacun (« Deux villes. » / « Une rivalité. »).
+- **N'invente ni date ni affiche officielle.** Pas de « ce dimanche 21 h » si ce n'est pas un vrai
+  match, et pas de logo de compétition.
+
+Le son de bande-annonce est fourni sans musique : nappe grave synthétisée, battements de cœur,
+projecteurs, cuivres, tambours, sifflet et foule, tout calé sur l'image. Une musique
+épique sous licence peut le remplacer (`musique`).
 
 ## Son
 

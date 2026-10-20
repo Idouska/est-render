@@ -21,10 +21,21 @@ gérer. Les modèles les placent avec `ctx.cue(t, type, { gain, pitch })`, où
 | `tampon` | Coup mat | Lettre de flocage posée |
 | `caisse` | Cloche claire | Prix qui s'arrête |
 | `brillance` | Petites notes aiguës | Reflet qui passe sur le maillot |
+| `coeur` | Battement de cœur (« boum-boum ») | Acte 1 du match : la tension |
+| `projecteur` | Déclic lourd et bourdonnement électrique | Projecteur de stade qui s'allume |
+| `braam` | Cuivres graves de bande-annonce | Chaque maillot qui entre en scène |
+| `sifflet` | Coup de sifflet d'arbitre (calé sur son attaque) | Coup d'envoi |
+| `foule` | Clameur de stade qui monte et retombe (pic au sommet) | Après le coup d'envoi |
+| `tambour` | Tambour grave (taiko) | La montée avant le coup d'envoi |
+| `aspiration` | Souffle qui monte jusqu'à l'impact (pic à la fin) | Juste avant chaque grand impact |
+| `eclat` | Crépitement | Étincelles |
 
 **Calage** : chaque son est décalé pour que **son pic** (le maximum de son
 enveloppe sur 10 ms) tombe sur l'instant demandé. Sur le MP4 final, l'écart mesuré
 est de moins d'une image (33 ms).
+
+Pour refaire seulement le son d'une vidéo déjà rendue (nouvelle musique, autre volume),
+sans recalculer l'image : `node scripts/render.mjs video.json --son-seulement`.
 
 Pour écouter tous les sons à la suite :
 `python3 scripts/audio.py catalogue --sortie essai.wav`.
@@ -44,7 +55,10 @@ Trois possibilités, par ordre de préférence pour publier :
 2. **Pas de musique dans le fichier** (`--sans-musique`), puis ajout dans l'outil de la
    plateforme : la bibliothèque de musiques de Meta, ou la Commercial Music Library de
    TikTok, dont les titres sont autorisés en publicité. Les bruitages restent calés.
-3. **Le fond de maquette** (le comportement par défaut) : grosse caisse, claps,
+3. **Le fond de maquette** (le comportement par défaut), de deux sortes. Le modèle
+   `match` reçoit une **nappe de bande-annonce** : un accord grave qui enfle jusqu'au
+   temps fort, se coupe juste avant, puis reste tenu sous l'action. Les autres modèles
+   reçoivent un **fond rythmique** : grosse caisse, claps,
    charleston, basse et cymbale au temps fort, à la vitesse de la vidéo. Il sert à
    juger le rythme. Il est propre et libre de droits, mais simple : ne le présente
    pas comme une musique finie.
@@ -60,7 +74,10 @@ Le mixage suit cinq étapes :
 1. Bruitages × 0,85, musique × `volume` (ou fond de maquette × 0,55).
 2. Fondu de sortie de 0,6 s.
 3. Limitation douce (tangente hyperbolique), crête ramenée à 0,89.
-4. Normalisation par ffmpeg (`loudnorm`) à −14 LUFS intégrés, crête ≤ −1,5 dBTP.
+4. Normalisation par ffmpeg (`loudnorm`) à −14 LUFS intégrés, en deux passes et en mode
+   linéaire : un seul gain pour tout le film, donc les contrastes restent. Le silence avant
+   un impact du modèle `match` reste à environ 15 dB sous l'impact. Un limiteur garde la
+   crête sous −2,5 dBFS, parce que l'encodage AAC déborde d'environ 1 dB.
 5. Mesure finale, affichée dans le résumé du rendu.
 
 ## Analyse seule

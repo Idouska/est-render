@@ -221,6 +221,110 @@ def s_brillance(p, seed):
     return normalize(x, 0.35)
 
 
+# --- Sons de bande-annonce (modèle « match ») -------------------------------
+
+def s_coeur(p, seed):
+    """Battement de cœur : deux coups sourds (« boum-boum »)."""
+    d = 0.7
+    x = np.zeros(secs(d))
+    for at, g in ((0.0, 1.0), (0.2, 0.7)):
+        thump = chirp(70 * semis(p), 38, 0.25, 6) * env_exp(0.25, 0.06, 0.004)
+        a = secs(at)
+        x[a:a + len(thump)] += thump * g
+    return stereo(normalize(fft_filter(x, None, 180), 0.95))
+
+
+def s_projecteur(p, seed):
+    """Projecteur de stade qui s'allume : déclic lourd, puis bourdonnement électrique."""
+    d = 2.4
+    t = tvec(d)
+    clunk = chirp(110 * semis(p), 50, d, 12) * env_exp(d, 0.05, 0.001)
+    metal = fft_filter(noise(d, seed), 1800, 9000) * env_exp(d, 0.015, 0.0005) * 0.5
+    hum = sum(np.sin(2 * np.pi * 100 * k * t) / k for k in (1, 2, 3, 5)) * 0.05
+    hum *= np.clip((t - 0.05) / 0.2, 0, 1) * np.exp(-t / 1.6)
+    return stereo(normalize(clunk + metal, 0.9) + hum, 0, 0.6)
+
+
+def s_braam(p, seed):
+    """Cuivres graves de bande-annonce : scies désaccordées, filtre qui s'ouvre puis se referme."""
+    d = 2.6
+    t = tvec(d)
+    f0 = 55 * semis(p)
+    x = np.zeros_like(t)
+    for f, g in ((f0, 1), (f0 * 1.007, 0.9), (f0 * 0.994, 0.9), (f0 * 1.5, 0.45), (f0 * 2, 0.3)):
+        ph = (f * t + np.random.default_rng(seed).uniform()) % 1
+        x += g * (2 * ph - 1)
+    x += np.sin(2 * np.pi * f0 / 2 * t) * 0.8
+    n_fft, hop = 2048, 512
+    out = np.zeros(len(x) + n_fft)
+    win = np.hanning(n_fft)
+    fr = np.fft.rfftfreq(n_fft, 1 / SR)
+    for i in range(0, len(x) - n_fft, hop):
+        k = i / len(x)
+        cut = 180 + 2600 * (np.sin(np.pi * min(1, k * 2.2)) ** 2) * (1 - k) ** 0.5
+        g = 1 / (1 + (fr / cut) ** 6)
+        out[i:i + n_fft] += np.fft.irfft(np.fft.rfft(x[i:i + n_fft] * win) * g, n_fft) * win
+    out = out[:len(x)] / 1.5
+    envl = np.clip(t / 0.06, 0, 1) * np.exp(-np.maximum(0, t - 0.6) / 0.9)
+    return stereo(normalize(np.tanh(out * envl * 2.2), 0.95), 0, 0.9)
+
+
+def s_sifflet(p, seed):
+    """Coup de sifflet d'arbitre (sifflet à bille : son aigu roulé)."""
+    d = 1.0
+    t = tvec(d)
+    trill = 1 + 0.025 * np.sin(2 * np.pi * 28 * t)
+    x = np.sin(2 * np.pi * np.cumsum(2950 * semis(p) * trill) / SR)
+    x += 0.25 * np.sin(2 * np.pi * np.cumsum(5900 * semis(p) * trill) / SR)
+    x += fft_filter(noise(d, seed), 2500, 6000) * 0.15
+    envl = np.clip(t / 0.02, 0, 1) * np.clip((0.85 - t) / 0.12, 0, 1) * (0.8 + 0.2 * np.sin(2 * np.pi * 28 * t))
+    return stereo(normalize(x * envl, 0.6))
+
+
+def s_foule(p, seed, d=4.5):
+    """Clameur de stade : bruit filtré en voyelles, qui monte, culmine, puis retombe."""
+    t = tvec(d)
+    rng = np.random.default_rng(seed)
+    x = np.zeros_like(t)
+    for fc, bw in ((420, 1.4), (750, 1.6), (1250, 1.8), (2500, 2.2)):
+        band = sweep_filter(noise(d, int(rng.integers(1e6))), lambda k, fc=fc: fc * (1 + 0.15 * k), q=bw)
+        mod = 0.7 + 0.3 * np.sin(2 * np.pi * rng.uniform(0.3, 0.9) * t + rng.uniform(0, 6))
+        x += band * mod
+    shape = np.clip(t / 1.6, 0, 1) ** 1.5 * np.clip((d - t) / 1.8, 0, 1)
+    x = normalize(x * shape, 0.75)
+    return np.stack([x, np.concatenate([np.zeros(240), x])[:len(x)]], 1)
+
+
+def s_tambour(p, seed):
+    """Tambour grave (taiko) : peau tendue et grosse résonance."""
+    d = 0.9
+    body = chirp(95 * semis(p), 48, d, 7) * env_exp(d, 0.18, 0.002)
+    skin = fft_filter(noise(d, seed), 150, 2500) * env_exp(d, 0.03, 0.001) * 0.6
+    return stereo(normalize(body + skin, 0.95), (seed % 3 - 1) * 0.2)
+
+
+def s_aspiration(p, seed):
+    """Souffle inversé qui monte jusqu'à l'impact (pic à la fin)."""
+    d = 1.0
+    n = fft_filter(noise(d, seed), 300, 9000)
+    t = tvec(d) / d
+    x = n * t ** 3
+    x[-secs(0.008):] *= np.linspace(1, 0, secs(0.008))
+    return stereo(normalize(x, 0.7), 0, 0.8)
+
+
+def s_eclat(p, seed):
+    """Crépitement d'étincelles."""
+    d = 0.6
+    rng = np.random.default_rng(seed)
+    x = np.zeros(secs(d))
+    for _ in range(26):
+        a = int(rng.uniform(0, 0.45) * SR)
+        c = fft_filter(noise(0.01, int(rng.integers(1e6))), 3000, 14000) * env_exp(0.01, 0.0015, 0.0002)
+        x[a:a + len(c)] += c * rng.uniform(0.2, 1) * (1 - a / len(x))
+    return stereo(normalize(x, 0.4), 0, 0.7)
+
+
 SOUNDS = {
     'impact': s_impact,
     'boom': s_boom,
@@ -233,7 +337,27 @@ SOUNDS = {
     'tampon': s_tampon,
     'caisse': s_caisse,
     'brillance': s_brillance,
+    'coeur': s_coeur,
+    'projecteur': s_projecteur,
+    'braam': s_braam,
+    'sifflet': s_sifflet,
+    'foule': s_foule,
+    'tambour': s_tambour,
+    'aspiration': s_aspiration,
+    'eclat': s_eclat,
 }
+
+
+# Sons calés sur leur attaque plutôt que sur leur maximum (son tenu).
+ANCRE_DEBUT = {'sifflet'}
+
+
+def onset_index(x):
+    """Attaque : premier instant où l'enveloppe atteint la moitié de son maximum."""
+    m = np.abs(x).max(1) if x.ndim == 2 else np.abs(x)
+    w = secs(0.01)
+    e = np.convolve(m ** 2, np.ones(w) / w, mode='same')
+    return int(np.argmax(e >= 0.5 * e.max()))
 
 
 def peak_index(x):
@@ -305,6 +429,30 @@ def synth_bed(duration, bpm, temps_fort=None):
     if temps_fort is not None and temps_fort > 0:
         add(crash, temps_fort)
     return out + bass * sc[:, None]
+
+
+def synth_cinema(duration, bpm, temps_fort=None):
+    """Nappe de bande-annonce : accord grave (la-mi) qui enfle jusqu'au temps
+    fort, un silence juste avant, puis tenu sous l'action. Les tambours, cuivres
+    et impacts sont des bruitages placés par le modèle."""
+    n = secs(duration + 1.5)
+    t = np.arange(n) / SR
+    rng = np.random.default_rng(5)
+    x = np.zeros(n)
+    for f, g in ((55, 1.0), (55.3, 0.8), (82.4, 0.6), (110, 0.35), (164.8, 0.2)):
+        ph = (f * t + rng.uniform()) % 1
+        x += g * (2 * ph - 1)
+    x = fft_filter(x, 30, 700)
+    x *= 0.85 + 0.15 * np.sin(2 * np.pi * 0.23 * t)
+    tf = temps_fort if temps_fort else duration * 0.3
+    env = np.clip(t / max(0.5, tf - 0.35), 0, 1) ** 1.6
+    env = np.where(t > tf - 0.35, 0.04, env)  # le silence avant l'impact
+    env = np.where(t >= tf, 0.55 + 0.1 * np.clip((t - tf) / 4, 0, 1), env)
+    env *= np.clip((duration - t) / 1.2, 0, 1)
+    smooth = secs(0.03)
+    env = np.convolve(env, np.ones(smooth) / smooth, mode='same')
+    y = normalize(x * env, 0.6)
+    return np.stack([y, np.concatenate([np.zeros(180), y])[:n]], 1)
 
 
 # ---------------------------------------------------------------------------
@@ -446,7 +594,7 @@ def mix(cue_file, out, fond='synthe', musique=None, debut=0.0, gain_musique=0.8)
             print(f"bruitage inconnu ignoré : {c['type']}", file=sys.stderr)
             continue
         x = make(float(c.get('pitch', 0)), 11 + i)
-        a = secs(float(c['t'])) - peak_index(x)
+        a = secs(float(c['t'])) - (onset_index(x) if c['type'] in ANCRE_DEBUT else peak_index(x))
         if a < 0:
             x, a = x[-a:], 0
         b = min(len(sfx), a + len(x))
@@ -458,6 +606,8 @@ def mix(cue_file, out, fond='synthe', musique=None, debut=0.0, gain_musique=0.8)
         bed = bed * gain_musique
     elif fond == 'synthe':
         bed = synth_bed(duration, bpm, spec.get('temps_fort')) * 0.55
+    elif fond == 'cinema':
+        bed = synth_cinema(duration, bpm, spec.get('temps_fort')) * 0.7
     mixd = sfx[:n] * 0.85
     if bed is not None:
         m = np.zeros((n, 2))
@@ -489,7 +639,7 @@ def main():
     m = sp.add_parser('mix')
     m.add_argument('cues')
     m.add_argument('--sortie', required=True)
-    m.add_argument('--fond', default='synthe', choices=['synthe', 'aucun'])
+    m.add_argument('--fond', default='synthe', choices=['synthe', 'cinema', 'aucun'])
     m.add_argument('--musique')
     m.add_argument('--debut', type=float, default=0.0)
     m.add_argument('--gain-musique', type=float, default=0.8)

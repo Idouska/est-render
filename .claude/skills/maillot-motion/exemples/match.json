@@ -1,0 +1,12 @@
+{
+  "modele": "match",
+  "marque": "marque.json",
+  "formats": ["9:16", "4:5", "1:1", "16:9"],
+  "match": {
+    "domicile": { "ville": "Bleus", "nom": "Domicile 26/27", "image": "../assets/demo/maillot-domicile-face.svg", "prix": 89.99, "couleur": "#2b5cff" },
+    "exterieur": { "ville": "Rouges", "nom": "Extérieur 26/27", "image": "../assets/demo/maillot-exterieur-face.svg", "prix": 89.99, "couleur": "#ff3b4e" },
+    "intro": ["Deux camps.", "Un seul vainqueur."],
+    "titre": ["Choisis", "ton camp"]
+  },
+  "textes": { "cta": "Commander", "mention": "Flocage nom & numéro" }
+}

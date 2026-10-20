@@ -211,11 +211,32 @@
    * Caméra : #world est cadré par une caméra (centre, zoom logarithmique).
    * ---------------------------------------------------------------------- */
 
-  function makeCamera(L, world) {
+  function makeCamera(L, world, hud) {
     const cx = new Track(L.W / 2);
     const cy = new Track(L.H / 2);
     const lz = new Track(0); // log du zoom : un zoom linéaire paraît faux
+    const shakes = [];
     const cam = {
+      // Secousse à l'impact : amplitude en px, amortie en ~dur secondes.
+      // Bruit déterministe (somme de sinus) : la secousse reste une fonction de t.
+      shake(t, amp = 18, dur = 0.35) {
+        shakes.push([t, amp, dur, shakes.length * 1.7]);
+        return cam;
+      },
+      shakeAt(t) {
+        let x = 0;
+        let y = 0;
+        let r = 0;
+        for (const [t0, a, d, ph] of shakes) {
+          const k = t - t0;
+          if (k < 0 || k > d * 4) continue;
+          const e = a * Math.exp(-k / d);
+          x += e * (Math.sin(k * 71 + ph) * 0.6 + Math.sin(k * 43 + ph * 2) * 0.4);
+          y += e * (Math.sin(k * 59 + ph * 3) * 0.6 + Math.sin(k * 37 + ph) * 0.4);
+          r += e * 0.012 * Math.sin(k * 29 + ph);
+        }
+        return { x, y, r };
+      },
       cx,
       cy,
       lz,
@@ -235,7 +256,11 @@
       },
       seek(t) {
         const s = cam.state(t);
-        world.style.transform = `translate(${L.W / 2}px,${L.H / 2}px) scale(${s.z.toFixed(5)}) translate(${-s.x.toFixed(2)}px,${-s.y.toFixed(2)}px)`;
+        const k = cam.shakeAt(t);
+        const sh = `translate(${k.x.toFixed(2)}px,${k.y.toFixed(2)}px) rotate(${k.r.toFixed(3)}deg) `;
+        world.style.transform = sh + `translate(${L.W / 2}px,${L.H / 2}px) scale(${s.z.toFixed(5)}) translate(${-s.x.toFixed(2)}px,${-s.y.toFixed(2)}px)`;
+        // L'interface tremble à moitié : le texte reste lisible.
+        hud.style.transform = shakes.length ? `translate(${(k.x * 0.5).toFixed(2)}px,${(k.y * 0.5).toFixed(2)}px)` : '';
       },
     };
     return cam;
@@ -269,6 +294,7 @@
     const back = el('div', { cls: 'mm-back' }); // fond, hors caméra
     const world = el('div', { cls: 'mm-world' });
     const hud = el('div', { cls: 'mm-hud' });
+    const front = el('div', { cls: 'mm-front' }); // effets par-dessus tout (barres, grain, étincelles)
     const parts = [];
     const cues = [];
     const ctx = {
@@ -281,7 +307,8 @@
       bpm,
       beat,
       B: (n) => n * beat, // temps du n-ième temps musical
-      cam: makeCamera(L, world),
+      front,
+      cam: makeCamera(L, world, hud),
       add(p) {
         parts.push(p);
         return p;
@@ -290,6 +317,14 @@
         cues.push({ t: +t.toFixed(4), type, gain: opt.gain ?? 1, pitch: opt.pitch ?? 0 });
       },
       image: loadImage,
+      // Réserve des bandes en haut et en bas (barres cinémascope) : la zone sûre
+      // rétrécit d'autant, et le contrôle des textes en tient compte.
+      reserve(top, bottom = top) {
+        const S = L.safe;
+        const y = Math.max(S.y, top + L.u * 2);
+        const b = Math.min(S.b, L.H - bottom - L.u * 2);
+        Object.assign(S, { y, b, h: b - y, cy: (y + b) / 2 });
+      },
       el,
       rng: rng(spec.graine || 7),
     };
@@ -306,7 +341,7 @@
       ready: true,
       duration,
       cues: cues.filter((c) => c.t >= -0.5 && c.t <= duration).sort((a, b) => a.t - b.t),
-      info: { format: L.fmt, W: L.W, H: L.H, bpm, safe: L.safe, temps_fort: ctx.tempsFort ?? null, minFont: L.u * 3.1 },
+      info: { format: L.fmt, W: L.W, H: L.H, bpm, safe: L.safe, temps_fort: ctx.tempsFort ?? null, minFont: L.u * 3.1, ambiance: ctx.ambiance || null },
       seek,
       qa(t) {
         seek(t);
@@ -342,6 +377,7 @@
         o,
         font,
         overflow: n.dataset.qaBox != null && n.scrollWidth > n.clientWidth + 2,
+        mouvant: n.dataset.qaMouvant === '1',
       });
     }
     return out;

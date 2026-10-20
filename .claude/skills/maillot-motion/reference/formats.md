@@ -26,8 +26,9 @@ courants, pas des spécifications officielles. Meta recommande parfois de laisse
 | Vidéo | H.264 High, yuv420p, BT.709, CRF 17 | Accepté partout, sans dérive de couleur |
 | Cadence | 30 i/s (`--fps` pour changer) | Le standard des réseaux sociaux |
 | Flou de mouvement | 4 sous-images, obturateur à 180° | Mouvement naturel (`--flou`) |
-| Son | AAC 192 kb/s, 48 kHz, −14 LUFS, crête ≤ −1,5 dBTP | Niveau habituel des plateformes, sans écrêtage |
-| Taille | 8 à 20 Mo pour 12 s en 9:16 | Bien sous les limites des plateformes |
+| Son | AAC 192 kb/s, 48 kHz, −14 LUFS, crête ≤ −2,5 dBFS | Niveau habituel des plateformes, sans écrêtage |
+| Débit | 16 Mb/s au plus (CRF 17) | Le grain de film du modèle `match` ferait sinon passer un 13 s à 70 Mo |
+| Taille | 8 à 30 Mo pour 12 s | Bien sous les limites des plateformes |
 
 ## Quel format pour quelle campagne
 
@@ -48,6 +49,7 @@ courants, pas des spécifications officielles. Meta recommande parfois de laisse
 | promo | 11 s | 10,3 s |
 | flocage | 12 s | 11,25 s |
 | collection (3 maillots) | 10,75 s | 10,1 s |
+| match | 13 s | 12,2 s |
 
 Plus le tempo est rapide, plus la vidéo est courte. Il vaut mieux accélérer le
 tempo que retirer des temps.

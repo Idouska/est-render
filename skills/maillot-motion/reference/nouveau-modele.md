@@ -35,7 +35,10 @@ modifiée pendant `seek`.
 | `B(n)` | Instant du n-ième temps musical, en secondes |
 | `beat` | Durée d'un temps (0,5 s à 120 BPM) |
 | `back`, `world`, `hud` | Calques : fond (fixe), monde (suit la caméra), interface (coordonnées écran) |
-| `cam` | Caméra : `frame(t, x, y, zoom, sp)`, `toScreen(t, x, y)` |
+| `cam` | Caméra : `frame(t, x, y, zoom, sp)`, `toScreen(t, x, y)`, `shake(t, amplitude, durée)` |
+| `front` | Calque par-dessus tout (effets d'écran du module cinéma) |
+| `reserve(haut, bas)` | Réserve des bandes (barres cinémascope) : la zone sûre rétrécit, le contrôle suit |
+| `ambiance` | `'cinema'` : le fond sonore par défaut devient la nappe de bande-annonce |
 | `add(part)` | Ajoute un objet `{ seek(t) }` au film |
 | `cue(t, type, { gain, pitch })` | Programme un bruitage (voir `son.md`) |
 | `image(url)` | Charge une image (promesse), à utiliser avec `await` |
@@ -80,6 +83,24 @@ avec `L.W` et `L.H` (il peut déborder). On distingue trois cas :
 | `logo(ctx, { x, y, h, tin })` | Logo de la marque, ou son nom en lettrage (à utiliser avec `await`) |
 | `ticker(ctx, { text, y, size, tin })` | Bandeau défilant décoratif |
 | `letters(ctx, str, { product, fx, fy, size, t0, step, arc })` | Lettres posées sur le maillot (flocage) |
+
+`product` accepte aussi `halo: '#couleur'`, un halo coloré derrière le maillot. Les pistes
+`lum` (0 : silhouette noire, 1 : éclairé) et `halo` s'animent avec `.move()`. `p.blur = (t) => px`
+ajoute un flou de profondeur.
+
+## Module cinéma (`MM.cine`)
+
+| Fonction | Rôle |
+|---|---|
+| `stade(ctx, { ciel, brume, poussiere })` | Remplace `ui.background` : nuit, fumée, poussière dans la lumière. `.faisceau({ x, y, angle, spread, on, off, force, balayage: { vers, t0, t1 } })` ajoute un projecteur (son de projecteur à l'allumage) ; `.lumiere` est une piste qui règle tout l'éclairage (noir avant un impact) ; `.flash(t, couleur, force)` |
+| `ecran(ctx, { barres, vignette, grain })` | Par-dessus tout : barres cinémascope (`.barre` donne leur hauteur), vignettage, grain à 24 i/s, `.etincelles(t, x, y, { nombre, angle, ouverture, vitesse, couleur })`, `.reflet(t, y, couleur)` (traînée anamorphique), `.flash(t, force)`, piste `.noir` (fondu au noir) |
+| `aberration(ctx)` | `.choc(t, px)` : décalage rouge et bleu qui s'amortit en 0,2 s |
+| `sousTitre(ctx, str, { x, y, size, tin, tout, de, a, duree })` | Lettres très espacées (`de` em) qui se resserrent (`a` em) |
+| `metal(ctx, titre, { t0 })` | Rend métallique un `ui.title`, avec un reflet qui passe |
+
+Le filtre d'aberration chromatique coûte cher : il n'est actif que pendant les chocs. Le
+fond du stade et l'écran sont deux canvas redessinés à chaque image, et leurs textures
+(fumée, grain, halos) sont précalculées.
 
 Icônes disponibles : `fleche`, `panier`, `check`, `etoile`, `bouclier`, `camion`,
 `horloge`, `tag`, `retour`. Toutes ont le même trait.

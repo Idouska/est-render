@@ -213,6 +213,23 @@
     return { src: c.toDataURL('image/png'), pad };
   }
 
+  // Halo de couleur : la silhouette très floutée, teintée, posée derrière le produit.
+  function bakedGlow(img, w, h, blur, color) {
+    const pad = blur * 3;
+    const k = 0.35;
+    const c = document.createElement('canvas');
+    c.width = Math.ceil((w + pad * 2) * k);
+    c.height = Math.ceil((h + pad * 2) * k);
+    const g = c.getContext('2d');
+    g.filter = `blur(${blur * k}px)`;
+    g.drawImage(img, pad * k, pad * k, w * k, h * k);
+    g.filter = 'none';
+    g.globalCompositeOperation = 'source-in';
+    g.fillStyle = color;
+    g.fillRect(0, 0, c.width, c.height);
+    return { src: c.toDataURL('image/png'), pad };
+  }
+
   /* ------------------------------------------------------------------------
    * Titre : lignes empilées qui claquent une par une sur les temps.
    * justify : chaque ligne remplit la même largeur (affiche sportive).
@@ -232,6 +249,7 @@
         qa: 'texte',
         style: { color: accent ? C.accent : o.color || C.texte },
       });
+      if (accent) n.dataset.accent = '1';
       if (o.justify === false) fit(n, maxW, o.size, o.size * 0.4);
       else fit(n, maxW, Math.min(o.size * 1.7, o.maxSize || 1e9), o.size * 0.4);
       return n;
@@ -356,6 +374,16 @@
       parent: o.parent || ctx.world,
       style: { width: w0 + 'px', height: h0 + 'px' },
     });
+    if (cutout && o.halo) {
+      const gl = bakedGlow(img, w0, h0, h0 * 0.09, o.halo);
+      const glow = el('img', {
+        parent: wrap,
+        cls: 'mm-img',
+        style: { position: 'absolute', left: -gl.pad + 'px', top: -gl.pad + 'px', width: w0 + gl.pad * 2 + 'px', height: h0 + gl.pad * 2 + 'px' },
+      });
+      glow.src = gl.src;
+      wrap.mmGlow = glow;
+    }
     if (cutout) {
       const sh = bakedShadow(img, w0, h0, h0 * 0.04);
       const shadow = el('img', {
@@ -409,10 +437,12 @@
       s: new Track(st.s ?? 1),
       r: new Track(st.r ?? 0),
       o: new Track(st.o ?? 1),
+      lum: new Track(st.lum ?? 1), // luminosité du maillot (0 : silhouette noire)
+      halo: new Track(st.halo ?? 1), // intensité du halo de couleur
       shines: [],
       floatFrom: o.floatFrom,
       move(t, to, sp = SP.vif) {
-        for (const k of ['x', 'y', 's', 'r', 'o']) if (to[k] != null) p[k].to(t, to[k], sp);
+        for (const k of ['x', 'y', 's', 'r', 'o', 'lum', 'halo']) if (to[k] != null) p[k].to(t, to[k], sp);
         return p;
       },
       shine(t) {
@@ -445,7 +475,10 @@
       },
       seek(t) {
         const s = p.state(t);
-        put(wrap, { x: s.x, y: s.y, s: s.s, r: s.r, o: s.o, b: (1 - clamp(s.o)) * 14 });
+        put(wrap, { x: s.x, y: s.y, s: s.s, r: s.r, o: s.o, b: (1 - clamp(s.o)) * 14 + (p.blur ? p.blur(t) : 0) });
+        const lum = p.lum.at(t);
+        im.style.filter = lum < 0.995 ? `brightness(${Math.max(0, lum).toFixed(3)})` : '';
+        if (wrap.mmGlow) wrap.mmGlow.style.opacity = clamp(p.halo.at(t)).toFixed(3);
         // Le reflet n'existe que pendant son passage (un masque coûte cher).
         let pos = null;
         for (const ts of p.shines) if (t >= ts && t <= ts + 0.8) pos = lerp(130, -30, E.inOutSine(range(t, ts, ts + 0.8)));
