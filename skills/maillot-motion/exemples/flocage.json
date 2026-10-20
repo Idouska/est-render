@@ -1,0 +1,12 @@
+{
+  "modele": "flocage",
+  "marque": "marque.json",
+  "formats": ["9:16", "4:5", "1:1", "16:9"],
+  "produit": {
+    "nom": "Maillot domicile floqué",
+    "image_dos": "../assets/demo/maillot-domicile-dos.svg",
+    "prix": 89.99
+  },
+  "flocage": { "nom": "Martin", "numero": 9, "couleur": "#ffffff", "prix": 15 },
+  "textes": { "accroche": ["Ton nom.", "Ton numéro."], "cta": "Je personnalise" }
+}

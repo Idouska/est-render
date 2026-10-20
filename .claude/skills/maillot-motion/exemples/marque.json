@@ -1,0 +1,11 @@
+{
+  "nom": "Running Upscale",
+  
+  "couleurs": {
+    "fond": "#0b0b0d",
+    "fond2": "#1d2130",
+    "texte": "#ffffff",
+    "accent": "#d8ff3c",
+    "accent_texte": "#0b0b0d"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "modele": "collection",
+  "marque": "marque.json",
+  "formats": ["9:16", "4:5", "1:1", "16:9"],
+  "produits": [
+    { "nom": "Domicile", "image": "../assets/demo/maillot-domicile-face.svg", "prix": 89.99 },
+    { "nom": "Extérieur", "image": "../assets/demo/maillot-exterieur-face.svg", "prix": 89.99 },
+    { "nom": "Third", "image": "../assets/demo/maillot-third-face.svg", "prix": 94.99, "prix_barre": 109.99 }
+  ],
+  "textes": { "accroche": ["La", "collection", "26/27"], "titre": "Collection 26/27", "cta": "Voir la collection" }
+}

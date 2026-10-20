@@ -1,0 +1,19 @@
+{
+  "modele": "drop",
+  "marque": "marque.json",
+  "formats": ["9:16", "4:5", "1:1", "16:9"],
+  "produit": {
+    "nom": "Maillot domicile",
+    "club": "Club démo",
+    "saison": "26/27",
+    "image": "../assets/demo/maillot-domicile-face.svg",
+    "prix": 89.99,
+    "prix_barre": 109.99
+  },
+  "textes": {
+    "accroche": ["Nouveau", "maillot", "26/27"],
+    "atouts": ["Tissu respirant", "Écusson brodé", "Coupe ajustée"],
+    "cta": "Commander",
+    "mention": "Produit authentique"
+  }
+}

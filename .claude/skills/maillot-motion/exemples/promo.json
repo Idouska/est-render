@@ -1,0 +1,12 @@
+{
+  "modele": "promo",
+  "marque": "marque.json",
+  "formats": ["9:16", "4:5", "1:1", "16:9"],
+  "promo": { "remise": 20, "code": "FOOT20", "fin": "Jusqu'à dimanche minuit" },
+  "produits": [
+    { "nom": "Maillot domicile", "image": "../assets/demo/maillot-domicile-face.svg", "prix": 89.99 },
+    { "nom": "Maillot extérieur", "image": "../assets/demo/maillot-exterieur-face.svg", "prix": 89.99 },
+    { "nom": "Maillot third", "image": "../assets/demo/maillot-third-face.svg", "prix": 94.99 }
+  ],
+  "textes": { "accroche": ["Offre", "flash"], "cta": "J'en profite" }
+}
