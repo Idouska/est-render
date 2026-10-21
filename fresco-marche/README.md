@@ -39,8 +39,9 @@ Incident corrigé pendant l'installation : après la duplication, le fichier `co
 2. **Vérifier que Google voit les liens** : Inspection de l'URL › `https://frescomarche.fr/products/banane-fraiche` › **Tester l'URL en direct** › Afficher la page explorée › HTML : on doit y trouver `fm-meme-rayon` et `/collections/fruits`.
 3. **Suivre** chaque semaine Pages › « Dans l'index » (doit monter) et « Détectée, actuellement non indexée » (doit baisser). Compter 2 à 6 semaines ; Google ne garantit aucun délai.
 
-## Pages « Livraison [ville] » (validées le 20/10/2026)
+## Pages « Livraison [ville] » (validées le 20/10/2026, en ligne depuis le 21/10/2026)
 
 - Textes, titres et descriptions Google des 8 pages : `textes-livraison.json` (avec l'« avant » pour revenir en arrière), aperçu dans `apercu-livraison.html`.
 - Zone : rayon de 5,5 km à vol d'oiseau autour du 120 rue Martre, qui couvre les 8 villes en entier.
 - Enregistrement sur le Mac : `shopify store auth --store qi1fj4-ip.myshopify.com --scopes read_online_store_pages,write_online_store_pages`, puis `node enregistrer-livraison.mjs --essai`, puis `node enregistrer-livraison.mjs`. Le titre affiché en haut des pages et leur adresse ne changent pas.
+- Vérifié sur le site le 21/10/2026 : texte, titre et description Google conformes sur les 8 pages, titre affiché inchangé, 27 liens internes en 200. Sauvegarde de l'ancienne version aussi sur le Mac : `~/fresco/sauvegarde-avant-2026-10-21.json`.
