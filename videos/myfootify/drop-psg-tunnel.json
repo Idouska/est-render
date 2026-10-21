@@ -21,7 +21,7 @@
   },
   "textes": {
     "accroche": ["Le nouveau", "maillot", "26/27"],
-    "atouts": ["Domicile 26/27", "Flocage nom & numéro", "Livraison France & Europe"],
+    "atouts": ["Domicile 26/27", "Flocage perso", "Livraison Europe"],
     "cta": "Commander",
     "mention": "myfootify.com"
   }
