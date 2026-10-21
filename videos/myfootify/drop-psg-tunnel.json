@@ -1,0 +1,28 @@
+{
+  "modele": "drop",
+  "nom": "myfootify-drop-psg-tunnel",
+  "marque": "marque.json",
+  "formats": ["9:16", "4:5", "16:9"],
+  "decor": {
+    "9:16": "decors/tunnel-9x16.jpg",
+    "4:5": "decors/tunnel-9x16.jpg",
+    "16:9": "decors/tunnel-16x9.jpg",
+    "flou": 3,
+    "assombrir": 0.18,
+    "teinte": 0.12,
+    "centre": [0.5, 0.42]
+  },
+  "produit": {
+    "nom": "Maillot domicile",
+    "club": "Paris 26/27",
+    "saison": "26/27",
+    "image": "images/psg-2026-27-domicile.png",
+    "prix": 59.9
+  },
+  "textes": {
+    "accroche": ["Le nouveau", "maillot", "26/27"],
+    "atouts": ["Domicile 26/27", "Flocage nom & numéro", "Livraison France & Europe"],
+    "cta": "Commander",
+    "mention": "myfootify.com"
+  }
+}

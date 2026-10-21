@@ -77,10 +77,12 @@
     cv.width = L.W;
     cv.height = L.H;
     const g = cv.getContext('2d');
-    const base = bakeBackdrop(ctx, C, o);
+    const decor = ctx.decor ? bakeDecor(ctx, C) : null;
+    const base = decor ? null : bakeBackdrop(ctx, C, o);
     const glow = radialSprite(o.lumiere || C.accent);
     const R = Math.max(L.W, L.H) * 0.9;
     const poolAlpha = o.halo == null ? [0.2, 0.12] : [o.halo, o.halo * 0.6];
+    if (decor) poolAlpha.forEach((a, i) => (poolAlpha[i] = a * 0.5)); // la photo porte déjà sa lumière
     const wipes = [];
     const flashes = [];
     put(cv, { x: 0, y: 0, ax: 0, ay: 0 });
@@ -98,7 +100,8 @@
       },
       seek(t) {
         g.globalAlpha = 1;
-        g.drawImage(base, 0, 0);
+        if (decor) decor.draw(g, t);
+        else g.drawImage(base, 0, 0);
         for (const w of wipes) {
           const e = stepR(t - w.t, SP.vif);
           if (e <= 0) continue;
@@ -130,6 +133,106 @@
       },
     };
     return ctx.add(part);
+  }
+
+  /* Décor photo (spec.decor) : l'image est recadrée, adoucie et assombrie une
+   * seule fois, dans un canvas plus grand que l'écran. À chaque image, elle
+   * avance lentement et suit un peu la caméra (parallaxe), sous un voile fixe :
+   * vignettage, bandes sombres derrière les textes, grain. Le décor ne touche
+   * jamais le maillot, qui reste la photo d'origine posée par-dessus. */
+  function bakeDecor(ctx, C) {
+    const { L } = ctx;
+    const img = ctx.decor;
+    const d = typeof ctx.spec.decor === 'object' ? ctx.spec.decor : {};
+    const k = L.u / 10.8; // réglages en px pour un petit côté de 1080
+    const M = 1.16; // marge pour le mouvement
+    const W = Math.round(L.W * M);
+    const H = Math.round(L.H * M);
+    const [fx, fy] = d.centre || [0.5, 0.5];
+    const s = Math.max(W / img.naturalWidth, H / img.naturalHeight);
+    const iw = img.naturalWidth * s;
+    const ih = img.naturalHeight * s;
+    const pic = document.createElement('canvas');
+    pic.width = W;
+    pic.height = H;
+    const p = pic.getContext('2d');
+    const blur = (d.flou ?? 2) * k;
+    p.filter = `blur(${blur.toFixed(1)}px) saturate(${d.saturation ?? 0.85}) contrast(1.06)`;
+    // Point focal (fx, fy) de l'image au centre, sans laisser de bord vide.
+    const ox = clamp(W / 2 - fx * iw, W - iw, 0);
+    const oy = clamp(H / 2 - fy * ih, H - ih, 0);
+    // Débord de quelques px pour que le flou ne fonce pas les bords.
+    p.drawImage(img, ox - blur * 2, oy - blur * 2, iw + blur * 4, ih + blur * 4);
+    // Masques : zones très floutées, en fraction de l'image (faux logos ou
+    // pseudo-texte inventés par le générateur, sur des panneaux par exemple).
+    const masques = ((d._masques || {})[d[L.fmt] ? L.fmt : 'image'] || []).concat(d.masques || []);
+    for (const [x0, y0, x1, y1] of masques) {
+      p.save();
+      p.beginPath();
+      p.rect(ox + x0 * iw, oy + y0 * ih, (x1 - x0) * iw, (y1 - y0) * ih);
+      p.clip();
+      const mb = Math.max(blur, 16 * k);
+      p.filter = `blur(${mb.toFixed(1)}px) saturate(0.6)`;
+      p.drawImage(img, ox - mb * 2, oy - mb * 2, iw + mb * 4, ih + mb * 4);
+      p.restore();
+    }
+    p.filter = 'none';
+    p.globalAlpha = d.assombrir ?? 0.35;
+    p.fillStyle = '#000';
+    p.fillRect(0, 0, W, H);
+    p.globalAlpha = d.teinte ?? 0.2; // la couleur de fond de la marque unifie la photo
+    p.fillStyle = C.fond;
+    p.fillRect(0, 0, W, H);
+
+    const veil = document.createElement('canvas');
+    veil.width = L.W;
+    veil.height = L.H;
+    const v = veil.getContext('2d');
+    const rgba = (a) => hexA(C.fond, a);
+    const vg = v.createRadialGradient(L.W / 2, L.H * 0.48, Math.min(L.W, L.H) * 0.3, L.W / 2, L.H * 0.48, Math.hypot(L.W, L.H) * 0.62);
+    vg.addColorStop(0, rgba(0));
+    vg.addColorStop(1, rgba(0.75));
+    v.fillStyle = vg;
+    v.fillRect(0, 0, L.W, L.H);
+    const band = (x0, y0, x1, y1, a) => {
+      const lg = v.createLinearGradient(x0, y0, x1, y1);
+      lg.addColorStop(0, rgba(a));
+      lg.addColorStop(1, rgba(0));
+      v.fillStyle = lg;
+      v.fillRect(0, 0, L.W, L.H);
+    };
+    const side = !L.portrait && !(L.H / L.W > 1.1);
+    if (side) band(L.W, 0, L.W * 0.42, 0, 0.6); // colonne de texte à droite
+    else {
+      band(0, 0, 0, L.H * 0.3, 0.6);
+      band(0, L.H, 0, L.H * 0.62, 0.7);
+    }
+    v.globalAlpha = 0.06;
+    v.fillStyle = v.createPattern(grainCanvas(), 'repeat');
+    v.fillRect(0, 0, L.W, L.H);
+
+    const push = d.mouvement ?? 0.06;
+    const par = d.parallaxe ?? 0.15;
+    return {
+      draw(g, t) {
+        const c = ctx.cam.state(t);
+        const z = (1 + push * (t / (t + 8))) * (1 + (c.z - 1) * par);
+        // 5 % de marge au repos : de quoi suivre la caméra sans montrer de bord.
+        const dw = L.W * 1.05 * z;
+        const dh = L.H * 1.05 * z;
+        const mx = (dw - L.W) / 2;
+        const my = (dh - L.H) / 2;
+        const dx = clamp((L.W / 2 - c.x) * c.z * par, -mx, mx);
+        const dy = clamp((L.H / 2 - c.y) * c.z * par, -my, my);
+        g.drawImage(pic, L.W / 2 - dw / 2 + dx, L.H / 2 - dh / 2 + dy, dw, dh);
+        g.drawImage(veil, 0, 0);
+      },
+    };
+  }
+
+  function hexA(hex, a) {
+    const n = parseInt(hex.replace('#', '').replace(/^(.)(.)(.)$/, '$1$1$2$2$3$3'), 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
   }
 
   function bakeBackdrop(ctx, C, o) {

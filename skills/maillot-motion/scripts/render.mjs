@@ -20,6 +20,7 @@
 
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { basename, dirname, extname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -119,14 +120,39 @@ if (modele === 'flocage' && !P.image_dos) {
   P.image_dos = demo('maillot-domicile-dos.svg');
   warnings.push('Pas de produit.image_dos : dos de démonstration utilisé.');
 }
+// Décor photo : une image pour tous les formats, ou une par format. Chaque fichier
+// est noté (empreinte, fiche de génération) dans <nom>-provenance.json.
+const provenance = { produits: [], decors: [] };
+const sha = (f) => createHash('sha256').update(readFileSync(f)).digest('hex');
+if (typeof spec.decor === 'string') spec.decor = { image: spec.decor };
+if (spec.decor) {
+  for (const k of Object.keys(spec.decor)) {
+    if (!/^(image|\d+:\d+)$/.test(k)) continue;
+    const abs = isAbsolute(spec.decor[k]) ? spec.decor[k] : resolve(specDir, spec.decor[k]);
+    spec.decor[k] = asset(abs, specDir, `decor.${k}`);
+    const ficheF = abs.replace(/\.[^.]+$/, '.json');
+    const fiche = existsSync(ficheF) ? JSON.parse(readFileSync(ficheF, 'utf8')) : null;
+    if (!fiche) warnings.push(`Décor ${basename(abs)} sans fiche (${basename(ficheF)}) : note d'où il vient (voir reference/decors.md).`);
+    else if (fiche.entrees && fiche.entrees.length)
+      warnings.push(`Décor ${basename(abs)} généré à partir d'images (${fiche.entrees.join(', ')}) : vérifie qu'aucune n'est une photo de maillot.`);
+    provenance.decors.push({ format: k, fichier: abs, sha256: sha(abs), fiche });
+    // Les masques décrivent l'image : ils vivent dans sa fiche.
+    if (fiche && fiche.masques) (spec.decor._masques = spec.decor._masques || {})[k] = fiche.masques;
+  }
+}
 // Tous les champs « image », « image_dos » et « logo… » du fichier de scène (produit,
 // produits, match.domicile…) deviennent des URL servies par la route mm.local.
 (function resolveImages(o, path) {
   if (Array.isArray(o)) return o.forEach((v, i) => resolveImages(v, `${path}[${i}]`));
   if (!o || typeof o !== 'object') return;
   for (const [k, v] of Object.entries(o)) {
-    if (/^(image|image_dos|logo\w*)$/.test(k) && typeof v === 'string') o[k] = asset(v, specDir, `${path}.${k}`);
-    else if (k !== 'marque') resolveImages(v, path ? `${path}.${k}` : k);
+    if (/^(image|image_dos|logo\w*)$/.test(k) && typeof v === 'string') {
+      o[k] = asset(v, specDir, `${path}.${k}`);
+      if (!/^logo/.test(k)) {
+        const abs = decodeURI(o[k].slice(HOST.length + 3));
+        provenance.produits.push({ champ: `${path}.${k}`, fichier: abs, sha256: sha(abs) });
+      }
+    } else if (k !== 'marque' && k !== 'decor') resolveImages(v, path ? `${path}.${k}` : k);
   }
 })(spec, '');
 if (spec.marque.logo) spec.marque.logo = asset(spec.marque.logo, brandDir, 'marque.logo');
@@ -462,6 +488,9 @@ function probe(file) {
  * ------------------------------------------------------------------------ */
 
 warnings.forEach((w) => log('ℹ ' + w));
+// Ce que la vidéo montre : les photos produit telles quelles, et d'où vient chaque décor.
+if (provenance.decors.length)
+  writeFileSync(join(outDir, `${slug}-provenance.json`), JSON.stringify({ video: slug, ...provenance }, null, 1));
 const results = [];
 let failedQa = 0;
 for (const fmt of formats) {
@@ -469,6 +498,10 @@ for (const fmt of formats) {
   const pg = await openPage(fmt);
   const { duration, cues, info } = await pg.page.evaluate(() => ({ duration: window.__mm.duration, cues: window.__mm.cues, info: window.__mm.info }));
   log(`\n▶ ${modele} · ${fmt} · ${duration.toFixed(2)} s · ${info.bpm.toFixed(1)} BPM`);
+  if (info.decor) {
+    const k = (Math.max(info.W / info.decor.w, info.H / info.decor.h) * 1.05);
+    if (k > 1.5) log(`ℹ Décor agrandi ×${k.toFixed(1)} en ${fmt} : il sera flou. Fournis une image d'au moins ${Math.round(info.W * 1.05)} × ${Math.round(info.H * 1.05)} px.`);
+  }
 
   const issues = await qa(pg, info, duration);
   if (issues.length) {

@@ -45,6 +45,7 @@ modifiée pendant `seek`.
 | `tempsFort` | À renseigner : instant de la révélation (cymbale du fond de maquette) |
 | `duration` | À renseigner si la durée dépend du contenu (sinon `beats`) |
 | `rng()` | Nombre pseudo-aléatoire, toujours le même d'un rendu à l'autre |
+| `decor` | Image du décor photo pour ce format (`spec.decor`), déjà chargée ; `ui.background` la dessine |
 
 Règle de mise en page : on place les textes avec `L.safe` (zone sûre), et le produit
 avec `L.W` et `L.H` (il peut déborder). On distingue trois cas :
@@ -71,7 +72,7 @@ avec `L.W` et `L.H` (il peut déborder). On distingue trois cas :
 
 | Composant | Rôle |
 |---|---|
-| `background(ctx, { halo, lumiere, rayures })` | Fond dessiné dans un canvas. Méthodes `.flash(t, force)` et `.wipe(t, couleur, sens)` |
+| `background(ctx, { halo, lumiere, rayures })` | Fond dessiné dans un canvas, ou décor photo si `spec.decor` existe (voir `decors.md`). Méthodes `.flash(t, force)` et `.wipe(t, couleur, sens)` |
 | `title(ctx, lignes, { x, cy, maxW, size, tins, tout, flash })` | Lignes qui claquent ; la dernière prend la couleur d'accent |
 | `text(ctx, str, { x, y, size, maxW, tin, tout, upper, titre, color })` | Une ligne ; `x` et `y` peuvent être des fonctions de t |
 | `product(ctx, img, { h, x, y, start, floatFrom, detoure })` | Le maillot : pistes `x y s r o`, `.move(t, {…}, sp)`, `.shine(t)`, `.pointAt(t, fx, fy)`, `.screenAt(t, fx, fy)` |

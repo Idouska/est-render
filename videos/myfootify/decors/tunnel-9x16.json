@@ -1,0 +1,23 @@
+{
+  "generateur": "Figma Weave",
+  "modele": "Flux 3 (Black Forest Labs), 2K",
+  "date": "2026-10-21",
+  "entrees": [],
+  "prompt": "Photorealistic empty stadium players' tunnel at night, seen from inside looking out toward the bright floodlit pitch at the far end. Dark concrete walls, wet floor with reflections, warm orange light spill, light haze. The center of the frame is open, empty negative space. No people, no text, no letters, no logos, no signs, no flags, no football shirts, no brand marks. Cinematic, shallow depth of field, moody, 35mm film look.",
+  "format": "9:16",
+  "remarques": "Panneaux au fond du stade avec faux logos et pseudo-texte : floutés par les masques ci-dessus (fractions de l'image).",
+  "masques": [
+    [
+      0.36,
+      0.375,
+      0.68,
+      0.405
+    ],
+    [
+      0.36,
+      0.415,
+      0.68,
+      0.448
+    ]
+  ]
+}

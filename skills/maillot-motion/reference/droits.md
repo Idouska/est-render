@@ -31,6 +31,17 @@ consulte aussi le skill `gmc-maillots-foot` (profil SHIELD, marques et licences)
 - **Promettre ce que la logistique ne tient pas** : « livraison 24 h », « en
   stock » en dropshipping, « retours gratuits » si ce n'est pas le cas.
 
+## Images générées par IA
+
+- **Seulement pour le décor** (voir `decors.md`). Le maillot montré est toujours la
+  photo du produit vendu. Un maillot généré ou retouché par IA a des écussons et des
+  sponsors redessinés : il ressemble à une contrefaçon et ne correspond plus au produit.
+- **Aucun texte ni logo inventé dans le décor** : les générateurs dessinent de faux
+  panneaux publicitaires. Floute-les ou régénère.
+- **Pas de stade réel reconnaissable** ni de personne générée qui ressemble à un joueur.
+- Meta et TikTok peuvent ajouter une mention « Info IA ». Garde le fichier
+  `sortie/<nom>-provenance.json` : il montre ce qui est généré et ce qui est réel.
+
 ## Plateformes publicitaires
 
 - Les règles de Meta, TikTok et Google interdisent les promesses trompeuses et les

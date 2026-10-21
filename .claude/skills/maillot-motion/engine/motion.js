@@ -330,6 +330,10 @@
       el,
       rng: rng(spec.graine || 7),
     };
+    // Décor photo (voir reference/decors.md) : une image par format, ou une seule pour tous.
+    const D = spec.decor;
+    const decorUrl = D && (D[L.fmt] || D.image);
+    if (decorUrl) ctx.decor = await loadImage(decorUrl);
 
     await def.build(ctx);
     const duration = ctx.duration || (def.beats ? def.beats * beat : 10);
@@ -343,7 +347,8 @@
       ready: true,
       duration,
       cues: cues.filter((c) => c.t >= -0.5 && c.t <= duration).sort((a, b) => a.t - b.t),
-      info: { format: L.fmt, W: L.W, H: L.H, bpm, safe: L.safe, temps_fort: ctx.tempsFort ?? null, minFont: L.u * 3.1, ambiance: ctx.ambiance || null },
+      info: { format: L.fmt, W: L.W, H: L.H, bpm, safe: L.safe, temps_fort: ctx.tempsFort ?? null, minFont: L.u * 3.1, ambiance: ctx.ambiance || null,
+        decor: ctx.decor ? { url: decorUrl, w: ctx.decor.naturalWidth, h: ctx.decor.naturalHeight } : null },
       seek,
       qa(t) {
         seek(t);

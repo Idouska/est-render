@@ -1,6 +1,6 @@
 ---
 name: maillot-motion
-description: Fabrique des vidéos publicitaires animées (motion design) pour des maillots de foot et produits de la boutique, en MP4 prêts pour Reels, TikTok, Stories, fil Meta, YouTube et Google (9:16, 4:5, 1:1, 16:9), avec son synchronisé sur le tempo. Cinq modèles - lancement d'un nouveau maillot (drop), promotion ou code promo (promo), personnalisation nom et numéro (flocage), collection de plusieurs maillots (collection), et bande-annonce cinématographique de choc entre deux équipes façon annonce de match télé (match : projecteurs, fumée, VS, sifflet, foule). Utilise ce skill dès qu'on demande une vidéo produit, une pub animée, un Reel, un TikTok, une story animée, une vidéo « cinématographique », « avec de l'émotion » ou « comme une annonce de match », ou du motion design pour un maillot, une promo, un flocage ou une collection, même sans le mot « motion ». Pas pour animer l'interface d'un site ou d'une application.
+description: Fabrique des vidéos publicitaires animées (motion design) pour des maillots de foot et produits de la boutique, en MP4 prêts pour Reels, TikTok, Stories, fil Meta, YouTube et Google (9:16, 4:5, 1:1, 16:9), avec son synchronisé sur le tempo. Cinq modèles - lancement d'un nouveau maillot (drop), promotion ou code promo (promo), personnalisation nom et numéro (flocage), collection de plusieurs maillots (collection), et bande-annonce cinématographique de choc entre deux équipes façon annonce de match télé (match : projecteurs, fumée, VS, sifflet, foule). Peut placer la vraie photo du maillot dans un décor photo généré par IA (tunnel de stade, vestiaire), sans jamais faire générer le maillot. Utilise ce skill dès qu'on demande une vidéo produit, une pub animée, un Reel, un TikTok, une story animée, une vidéo « cinématographique », « avec de l'émotion » ou « comme une annonce de match », un maillot « dans un décor », ou du motion design pour un maillot, une promo, un flocage ou une collection, même sans le mot « motion ». Pas pour animer l'interface d'un site ou d'une application.
 ---
 
 # maillot-motion : vidéos produit animées
@@ -18,7 +18,7 @@ résultat image par image. Tu ne livres jamais une vidéo que tu n'as pas regard
 |---|---|
 | `scripts/render.mjs` | Rendu : contrôle des textes, planche, vidéos, son, vérification du MP4 |
 | `scripts/audio.py` | Bruitages synthétisés, fond rythmique de maquette, analyse de tempo d'une musique |
-| `scripts/detourer.py` | Détourage des photos produit sur fond blanc (PNG à fond transparent) |
+| `scripts/detourer.py` | Détourage des photos produit sur fond blanc (PNG à fond transparent), réparation d'un détourage |
 | `templates/*.js` | Les cinq modèles : `drop`, `promo`, `flocage`, `collection`, `match` |
 | `engine/motion.js` | Moteur : ressorts, caméra, zones sûres, contrôle automatique |
 | `engine/ui.js` | Composants : fond, titre, produit, point d'intérêt, prix à rouleaux, bouton, pastille, bandeau, flocage |
@@ -26,7 +26,7 @@ résultat image par image. Tu ne livres jamais une vidéo que tu n'as pas regard
 | `exemples/*.json` | Un fichier de scène par modèle, et `marque.json` |
 | `assets/demo/` | Maillots génériques (sans club ni marque) pour essayer sans photo |
 | `fonts/` | Anton et Barlow Condensed (licence OFL, incluses) |
-| `reference/` | Direction artistique, formats, son, droits, création d'un modèle |
+| `reference/` | Direction artistique, formats, son, droits, décors générés par IA, création d'un modèle |
 
 Les chemins ci-dessous sont relatifs au dossier du skill : `skills/maillot-motion/` ou `.claude/skills/maillot-motion/`, selon la copie chargée.
 
@@ -62,7 +62,9 @@ Où trouver les données :
   - **Fond blanc ou uni clair**, le cas courant des photos e-commerce : détoure-la toi-même avec
     `python3 scripts/detourer.py photo.jpg --sortie images/`. Ajoute `--ombre` si une ombre grise
     reste sous le maillot (jamais pour un maillot blanc ou gris). Regarde toujours le résultat
-    sur un fond sombre avant de l'utiliser.
+    sur un fond sombre avant de l'utiliser : une bande blanche reliée au fond par un passage
+    étroit (le long du col) est rendue au maillot, mais vérifie-le. Un PNG déjà détouré à qui il
+    manque une bande blanche se répare avec la même commande (`<nom>-repare.png`).
   - **Autre fond** (mannequin, décor) : l'outil de suppression d'arrière-plan du connecteur Canva,
     sinon demande un PNG détouré.
 - **Marque** : un `marque.json` partagé par toutes les vidéos (nom, logo, couleurs). Crée-le une
@@ -156,6 +158,7 @@ Champs communs :
   "bpm": 120,                       // tempo de la grille ; pris sur la musique si elle est fournie
   "musique": { "fichier": "son.mp3", "debut": 12, "volume": 0.8, "decalage": 0 },  // ou false : aucun fond
   "zones_sures": { "9:16": { "b": 0.35 } },   // durcir une zone (fractions de l'image)
+  "decor": { "9:16": "decors/tunnel-9x16.jpg", "16:9": "decors/tunnel-16x9.jpg" },  // photo de fond (voir plus bas)
   "textes": { "accroche": ["Nouveau", "maillot", "26/27"], "cta": "Commander", "bandeau": false }
 }
 ```
@@ -213,6 +216,26 @@ Le son de bande-annonce est fourni sans musique : nappe grave synthétisée, bat
 projecteurs, cuivres, tambours, sifflet et foule, tout calé sur l'image. Une musique
 épique sous licence peut le remplacer (`musique`).
 
+## Décors générés par IA
+
+Quand l'utilisateur veut un vrai lieu derrière le maillot (tunnel de stade, vestiaire, rue),
+`"decor"` remplace le fond dessiné par une photo, de préférence générée par IA. Lis
+`reference/decors.md` avant d'en générer un. L'essentiel :
+
+- **L'IA ne génère que le décor, jamais le maillot.** Le générateur ne reçoit que du texte ;
+  le maillot reste la photo produit, posée par-dessus sans modification. Refuse de faire
+  générer, retoucher ou porter le maillot par une IA : elle redessine écussons et sponsors.
+- **Prompt** : lieu vide, sans personne, sans texte ni logo, centre libre, lumière dans la
+  couleur de la marque. Une image verticale et une horizontale.
+- **Inspecte chaque décor en grand** : les générateurs inventent du pseudo-texte et de faux
+  logos (panneaux publicitaires). Floute-les avec des `masques` dans la fiche du décor.
+- **Fiche** `<image>.json` à côté de chaque décor (générateur, prompt, `entrees: []`) : le rendu
+  écrit `sortie/<nom>-provenance.json`, qui prouve que seul le décor est généré.
+- **Coût** : un générateur payant (Figma Weave, API) se lance seulement après accord de
+  l'utilisateur sur le prix.
+
+Exemple : `videos/myfootify/drop-psg-tunnel.json`.
+
 ## Son
 
 Sans musique fournie, la vidéo reçoit les bruitages et un **fond rythmique de maquette**
@@ -253,6 +276,7 @@ Lis `reference/droits.md` avant de publier. L'essentiel :
 - **Flocage** : pas de nom de joueur réel dans une publicité sans droits. Utilise un prénom
   générique ou « TON NOM ».
 - **Musique** : seulement avec une licence qui couvre la publicité.
+- **IA** : seulement pour le décor, jamais pour le maillot. Garde le fichier de provenance.
 
 ## Créer ou modifier un modèle
 
@@ -277,3 +301,6 @@ proche, le régler avec `--planche` et `--controle`, puis rendre.
 | Point d'atout mal placé | Positions par défaut | Donne `x` et `y` pour chaque atout dans `textes.atouts` |
 | Tempo de la musique faux (moitié, double) | Morceau ambigu | Force `"bpm"` dans le fichier de scène |
 | Rendu lent | 4 sous-images par image | `--flou 2`, ou `--brouillon` pour régler |
+| Trait sombre le long d'une bande blanche du maillot | Le détourage a pris la bande pour du fond | `python3 scripts/detourer.py image.png` la répare (`image-repare.png`) |
+| Faux logos ou texte dans le décor | Invention du générateur | `masques` dans la fiche du décor, ou régénère |
+| `Décor agrandi ×…` | Image de décor trop petite | Génère en 2K, ou accepte un fond plus flou |
