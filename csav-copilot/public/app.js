@@ -816,7 +816,7 @@ function retourGmail() {
   if (!raison) return;
 
   adresse.searchParams.delete('gmail');
-  history.replaceState(null, '', `${adresse.pathname}${adresse.search}${adresse.hash}`);
+  history.replaceState(history.state, '', `${adresse.pathname}${adresse.search}${adresse.hash}`);
 
   const [message, echec] = RETOURS_GMAIL[raison] ?? RETOURS_GMAIL.echec;
   if (echec) {
@@ -15487,7 +15487,68 @@ const VIEW_LOADERS = {
   },
 };
 
-function setView(view) {
+/* -------------------------------------------------- retour du navigateur --
+
+   Par réflexe, on revient en arrière avec le bouton Retour du navigateur — ou
+   le geste retour du téléphone. L'outil tenait sur une seule entrée
+   d'historique : ce retour-là quittait l'outil au lieu de revenir à l'écran
+   d'avant.
+
+   Chaque écran a désormais son entrée : Retour ramène au précédent, Suivant
+   y retourne, et l'adresse porte l'écran (`#update`), si bien qu'un
+   rechargement rouvre le même. Les fiches ouvertes sur téléphone gardent
+   leur propre entrée par-dessus : Retour les ferme d'abord, comme avant. La
+   flèche ‹ de la barre du haut fait la même chose au clic. */
+
+/** Le rang de l'écran affiché dans l'historique de l'outil : 0, le premier. */
+let rangVue = 0;
+
+function memoriserVue(view) {
+  const courant = history.state;
+  if (courant?.csavVue === view) {
+    rangVue = courant.rang ?? 0;
+  } else {
+    const adresse = `${location.pathname}${location.search}#${view}`;
+    if (!courant?.csavVue) {
+      // Première ouverture : l'entrée existe déjà, on la nomme. Une fiche
+      // encore ouverte par-dessus l'écran : son entrée devient celle du
+      // nouvel écran — sinon il faudrait deux Retour pour revenir en arrière.
+      rangVue = courant ? rangVue + 1 : 0;
+      history.replaceState({ csavVue: view, rang: rangVue }, '', adresse);
+    } else {
+      rangVue = (courant.rang ?? 0) + 1;
+      history.pushState({ csavVue: view, rang: rangVue }, '', adresse);
+    }
+  }
+  const retour = $('nav-retour');
+  if (retour) retour.hidden = rangVue === 0;
+}
+
+addEventListener('popstate', (event) => {
+  const vue = event.state?.csavVue;
+  if (!vue || !VIEW_META[vue]) return;
+  rangVue = event.state.rang ?? 0;
+  if (vue !== state.view) setView(vue, { depuisHistorique: true });
+  else memoriserVue(vue);
+});
+
+$('nav-retour')?.addEventListener('click', () => history.back());
+
+/** L'écran à rouvrir au chargement : celui de l'adresse, s'il est permis. */
+function vueDeLAdresse() {
+  const vue = history.state?.csavVue ?? location.hash.slice(1);
+  return VIEW_META[vue] && !VIEW_META[vue].hidden ? vue : 'tickets';
+}
+
+function setView(view, { depuisHistorique = false } = {}) {
+  // Avant tout le reste : les fiches fermées plus bas ne reculent dans
+  // l'historique que si leur entrée est encore la dernière.
+  if (!depuisHistorique) memoriserVue(view);
+  else {
+    const retour = $('nav-retour');
+    if (retour) retour.hidden = rangVue === 0;
+  }
+
   // La barre de raccourcis appartient à la file : ailleurs, elle mentirait.
   const keybar = $('keybar');
   if (keybar) keybar.hidden = view !== 'tickets';
@@ -19308,7 +19369,7 @@ async function boot() {
 
   renderMe();
   renderClocks();
-  setView('tickets');
+  setView(vueDeLAdresse());
   retourGmail();
 
   /*
