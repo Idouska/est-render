@@ -489,6 +489,27 @@ body {
 
 .head-main { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 
+/* La flèche ‹ : revenir à l'écran d'avant, comme le Retour du navigateur.
+   Absente sur le premier écran — il n'y a rien derrière. */
+.nav-retour {
+  display: inline-grid;
+  place-items: center;
+  align-self: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-mute);
+  cursor: pointer;
+}
+.nav-retour[hidden] { display: none; }
+.nav-retour svg { width: 17px; height: 17px; }
+@media (hover: hover) { .nav-retour:hover { background: var(--line-soft); color: var(--ink); } }
+.nav-retour:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
 .crumb {
   display: flex;
   align-items: center;

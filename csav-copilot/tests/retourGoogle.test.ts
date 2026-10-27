@@ -44,7 +44,7 @@ test('l’outil dit quoi faire, sur Réglages › Connexions, une seule fois', (
   assert.match(retour, /setView\('settings'\);\n\s+document\.querySelector\('\[data-reg="connexions"\]'\)\?\.click\(\);/);
   // Le temps de lire une phrase entière.
   assert.match(retour, /toast\(message, echec, echec \? 10_000 : 4000\);/);
-  assert.match(app, /setView\('tickets'\);\n\s+retourGmail\(\);/);
+  assert.match(app, /setView\(vueDeLAdresse\(\)\);\n\s+retourGmail\(\);/);
 });
 
 test('au téléphone, un seul rond par ligne : la case de sélection', () => {
