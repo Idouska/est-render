@@ -120,6 +120,12 @@ model Merchant {
   /// sans qu'il l'ait voulu.
   mailRuptureAuto Boolean @default(false)
 
+  /// Expéditeurs — adresse ou domaine — que le marchand a rangés dans les
+  /// notifications, ou au contraire remis dans la file. Ils priment sur le
+  /// tri automatique. Voir `services/tickets/notification.ts`.
+  expediteursNotif   String[] @default([])
+  expediteursClients String[] @default([])
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -354,6 +360,12 @@ model Ticket {
   /// statistiques ferait croire à des mois de travail qui n'ont pas eu lieu.
   isHistorical Boolean @default(false)
 
+  /// Une notification d'appli (Judge.me, Shopify, infolettre, réponse
+  /// automatique…) : rangée à part, hors de la file, des compteurs et des
+  /// statistiques, et jamais passée à l'IA. Le motif dit pourquoi.
+  notification      Boolean @default(false)
+  notificationMotif String?
+
   lastMessageAt  DateTime
   /// Date à laquelle le fil Gmail complet a été relu pour ce ticket.
   ///
@@ -386,6 +398,7 @@ model Ticket {
   @@index([merchantId, mailboxId])
   @@index([merchantId, dueAt])
   @@index([merchantId, isHistorical])
+  @@index([merchantId, notification])
 }
 
 /// Réponse type.

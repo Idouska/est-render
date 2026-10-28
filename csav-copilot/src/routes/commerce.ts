@@ -432,7 +432,7 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
 
       const [tickets, parcels, changes] = await Promise.all([
         prisma.ticket.findMany({
-          where: { merchantId, shopifyOrderId: gid, isHistorical: false },
+          where: { merchantId, shopifyOrderId: gid, isHistorical: false, notification: false },
           orderBy: { lastMessageAt: 'desc' },
           take: 5,
           select: {

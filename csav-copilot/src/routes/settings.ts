@@ -1003,7 +1003,7 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
 
       const rows = await prisma.ticket.groupBy({
         by: ["failureReason"],
-        where: { merchantId, status: "FAILED", isHistorical: false },
+        where: { merchantId, status: "FAILED", isHistorical: false, notification: false },
         _count: { _all: true },
         orderBy: { _count: { failureReason: "desc" } },
         take: 5,

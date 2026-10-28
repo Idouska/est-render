@@ -116,6 +116,7 @@ export async function statsRoutes(app: FastifyInstance): Promise<void> {
       merchantId,
       ticket: {
         isHistorical: false,
+        notification: false,
         createdAt: { gte: since },
         status: { in: ['CLOSED', 'AUTO_SENT'] satisfies TicketStatus[] },
       },
@@ -126,7 +127,7 @@ export async function statsRoutes(app: FastifyInstance): Promise<void> {
     // nom, ce qui ne ressemble pas à une erreur.
     // Tous les tickets de la fenêtre, clos ou non : la première réponse se
     // mesure aussi sur ceux qui attendent encore la suite.
-    const fenetre = { merchantId, ticket: { isHistorical: false, createdAt: { gte: since } } };
+    const fenetre = { merchantId, ticket: { isHistorical: false, notification: false, createdAt: { gte: since } } };
 
     const [
       byStatus,
@@ -142,12 +143,12 @@ export async function statsRoutes(app: FastifyInstance): Promise<void> {
     ] = await Promise.all([
       prisma.ticket.groupBy({
         by: ['status'],
-        where: { merchantId, isHistorical: false, createdAt: { gte: since } },
+        where: { merchantId, isHistorical: false, notification: false, createdAt: { gte: since } },
         _count: { _all: true },
       }),
       prisma.ticket.groupBy({
         by: ['intent'],
-        where: { merchantId, isHistorical: false, createdAt: { gte: since }, intent: { not: null } },
+        where: { merchantId, isHistorical: false, notification: false, createdAt: { gte: since }, intent: { not: null } },
         _count: { _all: true },
       }),
       prisma.draft.findMany({
@@ -165,7 +166,7 @@ export async function statsRoutes(app: FastifyInstance): Promise<void> {
         },
       }),
       prisma.ticket.findMany({
-        where: { merchantId, isHistorical: false, createdAt: { gte: since } },
+        where: { merchantId, isHistorical: false, notification: false, createdAt: { gte: since } },
         select: { createdAt: true, status: true },
       }),
       /*

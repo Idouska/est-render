@@ -33,6 +33,9 @@ export const QUEUE_SELECT = {
   // L'état Gmail du fil : le gras et le dossier courant en dépendent.
   gmailUnread: true,
   gmailArchived: true,
+  // Une notification d'appli, et pourquoi : le dossier « Notifications » le dit.
+  notification: true,
+  notificationMotif: true,
   // Et l'ouverture dans l'outil, qui éteint le gras sans que Gmail en sache
   // rien : `gmail.readonly` ne permet pas de retirer le libellé UNREAD.
   openedAt: true,

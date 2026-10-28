@@ -15,6 +15,7 @@ import { getShopifyClient, ShopifyError } from '../services/shopify/client.ts';
 import { listVariants, requeteGammes } from '../services/shopify/catalog.ts';
 import { getOrderById, quoteSearchValue, searchOrders } from '../services/shopify/orders.ts';
 import { QUEUE_SELECT } from './queueFields.ts';
+import { estWebmail } from '../services/tickets/notification.ts';
 import { processTicket } from '../services/tickets/process.ts';
 import { signalementDuFil } from '../services/suppliers/signalement.ts';
 import { discardPendingDrafts } from '../services/tickets/discardDrafts.ts';
@@ -92,7 +93,7 @@ const listQuery = z.object({
    * `all` conserve le comportement d'avant ces dossiers, et reste le défaut
    * pour ne rien casser chez un appelant qui ne les connaît pas.
    */
-  folder: z.enum(['inbox', 'archived', 'drafts', 'sent', 'all']).default('all'),
+  folder: z.enum(['inbox', 'archived', 'drafts', 'sent', 'notifications', 'all']).default('all'),
   /** `all` élargit la file à toutes les boutiques du groupe. */
   scope: z.enum(['shop', 'all']).default('shop'),
   sort: z.enum(['oldest', 'newest', 'confidence', 'amount', 'due']).default('newest'),
@@ -109,8 +110,12 @@ const listQuery = z.object({
  * clés identiques dans le même objet s'écrasent en silence. Le filtre
  * disparaîtrait sans la moindre erreur, ce qui est déjà arrivé ici.
  */
-function folderWhere(folder: 'inbox' | 'archived' | 'drafts' | 'sent' | 'all') {
+function folderWhere(folder: 'inbox' | 'archived' | 'drafts' | 'sent' | 'notifications' | 'all') {
   switch (folder) {
+    // Les notifications d'applis, rangées à leur arrivée — archivées ou non
+    // dans Gmail : c'est le tri de l'outil qui les range, pas Gmail.
+    case 'notifications':
+      return { notification: true };
     case 'inbox':
       return { gmailArchived: false };
     case 'archived':
@@ -154,6 +159,9 @@ function buildTicketWhere(
     // explicite les montre — importer trois cents échanges et ne rien pouvoir
     // consulter donne l'impression que rien n'a eu lieu.
     isHistorical: filters.historical === true,
+    // Les notifications d'applis vivent dans leur dossier, et nulle part
+    // ailleurs : ni dans la réception, ni dans les compteurs.
+    ...(options.withFolder !== false && filters.folder === 'notifications' ? {} : { notification: false }),
     /*
      * Les ruptures signalées par l'atelier ne sont pas des mails à traiter :
      * elles ont leur page, « Ruptures de stock », où elles se décident. Les
@@ -417,6 +425,7 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
         merchantId: { in: merchantIds },
         intent: 'WISMO',
         isHistorical: false,
+        notification: false,
         status: { notIn: ['CLOSED', 'AUTO_SENT'] },
       },
     });
@@ -434,8 +443,8 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
       withFolder: false,
     });
 
-    const [inbox, archived, drafts, sent] = await Promise.all(
-      (['inbox', 'archived', 'drafts', 'sent'] as const).map((name) =>
+    const [inbox, archived, drafts, sent, notifications] = await Promise.all(
+      (['inbox', 'archived', 'drafts', 'sent', 'notifications'] as const).map((name) =>
         prisma.ticket.count({ where: { ...folderBase, ...folderWhere(name) } }),
       ),
     );
@@ -480,7 +489,7 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
          */
         signalement: signalementDuFil(gmailThreadId, ticket.customerName),
       })),
-      folders: { inbox, archived, drafts, sent },
+      folders: { inbox, archived, drafts, sent, notifications },
       counts: { ...counts, ALL: byStatus.reduce((sum, row) => sum + row._count, 0) },
       // Tous les libellés du marchand, pas seulement ceux de la page affichée.
       // Les déduire des cinquante tickets à l'écran donnait une liste qui
@@ -535,6 +544,94 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
       if (updated.count === 0) return reply.code(404).send({ error: 'Ticket introuvable' });
 
       return reply.send({ status: parsed.data.status });
+    },
+  );
+
+  /**
+   * Corriger le tri des notifications d'applis.
+   *
+   * Le geste vaut pour ce mail ET pour les suivants du même expéditeur : sans
+   * cela, le même robot reviendrait dans la file chaque matin — ou le même
+   * client en sortirait. `expediteur` choisit la portée : l'adresse seule,
+   * ou tout le domaine (pour Judge.me, toutes ses adresses).
+   */
+  app.post<{ Params: { id: string } }>(
+    '/api/tickets/:id/notification',
+    { preHandler: requirePermission('reply') },
+    async (request, reply) => {
+      const parsed = z
+        .object({ notification: z.boolean(), portee: z.enum(['adresse', 'domaine']).default('adresse') })
+        .safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Demande invalide' });
+
+      const { merchantId } = request.session;
+      const ticket = await prisma.ticket.findFirst({
+        where: { id: request.params.id, merchantId },
+        select: { id: true, customerEmail: true, status: true, _count: { select: { drafts: true } } },
+      });
+      if (!ticket) return reply.code(404).send({ error: 'Ticket introuvable' });
+
+      const adresse = ticket.customerEmail.toLowerCase();
+      // Jamais tout gmail.com : sur une messagerie grand public, l'adresse seule.
+      const portee = parsed.data.portee === 'domaine' && !estWebmail(adresse) ? 'domaine' : 'adresse';
+      const cle = portee === 'domaine' ? adresse.slice(adresse.lastIndexOf('@') + 1) : adresse;
+      const merchant = await prisma.merchant.findUniqueOrThrow({
+        where: { id: merchantId },
+        select: { expediteursNotif: true, expediteursClients: true },
+      });
+      // L'expéditeur passe d'une liste à l'autre : jamais dans les deux.
+      const [ajouter, retirer] = parsed.data.notification
+        ? (['expediteursNotif', 'expediteursClients'] as const)
+        : (['expediteursClients', 'expediteursNotif'] as const);
+      await prisma.merchant.update({
+        where: { id: merchantId },
+        data: {
+          [ajouter]: [...new Set([...merchant[ajouter], cle])],
+          [retirer]: merchant[retirer].filter((entree) => entree !== cle && entree !== adresse),
+        },
+      });
+
+      // Ce mail, et les autres fils encore ouverts du même expéditeur.
+      const memes = await prisma.ticket.findMany({
+        where: {
+          merchantId,
+          notification: !parsed.data.notification,
+          ...(portee === 'domaine'
+            ? { customerEmail: { endsWith: `@${cle}`, mode: 'insensitive' as const } }
+            : { customerEmail: { equals: adresse, mode: 'insensitive' as const } }),
+        },
+        select: { id: true, _count: { select: { drafts: true } } },
+      });
+      const ids = [...new Set([ticket.id, ...memes.map((m) => m.id)])];
+      await prisma.ticket.updateMany({
+        where: { merchantId, id: { in: ids } },
+        data: parsed.data.notification
+          ? { notification: true, notificationMotif: 'Rangé à la main dans les notifications' }
+          : { notification: false, notificationMotif: null },
+      });
+
+      // Remis dans la file, un fil jamais traité passe enfin par l'IA.
+      if (!parsed.data.notification) {
+        const aTraiter = [ticket, ...memes].filter((t) => t._count.drafts === 0).map((t) => t.id);
+        for (const id of new Set(aTraiter)) {
+          await enqueueTicket({ merchantId, ticketId: id }).catch((error) =>
+            request.log.error({ err: error, ticketId: id }, 'Mise en file impossible'),
+          );
+        }
+      }
+
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId: request.session.userId,
+        action: parsed.data.notification ? 'ticket.notification_set' : 'ticket.notification_unset',
+        targetType: 'Ticket',
+        targetId: ticket.id,
+        metadata: { expediteur: cle, fils: ids.length },
+        ipAddress: request.ip,
+      });
+
+      return reply.send({ notification: parsed.data.notification, expediteur: cle, fils: ids.length });
     },
   );
 
@@ -1036,7 +1133,7 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
 
       for (;;) {
         const page = await prisma.ticket.findMany({
-          where: { merchantId, status: 'FAILED', isHistorical: false },
+          where: { merchantId, status: 'FAILED', isHistorical: false, notification: false },
           select: { id: true },
           orderBy: { id: 'asc' },
           ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
@@ -1289,7 +1386,7 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
     const [open, late, disputes, closed] = await Promise.all([
       prisma.ticket.groupBy({
         by: ['merchantId'],
-        where: { merchantId: { in: ids }, isHistorical: false, status: { in: [...OPEN] } },
+        where: { merchantId: { in: ids }, isHistorical: false, notification: false, status: { in: [...OPEN] } },
         _count: true,
       }),
       // « En retard » se compte sur les tickets encore ouverts : un ticket clos
@@ -1299,6 +1396,7 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
         where: {
           merchantId: { in: ids },
           isHistorical: false,
+          notification: false,
           status: { in: [...OPEN] },
           lastMessageAt: { lte: lateBefore },
         },
@@ -1306,7 +1404,7 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
       }),
       prisma.ticket.groupBy({
         by: ['merchantId'],
-        where: { merchantId: { in: ids }, isHistorical: false, intent: 'DISPUTE', status: { in: [...OPEN] } },
+        where: { merchantId: { in: ids }, isHistorical: false, notification: false, intent: 'DISPUTE', status: { in: [...OPEN] } },
         _count: true,
       }),
       prisma.ticket.groupBy({
@@ -1314,6 +1412,7 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
         where: {
           merchantId: { in: ids },
           isHistorical: false,
+          notification: false,
           status: { in: ['CLOSED', 'AUTO_SENT'] },
           lastMessageAt: { gte: since },
         },
@@ -1412,13 +1511,14 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
     ] = await Promise.all([
       prisma.ticket.groupBy({
         by: ['status'],
-        where: { merchantId, isHistorical: false },
+        where: { merchantId, isHistorical: false, notification: false },
         _count: true,
       }),
       prisma.ticket.count({
         where: {
           merchantId,
           isHistorical: false,
+          notification: false,
           status: { in: ['CLOSED', 'AUTO_SENT'] },
           updatedAt: { gte: since },
         },
@@ -1437,6 +1537,7 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
         where: {
           merchantId,
           isHistorical: false,
+          notification: false,
           status: { in: ['CLOSED', 'AUTO_SENT'] },
           updatedAt: { gte: jour.debutAujourdhui },
         },
@@ -1454,17 +1555,19 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
         where: {
           merchantId,
           isHistorical: false,
+          notification: false,
           status: { in: ['CLOSED', 'AUTO_SENT'] },
           updatedAt: { gte: jour.debutHier, lt: jour.memeHeureHier },
         },
       }),
       prisma.ticket.count({
-        where: { merchantId, isHistorical: false, createdAt: { gte: jour.debutAujourdhui } },
+        where: { merchantId, isHistorical: false, notification: false, createdAt: { gte: jour.debutAujourdhui } },
       }),
       prisma.ticket.count({
         where: {
           merchantId,
           isHistorical: false,
+          notification: false,
           createdAt: { gte: jour.debutHier, lt: jour.memeHeureHier },
         },
       }),
@@ -1521,7 +1624,7 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
      * Borné à la fenêtre de trente jours : la moyenne de toute l'histoire du
      * marchand décrirait l'année dernière, et pèserait le double en base.
      */
-    const scope = { merchantId, ticket: { isHistorical: false, createdAt: { gte: since } } };
+    const scope = { merchantId, ticket: { isHistorical: false, notification: false, createdAt: { gte: since } } };
 
     const [firstIn, firstOut] = await Promise.all([
       prisma.message.groupBy({
@@ -1685,6 +1788,7 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
         customerEmail: ticket.customerEmail,
         id: { not: ticket.id },
         isHistorical: false,
+        notification: false,
       },
       orderBy: { lastMessageAt: 'desc' },
       take: 10,

@@ -27,6 +27,13 @@ export interface ParsedMessage {
   receivedAt: Date;
   labelIds: string[];
   attachments: ParsedAttachment[];
+  /** Ce que le mail dit de lui-même : sert à reconnaître une notification d'appli. */
+  entetes: {
+    replyTo: string | null;
+    listUnsubscribe: boolean;
+    precedence: string | null;
+    autoSubmitted: string | null;
+  };
 }
 
 function header(message: gmail_v1.Schema$Message, name: string): string | null {
@@ -173,5 +180,11 @@ export function parseMessage(message: gmail_v1.Schema$Message): ParsedMessage | 
     receivedAt: new Date(internalDate),
     labelIds: message.labelIds ?? [],
     attachments: extractAttachments(message.payload ?? undefined),
+    entetes: {
+      replyTo: parseAddress(header(message, 'Reply-To')).email || null,
+      listUnsubscribe: Boolean(header(message, 'List-Unsubscribe')),
+      precedence: header(message, 'Precedence'),
+      autoSubmitted: header(message, 'Auto-Submitted'),
+    },
   };
 }

@@ -13343,6 +13343,28 @@ progress { accent-color: var(--accent); }
   padding: 0 12px 8px;
 }
 .qjetons[hidden] { display: none; }
+
+/* Les notifications d'applis : une ligne fine sous les dossiers, grise —
+   elle informe, elle ne réclame rien. Dans le dossier, elle prend la teinte
+   de l'accent pour dire où l'on est. */
+.notif-ligne {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 12px 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--line-soft);
+  color: var(--ink-mute);
+  font-size: 12px;
+}
+.notif-ligne[hidden] { display: none; }
+.notif-ligne .qlink { flex: none; font-size: 12px; }
+.notif-ligne.notif-ici { background: var(--accent-soft); color: var(--accent-ink); }
+.notice-notif { margin-bottom: 10px; align-items: center; }
+.notice-notif > div { text-align: left; }
+.notice-notif .btn { margin-left: 8px; }
 .qjeton {
   display: inline-flex;
   align-items: center;

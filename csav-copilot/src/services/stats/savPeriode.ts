@@ -118,10 +118,10 @@ export function agregerSav(donnees: DonneesSav, p: Cadre): ChiffresSav {
 /** Ce que la base sait d'une plage : conversations, premiers et derniers messages, brouillons. */
 export async function lireDonneesSav(merchantId: string, p: Plage): Promise<DonneesSav> {
   const creees = { gte: p.depuis, lt: p.avant };
-  const portee = { merchantId, ticket: { isHistorical: false, createdAt: creees } };
+  const portee = { merchantId, ticket: { isHistorical: false, notification: false, createdAt: creees } };
   const [tickets, entrees, sorties, brouillons] = await Promise.all([
     prisma.ticket.findMany({
-      where: { merchantId, isHistorical: false, createdAt: creees },
+      where: { merchantId, isHistorical: false, notification: false, createdAt: creees },
       select: { id: true, createdAt: true, intent: true },
     }),
     prisma.message.groupBy({

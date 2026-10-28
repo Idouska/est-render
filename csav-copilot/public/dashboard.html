@@ -539,6 +539,10 @@
                propre — ses propositions en attente, et les fils où une
                réponse est partie. -->
           <nav class="folders" id="folders" aria-label="Dossiers"></nav>
+          <!-- Les notifications d'applis (Judge.me, Shopify, infolettres…) :
+               rangées à part dès leur arrivée. Une ligne les signale sous les
+               dossiers, sans prendre la place d'un cinquième onglet. -->
+          <div class="notif-ligne" id="notif-ligne" hidden></div>
           <!-- Les filtres posés, en jetons : on voit ce qui restreint la liste
                et on le retire d'une croix, sans rouvrir la fenêtre. -->
           <div class="qjetons" id="q-jetons" aria-label="Filtres posés" hidden></div>
@@ -626,6 +630,13 @@
                dernières repoussaient la réponse hors de l'écran alors qu'on
                les consulte une fois sur dix. -->
           <nav class="tabs" id="d-tabs" hidden aria-label="Sections du message"></nav>
+          <div class="notice notice-notif" id="d-notif" hidden>
+            <span class="notice-mark">Notification</span>
+            <div>
+              <span id="d-notif-texte"></span>
+              <button class="btn btn-small" id="d-notif-remettre" type="button">Remettre dans la file</button>
+            </div>
+          </div>
           <div class="notice" id="read-only" hidden>
             <span class="notice-mark">Lecture</span>
             <div>
