@@ -342,7 +342,7 @@ export async function statsRemboursements(
       select: { shopifyOrderId: true, productTitle: true, variantTitle: true, reason: true, createdAt: true },
     }),
     prisma.ticket.findMany({
-      where: { merchantId, intent: 'REFUND', isHistorical: false, createdAt: { gte: depuis } },
+      where: { merchantId, intent: 'REFUND', isHistorical: false, notification: false, createdAt: { gte: depuis } },
       select: {
         shopifyOrderId: true,
         refunds: { where: { status: 'COMPLETED', test: false }, select: { id: true }, take: 1 },

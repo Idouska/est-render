@@ -4,6 +4,7 @@ import { enqueueTicket } from '../../queue/index.ts';
 import { getGmailClient } from '../gmail/client.ts';
 import { loadLabelNames, resolveLabels } from '../gmail/labels.ts';
 import { fetchNewMessages, fetchRecentMessages } from '../gmail/sync.ts';
+import { motifNotification, reglagesNotif } from './notification.ts';
 
 /**
  * Ingère les nouveaux mails d'un marchand : upsert du ticket (un ticket = un
@@ -39,6 +40,8 @@ export async function ingestMerchantInbox(
   // Table des libellés chargée une fois, si du courrier est arrivé : elle ne
   // change presque jamais, l'appeler par message serait du gaspillage.
   let labelNames = new Map<string, string>();
+  // Les expéditeurs que le marchand a déjà triés à la main.
+  const reglages = messages.length > 0 ? await reglagesNotif(merchantId) : undefined;
   if (messages.length > 0) {
     try {
       const { gmail, mailboxId: id } = await getGmailClient(merchantId, mailboxId);
@@ -51,6 +54,10 @@ export async function ingestMerchantInbox(
   for (const message of messages) {
     if (!message.fromEmail) continue;
 
+    // Une notification d'appli entre rangée à part : hors de la file, et
+    // sans passer par l'IA (voir `processTicket`).
+    const motif = motifNotification({ ...message, ...message.entetes }, reglages);
+
     const ticket = await prisma.ticket.upsert({
       where: {
         merchantId_gmailThreadId: { merchantId, gmailThreadId: message.gmailThreadId },
@@ -62,6 +69,8 @@ export async function ingestMerchantInbox(
         customerEmail: message.fromEmail,
         customerName: message.fromName,
         status: 'NEW',
+        notification: motif !== null,
+        notificationMotif: motif,
         // Mémorisée à la création : la réponse repartira de la boîte qui a
         // reçu le message, pas d'une autre.
         mailboxId: mailboxId ?? null,

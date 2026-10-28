@@ -3,6 +3,7 @@ import { prisma } from '../../lib/prisma.ts';
 import { enqueueTicket } from '../../queue/index.ts';
 import { getGmailClient } from './client.ts';
 import { loadLabelNames, resolveLabels, syncTicketLabels } from './labels.ts';
+import { motifNotification, reglagesNotif } from '../tickets/notification.ts';
 import { parseMessage } from './messages.ts';
 
 /**
@@ -57,6 +58,7 @@ export async function backfillMailbox(params: {
   if (!connection) throw new Error('Boîte introuvable');
 
   const { gmail } = await getGmailClient(merchantId, connection.id);
+  const reglages = await reglagesNotif(merchantId);
   const address = connection.emailAddress.toLowerCase();
   const labelNames = await loadLabelNames(gmail, connection.id);
 
@@ -119,6 +121,7 @@ export async function backfillMailbox(params: {
         if (message.fromEmail === address) continue;
         if (message.labelIds.includes('DRAFT') || message.labelIds.includes('SENT')) continue;
 
+        const motif = motifNotification({ ...message, ...message.entetes }, reglages);
         const ticket = await prisma.ticket.upsert({
           where: {
             merchantId_gmailThreadId: { merchantId, gmailThreadId: message.gmailThreadId },
@@ -130,6 +133,9 @@ export async function backfillMailbox(params: {
             customerEmail: message.fromEmail,
             customerName: message.fromName,
             status: 'NEW',
+            // Les notifications d'applis entrent rangées à part.
+            notification: motif !== null,
+            notificationMotif: motif,
             mailboxId: connection.id,
             labels: resolveLabels(message.labelIds, labelNames),
             lastMessageAt: message.receivedAt,

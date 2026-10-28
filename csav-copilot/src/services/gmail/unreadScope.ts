@@ -20,6 +20,7 @@
  */
 export const PORTEE_NON_LU = {
   isHistorical: false,
+  notification: false,
   status: { notIn: ['CLOSED', 'AUTO_SENT'] as ('CLOSED' | 'AUTO_SENT')[] },
 };
 

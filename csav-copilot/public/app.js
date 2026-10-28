@@ -1508,6 +1508,68 @@ function renderFolders() {
   );
 }
 
+/*
+ * Les notifications d'applis.
+ *
+ * Judge.me, Shopify, les infolettres, les réponses automatiques : rangées à
+ * part dès leur arrivée, sans brouillon d'IA. Une ligne sous les dossiers dit
+ * combien, et y mène ; dans le dossier, la même ligne ramène à la réception.
+ * Pas un cinquième onglet : la rangée tient de justesse sur une colonne de
+ * file, et ce dossier-là se consulte une fois de temps en temps.
+ */
+function changerDossier(dossier) {
+  state.queue.folder = dossier;
+  state.picked.clear();
+  state.queueCursor = null;
+  void loadQueue();
+}
+
+function renderLigneNotifs() {
+  const ligne = $('notif-ligne');
+  if (!ligne) return;
+  const n = state.queueFolders?.notifications ?? 0;
+  const ici = state.queue.folder === 'notifications';
+  ligne.hidden = !ici && n === 0;
+  if (ligne.hidden) return;
+  ligne.classList.toggle('notif-ici', ici);
+  ligne.innerHTML = ici
+    ? `<span><b>Notifications d’applis</b> · hors du SAV, sans réponse de l’IA</span>
+       <button type="button" class="qlink" data-notif-dossier="inbox">Retour à la réception</button>`
+    : `<span>${n > 9999 ? '9999+' : n} notification${n > 1 ? 's' : ''} d’applis rangée${n > 1 ? 's' : ''} à part</span>
+       <button type="button" class="qlink" data-notif-dossier="notifications">Voir</button>`;
+  ligne.querySelector('[data-notif-dossier]')?.addEventListener('click', (event) =>
+    changerDossier(event.currentTarget.dataset.notifDossier),
+  );
+}
+
+/**
+ * Corriger le tri : ce mail, et les prochains du même expéditeur.
+ *
+ * Remis dans la file, un fil jamais traité passe par l'IA. Rangé, l'outil y
+ * range aussi tout le domaine — sauf sur une messagerie grand public, où le
+ * serveur s'en tient à l'adresse.
+ */
+async function basculerNotification(ticket, notification) {
+  const email = ticket.customerEmail ?? '';
+  const domaine = email.slice(email.lastIndexOf('@') + 1);
+  const question = notification
+    ? `Ranger ${domaine} dans les notifications ?\n\nCe mail et les prochains de cet expéditeur n’entreront plus dans la file, ni dans les compteurs. Ils restent visibles dans « Notifications ».`
+    : `Remettre ${email} dans la file ?\n\nCe mail et les prochains de cet expéditeur arriveront dans la réception, avec leur brouillon de réponse.`;
+  if (!(await confirmer(question, { action: notification ? 'Ranger' : 'Remettre dans la file', icone: notification ? 'message' : 'retour' }))) return;
+  try {
+    const resultat = await api(`/api/tickets/${ticket.id}/notification`, {
+      method: 'POST',
+      body: JSON.stringify({ notification, portee: notification ? 'domaine' : 'adresse' }),
+    });
+    const autres = resultat.fils > 1 ? ` (et ${resultat.fils - 1} autre${resultat.fils > 2 ? 's' : ''})` : '';
+    toast(notification ? `Rangé dans les notifications${autres}.` : `Remis dans la file${autres}.`);
+    await loadQueue();
+    if (state.currentId === ticket.id) await selectTicket(ticket.id, { silent: true });
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
 /**
  * Filtres de la file à l'état neuf.
  *
@@ -1632,6 +1694,7 @@ async function loadQueue({ append = false } = {}) {
   state.queueFolders = data.folders ?? {};
   state.queueLabels = data.labels ?? state.queueLabels ?? [];
   renderFolders();
+  renderLigneNotifs();
 
   // Compteurs de la navigation, dérivés des mêmes chiffres que la file : deux
   // sources donneraient deux vérités, et c'est celle qu'on ne regarde pas qui
@@ -4357,6 +4420,14 @@ function renderDetail() {
   const shopLabel =
     state.shops.find((shop) => shop.id === ticket.merchantId)?.label ?? 'une autre boutique';
 
+  // Une notification d'appli ouverte : on dit pourquoi elle n'est pas dans
+  // le SAV, et comment l'y remettre.
+  $('d-notif').hidden = !ticket.notification;
+  if (ticket.notification) {
+    $('d-notif-texte').textContent = `${ticket.notificationMotif ?? 'Expéditeur automatique'} — rangée hors du SAV, sans brouillon de l’IA.`;
+    $('d-notif-remettre').onclick = () => void basculerNotification(ticket, false);
+  }
+
   $('read-only').hidden = !otherShop;
   if (otherShop) {
     $('read-only-text').textContent = `Ce message appartient à ${shopLabel}. Basculez sur cette boutique pour y répondre.`;
@@ -5491,7 +5562,14 @@ function renderTicketLabels(ticket) {
       actionButton('modification', 'Modification', ticket, 'more-item') +
       actionButton('annulation', 'Annulation', ticket, 'more-item') +
       actionButton('update', 'Update', ticket, 'more-item') +
-      actionButton('renvoi', 'Renvoi', ticket, 'more-item');
+      actionButton('renvoi', 'Renvoi', ticket, 'more-item') +
+      `<button type="button" class="more-item" role="menuitem" data-notif-bascule>${
+        ticket.notification ? 'Ce n’est pas une notification' : 'Ranger dans les notifications'
+      }</button>`;
+    menu.querySelector('[data-notif-bascule]')?.addEventListener('click', () => {
+      closeMoreMenu();
+      void basculerNotification(ticket, !ticket.notification);
+    });
   }
 
   const quick = {

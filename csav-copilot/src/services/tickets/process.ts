@@ -52,6 +52,14 @@ export async function processTicket(merchantId: string, ticketId: string): Promi
     return;
   }
 
+  // Une notification d'appli n'attend aucune réponse : la classer et lui
+  // écrire un brouillon coûterait un appel d'IA pour un robot. Remise dans la
+  // file à la main, elle est traitée comme un mail de client.
+  if (ticket.notification) {
+    logger.info({ merchantId, ticketId }, 'Notification d’appli : pas de traitement par l’IA');
+    return;
+  }
+
   const lastInbound = [...ticket.messages]
     .reverse()
     .find((message) => message.direction === 'INBOUND');
@@ -198,6 +206,7 @@ export async function processTicket(merchantId: string, ticketId: string): Promi
         customerEmail: ticket.customerEmail,
         id: { not: ticket.id },
         isHistorical: false,
+        notification: false,
         status: { notIn: ['CLOSED', 'AUTO_SENT'] },
       },
       orderBy: { lastMessageAt: 'desc' },

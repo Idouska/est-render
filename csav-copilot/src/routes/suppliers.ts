@@ -35,6 +35,7 @@ function signalementsOuverts(merchantId: string) {
   return {
     merchantId,
     isHistorical: false,
+    notification: false,
     gmailThreadId: { startsWith: PREFIXE_SIGNALEMENT },
     NOT: { gmailThreadId: { endsWith: ':STOCK' } },
     status: { notIn: ['CLOSED' as const, 'AUTO_SENT' as const] },
