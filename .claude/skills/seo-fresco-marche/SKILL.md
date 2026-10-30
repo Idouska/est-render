@@ -61,6 +61,8 @@ Rachid pilote le projet. Ses règles passent avant tout le reste :
 - **Fuite de prix** : le filtre de prix des pages rayon (appli Search & Discovery) montre les prix réservés aux pros ; filtres libellés en espagnol (« Disponibilidad », « Precio »).
 - **Halal au 13/10/2026** : tout le catalogue est halal. 15 produits ont « halal » dans leur nom, 15 autres fiches disent « Certifié halal » dans leur description. Aucun organisme de certification n'est nommé sur le site.
 
+- **Charcuterie turque en ligne depuis le 30/10/2026** : texte, titre et description Google du rayon et de ses 7 fiches (`fresco-marche/textes-charcuterie-turque.json`, avec l'« avant » ; sauvegarde aussi sur le Mac de Rachid), enregistrés par `fresco-marche/enregistrer-charcuterie-turque.mjs`, vérifiés sur le site : 8/8 conformes. À mesurer vers le 13/11/2026 (positions de « salami turc », « charcuterie turc »).
+- **Champ « Fournisseur » (vendor)** : contient le nom des grossistes fournisseurs, lisible dans le code des fiches. À remplacer par la marque du produit. Ne jamais écrire ces noms dans le dépôt (public).
 - **Search Console lisible directement depuis le 30/10/2026** : connecteur Supermetrics, source `GW`, compte `sc-domain:frescomarche.fr`. Champs utiles : `query`, `pagepath`, `clicks`, `impressions`, `position`. Ne plus demander de captures à Rachid.
 - **Point de départ (28 jours au 29/10/2026)** : accueil 71 clics, 4 550 impressions, position 3,98 ; `/collections/charcuterie-turque` 3 clics, 377 impressions, position 11 (« salami turc » 8,7, « charcuterie turc » 13,5) ; pages de livraison 9 clics en tout (Paris 18e 4, Gennevilliers 2) ; « coucous » 372 impressions, position 9,4, 0 clic (faute dans le nom du produit). Indexées : 104 au 23/10/2026.
 
