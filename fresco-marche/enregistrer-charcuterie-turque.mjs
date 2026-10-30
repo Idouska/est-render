@@ -1,4 +1,4 @@
-// Enregistre dans Shopify le rayon « Charcuterie turque » et ses 7 fiches produit (frescomarche.fr).
+// Enregistre dans Shopify le rayon « Charcuterie turque » et ses 7 fiches produit (frescomarche.fr), validés par Rachid le 30/10/2026.
 // Pour chacun : le texte, le titre Google et la description Google. Noms, adresses, photos et prix ne changent pas.
 // Avant d'écrire, le script sauvegarde la version actuelle dans sauvegarde-charcuterie-avant-<date>.json.
 //
