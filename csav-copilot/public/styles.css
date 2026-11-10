@@ -1635,6 +1635,34 @@ body.ws-resizing { cursor: col-resize; user-select: none; }
 .fx td b { display: block; color: var(--ink); }
 .fx-switch { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; white-space: nowrap; }
 .fx-switch input { width: 16px; height: 16px; accent-color: var(--accent); }
+/* Les boîtes mail d'une boutique, dans la console admin : l'adresse et une
+   croix pour la débrancher sans s'y connecter. */
+.fx-mailbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0 6px 4px 0;
+  padding: 2px 4px 2px 8px;
+  border-radius: 999px;
+  background: var(--line-soft);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.fx-mailbox-x {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-mute);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+@media (hover: hover) { .fx-mailbox-x:hover { background: var(--crit-soft); color: var(--crit-ink); } }
 .fx-legende { margin: 4px 0 0; display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; font-size: 12.5px; }
 .fx-legende dt { font-weight: 600; color: var(--ink); }
 .fx-legende dd { margin: 0; color: var(--ink-mute); }

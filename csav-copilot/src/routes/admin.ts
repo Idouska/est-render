@@ -28,6 +28,8 @@ import { DEMO } from '../services/demo/catalogue.ts';
 import { preparerDemo } from '../services/demo/remplir.ts';
 import { signLoginToken } from '../lib/loginToken.ts';
 import { SESSION_COOKIE, signSession } from '../lib/session.ts';
+import { debrancherBoite } from '../services/gmail/disconnect.ts';
+import { supprimerMarchand } from '../services/merchant/supprimer.ts';
 
 /**
  * Console d'administration de la plateforme.
@@ -230,7 +232,13 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         shopDomain: true,
         status: true,
         testMode: true,
+        demo: true,
         fonctionnalites: true,
+        // Pour débrancher une boîte, ou supprimer la boutique, sans s'y connecter.
+        mailboxes: {
+          orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+          select: { id: true, emailAddress: true, isDefault: true },
+        },
       },
     });
 
@@ -299,6 +307,65 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         testMode: misAJour.testMode,
         fonctionnalites: fonctionnalitesDe(misAJour.fonctionnalites),
       });
+    },
+  );
+
+  /**
+   * Débrancher une boîte Gmail de n'importe quelle boutique, sans s'y
+   * connecter : coupe l'accès chez Google (watch, jeton) puis efface la
+   * boîte et le courrier qu'elle a apporté. Même geste que celui qu'un
+   * marchand fait depuis ses propres Réglages ; voir `debrancherBoite`.
+   */
+  app.delete<{ Params: { id: string; mailboxId: string } }>(
+    '/api/admin/marchands/:id/mailboxes/:mailboxId',
+    { preHandler: requireAdmin },
+    async (request, reply) => {
+      const resultat = await debrancherBoite(request.params.id, request.params.mailboxId);
+      if (!resultat) return reply.code(404).send({ error: 'Boîte introuvable' });
+
+      await recordAudit({
+        merchantId: request.params.id,
+        actorType: 'SYSTEM',
+        actorId: 'console-admin',
+        action: 'mailbox.disconnected',
+        targetType: 'GmailConnection',
+        targetId: request.params.mailboxId,
+        metadata: { emailAddress: resultat.emailAddress },
+        ipAddress: request.ip,
+      });
+
+      return reply.send({ ok: true, emailAddress: resultat.emailAddress });
+    },
+  );
+
+  /**
+   * Supprime une boutique : tickets, commandes suivies localement,
+   * fournisseurs, retours, colis, journal — tout disparaît avec elle, en
+   * cascade à la base. Irréversible ; voir `supprimerMarchand`.
+   *
+   * L'écran fait déjà saisir le domaine de la boutique avant d'appeler cette
+   * route, mais la vérification tient ici, côté serveur, pas seulement dans
+   * un `prompt()` qu'un clic distrait suffirait à valider.
+   */
+  app.delete<{ Params: { id: string } }>(
+    '/api/admin/marchands/:id',
+    { preHandler: requireAdmin },
+    async (request, reply) => {
+      const parsed = z.object({ shopDomain: z.string().min(1) }).safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Domaine de confirmation manquant' });
+
+      const marchand = await prisma.merchant.findUnique({
+        where: { id: request.params.id },
+        select: { shopDomain: true },
+      });
+      if (!marchand) return reply.code(404).send({ error: 'Boutique introuvable' });
+      if (parsed.data.shopDomain.trim().toLowerCase() !== marchand.shopDomain.toLowerCase()) {
+        return reply.code(400).send({ error: 'Le domaine saisi ne correspond pas à cette boutique' });
+      }
+
+      const resultat = await supprimerMarchand(request.params.id);
+      if (!resultat) return reply.code(404).send({ error: 'Boutique introuvable' });
+      return reply.send({ ok: true, shopDomain: resultat.shopDomain });
     },
   );
 
