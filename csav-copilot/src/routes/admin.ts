@@ -30,6 +30,7 @@ import { signLoginToken } from '../lib/loginToken.ts';
 import { SESSION_COOKIE, signSession } from '../lib/session.ts';
 import { debrancherBoite } from '../services/gmail/disconnect.ts';
 import { supprimerMarchand } from '../services/merchant/supprimer.ts';
+import { provisionnerComptesAgence, rattacherBoutiqueAgence } from '../services/agence.ts';
 
 /**
  * Console d'administration de la plateforme.
@@ -215,6 +216,77 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/admin/nouveautes', { preHandler: requireAdmin }, async (request, reply) =>
     reply.send({ nouveautes: NOUVEAUTES }),
   );
+
+  /*
+   * L'agence : des emails qui reçoivent un Propriétaire automatique sur
+   * chaque boutique, sans jamais être invités dessus. Voir `services/agence.ts`.
+   */
+  app.get('/api/admin/agence', { preHandler: requireAdmin }, async (request, reply) => {
+    const comptes = await prisma.agenceAdmin.findMany({ orderBy: { createdAt: 'asc' } });
+    return reply.send({ comptes });
+  });
+
+  app.post('/api/admin/agence', { preHandler: requireAdmin }, async (request, reply) => {
+    const parsed = z.object({ email: z.string().email() }).safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Adresse email invalide' });
+    const email = parsed.data.email.trim().toLowerCase();
+
+    const compte = await prisma.agenceAdmin.upsert({
+      where: { email },
+      create: { email },
+      update: {},
+    });
+
+    // Posée tout de suite sur les boutiques déjà là : sans appliquer à
+    // chacune, cette adresse n'aurait d'effet qu'à leur prochaine connexion.
+    const merchants = await prisma.merchant.findMany({
+      where: { id: { not: DEMO.merchantId } },
+      select: { id: true },
+    });
+    for (const merchant of merchants) await provisionnerComptesAgence(merchant.id);
+
+    logger.warn({ email, boutiques: merchants.length }, 'Email ajouté à l’agence');
+    return reply.send({ compte, boutiques: merchants.length });
+  });
+
+  app.delete<{ Params: { id: string } }>(
+    '/api/admin/agence/:id',
+    { preHandler: requireAdmin },
+    async (request, reply) => {
+      const compte = await prisma.agenceAdmin.findUnique({ where: { id: request.params.id } });
+      if (!compte) return reply.code(404).send({ error: 'Compte introuvable' });
+
+      await prisma.agenceAdmin.delete({ where: { id: compte.id } });
+
+      // Retire l'accès partout, pas seulement pour les boutiques à venir :
+      // sinon cette adresse resterait Propriétaire de tout ce qu'elle a déjà
+      // reçu, malgré son retrait de la liste.
+      const { count } = await prisma.user.updateMany({
+        where: { email: compte.email, agence: true },
+        data: { active: false },
+      });
+
+      logger.warn({ email: compte.email, comptes: count }, 'Email retiré de l’agence');
+      return reply.send({ ok: true, comptesDesactives: count });
+    },
+  );
+
+  /**
+   * Rattache toutes les boutiques déjà existantes au groupe de l'agence et
+   * leur pose les comptes — pour celles qui tournaient avant que l'agence
+   * n'existe, ou avant qu'un email n'y soit ajouté.
+   */
+  app.post('/api/admin/agence/appliquer', { preHandler: requireAdmin }, async (request, reply) => {
+    const merchants = await prisma.merchant.findMany({
+      where: { id: { not: DEMO.merchantId } },
+      select: { id: true, shopDomain: true },
+    });
+
+    for (const merchant of merchants) await rattacherBoutiqueAgence(merchant.id);
+
+    logger.warn({ boutiques: merchants.length }, 'Agence appliquée à toutes les boutiques existantes');
+    return reply.send({ ok: true, boutiques: merchants.length });
+  });
 
   /**
    * Les boutiques, avec leur mode test et leurs interrupteurs.

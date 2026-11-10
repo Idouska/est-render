@@ -7993,9 +7993,13 @@ function renderTeam() {
   $('team-rows').innerHTML = users
     .map((user) => {
       const self = user.id === state.team.me?.id;
-      return `<tr class="grid-row${user.active ? '' : ' muted'}" data-user="${esc(user.id)}">
+      return `<tr class="grid-row${user.active ? '' : ' muted'}${user.agence ? ' grid-row-lock' : ''}" data-user="${esc(user.id)}">
         <td>
-          <b>${esc(user.name ?? user.email)}</b>${self ? ' <span class="sub">(vous)</span>' : ''}
+          <b>${esc(user.name ?? user.email)}</b>${self ? ' <span class="sub">(vous)</span>' : ''}${
+            // Posé par l'agence, pas par la boutique : un propriétaire ne peut
+            // ni le rétrograder ni le désactiver (voir la route PATCH).
+            user.agence ? ' <span class="tag tone-mute" title="Compte géré par l’agence, pas modifiable ici">Agence</span>' : ''
+          }
           <br /><span class="sub mono">${esc(user.email)}</span>
         </td>
         <td>${esc(ROLE_LABELS[user.role] ?? user.role)}</td>
@@ -8020,7 +8024,7 @@ function renderTeam() {
               // n'est pas arrivé.
               : '<span class="tag tone-wait">Invité</span>'
         }</td>
-        <td>${owner ? '<button class="btn btn-small">Modifier</button>' : ''}</td>
+        <td>${owner && !user.agence ? '<button class="btn btn-small">Modifier</button>' : ''}</td>
       </tr>`;
     })
     .join('');
@@ -8034,7 +8038,7 @@ function renderTeam() {
 
   if (owner) {
     $('team-rows')
-      .querySelectorAll('.grid-row')
+      .querySelectorAll('.grid-row:not(.grid-row-lock)')
       .forEach((row) => row.addEventListener('click', () => openTeamForm(row.dataset.user)));
   }
 }

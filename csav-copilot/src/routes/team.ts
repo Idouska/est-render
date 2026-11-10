@@ -286,6 +286,7 @@ export async function teamRoutes(app: FastifyInstance): Promise<void> {
           createdAt: true,
           invitedAt: true,
           lastLoginAt: true,
+          agence: true,
         },
       });
 
@@ -371,6 +372,16 @@ export async function teamRoutes(app: FastifyInstance): Promise<void> {
           where: { id: request.params.id, merchantId },
         });
         if (!target) return reply.code(404).send({ error: 'Utilisateur introuvable' });
+
+        // Un compte posé par l'agence ne se modifie pas depuis l'équipe du
+        // marchand — ni son rôle, ni son état. Sans ce garde-fou, un
+        // propriétaire pourrait rétrograder ou désactiver l'agence d'un
+        // clic, ce qui viderait `provisionnerComptesAgence` de son sens :
+        // l'agence ne redeviendrait propriétaire qu'à la prochaine
+        // reconnexion de la boutique.
+        if (target.agence) {
+          return reply.code(403).send({ error: 'Ce compte est géré par l’agence, pas modifiable ici.' });
+        }
 
         // Se retirer soi-même le rôle propriétaire ou se désactiver ferme la
         // porte de l'intérieur : plus personne ne peut gérer l'équipe.

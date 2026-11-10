@@ -9,7 +9,7 @@
 
 const $ = (id) => document.getElementById(id);
 
-const state = { settings: [], nouveautes: [], registre: [], marchands: [] };
+const state = { settings: [], nouveautes: [], registre: [], marchands: [], agence: [] };
 
 function toast(message, isError = false) {
   const el = $('toast');
@@ -209,6 +209,118 @@ async function load() {
   void loadNouveautes();
   void loadApplis();
   void loadDemo();
+  void loadAgence();
+}
+
+/* ------------------------------------------------------------------ agence */
+
+/*
+ * Les emails de l'agence : chacun reçoit un Propriétaire automatique sur
+ * chaque boutique du SAV, sans jamais y être invité. Voir `services/agence.ts`
+ * côté serveur — cet écran ne fait qu'ajouter, retirer, et pousser le bouton
+ * qui rattrape les boutiques déjà là.
+ */
+async function loadAgence() {
+  try {
+    const { comptes } = await api('/api/admin/agence');
+    state.agence = comptes ?? [];
+    renderAgence();
+  } catch (error) {
+    $('agence-body').innerHTML = `<p class="empty">${esc(error.message)}</p>`;
+  }
+}
+
+function renderAgence() {
+  const comptes = state.agence ?? [];
+  $('agence-body').innerHTML = `
+    <p class="set-help">Chaque adresse listée ici reçoit un compte Propriétaire sur <b>chaque</b> boutique
+      du SAV, posé tout seul — rien à inviter boutique par boutique. Un marchand ne peut ni rétrograder ni
+      désactiver ce compte depuis sa propre équipe.</p>
+    ${
+      comptes.length
+        ? `<ul class="agence-liste">${comptes
+            .map(
+              (c) => `<li>${esc(c.email)}
+                <button type="button" class="btn btn-small" data-agence-retirer="${esc(c.id)}">Retirer</button>
+              </li>`,
+            )
+            .join('')}</ul>`
+        : '<p class="empty">Aucun email d’agence pour l’instant.</p>'
+    }
+    <div class="applis-form">
+      <div class="field admin-field">
+        <label for="agence-email">Ajouter un email</label>
+        <input type="email" id="agence-email" placeholder="toi@exemple.com" autocomplete="off" />
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary" id="agence-ajouter">Ajouter</button>
+      </div>
+    </div>
+    <p class="set-help">« Appliquer » pose les comptes sur les boutiques qui tournaient déjà avant l’agence,
+      ou avant l’ajout d’un email — les nouvelles boutiques les reçoivent toutes seules à la connexion.</p>
+    <div class="actions">
+      <button class="btn" id="agence-appliquer">Appliquer aux boutiques existantes</button>
+    </div>`;
+
+  $('agence-ajouter').addEventListener('click', () => void ajouterAgence());
+  $('agence-body')
+    .querySelectorAll('[data-agence-retirer]')
+    .forEach((bouton) => bouton.addEventListener('click', () => void retirerAgence(bouton.dataset.agenceRetirer)));
+  $('agence-appliquer').addEventListener('click', () => void appliquerAgence());
+}
+
+async function ajouterAgence() {
+  const email = $('agence-email').value.trim();
+  if (!email) return toast('Une adresse email est nécessaire.', true);
+  try {
+    const { boutiques } = await api('/api/admin/agence', { method: 'POST', body: JSON.stringify({ email }) });
+    toast(`${email} ajoutée — posée sur ${boutiques} boutique${boutiques > 1 ? 's' : ''}.`);
+    await loadAgence();
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+async function retirerAgence(id) {
+  const compte = (state.agence ?? []).find((c) => c.id === id);
+  if (!compte) return;
+  if (
+    !confirm(
+      `Retirer ${compte.email} de l’agence ?\n\nSes comptes Propriétaire posés sur les boutiques sont désactivés.`,
+    )
+  ) {
+    return;
+  }
+  try {
+    const { comptesDesactives } = await api(`/api/admin/agence/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    toast(`${compte.email} retirée — ${comptesDesactives} compte${comptesDesactives > 1 ? 's' : ''} désactivé${comptesDesactives > 1 ? 's' : ''}.`);
+    await loadAgence();
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+async function appliquerAgence() {
+  if (
+    !confirm(
+      'Appliquer l’agence à toutes les boutiques existantes ?\n\n' +
+        'Chaque email de la liste reçoit un compte Propriétaire sur chaque boutique déjà installée.',
+    )
+  ) {
+    return;
+  }
+  const bouton = $('agence-appliquer');
+  bouton.disabled = true;
+  bouton.textContent = 'Application…';
+  try {
+    const { boutiques } = await api('/api/admin/agence/appliquer', { method: 'POST', body: '{}' });
+    toast(`Appliqué à ${boutiques} boutique${boutiques > 1 ? 's' : ''}.`);
+  } catch (error) {
+    toast(error.message, true);
+  } finally {
+    bouton.disabled = false;
+    bouton.textContent = 'Appliquer aux boutiques existantes';
+  }
 }
 
 /* ------------------------------------------------------- démonstration */
