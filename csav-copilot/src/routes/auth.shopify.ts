@@ -8,6 +8,7 @@ import { prisma } from '../lib/prisma.ts';
 import { SESSION_COOKIE, signSession, verifySession } from '../lib/session.ts';
 import { MissingCredentialError } from '../services/platform/credentials.ts';
 import { appliPourBoutique, estDomaineShopify } from '../services/shopify/applis.ts';
+import { assurerOrganisationAgence, provisionnerComptesAgence } from '../services/agence.ts';
 
 const STATE_COOKIE = 'csav_shopify_state';
 const LINK_COOKIE = 'csav_shopify_link';
@@ -175,12 +176,12 @@ export async function shopifyAuthRoutes(app: FastifyInstance): Promise<void> {
       });
 
       // Une boutique déjà rattachée garde son groupe : la réinstaller ne doit
-      // pas la faire changer de propriétaire.
+      // pas la faire changer de propriétaire. Une boutique neuve, sans lien
+      // avec un groupe déjà choisi, rejoint celui de l'agence — c'est lui qui
+      // réunit « Toutes les boutiques » pour elle, sans rien changer pour le
+      // marchand (voir `services/agence.ts`).
       const organizationId =
-        existing?.organizationId ??
-        (link?.organizationId
-          ? link.organizationId
-          : (await prisma.organization.create({ data: { name: shop } })).id);
+        existing?.organizationId ?? link?.organizationId ?? (await assurerOrganisationAgence());
 
       const merchant = await prisma.merchant.upsert({
         where: { shopDomain: shop },
@@ -212,6 +213,10 @@ export async function shopifyAuthRoutes(app: FastifyInstance): Promise<void> {
         create: { merchantId: merchant.id, email: ownerEmail, role: 'OWNER' },
         update: { active: true },
       });
+
+      // L'agence reçoit son propre compte Propriétaire, sans invitation : en
+      // plus de celui ci-dessus, jamais à sa place.
+      await provisionnerComptesAgence(merchant.id);
 
       await recordAudit({
         merchantId: merchant.id,

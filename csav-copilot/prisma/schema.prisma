@@ -30,6 +30,22 @@ model Organization {
   merchants Merchant[]
 }
 
+/**
+ * Les emails de l'agence : chacun reçoit automatiquement un compte
+ * Propriétaire sur CHAQUE boutique du SAV, posée à sa connexion ou par le
+ * bouton « Appliquer aux boutiques existantes » de la console admin. Toutes
+ * les boutiques rejoignent la même Organization (`AGENCE_ORGANIZATION_ID`,
+ * dans `services/agence.ts`) pour que le sélecteur « Toutes les boutiques »
+ * les réunisse côté agence — être dans le même groupe ne donne accès à
+ * personne d'autre, seul un compte `User` explicite par boutique le fait
+ * (voir `routes/shops.ts`).
+ */
+model AgenceAdmin {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
+}
+
 model Merchant {
   id             String         @id @default(cuid())
   organizationId String?
@@ -171,6 +187,11 @@ model User {
   // le journal d'audit référence `userId`, une suppression le rendrait muet.
   active     Boolean  @default(true)
   createdAt  DateTime @default(now())
+
+  /// Compte posé par l'agence elle-même (voir `AgenceAdmin`), pas par le
+  /// marchand. Toujours Propriétaire, toujours actif : un marchand ne peut
+  /// ni le rétrograder ni le désactiver depuis son équipe (`routes/team.ts`).
+  agence Boolean @default(false)
 
   invitedAt   DateTime?
   lastLoginAt DateTime?
