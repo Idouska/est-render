@@ -435,6 +435,8 @@ function renderFonctionnalites() {
           <th>Boutique</th>
           <th title="Rien ne sort : ni expédition, ni remboursement, ni e-mail.">Mode test</th>
           ${registre.map((f) => `<th title="${esc(f.description)}">${esc(f.titre)}</th>`).join('')}
+          <th>Boîtes mail</th>
+          <th></th>
         </tr></thead>
         <tbody>${marchands
           .map(
@@ -453,6 +455,24 @@ function renderFonctionnalites() {
                     )}</td>`,
                 )
                 .join('')}
+              <td>${
+                m.mailboxes?.length
+                  ? m.mailboxes
+                      .map(
+                        (b) => `<span class="fx-mailbox">${esc(b.emailAddress)}<button type="button"
+                          class="fx-mailbox-x" data-marchand-mail="${esc(m.id)}" data-mailbox="${esc(b.id)}"
+                          title="Débrancher ${esc(b.emailAddress)}" aria-label="Débrancher ${esc(b.emailAddress)}">×</button></span>`,
+                      )
+                      .join('')
+                  : '<span class="admin-print">Aucune</span>'
+              }</td>
+              <td>${
+                // La démo se gère depuis sa propre section (créer / réinitialiser) :
+                // un bouton de plus ici désynchroniserait les deux écrans.
+                m.demo
+                  ? ''
+                  : `<button type="button" class="btn btn-small btn-danger" data-marchand-suppr="${esc(m.id)}">Supprimer</button>`
+              }</td>
             </tr>`,
           )
           .join('')}</tbody>
@@ -465,6 +485,75 @@ function renderFonctionnalites() {
   corps.querySelectorAll('input[data-marchand]').forEach((caseACocher) =>
     caseACocher.addEventListener('change', () => void basculer(caseACocher)),
   );
+  corps.querySelectorAll('[data-marchand-mail]').forEach((bouton) =>
+    bouton.addEventListener('click', () => void retirerBoiteMarchand(bouton.dataset.marchandMail, bouton.dataset.mailbox)),
+  );
+  corps.querySelectorAll('[data-marchand-suppr]').forEach((bouton) =>
+    bouton.addEventListener('click', () => void supprimerMarchand(bouton.dataset.marchandSuppr)),
+  );
+}
+
+/**
+ * Débrancher une boîte depuis la console, sans se connecter à la boutique.
+ * Même geste et même confirmation que « Débrancher » dans ses Réglages.
+ */
+async function retirerBoiteMarchand(idMarchand, idBoite) {
+  const marchand = state.marchands.find((m) => m.id === idMarchand);
+  const boite = marchand?.mailboxes?.find((b) => b.id === idBoite);
+  if (!marchand || !boite) return;
+
+  if (
+    !confirm(
+      `Débrancher ${boite.emailAddress} de ${marchand.brandName ?? marchand.name ?? marchand.shopDomain} ?\n\n` +
+        'Le courrier reçu par cette boîte disparaît de la boutique.',
+    )
+  ) {
+    return;
+  }
+
+  try {
+    await api(
+      `/api/admin/marchands/${encodeURIComponent(idMarchand)}/mailboxes/${encodeURIComponent(idBoite)}`,
+      { method: 'DELETE' },
+    );
+    marchand.mailboxes = marchand.mailboxes.filter((b) => b.id !== idBoite);
+    toast(`${boite.emailAddress} débranchée.`);
+    renderFonctionnalites();
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+/**
+ * Supprimer une boutique : irréversible, donc une confirmation qui ne se
+ * valide pas d'un clic distrait — il faut taper le domaine affiché.
+ */
+async function supprimerMarchand(idMarchand) {
+  const marchand = state.marchands.find((m) => m.id === idMarchand);
+  if (!marchand) return;
+  const nom = marchand.brandName ?? marchand.name ?? marchand.shopDomain;
+
+  const saisie = prompt(
+    `Supprimer définitivement « ${nom} » ?\n\n` +
+      'Tickets, commandes suivies, fournisseurs, retours, colis, journal : tout disparaît, sans retour possible.\n\n' +
+      `Pour confirmer, tapez le domaine de la boutique :\n${marchand.shopDomain}`,
+  );
+  if (saisie === null) return;
+  if (saisie.trim().toLowerCase() !== marchand.shopDomain.toLowerCase()) {
+    return toast('Domaine incorrect : rien n’a été supprimé.', true);
+  }
+
+  try {
+    await api(`/api/admin/marchands/${encodeURIComponent(idMarchand)}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ shopDomain: saisie.trim() }),
+    });
+    state.marchands = state.marchands.filter((m) => m.id !== idMarchand);
+    toast(`${nom} supprimée.`);
+    renderFonctionnalites();
+  } catch (error) {
+    toast(error.message, true);
+  }
 }
 
 async function basculer(caseACocher) {

@@ -2,17 +2,17 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { env } from "../config/env.ts";
 import { recordAudit } from "../lib/audit.ts";
-import { decryptSecret } from "../lib/crypto.ts";
 import { boutiqueDemo } from "../services/modeTest.ts";
 import { prisma } from "../lib/prisma.ts";
 import { PREVIEW_COOKIE, requirePermission, requireSession } from "../plugins/auth.ts";
 import { generateReply } from "../services/ai/generate.ts";
 import { backfillMailbox, backfillProgress } from "../services/gmail/backfill.ts";
-import { createOAuthClient, getGmailClient } from "../services/gmail/client.ts";
+import { getGmailClient } from "../services/gmail/client.ts";
+import { debrancherBoite } from "../services/gmail/disconnect.ts";
 import { loadLabelNames, loadLabelStyles, syncTicketLabels } from "../services/gmail/labels.ts";
 import { importMailboxHistory } from "../services/gmail/importHistory.ts";
 import { deleteReplyDraft } from "../services/gmail/drafts.ts";
-import { startWatch, stopWatch } from "../services/gmail/watch.ts";
+import { startWatch } from "../services/gmail/watch.ts";
 import { ingestMerchantInbox } from "../services/tickets/ingest.ts";
 import { ShopifyScopeError } from "../services/shopify/client.ts";
 import { fetchShopPolicies, policiesToPlaybook } from "../services/shopify/policies.ts";
@@ -1259,80 +1259,10 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const { merchantId, userId } = request.session;
 
-      const mailbox = await prisma.gmailConnection.findFirst({
-        where: { id: request.params.id, merchantId },
-        select: {
-          id: true,
-          emailAddress: true,
-          isDefault: true,
-          refreshTokenEnc: true,
-        },
-      });
-      if (!mailbox) return reply.code(404).send({ error: "Boîte introuvable" });
-
-      /*
-       * Couper chez Google avant d'effacer chez nous.
-       *
-       * Supprimer la ligne en base ne retirait rien du côté Google :
-       * l'abonnement continuait de pousser des notifications pour une boîte
-       * devenue inconnue, et surtout l'autorisation restait vivante — le jeton
-       * permettait encore de lire la boîte que le marchand croyait débranchée.
-       * « Débrancher » doit vouloir dire ce qu'il dit.
-       *
-       * Les deux gestes sont tentés séparément et sans bloquer : si Google
-       * refuse, on retire quand même l'accès de l'application. Laisser une
-       * boîte branchée parce qu'une révocation a échoué serait le pire des
-       * deux mondes.
-       */
-      try {
-        await stopWatch(merchantId, mailbox.id);
-      } catch (error) {
-        request.log.warn({ err: error }, "Arrêt du watch Gmail en échec");
-      }
-
-      try {
-        const auth = await createOAuthClient();
-        await auth.revokeToken(decryptSecret(mailbox.refreshTokenEnc));
-      } catch (error) {
-        request.log.warn({ err: error }, "Révocation du jeton Google en échec");
-      }
-
-      const remaining = await prisma.gmailConnection.findFirst({
-        where: { merchantId, id: { not: mailbox.id } },
-        orderBy: { createdAt: "asc" },
-        select: { id: true },
-      });
-
-      // Débrancher la dernière boîte couperait toute entrée de courrier : on
-      // laisse faire, mais l'envoi automatique n'a plus de sens sans elle.
-      await prisma.$transaction([
-        /*
-         * Le courrier part avec l'adresse qui l'a apporté.
-         *
-         * Le laisser en place rendait la file impossible à nettoyer : sans son
-         * lien de provenance, plus rien ne distinguait un message d'une boîte
-         * débranchée par erreur d'un message de la boîte du SAV. Débrancher
-         * est déjà un geste délibéré, précédé de sa confirmation.
-         */
-        prisma.ticket.deleteMany({ where: { merchantId, mailboxId: mailbox.id } }),
-        prisma.gmailConnection.delete({ where: { id: mailbox.id } }),
-        ...(mailbox.isDefault && remaining
-          ? [
-              prisma.gmailConnection.update({
-                where: { id: remaining.id },
-                data: { isDefault: true },
-              }),
-            ]
-          : []),
-        ...(remaining
-          ? []
-          : [
-              prisma.merchant.update({
-                where: { id: merchantId },
-                data: { autoSendEnabled: false },
-              }),
-            ]),
-      ]);
+      // Coupe l'accès chez Google avant d'effacer chez nous — partagé avec
+      // la console admin, qui débranche une boîte sans s'y connecter.
+      const resultat = await debrancherBoite(merchantId, request.params.id);
+      if (!resultat) return reply.code(404).send({ error: "Boîte introuvable" });
 
       await recordAudit({
         merchantId,
@@ -1340,8 +1270,8 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
         actorId: userId,
         action: "mailbox.disconnected",
         targetType: "GmailConnection",
-        targetId: mailbox.id,
-        metadata: { emailAddress: mailbox.emailAddress },
+        targetId: request.params.id,
+        metadata: { emailAddress: resultat.emailAddress },
         ipAddress: request.ip,
       });
 
