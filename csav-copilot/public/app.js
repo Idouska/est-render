@@ -9416,7 +9416,7 @@ const etatStats = (() => {
     if (reglages.raccourci === 'perso') reglages.raccourci = '30';
     [reglages.debut, reglages.fin] = datesDuRaccourci(reglages.raccourci);
   }
-  return { ...reglages, sav: null, ventes: null, attente: new Set(), seq: 0, detail: null, choix: null, moisVu: null };
+  return { ...reglages, sav: null, ventes: null, produits: null, attente: new Set(), seq: 0, detail: null, choix: null, moisVu: null };
 })();
 
 function garderReglagesStats() {
@@ -9427,6 +9427,13 @@ function garderReglagesStats() {
     // Navigation privée : les réglages valent pour cette visite.
   }
 }
+
+/* Le classement produits garde son onglet, son pays et son « Tout voir »
+   d'une relève à l'autre, mais pas d'une visite à l'autre : rien d'assez
+   important pour mériter `localStorage`. */
+let typeProduitsStats = 'ventes';
+let paysProduitsStats = '';
+let tousProduitsStats = false;
 
 function fuseauStats() {
   try {
@@ -9446,7 +9453,7 @@ async function loadStats() {
   const grain = grainEffectif(etatStats.grain, joursDe(debut, fin));
   const params = new URLSearchParams({ debut, fin, comparer, grain, tz: fuseauStats() });
 
-  etatStats.attente = new Set(['sav', 'ventes']);
+  etatStats.attente = new Set(['sav', 'ventes', 'produits']);
   rendreBarreStats();
   rendreStats();
 
@@ -9460,6 +9467,7 @@ async function loadStats() {
   await Promise.all([
     api(`/api/stats/periode/sav?${params}`).then(arrivee('sav'), () => arrivee('sav')(null)),
     api(`/api/stats/periode/ventes?${params}`).then(arrivee('ventes'), () => arrivee('ventes')(null)),
+    api(`/api/stats/periode/produits?${params}`).then(arrivee('produits'), () => arrivee('produits')(null)),
   ]);
 }
 
@@ -9587,6 +9595,8 @@ function rendreStats() {
     $('sta-ca').innerHTML = grapheCaMarkup();
   }
 
+  $('sta-produits').innerHTML = produitsMarkup();
+
   /* SAV */
   const sav = etatStats.sav?.courant.totaux;
   $('sta-sav').innerHTML = [
@@ -9608,6 +9618,114 @@ function rendreStats() {
   $('sta-motifs').innerHTML = motifsMarkup();
   $('sta-equipe').innerHTML = equipeMarkup();
 }
+
+/* ------------------------------------------------------- classement produits */
+
+const TYPES_PRODUITS = {
+  ventes: { titre: 'Ventes', unite: 'vendue', ca: true },
+  retours: { titre: 'Retours', unite: 'retournée', ca: false },
+  echanges: { titre: 'Échanges', unite: 'échangée', ca: false },
+  annulations: { titre: 'Annulations', unite: 'annulée', ca: true },
+};
+
+/** Les pays présents dans un classement, triés par unités décroissantes. */
+function paysDuClassement(lignes) {
+  const totaux = new Map();
+  for (const ligne of lignes) {
+    for (const [pays, n] of Object.entries(ligne.pays)) totaux.set(pays, (totaux.get(pays) ?? 0) + n);
+  }
+  return [...totaux.entries()].sort((a, b) => b[1] - a[1]).map(([pays]) => pays);
+}
+
+function produitsMarkup() {
+  const d = etatStats.produits;
+  if (!d && !etatStats.attente.has('produits')) {
+    return '<p class="sta-panne">Le classement produits n’a pas pu être lu. Réessayez dans un instant.</p>';
+  }
+  if (!d) return '';
+
+  const type = TYPES_PRODUITS[typeProduitsStats] ? typeProduitsStats : 'ventes';
+  const brut = d[type];
+  const indisponible = brut === null;
+  const lignes = brut ?? [];
+  const pays = paysDuClassement(lignes);
+  if (paysProduitsStats && !pays.includes(paysProduitsStats)) paysProduitsStats = '';
+
+  const valeur = (l) => (paysProduitsStats ? (l.pays[paysProduitsStats] ?? 0) : l.unites);
+  // Le CA suit le même filtre : sans ça, choisir un pays changerait les
+  // unités affichées sans changer le montant en face, qui resterait global.
+  const caDe = (l) => (paysProduitsStats ? (l.caPays?.[paysProduitsStats] ?? 0) : l.ca);
+  const classees = lignes
+    .map((l) => ({ ...l, valeur: valeur(l), ca: caDe(l) }))
+    .filter((l) => l.valeur > 0)
+    .sort((a, b) => b.valeur - a.valeur);
+  const somme = classees.reduce((total, l) => total + l.valeur, 0) || 1;
+  const visibles = tousProduitsStats ? classees : classees.slice(0, 8);
+
+  const onglets = Object.entries(TYPES_PRODUITS)
+    .map(
+      ([cle, info]) =>
+        `<button type="button" role="tab" data-prod-type="${cle}" aria-selected="${cle === type}">${esc(info.titre)}</button>`,
+    )
+    .join('');
+
+  const devise = etatStats.ventes?.devise ?? 'EUR';
+
+  return `<div class="rmb-carte-tete">
+      <h2 id="sta-produits-titre">Classement produits</h2>
+      <div class="rmb-onglets rmb-petit" role="tablist" aria-label="Catégorie">${onglets}</div>
+      <select class="sta-prod-pays" aria-label="Pays" ${pays.length ? '' : 'disabled'}>
+        <option value=""${paysProduitsStats ? '' : ' selected'}>Tous pays</option>
+        ${pays.map((p) => `<option value="${esc(p)}"${p === paysProduitsStats ? ' selected' : ''}>${esc(nomPays(p))}</option>`).join('')}
+      </select>
+    </div>
+    ${
+      indisponible
+        ? '<p class="sta-panne">Shopify n’a pas répondu : ce classement reviendra avec lui.</p>'
+        : classees.length
+          ? `<div class="rmb-prod rmb-prod-tete" aria-hidden="true"><span>Produit</span><span>Unités</span><span>${
+              TYPES_PRODUITS[type].ca ? 'CA' : ''
+            }</span><span>Part</span></div>
+            ${visibles
+              .map(
+                (l) => `<div class="rmb-prod">
+                  <span class="rmb-prod-nom"><i class="rmb-vignette" aria-hidden="true"></i><span class="rmb-prod-txt"><b>${esc(
+                    l.titre,
+                  )}</b>${l.variante ? `<span>${esc(l.variante)}</span>` : ''}</span></span>
+                  <span class="rmb-prod-n">${l.valeur}<span class="rmb-unite"> ${esc(TYPES_PRODUITS[type].unite)}${l.valeur > 1 ? 's' : ''}</span></span>
+                  <span class="rmb-prod-m">${TYPES_PRODUITS[type].ca ? esc(formatStat(l.ca, 'argent', devise)) : ''}</span>
+                  <span class="rmb-prod-r">${Math.round((l.valeur / somme) * 100)} %</span>
+                </div>`,
+              )
+              .join('')}
+            ${
+              classees.length > 8
+                ? `<button type="button" class="rmb-lien" data-prod-tous>${tousProduitsStats ? 'Voir moins' : 'Tout voir'}</button>`
+                : ''
+            }`
+          : '<p class="rmb-vide-petit">Aucun article sur cette période.</p>'
+    }`;
+}
+
+$('sta-produits').addEventListener('click', (event) => {
+  const onglet = event.target.closest('[data-prod-type]');
+  if (onglet) {
+    typeProduitsStats = onglet.dataset.prodType;
+    tousProduitsStats = false;
+    rendreStats();
+    return;
+  }
+  if (event.target.closest('[data-prod-tous]')) {
+    tousProduitsStats = !tousProduitsStats;
+    rendreStats();
+  }
+});
+$('sta-produits').addEventListener('change', (event) => {
+  if (event.target.classList.contains('sta-prod-pays')) {
+    paysProduitsStats = event.target.value;
+    rendreStats();
+  }
+});
 
 /* Le chiffre d'affaires, en ligne, face à la comparaison. */
 function grapheCaMarkup() {

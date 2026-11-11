@@ -426,6 +426,8 @@ function runSearch(ORDERS: MockOrder[], query: string): MockOrder[] {
  * avec et sans articles précisés, des partiels. Déterministe : un graphique
  * de démonstration qui change à chaque appel ferait douter du vrai.
  */
+const PAYS_FICTIFS = ['FR', 'FR', 'FR', 'BE', 'ES', 'CH'];
+
 const PRODUITS_FICTIFS: JeuFictif['produitsStats'] = [
   ['Lampe Perce-neige', ['Laiton', 'Noir'], 89],
   ['Applique Halo', ['Noir mat', 'Laiton'], 74],
@@ -825,6 +827,44 @@ export function createMockShopifyClient(shopDomain: string, jeu: JeuFictif = JEU
               cancelledAt: (graine + i) % 29 === 0 ? new Date(instant).toISOString() : null,
               totalPriceSet: { shopMoney: { amount: (79 + ((graine * 13 + i * 31) % 90)).toFixed(2), currencyCode: 'EUR' } },
               totalRefundedSet: (graine + i) % 11 === 0 ? { shopMoney: { amount: '39.00' } } : null,
+            });
+          }
+        }
+        return { orders: { pageInfo: { hasNextPage: false, endCursor: null }, nodes } } as T;
+      }
+
+      // Même graine que « VentesPeriode » : un à trois articles par commande,
+      // tirés des produits fictifs, avec un pays de livraison et, de loin en
+      // loin, une annulation — de quoi montrer un vrai classement.
+      if (query.includes('query ProduitsPeriode')) {
+        const [, debut = '', fin = ''] = /created_at:>='([^']+)' created_at:<'([^']+)'/.exec(String(variables?.query ?? '')) ?? [];
+        const depuis = Date.parse(debut);
+        const avant = Math.min(Date.parse(fin), Date.now());
+        const nodes = [];
+        for (let jour = Math.floor(depuis / 86_400_000); jour * 86_400_000 < avant; jour += 1) {
+          const graine = (jour * 7919) % 23;
+          const saison = 1 + 0.25 * Math.sin(jour / 58);
+          const nombre = Math.round((2 + (graine % 5)) * saison);
+          for (let i = 0; i < nombre; i += 1) {
+            const instant = jour * 86_400_000 + (7 + ((graine * 5 + i * 7) % 15)) * 3_600_000 + ((i * 17) % 60) * 60_000;
+            if (instant < depuis || instant >= avant) continue;
+            const pays = PAYS_FICTIFS[(graine + i) % PAYS_FICTIFS.length];
+            const nArticles = 1 + ((graine + i) % 3 === 0 ? 1 : 0);
+            const lignes = Array.from({ length: nArticles }, (_, k) => {
+              const [titre, variantes, prix] = jeu.produitsStats[(graine * 3 + i * 5 + k) % jeu.produitsStats.length]!;
+              const quantite = (graine + i + k) % 7 === 0 ? 2 : 1;
+              return {
+                title: titre,
+                variantTitle: variantes[(i + k) % variantes.length] ?? null,
+                sku: null,
+                quantity: quantite,
+                discountedTotalSet: { shopMoney: { amount: (prix * quantite).toFixed(2) } },
+              };
+            });
+            nodes.push({
+              cancelledAt: (graine + i) % 29 === 0 ? new Date(instant).toISOString() : null,
+              shippingAddress: { countryCodeV2: pays },
+              lineItems: { nodes: lignes },
             });
           }
         }
