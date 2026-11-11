@@ -14563,6 +14563,19 @@ progress { accent-color: var(--accent); }
 .rmb-onglets button:focus-visible { outline: none; box-shadow: var(--mac-halo); }
 .rmb-petit button { height: 22px; padding: 0 9px; font-size: 12px; }
 
+.sta-prod-pays {
+  margin-left: auto;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--inset);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
+}
+.sta-prod-pays:disabled { opacity: 0.5; }
+
 .rmb-stats { display: flex; flex-direction: column; gap: 13px; }
 .rmb-stats.rmb-charge > * { opacity: 0.55; transition: opacity 0.15s; }
 .rmb-vide { margin: 60px 0; text-align: center; color: var(--ink-mute); }

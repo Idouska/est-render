@@ -5,8 +5,10 @@ import { prisma } from '../lib/prisma.ts';
 import { requireSession } from '../plugins/auth.ts';
 import { getShopifyClient, ShopifyError } from '../services/shopify/client.ts';
 import { fetchCommerceStats } from '../services/shopify/commerceStats.ts';
+import { classementProduits } from '../services/shopify/produitsPeriode.ts';
 import { statsVentesPeriode } from '../services/shopify/ventesPeriode.ts';
 import { lirePeriode, resumePeriode } from '../services/stats/periode.ts';
+import { classementRetoursEchanges } from '../services/stats/produitsRetours.ts';
 import { statsSavPeriode } from '../services/stats/savPeriode.ts';
 import { brouillonsEnvoyes, premieresReponses } from '../services/tickets/premiereReponse.ts';
 import { delaisResolution } from '../services/tickets/resolution.ts';
@@ -99,6 +101,29 @@ export async function statsRoutes(app: FastifyInstance): Promise<void> {
     } catch (error) {
       if (error instanceof ShopifyError) {
         return reply.code(502).send({ error: 'Shopify n’a pas répondu.' });
+      }
+      throw error;
+    }
+  });
+
+  /**
+   * Classement des produits sur la période — ventes, annulations (Shopify),
+   * retours et échanges (SAV). Les deux moitiés sont indépendantes : si
+   * Shopify ne répond pas, retours et échanges s'affichent quand même.
+   */
+  app.get('/api/stats/periode/produits', async (request, reply) => {
+    const lu = lirePeriode(request.query);
+    if (!lu.ok) return reply.code(400).send({ error: lu.erreur });
+    const { merchantId } = request.session;
+    const { retours, echanges } = await classementRetoursEchanges(merchantId, lu.periode.courante);
+
+    try {
+      const client = await getShopifyClient(merchantId);
+      const { ventes, annulations, tronque } = await classementProduits(merchantId, client, lu.periode.courante);
+      return reply.send({ periode: resumePeriode(lu.periode), tronque, ventes, annulations, retours, echanges });
+    } catch (error) {
+      if (error instanceof ShopifyError) {
+        return reply.send({ periode: resumePeriode(lu.periode), tronque: false, ventes: null, annulations: null, retours, echanges });
       }
       throw error;
     }
