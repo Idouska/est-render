@@ -129,11 +129,16 @@ export function stripQuotedText(body: string): string {
 /**
  * Pièces jointes réelles d'un message.
  *
- * Écarte les images intégrées au corps HTML — signatures, logos, pixels de
- * suivi : elles portent un `Content-ID` et ne sont pas des documents envoyés.
- * Sans ce filtre, chaque mail d'un client Gmail arrive avec quatre « pièces
- * jointes » qui sont son logo d'entreprise.
+ * Un logo de signature porte lui aussi un `Content-ID`, comme une photo
+ * collée dans le corps par le client — même forme MIME, sens opposé. Les
+ * confondre coûte cher dans les deux sens : tout garder noie chaque mail
+ * sous quatre « pièces jointes » qui sont un logo d'entreprise ; tout écarter
+ * perd la photo du défaut que le client a glissée dans sa réponse Gmail, pas
+ * attachée en pièce jointe classique. La taille tranche : une signature tient
+ * sous le Ko, une vraie photo jamais.
  */
+const SEUIL_INLINE = 20 * 1024;
+
 export function extractAttachments(
   payload: gmail_v1.Schema$MessagePart | undefined,
 ): ParsedAttachment[] {
@@ -144,13 +149,14 @@ export function extractAttachments(
   const walk = (part: gmail_v1.Schema$MessagePart): void => {
     const id = part.body?.attachmentId;
     const inline = part.headers?.some((h) => h.name?.toLowerCase() === 'content-id');
+    const size = part.body?.size ?? 0;
 
-    if (id && part.filename && !inline) {
+    if (id && part.filename && (!inline || size > SEUIL_INLINE)) {
       found.push({
         gmailAttachmentId: id,
         filename: part.filename,
         mimeType: part.mimeType ?? 'application/octet-stream',
-        size: part.body?.size ?? 0,
+        size,
       });
     }
 
