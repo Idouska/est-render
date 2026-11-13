@@ -114,3 +114,41 @@ test('un pays absent du classement en cours ne laisse pas un filtre invalide act
   const fn = appJs.slice(appJs.indexOf('function produitsMarkup()'));
   assert.match(fn, /if \(paysProduitsStats && !pays\.includes\(paysProduitsStats\)\) paysProduitsStats = '';/);
 });
+
+test('la carte du monde est vendue avec l’outil, jamais chargée depuis un CDN', () => {
+  assert.match(dashboard, /vendor\/jsvectormap\/jsvectormap\.min\.css/);
+  assert.match(dashboard, /vendor\/jsvectormap\/jsvectormap\.min\.js/);
+  assert.match(dashboard, /vendor\/jsvectormap\/world\.js/);
+  assert.doesNotMatch(dashboard, /cdn\.|unpkg\.|jsdelivr\./);
+});
+
+test('la carte se détruit avant de se redessiner : son conteneur est recréé à chaque relève', () => {
+  const fn = appJs.slice(appJs.indexOf('function dessinerCarteMonde'), appJs.indexOf('function produitsMarkup()'));
+  assert.match(fn, /detruireCarteMonde\(\);/);
+  assert.match(fn, /document\.getElementById\('sta-prod-carte'\)/);
+});
+
+test('la couleur de chaque pays suit son rang entre le plus petit et le plus grand, pas un total absolu', () => {
+  const fn = appJs.slice(appJs.indexOf('function dessinerCarteMonde'), appJs.indexOf('function produitsMarkup()'));
+  assert.match(fn, /const max = Math\.max\(\.\.\.paysTotaux\.map/);
+  assert.match(fn, /const min = Math\.min\(\.\.\.paysTotaux\.map/);
+  assert.match(fn, /color-mix\(in srgb, var\(--accent\)/);
+});
+
+test('cliquer un pays sur la carte pose le même filtre que la liste ou le menu', () => {
+  const fn = appJs.slice(appJs.indexOf('function dessinerCarteMonde'), appJs.indexOf('function produitsMarkup()'));
+  assert.match(fn, /onRegionClick\(event, code\) \{/);
+  assert.match(fn, /paysProduitsStats = paysProduitsStats === code \? '' : code;/);
+});
+
+test('chaque ligne de la liste pays est un vrai bouton accessible, pas une div cliquable', () => {
+  const fn = appJs.slice(appJs.indexOf('function produitsMarkup()'));
+  assert.match(fn, /<button type="button" class="sta-pays-row\$\{/);
+  assert.match(fn, /data-prod-pays="\$\{esc\(p\)\}" aria-pressed="\$\{p === paysProduitsStats\}"/);
+});
+
+test('cliquer une ligne de la liste pays bascule le filtre, au clic comme au clavier', () => {
+  const fn = appJs.slice(appJs.indexOf("$('sta-produits').addEventListener('click'"));
+  assert.match(fn, /const ligne = event\.target\.closest\('\[data-prod-pays\]'\);/);
+  assert.match(fn, /paysProduitsStats = paysProduitsStats === ligne\.dataset\.prodPays \? '' : ligne\.dataset\.prodPays;/);
+});

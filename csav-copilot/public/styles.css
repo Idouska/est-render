@@ -14576,6 +14576,55 @@ progress { accent-color: var(--accent); }
 }
 .sta-prod-pays:disabled { opacity: 0.5; }
 
+.sta-monde {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.3fr) minmax(180px, 1fr);
+  gap: 14px;
+  align-items: start;
+  margin: 12px 8px;
+}
+/* `#` l'emporte sur `.jvm-container{height:100%}` de la librairie, chargée
+   après cette feuille — une simple classe perdrait ce bras de fer. */
+#sta-prod-carte.sta-carte-monde { height: 320px; }
+/* La carte n'a pas de thème propre : elle suit le même clair/sombre que le
+   reste de l'écran, par les variables plutôt que par des couleurs figées. */
+.sta-carte-monde .jvm-zoom-btn {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 0 0 0.5px rgb(0 0 0 / 12%), 0 1px 2px rgb(0 0 0 / 12%);
+}
+.sta-carte-monde .jvm-tooltip {
+  background: var(--ink);
+  color: var(--surface);
+  font: inherit;
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+.sta-pays-liste { display: flex; flex-direction: column; gap: 4px; max-height: 320px; overflow-y: auto; }
+.sta-pays-row {
+  display: grid;
+  grid-template-columns: minmax(70px, 120px) minmax(30px, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 26px;
+  border: 0;
+  background: none;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+.sta-pays-row:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.sta-pays-row.actif { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.sta-pays-row:focus-visible { outline: none; box-shadow: var(--mac-halo); }
+@media (max-width: 720px) {
+  .sta-monde { grid-template-columns: 1fr; }
+  #sta-prod-carte.sta-carte-monde { height: 180px; }
+}
+
 .rmb-stats { display: flex; flex-direction: column; gap: 13px; }
 .rmb-stats.rmb-charge > * { opacity: 0.55; transition: opacity 0.15s; }
 .rmb-vide { margin: 60px 0; text-align: center; color: var(--ink-mute); }
