@@ -6,6 +6,9 @@
     <title>cSAV Copilot</title>
     <link rel="icon" type="image/svg+xml" href="/static/logo.svg" />
     <link rel="stylesheet" href="/static/styles.css" />
+    <!-- Carte « Classement produits » par pays : seule librairie tierce de
+         l'outil, hébergée nous-mêmes (pas de CDN externe à charger). -->
+    <link rel="stylesheet" href="/static/vendor/jsvectormap/jsvectormap.min.css" />
   </head>
   <body>
     <div id="gate" class="gate" hidden>
@@ -2944,6 +2947,8 @@ Remboursement : sous 5 jours ouvrés après réception du retour."></textarea>
 
     <div class="toast" id="toast" role="status"></div>
 
+    <script src="/static/vendor/jsvectormap/jsvectormap.min.js"></script>
+    <script src="/static/vendor/jsvectormap/world.js"></script>
     <script type="module" src="/static/app.js"></script>
   </body>
 </html>

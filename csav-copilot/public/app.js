@@ -9434,6 +9434,7 @@ function garderReglagesStats() {
 let typeProduitsStats = 'ventes';
 let paysProduitsStats = '';
 let tousProduitsStats = false;
+let dernierPaysTotaux = [];
 
 function fuseauStats() {
   try {
@@ -9596,6 +9597,7 @@ function rendreStats() {
   }
 
   $('sta-produits').innerHTML = produitsMarkup();
+  dessinerCarteMonde(dernierPaysTotaux);
 
   /* SAV */
   const sav = etatStats.sav?.courant.totaux;
@@ -9628,13 +9630,77 @@ const TYPES_PRODUITS = {
   annulations: { titre: 'Annulations', unite: 'annulée', ca: true },
 };
 
-/** Les pays présents dans un classement, triés par unités décroissantes. */
+/** Le total par pays d'un classement, trié par unités décroissantes. */
 function paysDuClassement(lignes) {
   const totaux = new Map();
   for (const ligne of lignes) {
     for (const [pays, n] of Object.entries(ligne.pays)) totaux.set(pays, (totaux.get(pays) ?? 0) + n);
   }
-  return [...totaux.entries()].sort((a, b) => b[1] - a[1]).map(([pays]) => pays);
+  return [...totaux.entries()].sort((a, b) => b[1] - a[1]).map(([pays, unites]) => ({ pays, unites }));
+}
+
+/* La carte du monde : une seule instance, détruite et refaite à chaque
+   relève — le conteneur lui-même est recréé par `innerHTML`, elle ne peut
+   pas survivre au-delà. Le coût est négligeable au regard de la fréquence
+   des relèves. */
+let carteMonde = null;
+
+function detruireCarteMonde() {
+  if (!carteMonde) return;
+  try {
+    carteMonde.destroy();
+  } catch {
+    // Le conteneur a déjà disparu de la page : rien à détruire proprement.
+  }
+  carteMonde = null;
+}
+
+function dessinerCarteMonde(paysTotaux) {
+  detruireCarteMonde();
+  const conteneur = document.getElementById('sta-prod-carte');
+  if (!conteneur || typeof window.jsVectorMap !== 'function' || paysTotaux.length === 0) return;
+
+  const valeurs = {};
+  const echelle = {};
+  const max = Math.max(...paysTotaux.map((p) => p.unites));
+  const min = Math.min(...paysTotaux.map((p) => p.unites));
+  for (const { pays, unites } of paysTotaux) {
+    valeurs[pays] = unites;
+    // 30 % à 95 % de la teinte d'accent : même le pays le plus modeste doit
+    // se voir — un pays presque invisible se lirait comme une absence de
+    // données, pas comme une petite part. `color-mix` suit le thème (clair
+    // ou sombre) sans recalcul — la carte n'a pas sa propre notion de thème.
+    const part = max === min ? 1 : (unites - min) / (max - min);
+    echelle[unites] = `color-mix(in srgb, var(--accent) ${Math.round(30 + part * 65)}%, var(--surface))`;
+  }
+
+  carteMonde = new window.jsVectorMap({
+    selector: '#sta-prod-carte',
+    map: 'world',
+    zoomButtons: true,
+    zoomOnScroll: false,
+    regionsSelectable: false,
+    backgroundColor: 'transparent',
+    showTooltip: true,
+    // Cadre la vue sur les pays qui ont des données : sans ça, la France ou
+    // la Belgique restent minuscules sur un planisphère entier, alors que la
+    // plupart des boutiques ne vendent qu'en Europe.
+    focusOn: { regions: Object.keys(valeurs), animate: false },
+    regionStyle: {
+      initial: { fill: 'color-mix(in srgb, var(--ink) 10%, var(--surface))', stroke: 'var(--surface)', 'stroke-width': 0.5 },
+      hover: { cursor: 'pointer', 'fill-opacity': 0.85 },
+    },
+    series: { regions: [{ values: valeurs, scale: echelle, attribute: 'fill' }] },
+    onRegionTooltipShow(event, tooltip, code) {
+      const unites = valeurs[code];
+      if (unites) tooltip.text(`${nomPays(code)} : ${unites}`, false);
+    },
+    onRegionClick(event, code) {
+      if (!(code in valeurs)) return;
+      paysProduitsStats = paysProduitsStats === code ? '' : code;
+      rendreStats();
+    },
+  });
 }
 
 function produitsMarkup() {
@@ -9648,8 +9714,13 @@ function produitsMarkup() {
   const brut = d[type];
   const indisponible = brut === null;
   const lignes = brut ?? [];
-  const pays = paysDuClassement(lignes);
+  const paysTotaux = paysDuClassement(lignes);
+  const pays = paysTotaux.map((p) => p.pays);
   if (paysProduitsStats && !pays.includes(paysProduitsStats)) paysProduitsStats = '';
+  // Lue par `rendreStats` juste après l'injection du HTML, pour dessiner la
+  // carte sur les mêmes données que la liste — jamais recalculée à part,
+  // sous peine de voir diverger la carte et le classement en dessous.
+  dernierPaysTotaux = paysTotaux;
 
   const valeur = (l) => (paysProduitsStats ? (l.pays[paysProduitsStats] ?? 0) : l.unites);
   // Le CA suit le même filtre : sans ça, choisir un pays changerait les
@@ -9671,6 +9742,26 @@ function produitsMarkup() {
 
   const devise = etatStats.ventes?.devise ?? 'EUR';
 
+  const sommePays = paysTotaux.reduce((total, p) => total + p.unites, 0) || 1;
+  const carteEtListe = paysTotaux.length
+    ? `<div class="sta-monde">
+        <div id="sta-prod-carte" class="sta-carte-monde" aria-hidden="true"></div>
+        <div class="sta-pays-liste">
+          ${paysTotaux
+            .map(
+              ({ pays: p, unites }) => `<button type="button" class="sta-pays-row${
+                p === paysProduitsStats ? ' actif' : ''
+              }" data-prod-pays="${esc(p)}" aria-pressed="${p === paysProduitsStats}">
+                <span class="rmb-raison-nom">${esc(nomPays(p))}</span>
+                <span class="rmb-piste" aria-hidden="true"><i style="width:${Math.round((unites / sommePays) * 100)}%"></i></span>
+                <span class="rmb-raison-val"><b>${unites}</b> <span>${Math.round((unites / sommePays) * 100)} %</span></span>
+              </button>`,
+            )
+            .join('')}
+        </div>
+      </div>`
+    : '';
+
   return `<div class="rmb-carte-tete">
       <h2 id="sta-produits-titre">Classement produits</h2>
       <div class="rmb-onglets rmb-petit" role="tablist" aria-label="Catégorie">${onglets}</div>
@@ -9679,6 +9770,7 @@ function produitsMarkup() {
         ${pays.map((p) => `<option value="${esc(p)}"${p === paysProduitsStats ? ' selected' : ''}>${esc(nomPays(p))}</option>`).join('')}
       </select>
     </div>
+    ${carteEtListe}
     ${
       indisponible
         ? '<p class="sta-panne">Shopify n’a pas répondu : ce classement reviendra avec lui.</p>'
@@ -9717,6 +9809,12 @@ $('sta-produits').addEventListener('click', (event) => {
   }
   if (event.target.closest('[data-prod-tous]')) {
     tousProduitsStats = !tousProduitsStats;
+    rendreStats();
+    return;
+  }
+  const ligne = event.target.closest('[data-prod-pays]');
+  if (ligne) {
+    paysProduitsStats = paysProduitsStats === ligne.dataset.prodPays ? '' : ligne.dataset.prodPays;
     rendreStats();
   }
 });
