@@ -52,6 +52,10 @@ const STYLE = `
 @media (hover: hover) { .al-boutons .al-action:hover { background: #0071e3; } }
 .al-boutons .al-danger { background: #ff3b30; color: #fff; font-weight: 600; }
 @media (hover: hover) { .al-boutons .al-danger:hover { background: #e0352b; } }
+.al-champ { width: 100%; box-sizing: border-box; margin: 12px 0 0; height: 28px; padding: 0 8px; border: 0.5px solid rgb(0 0 0 / 25%);
+  border-radius: 6px; background: #fff; color: #1d1d1f; font: inherit; font-size: 12.5px; text-align: center; }
+.al-champ:focus { outline: 3px solid rgb(10 132 255 / 45%); outline-offset: 0; }
+.al-boutons button:disabled { opacity: .45; cursor: default; }
 .al-boutons button:focus { outline: none; }
 .al-boutons button:focus-visible { outline: 3px solid rgb(10 132 255 / 50%); outline-offset: 1px; }
 @keyframes al-fondu { from { opacity: 0; } }
@@ -74,7 +78,9 @@ const STYLE = `
 :where(:root[data-theme='dark']) .al-texte, :where(:root[data-theme='dark']) .al-lignes li span:first-child { color: #c7c7cc; }
 :where(:root[data-theme='dark']) .al-lignes { background: rgb(255 255 255 / 7%); }
 :where(:root[data-theme='dark']) .al-boutons button { background: rgb(255 255 255 / 14%); color: #f5f5f7; }
+:where(:root[data-theme='dark']) .al-champ { background: rgb(255 255 255 / 10%); color: #f5f5f7; border-color: rgb(255 255 255 / 20%); }
 @media (max-width: 700px) {
+  .al-champ { width: calc(100% - 32px); margin: 12px 16px 0; height: 36px; font-size: 15px; }
   .al { width: 270px; padding: 20px 0 0; border-radius: 14px; }
   .al-ico { width: 48px; height: 48px; border-radius: 11px; margin-bottom: 10px; }
   .al-ico svg { width: 27px; height: 27px; }
@@ -115,7 +121,7 @@ function icone(nom) {
  * doit jamais effacer par mégarde. Échap annule toujours ; un clic à côté
  * aussi.
  */
-function ouvrir({ titre, texte = '', lignes = null, icone: nom = 'info', action = 'OK', annuler = 'Annuler', danger = false, seul = false }) {
+function ouvrir({ titre, texte = '', lignes = null, icone: nom = 'info', action = 'OK', annuler = 'Annuler', danger = false, seul = false, champ = null }) {
   installerStyle();
   const precedent = document.activeElement;
   const fond = document.createElement('div');
@@ -130,19 +136,40 @@ function ouvrir({ titre, texte = '', lignes = null, icone: nom = 'info', action 
         ? `<ul class="al-lignes">${lignes.map(([libelle, valeur]) => `<li><span>${echapper(libelle)}</span><b>${echapper(valeur)}</b></li>`).join('')}</ul>`
         : ''
     }
+    ${
+      champ
+        ? `<input class="al-champ" type="text" autocomplete="off" spellcheck="false" aria-label="${echapper(champ.libelle ?? titre)}"
+            placeholder="${echapper(champ.placeholder ?? '')}" />`
+        : ''
+    }
     <div class="al-boutons">
       ${seul ? '' : `<button type="button" data-al="non">${echapper(annuler)}</button>`}
-      <button type="button" data-al="oui" class="${danger ? 'al-danger' : 'al-action'}">${echapper(action)}</button>
+      <button type="button" data-al="oui" class="${danger ? 'al-danger' : 'al-action'}"${champ?.attendu ? ' disabled' : ''}>${echapper(action)}</button>
     </div>
   </div>`;
 
   return new Promise((resolve) => {
+    const saisie = fond.querySelector('.al-champ');
+    const valider = fond.querySelector('[data-al="oui"]');
+    // Avec un champ, l'alerte rend ce qui a été tapé (ou `null`) : c'est la
+    // valeur qui fait foi, pas un oui/non.
     const fermer = (reponse) => {
       document.removeEventListener('keydown', clavier, true);
       fond.remove();
       if (precedent instanceof HTMLElement) precedent.focus?.();
-      resolve(reponse);
+      resolve(saisie ? (reponse ? saisie.value.trim() : null) : reponse);
     };
+    const conforme = () =>
+      !champ?.attendu || saisie.value.trim().toLowerCase() === String(champ.attendu).toLowerCase();
+    saisie?.addEventListener('input', () => {
+      valider.disabled = !conforme();
+    });
+    saisie?.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' && conforme()) {
+        event.preventDefault();
+        fermer(true);
+      }
+    });
     const clavier = (event) => {
       if (event.key === 'Escape') {
         event.preventDefault();
@@ -150,7 +177,7 @@ function ouvrir({ titre, texte = '', lignes = null, icone: nom = 'info', action 
         fermer(seul);
       } else if (event.key === 'Tab') {
         // Le focus reste dans l'alerte, comme sur macOS.
-        const boutons = [...fond.querySelectorAll('button')];
+        const boutons = [...fond.querySelectorAll('input, button:not(:disabled)')];
         const rang = boutons.indexOf(document.activeElement);
         event.preventDefault();
         boutons[(rang + (event.shiftKey ? -1 : 1) + boutons.length) % boutons.length]?.focus();
@@ -158,7 +185,7 @@ function ouvrir({ titre, texte = '', lignes = null, icone: nom = 'info', action 
     };
     fond.addEventListener('click', (event) => {
       const bouton = event.target.closest('[data-al]');
-      if (bouton) fermer(bouton.dataset.al === 'oui');
+      if (bouton && !bouton.disabled) fermer(bouton.dataset.al === 'oui');
       else if (event.target === fond) fermer(seul);
     });
     document.addEventListener('keydown', clavier, true);
@@ -167,7 +194,8 @@ function ouvrir({ titre, texte = '', lignes = null, icone: nom = 'info', action 
     if ([...rangee.children].some((bouton) => bouton.scrollWidth > bouton.clientWidth)) rangee.classList.add('al-empile');
     // Entrée valide le bouton qui a le focus : le verbe, sauf quand il détruit.
     // Au doigt, pas de focus : un anneau sur une alerte d'iPhone ne dit rien.
-    if (window.matchMedia('(hover: hover)').matches) {
+    if (saisie) saisie.focus();
+    else if (window.matchMedia('(hover: hover)').matches) {
       fond.querySelector(danger && !seul ? '[data-al="non"]' : '[data-al="oui"]')?.focus({ focusVisible: true });
     }
   });
@@ -189,6 +217,14 @@ export function confirmer(message, options = {}) {
   const titre = coupe > 0 ? texte.slice(0, coupe + (texte.includes('\n\n') ? 0 : 1)).trim() : texte;
   const reste = coupe > 0 ? texte.slice(coupe + 1).trim() : '';
   return demander({ titre, texte: reste, ...options });
+}
+
+/**
+ * Une confirmation qu'on tape : le verbe ne s'allume que lorsque la saisie
+ * correspond à `champ.attendu`. Rend le texte tapé, ou `null` si l'on annule.
+ */
+export function saisir(options) {
+  return ouvrir({ ...options, champ: options.champ ?? {} });
 }
 
 /** Une information, un seul bouton : « OK ». */

@@ -1,3 +1,5 @@
+import { demander, saisir } from './alerte.js';
+
 /**
  * Console d'administration.
  *
@@ -284,13 +286,14 @@ async function ajouterAgence() {
 async function retirerAgence(id) {
   const compte = (state.agence ?? []).find((c) => c.id === id);
   if (!compte) return;
-  if (
-    !confirm(
-      `Retirer ${compte.email} de l’agence ?\n\nSes comptes Propriétaire posés sur les boutiques sont désactivés.`,
-    )
-  ) {
-    return;
-  }
+  const ok = await demander({
+    titre: `Retirer ${compte.email} de l’agence ?`,
+    texte: 'Ses comptes Propriétaire posés sur les boutiques sont désactivés.',
+    icone: 'attention',
+    action: 'Retirer',
+    danger: true,
+  });
+  if (!ok) return;
   try {
     const { comptesDesactives } = await api(`/api/admin/agence/${encodeURIComponent(id)}`, { method: 'DELETE' });
     toast(`${compte.email} retirée — ${comptesDesactives} compte${comptesDesactives > 1 ? 's' : ''} désactivé${comptesDesactives > 1 ? 's' : ''}.`);
@@ -301,14 +304,13 @@ async function retirerAgence(id) {
 }
 
 async function appliquerAgence() {
-  if (
-    !confirm(
-      'Appliquer l’agence à toutes les boutiques existantes ?\n\n' +
-        'Chaque email de la liste reçoit un compte Propriétaire sur chaque boutique déjà installée.',
-    )
-  ) {
-    return;
-  }
+  const ok = await demander({
+    titre: 'Appliquer l’agence à toutes les boutiques ?',
+    texte: 'Chaque email de la liste reçoit un compte Propriétaire sur chaque boutique déjà installée. Les comptes des clients ne changent pas.',
+    icone: 'info',
+    action: 'Appliquer',
+  });
+  if (!ok) return;
   const bouton = $('agence-appliquer');
   bouton.disabled = true;
   bouton.textContent = 'Application…';
@@ -492,7 +494,14 @@ async function ajouterAppli() {
 }
 
 async function retirerAppli(id) {
-  if (!confirm('Retirer cette appli ? La boutique repassera par l’appli de la plateforme.')) return;
+  const ok = await demander({
+    titre: 'Retirer cette appli ?',
+    texte: 'La boutique repassera par l’appli de la plateforme.',
+    icone: 'attention',
+    action: 'Retirer',
+    danger: true,
+  });
+  if (!ok) return;
   try {
     await api(`/api/admin/applis-shopify/${encodeURIComponent(id)}`, { method: 'DELETE' });
     toast('Appli retirée.');
@@ -614,14 +623,14 @@ async function retirerBoiteMarchand(idMarchand, idBoite) {
   const boite = marchand?.mailboxes?.find((b) => b.id === idBoite);
   if (!marchand || !boite) return;
 
-  if (
-    !confirm(
-      `Débrancher ${boite.emailAddress} de ${marchand.brandName ?? marchand.name ?? marchand.shopDomain} ?\n\n` +
-        'Le courrier reçu par cette boîte disparaît de la boutique.',
-    )
-  ) {
-    return;
-  }
+  const ok = await demander({
+    titre: `Débrancher ${boite.emailAddress} ?`,
+    texte: `De ${marchand.brandName ?? marchand.name ?? marchand.shopDomain}. Le courrier reçu par cette boîte disparaît de la boutique.`,
+    icone: 'corbeille',
+    action: 'Débrancher',
+    danger: true,
+  });
+  if (!ok) return;
 
   try {
     await api(
@@ -645,11 +654,16 @@ async function supprimerMarchand(idMarchand) {
   if (!marchand) return;
   const nom = marchand.brandName ?? marchand.name ?? marchand.shopDomain;
 
-  const saisie = prompt(
-    `Supprimer définitivement « ${nom} » ?\n\n` +
+  const saisie = await saisir({
+    titre: `Supprimer « ${nom} » ?`,
+    texte:
       'Tickets, commandes suivies, fournisseurs, retours, colis, journal : tout disparaît, sans retour possible.\n\n' +
-      `Pour confirmer, tapez le domaine de la boutique :\n${marchand.shopDomain}`,
-  );
+      `Pour confirmer, tapez :\n${marchand.shopDomain}`,
+    icone: 'corbeille',
+    action: 'Supprimer',
+    danger: true,
+    champ: { attendu: marchand.shopDomain, placeholder: marchand.shopDomain, libelle: 'Domaine de la boutique' },
+  });
   if (saisie === null) return;
   if (saisie.trim().toLowerCase() !== marchand.shopDomain.toLowerCase()) {
     return toast('Domaine incorrect : rien n’a été supprimé.', true);
@@ -871,7 +885,14 @@ async function save(groupId) {
 }
 
 async function clearKey(key) {
-  if (!confirm(`Effacer ${key} ? La variable d'environnement du même nom reprend la main.`)) return;
+  const ok = await demander({
+    titre: `Effacer ${key} ?`,
+    texte: 'La variable d’environnement du même nom reprend la main.',
+    icone: 'corbeille',
+    action: 'Effacer',
+    danger: true,
+  });
+  if (!ok) return;
 
   try {
     await api('/api/admin/settings', {

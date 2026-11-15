@@ -2233,13 +2233,15 @@ Remboursement : sous 5 jours ouvrés après réception du retour."></textarea>
             <input type="checkbox" id="team-f-active" checked />
             <span>Compte actif — la personne peut se connecter.</span>
           </label>
-          <div class="warnbox" id="team-f-link" hidden>
-            <b>!</b>
-            <div>
-              L'email n'a pas pu être envoyé — la boîte Gmail n'est pas connectée.
-              Transmettez ce lien vous-même :
-              <br /><code id="team-f-link-url" style="word-break: break-all"></code>
+          <div class="lienbox" id="team-f-link" hidden>
+            <div class="lienbox-txt">
+              <b>Le mail n'est pas parti</b>
+              <span>Aucune boîte Gmail n'est encore connectée. Copiez le lien de connexion et
+                envoyez-le vous-même, par SMS ou WhatsApp — pas en capture d'écran : il ouvre le compte
+                sans mot de passe pendant 7 jours.</span>
             </div>
+            <button type="button" class="btn btn-small btn-primary" id="team-f-link-copy">Copier le lien</button>
+            <code id="team-f-link-url" hidden></code>
           </div>
         </div>
         <div class="modal-foot">

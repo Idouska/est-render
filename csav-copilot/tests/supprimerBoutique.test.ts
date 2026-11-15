@@ -88,7 +88,8 @@ test('la liste des boutiques porte le drapeau démo et les boîtes mail', () => 
 
 test('l’écran demande de taper le domaine pour supprimer, et débranche d’un clic', () => {
   assert.match(adminJs, /async function supprimerMarchand\(idMarchand\)/);
-  assert.match(adminJs, /const saisie = prompt\(/);
+  assert.match(adminJs, /const saisie = await saisir\(\{/);
+  assert.match(adminJs, /champ: \{ attendu: marchand\.shopDomain/);
   assert.match(adminJs, /if \(saisie\.trim\(\)\.toLowerCase\(\) !== marchand\.shopDomain\.toLowerCase\(\)\)/);
   assert.match(adminJs, /method: 'DELETE',\s*body: JSON\.stringify\(\{ shopDomain: saisie\.trim\(\) \}\)/);
 

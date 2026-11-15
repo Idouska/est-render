@@ -5,6 +5,7 @@ import { recordAudit } from '../lib/audit.ts';
 import { prisma } from '../lib/prisma.ts';
 import { SESSION_COOKIE, signSession } from '../lib/session.ts';
 import { requirePermission, requireSession } from '../plugins/auth.ts';
+import { nommerBoutique } from '../services/shopify/nomBoutique.ts';
 
 /**
  * Multi-boutique.
@@ -38,6 +39,16 @@ export async function listShopsFor(merchantId: string, email: string) {
     },
     orderBy: { createdAt: 'asc' },
   });
+
+  // Boutiques installées avant qu'on lise leur nom : rattrapées une fois, en
+  // parallèle — le nom reste ensuite en base.
+  await Promise.all(
+    merchants
+      .filter((merchant) => merchant.users.length > 0 && merchant.status === 'ACTIVE' && !merchant.brandName && !merchant.name)
+      .map(async (merchant) => {
+        merchant.name = await nommerBoutique(merchant.id);
+      }),
+  );
 
   return merchants
     .filter((merchant) => merchant.users.length > 0)

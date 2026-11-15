@@ -853,11 +853,16 @@ export function createMockShopifyClient(shopDomain: string, jeu: JeuFictif = JEU
             const lignes = Array.from({ length: nArticles }, (_, k) => {
               const [titre, variantes, prix] = jeu.produitsStats[(graine * 3 + i * 5 + k) % jeu.produitsStats.length]!;
               const quantite = (graine + i + k) % 7 === 0 ? 2 : 1;
+              const variante = variantes[(i + k) % variantes.length] ?? null;
+              const fiche = jeu.produits?.find((p) => p.titre === titre);
+              const couleur = variante?.split(' / ')[0];
+              const visuel = fiche?.variantes.find((v) => couleur && v.titre.startsWith(couleur))?.image ?? fiche?.image ?? null;
               return {
                 title: titre,
-                variantTitle: variantes[(i + k) % variantes.length] ?? null,
+                variantTitle: variante,
                 sku: null,
                 quantity: quantite,
+                image: visuel ? { url: visuel } : null,
                 discountedTotalSet: { shopMoney: { amount: (prix * quantite).toFixed(2) } },
               };
             });
@@ -913,6 +918,10 @@ export function createMockShopifyClient(shopDomain: string, jeu: JeuFictif = JEU
             return [cle.replace(/^q/, 'm'), { count, precision: 'EXACT' }];
           }),
         ) as T;
+      }
+
+      if (query.includes('query NomBoutique')) {
+        return { shop: { name: jeu.nom } } as T;
       }
 
       if (query.includes('query ShopPolicies')) {
