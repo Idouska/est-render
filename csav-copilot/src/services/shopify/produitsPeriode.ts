@@ -14,6 +14,7 @@ import type { Plage } from '../stats/periode.ts';
  */
 
 interface LigneBrute {
+  image: string | null;
   titre: string;
   variante: string | null;
   sku: string | null;
@@ -45,6 +46,9 @@ const QUERY = /* GraphQL */ `
             variantTitle
             sku
             quantity
+            image {
+              url(transform: { maxWidth: 96, maxHeight: 96 })
+            }
             discountedTotalSet {
               shopMoney {
                 amount
@@ -81,7 +85,7 @@ export async function fetchProduitsEntre(client: ShopifyClient, depuis: Date, av
         nodes: Array<{
           cancelledAt: string | null;
           shippingAddress: { countryCodeV2: string | null } | null;
-          lineItems: { nodes: Array<{ title: string; variantTitle: string | null; sku: string | null; quantity: number; discountedTotalSet: { shopMoney: { amount: string } } | null }> };
+          lineItems: { nodes: Array<{ title: string; variantTitle: string | null; sku: string | null; quantity: number; image: { url: string } | null; discountedTotalSet: { shopMoney: { amount: string } } | null }> };
         }>;
       };
     };
@@ -104,6 +108,7 @@ export async function fetchProduitsEntre(client: ShopifyClient, depuis: Date, av
         annulee: Boolean(commande.cancelledAt),
         pays: commande.shippingAddress?.countryCodeV2 ?? null,
         lignes: commande.lineItems.nodes.map((ligne) => ({
+          image: ligne.image?.url ?? null,
           titre: ligne.title,
           variante: ligne.variantTitle ?? null,
           sku: ligne.sku ?? null,
@@ -137,6 +142,7 @@ function produitsEnCache(merchantId: string, client: ShopifyClient, p: Plage): P
 /* ------------------------------------------------------------ classement */
 
 export interface LigneClassement {
+  image: string | null;
   titre: string;
   variante: string | null;
   sku: string | null;
@@ -159,9 +165,10 @@ function classer(commandes: CommandeBrute[], annulee: boolean): LigneClassement[
       const cle = cleProduit(ligne.titre, ligne.variante, ligne.sku);
       let entree = parCle.get(cle);
       if (!entree) {
-        entree = { titre: ligne.titre, variante: ligne.variante, sku: ligne.sku, unites: 0, ca: 0, pays: {}, caPays: {} };
+        entree = { image: ligne.image, titre: ligne.titre, variante: ligne.variante, sku: ligne.sku, unites: 0, ca: 0, pays: {}, caPays: {} };
         parCle.set(cle, entree);
       }
+      entree.image ??= ligne.image;
       entree.unites += ligne.quantite;
       entree.ca += ligne.montant;
       if (commande.pays) {

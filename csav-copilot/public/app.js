@@ -8087,11 +8087,28 @@ $('team-modal').addEventListener('click', (event) => {
 function showInviteLink(payload) {
   if (payload?.inviteUrl) {
     $('team-f-link-url').textContent = payload.inviteUrl;
+    $('team-f-link-url').hidden = true;
+    $('team-f-link-copy').textContent = 'Copier le lien';
     $('team-f-link').hidden = false;
     return false;
   }
   return true;
 }
+
+/* Le lien reste caché tant que la copie marche : affiché, il finissait en
+   capture d'écran — et une capture circule bien plus loin qu'un SMS. Il ne se
+   montre que si le presse-papiers refuse. */
+$('team-f-link-copy').addEventListener('click', async () => {
+  const url = $('team-f-link-url').textContent;
+  try {
+    await navigator.clipboard.writeText(url);
+    $('team-f-link-copy').textContent = 'Lien copié';
+    toast('Lien copié. Collez-le dans un SMS ou un message à la personne.');
+  } catch {
+    $('team-f-link-url').hidden = false;
+    toast('Copie impossible ici : sélectionnez le lien affiché.', true);
+  }
+});
 
 $('team-f-save').addEventListener('click', async () => {
   const id = state.editingUser;
@@ -9742,6 +9759,23 @@ function produitsMarkup() {
 
   const devise = etatStats.ventes?.devise ?? 'EUR';
 
+  // Les retours et échanges viennent du SAV, sans photo : ils empruntent
+  // celle du même produit vendu sur la période, quand il y en a une.
+  const photos = new Map();
+  for (const l of [...(d.ventes ?? []), ...(d.annulations ?? [])]) {
+    if (!l.image) continue;
+    photos.set(`${l.titre}__${l.variante ?? ''}`, l.image);
+    if (!photos.has(l.titre)) photos.set(l.titre, l.image);
+  }
+  const photoDe = (l) => l.image ?? photos.get(`${l.titre}__${l.variante ?? ''}`) ?? photos.get(l.titre) ?? null;
+  const initiales = (titre) =>
+    titre
+      .split(/\s+/)
+      .filter((mot) => /^[\p{L}\p{N}]/u.test(mot))
+      .slice(0, 2)
+      .map((mot) => mot[0].toUpperCase())
+      .join('');
+
   const sommePays = paysTotaux.reduce((total, p) => total + p.unites, 0) || 1;
   const carteEtListe = paysTotaux.length
     ? `<div class="sta-monde">
@@ -9781,7 +9815,11 @@ function produitsMarkup() {
             ${visibles
               .map(
                 (l) => `<div class="rmb-prod">
-                  <span class="rmb-prod-nom"><i class="rmb-vignette" aria-hidden="true"></i><span class="rmb-prod-txt"><b>${esc(
+                  <span class="rmb-prod-nom">${
+                    photoDe(l)
+                      ? `<img src="${esc(photoDe(l))}" alt="" loading="lazy" />`
+                      : `<i class="rmb-vignette sta-initiales" aria-hidden="true">${esc(initiales(l.titre))}</i>`
+                  }<span class="rmb-prod-txt"><b>${esc(
                     l.titre,
                   )}</b>${l.variante ? `<span>${esc(l.variante)}</span>` : ''}</span></span>
                   <span class="rmb-prod-n">${l.valeur}<span class="rmb-unite"> ${esc(TYPES_PRODUITS[type].unite)}${l.valeur > 1 ? 's' : ''}</span></span>

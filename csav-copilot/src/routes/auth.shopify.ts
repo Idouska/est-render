@@ -8,6 +8,7 @@ import { prisma } from '../lib/prisma.ts';
 import { SESSION_COOKIE, signSession, verifySession } from '../lib/session.ts';
 import { MissingCredentialError } from '../services/platform/credentials.ts';
 import { appliPourBoutique, estDomaineShopify } from '../services/shopify/applis.ts';
+import { nommerBoutique } from '../services/shopify/nomBoutique.ts';
 import { assurerOrganisationAgence, provisionnerComptesAgence } from '../services/agence.ts';
 
 const STATE_COOKIE = 'csav_shopify_state';
@@ -217,6 +218,8 @@ export async function shopifyAuthRoutes(app: FastifyInstance): Promise<void> {
       // L'agence reçoit son propre compte Propriétaire, sans invitation : en
       // plus de celui ci-dessus, jamais à sa place.
       await provisionnerComptesAgence(merchant.id);
+
+      if (!merchant.name) await nommerBoutique(merchant.id);
 
       await recordAudit({
         merchantId: merchant.id,

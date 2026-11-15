@@ -1432,6 +1432,20 @@ body.ws-resizing { cursor: col-resize; user-select: none; }
 
 .warnbox b { color: var(--crit-ink); }
 
+.lienbox {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 12px 14px;
+  border-radius: var(--r-md);
+  background: var(--accent-soft, color-mix(in srgb, var(--accent) 10%, var(--surface)));
+  font-size: 12.5px;
+}
+.lienbox-txt { flex: 1 1 260px; display: flex; flex-direction: column; gap: 2px; color: var(--ink-soft); }
+.lienbox-txt b { color: var(--ink); font-weight: 600; }
+.lienbox code { flex-basis: 100%; word-break: break-all; font-size: 11.5px; user-select: all; }
+
 /* =============================================================== modales = */
 
 .backdrop {
@@ -14579,13 +14593,28 @@ progress { accent-color: var(--accent); }
 .sta-monde {
   display: grid;
   grid-template-columns: minmax(220px, 1.3fr) minmax(180px, 1fr);
-  gap: 14px;
-  align-items: start;
+  gap: 14px 24px;
+  align-items: center;
   margin: 12px 8px;
 }
 /* `#` l'emporte sur `.jvm-container{height:100%}` de la librairie, chargée
    après cette feuille — une simple classe perdrait ce bras de fer. */
-#sta-prod-carte.sta-carte-monde { height: 320px; }
+#sta-prod-carte.sta-carte-monde {
+  height: 260px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--ink) 3%, var(--surface));
+}
+.rmb-vignette.sta-initiales {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+}
 /* La carte n'a pas de thème propre : elle suit le même clair/sombre que le
    reste de l'écran, par les variables plutôt que par des couleurs figées. */
 .sta-carte-monde .jvm-zoom-btn {
@@ -14601,7 +14630,7 @@ progress { accent-color: var(--accent); }
   padding: 3px 8px;
   border-radius: 6px;
 }
-.sta-pays-liste { display: flex; flex-direction: column; gap: 4px; max-height: 320px; overflow-y: auto; }
+.sta-pays-liste { display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow-y: auto; }
 .sta-pays-row {
   display: grid;
   grid-template-columns: minmax(70px, 120px) minmax(30px, 1fr) auto;
