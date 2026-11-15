@@ -30,7 +30,8 @@ test('le retour de Google ne répond plus jamais par du JSON brut', () => {
   assert.match(rappel, /return reply\.redirect\('\/dashboard\?gmail=connecte'\);/);
   assert.match(route, /reply\.redirect\(`\/dashboard\?gmail=\$\{raison\}`\);/);
   // Sans session, la connexion plutôt que « Session absente ou expirée ».
-  assert.match(rappel, /\{ preHandler: sessionOuConnexion \}/);
+  // Sauf pour « Se connecter avec Google », qui arrive par définition sans session.
+  assert.match(rappel, /if \(!estConnexion\(request\)\) await sessionOuConnexion\(request, reply\);/);
   assert.match(route, /if \(!verifySession\(request\.cookies\[SESSION_COOKIE\]\)\) \{\n\s+await reply\.redirect\('\/login'\);/);
 });
 

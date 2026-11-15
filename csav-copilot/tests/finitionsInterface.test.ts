@@ -94,3 +94,15 @@ test('une photo refusée par Shopify ne fait plus disparaître le classement pro
   assert.deepEqual(avecPhoto, [true, false]);
   assert.equal(r.commandes[0]!.lignes[0]!.titre, 'Crampon X');
 });
+
+test('« Se connecter avec Google » n’ouvre qu’un compte actif à l’adresse vérifiée par Google', () => {
+  const g = lire('src/routes/auth.google.ts');
+  assert.match(g, /scope: \['openid', 'email'\]/);
+  assert.match(g, /if \(!identite\?\.email \|\| !identite\.email_verified\) return retourConnexion\(reply, 'echec'\);/);
+  assert.match(g, /where: \{ email, active: true \}/);
+  assert.match(g, /audience: await requireCredential\('GOOGLE_CLIENT_ID'/);
+  // Le retour sans session n'est accepté que pour une connexion annoncée par son cookie d'état.
+  assert.match(g, /if \(!estConnexion\(request\)\) await sessionOuConnexion\(request, reply\);/);
+  assert.match(g, /return Boolean\(attendu && recu && safeEqual\(recu, attendu\)\);/);
+  assert.match(lire('public/login.html'), /href="\/auth\/google\/login"/);
+});
