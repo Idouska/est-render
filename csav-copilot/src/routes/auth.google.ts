@@ -6,13 +6,90 @@ import { recordAudit } from '../lib/audit.ts';
 import { encryptSecret, safeEqual } from '../lib/crypto.ts';
 import { logger } from '../lib/logger.ts';
 import { prisma } from '../lib/prisma.ts';
-import { SESSION_COOKIE, verifySession } from '../lib/session.ts';
+import { SESSION_COOKIE, signSession, verifySession } from '../lib/session.ts';
 import { requireSession } from '../plugins/auth.ts';
 import { createOAuthClient } from '../services/gmail/client.ts';
 import { startWatch } from '../services/gmail/watch.ts';
+import { requireCredential } from '../services/platform/credentials.ts';
 import { boutiqueDemo } from '../services/modeTest.ts';
 
 const STATE_COOKIE = 'csav_google_state';
+const LOGIN_COOKIE = 'csav_google_login';
+
+/*
+ * « Se connecter avec Google ».
+ *
+ * Le lien par mail reste la porte d'entrée par défaut ; celle-ci évite
+ * d'attendre le mail. Elle passe par la même appli Google que la connexion
+ * des boîtes Gmail et par la même adresse de retour — aucune adresse de plus
+ * à déclarer chez Google — mais ne demande que l'identité (`openid email`),
+ * jamais l'accès au courrier. Un cookie d'état à part dit au retour qu'il
+ * s'agit d'une connexion, pas d'un branchement de boîte.
+ *
+ * Elle n'ouvre que ce qui existe déjà : un compte actif portant l'adresse
+ * vérifiée par Google. Pas de création de compte ici.
+ */
+const estConnexion = (request: FastifyRequest) => {
+  const attendu = request.cookies[LOGIN_COOKIE];
+  const recu = (request.query as { state?: string }).state;
+  return Boolean(attendu && recu && safeEqual(recu, attendu));
+};
+
+type RaisonConnexion = 'refuse' | 'echec' | 'inconnu';
+const retourConnexion = (reply: FastifyReply, raison: RaisonConnexion) => reply.redirect(`/login?google=${raison}`);
+
+async function connexionGoogle(
+  request: FastifyRequest<{ Querystring: { code?: string; state?: string; error?: string } }>,
+  reply: FastifyReply,
+) {
+  reply.clearCookie(LOGIN_COOKIE, { path: '/' });
+  const { code, error } = request.query;
+  if (error || !code) return retourConnexion(reply, 'refuse');
+
+  let email: string;
+  try {
+    const auth = await createOAuthClient();
+    const { tokens } = await auth.getToken(code);
+    if (!tokens.id_token) return retourConnexion(reply, 'echec');
+    const ticket = await auth.verifyIdToken({
+      idToken: tokens.id_token,
+      audience: await requireCredential('GOOGLE_CLIENT_ID', 'Nécessaire pour se connecter avec Google.'),
+    });
+    const identite = ticket.getPayload();
+    // Une adresse que Google n'a pas vérifiée ne prouve rien.
+    if (!identite?.email || !identite.email_verified) return retourConnexion(reply, 'echec');
+    email = identite.email.toLowerCase();
+  } catch (err) {
+    logger.warn({ err }, 'Connexion Google en échec');
+    return retourConnexion(reply, 'echec');
+  }
+
+  // La boutique de la dernière connexion, comme le lien par mail : les autres
+  // sont à un clic dans le sélecteur.
+  const user = await prisma.user.findFirst({
+    where: { email, active: true },
+    orderBy: [{ lastLoginAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'asc' }],
+    select: { id: true, merchantId: true },
+  });
+  if (!user) return retourConnexion(reply, 'inconnu');
+
+  await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+  reply.setCookie(SESSION_COOKIE, signSession({ merchantId: user.merchantId, userId: user.id }), {
+    httpOnly: true,
+    secure: env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+  });
+  await recordAudit({
+    merchantId: user.merchantId,
+    actorType: 'USER',
+    actorId: user.id,
+    action: 'user.logged_in',
+    metadata: { methode: 'google' },
+    ipAddress: request.ip,
+  });
+  return reply.redirect('/dashboard');
+}
 
 /*
  * Un refus ou un échec ramène dans l'outil, avec sa raison.
@@ -40,6 +117,22 @@ async function sessionOuConnexion(request: FastifyRequest, reply: FastifyReply):
 }
 
 export async function googleAuthRoutes(app: FastifyInstance): Promise<void> {
+  // Ouvert sans session : c'est une porte d'entrée.
+  app.get('/auth/google/login', async (_request, reply) => {
+    const state = randomBytes(24).toString('hex');
+    reply.setCookie(LOGIN_COOKIE, state, {
+      httpOnly: true,
+      secure: env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 600,
+    });
+    const client = await createOAuthClient();
+    return reply.redirect(
+      client.generateAuthUrl({ scope: ['openid', 'email'], prompt: 'select_account', state }),
+    );
+  });
+
   app.get('/auth/google', { preHandler: requireSession }, async (request, reply) => {
     // Une boîte réelle n'a rien à faire dans la boutique de démonstration :
     // ses mails s'y mêleraient aux mails fictifs, sous les yeux des visiteurs.
@@ -73,8 +166,15 @@ export async function googleAuthRoutes(app: FastifyInstance): Promise<void> {
 
   app.get<{ Querystring: { code?: string; state?: string; error?: string } }>(
     '/auth/google/callback',
-    { preHandler: sessionOuConnexion },
+    {
+      // Une connexion arrive par définition sans session : seule la pose
+      // d'une boîte Gmail en exige une.
+      preHandler: async (request, reply) => {
+        if (!estConnexion(request)) await sessionOuConnexion(request, reply);
+      },
+    },
     async (request, reply) => {
+      if (estConnexion(request)) return connexionGoogle(request, reply);
       const { merchantId, userId } = request.session;
       const { code, state, error } = request.query;
 
