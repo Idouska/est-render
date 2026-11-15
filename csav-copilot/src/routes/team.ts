@@ -225,8 +225,12 @@ export async function teamRoutes(app: FastifyInstance): Promise<void> {
 
       // Un seul mail, avec un lien par boutique : en envoyer plusieurs ferait
       // douter du bon, et n'en envoyer qu'un obligerait à basculer ensuite.
-      await deliverLink({
-        merchantId: accounts[0]!.merchantId,
+      //
+      // Il part de la boîte Gmail d'une des boutiques. Celle de la dernière
+      // connexion d'abord, puis les suivantes : une boutique sans Gmail
+      // branché faisait échouer l'envoi en silence, alors qu'une autre
+      // pouvait l'envoyer.
+      const corps = {
         to: accounts[0]!.email,
         subject: 'Votre lien de connexion',
         body:
@@ -242,7 +246,10 @@ export async function teamRoutes(app: FastifyInstance): Promise<void> {
                 '',
                 'Chaque lien est valable une heure et ne sert qu’une fois.',
               ].join('\n'),
-      });
+      };
+      for (const merchantId of new Set(accounts.map((account) => account.merchantId))) {
+        if (await deliverLink({ merchantId, ...corps })) break;
+      }
     }
 
     // Toujours la même réponse, envoi effectué ou non, compte existant ou
