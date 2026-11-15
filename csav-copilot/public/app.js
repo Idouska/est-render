@@ -8189,9 +8189,13 @@ $('team-f-resend').addEventListener('click', async () => {
 async function loadOverview() {
   void renderShopCards();
 
+  // Arriver directement sur la vue d'ensemble — c'est l'écran d'accueil —
+  // laissait « À traiter en priorité » vide tant qu'on n'avait pas ouvert le
+  // SAV client : la file se charge ici aussi, en même temps que le reste.
   const [mRes, sRes] = await Promise.allSettled([
     api('/api/metrics'),
     api('/api/stats?days=7'),
+    state.queueLoaded ? null : loadQueue(),
   ]);
 
   const metrics = mRes.status === 'fulfilled' ? mRes.value : null;

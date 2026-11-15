@@ -59,3 +59,38 @@ test('le classement produits montre une photo, ou des initiales à défaut', () 
   assert.match(rendu, /const photoDe = \(l\) => l\.image \?\?/);
   assert.match(rendu, /sta-initiales/);
 });
+
+test('la vue d’ensemble charge la file elle-même, sans passer par « SAV client »', () => {
+  const fn = appJs.slice(appJs.indexOf('async function loadOverview()'), appJs.indexOf('function renderOvPanne'));
+  assert.match(fn, /state\.queueLoaded \? null : loadQueue\(\)/);
+});
+
+test('le lien de connexion essaie la boîte de chaque boutique jusqu’à ce qu’une l’envoie', () => {
+  const team = lire('src/routes/team.ts');
+  const fn = team.slice(team.indexOf("app.post('/api/auth/request-link'"));
+  assert.match(fn, /for \(const merchantId of new Set\(accounts\.map\(\(account\) => account\.merchantId\)\)\) \{\s*if \(await deliverLink\(\{ merchantId, \.\.\.corps \}\)\) break;/);
+});
+
+test('une photo refusée par Shopify ne fait plus disparaître le classement produits', async () => {
+  process.env.ENCRYPTION_KEY ??= 'MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=';
+  const { fetchProduitsEntre } = await import('../src/services/shopify/produitsPeriode.ts');
+  const avecPhoto: boolean[] = [];
+  const client = {
+    async request(q: string) {
+      avecPhoto.push(q.includes('image {'));
+      if (q.includes('image {')) throw new Error('Access denied for image field');
+      return {
+        orders: {
+          pageInfo: { hasNextPage: false, endCursor: null },
+          nodes: [{ cancelledAt: null, shippingAddress: { countryCodeV2: 'FR' }, lineItems: { nodes: [
+            { title: 'Crampon X', variantTitle: '42', sku: null, quantity: 2, image: null, discountedTotalSet: { shopMoney: { amount: '120' } } },
+          ] } }],
+        },
+      };
+    },
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const r = await fetchProduitsEntre(client as any, new Date(0), new Date());
+  assert.deepEqual(avecPhoto, [true, false]);
+  assert.equal(r.commandes[0]!.lignes[0]!.titre, 'Crampon X');
+});

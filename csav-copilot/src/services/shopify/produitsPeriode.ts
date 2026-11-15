@@ -61,6 +61,19 @@ const QUERY = /* GraphQL */ `
   }
 `;
 
+/*
+ * La photo est un confort : lue sur l'article, elle demande à l'appli le droit
+ * de lire les produits. Une boutique installée sans ce droit faisait échouer
+ * toute la requête — et disparaître le classement. Sans photo, on recommence.
+ */
+const QUERY_SANS_PHOTO = QUERY.replace(
+  `            image {
+              url(transform: { maxWidth: 96, maxHeight: 96 })
+            }
+`,
+  '',
+);
+
 export interface ProduitsBrutes {
   commandes: CommandeBrute[];
   tronque: boolean;
@@ -75,6 +88,7 @@ export async function fetchProduitsEntre(client: ShopifyClient, depuis: Date, av
   const commandes: CommandeBrute[] = [];
   let cursor: string | null = null;
   let essais = 0;
+  let requete = QUERY;
   const debut = Date.now();
 
   for (;;) {
@@ -90,13 +104,17 @@ export async function fetchProduitsEntre(client: ShopifyClient, depuis: Date, av
       };
     };
     try {
-      data = await client.request(QUERY, { query, cursor });
+      data = await client.request(requete, { query, cursor });
     } catch (error) {
       const details = (error as { details?: unknown })?.details;
       const codes = Array.isArray(details) ? details.map((e) => e?.extensions?.code ?? '').join(' ') : '';
       if (/THROTTLED|throttled/i.test(`${codes} ${(error as Error)?.message}`) && essais < 4) {
         essais += 1;
         await attendre(1500 * essais);
+        continue;
+      }
+      if (requete !== QUERY_SANS_PHOTO) {
+        requete = QUERY_SANS_PHOTO;
         continue;
       }
       throw error;
