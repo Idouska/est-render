@@ -100,8 +100,9 @@ test('menu Actions et barre Fournisseur : les gestes demandés, dans cet ordre',
 
   const meta = brut.slice(brut.indexOf('const VIEW_META = {'), brut.indexOf('const NAV_GROUPS'));
   const fournisseur = [...meta.matchAll(/label: '([^']+)',\s*group: 'Fournisseur'(?![^}]*hidden: true)/g)].map((m) => m[1]);
-  assert.deepEqual(fournisseur, ['Fournisseur', 'Modification', 'Update', 'Annulation/\\u200bRemboursement', 'Renvoi', 'Retour']);
-  assert.match(brut, /const NAV_GROUPS = \['Pilotage', 'Commerce', 'Fournisseur', 'Atelier', 'Finance', 'Plateforme'\];/);
+  // Fournisseur monte dans Admin, Modification et Update dans Pilotage.
+  assert.deepEqual(fournisseur, ['Annulation/\\u200bRemboursement', 'Renvoi', 'Retour']);
+  assert.match(brut, /const NAV_GROUPS = \['Admin', 'Pilotage', 'Commerce', 'Fournisseur', 'Atelier', 'Finance', 'Plateforme'\];/);
 });
 
 test('Fournisseur : toutes les demandes, triées par fournisseur et par type ; Modification : trois motifs', () => {

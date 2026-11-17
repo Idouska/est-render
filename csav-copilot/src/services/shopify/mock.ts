@@ -416,6 +416,8 @@ function runSearch(ORDERS: MockOrder[], query: string): MockOrder[] {
   if (free) result = result.filter((o) => o.customerName.toLowerCase().includes(free));
   if (paiements.length) result = result.filter((o) => paiements.includes(o.displayFinancialStatus.toLowerCase()));
   if (expeditions.length) result = result.filter((o) => expeditions.some((v) => EXPEDITION[v]?.(o)));
+  const avant = query.match(/created_at:<'([^']+)'/)?.[1];
+  if (avant) result = result.filter((o) => o.createdAt < avant);
 
   return [...result].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
@@ -836,6 +838,37 @@ export function createMockShopifyClient(shopDomain: string, jeu: JeuFictif = JEU
       // Même graine que « VentesPeriode » : un à trois articles par commande,
       // tirés des produits fictifs, avec un pays de livraison et, de loin en
       // loin, une annulation — de quoi montrer un vrai classement.
+      // Délais logistiques : expédition en deux à six jours, livraison six à
+      // douze jours plus tard, une commande sur sept encore en route.
+      if (query.includes('query DelaisExpedition')) {
+        const [, debut = ''] = /created_at:>='([^']+)'/.exec(String(variables?.query ?? '')) ?? [];
+        const depuis = Date.parse(debut);
+        const maintenant = Date.now();
+        const nodes = [];
+        for (let jour = Math.floor(depuis / 86_400_000); jour * 86_400_000 < maintenant; jour += 1) {
+          const graine = (jour * 7919) % 23;
+          for (let i = 0; i < 2 + (graine % 4); i += 1) {
+            const commande = jour * 86_400_000 + (8 + ((graine + i * 5) % 12)) * 3_600_000;
+            if (commande < depuis || commande >= maintenant) continue;
+            const expedie = commande + (2 + ((graine + i) % 5)) * 86_400_000 + ((i * 7) % 20) * 3_600_000;
+            const livre = expedie + (6 + ((graine * 3 + i) % 7)) * 86_400_000;
+            nodes.push({
+              createdAt: new Date(commande).toISOString(),
+              cancelledAt: null,
+              fulfillments:
+                expedie > maintenant
+                  ? []
+                  : [{
+                      createdAt: new Date(expedie).toISOString(),
+                      deliveredAt: livre <= maintenant && (graine + i) % 7 !== 0 ? new Date(livre).toISOString() : null,
+                      trackingInfo: [{ number: null }],
+                    }],
+            });
+          }
+        }
+        return { orders: { pageInfo: { hasNextPage: false, endCursor: null }, nodes } } as T;
+      }
+
       if (query.includes('query ProduitsPeriode')) {
         const [, debut = '', fin = ''] = /created_at:>='([^']+)' created_at:<'([^']+)'/.exec(String(variables?.query ?? '')) ?? [];
         const depuis = Date.parse(debut);

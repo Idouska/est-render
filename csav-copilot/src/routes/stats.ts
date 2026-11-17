@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma.ts';
 import { requireSession } from '../plugins/auth.ts';
 import { getShopifyClient, ShopifyError } from '../services/shopify/client.ts';
 import { fetchCommerceStats } from '../services/shopify/commerceStats.ts';
+import { bandeauEnCache } from '../services/shopify/delaisLogistique.ts';
 import { classementProduits } from '../services/shopify/produitsPeriode.ts';
 import { statsVentesPeriode } from '../services/shopify/ventesPeriode.ts';
 import { lirePeriode, resumePeriode } from '../services/stats/periode.ts';
@@ -89,6 +90,23 @@ export async function statsRoutes(app: FastifyInstance): Promise<void> {
     if (!lu.ok) return reply.code(400).send({ error: lu.erreur });
     const { merchantId } = request.session;
     return reply.send({ periode: resumePeriode(lu.periode), ...(await statsSavPeriode(merchantId, lu.periode)) });
+  });
+
+  /**
+   * La bande logistique de la Vue d'ensemble : commandes non expédiées,
+   * délais d'expédition et de livraison. Boutique de la session seulement.
+   */
+  app.get('/api/overview/logistique', async (request, reply) => {
+    const { merchantId } = request.session;
+    try {
+      const client = await getShopifyClient(merchantId);
+      return reply.send(await bandeauEnCache(merchantId, client));
+    } catch (error) {
+      if (error instanceof ShopifyError) {
+        return reply.code(502).send({ error: 'Shopify n’a pas répondu.' });
+      }
+      throw error;
+    }
   });
 
   app.get('/api/stats/periode/ventes', async (request, reply) => {

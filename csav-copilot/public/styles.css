@@ -16976,3 +16976,17 @@ button.rup-chiffre:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--
   display: inline-block; margin-top: 6px; padding: 1px 8px; border-radius: 6px;
   background: var(--warn-soft); color: var(--warn-ink); font-size: 12px; font-weight: 600;
 }
+
+/* La bande logistique de la Vue d'ensemble : cinq cases cliquables, chacune
+   mène à l'écran où le chiffre se traite. */
+#view-overview .ov-bandeau .kpi {
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+  appearance: none;
+}
+#view-overview .ov-bandeau .kpi:hover { background: var(--line-soft); }
+#view-overview .ov-bandeau .kpi:focus-visible { outline: 2px solid var(--accent, #0a84ff); outline-offset: -2px; }
+#view-overview .ov-bandeau .kpi-note.kn-bad { color: var(--crit-ink); }

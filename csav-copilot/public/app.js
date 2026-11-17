@@ -1985,90 +1985,121 @@ function openTracking(number) {
  * charge de travail — au-delà de 1 % de commandes contestées, Shopify gèle les
  * paiements d'une boutique. Un exploitant doit le voir avant de le subir.
  */
-async function renderShopCards() {
-  let data;
-  try {
-    data = await api('/api/overview');
-  } catch {
-    $('ov-shops').innerHTML = '';
-    return;
-  }
-
-  const shops = data.shops ?? [];
-  const threshold = data.disputeThreshold ?? 1;
-
-  // Une seule boutique : la carte répéterait les indicateurs juste en dessous.
-  if (shops.length < 2) {
-    $('ov-shops').innerHTML = '';
-    return;
-  }
-
-  $('ov-shops').innerHTML = shops
-    .map((shop) => {
-      const over = shop.disputeRate > threshold;
-      // Échelle à deux fois le seuil : sinon un taux de 0,3 % donne une barre
-      // invisible et un taux de 1,2 % une barre pleine, tous deux illisibles.
-      const width = Math.min(100, (shop.disputeRate / (threshold * 2)) * 100);
-
-      return `<article class="shopcard">
-        <div class="shopcard-head">
-          <i style="background:${esc(shop.color)}"></i>
-          ${esc(shop.label)}
-        </div>
-
-        <div class="shopcard-open">
-          <b>${shop.open}</b><span>à traiter</span>
-        </div>
-
-        <div class="shopcard-tags">
-          ${
-            shop.late
-              ? `<span class="tag st-FAILED">${shop.late} en retard</span>`
-              : '<span class="tag st-CLOSED">rien en retard</span>'
-          }
-          ${shop.disputes ? `<span class="tag st-NEEDS_REVIEW">${shop.disputes} litige${
-            shop.disputes > 1 ? 's' : ''
-          }</span>` : ''}
-        </div>
-
-        <div class="shopcard-rate">
-          <span>Litiges 30 j</span>
-          <span class="dispute-bar" style="flex:1">
-            <span class="dispute-fill${over ? ' over' : ''}" style="width:${width}%"></span>
-            <span class="dispute-mark" style="left:50%"></span>
-          </span>
-          <b>${String(shop.disputeRate).replace('.', ',')} %</b>
-        </div>
-
-        ${
-          over
-            ? '<div class="shopcard-alert">Seuil Shopify dépassé — risque de gel des paiements</div>'
-            : ''
-        }
-
-        <button class="btn btn-small" data-open-shop="${esc(shop.id)}">${
-          shop.current ? 'Ouvrir la file' : 'Basculer et ouvrir'
-        }</button>
-      </article>`;
-    })
-    .join('');
-
-  $('ov-shops')
-    .querySelectorAll('[data-open-shop]')
-    .forEach((button) =>
-      button.addEventListener('click', async () => {
-        const id = button.dataset.openShop;
-        const shop = shops.find((candidate) => candidate.id === id);
-
-        // Basculer recharge la page : rien de la boutique précédente ne doit
-        // survivre en mémoire.
-        if (!shop?.current) return switchShop(id);
-
-        setView('tickets');
-        await loadQueue();
-      }),
-    );
+/*
+ * La bande du haut de la Vue d'ensemble : la boutique sélectionnée seulement.
+ *
+ * Cinq chiffres, chacun mène à l'écran où il se traite. La logistique vient
+ * de Shopify (et de 17TRACK pour la livraison) ; Out of stock et Update des
+ * mêmes comptes que les pastilles du menu, pour ne jamais afficher deux
+ * nombres différents pour la même chose.
+ */
+function joursTexte(jours) {
+  if (jours === null || jours === undefined) return '—';
+  return `${String(jours).replace('.', ',')} j`;
 }
+
+function ecartMedianes(jours, avant) {
+  if (jours === null || avant === null || jours === undefined || avant === undefined) return null;
+  const diff = Math.round((jours - avant) * 10) / 10;
+  if (diff === 0) return { texte: '=', ton: null };
+  // Un délai qui baisse est une bonne nouvelle.
+  return { texte: `${diff > 0 ? '+' : '−'}${String(Math.abs(diff)).replace('.', ',')} j`, ton: diff < 0 ? 'ok' : 'bad' };
+}
+
+async function renderOvBandeau() {
+  const hote = $('ov-bandeau');
+  if (!hote) return;
+
+  const [logRes, rupRes, updRes] = await Promise.allSettled([
+    api('/api/overview/logistique'),
+    api('/api/ruptures/compte'),
+    api('/api/updates?compte=1'),
+  ]);
+  const log = logRes.status === 'fulfilled' ? logRes.value : null;
+  const ruptures = rupRes.status === 'fulfilled' ? rupRes.value?.ouverts ?? 0 : null;
+  const updates = updRes.status === 'fulfilled' ? compteUpdate(updRes.value) : null;
+  const fenetre = log?.fenetreJours ?? 30;
+
+  const cartes = [
+    {
+      ico: 'bag',
+      label: 'Commandes non expédiées',
+      valeur: log ? `${log.nonExpediees.total}${log.nonExpediees.auMoins ? '+' : ''}` : '—',
+      note: log
+        ? log.nonExpediees.enRetard
+          ? `dont ${log.nonExpediees.enRetard} depuis plus de ${log.retardJours} jours`
+          : `aucune depuis plus de ${log.retardJours} jours`
+        : 'Shopify n’a pas répondu',
+      ton: log?.nonExpediees.enRetard ? 'bad' : null,
+      teinte: 'bleu',
+      vue: 'orders',
+    },
+    {
+      ico: 'alerte',
+      label: 'Out of stock',
+      valeur: ruptures === null ? '—' : String(ruptures),
+      note: 'non traités',
+      teinte: 'orange',
+      vue: 'ruptures',
+    },
+    {
+      ico: 'truck',
+      label: 'Délai d’expédition',
+      per: `${fenetre} j`,
+      valeur: joursTexte(log?.expedition.jours),
+      delta: ecartMedianes(log?.expedition.jours, log?.expedition.avant),
+      note: log ? 'médiane commande → expédition' : 'Shopify n’a pas répondu',
+      teinte: 'indigo',
+      vue: 'tracking',
+    },
+    {
+      ico: 'pin',
+      label: 'Délai de livraison',
+      per: `${fenetre} j`,
+      valeur: joursTexte(log?.livraison.jours),
+      delta: ecartMedianes(log?.livraison.jours, log?.livraison.avant),
+      note: log
+        ? log.livraison.n
+          ? `médiane sur ${log.livraison.n} colis livrés`
+          : 'aucune livraison connue sur la période'
+        : 'Shopify n’a pas répondu',
+      teinte: 'vert',
+      vue: 'tracking',
+    },
+    {
+      ico: 'suivi',
+      label: 'Update à traiter',
+      valeur: updates === null ? '—' : String(updates),
+      note: 'colis qui ne bougent plus',
+      teinte: 'violet',
+      vue: 'update',
+    },
+  ];
+
+  hote.innerHTML = cartes
+    .map(
+      (c) => `<button type="button" class="kpi ov-bandeau-case" data-ov-vue="${esc(c.vue)}">
+        <span class="kpi-ico c-${c.teinte}" data-ico="${esc(c.ico)}" aria-hidden="true"></span>
+        <span class="kpi-body">
+          <span class="kpi-label">${esc(c.label)}${c.per ? `<span class="kpi-per"> · ${esc(c.per)}</span>` : ''}</span>
+          <span class="kpi-value">${esc(c.valeur)}${
+            c.delta
+              ? `<span class="kpi-delta${c.delta.ton ? ` kd-${c.delta.ton}` : ''}"
+                  title="Médiane des ${fenetre} jours précédents">${esc(c.delta.texte)} <small>vs ${fenetre} j avant</small></span>`
+              : ''
+          }</span>
+          <span class="kpi-note${c.ton ? ` kn-${c.ton}` : ''}">${esc(c.note)}</span>
+        </span>
+      </button>`,
+    )
+    .join('');
+  paintKpiIcons(hote);
+}
+
+$('ov-bandeau')?.addEventListener('click', (event) => {
+  const cible = event.target.closest('[data-ov-vue]');
+  if (cible) setView(cible.dataset.ovVue);
+});
 
 /* ----------------------------------------------------------- fiche client */
 
@@ -7113,8 +7144,8 @@ function renderATraiter() {
         ton: 'faite',
         icone: ico('bubble'),
         titre: `${pluriel(activite.answered, 'réponse')} d’atelier à reprendre`,
-        sous: 'Des escalades auxquelles l’atelier a répondu, dans SAV client',
-        gestes: '<button type="button" class="btn btn-primary btn-small" data-goto="tickets">Ouvrir SAV client</button>',
+        sous: 'Des escalades auxquelles l’atelier a répondu, dans la boîte de réception',
+        gestes: '<button type="button" class="btn btn-primary btn-small" data-goto="tickets">Ouvrir la boîte de réception</button>',
       }),
     );
   }
@@ -7133,8 +7164,8 @@ function renderATraiter() {
         ton: 'info',
         icone: ico('box'),
         titre: `${pluriel(activite.ruptures, 'rupture')} en cours`,
-        sous: [parAtelier, 'les articles indisponibles se traitent dans Ruptures de stock'].filter(Boolean).join(' · '),
-        gestes: '<button type="button" class="fo-bouton" data-goto="ruptures">Ruptures de stock</button>',
+        sous: [parAtelier, 'les articles indisponibles se traitent dans Out of stock'].filter(Boolean).join(' · '),
+        gestes: '<button type="button" class="fo-bouton" data-goto="ruptures">Out of stock</button>',
       }),
     );
   }
@@ -8120,7 +8151,7 @@ $('team-f-resend').addEventListener('click', async () => {
  * règle de l'écran Statistiques, elle vaut ici pour la même raison.
  */
 async function loadOverview() {
-  void renderShopCards();
+  void renderOvBandeau();
 
   // Arriver directement sur la vue d'ensemble — c'est l'écran d'accueil —
   // laissait « À traiter en priorité » vide tant qu'on n'avait pas ouvert le
@@ -8544,7 +8575,7 @@ function renderOvPriorite() {
     : `<li class="empty ov-vide">${
         state.queueLoaded
           ? 'Rien en attente.'
-          : 'File non chargée : ouvrez « SAV client » ou rafraîchissez.'
+          : 'File non chargée : ouvrez « Boîte de réception » ou rafraîchissez.'
       }</li>`;
 
   $('ov-prio-rows')
@@ -14318,16 +14349,16 @@ const VIEW_META = {
   overview: {
     icon: 'grid',
     label: "Vue d'ensemble",
-    group: 'Pilotage',
+    group: 'Admin',
     title: "Vue d'ensemble",
     sous: 'Votre activité SAV en un coup d’œil',
   },
-  tickets: { icon: 'inbox', label: 'SAV client', group: 'Pilotage', title: 'SAV client' },
-  stats: { icon: 'chart', label: "Statistiques", group: 'Pilotage', title: "Statistiques" },
+  tickets: { icon: 'inbox', label: 'Boîte de réception', group: 'Pilotage', title: 'Boîte de réception' },
+  stats: { icon: 'chart', label: "Statistiques", group: 'Admin', title: "Statistiques" },
   couts: {
     icon: 'coins',
     label: 'Coûts SAV',
-    group: 'Pilotage',
+    group: 'Admin',
     // Le même mot que dans le menu : « Coûts du SAV » se cassait sur deux
     // lignes dans l'en-tête, à côté de la recherche.
     title: 'Coûts SAV',
@@ -14345,12 +14376,12 @@ const VIEW_META = {
   suppliers: {
     icon: 'factory',
     label: 'Fournisseur',
-    group: 'Fournisseur',
+    group: 'Admin',
     title: 'Fournisseurs',
   },
-  changes: { icon: 'pencil', label: 'Modification', group: 'Fournisseur', title: 'Modification' },
+  changes: { icon: 'pencil', label: 'Modification', group: 'Pilotage', title: 'Modification' },
   // Les colis qui ne bougent plus : ce qu'on demande à l'atelier, et ce qu'il répond.
-  update: { icon: 'suivi', label: 'Update', group: 'Fournisseur', title: 'Update', sous: 'Où en sont les colis qui ne bougent plus' },
+  update: { icon: 'suivi', label: 'Update', group: 'Pilotage', title: 'Update', sous: 'Où en sont les colis qui ne bougent plus' },
   refunds: { icon: 'card', label: 'Annulation/\u200bRemboursement', group: 'Fournisseur', title: 'Annulations et remboursements' },
   renvoi: { icon: 'cycle', label: 'Renvoi', group: 'Fournisseur', title: 'Renvoi — stock retours', alias: 'returns', onglet: 'stock' },
   retour: { icon: 'uturn', label: 'Retour', group: 'Fournisseur', title: 'Retours clients', alias: 'returns', onglet: 'cases' },
@@ -14364,9 +14395,9 @@ const VIEW_META = {
   },
   ruptures: {
     icon: 'alerte',
-    label: 'Ruptures de stock',
-    group: 'Atelier',
-    title: 'Ruptures de stock',
+    label: 'Out of stock',
+    group: 'Pilotage',
+    title: 'Out of stock',
     sous: 'Commandes nécessitant une action suite à une indisponibilité produit',
   },
   tracking: { icon: 'pin', label: 'Suivi colis', group: 'Atelier', title: 'Suivi des colis' },
@@ -14378,7 +14409,14 @@ const VIEW_META = {
   settings: { icon: 'gear', label: 'Réglages', group: 'Plateforme', title: 'Réglages' },
 };
 
-const NAV_GROUPS = ['Pilotage', 'Commerce', 'Fournisseur', 'Atelier', 'Finance', 'Plateforme'];
+const NAV_GROUPS = ['Admin', 'Pilotage', 'Commerce', 'Fournisseur', 'Atelier', 'Finance', 'Plateforme'];
+
+/* L'ordre voulu dans la navigation, quand il diffère de celui des écrans. */
+const NAV_ORDRE = ['overview', 'suppliers', 'couts', 'stats', 'tickets', 'changes', 'update', 'ruptures'];
+const rangNav = (view) => {
+  const i = NAV_ORDRE.indexOf(view);
+  return i === -1 ? NAV_ORDRE.length + VIEWS.indexOf(view) : i;
+};
 
 const VIEWS = Object.keys(VIEW_META);
 
@@ -14513,7 +14551,7 @@ function renderNav() {
   $('nav').innerHTML = NAV_GROUPS.map((group) => {
     const items = VIEWS.filter(
       (view) => !VIEW_META[view].hidden && VIEW_META[view].group === group && matches(view),
-    );
+    ).sort((a, b) => rangNav(a) - rangNav(b));
     if (items.length === 0) return '';
 
     return `<div class="nav-group">
@@ -20100,7 +20138,7 @@ function buildCommands() {
     },
     {
       label: 'File en tableau',
-      hint: 'SAV client',
+      hint: 'Boîte de réception',
       run: () => {
         setView('tickets');
         setQueueView('table');
@@ -20108,7 +20146,7 @@ function buildCommands() {
     },
     {
       label: 'File en liste',
-      hint: 'SAV client',
+      hint: 'Boîte de réception',
       run: () => {
         setView('tickets');
         setQueueView('list');
@@ -20116,7 +20154,7 @@ function buildCommands() {
     },
     {
       label: 'Filtrer les WISMO',
-      hint: 'SAV client',
+      hint: 'Boîte de réception',
       run: () => {
         setView('tickets');
         basculerSeulement('wismo');
@@ -20267,7 +20305,7 @@ function sectionsPalette(query) {
       lignes.push({
         genre: 'message',
         titre: `Chercher « ${q} » dans les messages`,
-        sous: 'SAV client',
+        sous: 'Boîte de réception',
         initiales: '…',
         run: () => chercherDans('tickets', q),
       });
@@ -20636,7 +20674,7 @@ function renderARembourser() {
           <b class="rmb-af-cmd">${esc(ligne.orderName ?? '—')}</b>
           <span class="rmb-af-art"><b>${esc(ligne.article)}</b><small>${esc(ligne.motif ?? 'Rupture · l’atelier n’expédie pas cet article')}</small></span>
           <span class="rmb-af-par"><span class="rmb-af-qui">${esc(ligne.demandePar ?? 'L’équipe')}</span><small>${ageMarkup(ligne.demandeLe, Boolean(ligne.faitLe))} ${
-            ligne.returnCaseId ? 'depuis Retour/Échange' : 'depuis Ruptures de stock'
+            ligne.returnCaseId ? 'depuis Retour/Échange' : 'depuis Out of stock'
           }</small></span>
           <b class="rmb-af-montant num">${typeof ligne.montant === 'number' ? esc(euro(ligne.montant, ligne.devise ?? 'EUR')) : '—'}</b>
           <span class="rmb-af-geste">${
