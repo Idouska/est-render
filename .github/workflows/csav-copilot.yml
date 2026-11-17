@@ -1,0 +1,52 @@
+name: cSAV Copilot
+
+# Les vérifications qui se faisaient à la main avant chaque mise en ligne :
+# types, tests, et la compilation que Render lance au déploiement.
+on:
+  pull_request:
+    paths: ['csav-copilot/**', '.github/workflows/csav-copilot.yml']
+  push:
+    branches: [main]
+    paths: ['csav-copilot/**', '.github/workflows/csav-copilot.yml']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: csav-copilot-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verifier:
+    name: Types, tests, compilation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: csav-copilot
+    env:
+      # Valeurs factices : les tests ne joignent ni base, ni Redis, ni Google.
+      APP_URL: https://example.test
+      DATABASE_URL: postgresql://u:p@localhost:5432/db
+      REDIS_URL: redis://localhost:6379
+      ENCRYPTION_KEY: MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=
+      SHOPIFY_API_KEY: key
+      SHOPIFY_API_SECRET: secret
+      SHOPIFY_SCOPES: read_orders
+      GOOGLE_CLIENT_ID: client
+      GOOGLE_CLIENT_SECRET: secret
+      GOOGLE_SCOPES: https://www.googleapis.com/auth/gmail.readonly
+      GOOGLE_PUBSUB_TOPIC: projects/p/topics/t
+      GOOGLE_PUBSUB_SERVICE_ACCOUNT: sa@p.iam.gserviceaccount.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: csav-copilot/package-lock.json
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
