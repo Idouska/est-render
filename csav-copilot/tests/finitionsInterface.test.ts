@@ -106,3 +106,12 @@ test('« Se connecter avec Google » n’ouvre qu’un compte actif à l’adres
   assert.match(g, /return Boolean\(attendu && recu && safeEqual\(recu, attendu\)\);/);
   assert.match(lire('public/login.html'), /href="\/auth\/google\/login"/);
 });
+
+test('un numéro de suivi ouvre 17TRACK, et le menu dit « À classer »', () => {
+  const app = sansCommentaires(lire('public/app.js'));
+  const corps = app.slice(app.indexOf('function openTracking('), app.indexOf('function openTracking(') + 200);
+  assert.match(corps, /window\.open\(trackUrl\(number\)/);
+  assert.doesNotMatch(app, /\/api\/tracking\//);
+  assert.match(app, /'À classer'\s*\n?\s*}<\/button>/);
+  assert.doesNotMatch(app, /Ranger dans les notifications/);
+});
