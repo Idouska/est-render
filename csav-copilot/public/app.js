@@ -1553,16 +1553,16 @@ async function basculerNotification(ticket, notification) {
   const email = ticket.customerEmail ?? '';
   const domaine = email.slice(email.lastIndexOf('@') + 1);
   const question = notification
-    ? `Ranger ${domaine} dans les notifications ?\n\nCe mail et les prochains de cet expéditeur n’entreront plus dans la file, ni dans les compteurs. Ils restent visibles dans « Notifications ».`
+    ? `Mettre ${domaine} « À classer » ?\n\nCe mail et les prochains de cet expéditeur n’entreront plus dans la file, ni dans les compteurs. Ils restent visibles dans « Notifications ».`
     : `Remettre ${email} dans la file ?\n\nCe mail et les prochains de cet expéditeur arriveront dans la réception, avec leur brouillon de réponse.`;
-  if (!(await confirmer(question, { action: notification ? 'Ranger' : 'Remettre dans la file', icone: notification ? 'message' : 'retour' }))) return;
+  if (!(await confirmer(question, { action: notification ? 'À classer' : 'Remettre dans la file', icone: notification ? 'message' : 'retour' }))) return;
   try {
     const resultat = await api(`/api/tickets/${ticket.id}/notification`, {
       method: 'POST',
       body: JSON.stringify({ notification, portee: notification ? 'domaine' : 'adresse' }),
     });
     const autres = resultat.fils > 1 ? ` (et ${resultat.fils - 1} autre${resultat.fils > 2 ? 's' : ''})` : '';
-    toast(notification ? `Rangé dans les notifications${autres}.` : `Remis dans la file${autres}.`);
+    toast(notification ? `Mis « À classer »${autres}.` : `Remis dans la file${autres}.`);
     await loadQueue();
     if (state.currentId === ticket.id) await selectTicket(ticket.id, { silent: true });
   } catch (error) {
@@ -1967,80 +1967,13 @@ async function openAgencyLink(agencyId, revoke = false) {
 /* ------------------------------------------------- chronologie d'un colis */
 
 /**
- * Historique réel du colis, transporteur par transporteur.
- *
- * Shopify fige le statut à l'expédition : pour un envoi depuis la Chine, il
- * reste « expédié » trois semaines. C'est 17TRACK qui sait où en est le colis,
- * et c'est cette réponse-là qu'attend le client.
+ * Un numéro de suivi s'ouvre sur 17TRACK, dans un nouvel onglet : c'est là
+ * que l'équipe lit l'historique du colis, quel que soit le transporteur.
+ * Appel synchrone, pour rester dans le geste du clic (sinon bloqué comme
+ * fenêtre surgissante).
  */
-async function openTracking(number, externalUrl = null) {
-  $('sheet-name').textContent = 'Suivi du colis';
-  $('sheet-email').textContent = number;
-  $('sheet-body').innerHTML = '<p class="empty">Interrogation du transporteur…</p>';
-  $('sheet-wrap').hidden = false;
-
-  let data;
-  try {
-    data = await api(`/api/tracking/${encodeURIComponent(number)}`);
-  } catch (error) {
-    $('sheet-body').innerHTML = `<p class="empty">${esc(error.message)}</p>`;
-    return;
-  }
-
-  const { parcel, track } = data;
-
-  if (!track) {
-    $('sheet-body').innerHTML = `<section class="sheet-group">
-      <h3>Suivi indisponible</h3>
-      <div class="sheet-row"><p>
-        Aucune donnée transporteur pour ce numéro. Soit la clé 17TRACK n'est pas
-        configurée dans la console d'administration, soit le transporteur n'a pas
-        encore pris le colis en charge.
-      </p></div>
-    </section>`;
-    return;
-  }
-
-  // Le site du transporteur reste accessible, mais depuis la fenêtre et en
-  // choix secondaire : l'outil répond d'abord lui-même.
-  const external = externalUrl
-    ? `<p class="sheet-ext"><a href="${esc(externalUrl)}" target="_blank" rel="noopener">
-        Ouvrir chez le transporteur</a></p>`
-    : '';
-
-  $('sheet-body').innerHTML = `
-    <section class="sheet-group">
-      <h3>${esc(parcel.orderName ?? 'Colis')}${
-        parcel.total > 1 ? ` · ${parcel.index}/${parcel.total}` : ''
-      }</h3>
-      <div class="sheet-row">
-        <b>${esc(TRACK_LABELS[track.status] ?? track.status ?? '—')}</b>
-        ${track.carrier ? `<span class="tag tag-order">${esc(track.carrier)}</span>` : ''}
-        <span class="when">${
-          track.lastUpdatedAt ? relativeTime(track.lastUpdatedAt) : ''
-        }</span>
-      </div>
-    </section>
-
-    <section class="sheet-group">
-      <h3>Chronologie</h3>
-      <div class="sheet-row" style="display:block">
-        ${
-          track.events.length
-            ? `<div class="tl">${track.events
-                .map(
-                  (event) => `<div class="tl-step">
-                    <span class="when">${fullDate(event.at)}</span>
-                    <b>${esc(event.status)}</b>
-                    ${event.location ? `<span>${esc(event.location)}</span>` : ''}
-                  </div>`,
-                )
-                .join('')}</div>`
-            : '<p>Aucun événement pour le moment.</p>'
-        }
-      </div>
-    </section>
-    ${external}`;
+function openTracking(number) {
+  window.open(trackUrl(number), '_blank', 'noopener');
 }
 
 /* ----------------------------------------------- vue d'ensemble du groupe */
@@ -5564,7 +5497,7 @@ function renderTicketLabels(ticket) {
       actionButton('update', 'Update', ticket, 'more-item') +
       actionButton('renvoi', 'Renvoi', ticket, 'more-item') +
       `<button type="button" class="more-item" role="menuitem" data-notif-bascule>${
-        ticket.notification ? 'Ce n’est pas une notification' : 'Ranger dans les notifications'
+        ticket.notification ? 'Ce n’est pas à classer' : 'À classer'
       }</button>`;
     menu.querySelector('[data-notif-bascule]')?.addEventListener('click', () => {
       closeMoreMenu();
@@ -11313,7 +11246,7 @@ async function loadTracking() {
 
     body.querySelectorAll('[data-track]').forEach((button) =>
       button.addEventListener('click', () =>
-        void openTracking(button.dataset.track, button.dataset.trackUrl ?? null),
+        openTracking(button.dataset.track),
       ),
     );
 
@@ -20563,7 +20496,7 @@ document.addEventListener('click', (event) => {
   // le colis » n'est pas un lien, et le câbler à part le ferait diverger.
   const button = event.target.closest('[data-track]');
   if (!button || button.closest('#tracking-rows')) return;
-  void openTracking(button.dataset.track, button.dataset.trackUrl ?? null);
+  openTracking(button.dataset.track);
 });
 
 /* ==========================================================================
