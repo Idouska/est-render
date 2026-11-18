@@ -17029,7 +17029,6 @@ button.rup-chiffre:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--
 .stk-compteur.stk-warn b { color: var(--warn-ink); }
 .stk-export { margin-left: auto; align-self: center; }
 #stk-ouvrir { align-self: center; }
-.stk-filtres { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 12px; }
 .stk-note { color: var(--ink-mute); }
 .stk-liste { display: grid; background: var(--surface); border-radius: 12px; box-shadow: 0 0 0 1px var(--line); overflow: hidden; }
 .stk-ligne { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--line-soft); }
@@ -17058,3 +17057,12 @@ i.stk-photo { display: grid; place-items: center; font-style: normal; font-size:
   .stk-export { margin-left: 0; flex: 1; }
   .stk-compteur { flex: 1 1 90px; min-width: 0; }
 }
+
+.stk-note { margin: 0 0 12px; font-size: 12px; }
+.stk-vide-ecran {
+  display: grid; justify-items: center; gap: 8px; text-align: center;
+  padding: 48px 20px; background: var(--surface); border-radius: 12px; box-shadow: 0 0 0 1px var(--line);
+}
+.stk-vide-ecran b { font-size: 15px; }
+.stk-vide-ecran p { margin: 0 0 6px; max-width: 420px; color: var(--ink-mute); }
+#ret-barre[hidden], #ret-tabs .chip[hidden] { display: none; }

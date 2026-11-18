@@ -12179,6 +12179,8 @@ function renderReturns() {
   document
     .querySelectorAll('#ret-tabs [data-rtab]')
     .forEach((tab) => tab.setAttribute('aria-pressed', String(tab.dataset.rtab === r.tab)));
+  // Stock a son propre en-tête : la barre de Retour n'y paraît pas.
+  $('ret-barre').hidden = r.tab === 'stock';
 
   if (r.tab === 'echanges') return renderEchanges(box);
   if (r.tab === 'cases') return renderReturnCases(box);
@@ -12889,14 +12891,13 @@ function adresseTexte(adresse) {
  * examinées est affiché : un « aucun match » doit pouvoir se lire comme
  * « rien ne correspond », pas comme « on n'a pas regardé ».
  */
-function renderReturnMatches(box) {
-  const { matches, matchMeta = {}, derniere } = state.returns;
-
-  const confiee = derniere
+/** Après « Servir depuis le stock » : à qui écrire, et l'adresse à mettre sur le colis. */
+function noticeConfiee(derniere) {
+  return derniere
     ? `<div class="notice ret-confie">
         <span class="notice-mark">Confiée</span>
         <div>
-          <b>${esc(derniere.commande)} part du stock retours — ${esc(nomPays(derniere.paysStock))}.</b>
+          <b>${esc(derniere.commande)} part du stock — ${esc(nomPays(derniere.paysStock))}.</b>
           Elle a disparu de la liste de l’atelier, qui ne l’expédiera pas.
           <p>À expédier par : <b>${esc(derniere.agenceContact?.name ?? derniere.agence?.nom ?? 'l’agence')}</b>${
             derniere.agenceContact?.email ? ` · ${esc(derniere.agenceContact.email)}` : ''
@@ -12909,7 +12910,12 @@ function renderReturnMatches(box) {
         </div>
       </div>`
     : '';
+}
 
+function renderReturnMatches(box) {
+  const { matches, matchMeta = {}, derniere } = state.returns;
+
+  const confiee = noticeConfiee(derniere);
   const meta = matchMeta.error
     ? `<p class="ret-meta">${esc(matchMeta.error)}</p>`
     : `<p class="ret-meta">Commandes en attente examinées : ${matchMeta.examinees ?? 0}. Même pays d’abord,
@@ -12990,10 +12996,12 @@ function lignesStock() {
   return { dispo, confiees, toutes: [...dispo, ...confiees] };
 }
 
+/* Une seule rangée : les compteurs sont le filtre. « En stock » : les paires
+   disponibles, celles qui ont un match comprises. */
 const FILTRES_STOCK = [
-  ['tout', 'Tout'],
-  ['match', 'Match'],
-  ['nonenvoye', 'Non envoyé'],
+  ['stock', 'En stock'],
+  ['match', 'Matching'],
+  ['nonenvoye', 'À expédier'],
   ['envoye', 'Envoyé'],
 ];
 
@@ -13001,7 +13009,7 @@ function filtrerStock(lignes, filtre) {
   if (filtre === 'match') return lignes.filter((l) => l.etat === 'match');
   if (filtre === 'nonenvoye') return lignes.filter((l) => l.etat === 'aexpedier');
   if (filtre === 'envoye') return lignes.filter((l) => l.etat === 'envoye');
-  return lignes;
+  return lignes.filter((l) => l.etat === 'stock' || l.etat === 'match');
 }
 
 const ETATS_STOCK = {
@@ -13019,7 +13027,7 @@ const ETATS_STOCK = {
  */
 function renderReturnStock(box) {
   const r = state.returns;
-  r.stockFiltre ??= 'tout';
+  if (!FILTRES_STOCK.some(([cle]) => cle === r.stockFiltre)) r.stockFiltre = 'stock';
   const { dispo, toutes } = lignesStock();
   const nMatch = dispo.filter((l) => l.etat === 'match').length;
   const nAExpedier = toutes.filter((l) => l.etat === 'aexpedier').length;
@@ -13095,10 +13103,12 @@ function renderReturnStock(box) {
     </div>`;
   };
 
-  box.innerHTML = `<div class="stk-tete">
-      ${compteur('tout', dispo.length, 'En stock')}
+  const nEnvoye = toutes.filter((l) => l.etat === 'envoye').length;
+  box.innerHTML = `${noticeConfiee(r.derniere)}<div class="stk-tete">
+      ${compteur('stock', dispo.length, 'En stock')}
       ${compteur('match', nMatch, 'Matching', 'ok')}
       ${compteur('nonenvoye', nAExpedier, 'À expédier', nAExpedier ? 'warn' : '')}
+      ${compteur('envoye', nEnvoye, 'Envoyé')}
       <select class="stk-export" id="stk-export" aria-label="Imprimer ou partager">
         <option value="">Imprimer / partager</option>
         <option value="imprimer">Imprimer la liste</option>
@@ -13106,22 +13116,22 @@ function renderReturnStock(box) {
       </select>
       <button class="btn btn-primary" type="button" id="stk-ouvrir">Ajouter au stock</button>
     </div>
-    <div class="stk-filtres" role="group" aria-label="Filtrer">
-      ${FILTRES_STOCK.map(
-        ([cle, libelle]) => `<button type="button" class="chip" data-stk-filtre="${cle}" aria-pressed="${r.stockFiltre === cle}">${esc(libelle)} <span class="count">${filtrerStock(toutes, cle).length}</span></button>`,
-      ).join('')}
-      ${r.matchMeta?.error ? `<small class="stk-note">Match indisponible : ${esc(r.matchMeta.error)}</small>` : ''}
-    </div>
+    ${r.matchMeta?.error ? `<p class="stk-note">Matching indisponible : ${esc(r.matchMeta.error)}</p>` : ''}
     ${
       lignes.length
         ? `<div class="stk-liste">${lignes.map(ligne).join('')}</div>`
-        : `<p class="empty" style="padding:20px">${
-            toutes.length
-              ? 'Aucune paire dans ce filtre.'
-              : 'Rien en stock. Les retours « Reçu et validé » arrivent ici, avec les paires ajoutées à la main.'
-          }</p>`
+        : toutes.length
+          ? '<p class="empty" style="padding:20px">Aucune paire ici pour le moment.</p>'
+          : `<div class="stk-vide-ecran">
+              <b>Aucune paire en stock</b>
+              <p>Les retours passés en « Reçu et validé » arrivent ici tout seuls. Vous pouvez aussi ajouter une paire à la main : fin de série, paire d’exposition…</p>
+              <button class="btn btn-primary" type="button" data-stk-ajouter>Ajouter au stock</button>
+            </div>`
     }`;
+  // Écran vide : le bouton est au centre, pas deux fois.
+  if (!toutes.length) $('stk-ouvrir')?.remove();
   $('stk-ouvrir')?.addEventListener('click', () => void ouvrirAjoutStock());
+  box.querySelector('[data-stk-ajouter]')?.addEventListener('click', () => void ouvrirAjoutStock());
   if (!r.stockImagesChargees) {
     r.stockImagesChargees = true;
     void api('/api/returns/stock/images')
@@ -13135,7 +13145,7 @@ function renderReturnStock(box) {
 
 /** La liste filtrée, en texte : pour l'impression et le partage. */
 function texteStock() {
-  const lignes = filtrerStock(lignesStock().toutes, state.returns.stockFiltre ?? 'tout');
+  const lignes = filtrerStock(lignesStock().toutes, state.returns.stockFiltre ?? 'stock');
   return lignes.map((l) => {
     const paire = `${l.item.productTitle}${l.item.variantTitle ? ` — ${l.item.variantTitle}` : ''}`;
     const cmd = l.commande ? `${l.commande} (${nomPays(l.pays) || '—'})` : '';
@@ -13145,7 +13155,7 @@ function texteStock() {
 
 function imprimerStock() {
   const lignes = texteStock();
-  const titre = `Stock — ${FILTRES_STOCK.find(([c]) => c === (state.returns.stockFiltre ?? 'tout'))?.[1] ?? 'Tout'}`;
+  const titre = `Stock — ${FILTRES_STOCK.find(([c]) => c === (state.returns.stockFiltre ?? 'stock'))?.[1] ?? 'En stock'}`;
   const fenetre = window.open('', '_blank');
   if (!fenetre) return toast('Fenêtre bloquée : autorisez les fenêtres pour imprimer.', true);
   fenetre.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${esc(titre)}</title>
@@ -14944,7 +14954,7 @@ function renderNav() {
           const shown = tally > 9999 ? '9999+' : tally;
           const badge = tally && !mute;
           const courant = meta.alias
-            ? state.view === meta.alias && state.returns?.tab === meta.onglet
+            ? state.view === meta.alias && (state.returns?.tab === 'stock') === (meta.onglet === 'stock')
             : view === state.view;
           return `<button class="nav-item" data-view="${view}" aria-current="${courant}">${ico(meta.icon)}<span class="nav-label">${esc(meta.label)}</span>${
             badge
