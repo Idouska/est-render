@@ -1664,7 +1664,9 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
           query: 'fulfillment_status:unfulfilled status:open',
           limit: 100,
           cursor,
-          sort: 'oldest',
+          // Les plus récentes d'abord : ce sont elles que le stock sert en premier,
+          // et celles qu'un plafond ne doit pas laisser de côté.
+          sort: 'recent',
         });
         commandes.push(...resultat.orders);
         cursor = resultat.hasNextPage ? resultat.cursor : null;

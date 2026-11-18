@@ -85,12 +85,12 @@ test('le client du pays passe avant le client voisin, même s’il a commandé a
   assert.deepEqual(propositions.map((p) => p.commande), ['#be']);
 });
 
-test('une paire ne va qu’à une commande : la plus ancienne', () => {
+test('une paire ne va qu’à une commande : la plus récente', () => {
   const propositions = rapprocher(
     [paire('FR', 'HQ1')],
     [commande('recente', 'FR', [['HQ1', 1]], '2026-09-10T10:00:00Z'), commande('ancienne', 'FR', [['HQ1', 1]], '2026-09-02T10:00:00Z')],
   );
-  assert.deepEqual(propositions.map((p) => p.commande), ['#ancienne']);
+  assert.deepEqual(propositions.map((p) => p.commande), ['#recente']);
 });
 
 test('chaque exemplaire commandé demande sa paire', () => {
@@ -144,7 +144,7 @@ test('les propositions écartent les commandes commencées par l’atelier ou d�
   assert.match(route, /!commencees\.has\(commande\.id\)/);
   assert.match(route, /!servies\.has\(commande\.id\)/);
   // Toutes les commandes, par pages, et un plafond qui se dit.
-  assert.match(route, /sort: 'oldest'/);
+  assert.match(route, /sort: 'recent'/);
   assert.match(route, /tronque = Boolean\(cursor\)/);
 });
 
