@@ -2787,6 +2787,21 @@ Remboursement : sous 5 jours ouvrés après réception du retour."></textarea>
       </div>
     </div>
 
+    <!-- Envoi d'une paire du stock : transporteur, numéro du bon, et le bon
+         lui-même. S'ouvre en saisie quand on passe « Envoyé », en lecture
+         quand on clique sur le transporteur d'une paire déjà partie. -->
+    <div class="backdrop" id="stkenv-modal" role="dialog" aria-modal="true" aria-labelledby="stkenv-title" hidden>
+      <div class="modal">
+        <div class="modal-head">
+          <h2 id="stkenv-title">Envoi</h2>
+          <p id="stkenv-sous"></p>
+        </div>
+        <div class="modal-body" id="stkenv-body"></div>
+        <div class="modal-foot" id="stkenv-foot"></div>
+        <input type="file" id="stkenv-fichier" accept="application/pdf,image/jpeg,image/png,image/webp" hidden />
+      </div>
+    </div>
+
     <div class="backdrop" id="stk-modal" role="dialog" aria-modal="true" aria-labelledby="stk-title" hidden>
       <div class="modal">
         <div class="modal-head">

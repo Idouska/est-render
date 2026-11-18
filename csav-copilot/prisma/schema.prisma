@@ -1291,6 +1291,10 @@ model ReturnCase {
   /// même colis et portent le même numéro.
   reshipTrackingNumber String?
   reshipCarrier        String?
+  /// Le bon d'expédition de cet envoi (photo ou PDF) : la preuve de dépôt.
+  reshipBonData        Bytes?
+  reshipBonMime        String?
+  reshipBonNom         String?
   reshippedAt          DateTime?
 
   /// Entrée au stock : les paires les plus anciennes partent en premier.
