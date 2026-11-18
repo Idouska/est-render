@@ -372,7 +372,7 @@ export async function preparerDemo(maintenant = Date.now()): Promise<{ merchantI
   });
   await retour({
     ...infosClient(4098), productTitle: 'Kairo Street Mid', variantTitle: 'Bleu nuit / 42', sku: skuDemo('street', 0, '42'), prixRetour: 139,
-    reason: 'MODEL', resolution: 'REFUND', status: 'IN_TRANSIT', labelSent: true, labelSentAt: ilJ(5), agencyId: agenceParis,
+    reason: 'MODEL', resolution: 'REFUND', status: 'LABEL_SENT', labelSent: true, labelSentAt: ilJ(5), agencyId: agenceParis,
     trackingNumber: NUMEROS_RETOUR_DEMO[0], createdAt: ilJ(6), lastContactAt: il(340),
   });
   // Reçu à l'agence avec ses trois photos : il attend la décision du marchand.
@@ -380,7 +380,7 @@ export async function preparerDemo(maintenant = Date.now()): Promise<{ merchantI
     {
       ...infosClient(4110), productTitle: 'Kairo Court Low', variantTitle: 'Crème / Vert / 43', sku: skuDemo('court', 1, '43'),
       wantedTitle: 'Kairo Court Low', wantedVariantTitle: 'Crème / Vert / 44', wantedSku: skuDemo('court', 1, '44'),
-      prixRetour: 109, prixVoulu: 109, ecartPrix: 0, reason: 'SIZE', resolution: 'EXCHANGE', status: 'RECEIVED',
+      prixRetour: 109, prixVoulu: 109, ecartPrix: 0, reason: 'SIZE', resolution: 'EXCHANGE', status: 'LABEL_SENT',
       labelSent: true, labelSentAt: ilJ(9), agencyId: agenceParis, trackingNumber: NUMEROS_RETOUR_DEMO[1], receivedAt: il(200),
       createdAt: ilJ(10), lastContactAt: il(200),
     },

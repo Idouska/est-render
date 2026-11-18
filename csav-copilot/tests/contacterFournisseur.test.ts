@@ -101,7 +101,7 @@ test('menu Actions et barre Fournisseur : les gestes demandés, dans cet ordre',
   const meta = brut.slice(brut.indexOf('const VIEW_META = {'), brut.indexOf('const NAV_GROUPS'));
   const fournisseur = [...meta.matchAll(/label: '([^']+)',\s*group: 'Fournisseur'(?![^}]*hidden: true)/g)].map((m) => m[1]);
   // Fournisseur monte dans Admin, Modification et Update dans Pilotage.
-  assert.deepEqual(fournisseur, ['Annulation/\\u200bRemboursement', 'Renvoi', 'Retour']);
+  assert.deepEqual(fournisseur, ['Annulation/\\u200bRemboursement', 'Retour']);
   assert.match(brut, /const NAV_GROUPS = \['Admin', 'Pilotage', 'Commerce', 'Fournisseur', 'Atelier', 'Finance', 'Plateforme'\];/);
 });
 

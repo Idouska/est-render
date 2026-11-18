@@ -263,7 +263,7 @@ test('la section des échanges existe des deux côtés', () => {
 test('valider l’échange : la paire reçue, les trois points du contrôle, puis le stock', () => {
   const valider = retours.slice(retours.indexOf("'/api/returns/:id/echange/valider'"));
   assert.match(valider, /conforme: z\.literal\(true\), propre: z\.literal\(true\), complet: z\.literal\(true\)/);
-  const garde = valider.indexOf("['RECEIVED', 'RESTOCKED'].includes(dossier.status)");
+  const garde = valider.indexOf("dossier.receivedAt || dossier.status === 'RESTOCKED'");
   assert.ok(garde > 0, 'pas de validation avant la réception');
   assert.ok(garde < valider.indexOf('organiserEchange('), 'la garde précède l’envoi');
   // La paire retournée entre au stock, sauf défaut.

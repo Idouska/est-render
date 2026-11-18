@@ -517,7 +517,9 @@ export async function agencyPortalRoutes(app: FastifyInstance): Promise<void> {
           origine: 'RETOUR',
           controleLe: null,
           refuseLe: null,
-          status: { in: ['LABEL_SENT', 'SHIPPED', 'IN_TRANSIT', 'RECEIVED'] },
+          // Les dossiers en route vers l'agence : Ouvert ou Bon envoyé (les
+          // anciens « Expédié / En transit / Reçu » sont repassés en Ouvert).
+          status: { in: ['OPEN', 'LABEL_SENT', 'SHIPPED', 'IN_TRANSIT', 'RECEIVED'] },
         },
         orderBy: { createdAt: 'asc' },
         take: 100,
@@ -540,7 +542,7 @@ export async function agencyPortalRoutes(app: FastifyInstance): Promise<void> {
         min: PHOTOS_MIN,
         retours: dossiers.map(({ photos, ...dossier }) => ({
           ...dossier,
-          recu: dossier.status === 'RECEIVED',
+          recu: Boolean(dossier.receivedAt),
           photos,
           // La réception se déclare sur SES photos : celles du client montrent la paire avant le voyage.
           photosAgence: photos.filter((photo) => photo.source === 'AGENCE').length,
@@ -637,7 +639,9 @@ export async function agencyPortalRoutes(app: FastifyInstance): Promise<void> {
       }
       await prisma.returnCase.update({
         where: { id: dossier.id },
-        data: { status: 'RECEIVED', receivedAt: dossier.receivedAt ?? new Date() },
+        // La réception se date ; le statut, lui, se décide au contrôle :
+        // Reçu et validé, ou Reçu et non valide.
+        data: { receivedAt: dossier.receivedAt ?? new Date() },
       });
       await recordAudit({
         merchantId: agence.merchantId,

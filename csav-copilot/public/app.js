@@ -1,4 +1,4 @@
-import { demander, informer } from './alerte.js';
+import { demander, informer, saisir } from './alerte.js';
 
 /**
  * Dashboard cSAV Copilot.
@@ -11993,16 +11993,25 @@ const RETURN_RESOLUTIONS = {
   REFUND: 'Remboursement',
 };
 
+/* Les cinq statuts qui se choisissent. « Reçu et validé » met la paire en
+   stock ; « Reçu et non valide » bloque échange et remboursement. */
 const RETURN_STATUSES = {
   OPEN: 'Ouvert',
   LABEL_SENT: 'Bon envoyé',
-  SHIPPED: 'Expédié',
-  IN_TRANSIT: 'En transit',
-  RECEIVED: "Livré à l'agence",
-  RESTOCKED: 'En stock',
-  UNUSABLE: 'Inutilisable',
-  CLOSED: 'Clos',
+  RESTOCKED: 'Reçu et validé',
+  UNUSABLE: 'Reçu et non valide',
+  CLOSED: 'Fermé',
 };
+
+/** La paire est arrivée (déclarée par l'agence, ou validée) et attend la décision. */
+function recuAControler(item) {
+  if (item.controleLe || item.refuseLe || item.origine === 'MANUEL') return false;
+  if (item.status === 'RESTOCKED') return true;
+  return Boolean(item.receivedAt) && !['UNUSABLE', 'CLOSED'].includes(item.status);
+}
+
+/** « Reçu et non valide » posé à la main : rien ne part, rien ne se rembourse. */
+const nonValide = (item) => item.status === 'UNUSABLE' && !item.controleLe;
 
 /** Suivi universel : 17track connaît les transporteurs chinois et européens. */
 function trackUrl(number) {
@@ -12129,7 +12138,7 @@ function blocEchange(item) {
 
   // L'échange ne part qu'une fois la paire retournée reçue et contrôlée.
   if (!qui) {
-    return item.status === 'RECEIVED'
+    return recuAControler(item)
       ? `<div class="ret-echange">
       <button class="btn btn-small btn-primary" data-ech-controler="${esc(item.id)}">Contrôler et valider</button>
     </div>`
@@ -12206,7 +12215,7 @@ function etatEchange(item) {
   if (item.exchangeShippedAt) return ['Envoyé', `suivi ${item.exchangeTrackingNumber ?? ''}`.trim(), 'ok'];
   if (item.exchangeStockCaseId) return ['Pris dans le stock', item.exchangeAgence ? `${item.exchangeAgence} l’expédie` : 'l’agence l’expédie', 'ok'];
   if (item.exchangeSupplierId) return ['Chez l’atelier', `${item.exchangeAtelier ?? 'l’atelier'} prévenu`, 'ok'];
-  if (item.status === 'RECEIVED') return ['Reçue', 'à contrôler, puis valider', 'accent'];
+  if (recuAControler(item)) return ['Reçue', 'à contrôler, puis valider', 'accent'];
   if (['LABEL_SENT', 'SHIPPED', 'IN_TRANSIT'].includes(item.status) || item.labelSent) {
     return ['En route', item.trackingNumber ? 'colis retour suivi' : 'bon envoyé au client', 'warn'];
   }
@@ -12217,7 +12226,7 @@ const nomPaire = (titre, variante) => [titre, variante].filter(Boolean).join(' �
 
 function renderEchanges(box) {
   const items = echangesEnCours();
-  const ordre = (item) => (item.status === 'RECEIVED' && !item.exchangeStockCaseId && !item.exchangeSupplierId ? 0 : item.exchangeShippedAt ? 3 : item.exchangeStockCaseId || item.exchangeSupplierId ? 2 : 1);
+  const ordre = (item) => (recuAControler(item) && !item.exchangeStockCaseId && !item.exchangeSupplierId ? 0 : item.exchangeShippedAt ? 3 : item.exchangeStockCaseId || item.exchangeSupplierId ? 2 : 1);
   items.sort((a, b) => ordre(a) - ordre(b) || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
   const compte = (garde) => items.filter(garde).length;
@@ -12252,7 +12261,7 @@ function renderEchanges(box) {
             ? `<span class="ech-paiement"><button class="btn btn-small" type="button" data-ech-lien="${esc(item.id)}">${
                 item.lienEnvoyeLe ? 'Renvoyer le lien' : 'Envoyer le lien'
               }</button><button class="linkish" type="button" data-ech-paye="${esc(item.id)}">Marquer payé</button></span>`
-            : item.status === 'RECEIVED'
+            : recuAControler(item)
             ? `<button class="btn btn-small btn-primary" type="button" data-ech-controler="${esc(item.id)}">Contrôler et valider</button>`
             : '<span class="ech-attente" title="« Valider » s’ouvre quand la paire est reçue par l’agence">Valider · à la réception</span>';
         return `<div class="ech-ligne">
@@ -12747,6 +12756,7 @@ function renderReturnCases(box) {
                 RETURN_RESOLUTIONS[item.resolution] ?? item.resolution,
               )}</span>
               ${item.refuseLe ? '<span class="ret-tag bad">Refusé</span>' : ''}
+              ${nonValide(item) ? '<span class="ret-tag bad" title="Échange et remboursement bloqués">Non valide · bloqué</span>' : ''}
             </div>
             ${item.refuseLe && item.refusMotif ? `<small class="ret-refus">Refusé : ${esc(item.refusMotif)}</small>` : ''}
           </td>
@@ -12769,6 +12779,16 @@ function renderReturnCases(box) {
                   : ''
               }
             </div>
+            ${item.trackingCarrier ? `<small class="ret-transp">${esc(item.trackingCarrier)}</small>` : ''}
+            <div class="ret-bon">${
+              item.hasBon
+                ? `<a class="qlink" href="/api/returns/${esc(item.id)}/bon" target="_blank" rel="noopener">Voir le bon</a>
+                   <button type="button" class="btn btn-small" data-ret-bon-envoyer="${esc(item.id)}"${
+                     item.customerEmail ? '' : ' disabled title="Pas d’adresse mail pour ce client"'
+                   }>${item.bonEnvoyeLe ? 'Renvoyer au client' : 'Envoyer au client'}</button>
+                   ${item.bonEnvoyeLe ? `<small class="ret-bon-envoye">envoyé ${esc(ilYa(item.bonEnvoyeLe))}</small>` : ''}`
+                : `<button type="button" class="qlink ret-bon-importer" data-ret-bon-importer="${esc(item.id)}">Importer le bon</button>`
+            }</div>
           </td>
           <td>
             <select data-ret-status="${esc(item.id)}">
@@ -12782,13 +12802,18 @@ function renderReturnCases(box) {
                 .join('')}
             </select>
             ${
+              item.status === 'CLOSED' && item.closeComment
+                ? `<small class="ret-close-comment" title="Commentaire de fermeture">${esc(item.closeComment)}</small>`
+                : ''
+            }
+            ${
               // Le contrôle à la réception : un remboursement se décide sur les
               // photos, dans la fenêtre de contrôle ; un échange a son bloc.
-              item.status === 'RECEIVED' && !item.controleLe && item.resolution === 'REFUND'
+              recuAControler(item) && !item.controleLe && item.resolution === 'REFUND'
                 ? `<div class="ret-controle">
                     <button class="btn btn-small btn-primary" data-ech-controler="${esc(item.id)}">Contrôler et décider</button>
                   </div>`
-                : item.status === 'RECEIVED'
+                : recuAControler(item) && item.status !== 'RESTOCKED'
                   ? `<div class="ret-controle">
                       <button class="btn btn-small" data-ret-restock="${esc(item.id)}">En stock</button>
                       <button class="btn btn-small btn-danger" data-ret-defect="${esc(item.id)}">Défectueux</button>
@@ -13530,6 +13555,162 @@ $('ret-body').addEventListener('click', async (event) => {
   }
 });
 
+/* --------------------------------------------------- bons de retour ---- */
+
+/** Un fichier en data URL, pour l'envoyer en JSON comme les photos. */
+function lireFichier(fichier) {
+  return new Promise((resolve, reject) => {
+    const lecteur = new FileReader();
+    lecteur.onload = () => resolve(String(lecteur.result));
+    lecteur.onerror = () => reject(new Error(`Lecture impossible : ${fichier.name}`));
+    lecteur.readAsDataURL(fichier);
+  });
+}
+
+const BON_MAX = 4 * 1024 * 1024;
+const importBons = { fichiers: [], lectures: [], dossiers: [], cible: null };
+
+function fermerBons() {
+  $('bons-modal').hidden = true;
+  $('bons-modal').classList.remove('open');
+  importBons.fichiers = [];
+  importBons.lectures = [];
+  importBons.cible = null;
+}
+
+/** Ouvre le sélecteur de fichiers ; `cible` : le dossier d'où l'on importe, s'il y en a un. */
+function choisirBons(cible = null) {
+  importBons.cible = cible;
+  const champ = $('ret-bons-fichiers');
+  champ.multiple = !cible;
+  champ.value = '';
+  champ.click();
+}
+
+$('ret-bons')?.addEventListener('click', () => choisirBons());
+
+$('ret-bons-fichiers')?.addEventListener('change', async (event) => {
+  const choisis = [...event.target.files].slice(0, 10);
+  if (!choisis.length) return;
+  const tropGros = choisis.filter((f) => f.size > BON_MAX);
+  if (tropGros.length) toast(`${tropGros.map((f) => f.name).join(', ')} : plus de 4 Mo, ignoré.`, true);
+  const fichiers = choisis.filter((f) => f.size <= BON_MAX);
+  if (!fichiers.length) return;
+
+  $('bons-body').innerHTML = `<p class="empty">Lecture de ${pluriel(fichiers.length, 'bon')}…</p>`;
+  $('bons-save').disabled = true;
+  $('bons-modal').hidden = false;
+  $('bons-modal').classList.add('open');
+  try {
+    importBons.fichiers = await Promise.all(fichiers.map(async (f) => ({ nom: f.name, contenu: await lireFichier(f) })));
+    const lu = await api('/api/returns/bons/lire', { method: 'POST', body: JSON.stringify({ fichiers: importBons.fichiers }) });
+    importBons.dossiers = lu.dossiers ?? [];
+    importBons.lectures = (lu.lectures ?? []).map((l) => ({ ...l, dossierId: importBons.cible ?? l.dossierId ?? '' }));
+    // Le dossier d'où l'on importe doit figurer dans la liste, même s'il est déjà plus loin.
+    if (importBons.cible && !importBons.dossiers.some((d) => d.id === importBons.cible)) {
+      const c = state.returns.cases.find((x) => x.id === importBons.cible);
+      if (c) importBons.dossiers.unshift({ id: c.id, orderName: c.orderName, customerName: c.customerName, productTitle: c.productTitle, variantTitle: c.variantTitle });
+    }
+    renderBons();
+  } catch (error) {
+    $('bons-body').innerHTML = `<p class="empty">${esc(error.message)}</p>`;
+  }
+});
+
+function renderBons() {
+  const options = (choisi) =>
+    '<option value="">— Choisir le dossier —</option>' +
+    importBons.dossiers
+      .map(
+        (d) => `<option value="${esc(d.id)}"${d.id === choisi ? ' selected' : ''}>${esc(
+          [d.orderName, d.customerName, nomPaire(d.productTitle, d.variantTitle)].filter(Boolean).join(' · '),
+        )}</option>`,
+      )
+      .join('');
+  $('bons-body').innerHTML = `<div class="bons-liste">${importBons.lectures
+    .map((l, i) =>
+      l.erreur
+        ? `<div class="bons-ligne"><b class="bons-nom">${esc(l.nom)}</b><small class="bons-err">${esc(l.erreur)}</small></div>`
+        : `<div class="bons-ligne" data-bon="${i}">
+            <b class="bons-nom" title="${esc(l.nom)}">${esc(l.nom)}</b>
+            <small class="bons-source">${
+              l.source === 'ia'
+                ? `lu sur le bon${l.expediteur ? ` · expéditeur : ${esc(l.expediteur)}` : ''}`
+                : l.source === 'fichier'
+                  ? 'numéro deviné d’après le nom du fichier : vérifiez'
+                  : 'rien n’a pu être lu : complétez à la main'
+            }</small>
+            <div class="field"><label for="bon-num-${i}">N° de suivi</label><input id="bon-num-${i}" type="text" data-bon-numero value="${esc(l.numero ?? '')}" /></div>
+            <div class="field"><label for="bon-tr-${i}">Transporteur</label><input id="bon-tr-${i}" type="text" data-bon-transp value="${esc(l.transporteur ?? '')}" /></div>
+            <div class="field bons-dossier"><label for="bon-dos-${i}">Dossier</label><select id="bon-dos-${i}" data-bon-dossier>${options(l.dossierId)}</select></div>
+          </div>`,
+    )
+    .join('')}</div>`;
+  majBons();
+}
+
+function majBons() {
+  const prets = [...document.querySelectorAll('#bons-body [data-bon]')].filter((ligne) => ligne.querySelector('[data-bon-dossier]').value);
+  $('bons-save').disabled = prets.length === 0;
+  $('bons-save').textContent = prets.length > 1 ? `Rattacher ${prets.length} bons` : 'Rattacher';
+}
+
+$('bons-body')?.addEventListener('change', majBons);
+$('bons-cancel')?.addEventListener('click', fermerBons);
+$('bons-modal')?.addEventListener('click', (event) => {
+  if (event.target === event.currentTarget) fermerBons();
+});
+
+$('bons-save')?.addEventListener('click', async () => {
+  const lignes = [...document.querySelectorAll('#bons-body [data-bon]')].filter((ligne) => ligne.querySelector('[data-bon-dossier]').value);
+  const bouton = $('bons-save');
+  bouton.disabled = true;
+  let ok = 0;
+  const echecs = [];
+  for (const ligne of lignes) {
+    const lecture = importBons.lectures[Number(ligne.dataset.bon)];
+    const fichier = importBons.fichiers.find((f) => f.nom === lecture.nom);
+    try {
+      await api(`/api/returns/${ligne.querySelector('[data-bon-dossier]').value}/bon`, {
+        method: 'POST',
+        body: JSON.stringify({
+          nom: lecture.nom,
+          contenu: fichier.contenu,
+          numero: ligne.querySelector('[data-bon-numero]').value.trim() || null,
+          transporteur: ligne.querySelector('[data-bon-transp]').value.trim() || null,
+        }),
+      });
+      ok += 1;
+    } catch (error) {
+      echecs.push(`${lecture.nom} : ${error.message}`);
+    }
+  }
+  fermerBons();
+  if (echecs.length) toast(echecs.join(' · '), true);
+  if (ok) toast(`${pluriel(ok, 'bon')} rattaché${ok > 1 ? 's' : ''}. Envoyez-${ok > 1 ? 'les' : 'le'} au client depuis le dossier.`);
+  await loadReturns();
+});
+
+$('ret-body')?.addEventListener('click', async (event) => {
+  const importer = event.target.closest('[data-ret-bon-importer]');
+  if (importer) return choisirBons(importer.dataset.retBonImporter);
+
+  const envoyer = event.target.closest('[data-ret-bon-envoyer]');
+  if (!envoyer) return;
+  const dossier = state.returns.cases.find((c) => c.id === envoyer.dataset.retBonEnvoyer);
+  const question = `Envoyer le bon de retour à ${dossier?.customerEmail ?? 'ce client'} ?\n\nLe bon part en pièce jointe, depuis la boîte mail de la boutique.`;
+  if (!(await confirmer(question, { action: 'Envoyer', icone: 'message' }))) return;
+  envoyer.disabled = true;
+  try {
+    await api(`/api/returns/${envoyer.dataset.retBonEnvoyer}/bon/envoyer`, { method: 'POST' });
+    toast('Bon de retour envoyé au client.');
+    await loadReturns();
+  } catch (error) {
+    envoyer.disabled = false;
+    toast(error.message, true);
+  }
+});
+
 $('ret-body').addEventListener('change', async (event) => {
   const track = event.target.closest('[data-ret-track]');
   const label = event.target.closest('[data-ret-label]');
@@ -13537,6 +13718,22 @@ $('ret-body').addEventListener('change', async (event) => {
   if (!track && !label && !status) return;
 
   const id = track?.dataset.retTrack ?? label?.dataset.retLabel ?? status?.dataset.retStatus;
+  // Fermer : un commentaire facultatif, gardé au dossier.
+  let commentaireFermeture = '';
+  if (status?.value === 'CLOSED') {
+    const saisi = await saisir({
+      titre: 'Fermer le dossier',
+      texte: 'Un commentaire pour le dossier ? (facultatif)',
+      action: 'Fermer',
+      champ: { placeholder: 'Ex. remboursé hors outil, client injoignable…', libelle: 'Commentaire' },
+    });
+    if (saisi === null) {
+      const avant = state.returns.cases.find((candidate) => candidate.id === id)?.status;
+      if (avant) status.value = avant;
+      return;
+    }
+    commentaireFermeture = typeof saisi === 'string' ? saisi.trim() : '';
+  }
   try {
     await api(`/api/returns/${id}`, {
       method: 'PATCH',
@@ -13547,15 +13744,15 @@ $('ret-body').addEventListener('change', async (event) => {
             {
               trackingNumber: track.value.trim() || null,
               ...(track.value.trim() &&
-              ['OPEN', 'LABEL_SENT'].includes(
-                state.returns.cases.find((candidate) => candidate.id === id)?.status,
-              )
-                ? { status: 'SHIPPED' }
+              state.returns.cases.find((candidate) => candidate.id === id)?.status === 'OPEN'
+                ? { status: 'LABEL_SENT' }
                 : {}),
             }
           : label
             ? { labelSent: label.checked }
-            : { status: status.value },
+            : status.value === 'CLOSED'
+              ? { status: 'CLOSED', closeComment: commentaireFermeture || null }
+              : { status: status.value },
       ),
     });
     await loadReturns();
@@ -14383,7 +14580,7 @@ const VIEW_META = {
   // Les colis qui ne bougent plus : ce qu'on demande à l'atelier, et ce qu'il répond.
   update: { icon: 'suivi', label: 'Update', group: 'Pilotage', title: 'Update', sous: 'Où en sont les colis qui ne bougent plus' },
   refunds: { icon: 'card', label: 'Annulation/\u200bRemboursement', group: 'Fournisseur', title: 'Annulations et remboursements' },
-  renvoi: { icon: 'cycle', label: 'Renvoi', group: 'Fournisseur', title: 'Renvoi — stock retours', alias: 'returns', onglet: 'stock' },
+  renvoi: { icon: 'cycle', label: 'Stock', group: 'Pilotage', title: 'Stock', alias: 'returns', onglet: 'stock' },
   retour: { icon: 'uturn', label: 'Retour', group: 'Fournisseur', title: 'Retours clients', alias: 'returns', onglet: 'cases' },
   // Atelier : le travail avec le fournisseur au quotidien.
   envoi: {
@@ -14412,7 +14609,7 @@ const VIEW_META = {
 const NAV_GROUPS = ['Admin', 'Pilotage', 'Commerce', 'Fournisseur', 'Atelier', 'Finance', 'Plateforme'];
 
 /* L'ordre voulu dans la navigation, quand il diffère de celui des écrans. */
-const NAV_ORDRE = ['overview', 'suppliers', 'couts', 'stats', 'tickets', 'changes', 'update', 'ruptures'];
+const NAV_ORDRE = ['overview', 'suppliers', 'couts', 'stats', 'tickets', 'changes', 'update', 'ruptures', 'renvoi'];
 const rangNav = (view) => {
   const i = NAV_ORDRE.indexOf(view);
   return i === -1 ? NAV_ORDRE.length + VIEWS.indexOf(view) : i;
