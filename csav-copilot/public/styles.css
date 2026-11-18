@@ -17096,3 +17096,46 @@ button.stk-transp { cursor: pointer; }
 .envoi-lecture span:first-child { font-size: 11px; color: var(--ink-mute); }
 #stkenv-transp-autre { margin-top: 6px; }
 @media (max-width: 640px) { .stk-match { flex-wrap: wrap; } }
+
+/* ------------------------------------------------------------------------
+   TÉLÉPHONE — Retour, Stock, Commandes du jour
+
+   Le tableau des dossiers devenait une pile de cases sans nom, alignées à
+   droite, le modèle coupé au milieu. Chaque dossier est une fiche : la
+   commande en titre, puis chaque case sous son intitulé, pleine largeur
+   quand elle porte un champ.
+   ------------------------------------------------------------------------ */
+@media (max-width: 760px) {
+  #ret-body .grid td.ret-c-bloc { display: block; text-align: left; }
+  #ret-body .grid td.ret-c-bloc::before { display: block; margin-bottom: 6px; }
+  #ret-body .grid td.ret-c-cmd { display: flex; align-items: baseline; gap: 8px; }
+  #ret-body .grid td.ret-c-cmd br { display: none; }
+  #ret-body .grid td.ret-c-cmd small { font-weight: 400; color: var(--ink-mute); }
+  #ret-body .grid td.ret-c-gestes { justify-content: flex-start; gap: 8px; white-space: normal !important; }
+  #ret-body .ret-track { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px; }
+  #ret-body .ret-track input { flex: 1 1 0; width: auto; min-width: 140px; height: auto; }
+  #ret-body .grid select[data-ret-status] { width: 100%; }
+  #ret-body .ret-tags, #ret-body .ret-bon, #ret-body .ret-controle { display: flex; flex-wrap: wrap; gap: 6px; }
+  #ret-body .ret-close-comment { max-width: none; }
+  #ret-body .grid tr.ret-sep, #ret-body .grid tr.ret-plus, #ret-body .grid tr.ret-vide {
+    background: none; border: 0; box-shadow: none; padding: 0;
+  }
+  #ret-body .grid tr.ret-sep td, #ret-body .grid tr.ret-plus td { justify-content: flex-start; }
+  #ret-barre { flex-wrap: wrap; gap: 8px; }
+  #ret-barre #ret-bons { margin-left: 0 !important; }
+  #ret-barre .btn { flex: 1 1 140px; }
+
+  /* Stock : la paire, puis sa commande et ses gestes sur une ligne qui se replie. */
+  .stk-ligne { grid-template-columns: minmax(0, 1fr); }
+  .stk-match { flex-wrap: wrap; justify-content: flex-start; }
+  .stk-cmd { text-align: left; min-width: 0; margin-right: auto; }
+  .stk-tete { gap: 8px; }
+  .stk-compteur { flex: 1 1 30%; min-width: 0; padding: 10px 12px; }
+  .stk-export, #stk-ouvrir { flex: 1 1 140px; margin-left: 0; }
+  .stk-gestes .btn { flex: 1 1 auto; }
+
+  /* Commandes du jour : « Derniers envois » poussait la page hors de l'écran. */
+  #view-envoi .envoi-hist-row, #view-envoi .envoi-hist-row > *, #view-envoi .envoi-lot summary > * { min-width: 0; max-width: 100%; }
+  #view-envoi .eh-tete { flex-wrap: wrap; }
+  #view-envoi .eh-detail, #view-envoi .el-resume { overflow-wrap: anywhere; white-space: normal; }
+}

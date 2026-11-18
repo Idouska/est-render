@@ -12735,15 +12735,15 @@ function renderReturnCases(box) {
         return `${intertitre}<tr data-ret="${esc(item.id)}"${
           silent ? ' class="ret-silent"' : fini ? ' class="ret-clos"' : ''
         }>
-          <td><b>${esc(item.orderName ?? '—')}</b><br /><small>${esc(
+          <td class="ret-c-cmd"><b>${esc(item.orderName ?? '—')}</b><br /><small>${esc(
             RETURN_COUNTRIES[item.country] ?? item.country ?? '',
           )}</small></td>
-          <td>${esc(item.customerName ?? '—')}${
+          <td data-label="Client">${esc(item.customerName ?? '—')}${
             silent
               ? '<br /><span class="ret-tag bad">3 j sans réponse</span>'
               : ''
           }</td>
-          <td>
+          <td data-label="Article" class="ret-c-bloc">
             <b>${esc(item.productTitle)}</b>${
               item.variantTitle ? ` <small>${esc(item.variantTitle)}</small>` : ''
             }
@@ -12769,7 +12769,7 @@ function renderReturnCases(box) {
             </div>
             ${item.refuseLe && item.refusMotif ? `<small class="ret-refus">Refusé : ${esc(item.refusMotif)}</small>` : ''}
           </td>
-          <td>
+          <td data-label="Bon de retour">
             <label class="switch" style="margin:0">
               <input type="checkbox" data-ret-label="${esc(item.id)}"${
                 item.labelSent ? ' checked' : ''
@@ -12777,7 +12777,7 @@ function renderReturnCases(box) {
               <span>${item.labelSent ? 'Fourni' : 'À fournir'}</span>
             </label>
           </td>
-          <td>
+          <td data-label="Colis retour" class="ret-c-bloc">
             <div class="ret-track">
               <input type="text" class="mono" data-ret-track="${esc(item.id)}"
                 placeholder="N° de suivi" value="${esc(item.trackingNumber ?? '')}" />
@@ -12799,7 +12799,7 @@ function renderReturnCases(box) {
                 : `<button type="button" class="qlink ret-bon-importer" data-ret-bon-importer="${esc(item.id)}">Importer le bon</button>`
             }</div>
           </td>
-          <td>
+          <td data-label="Statut" class="ret-c-bloc">
             <select data-ret-status="${esc(item.id)}">
               ${Object.entries(RETURN_STATUSES)
                 .map(
@@ -12830,7 +12830,7 @@ function renderReturnCases(box) {
                   : ''
             }
           </td>
-          <td style="white-space:nowrap">
+          <td class="ret-c-gestes" style="white-space:nowrap">
             ${
               wa
                 ? `<button class="ret-wa" data-ret-wa="${esc(item.id)}"
