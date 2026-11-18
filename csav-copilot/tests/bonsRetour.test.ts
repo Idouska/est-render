@@ -49,14 +49,18 @@ test('« Renvoi » devient « Stock », dans Pilotage', () => {
   assert.match(lire('public/app.js'), /renvoi: \{ icon: 'cycle', label: 'Stock', group: 'Pilotage'/);
 });
 
-test('Stock : compteurs, filtre, une ligne par paire avec sa commande', () => {
+test('Stock : une rangée de compteurs qui filtrent, sans la barre de Retour', () => {
   const app = lire('public/app.js');
-  assert.match(app, /compteur\('tout', dispo\.length, 'En stock'\)/);
+  assert.match(app, /compteur\('stock', dispo\.length, 'En stock'\)/);
   assert.match(app, /compteur\('match', nMatch, 'Matching', 'ok'\)/);
   assert.match(app, /compteur\('nonenvoye', nAExpedier, 'À expédier'/);
+  assert.match(app, /compteur\('envoye', nEnvoye, 'Envoyé'\)/);
   assert.match(app, /<option value="imprimer">Imprimer la liste<\/option>/);
   assert.match(app, /<option value="partager">Partager la liste<\/option>/);
-  assert.match(app, /\['tout', 'Tout'\],\s*\['match', 'Match'\],\s*\['nonenvoye', 'Non envoyé'\],\s*\['envoye', 'Envoyé'\],/);
   assert.match(app, /data-stk-voir=/);
+  assert.match(app, /\$\('ret-barre'\)\.hidden = r\.tab === 'stock';/);
+  const html = lire('public/dashboard.html');
+  assert.match(html, /data-rtab="matches" aria-pressed="false" hidden/);
+  assert.match(html, /data-rtab="stock" aria-pressed="false" hidden/);
   assert.match(lire('src/routes/returns.ts'), /app\.get\('\/api\/returns\/stock\/images'/);
 });
