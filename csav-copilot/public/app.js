@@ -12922,7 +12922,7 @@ function renderReturnMatches(box) {
     ? `<p class="ret-meta">${esc(matchMeta.error)}</p>`
     : `<p class="ret-meta">Commandes en attente examinées : ${matchMeta.examinees ?? 0}. Même pays d’abord,
         puis pays voisin ; les paires les plus anciennes partent en premier.${
-          matchMeta.tronque ? ' <b>Seules les 1 000 plus anciennes ont été examinées.</b>' : ''
+          matchMeta.tronque ? ' <b>Seules les 1 000 plus récentes ont été examinées.</b>' : ''
         }</p>`;
 
   box.innerHTML =

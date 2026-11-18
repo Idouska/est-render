@@ -18,8 +18,10 @@
  *    belge partirait en France alors qu'un client belge l'attendait.
  * 3. Une paire ne va qu'à une commande, et chaque exemplaire commandé compte :
  *    deux paires commandées demandent deux paires en stock.
- * 4. Les paires les plus anciennes partent en premier, et les commandes qui
- *    attendent depuis le plus longtemps sont servies d'abord.
+ * 4. Les paires les plus anciennes partent en premier, et les commandes les
+ *    plus RÉCENTES sont servies d'abord — choix du marchand : une vieille
+ *    commande restée ouverte dans Shopify est souvent une commande réglée
+ *    autrement, et lui donner la paire la retirerait à un client qui attend.
  */
 
 /** Pays où des agences réceptionnent les retours. */
@@ -71,7 +73,7 @@ export interface CommandeEnAttente {
   nom: string;
   client: string | null;
   pays: string | null;
-  /** AAAA-MM-JJ… : les plus anciennes sont servies d'abord. */
+  /** AAAA-MM-JJ… : les plus récentes sont servies d'abord. */
   creeLe: string;
   lignes: LigneEnAttente[];
 }
@@ -139,11 +141,11 @@ function couvrir(commande: CommandeEnAttente, paires: readonly PaireEnStock[], p
 }
 
 export function rapprocher(stock: readonly PaireEnStock[], commandes: readonly CommandeEnAttente[]): Proposition[] {
-  // Les plus anciennes d'abord, des deux côtés.
+  // Les paires les plus anciennes d'abord ; les commandes les plus récentes d'abord.
   const paires = [...stock].sort((a, b) => a.depuis.getTime() - b.depuis.getTime());
   const enAttente = [...commandes]
     .filter((commande) => commande.pays && commande.lignes.length > 0)
-    .sort((a, b) => a.creeLe.localeCompare(b.creeLe));
+    .sort((a, b) => b.creeLe.localeCompare(a.creeLe));
 
   const prises = new Set<string>();
   const servies = new Set<string>();
