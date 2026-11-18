@@ -48,3 +48,15 @@ test('« Reçu et non valide » bloque échange, lien de paiement et rembourseme
 test('« Renvoi » devient « Stock », dans Pilotage', () => {
   assert.match(lire('public/app.js'), /renvoi: \{ icon: 'cycle', label: 'Stock', group: 'Pilotage'/);
 });
+
+test('Stock : compteurs, filtre, une ligne par paire avec sa commande', () => {
+  const app = lire('public/app.js');
+  assert.match(app, /compteur\('tout', dispo\.length, 'En stock'\)/);
+  assert.match(app, /compteur\('match', nMatch, 'Matching', 'ok'\)/);
+  assert.match(app, /compteur\('nonenvoye', nAExpedier, 'À expédier'/);
+  assert.match(app, /<option value="imprimer">Imprimer la liste<\/option>/);
+  assert.match(app, /<option value="partager">Partager la liste<\/option>/);
+  assert.match(app, /\['tout', 'Tout'\],\s*\['match', 'Match'\],\s*\['nonenvoye', 'Non envoyé'\],\s*\['envoye', 'Envoyé'\],/);
+  assert.match(app, /data-stk-voir=/);
+  assert.match(lire('src/routes/returns.ts'), /app\.get\('\/api\/returns\/stock\/images'/);
+});
