@@ -12957,106 +12957,263 @@ function renderReturnMatches(box) {
  * commande sont à part, et se libèrent — la commande revient alors à
  * l'atelier.
  */
-function renderReturnStock(box) {
+function lignesStock() {
   const cases = state.returns.cases;
-  const stock = cases.filter((item) => item.status === 'RESTOCKED' && !item.reusedAt);
-  const confiees = cases.filter((item) => item.reusedShopifyOrderId);
-  const joursDepuis = (date) => Math.max(0, Math.floor((Date.now() - new Date(date).getTime()) / 86_400_000));
-
-  const parPays = new Map();
-  for (const item of stock) {
-    // Sans agence, une paire ajoutée à la main est chez le marchand.
-    const pays = item.agency?.country ?? (item.origine === 'MANUEL' ? 'MAISON' : (item.country ?? '—'));
-    const agence = item.agency?.name ?? (item.origine === 'MANUEL' ? 'Chez vous' : 'Sans agence');
-    if (!parPays.has(pays)) parPays.set(pays, new Map());
-    const parAgence = parPays.get(pays);
-    parAgence.set(agence, [...(parAgence.get(agence) ?? []), item]);
-  }
-
-  const sections = [...parPays.entries()]
-    .map(
-      ([pays, parAgence]) => `<section class="ret-pays">
-        <h3>${esc(pays === 'MAISON' ? 'Chez vous' : nomPays(pays))} <span class="count">${[...parAgence.values()].flat().length}</span></h3>
-        ${[...parAgence.entries()]
-          .map(
-            ([agence, items]) => `${pays === 'MAISON' ? '' : `<h4>${esc(agence)}</h4>`}
-              <div class="ret-grid">${items
-                .map(
-                  (item) => `<div class="ret-card">
-                    <b>${esc(item.productTitle)}</b>
-                    <small>${esc([item.variantTitle, item.sku].filter(Boolean).join(' · '))}</small>
-                    <small>${
-                      item.origine === 'MANUEL'
-                        ? `ajout manuel${item.note ? ` · ${esc(item.note)}` : ''}`
-                        : `retour ${esc(item.orderName ?? '—')} · ${esc(RETURN_REASONS[item.reason] ?? '')}`
-                    } · en stock depuis ${joursDepuis(item.restockedAt ?? item.updatedAt)} j</small>
-                    <button class="btn btn-small btn-danger" data-ret-defect="${esc(item.id)}">${
-                      item.origine === 'MANUEL' ? 'Retirer du stock' : 'Défectueux — sortir du stock'
-                    }</button>
-                  </div>`,
-                )
-                .join('')}</div>`,
-          )
-          .join('')}
-      </section>`,
-    )
-    .join('');
-
-  // Les paires confiées, regroupées par commande : une commande de deux
-  // paires se libère d'un seul geste.
-  const parCommande = new Map();
-  for (const item of confiees) {
-    parCommande.set(item.reusedShopifyOrderId, [...(parCommande.get(item.reusedShopifyOrderId) ?? []), item]);
-  }
-  const confieesMarkup = parCommande.size
-    ? `<section class="ret-pays">
-        <h3>Confiées à une commande <span class="count">${parCommande.size}</span></h3>
-        <div class="table-wrap"><table class="grid"><thead><tr>
-          <th>Commande</th><th>Paires</th><th>Part de</th><th>Envoi de l’agence</th><th></th>
-        </tr></thead><tbody>${[...parCommande.entries()]
-          .map(([idCommande, items]) => {
-            const premiere = items[0];
-            return `<tr>
-              <td><b>${esc(premiere.reusedOrderName ?? '—')}</b></td>
-              <td>${items
-                .map((item) => `<div>${esc(item.productTitle)}${item.variantTitle ? ` <small>${esc(item.variantTitle)}</small>` : ''}</div>`)
-                .join('')}</td>
-              <td>${esc(nomPays(premiere.agency?.country ?? premiere.country))}${
-                premiere.agency?.name ? ` · ${esc(premiere.agency.name)}` : ''
-              }</td>
-              <td>${
-                premiere.reshippedAt
-                  ? `<span class="ret-tag ok">Expédiée</span> <span class="mono">${esc(premiere.reshipTrackingNumber ?? '')}</span>`
-                  : `<span class="ret-tag warn">À expédier</span> <small>confiée il y a ${
-                      premiere.reusedAt ? joursDepuis(premiere.reusedAt) : 0
-                    } j</small>`
-              }</td>
-              <td>${
-                // Une fois l'agence passée, la paire est partie : plus rien à libérer.
-                premiere.reshippedAt
-                  ? ''
-                  : `<button class="btn btn-small" data-ret-liberer="${esc(idCommande)}"
-                      data-ret-order="${esc(premiere.reusedOrderName ?? '')}">Libérer</button>`
-              }</td>
-            </tr>`;
-          })
-          .join('')}</tbody></table></div>
-      </section>`
-    : '';
-
-  box.innerHTML =
-    `<div class="ret-stock-barre">
-      <button class="btn btn-small btn-primary" type="button" id="stk-ouvrir">Ajouter au stock</button>
-      <small>Fin de série, paire d'exposition… : des paires qui ne viennent pas d'un retour.</small>
-    </div>` +
-    (stock.length
-      ? sections
-      : `<p class="empty" style="padding:20px">
-          Rien en stock. Les retours contrôlés et passés « En stock » arrivent ici, rangés
-          par pays et par agence, prêts au réemploi — avec les paires ajoutées à la main.
-        </p>`) + confieesMarkup;
-  $('stk-ouvrir')?.addEventListener('click', () => void ouvrirAjoutStock());
+  // Pour chaque paire disponible, la commande que le match lui propose.
+  const matchDe = new Map();
+  (state.returns.matches ?? []).forEach((match, rang) => {
+    for (const paire of match.paires) matchDe.set(paire.returnId, { match, rang });
+  });
+  const dispo = cases
+    .filter((item) => item.status === 'RESTOCKED' && !item.reusedAt)
+    .map((item) => {
+      const m = matchDe.get(item.id);
+      return {
+        item,
+        etat: m ? 'match' : 'stock',
+        commande: m?.match.commande ?? null,
+        pays: m?.match.pays ?? null,
+        rang: m?.rang ?? null,
+        match: m?.match ?? null,
+      };
+    });
+  const confiees = cases
+    .filter((item) => item.reusedShopifyOrderId)
+    .map((item) => ({
+      item,
+      etat: item.reshippedAt ? 'envoye' : 'aexpedier',
+      commande: item.reusedOrderName ?? null,
+      pays: item.agency?.country ?? item.country ?? null,
+      rang: null,
+      match: null,
+    }));
+  return { dispo, confiees, toutes: [...dispo, ...confiees] };
 }
+
+const FILTRES_STOCK = [
+  ['tout', 'Tout'],
+  ['match', 'Match'],
+  ['nonenvoye', 'Non envoyé'],
+  ['envoye', 'Envoyé'],
+];
+
+function filtrerStock(lignes, filtre) {
+  if (filtre === 'match') return lignes.filter((l) => l.etat === 'match');
+  if (filtre === 'nonenvoye') return lignes.filter((l) => l.etat === 'aexpedier');
+  if (filtre === 'envoye') return lignes.filter((l) => l.etat === 'envoye');
+  return lignes;
+}
+
+const ETATS_STOCK = {
+  stock: ['En stock', 'dim'],
+  match: ['Match', 'ok'],
+  aexpedier: ['À expédier', 'warn'],
+  envoye: ['Envoyé', 'ok'],
+};
+
+/*
+ * Le stock : trois compteurs, un filtre, puis une ligne par paire — la paire
+ * à gauche (photo, modèle, taille), sa commande à droite (numéro, pays, Voir).
+ * « Voir » déplie le détail sous la ligne, avec le geste qui va avec : servir,
+ * libérer, sortir du stock.
+ */
+function renderReturnStock(box) {
+  const r = state.returns;
+  r.stockFiltre ??= 'tout';
+  const { dispo, toutes } = lignesStock();
+  const nMatch = dispo.filter((l) => l.etat === 'match').length;
+  const nAExpedier = toutes.filter((l) => l.etat === 'aexpedier').length;
+  const lignes = filtrerStock(toutes, r.stockFiltre);
+  const images = r.stockImages ?? {};
+  const joursDepuis = (date) => Math.max(0, Math.floor((Date.now() - new Date(date).getTime()) / 86_400_000));
+  const initiales = (titre) =>
+    String(titre ?? '').split(/\s+/).filter((mot) => /^[\p{L}\d]/u.test(mot)).slice(0, 2).map((mot) => mot[0].toUpperCase()).join('') || '·';
+
+  const compteur = (filtre, n, libelle, ton) => `<button type="button" class="stk-compteur${
+    r.stockFiltre === filtre ? ' actif' : ''
+  }${ton ? ` stk-${ton}` : ''}" data-stk-filtre="${filtre}"><b>${n}</b><span>${esc(libelle)}</span></button>`;
+
+  const detail = (l) => {
+    const { item } = l;
+    const lignesDetail = [];
+    lignesDetail.push(`<div><span>Où</span><b>${esc(
+      item.agency?.name ? `${item.agency.name} (${nomPays(item.agency.country)})` : item.origine === 'MANUEL' ? 'Chez vous' : nomPays(item.country),
+    )}</b></div>`);
+    lignesDetail.push(`<div><span>Origine</span><b>${
+      item.origine === 'MANUEL' ? `ajout manuel${item.note ? ` · ${esc(item.note)}` : ''}` : `retour ${esc(item.orderName ?? '—')}`
+    }</b></div>`);
+    if (item.sku) lignesDetail.push(`<div><span>Référence</span><b class="mono">${esc(item.sku)}</b></div>`);
+    if (item.restockedAt) lignesDetail.push(`<div><span>En stock depuis</span><b>${joursDepuis(item.restockedAt)} j</b></div>`);
+    if (l.match) {
+      lignesDetail.push(`<div><span>Client</span><b>${esc(l.match.client ?? '—')}</b></div>`);
+      if (l.match.adresse) lignesDetail.push(`<div><span>Livrer à</span><b class="stk-adresse">${esc(adresseTexte(l.match.adresse))}</b></div>`);
+      if (l.match.paires.length > 1) lignesDetail.push(`<div><span>Paires</span><b>${l.match.paires.length} paires pour cette commande</b></div>`);
+    }
+    if (l.etat === 'envoye' && item.reshipTrackingNumber) {
+      lignesDetail.push(`<div><span>Suivi</span><b><a class="qlink mono" href="${esc(trackUrl(item.reshipTrackingNumber))}" target="_blank" rel="noopener">${esc(item.reshipTrackingNumber)}</a>${
+        item.reshipCarrier ? ` · ${esc(item.reshipCarrier)}` : ''
+      }</b></div>`);
+    }
+    const gestes =
+      l.etat === 'match'
+        ? `<button class="btn btn-small btn-primary" data-ret-serve="${l.rang}">Servir depuis le stock</button>`
+        : l.etat === 'aexpedier'
+          ? `<button class="btn btn-small" data-ret-liberer="${esc(item.reusedShopifyOrderId)}" data-ret-order="${esc(item.reusedOrderName ?? '')}">Libérer</button>`
+          : '';
+    const sortir =
+      l.etat === 'stock' || l.etat === 'match'
+        ? `<button class="btn btn-small btn-danger" data-ret-defect="${esc(item.id)}">${
+            item.origine === 'MANUEL' ? 'Retirer du stock' : 'Défectueux — sortir du stock'
+          }</button>`
+        : '';
+    return `<div class="stk-detail"><div class="stk-infos">${lignesDetail.join('')}</div><div class="stk-gestes">${gestes}${sortir}</div></div>`;
+  };
+
+  const ligne = (l) => {
+    const { item } = l;
+    const [mot, ton] = ETATS_STOCK[l.etat];
+    const ouvert = r.stockOuvert === item.id;
+    return `<div class="stk-ligne${ouvert ? ' ouvert' : ''}">
+      <div class="stk-paire">
+        ${
+          images[item.id]
+            ? `<img class="stk-photo" src="${esc(images[item.id])}" alt="" loading="lazy" data-initiales="${esc(initiales(item.productTitle))}" />`
+            : `<i class="stk-photo sta-initiales" aria-hidden="true">${esc(initiales(item.productTitle))}</i>`
+        }
+        <span class="stk-nom"><b>${esc(item.productTitle)}</b><span>${esc(item.variantTitle ?? 'Taille non précisée')}</span></span>
+      </div>
+      <div class="stk-match">
+        ${
+          l.commande
+            ? `<span class="stk-cmd"><b>${esc(l.commande)}</b><span>${esc(nomPays(l.pays) || '—')}</span></span>`
+            : '<span class="stk-cmd stk-vide">Aucune commande</span>'
+        }
+        <span class="ret-tag ${ton}">${esc(mot)}</span>
+        <button type="button" class="btn btn-small" data-stk-voir="${esc(item.id)}" aria-expanded="${ouvert}">${ouvert ? 'Fermer' : 'Voir'}</button>
+      </div>
+      ${ouvert ? detail(l) : ''}
+    </div>`;
+  };
+
+  box.innerHTML = `<div class="stk-tete">
+      ${compteur('tout', dispo.length, 'En stock')}
+      ${compteur('match', nMatch, 'Matching', 'ok')}
+      ${compteur('nonenvoye', nAExpedier, 'À expédier', nAExpedier ? 'warn' : '')}
+      <select class="stk-export" id="stk-export" aria-label="Imprimer ou partager">
+        <option value="">Imprimer / partager</option>
+        <option value="imprimer">Imprimer la liste</option>
+        <option value="partager">Partager la liste</option>
+      </select>
+      <button class="btn btn-primary" type="button" id="stk-ouvrir">Ajouter au stock</button>
+    </div>
+    <div class="stk-filtres" role="group" aria-label="Filtrer">
+      ${FILTRES_STOCK.map(
+        ([cle, libelle]) => `<button type="button" class="chip" data-stk-filtre="${cle}" aria-pressed="${r.stockFiltre === cle}">${esc(libelle)} <span class="count">${filtrerStock(toutes, cle).length}</span></button>`,
+      ).join('')}
+      ${r.matchMeta?.error ? `<small class="stk-note">Match indisponible : ${esc(r.matchMeta.error)}</small>` : ''}
+    </div>
+    ${
+      lignes.length
+        ? `<div class="stk-liste">${lignes.map(ligne).join('')}</div>`
+        : `<p class="empty" style="padding:20px">${
+            toutes.length
+              ? 'Aucune paire dans ce filtre.'
+              : 'Rien en stock. Les retours « Reçu et validé » arrivent ici, avec les paires ajoutées à la main.'
+          }</p>`
+    }`;
+  $('stk-ouvrir')?.addEventListener('click', () => void ouvrirAjoutStock());
+  if (!r.stockImagesChargees) {
+    r.stockImagesChargees = true;
+    void api('/api/returns/stock/images')
+      .then((data) => {
+        r.stockImages = data.images ?? {};
+        if (r.tab === 'stock') renderReturns();
+      })
+      .catch(() => {});
+  }
+}
+
+/** La liste filtrée, en texte : pour l'impression et le partage. */
+function texteStock() {
+  const lignes = filtrerStock(lignesStock().toutes, state.returns.stockFiltre ?? 'tout');
+  return lignes.map((l) => {
+    const paire = `${l.item.productTitle}${l.item.variantTitle ? ` — ${l.item.variantTitle}` : ''}`;
+    const cmd = l.commande ? `${l.commande} (${nomPays(l.pays) || '—'})` : '';
+    return { paire, cmd, etat: ETATS_STOCK[l.etat][0] };
+  });
+}
+
+function imprimerStock() {
+  const lignes = texteStock();
+  const titre = `Stock — ${FILTRES_STOCK.find(([c]) => c === (state.returns.stockFiltre ?? 'tout'))?.[1] ?? 'Tout'}`;
+  const fenetre = window.open('', '_blank');
+  if (!fenetre) return toast('Fenêtre bloquée : autorisez les fenêtres pour imprimer.', true);
+  fenetre.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${esc(titre)}</title>
+    <style>body{font:13px -apple-system,system-ui,sans-serif;margin:24px;color:#111}h1{font-size:18px}
+    table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #ddd;padding:6px 8px;text-align:left}th{font-size:11px;color:#666;text-transform:uppercase}</style>
+    </head><body><h1>${esc(titre)}</h1><p>${lignes.length} paire${lignes.length > 1 ? 's' : ''} · ${esc(new Date().toLocaleDateString('fr-FR'))}</p>
+    <table><thead><tr><th>Paire</th><th>Commande</th><th>État</th></tr></thead><tbody>${lignes
+      .map((l) => `<tr><td>${esc(l.paire)}</td><td>${esc(l.cmd)}</td><td>${esc(l.etat)}</td></tr>`)
+      .join('')}</tbody></table></body></html>`);
+  fenetre.document.close();
+  fenetre.focus();
+  fenetre.print();
+}
+
+async function partagerStock() {
+  const texte = texteStock()
+    .map((l) => `• ${l.paire}${l.cmd ? ` → ${l.cmd}` : ''} [${l.etat}]`)
+    .join('\n');
+  if (!texte) return toast('Rien à partager dans ce filtre.', true);
+  const contenu = `Stock (${new Date().toLocaleDateString('fr-FR')})\n${texte}`;
+  try {
+    if (navigator.share) await navigator.share({ title: 'Stock', text: contenu });
+    else {
+      await navigator.clipboard.writeText(contenu);
+      toast('Liste copiée : collez-la où vous voulez.');
+    }
+  } catch (error) {
+    if (error?.name !== 'AbortError') toast('Partage impossible depuis ce navigateur.', true);
+  }
+}
+
+$('ret-body')?.addEventListener('click', (event) => {
+  const filtre = event.target.closest('[data-stk-filtre]');
+  if (filtre) {
+    state.returns.stockFiltre = filtre.dataset.stkFiltre;
+    state.returns.stockOuvert = null;
+    return renderReturns();
+  }
+  const voir = event.target.closest('[data-stk-voir]');
+  if (voir) {
+    state.returns.stockOuvert = state.returns.stockOuvert === voir.dataset.stkVoir ? null : voir.dataset.stkVoir;
+    renderReturns();
+  }
+});
+
+// Une photo qui ne charge pas laisse place aux initiales du modèle.
+$('ret-body')?.addEventListener(
+  'error',
+  (event) => {
+    const img = event.target;
+    if (!(img instanceof HTMLImageElement) || !img.classList.contains('stk-photo')) return;
+    const repli = document.createElement('i');
+    repli.className = 'stk-photo sta-initiales';
+    repli.setAttribute('aria-hidden', 'true');
+    repli.textContent = img.dataset.initiales ?? '·';
+    img.replaceWith(repli);
+  },
+  true,
+);
+
+$('ret-body')?.addEventListener('change', (event) => {
+  const choix = event.target.closest('#stk-export');
+  if (!choix) return;
+  const valeur = choix.value;
+  choix.value = '';
+  if (valeur === 'imprimer') imprimerStock();
+  if (valeur === 'partager') void partagerStock();
+});
 
 /* ==========================================================================
    AJOUTER AU STOCK, À LA MAIN

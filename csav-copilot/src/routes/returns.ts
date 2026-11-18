@@ -145,6 +145,8 @@ function decoderBon(dataUrl: string): { mime: TypeBon; data: Buffer } | null {
   return { mime: mime as TypeBon, data };
 }
 
+const imagesStock = new Map<string, { cle: string; expire: number; images: Record<string, string> }>();
+
 /** Une paire prise entre la proposition et le clic : la réservation entière est annulée. */
 class PairePlusDisponible extends Error {}
 
@@ -1559,6 +1561,53 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
    * Rien ne s'engage tout seul : le match propose, le marchand confie la
    * commande d'un clic.
    */
+  /**
+   * La photo de chaque paire du stock (et de celles confiées à une commande),
+   * lue dans le catalogue Shopify : par référence, sinon par nom du modèle.
+   * Gardée trente minutes — l'écran Stock la redemande à chaque ouverture.
+   */
+  app.get('/api/returns/stock/images', async (request, reply) => {
+    const { merchantId } = request.session;
+    const paires = await prisma.returnCase.findMany({
+      where: { merchantId, OR: [{ status: 'RESTOCKED', reusedAt: null }, { reusedShopifyOrderId: { not: null } }] },
+      orderBy: { updatedAt: 'desc' },
+      take: 400,
+      select: { id: true, sku: true, productTitle: true },
+    });
+    const cle = `${merchantId}|${paires.map((p) => `${p.sku ?? ''}~${p.productTitle}`).sort().join('|')}`;
+    const connu = imagesStock.get(merchantId);
+    if (connu && connu.cle === cle && connu.expire > Date.now()) return reply.send({ images: connu.images });
+
+    const images: Record<string, string> = {};
+    try {
+      const client = await getShopifyClient(merchantId);
+      const parSku = new Map<string, string>();
+      const skus = [...new Set(paires.flatMap((p) => (p.sku ? [p.sku] : [])))];
+      for (let i = 0; i < skus.length && i < 200; i += 20) {
+        const lot = skus.slice(i, i + 20);
+        const variantes = await listVariants(client, { query: lot.map((sku) => `sku:${quoteSearchValue(sku)}`).join(' OR '), limit: 50 });
+        for (const v of variantes) if (v.sku && v.image) parSku.set(v.sku, v.image);
+      }
+      const parTitre = new Map<string, string | null>();
+      for (const paire of paires) {
+        let image = paire.sku ? parSku.get(paire.sku) : undefined;
+        if (!image) {
+          if (!parTitre.has(paire.productTitle) && parTitre.size < 30) {
+            const v = await listVariants(client, { query: `product_title:${quoteSearchValue(paire.productTitle)}`, limit: 1 }).catch(() => []);
+            parTitre.set(paire.productTitle, v[0]?.image ?? null);
+          }
+          image = parTitre.get(paire.productTitle) ?? undefined;
+        }
+        if (image) images[paire.id] = image;
+      }
+    } catch {
+      // Sans Shopify, l'écran montre les initiales du modèle.
+    }
+    imagesStock.set(merchantId, { cle, expire: Date.now() + 30 * 60_000, images });
+    if (imagesStock.size > 200) imagesStock.delete(imagesStock.keys().next().value!);
+    return reply.send({ images });
+  });
+
   app.get('/api/returns/matches', async (request, reply) => {
     const { merchantId } = request.session;
 
