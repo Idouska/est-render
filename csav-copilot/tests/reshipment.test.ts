@@ -233,3 +233,18 @@ test('l’écran confie la commande entière, et la fiche commande le dit', () =
   assert.match(app, /orderDetailMarkup\(order, parcels, reemploi\)/);
   assert.equal(/Stock France/.test(app), false, 'le stock n’est pas qu’en France');
 });
+
+test('une paire gardée chez le marchand sert n’importe quel pays, après les agences', () => {
+  // États-Unis : aucune agence, mais la paire « Chez vous » part quand même.
+  const [usa] = rapprocher([paire('MAISON', 'HQ1')], [commande('1', 'US', [['HQ1', 1]])]);
+  assert.equal(usa?.commande, '#1');
+  assert.equal(usa?.paysStock, 'MAISON');
+  assert.equal(usa?.voisin, false);
+  // Une agence du pays passe devant.
+  const maison = paire('MAISON', 'HQ1', { id: 'maison', depuis: new Date('2026-01-01') });
+  const locale = paire('FR', 'HQ1', { id: 'locale' });
+  const [fr] = rapprocher([maison, locale], [commande('2', 'FR', [['HQ1', 1]])]);
+  assert.equal(fr?.paires[0]?.returnId, 'locale');
+  // Une paire d'agence, elle, ne traverse pas l'Atlantique.
+  assert.deepEqual(rapprocher([paire('FR', 'HQ1')], [commande('3', 'US', [['HQ1', 1]])]), []);
+});
