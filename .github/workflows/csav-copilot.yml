@@ -14,7 +14,10 @@ permissions:
 
 concurrency:
   group: csav-copilot-${{ github.ref }}
-  cancel-in-progress: true
+  # Sur une pull request, un nouveau commit remplace la vérification en cours.
+  # Sur main, jamais : Render attend le feu vert de CE commit pour déployer, et
+  # une vérification annulée laisse la mise en ligne bloquée sans rien dire.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   verifier:
