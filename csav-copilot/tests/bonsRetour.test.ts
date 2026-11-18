@@ -49,12 +49,14 @@ test('« Renvoi » devient « Stock », dans Pilotage', () => {
   assert.match(lire('public/app.js'), /renvoi: \{ icon: 'cycle', label: 'Stock', group: 'Pilotage'/);
 });
 
-test('Stock : une rangée de compteurs qui filtrent, sans la barre de Retour', () => {
+test('Stock : compteurs, filtre Tout/Match/Non envoyé/Envoyé, sans la barre de Retour', () => {
   const app = lire('public/app.js');
-  assert.match(app, /compteur\('stock', dispo\.length, 'En stock'\)/);
+  assert.match(app, /compteur\('tout', dispo\.length, 'En stock'\)/);
   assert.match(app, /compteur\('match', nMatch, 'Matching', 'ok'\)/);
   assert.match(app, /compteur\('nonenvoye', nAExpedier, 'À expédier'/);
-  assert.match(app, /compteur\('envoye', nEnvoye, 'Envoyé'\)/);
+  assert.match(app, /\['tout', 'Tout'\],\s*\['match', 'Match'\],\s*\['nonenvoye', 'Non envoyé'\],\s*\['envoye', 'Envoyé'\],/);
+  // Les photos se redemandent quand les paires changent.
+  assert.match(app, /r\.stockImagesCle !== clePhotos/);
   assert.match(app, /<option value="imprimer">Imprimer la liste<\/option>/);
   assert.match(app, /<option value="partager">Partager la liste<\/option>/);
   assert.match(app, /data-stk-voir=/);

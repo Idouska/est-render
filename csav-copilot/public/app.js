@@ -12996,12 +12996,12 @@ function lignesStock() {
   return { dispo, confiees, toutes: [...dispo, ...confiees] };
 }
 
-/* Une seule rangée : les compteurs sont le filtre. « En stock » : les paires
-   disponibles, celles qui ont un match comprises. */
+/* Le filtre demandé par le marchand : Tout, Match, Non envoyé, Envoyé. Les
+   compteurs du dessus y mènent aussi, mais c'est lui qui dit où l'on est. */
 const FILTRES_STOCK = [
-  ['stock', 'En stock'],
-  ['match', 'Matching'],
-  ['nonenvoye', 'À expédier'],
+  ['tout', 'Tout'],
+  ['match', 'Match'],
+  ['nonenvoye', 'Non envoyé'],
   ['envoye', 'Envoyé'],
 ];
 
@@ -13009,7 +13009,7 @@ function filtrerStock(lignes, filtre) {
   if (filtre === 'match') return lignes.filter((l) => l.etat === 'match');
   if (filtre === 'nonenvoye') return lignes.filter((l) => l.etat === 'aexpedier');
   if (filtre === 'envoye') return lignes.filter((l) => l.etat === 'envoye');
-  return lignes.filter((l) => l.etat === 'stock' || l.etat === 'match');
+  return lignes;
 }
 
 const ETATS_STOCK = {
@@ -13027,7 +13027,7 @@ const ETATS_STOCK = {
  */
 function renderReturnStock(box) {
   const r = state.returns;
-  if (!FILTRES_STOCK.some(([cle]) => cle === r.stockFiltre)) r.stockFiltre = 'stock';
+  if (!FILTRES_STOCK.some(([cle]) => cle === r.stockFiltre)) r.stockFiltre = 'tout';
   const { dispo, toutes } = lignesStock();
   const nMatch = dispo.filter((l) => l.etat === 'match').length;
   const nAExpedier = toutes.filter((l) => l.etat === 'aexpedier').length;
@@ -13037,9 +13037,7 @@ function renderReturnStock(box) {
   const initiales = (titre) =>
     String(titre ?? '').split(/\s+/).filter((mot) => /^[\p{L}\d]/u.test(mot)).slice(0, 2).map((mot) => mot[0].toUpperCase()).join('') || '·';
 
-  const compteur = (filtre, n, libelle, ton) => `<button type="button" class="stk-compteur${
-    r.stockFiltre === filtre ? ' actif' : ''
-  }${ton ? ` stk-${ton}` : ''}" data-stk-filtre="${filtre}"><b>${n}</b><span>${esc(libelle)}</span></button>`;
+  const compteur = (filtre, n, libelle, ton) => `<button type="button" class="stk-compteur${ton ? ` stk-${ton}` : ''}" data-stk-filtre="${filtre}"><b>${n}</b><span>${esc(libelle)}</span></button>`;
 
   const detail = (l) => {
     const { item } = l;
@@ -13103,18 +13101,21 @@ function renderReturnStock(box) {
     </div>`;
   };
 
-  const nEnvoye = toutes.filter((l) => l.etat === 'envoye').length;
   box.innerHTML = `${noticeConfiee(r.derniere)}<div class="stk-tete">
-      ${compteur('stock', dispo.length, 'En stock')}
+      ${compteur('tout', dispo.length, 'En stock')}
       ${compteur('match', nMatch, 'Matching', 'ok')}
       ${compteur('nonenvoye', nAExpedier, 'À expédier', nAExpedier ? 'warn' : '')}
-      ${compteur('envoye', nEnvoye, 'Envoyé')}
       <select class="stk-export" id="stk-export" aria-label="Imprimer ou partager">
         <option value="">Imprimer / partager</option>
         <option value="imprimer">Imprimer la liste</option>
         <option value="partager">Partager la liste</option>
       </select>
       <button class="btn btn-primary" type="button" id="stk-ouvrir">Ajouter au stock</button>
+    </div>
+    <div class="stk-filtres" role="group" aria-label="Filtrer">
+      ${FILTRES_STOCK.map(
+        ([cle, libelle]) => `<button type="button" class="chip" data-stk-filtre="${cle}" aria-pressed="${r.stockFiltre === cle}">${esc(libelle)} <span class="count">${filtrerStock(toutes, cle).length}</span></button>`,
+      ).join('')}
     </div>
     ${r.matchMeta?.error ? `<p class="stk-note">Matching indisponible : ${esc(r.matchMeta.error)}</p>` : ''}
     ${
@@ -13132,11 +13133,14 @@ function renderReturnStock(box) {
   if (!toutes.length) $('stk-ouvrir')?.remove();
   $('stk-ouvrir')?.addEventListener('click', () => void ouvrirAjoutStock());
   box.querySelector('[data-stk-ajouter]')?.addEventListener('click', () => void ouvrirAjoutStock());
-  if (!r.stockImagesChargees) {
-    r.stockImagesChargees = true;
+  // Les photos se redemandent dès que les paires changent : une paire ajoutée
+  // après l'ouverture de l'écran restait sans photo jusqu'au rechargement.
+  const clePhotos = toutes.map((l) => l.item.id).sort().join(',');
+  if (toutes.length && r.stockImagesCle !== clePhotos) {
+    r.stockImagesCle = clePhotos;
     void api('/api/returns/stock/images')
       .then((data) => {
-        r.stockImages = data.images ?? {};
+        r.stockImages = { ...(r.stockImages ?? {}), ...(data.images ?? {}) };
         if (r.tab === 'stock') renderReturns();
       })
       .catch(() => {});
@@ -13145,7 +13149,7 @@ function renderReturnStock(box) {
 
 /** La liste filtrée, en texte : pour l'impression et le partage. */
 function texteStock() {
-  const lignes = filtrerStock(lignesStock().toutes, state.returns.stockFiltre ?? 'stock');
+  const lignes = filtrerStock(lignesStock().toutes, state.returns.stockFiltre ?? 'tout');
   return lignes.map((l) => {
     const paire = `${l.item.productTitle}${l.item.variantTitle ? ` — ${l.item.variantTitle}` : ''}`;
     const cmd = l.commande ? `${l.commande} (${nomPays(l.pays) || '—'})` : '';
@@ -13155,7 +13159,7 @@ function texteStock() {
 
 function imprimerStock() {
   const lignes = texteStock();
-  const titre = `Stock — ${FILTRES_STOCK.find(([c]) => c === (state.returns.stockFiltre ?? 'stock'))?.[1] ?? 'En stock'}`;
+  const titre = `Stock — ${FILTRES_STOCK.find(([c]) => c === (state.returns.stockFiltre ?? 'tout'))?.[1] ?? 'Tout'}`;
   const fenetre = window.open('', '_blank');
   if (!fenetre) return toast('Fenêtre bloquée : autorisez les fenêtres pour imprimer.', true);
   fenetre.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${esc(titre)}</title>

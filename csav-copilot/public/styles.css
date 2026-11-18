@@ -17066,3 +17066,5 @@ i.stk-photo { display: grid; place-items: center; font-style: normal; font-size:
 .stk-vide-ecran b { font-size: 15px; }
 .stk-vide-ecran p { margin: 0 0 6px; max-width: 420px; color: var(--ink-mute); }
 #ret-barre[hidden], #ret-tabs .chip[hidden] { display: none; }
+
+.stk-filtres { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 12px; }

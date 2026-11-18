@@ -1585,7 +1585,8 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
       const skus = [...new Set(paires.flatMap((p) => (p.sku ? [p.sku] : [])))];
       for (let i = 0; i < skus.length && i < 200; i += 20) {
         const lot = skus.slice(i, i + 20);
-        const variantes = await listVariants(client, { query: lot.map((sku) => `sku:${quoteSearchValue(sku)}`).join(' OR '), limit: 50 });
+        // Un lot qui échoue ne prive pas les autres paires de leur photo : le nom du modèle prend le relais.
+        const variantes = await listVariants(client, { query: lot.map((sku) => `sku:${quoteSearchValue(sku)}`).join(' OR '), limit: 50 }).catch(() => []);
         for (const v of variantes) if (v.sku && v.image) parSku.set(v.sku, v.image);
       }
       const parTitre = new Map<string, string | null>();
@@ -1593,8 +1594,8 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
         let image = paire.sku ? parSku.get(paire.sku) : undefined;
         if (!image) {
           if (!parTitre.has(paire.productTitle) && parTitre.size < 30) {
-            const v = await listVariants(client, { query: `product_title:${quoteSearchValue(paire.productTitle)}`, limit: 1 }).catch(() => []);
-            parTitre.set(paire.productTitle, v[0]?.image ?? null);
+            const v = await listVariants(client, { query: `product_title:${quoteSearchValue(paire.productTitle)}`, limit: 10 }).catch(() => []);
+            parTitre.set(paire.productTitle, (v.find((x) => x.productTitle === paire.productTitle && x.image) ?? v.find((x) => x.image))?.image ?? null);
           }
           image = parTitre.get(paire.productTitle) ?? undefined;
         }
@@ -1603,7 +1604,10 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
     } catch {
       // Sans Shopify, l'écran montre les initiales du modèle.
     }
-    imagesStock.set(merchantId, { cle, expire: Date.now() + 30 * 60_000, images });
+    // Une réponse incomplète (Shopify lent, catalogue pas encore lu) ne se
+    // garde que deux minutes : la photo doit pouvoir arriver à la visite suivante.
+    const complet = paires.every((p) => images[p.id]);
+    imagesStock.set(merchantId, { cle, expire: Date.now() + (complet ? 30 : 2) * 60_000, images });
     if (imagesStock.size > 200) imagesStock.delete(imagesStock.keys().next().value!);
     return reply.send({ images });
   });
