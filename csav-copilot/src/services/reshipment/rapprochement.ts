@@ -104,14 +104,24 @@ function normaliser(texte: string | null | undefined): string {
 /**
  * Une paire convient-elle à une ligne de commande ?
  *
- * Par référence quand les deux en ont une — c'est la seule identité sûre.
- * Sinon par modèle et déclinaison, comparés sans casse ni ponctuation : « Nike
- * Mind 001 · 45 » et « nike mind 001 / 45 » sont la même paire.
+ * Par référence quand les deux en ont une — mais une référence ne suffit pas :
+ * beaucoup de boutiques donnent la MÊME référence à toutes les pointures d'un
+ * modèle (« HQ4307-400 » pour le 42.5 comme pour le 49.5). Quand les deux
+ * côtés portent une déclinaison, elle doit donc être identique aussi, sinon un
+ * 49.5 partirait chez un client qui a commandé du 42.5.
+ * Sans référence : par modèle et déclinaison, comparés sans casse ni
+ * ponctuation — « Nike Mind 001 · 45 » et « nike mind 001 / 45 » sont la même
+ * paire.
  */
 export function correspond(paire: PaireEnStock, ligne: LigneEnAttente): boolean {
   const skuPaire = normaliser(paire.sku);
   const skuLigne = normaliser(ligne.sku);
-  if (skuPaire && skuLigne) return skuPaire === skuLigne;
+  if (skuPaire && skuLigne) {
+    if (skuPaire !== skuLigne) return false;
+    const declPaire = normaliser(paire.declinaison);
+    const declLigne = normaliser(ligne.declinaison);
+    return !declPaire || !declLigne || declPaire === declLigne;
+  }
   return normaliser(paire.titre) === normaliser(ligne.titre) && normaliser(paire.declinaison) === normaliser(ligne.declinaison);
 }
 
@@ -226,7 +236,8 @@ export interface CorrespondanceStock {
  * arriverait aussi tard que celle de l'atelier. Une commande dont on ignore
  * le pays ne peut être servie que par le stock du marchand. Et toujours :
  * une commande servie en entier par UN lieu ou pas du tout, une paire pour
- * une seule commande, les plus anciennes d'abord des deux côtés.
+ * une seule commande ; les paires les plus anciennes partent d'abord, et les
+ * commandes les plus récentes sont servies d'abord, comme dans Stock.
  */
 export function rapprocherAvantEnvoi(
   stock: readonly PaireEnStock[],
@@ -235,7 +246,7 @@ export function rapprocherAvantEnvoi(
   const paires = [...stock].sort((a, b) => a.depuis.getTime() - b.depuis.getTime());
   const enAttente = [...commandes]
     .filter((commande) => commande.lignes.length > 0)
-    .sort((a, b) => a.creeLe.localeCompare(b.creeLe));
+    .sort((a, b) => b.creeLe.localeCompare(a.creeLe));
 
   const prises = new Set<string>();
   const servies = new Set<string>();

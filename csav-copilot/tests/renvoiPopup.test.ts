@@ -32,7 +32,9 @@ test('la commande et ses produits sont déjà remplis', () => {
 
 test('les paires proposées suivent la règle du rapprochement', () => {
   const regle = app.slice(app.indexOf('function paireCorrespond'), app.indexOf('async function ouvrirRenvoi'));
-  assert.match(regle, /if \(skuPaire && skuArticle\) return skuPaire === skuArticle;/);
+  // Même référence ET, quand les deux en ont une, même déclinaison.
+  assert.match(regle, /if \(skuPaire !== skuArticle\) return false;/);
+  assert.match(regle, /return !a \|\| !b \|\| a === b;/);
   assert.match(app, /paire\.status === 'RESTOCKED' && !paire\.reusedAt && paireCorrespond\(paire, article\)/);
 });
 

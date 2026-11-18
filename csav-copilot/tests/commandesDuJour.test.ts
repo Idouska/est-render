@@ -76,7 +76,7 @@ test('une commande à moitié servie reste au fournisseur', () => {
   assert.deepEqual(resultat, []);
 });
 
-test('une paire ne sert qu’une commande, la plus ancienne ; la plus vieille paire part d’abord', () => {
+test('une paire ne sert qu’une commande, la plus récente ; la plus vieille paire part d’abord', () => {
   const stock = [paire('recente', 'Lampe', 'Laiton', '2026-09-20'), paire('ancienne', 'Lampe', 'Laiton', '2026-09-01')];
   const resultat = rapprocherAvantEnvoi(stock, [
     commande('tard', '2026-09-30T18:00:00Z', [['Lampe', 'Laiton', 1]]),
@@ -86,7 +86,7 @@ test('une paire ne sert qu’une commande, la plus ancienne ; la plus vieille pa
   assert.deepEqual(
     resultat.map((c) => [c.commandeId, c.paires[0]!.returnId]),
     [
-      ['tot', 'ancienne'],
+      ['trop', 'ancienne'],
       ['tard', 'recente'],
     ],
   );

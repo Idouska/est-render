@@ -248,3 +248,12 @@ test('une paire gardée chez le marchand sert n’importe quel pays, après les 
   // Une paire d'agence, elle, ne traverse pas l'Atlantique.
   assert.deepEqual(rapprocher([paire('FR', 'HQ1')], [commande('3', 'US', [['HQ1', 1]])]), []);
 });
+
+test('même référence, pointure différente : ce n’est pas la même paire', () => {
+  const p = paire('FR', 'HQ4307-400', { titre: 'Nike Mind 001', declinaison: '49.5' });
+  const ligne = (declinaison: string | null) => ({ titre: 'Nike Mind 001', declinaison, sku: 'HQ4307-400', quantite: 1 });
+  assert.equal(correspond(p, ligne('42.5')), false);
+  assert.equal(correspond(p, ligne('49.5')), true);
+  // Sans déclinaison d'un côté, la référence fait foi comme avant.
+  assert.equal(correspond(p, ligne(null)), true);
+});
