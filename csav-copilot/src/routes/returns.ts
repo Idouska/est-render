@@ -11,6 +11,7 @@ import { listVariants } from '../services/shopify/catalog.ts';
 import {
   PAYS_RETOUR,
   VOISINS,
+  CHEZ_VOUS,
   correspond,
   rapprocher,
   type PaireEnStock,
@@ -1626,16 +1627,18 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
         orderName: true,
         restockedAt: true,
         updatedAt: true,
+        origine: true,
         agency: { select: { id: true, name: true, country: true } },
       },
     });
     if (enStock.length === 0) return reply.send({ matches: [], examinees: 0, tronque: false });
 
     // Où se trouve la paire : chez son agence. Sans agence, dans le pays du
-    // client qui l'a renvoyée — c'est celui qui décide de l'agence.
+    // client qui l'a renvoyée — c'est celui qui décide de l'agence. Ajoutée à
+    // la main sans agence, elle est chez le marchand et sert tous les pays.
     const stock: PaireEnStock[] = enStock.map((paire) => ({
       id: paire.id,
-      pays: paire.agency?.country ?? paire.country ?? null,
+      pays: paire.agency?.country ?? paire.country ?? (paire.origine === 'MANUEL' ? CHEZ_VOUS : null),
       agenceId: paire.agency?.id ?? null,
       agenceNom: paire.agency?.name ?? null,
       sku: paire.sku,
@@ -1644,6 +1647,8 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
       depuis: paire.restockedAt ?? paire.updatedAt,
       retourDe: paire.orderName,
     }));
+
+    const aLaMaison = stock.some((paire) => paire.pays === CHEZ_VOUS);
 
     // Toutes les commandes en attente, par pages de cent. Au-delà de dix
     // pages, on s'arrête — et on le DIT : un plafond silencieux se lirait
@@ -1690,7 +1695,8 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
         !commencees.has(commande.id) &&
         !servies.has(commande.id) &&
         commande.shippingAddress?.country &&
-        VOISINS[commande.shippingAddress.country],
+        // Une paire chez le marchand sert tous les pays ; les agences, les leurs.
+        (aLaMaison || VOISINS[commande.shippingAddress.country]),
     );
 
     const parId = new Map(enAttente.map((commande) => [commande.id, commande]));
@@ -1821,6 +1827,40 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
         select: { agency: { select: { name: true, email: true, phone: true, address: true, country: true } } },
       });
       return reply.send({ reserve: true, agence: agence?.agency ?? null });
+    },
+  );
+
+  /**
+   * Expédiée par le marchand : pour les paires gardées chez lui. Celles d'une
+   * agence se déclarent depuis l'espace de l'agence.
+   */
+  app.post(
+    '/api/returns/reemploi/expedier',
+    { preHandler: requirePermission('reply') },
+    async (request, reply) => {
+      const { merchantId, userId } = request.session;
+      const parsed = z
+        .object({
+          orderId: z.string().min(1).max(120),
+          suivi: z.string().trim().max(120).nullish(),
+        })
+        .safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Envoi invalide' });
+      const maj = await prisma.returnCase.updateMany({
+        where: { merchantId, reusedShopifyOrderId: parsed.data.orderId, agencyId: null, reshippedAt: null },
+        data: { reshippedAt: new Date(), reshipTrackingNumber: parsed.data.suivi?.replace(/\s+/g, '') || null },
+      });
+      if (!maj.count) return reply.code(404).send({ error: 'Aucune paire à expédier chez vous pour cette commande.' });
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId: userId,
+        action: 'return.reshipped_by_merchant',
+        targetType: 'order',
+        targetId: parsed.data.orderId,
+        metadata: { suivi: parsed.data.suivi ?? null },
+      });
+      return reply.send({ expediee: true });
     },
   );
 

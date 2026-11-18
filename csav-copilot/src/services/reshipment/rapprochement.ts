@@ -36,6 +36,12 @@ export const VOISINS: Readonly<Record<string, readonly string[]>> = {
   IT: ['FR'],
 };
 
+/**
+ * Le « pays » d'une paire gardée chez le marchand (ajoutée à la main, sans
+ * agence) : elle part de chez lui, donc vers n'importe quel pays.
+ */
+export const CHEZ_VOUS = 'MAISON';
+
 /** Une paire du stock retours, là où elle se trouve. */
 export interface PaireEnStock {
   id: string;
@@ -143,12 +149,14 @@ export function rapprocher(stock: readonly PaireEnStock[], commandes: readonly C
   const servies = new Set<string>();
   const propositions: Proposition[] = [];
 
-  // Deux passes : tout le même-pays d'abord, les voisins ensuite.
-  for (const passe of ['meme', 'voisin'] as const) {
+  // Trois passes : le même pays d'abord, les voisins ensuite, et enfin les
+  // paires gardées chez le marchand, qui servent tous les pays — après les
+  // agences, plus proches du client.
+  for (const passe of ['meme', 'voisin', 'maison'] as const) {
     for (const commande of enAttente) {
       if (servies.has(commande.id)) continue;
       const pays = commande.pays!;
-      const paysCandidats = passe === 'meme' ? [pays] : (VOISINS[pays] ?? []);
+      const paysCandidats = passe === 'meme' ? [pays] : passe === 'voisin' ? (VOISINS[pays] ?? []) : [CHEZ_VOUS];
 
       // Les lieux candidats, dans l'ordre de leur paire la plus ancienne.
       const lieux = new Map<string, PaireEnStock[]>();
@@ -171,7 +179,7 @@ export function rapprocher(stock: readonly PaireEnStock[], commandes: readonly C
           client: commande.client,
           pays,
           paysStock: premiere.pays!,
-          voisin: premiere.pays !== pays,
+          voisin: premiere.pays !== pays && premiere.pays !== CHEZ_VOUS,
           agence: premiere.agenceId ? { id: premiere.agenceId, nom: premiere.agenceNom } : null,
           paires: choisies.map((paire) => ({
             returnId: paire.id,

@@ -12862,6 +12862,8 @@ $('ret-body')?.addEventListener('click', (event) => {
 const nomsDeRegions = typeof Intl.DisplayNames === 'function' ? new Intl.DisplayNames(['fr'], { type: 'region' }) : null;
 const nomPays = (code) => {
   if (!code) return '—';
+  // Une paire gardée chez le marchand, sans agence.
+  if (code === 'MAISON') return 'Chez vous';
   if (RETURN_COUNTRIES[code]) return RETURN_COUNTRIES[code];
   try {
     return (/^[A-Z]{2}$/.test(code) && nomsDeRegions?.of(code)) || code;
@@ -12899,7 +12901,7 @@ function noticeConfiee(derniere) {
         <div>
           <b>${esc(derniere.commande)} part du stock — ${esc(nomPays(derniere.paysStock))}.</b>
           Elle a disparu de la liste de l’atelier, qui ne l’expédiera pas.
-          <p>À expédier par : <b>${esc(derniere.agenceContact?.name ?? derniere.agence?.nom ?? 'l’agence')}</b>${
+          <p>À expédier par : <b>${esc(derniere.agenceContact?.name ?? derniere.agence?.nom ?? (derniere.paysStock === 'MAISON' ? 'vous — puis « Marquer expédiée » dans À expédier' : 'l’agence'))}</b>${
             derniere.agenceContact?.email ? ` · ${esc(derniere.agenceContact.email)}` : ''
           }${derniere.agenceContact?.phone ? ` · ${esc(derniere.agenceContact.phone)}` : ''}</p>
           <pre class="ret-adresse">${esc(adresseTexte(derniere.adresse))}</pre>
@@ -13064,7 +13066,11 @@ function renderReturnStock(box) {
       l.etat === 'match'
         ? `<button class="btn btn-small btn-primary" data-ret-serve="${l.rang}">Servir depuis le stock</button>`
         : l.etat === 'aexpedier'
-          ? `<button class="btn btn-small" data-ret-liberer="${esc(item.reusedShopifyOrderId)}" data-ret-order="${esc(item.reusedOrderName ?? '')}">Libérer</button>`
+          ? `${
+              item.agencyId
+                ? ''
+                : `<button class="btn btn-small btn-primary" data-stk-expedier="${esc(item.reusedShopifyOrderId)}" data-ret-order="${esc(item.reusedOrderName ?? '')}">Marquer expédiée</button>`
+            }<button class="btn btn-small" data-ret-liberer="${esc(item.reusedShopifyOrderId)}" data-ret-order="${esc(item.reusedOrderName ?? '')}">Libérer</button>`
           : '';
     const sortir =
       l.etat === 'stock' || l.etat === 'match'
@@ -13147,6 +13153,29 @@ function renderReturnStock(box) {
   }
 }
 
+/** Une paire gardée chez vous, partie : le numéro de suivi est facultatif. */
+async function marquerExpediee(bouton) {
+  const suivi = await saisir({
+    titre: `${bouton.dataset.retOrder || 'Commande'} expédiée ?`,
+    texte: 'Numéro de suivi du colis (facultatif).',
+    action: 'Marquer expédiée',
+    champ: { placeholder: 'N° de suivi', libelle: 'Numéro de suivi' },
+  });
+  if (suivi === null) return;
+  bouton.disabled = true;
+  try {
+    await api('/api/returns/reemploi/expedier', {
+      method: 'POST',
+      body: JSON.stringify({ orderId: bouton.dataset.stkExpedier, suivi: suivi || null }),
+    });
+    toast('Paire marquée expédiée.');
+    await loadReturns();
+  } catch (error) {
+    bouton.disabled = false;
+    toast(error.message, true);
+  }
+}
+
 /** La liste filtrée, en texte : pour l'impression et le partage. */
 function texteStock() {
   const lignes = filtrerStock(lignesStock().toutes, state.returns.stockFiltre ?? 'tout');
@@ -13198,6 +13227,8 @@ $('ret-body')?.addEventListener('click', (event) => {
     state.returns.stockOuvert = null;
     return renderReturns();
   }
+  const expedier = event.target.closest('[data-stk-expedier]');
+  if (expedier) return void marquerExpediee(expedier);
   const voir = event.target.closest('[data-stk-voir]');
   if (voir) {
     state.returns.stockOuvert = state.returns.stockOuvert === voir.dataset.stkVoir ? null : voir.dataset.stkVoir;
