@@ -13076,7 +13076,7 @@ function renderReturnStock(box) {
           ? `${
               item.agencyId
                 ? ''
-                : `<button class="btn btn-small btn-primary" data-stk-expedier="${esc(item.reusedShopifyOrderId)}" data-ret-order="${esc(item.reusedOrderName ?? '')}">Marquer expédiée</button>`
+                : `<button class="btn btn-small btn-primary" data-stk-envoi-ouvrir="${esc(item.id)}">Marquer envoyé</button>`
             }<button class="btn btn-small" data-ret-liberer="${esc(item.reusedShopifyOrderId)}" data-ret-order="${esc(item.reusedOrderName ?? '')}">Libérer</button>`
           : '';
     const sortir =
@@ -13107,8 +13107,22 @@ function renderReturnStock(box) {
             ? `<span class="stk-cmd"><b>${esc(l.commande)}</b><span>${esc(nomPays(l.pays) || '—')}</span></span>`
             : '<span class="stk-cmd stk-vide">Aucune commande</span>'
         }
-        <span class="ret-tag ${ton}">${esc(mot)}</span>
+        ${
+          // Confiée à une commande, c'est le sélecteur qui dit l'état : pas deux fois.
+          l.etat === 'stock' || l.etat === 'match' ? `<span class="ret-tag ${ton}">${esc(mot)}</span>` : ''
+        }
         <button type="button" class="btn btn-small" data-stk-voir="${esc(item.id)}" aria-expanded="${ouvert}">${ouvert ? 'Fermer' : 'Voir'}</button>
+        ${
+          // Une paire qui a une commande : à envoyer, ou envoyée. Le
+          // transporteur d'une paire partie rouvre le détail de l'envoi.
+          l.commande
+            ? `${l.etat === 'envoye' ? pastilleTransporteur(item.reshipCarrier, `data-stk-envoi-voir="${esc(item.id)}" title="Voir l’envoi"`) : ''}
+               <select class="stk-envoi ${l.etat === 'envoye' ? 'stk-envoi-ok' : 'stk-envoi-attente'}" data-stk-envoi="${esc(item.id)}" aria-label="État de l’envoi">
+                 <option value="aenvoyer"${l.etat === 'envoye' ? '' : ' selected'}>À envoyer</option>
+                 <option value="envoye"${l.etat === 'envoye' ? ' selected' : ''}>Envoyé</option>
+               </select>`
+            : ''
+        }
       </div>
       ${ouvert ? detail(l) : ''}
     </div>`;
@@ -13160,28 +13174,250 @@ function renderReturnStock(box) {
   }
 }
 
-/** Une paire gardée chez vous, partie : le numéro de suivi est facultatif. */
-async function marquerExpediee(bouton) {
-  const suivi = await saisir({
-    titre: `${bouton.dataset.retOrder || 'Commande'} expédiée ?`,
-    texte: 'Numéro de suivi du colis (facultatif).',
-    action: 'Marquer expédiée',
-    champ: { placeholder: 'N° de suivi', libelle: 'Numéro de suivi' },
-  });
-  if (suivi === null) return;
-  bouton.disabled = true;
+/* ------------------------------------------------- envoi d'une paire ---- */
+
+/*
+ * Les transporteurs, à leurs couleurs. Pas leurs logos : ce sont des marques,
+ * et l'outil n'embarque pas leurs fichiers — la couleur et le nom suffisent à
+ * les reconnaître d'un coup d'œil.
+ */
+const TRANSPORTEURS = {
+  Colissimo: ['#f5a800', '#1d1d1b'],
+  'La Poste': ['#ffd200', '#003da5'],
+  'Mondial Relay': ['#96154a', '#ffffff'],
+  Chronopost: ['#0096d6', '#ffffff'],
+  DHL: ['#ffcc00', '#d40511'],
+  UPS: ['#351c15', '#ffb500'],
+  FedEx: ['#4d148c', '#ff6600'],
+  DPD: ['#dc0032', '#ffffff'],
+  GLS: ['#172b6b', '#ffd100'],
+  USPS: ['#333366', '#ffffff'],
+};
+
+function couleursTransporteur(nom) {
+  const cherche = sansAccents(nom ?? '').replace(/\s+/g, '');
+  if (!cherche) return null;
+  const cle = Object.keys(TRANSPORTEURS).find((t) => cherche.includes(sansAccents(t).replace(/\s+/g, '')));
+  return cle ? TRANSPORTEURS[cle] : null;
+}
+
+function pastilleTransporteur(nom, attributs = '') {
+  const couleurs = couleursTransporteur(nom);
+  const style = couleurs ? ` style="background:${couleurs[0]};color:${couleurs[1]}"` : '';
+  const balise = attributs ? 'button type="button"' : 'span';
+  return `<${balise} class="stk-transp${couleurs ? '' : ' stk-transp-neutre'}"${style} ${attributs}>${esc(nom || 'Transporteur ?')}</${balise.split(' ')[0]}>`;
+}
+
+const envoiStock = { ligne: null, bon: null, lecture: false };
+
+function fermerEnvoiStock() {
+  $('stkenv-modal').hidden = true;
+  $('stkenv-modal').classList.remove('open');
+  envoiStock.ligne = null;
+  envoiStock.bon = null;
+  // Le sélecteur reprend la valeur du serveur si l'on a annulé.
+  if (state.view === 'returns' && state.returns.tab === 'stock') renderReturns();
+}
+
+function ouvrirEnvoiStock(id, mode) {
+  const ligne = lignesStock().toutes.find((l) => l.item.id === id);
+  if (!ligne?.commande) return;
+  envoiStock.ligne = ligne;
+  envoiStock.bon = null;
+  envoiStock.lecture = mode === 'lecture';
+  renderEnvoiStock();
+  $('stkenv-modal').hidden = false;
+  $('stkenv-modal').classList.add('open');
+}
+
+function renderEnvoiStock() {
+  const { ligne, lecture, bon } = envoiStock;
+  const { item } = ligne;
+  $('stkenv-title').textContent = `Envoi · ${ligne.commande}`;
+  $('stkenv-sous').textContent = nomPaire(item.productTitle, item.variantTitle);
+
+  const bonExistant = item.reshipBonMime
+    ? item.reshipBonMime === 'application/pdf'
+      ? `<a class="qlink" href="/api/returns/${esc(item.id)}/bon-envoi" target="_blank" rel="noopener">Ouvrir le bon (PDF)</a>`
+      : `<a href="/api/returns/${esc(item.id)}/bon-envoi" target="_blank" rel="noopener"><img class="envoi-bon-img" src="/api/returns/${esc(item.id)}/bon-envoi" alt="Bon d’expédition" /></a>`
+    : '';
+
+  if (lecture) {
+    $('stkenv-body').innerHTML = `
+      <div class="envoi-lecture">
+        <div><span>Transporteur</span>${pastilleTransporteur(item.reshipCarrier)}</div>
+        <div><span>Numéro du bon</span>${
+          item.reshipTrackingNumber
+            ? `<a class="qlink mono" href="${esc(trackUrl(item.reshipTrackingNumber))}" target="_blank" rel="noopener">${esc(item.reshipTrackingNumber)}</a>`
+            : '<b>—</b>'
+        }</div>
+        <div><span>Envoyé</span><b>${item.reshippedAt ? esc(fullDate(item.reshippedAt)) : '—'}</b></div>
+      </div>
+      <div class="envoi-bon">${bonExistant || '<p class="empty">Aucun bon enregistré pour cet envoi.</p>'}</div>`;
+    $('stkenv-foot').innerHTML =
+      '<button class="btn" type="button" data-envoi-modifier>Modifier</button><button class="btn btn-primary" type="button" data-envoi-fermer>Fermer</button>';
+    return;
+  }
+
+  const connus = Object.keys(TRANSPORTEURS);
+  const actuel = item.reshipCarrier ?? '';
+  const autre = actuel && !connus.includes(actuel);
+  $('stkenv-body').innerHTML = `
+    <div class="envoi-depot">
+      <button class="btn" type="button" data-envoi-choisir>${bon || bonExistant ? 'Changer le bon' : 'Déposer le bon (photo ou PDF)'}</button>
+      <small id="stkenv-lecture">${
+        bon ? esc(bon.nom) : 'Le numéro et le transporteur sont lus sur le bon.'
+      }</small>
+    </div>
+    <div class="envoi-bon" id="stkenv-apercu">${
+      bon
+        ? bon.contenu.startsWith('data:image/')
+          ? `<img class="envoi-bon-img" src="${esc(bon.contenu)}" alt="Bon d’expédition" />`
+          : '<p class="empty">PDF prêt à être enregistré.</p>'
+        : bonExistant
+    }</div>
+    <div class="field-duo">
+      <div class="field">
+        <label for="stkenv-transp">Transporteur</label>
+        <select id="stkenv-transp">
+          <option value="">— Choisir —</option>
+          ${connus.map((t) => `<option${t === actuel ? ' selected' : ''}>${esc(t)}</option>`).join('')}
+          <option value="__autre"${autre ? ' selected' : ''}>Autre…</option>
+        </select>
+        <input id="stkenv-transp-autre" type="text" placeholder="Nom du transporteur" value="${esc(autre ? actuel : '')}"${autre ? '' : ' hidden'} />
+      </div>
+      <div class="field">
+        <label for="stkenv-numero">Numéro du bon</label>
+        <input id="stkenv-numero" type="text" value="${esc(item.reshipTrackingNumber ?? '')}" placeholder="N° de suivi" />
+      </div>
+    </div>
+    ${
+      ligne.etat === 'envoye'
+        ? ''
+        : '<p class="envoi-note">En enregistrant, la commande est marquée expédiée dans Shopify, qui écrit au client avec ce numéro de suivi.</p>'
+    }`;
+  $('stkenv-foot').innerHTML =
+    '<button class="btn" type="button" data-envoi-fermer>Annuler</button><button class="btn btn-primary" type="button" data-envoi-enregistrer>' +
+    (ligne.etat === 'envoye' ? 'Enregistrer' : 'Marquer envoyé') +
+    '</button>';
+}
+
+function transporteurSaisi() {
+  const choix = $('stkenv-transp').value;
+  return (choix === '__autre' ? $('stkenv-transp-autre').value.trim() : choix) || null;
+}
+
+$('stkenv-modal')?.addEventListener('change', (event) => {
+  if (event.target.id === 'stkenv-transp') $('stkenv-transp-autre').hidden = event.target.value !== '__autre';
+});
+
+$('stkenv-fichier')?.addEventListener('change', async (event) => {
+  const fichier = event.target.files[0];
+  event.target.value = '';
+  if (!fichier || !envoiStock.ligne) return;
+  if (fichier.size > BON_MAX) return toast('Bon trop lourd : 4 Mo au plus.', true);
+  // Ce qui est déjà saisi ne se perd pas au nouveau rendu.
+  const numeroAvant = $('stkenv-numero').value.trim();
+  const transpAvant = transporteurSaisi();
+  envoiStock.bon = { nom: fichier.name, contenu: await lireFichier(fichier) };
+  renderEnvoiStock();
+  $('stkenv-numero').value = numeroAvant;
+  $('stkenv-lecture').textContent = `${fichier.name} — lecture…`;
+  const poser = (numero, transporteur) => {
+    if (numero && !$('stkenv-numero').value.trim()) $('stkenv-numero').value = numero;
+    const voulu = transpAvant || transporteur;
+    if (!voulu) return;
+    const connu = Object.keys(TRANSPORTEURS).find((t) => sansAccents(t) === sansAccents(voulu));
+    $('stkenv-transp').value = connu ?? '__autre';
+    $('stkenv-transp-autre').hidden = Boolean(connu);
+    if (!connu) $('stkenv-transp-autre').value = voulu;
+  };
+  poser(null, null);
   try {
-    await api('/api/returns/reemploi/expedier', {
+    const lu = await api('/api/returns/bons/lire', { method: 'POST', body: JSON.stringify({ fichiers: [envoiStock.bon] }) });
+    const lecture = lu.lectures?.[0];
+    if (!envoiStock.bon || !$('stkenv-lecture')) return;
+    poser(lecture?.numero, lecture?.transporteur);
+    $('stkenv-lecture').textContent =
+      lecture?.source === 'ia'
+        ? `${fichier.name} — lu sur le bon, vérifiez.`
+        : lecture?.source === 'fichier'
+          ? `${fichier.name} — numéro deviné d’après le nom du fichier, vérifiez.`
+          : `${fichier.name} — rien n’a pu être lu : complétez à la main.`;
+  } catch {
+    if ($('stkenv-lecture')) $('stkenv-lecture').textContent = `${fichier.name} — lecture impossible : complétez à la main.`;
+  }
+});
+
+$('stkenv-modal')?.addEventListener('click', async (event) => {
+  if (event.target === event.currentTarget || event.target.closest('[data-envoi-fermer]')) return fermerEnvoiStock();
+  if (event.target.closest('[data-envoi-choisir]')) return $('stkenv-fichier').click();
+  if (event.target.closest('[data-envoi-modifier]')) {
+    envoiStock.lecture = false;
+    return renderEnvoiStock();
+  }
+  const enregistrer = event.target.closest('[data-envoi-enregistrer]');
+  if (!enregistrer) return;
+  const { ligne, bon } = envoiStock;
+  const { item } = ligne;
+  enregistrer.disabled = true;
+  try {
+    // Une paire seulement proposée : on la confie d'abord à sa commande.
+    let orderId = item.reusedShopifyOrderId;
+    if (ligne.etat === 'match') {
+      await api('/api/returns/reemploi', {
+        method: 'POST',
+        body: JSON.stringify({
+          orderId: ligne.match.commandeId,
+          orderName: ligne.match.commande,
+          returnIds: ligne.match.paires.map((paire) => paire.returnId),
+        }),
+      });
+      orderId = ligne.match.commandeId;
+    }
+    const resultat = await api('/api/returns/reemploi/expedier', {
       method: 'POST',
-      body: JSON.stringify({ orderId: bouton.dataset.stkExpedier, suivi: suivi || null }),
+      body: JSON.stringify({
+        orderId,
+        suivi: $('stkenv-numero').value.trim() || null,
+        transporteur: transporteurSaisi(),
+        bon: bon ?? null,
+      }),
     });
-    toast('Paire marquée expédiée.');
+    if (resultat.corrigee) toast('Envoi mis à jour.');
+    else if (resultat.shopify?.fulfilled) toast('Envoyé. Shopify a marqué la commande expédiée et prévient le client.');
+    else toast(`Envoyé ici, mais pas dans Shopify : ${resultat.shopify?.reason ?? 'raison inconnue'}`, true);
+    envoiStock.ligne = null;
+    $('stkenv-modal').hidden = true;
+    $('stkenv-modal').classList.remove('open');
     await loadReturns();
   } catch (error) {
-    bouton.disabled = false;
+    enregistrer.disabled = false;
     toast(error.message, true);
+    // La paire a pu être confiée avant l'échec : l'écran doit le montrer.
+    void loadReturns();
   }
-}
+});
+
+// Le sélecteur : « Envoyé » ouvre la fenêtre, « À envoyer » annule l'envoi.
+$('ret-body')?.addEventListener('change', async (event) => {
+  const choix = event.target.closest('[data-stk-envoi]');
+  if (!choix) return;
+  const ligne = lignesStock().toutes.find((l) => l.item.id === choix.dataset.stkEnvoi);
+  if (!ligne) return;
+  if (choix.value === 'envoye') return ouvrirEnvoiStock(ligne.item.id, 'saisie');
+  if (ligne.etat !== 'envoye') return;
+  const question = `Remettre ${ligne.commande} « À envoyer » ?\n\nLe transporteur, le numéro et le bon notés ici sont effacés. Shopify n’est pas modifié : si la commande y est déjà expédiée, elle le reste.`;
+  if (!(await confirmer(question, { action: 'Remettre à envoyer', icone: 'retour' }))) return renderReturns();
+  try {
+    await api('/api/returns/reemploi/annuler-envoi', { method: 'POST', body: JSON.stringify({ orderId: ligne.item.reusedShopifyOrderId }) });
+    toast('Remis « À envoyer ».');
+    await loadReturns();
+  } catch (error) {
+    toast(error.message, true);
+    renderReturns();
+  }
+});
 
 /** La liste filtrée, en texte : pour l'impression et le partage. */
 function texteStock() {
@@ -13234,8 +13470,10 @@ $('ret-body')?.addEventListener('click', (event) => {
     state.returns.stockOuvert = null;
     return renderReturns();
   }
-  const expedier = event.target.closest('[data-stk-expedier]');
-  if (expedier) return void marquerExpediee(expedier);
+  const envoiOuvrir = event.target.closest('[data-stk-envoi-ouvrir]');
+  if (envoiOuvrir) return ouvrirEnvoiStock(envoiOuvrir.dataset.stkEnvoiOuvrir, 'saisie');
+  const envoiVoir = event.target.closest('[data-stk-envoi-voir]');
+  if (envoiVoir) return ouvrirEnvoiStock(envoiVoir.dataset.stkEnvoiVoir, 'lecture');
   const voir = event.target.closest('[data-stk-voir]');
   if (voir) {
     state.returns.stockOuvert = state.returns.stockOuvert === voir.dataset.stkVoir ? null : voir.dataset.stkVoir;

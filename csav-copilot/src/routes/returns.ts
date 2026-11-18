@@ -6,6 +6,7 @@ import { recordAudit } from '../lib/audit.ts';
 import { requirePermission, requireSession } from '../plugins/auth.ts';
 import { decodePhoto, photoSchema } from './parcels.ts';
 import { getShopifyClient } from '../services/shopify/client.ts';
+import { fulfillOrder } from '../services/shopify/fulfill.ts';
 import { listOrders, quoteSearchValue, type OrderSummary } from '../services/shopify/orders.ts';
 import { listVariants } from '../services/shopify/catalog.ts';
 import {
@@ -164,7 +165,7 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
         take: 300,
         // Les octets de la photo restent en base : la liste n'a besoin que de
         // savoir qu'elle existe, l'image se sert par sa propre route.
-        omit: { photoData: true, bonData: true },
+        omit: { photoData: true, bonData: true, reshipBonData: true },
         include: { agency: { select: { id: true, name: true, country: true } } },
       })
     ).map(({ photoMime, bonMime, ...item }) => ({ ...item, hasPhoto: Boolean(photoMime), hasBon: Boolean(bonMime) }));
@@ -426,6 +427,8 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
 
       const updated = await prisma.returnCase.update({
         where: { id: existing.id },
+        // Les fichiers restent en base : la réponse n'a pas à les transporter.
+        omit: { photoData: true, bonData: true, reshipBonData: true },
         data: {
           ...fields,
           ...photoFields,
@@ -1833,38 +1836,116 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
   );
 
   /**
-   * Expédiée par le marchand : pour les paires gardées chez lui. Celles d'une
-   * agence se déclarent depuis l'espace de l'agence.
+   * « Envoyé », depuis l'écran Stock : le transporteur, le numéro du bon et
+   * le bon lui-même (photo ou PDF). La commande est alors expédiée dans
+   * Shopify, qui écrit au client avec son numéro de suivi.
+   *
+   * Rappelée sur une commande déjà envoyée, elle corrige seulement ce qui est
+   * noté ici — Shopify a déjà écrit au client, on ne l'expédie pas deux fois.
    */
   app.post(
     '/api/returns/reemploi/expedier',
-    { preHandler: requirePermission('reply') },
+    { preHandler: requirePermission('reply'), bodyLimit: 7 * 1024 * 1024 },
     async (request, reply) => {
       const { merchantId, userId } = request.session;
       const parsed = z
         .object({
           orderId: z.string().min(1).max(120),
           suivi: z.string().trim().max(120).nullish(),
+          transporteur: z.string().trim().max(60).nullish(),
+          bon: fichierBon.nullish(),
         })
         .safeParse(request.body);
-      if (!parsed.success) return reply.code(400).send({ error: 'Envoi invalide' });
-      const maj = await prisma.returnCase.updateMany({
-        where: { merchantId, reusedShopifyOrderId: parsed.data.orderId, agencyId: null, reshippedAt: null },
-        data: { reshippedAt: new Date(), reshipTrackingNumber: parsed.data.suivi?.replace(/\s+/g, '') || null },
+      if (!parsed.success) return reply.code(400).send({ error: 'Envoi invalide : bon en PDF ou photo, 4 Mo max.' });
+      const { orderId } = parsed.data;
+      const bon = parsed.data.bon ? decoderBon(parsed.data.bon.contenu) : null;
+      if (parsed.data.bon && !bon) return reply.code(400).send({ error: 'Bon non pris en charge : PDF, JPEG, PNG ou WebP, 4 Mo max.' });
+
+      const paires = await prisma.returnCase.findMany({
+        where: { merchantId, reusedShopifyOrderId: orderId },
+        select: { id: true, reshippedAt: true, reusedOrderName: true },
       });
-      if (!maj.count) return reply.code(404).send({ error: 'Aucune paire à expédier chez vous pour cette commande.' });
+      if (!paires.length) return reply.code(404).send({ error: 'Aucune paire du stock n’est confiée à cette commande.' });
+      const dejaEnvoyee = paires.some((paire) => paire.reshippedAt);
+
+      const suivi = parsed.data.suivi?.replace(/\s+/g, '') || null;
+      const transporteur = parsed.data.transporteur || null;
+      await prisma.returnCase.updateMany({
+        where: { merchantId, reusedShopifyOrderId: orderId },
+        data: {
+          reshipTrackingNumber: suivi,
+          reshipCarrier: transporteur,
+          ...(dejaEnvoyee ? {} : { reshippedAt: new Date() }),
+          ...(bon
+            ? { reshipBonData: new Uint8Array(bon.data), reshipBonMime: bon.mime, reshipBonNom: parsed.data.bon!.nom.slice(0, 200) }
+            : {}),
+        },
+      });
+
+      // Shopify : une seule fois, à la première expédition.
+      let shopify: { fulfilled: boolean; reason?: string } | null = null;
+      if (!dejaEnvoyee) {
+        try {
+          const client = await getShopifyClient(merchantId);
+          shopify = await fulfillOrder(client, orderId, { numbers: suivi ? [suivi] : [], company: transporteur });
+        } catch (error) {
+          request.log.warn({ err: error, orderId }, 'Expédition Shopify en échec (stock)');
+          shopify = { fulfilled: false, reason: 'Shopify n’a pas répondu.' };
+        }
+      }
+
       await recordAudit({
         merchantId,
         actorType: 'USER',
         actorId: userId,
-        action: 'return.reshipped_by_merchant',
+        action: dejaEnvoyee ? 'return.reship_updated' : 'return.reshipped_by_merchant',
         targetType: 'order',
-        targetId: parsed.data.orderId,
-        metadata: { suivi: parsed.data.suivi ?? null },
+        targetId: orderId,
+        metadata: { suivi, transporteur, bon: Boolean(bon), shopify: shopify?.fulfilled ?? null },
       });
-      return reply.send({ expediee: true });
+      return reply.send({ expediee: true, corrigee: dejaEnvoyee, shopify });
     },
   );
+
+  /** « À envoyer » de nouveau : l'envoi noté ici est effacé. Shopify, lui, n'est pas touché. */
+  app.post(
+    '/api/returns/reemploi/annuler-envoi',
+    { preHandler: requirePermission('reply') },
+    async (request, reply) => {
+      const { merchantId, userId } = request.session;
+      const parsed = z.object({ orderId: z.string().min(1).max(120) }).safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Commande invalide' });
+      const maj = await prisma.returnCase.updateMany({
+        where: { merchantId, reusedShopifyOrderId: parsed.data.orderId, reshippedAt: { not: null } },
+        data: { reshippedAt: null, reshipTrackingNumber: null, reshipCarrier: null, reshipBonData: null, reshipBonMime: null, reshipBonNom: null },
+      });
+      if (!maj.count) return reply.code(404).send({ error: 'Cette commande n’est pas marquée envoyée.' });
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId: userId,
+        action: 'return.reship_cancelled',
+        targetType: 'order',
+        targetId: parsed.data.orderId,
+      });
+      return reply.send({ annule: true });
+    },
+  );
+
+  /** Le bon d'expédition d'une paire envoyée depuis le stock. */
+  app.get<{ Params: { id: string } }>('/api/returns/:id/bon-envoi', async (request, reply) => {
+    const paire = await prisma.returnCase.findFirst({
+      where: { id: request.params.id, merchantId: request.session.merchantId },
+      select: { reshipBonData: true, reshipBonMime: true, reshipBonNom: true },
+    });
+    if (!paire?.reshipBonData || !paire.reshipBonMime) return reply.code(404).send({ error: 'Aucun bon pour cet envoi.' });
+    const nom = (paire.reshipBonNom ?? 'bon-envoi').replace(/["\r\n]/g, '');
+    return reply
+      .header('Content-Type', paire.reshipBonMime)
+      .header('Content-Disposition', `inline; filename="${nom}"`)
+      .header('Cache-Control', 'private, max-age=300')
+      .send(Buffer.from(paire.reshipBonData));
+  });
 
   /** Annuler : les paires reviennent au stock, la commande revient à l'atelier. */
   app.post(

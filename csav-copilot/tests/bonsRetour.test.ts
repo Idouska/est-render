@@ -66,3 +66,20 @@ test('Stock : compteurs, filtre Tout/Match/Non envoyé/Envoyé, sans la barre de
   assert.match(html, /data-rtab="stock" aria-pressed="false" hidden/);
   assert.match(lire('src/routes/returns.ts'), /app\.get\('\/api\/returns\/stock\/images'/);
 });
+
+test('Stock : « Envoyé » note transporteur, numéro et bon, et expédie dans Shopify une seule fois', () => {
+  const routes = lire('src/routes/returns.ts');
+  const expedier = routes.slice(routes.indexOf("'/api/returns/reemploi/expedier'"), routes.indexOf("'/api/returns/reemploi/annuler-envoi'"));
+  assert.match(expedier, /reshipCarrier: transporteur/);
+  assert.match(expedier, /reshipBonData: new Uint8Array\(bon\.data\)/);
+  // Déjà envoyée : on corrige ce qui est noté, sans réexpédier chez Shopify.
+  assert.match(expedier, /if \(!dejaEnvoyee\) \{\s*try \{\s*const client = await getShopifyClient\(merchantId\);\s*shopify = await fulfillOrder\(/);
+  // La liste ne transporte pas les octets du bon.
+  assert.match(routes, /omit: \{ photoData: true, bonData: true, reshipBonData: true \},\s*include:/);
+  const app = lire('public/app.js');
+  assert.match(app, /<option value="aenvoyer"/);
+  assert.match(app, /<option value="envoye"/);
+  assert.match(app, /data-stk-envoi-voir=/);
+  // Le bouton « Servir depuis le stock » reste.
+  assert.match(app, /data-ret-serve="\$\{l\.rang\}">Servir depuis le stock</);
+});
