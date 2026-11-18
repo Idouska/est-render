@@ -3093,7 +3093,14 @@ const sansAccents = (texte) =>
 function paireCorrespond(paire, article) {
   const skuPaire = sansAccents(paire.sku);
   const skuArticle = sansAccents(article?.sku);
-  if (skuPaire && skuArticle) return skuPaire === skuArticle;
+  // Une même référence couvre souvent toutes les pointures d'un modèle : la
+  // déclinaison doit correspondre aussi, quand les deux côtés en ont une.
+  if (skuPaire && skuArticle) {
+    if (skuPaire !== skuArticle) return false;
+    const a = sansAccents(paire.variantTitle);
+    const b = sansAccents(article?.variantTitle);
+    return !a || !b || a === b;
+  }
   return (
     sansAccents(paire.productTitle) === sansAccents(article?.title) &&
     sansAccents(paire.variantTitle) === sansAccents(article?.variantTitle)
