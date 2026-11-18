@@ -17,6 +17,8 @@ import {
 } from '../services/reshipment/rapprochement.ts';
 import { choisirSource, type AtelierCandidat } from '../services/reshipment/echange.ts';
 import { datesDuGeste } from '../services/couts/datesRetour.ts';
+import { lireBon, rattacherBon, TYPES_BON, type TypeBon } from '../services/reshipment/lireBon.ts';
+import { sendPlainEmail } from '../services/gmail/send.ts';
 import { signAgencyToken } from '../lib/agencyToken.ts';
 import { env } from '../config/env.ts';
 import { calculerEcart, CHOIX_ECART, choixPourEcart, differenceReglee, envoyerLienDifference, prixPaye } from '../services/reshipment/difference.ts';
@@ -77,9 +79,20 @@ const creationBody = caseBody.extend({
   ecartChoix: z.enum(CHOIX_ECART).nullish(),
 });
 
+/**
+ * Les cinq statuts d'un dossier : Ouvert, Bon envoyé, Reçu et validé (la
+ * paire entre au stock), Reçu et non valide, Fermé. « Expédié », « En
+ * transit » et « Reçu » restent dans la base pour l'historique, mais ne se
+ * choisissent plus.
+ */
+export const STATUTS_RETOUR = ['OPEN', 'LABEL_SENT', 'RESTOCKED', 'UNUSABLE', 'CLOSED'] as const;
+
 const casePatch = caseBody.partial().extend({
   labelSent: z.boolean().optional(),
-  status: z.enum(['OPEN', 'LABEL_SENT', 'SHIPPED', 'IN_TRANSIT', 'RECEIVED', 'RESTOCKED', 'UNUSABLE', 'CLOSED']).optional(),
+  status: z.enum(STATUTS_RETOUR).optional(),
+  trackingCarrier: z.string().trim().max(80).nullish(),
+  /** Facultatif, à la fermeture. */
+  closeComment: z.string().trim().max(2000).nullish(),
   trackingNumber: z.string().max(120).nullish(),
   /** Photo de l'article retourné, en data URL — la preuve au dossier. */
   photo: photoSchema.nullish(),
@@ -98,6 +111,40 @@ const agencyBody = z.object({
   notes: z.string().max(4000).nullish(),
 });
 
+/**
+ * « Reçu et non valide » posé à la main : échange et remboursement bloqués.
+ * (Un défaut contrôlé passe aussi en UNUSABLE, mais après le contrôle — il
+ * porte alors `controleLe` et n'est pas concerné.)
+ */
+export function retourNonValide(dossier: { status: string; controleLe: Date | null }): boolean {
+  return dossier.status === 'UNUSABLE' && !dossier.controleLe;
+}
+
+const NON_VALIDE = { code: 'non_valide', error: 'Retour reçu et non valide : échange et remboursement sont bloqués.' };
+
+async function bloqueParNonValide(merchantId: string, id: string): Promise<boolean> {
+  const dossier = await prisma.returnCase.findFirst({ where: { id, merchantId }, select: { status: true, controleLe: true } });
+  return Boolean(dossier && retourNonValide(dossier));
+}
+
+/** Un bon de retour déposé : son nom et son contenu en data URL. */
+const fichierBon = z.object({
+  nom: z.string().trim().min(1).max(200),
+  contenu: z.string().max(6 * 1024 * 1024),
+});
+
+const OCTETS_BON_MAX = 4 * 1024 * 1024;
+
+function decoderBon(dataUrl: string): { mime: TypeBon; data: Buffer } | null {
+  const m = /^data:([a-z/+.-]+);base64,(.+)$/i.exec(dataUrl);
+  if (!m) return null;
+  const mime = m[1]!.toLowerCase() === 'image/jpg' ? 'image/jpeg' : m[1]!.toLowerCase();
+  if (!(TYPES_BON as readonly string[]).includes(mime)) return null;
+  const data = Buffer.from(m[2]!, 'base64');
+  if (data.length === 0 || data.length > OCTETS_BON_MAX) return null;
+  return { mime: mime as TypeBon, data };
+}
+
 /** Une paire prise entre la proposition et le clic : la réservation entière est annulée. */
 class PairePlusDisponible extends Error {}
 
@@ -114,10 +161,10 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
         take: 300,
         // Les octets de la photo restent en base : la liste n'a besoin que de
         // savoir qu'elle existe, l'image se sert par sa propre route.
-        omit: { photoData: true },
+        omit: { photoData: true, bonData: true },
         include: { agency: { select: { id: true, name: true, country: true } } },
       })
-    ).map(({ photoMime, ...item }) => ({ ...item, hasPhoto: Boolean(photoMime) }));
+    ).map(({ photoMime, bonMime, ...item }) => ({ ...item, hasPhoto: Boolean(photoMime), hasBon: Boolean(bonMime) }));
     // Combien de photos : il en faut trois pour décider.
     const photos = await comptePhotos(merchantId, cases.map((item) => item.id));
     for (const item of cases) Object.assign(item, { photos: photos.get(item.id) ?? 0 });
@@ -385,6 +432,8 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
           ...(fields.labelSent === true ? { status: fields.status ?? 'LABEL_SENT' } : {}),
           // Entrée au stock datée : les paires les plus anciennes partent en premier.
           ...(fields.status === 'RESTOCKED' ? { restockedAt: new Date() } : {}),
+          // Rouvrir un dossier fermé efface le commentaire de fermeture.
+          ...(fields.status && fields.status !== 'CLOSED' && fields.closeComment === undefined ? { closeComment: null } : {}),
           ...(touch ? { lastContactAt: new Date() } : {}),
           ...(reusedOrderName !== undefined
             ? reusedOrderName
@@ -445,6 +494,168 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
   );
 
   /** La photo de l'article retourné — la preuve, en pleine taille. */
+  /* ------------------------------------------------- bons de retour ---- */
+
+  /*
+   * Importer des bons : on lit d'abord (numéro, transporteur, client) et on
+   * propose un dossier ; rien n'est écrit tant que l'agent n'a pas confirmé.
+   * Un bon rattaché au mauvais dossier partirait chez le mauvais client.
+   */
+  app.post(
+    '/api/returns/bons/lire',
+    { preHandler: requirePermission('reply'), bodyLimit: 30 * 1024 * 1024 },
+    async (request, reply) => {
+      const { merchantId } = request.session;
+      const parsed = z.object({ fichiers: z.array(fichierBon).min(1).max(10) }).safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Déposez de 1 à 10 bons, en PDF ou en photo (4 Mo max chacun).' });
+
+      const dossiers = await prisma.returnCase.findMany({
+        where: { merchantId, origine: 'RETOUR', status: { in: ['OPEN', 'LABEL_SENT'] } },
+        orderBy: { createdAt: 'desc' },
+        take: 300,
+        select: { id: true, orderName: true, customerName: true, productTitle: true, variantTitle: true, trackingNumber: true },
+      });
+
+      const lectures = [];
+      for (const fichier of parsed.data.fichiers) {
+        const decode = decoderBon(fichier.contenu);
+        if (!decode) {
+          lectures.push({ nom: fichier.nom, erreur: 'Format non pris en charge : PDF, JPEG, PNG ou WebP.' });
+          continue;
+        }
+        const lu = await lireBon({ nom: fichier.nom, mime: decode.mime, contenu: decode.data });
+        // Un bon déjà rattaché (même numéro) retrouve son dossier.
+        const dejaLa = lu.numero ? dossiers.find((d) => d.trackingNumber === lu.numero) : undefined;
+        lectures.push({ nom: fichier.nom, ...lu, dossierId: dejaLa?.id ?? rattacherBon(lu, dossiers) });
+      }
+      return reply.send({
+        lectures,
+        dossiers: dossiers.map(({ trackingNumber: _t, ...d }) => d),
+      });
+    },
+  );
+
+  /** Rattacher un bon à son dossier : le fichier, le numéro, le transporteur. */
+  app.post<{ Params: { id: string } }>(
+    '/api/returns/:id/bon',
+    { preHandler: requirePermission('reply'), bodyLimit: 6 * 1024 * 1024 },
+    async (request, reply) => {
+      const { merchantId, userId } = request.session;
+      const parsed = fichierBon
+        .extend({
+          numero: z.string().trim().max(60).nullish(),
+          transporteur: z.string().trim().max(60).nullish(),
+        })
+        .safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Bon invalide : PDF ou photo, 4 Mo max.' });
+      const decode = decoderBon(parsed.data.contenu);
+      if (!decode) return reply.code(400).send({ error: 'Format non pris en charge : PDF, JPEG, PNG ou WebP.' });
+
+      const dossier = await prisma.returnCase.findFirst({
+        where: { id: request.params.id, merchantId },
+        select: { id: true, status: true, labelSentAt: true },
+      });
+      if (!dossier) return reply.code(404).send({ error: 'Dossier introuvable' });
+
+      const maintenant = new Date();
+      const numero = parsed.data.numero?.replace(/\s+/g, '') || null;
+      const updated = await prisma.returnCase.update({
+        where: { id: dossier.id },
+        data: {
+          bonData: new Uint8Array(decode.data),
+          bonMime: decode.mime,
+          bonNom: parsed.data.nom.slice(0, 200),
+          bonImporteLe: maintenant,
+          ...(numero ? { trackingNumber: numero } : {}),
+          ...(parsed.data.transporteur ? { trackingCarrier: parsed.data.transporteur } : {}),
+          labelSent: true,
+          labelSentAt: dossier.labelSentAt ?? maintenant,
+          ...(dossier.status === 'OPEN' ? { status: 'LABEL_SENT' as const } : {}),
+        },
+        select: { id: true, status: true, trackingNumber: true, trackingCarrier: true, bonNom: true, bonImporteLe: true },
+      });
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId: userId,
+        action: 'return.label_imported',
+        targetType: 'return',
+        targetId: dossier.id,
+        metadata: { numero, transporteur: parsed.data.transporteur ?? null },
+      });
+      return reply.send({ case: updated });
+    },
+  );
+
+  app.get<{ Params: { id: string } }>('/api/returns/:id/bon', async (request, reply) => {
+    const dossier = await prisma.returnCase.findFirst({
+      where: { id: request.params.id, merchantId: request.session.merchantId },
+      select: { bonData: true, bonMime: true, bonNom: true },
+    });
+    if (!dossier?.bonData || !dossier.bonMime) return reply.code(404).send({ error: 'Aucun bon pour ce dossier.' });
+    const nom = (dossier.bonNom ?? 'bon-de-retour').replace(/["\r\n]/g, '');
+    return reply
+      .header('Content-Type', dossier.bonMime)
+      .header('Content-Disposition', `inline; filename="${nom}"`)
+      .header('Cache-Control', 'private, max-age=300')
+      .send(Buffer.from(dossier.bonData));
+  });
+
+  /** Envoyer le bon au client, en pièce jointe, depuis la boîte de la boutique. */
+  app.post<{ Params: { id: string } }>(
+    '/api/returns/:id/bon/envoyer',
+    { preHandler: requirePermission('reply') },
+    async (request, reply) => {
+      const { merchantId, userId } = request.session;
+      const dossier = await prisma.returnCase.findFirst({
+        where: { id: request.params.id, merchantId },
+        select: {
+          id: true, customerEmail: true, customerName: true, orderName: true, productTitle: true,
+          bonData: true, bonMime: true, bonNom: true, trackingNumber: true, trackingCarrier: true,
+          merchant: { select: { brandName: true, name: true } },
+        },
+      });
+      if (!dossier) return reply.code(404).send({ error: 'Dossier introuvable' });
+      if (!dossier.bonData || !dossier.bonMime) return reply.code(409).send({ error: 'Importez d’abord le bon de retour.' });
+      if (!dossier.customerEmail) return reply.code(409).send({ error: 'Pas d’adresse mail pour ce client.' });
+
+      const boutique = dossier.merchant.brandName || dossier.merchant.name || null;
+      const prenom = (dossier.customerName ?? '').trim().split(/\s+/)[0] || '';
+      const suivi = dossier.trackingNumber
+        ? `\nNuméro de suivi${dossier.trackingCarrier ? ` (${dossier.trackingCarrier})` : ''} : ${dossier.trackingNumber}\n`
+        : '';
+      try {
+        await sendPlainEmail({
+          merchantId,
+          to: dossier.customerEmail,
+          fromName: boutique,
+          subject: `Votre bon de retour${dossier.orderName ? ` — commande ${dossier.orderName}` : ''}`,
+          body:
+            `Bonjour${prenom ? ` ${prenom}` : ''},\n\n` +
+            `Vous trouverez ci-joint votre bon de retour${dossier.productTitle ? ` pour ${dossier.productTitle}` : ''}.\n` +
+            'Imprimez-le, collez-le sur le colis et déposez-le chez le transporteur.\n' +
+            suivi +
+            `\nBien cordialement,\n${boutique ?? ''}`.trimEnd(),
+          attachments: [{ filename: dossier.bonNom ?? 'bon-de-retour.pdf', mimeType: dossier.bonMime, content: Buffer.from(dossier.bonData) }],
+        });
+      } catch (error) {
+        request.log.warn({ err: error, returnId: dossier.id }, 'Bon de retour non envoyé');
+        return reply.code(502).send({ error: 'Le mail n’est pas parti : vérifiez la boîte mail connectée.' });
+      }
+      const maintenant = new Date();
+      await prisma.returnCase.update({ where: { id: dossier.id }, data: { bonEnvoyeLe: maintenant, lastContactAt: maintenant } });
+      await recordAudit({
+        merchantId,
+        actorType: 'USER',
+        actorId: userId,
+        action: 'return.label_sent_to_customer',
+        targetType: 'return',
+        targetId: dossier.id,
+      });
+      return reply.send({ envoye: true, le: maintenant });
+    },
+  );
+
   app.get<{ Params: { id: string } }>('/api/returns/:id/photo', async (request, reply) => {
     const { merchantId } = request.session;
 
@@ -604,7 +815,7 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
       const dossier = await prisma.returnCase.findFirst({
         where: { id: request.params.id, merchantId },
         select: {
-          id: true, status: true, reason: true, resolution: true, controleLe: true, refuseLe: true, test: true,
+          id: true, status: true, reason: true, resolution: true, controleLe: true, refuseLe: true, test: true, receivedAt: true,
           orderName: true, shopifyOrderId: true, customerName: true, customerEmail: true,
           productTitle: true, variantTitle: true, sku: true, prixRetour: true, devise: true,
         },
@@ -616,7 +827,8 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
       if (dossier.controleLe || dossier.refuseLe) {
         return reply.code(409).send({ code: 'deja_decide', error: 'Ce retour est déjà décidé.' });
       }
-      if (!['RECEIVED', 'RESTOCKED'].includes(dossier.status)) {
+      if (retourNonValide(dossier)) return reply.code(409).send(NON_VALIDE);
+      if (!(dossier.receivedAt || dossier.status === 'RESTOCKED')) {
         return reply.code(409).send({ code: 'pas_recue', error: 'La paire n’est pas encore reçue : validez à sa réception.' });
       }
       const photos = await nombrePhotos(merchantId, dossier.id);
@@ -1158,6 +1370,7 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
     { preHandler: requirePermission('reply') },
     async (request, reply) => {
       const { merchantId } = request.session;
+      if (await bloqueParNonValide(merchantId, request.params.id)) return reply.code(409).send(NON_VALIDE);
       const resultat = await envoyerLienDifference(merchantId, request.params.id);
       return reply.code(resultat.envoye ? 200 : 409).send(resultat.envoye ? resultat : { code: 'lien', error: resultat.erreur });
     },
@@ -1197,6 +1410,7 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
     { preHandler: requirePermission('reply') },
     async (request, reply) => {
       const { merchantId, userId } = request.session;
+      if (await bloqueParNonValide(merchantId, request.params.id)) return reply.code(409).send(NON_VALIDE);
       // Pas de paire envoyée sans les photos de celle qui revient.
       const photos = await nombrePhotos(merchantId, request.params.id);
       if (photos < PHOTOS_MIN) return reply.code(409).send({ code: 'photos', error: manquePhotos(photos) });
@@ -1227,13 +1441,14 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
 
       const dossier = await prisma.returnCase.findFirst({
         where: { id: request.params.id, merchantId },
-        select: { id: true, status: true, reason: true, resolution: true, exchangeStockCaseId: true, exchangeSupplierId: true },
+        select: { id: true, status: true, reason: true, resolution: true, exchangeStockCaseId: true, exchangeSupplierId: true, receivedAt: true, controleLe: true },
       });
       if (!dossier) return reply.code(404).send({ code: 'introuvable', error: 'Dossier introuvable' });
       if (dossier.exchangeStockCaseId || dossier.exchangeSupplierId) {
         return reply.code(409).send({ code: 'deja_organise', error: 'Cet échange est déjà validé.' });
       }
-      if (!['RECEIVED', 'RESTOCKED'].includes(dossier.status)) {
+      if (retourNonValide(dossier)) return reply.code(409).send(NON_VALIDE);
+      if (!(dossier.receivedAt || dossier.status === 'RESTOCKED')) {
         return reply.code(409).send({ code: 'pas_recue', error: 'La paire n’est pas encore reçue : validez à sa réception.' });
       }
       const photos = await nombrePhotos(merchantId, dossier.id);

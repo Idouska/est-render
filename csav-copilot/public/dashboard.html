@@ -1536,7 +1536,9 @@
             <button type="button" class="chip" data-rtab="stock" aria-pressed="false">Stock retours <span class="count" id="ret-n-stock">0</span></button>
             <button type="button" class="chip" data-rtab="agencies" aria-pressed="false">Agences</button>
           </div>
-          <button class="btn btn-primary" id="ret-new" style="margin-left:auto">Nouveau retour</button>
+          <button class="btn" id="ret-bons" type="button" style="margin-left:auto">Importer des bons</button>
+          <input type="file" id="ret-bons-fichiers" accept="application/pdf,image/jpeg,image/png,image/webp" multiple hidden />
+          <button class="btn btn-primary" id="ret-new">Nouveau retour</button>
         </div>
         <div id="ret-body"></div>
       </section>
@@ -2766,6 +2768,22 @@ Remboursement : sous 5 jours ouvrés après réception du retour."></textarea>
     <!-- Ajouter des paires au stock à la main : fin de série, paire
          d'exposition… Le modèle et la déclinaison viennent du catalogue,
          sinon la paire ne correspondrait jamais à une commande. -->
+    <!-- Importer des bons de retour : l'IA lit le numéro de suivi, le
+         transporteur et le client ; l'agent confirme le dossier de chacun. -->
+    <div class="backdrop" id="bons-modal" role="dialog" aria-modal="true" aria-labelledby="bons-title" hidden>
+      <div class="modal modal-wide">
+        <div class="modal-head">
+          <h2 id="bons-title">Importer des bons de retour</h2>
+          <p>Numéro de suivi et transporteur sont lus sur chaque bon. Vérifiez le dossier proposé, puis rattachez.</p>
+        </div>
+        <div class="modal-body" id="bons-body"></div>
+        <div class="modal-foot">
+          <button class="btn" id="bons-cancel" type="button">Annuler</button>
+          <button class="btn btn-primary" id="bons-save" type="button" disabled>Rattacher</button>
+        </div>
+      </div>
+    </div>
+
     <div class="backdrop" id="stk-modal" role="dialog" aria-modal="true" aria-labelledby="stk-title" hidden>
       <div class="modal">
         <div class="modal-head">

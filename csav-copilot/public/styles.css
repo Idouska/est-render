@@ -16990,3 +16990,25 @@ button.rup-chiffre:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--
 #view-overview .ov-bandeau .kpi:hover { background: var(--line-soft); }
 #view-overview .ov-bandeau .kpi:focus-visible { outline: 2px solid var(--accent, #0a84ff); outline-offset: -2px; }
 #view-overview .ov-bandeau .kpi-note.kn-bad { color: var(--crit-ink); }
+
+/* Bons de retour : une ligne par fichier, le dossier à confirmer. */
+.bons-liste { display: grid; gap: 10px; }
+.bons-ligne {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 10px;
+  padding: 12px;
+  border-radius: 10px;
+  box-shadow: 0 0 0 1px var(--line);
+}
+.bons-nom { grid-column: 1 / -1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bons-source, .bons-err { grid-column: 1 / -1; color: var(--ink-mute); margin-top: -4px; }
+.bons-err { color: var(--crit-ink); }
+.bons-ligne .field { margin: 0; }
+.bons-ligne input, .bons-ligne select { width: 100%; }
+.ret-bon-importer { background: none; border: 0; padding: 0; font: inherit; font-size: 12px; cursor: pointer; }
+.bons-dossier { grid-column: 1 / -1; }
+.ret-bon { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; }
+.ret-bon-envoye, .ret-transp { color: var(--ink-mute); font-size: 11px; }
+.ret-close-comment { display: block; margin-top: 4px; color: var(--ink-mute); font-size: 11px; max-width: 220px; }
+@media (max-width: 560px) { .bons-ligne { grid-template-columns: 1fr; } }

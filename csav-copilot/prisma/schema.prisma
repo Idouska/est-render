@@ -1319,6 +1319,19 @@ model ReturnCase {
   refuseLe   DateTime?
   refusMotif String?   @db.Text
 
+  /// Le transporteur du colis retour, lu sur le bon ou saisi.
+  trackingCarrier String?
+  /// Le bon de retour importé (PDF ou photo), pour l'envoyer au client.
+  bonData      Bytes?
+  bonMime      String?
+  bonNom       String?
+  bonImporteLe DateTime?
+  /// Quand le bon est parti chez le client par mail.
+  bonEnvoyeLe  DateTime?
+
+  /// Commentaire facultatif laissé à la fermeture du dossier.
+  closeComment String? @db.Text
+
   /// Dernier échange avec le client, pour repérer les dossiers silencieux :
   /// trois jours sans nouvelle et la relance WhatsApp se propose d'elle-même.
   lastContactAt DateTime @default(now())
