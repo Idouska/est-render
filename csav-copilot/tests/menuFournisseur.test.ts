@@ -54,6 +54,27 @@ test('les ruptures auxquelles le client a répondu s’affichent dans Commandes 
   assert.match(js, /bandeRupturesARepondre\(mes \?\? \[\]\);\n\s+if \(state\.view !== 'rupture'\) return;/);
   assert.match(js, /if \(event\.target\.closest\('\[data-voir-ruptures\]'\)\) setView\('rupture'\);/);
   // Le bouton d'envoi dit à qui cela part : au client de l'atelier.
-  assert.match(i18n, /'oos\.send': 'Envoyer au client',/);
+  assert.match(i18n, /'oos\.send': 'Envoyer \{aBoutique\}',/);
   assert.equal((i18n.match(/'oos\.toAnswer':/g) ?? []).length, 3);
+});
+
+test('les phrases nomment la boutique, et disent « votre client » tant qu’on ne la connaît pas', async () => {
+  const m = await import('../public/workspace.i18n.js');
+  m.setBoutique('Kairo');
+  assert.equal(m.translator('fr')('oos.send'), 'Envoyer à Kairo');
+  assert.equal(m.translator('fr')('oos.waiting'), 'En attente de Kairo');
+  assert.equal(m.translator('en')('oos.merchantSays'), 'Kairo’s reply');
+  assert.equal(m.translator('zh')('oos.send'), '发送给Kairo');
+  // L'élision devant une voyelle.
+  m.setBoutique('Atlasya');
+  assert.equal(m.translator('fr')('oos.waiting'), 'En attente d’Atlasya');
+  m.setBoutique(null);
+  assert.equal(m.translator('fr')('oos.send'), 'Envoyer à votre client');
+  assert.equal(m.translator('en')('oos.send'), 'Send to your client');
+  // Plus aucune phrase ne dit « le marchand », dans aucune langue.
+  const valeurs = i18n.split('\n').filter((l) => /^\s+'[\w.]+':/.test(l)).map((l) => l.slice(l.indexOf(':') + 1));
+  assert.deepEqual(valeurs.filter((v) => /marchand|merchant|商家/i.test(v)), []);
+  // Et le serveur envoie le nom avec les commandes.
+  const routes = readFileSync(new URL('../src/routes/supplierWorkspace.ts', import.meta.url), 'utf8');
+  assert.match(routes, /boutique: supplier\.merchant\?\.brandName\?\.trim\(\) \|\| supplier\.merchant\?\.name\?\.trim\(\) \|\| null,/);
 });

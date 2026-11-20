@@ -59,6 +59,8 @@ interface Workspace {
   merchantId: string;
   supplierId: string;
   supplierName: string;
+  /** Le nom de la boutique, tel que l'atelier la connaît : c'est son client. */
+  boutique: string | null;
   ordersAccess: 'NONE' | 'ASSIGNED' | 'ALL';
   vendors: string[];
   skuPrefixes: string[];
@@ -90,6 +92,7 @@ async function authorize(
       skuPrefixes: true,
       isDefault: true,
       joursCommande: true,
+      merchant: { select: { brandName: true, name: true } },
     },
   });
 
@@ -104,6 +107,7 @@ async function authorize(
     merchantId: payload.merchantId,
     supplierId: supplier.id,
     supplierName: supplier.name,
+    boutique: supplier.merchant?.brandName?.trim() || supplier.merchant?.name?.trim() || null,
     ordersAccess: supplier.ordersAccess,
     vendors: supplier.vendors,
     skuPrefixes: supplier.skuPrefixes,
@@ -642,6 +646,7 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
       if (allowed?.length === 0) {
         return reply.send({
           supplier: { name: workspace.supplierName, ordersAccess: workspace.ordersAccess },
+        boutique: workspace.boutique,
         // Le bandeau « Mode test » de l'atelier : ses saisies n'expédient rien.
         testMode: await enModeTest(workspace.merchantId),
         // Ce que la console a éteint pour cette boutique : l'écran le masque.
@@ -717,6 +722,7 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
 
       return reply.send({
         supplier: { name: workspace.supplierName, ordersAccess: workspace.ordersAccess },
+        boutique: workspace.boutique,
         // Le bandeau « Mode test » de l'atelier : ses saisies n'expédient rien.
         testMode: await enModeTest(workspace.merchantId),
         // Ce que la console a éteint pour cette boutique : l'écran le masque.

@@ -6,7 +6,7 @@
  * ce qui coince. L'export Excel donne la même liste hors ligne.
  */
 
-import { LANGS, LOCALES, pickLang, saveLang, translator } from './workspace.i18n.js';
+import { LANGS, LOCALES, pickLang, saveLang, setBoutique, translator } from './workspace.i18n.js';
 import { verifierAdresse, verifierTelephone } from './workspace.verif.js';
 import { confirmer } from './alerte.js';
 
@@ -938,6 +938,12 @@ async function load() {
 
     $('app').hidden = false;
     $('ws-supplier').textContent = data.supplier?.name ?? '';
+    // Le nom de la boutique entre dans les phrases : on les réécrit dès qu'on le connaît.
+    if ((data.boutique ?? null) !== (state.boutique ?? null)) {
+      state.boutique = data.boutique ?? null;
+      setBoutique(state.boutique);
+      applyLang(state.lang);
+    }
     state.testMode = Boolean(data.testMode);
     $('ws-test').hidden = !state.testMode;
     state.fonctionnalites = data.fonctionnalites ?? {};
