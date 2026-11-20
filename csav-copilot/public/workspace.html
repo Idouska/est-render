@@ -71,18 +71,28 @@
           <span data-t="nav.catalog">Catalogue</span>
         </button>
 
-        <!-- Un seul guichet pour tout ce que le marchand demande.
-             Il y en avait trois — Changements, Ruptures, Échanges — avec trois
-             pastilles : trois boîtes de réception pour une seule question,
-             « qu'attend-on de moi ? ». Le tri par type reste, mais à
-             l'intérieur, où il coûte un clic au lieu d'un choix permanent. -->
-        <button type="button" data-view="tickets">
-          <span class="wsnav-tuile t-vert" aria-hidden="true"><svg viewBox="0 0 20 20">
-            <path d="M3 6.5h14v3a1.6 1.6 0 0 0 0 3v3H3v-3a1.6 1.6 0 0 0 0-3z" />
-            <path d="M12 6.5v10" />
-          </svg></span>
-          <span data-t="nav.tickets">Tickets</span>
-          <span class="wsnav-badge" id="ws-tickets-badge" hidden>0</span>
+        <!-- Ce que le marchand demande, sous les mêmes noms que dans son
+             propre menu : Update, Modification, Annulation. C'était un seul
+             guichet « Tickets », trié par un menu « Type » ; les deux côtés ne
+             parlaient pas de la même chose avec les mêmes mots. La pastille
+             d'ensemble reste, cachée, pour les comptes qui s'y lisent. -->
+        <span class="wsnav-badge" id="ws-tickets-badge" hidden>0</span>
+        <button type="button" data-view="tickets" data-famille="update">
+          <span class="wsnav-tuile t-vert" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M10 4.5v5.5l3.5 2" /><circle cx="10" cy="10" r="6.5" /></svg></span>
+          <span data-t="nav.update">Update</span>
+          <span class="wsnav-badge" id="ws-fam-update" hidden>0</span>
+        </button>
+
+        <button type="button" data-view="tickets" data-famille="modification">
+          <span class="wsnav-tuile t-bleu" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M4 16l1-4 8-8 3 3-8 8z" /><path d="M11.5 5.5l3 3" /></svg></span>
+          <span data-t="nav.modification">Modification</span>
+          <span class="wsnav-badge" id="ws-fam-modification" hidden>0</span>
+        </button>
+
+        <button type="button" data-view="tickets" data-famille="annulation">
+          <span class="wsnav-tuile t-gris" aria-hidden="true"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="6.5" /><path d="M5.5 14.5l9-9" /></svg></span>
+          <span data-t="nav.annulation">Annulation</span>
+          <span class="wsnav-badge" id="ws-fam-annulation" hidden>0</span>
         </button>
 
         <!-- Les échanges : une paire à envoyer contre une paire retournée,

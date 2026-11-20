@@ -50,7 +50,7 @@ test('« à préparer » se lit dans ses lots, et mène à l’onglet des lots',
 });
 
 test('une seule liste, ouverte sur « À répondre », les plus anciennes d’abord', () => {
-  assert.match(js, /state\.tk = \{ statut: 'A_REPONDRE', type: '', items: \[\], erreurs: \[\] \};/);
+  assert.match(js, /state\.tk = \{ statut: 'A_REPONDRE', type: '', famille: null, items: \[\], erreurs: \[\] \};/);
   assert.match(html, /data-tstatut="A_REPONDRE" aria-pressed="true"/);
   const rendu = js.slice(js.indexOf('function renderTickets('));
   assert.match(rendu, /statut === 'A_REPONDRE'\s*\?\s*new Date\(a\.date\)\.getTime\(\) - new Date\(b\.date\)\.getTime\(\)/);

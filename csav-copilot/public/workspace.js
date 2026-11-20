@@ -1782,6 +1782,7 @@ setInterval(loadAlerts, 120000);
  * qui se traitent dans la journée.
  */
 function rafraichirPastilles() {
+  void releverFamilles();
   void rafraichirPastilleUpdates();
   void rafraichirPastilleRuptures();
   void rafraichirPastilleEchanges();
@@ -1857,8 +1858,12 @@ function setView(view) {
   }
 
   document.querySelectorAll('#ws-nav [data-view]').forEach((button) => {
-    button.setAttribute('aria-current', String(button.dataset.view === view));
+    // Trois entrées mènent aux tickets : seule celle de la famille ouverte s'allume.
+    const memeFamille = view !== 'tickets' || (button.dataset.famille ?? null) === (state.tk?.famille ?? null);
+    button.setAttribute('aria-current', String(button.dataset.view === view && memeFamille));
   });
+  // Au téléphone la barre défile : l'onglet ouvert doit rester sous les yeux.
+  document.querySelector('#ws-nav [aria-current="true"]')?.scrollIntoView?.({ block: 'nearest', inline: 'center' });
 
 
   // Chaque écran recharge à l'ouverture : le fournisseur laisse l'onglet
@@ -1878,7 +1883,14 @@ document.querySelectorAll('[data-sous]').forEach((bouton) =>
 );
 
 document.querySelectorAll('#ws-nav [data-view]').forEach((button) =>
-  button.addEventListener('click', () => setView(button.dataset.view)),
+  button.addEventListener('click', () => {
+    if (button.dataset.view === 'tickets' && state.tk) {
+      // Changer de famille repart de « À répondre », sans le tri par type de l'autre.
+      if (state.tk.famille !== button.dataset.famille) Object.assign(state.tk, { statut: 'A_REPONDRE', type: '' });
+      state.tk.famille = button.dataset.famille ?? null;
+    }
+    setView(button.dataset.view);
+  }),
 );
 
 /* -------------------------------------------------------------- période -- */
@@ -2636,7 +2648,8 @@ function majPastilleTickets() {
   // Le même total sur le filtre « À répondre » de la liste : les deux
   // chiffres disent la même chose, ils doivent être égaux.
   const compteur = $('tk-n-rep');
-  if (compteur) {
+  // Dans une famille du menu, ce compteur est celui de la famille (voir renderTickets).
+  if (compteur && !(state.view === 'tickets' && state.tk?.famille)) {
     compteur.hidden = total === 0;
     compteur.textContent = String(total);
   }
@@ -3815,7 +3828,45 @@ function statutRupture(dossier, estDemande) {
   return dossier.phase === 'traite' ? 'CLOS' : 'ATTENTE';
 }
 
-state.tk = { statut: 'A_REPONDRE', type: '', items: [], erreurs: [] };
+state.tk = { statut: 'A_REPONDRE', type: '', famille: null, items: [], erreurs: [] };
+
+/*
+ * Les trois familles du menu, sous les noms du marchand. Une demande de
+ * rupture ou un signalement n'en fait pas partie : ils ont leur écran,
+ * « Out of stock ». Sans famille choisie (lien « Tous les tickets » de
+ * l'accueil), la liste montre tout, comme avant.
+ */
+const FAMILLES_TICKETS = {
+  update: ['UPD:TRACKING', 'UPD:DELAY', 'UPD:MISSING_ITEM'],
+  annulation: ['UPD:CANCEL', 'UPD:HOLD'],
+};
+function familleDuTicket(type) {
+  if (!String(type).startsWith('UPD:')) return null;
+  if (FAMILLES_TICKETS.update.includes(type)) return 'update';
+  if (FAMILLES_TICKETS.annulation.includes(type)) return 'annulation';
+  // Adresse, téléphone, taille, modèle, couleur, message : une modification.
+  return 'modification';
+}
+
+/** La pastille de chaque famille : ce qui attend une réponse. */
+function poserPastillesFamilles(enAttente) {
+  for (const famille of ['update', 'modification', 'annulation']) {
+    const badge = $(`ws-fam-${famille}`);
+    if (!badge) continue;
+    const n = enAttente.filter((type) => familleDuTicket(type) === famille).length;
+    badge.hidden = n === 0;
+    badge.textContent = String(n);
+  }
+}
+function majPastillesFamilles() {
+  poserPastillesFamilles(state.tk.items.filter((item) => item.statut === 'A_REPONDRE').map((item) => item.type));
+}
+/** Relevées seules, toutes les deux minutes, sans toucher à l'écran ouvert. */
+async function releverFamilles() {
+  const donnees = await api(`/api/workspace/${supplierId}/updates`).catch(() => null);
+  if (!donnees) return;
+  poserPastillesFamilles((donnees.updates ?? []).filter((u) => u.status === 'PENDING').map((u) => `UPD:${u.kind}`));
+}
 
 /** Âge lisible : « aujourd'hui », « 3 j ». Rouge au-delà de deux jours. */
 function age(date) {
@@ -3883,6 +3934,7 @@ async function chargerTickets() {
   void rafraichirPastilleEchanges();
 
   state.tk.items = items;
+  majPastillesFamilles();
   state.tk.erreurs = [
     [updates, 'tk.src.updates'],
     [ruptures, 'tk.src.ruptures'],
@@ -3901,11 +3953,21 @@ async function loadTickets() {
 }
 
 function renderTickets() {
-  const { statut, type, items, erreurs } = state.tk;
+  const { statut, type, famille, erreurs } = state.tk;
+  // Une famille du menu ne montre que ses demandes ; sans famille, tout.
+  const items = famille ? state.tk.items.filter((item) => familleDuTicket(item.type) === famille) : state.tk.items;
+  const titre = document.querySelector('#view-tickets h1');
+  if (titre) titre.textContent = t(famille ? `nav.${famille}` : 'tk.title');
 
   document.querySelectorAll('#tk-statuts [data-tstatut]').forEach((bouton) =>
     bouton.setAttribute('aria-pressed', String(bouton.dataset.tstatut === statut)),
   );
+  // Dans une famille, « À répondre » compte ce qu'elle contient, pas tout le guichet.
+  if (famille) {
+    const aRepondre = items.filter((item) => item.statut === 'A_REPONDRE').length;
+    $('tk-n-rep').hidden = aRepondre === 0;
+    $('tk-n-rep').textContent = String(aRepondre);
+  }
   const enAttente = items.filter((item) => item.statut === 'ATTENTE').length;
   $('tk-n-att').hidden = enAttente === 0;
   $('tk-n-att').textContent = String(enAttente);
@@ -4104,6 +4166,8 @@ $('tk-rows')?.addEventListener('click', (event) => {
 function ouvrirTickets(statut, type = '') {
   state.tk.statut = statut;
   state.tk.type = type;
+  // Depuis l'accueil : tous les tickets, pas une seule famille.
+  state.tk.famille = null;
   setView('tickets');
 }
 
