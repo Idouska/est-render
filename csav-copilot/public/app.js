@@ -4066,6 +4066,102 @@ async function basculerLectureOuvert() {
   if (!versLu && PILE_TICKETS.matches) fermerMessagePile();
 }
 
+/*
+ * Au doigt, balayer un message vers la gauche : lu / non lu, comme dans Mail.
+ *
+ * Seulement au toucher (`pointerType === 'touch'`) et hors du mode
+ * sélection. Le geste ne démarre qu'une fois clairement horizontal : un
+ * défilement vertical rend la main au navigateur (qui annule le pointeur).
+ * Lâché après le seuil, il bascule ; avant, la ligne revient sans rien faire.
+ * Le clic qui suit un balayage est avalé — sinon le message s'ouvrirait et
+ * se remarquerait lu dans la foulée.
+ */
+const BALAYAGE_SEUIL = 72;
+let balayage = null;
+let balayageVientDeFinir = false;
+
+function finirBalayage(declencher) {
+  const b = balayage;
+  balayage = null;
+  if (!b?.actif) return;
+  const { rangee } = b;
+  rangee.classList.add('glisse-retour');
+  rangee.style.setProperty('--glisse', '0px');
+  setTimeout(() => {
+    rangee.classList.remove('en-glisse', 'glisse-arme', 'glisse-retour');
+    rangee.style.removeProperty('--glisse');
+    b.fond?.remove();
+  }, 220);
+  balayageVientDeFinir = true;
+  setTimeout(() => {
+    balayageVientDeFinir = false;
+  }, 400);
+  if (declencher) void basculerLecture(b.id);
+}
+
+$('queue')?.addEventListener('pointerdown', (event) => {
+  if (event.pointerType !== 'touch' || enSelection()) return;
+  const rangee = event.target.closest('.qrow');
+  const id = rangee?.querySelector('.queue-item')?.dataset.id;
+  if (!id || event.target.closest('.qpick')) return;
+  balayage = { rangee, id, x0: event.clientX, y0: event.clientY, dx: 0, actif: false, arme: false, pointerId: event.pointerId };
+});
+
+$('queue')?.addEventListener('pointermove', (event) => {
+  const b = balayage;
+  if (!b || event.pointerId !== b.pointerId) return;
+  const dx = event.clientX - b.x0;
+  const dy = event.clientY - b.y0;
+  if (!b.actif) {
+    // Vertical d'abord : c'est un défilement, pas un balayage.
+    if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) {
+      balayage = null;
+      return;
+    }
+    if (dx > -12 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    b.actif = true;
+    const ticket = state.tickets.find((candidat) => candidat.id === b.id);
+    b.fond = document.createElement('div');
+    b.fond.className = 'qswipe';
+    b.fond.setAttribute('aria-hidden', 'true');
+    b.fond.textContent = ticket && !estLu(ticket) ? 'Lu' : 'Non lu';
+    b.rangee.prepend(b.fond);
+    b.rangee.classList.add('en-glisse');
+    try {
+      b.rangee.setPointerCapture(event.pointerId);
+    } catch {
+      // Sans capture, le geste continue tant que le doigt reste sur la ligne.
+    }
+  }
+  b.dx = Math.max(Math.min(dx, 0), -b.rangee.clientWidth * 0.75);
+  b.rangee.style.setProperty('--glisse', `${b.dx}px`);
+  const arme = b.dx <= -BALAYAGE_SEUIL;
+  if (arme && !b.arme) navigator.vibrate?.(8);
+  b.arme = arme;
+  b.rangee.classList.toggle('glisse-arme', arme);
+});
+
+for (const fin of ['pointerup', 'pointercancel']) {
+  $('queue')?.addEventListener(fin, (event) => {
+    if (!balayage || event.pointerId !== balayage.pointerId) return;
+    if (!balayage.actif) {
+      balayage = null;
+      return;
+    }
+    finirBalayage(fin === 'pointerup' && balayage.arme);
+  });
+}
+
+$('queue')?.addEventListener(
+  'click',
+  (event) => {
+    if (!balayageVientDeFinir) return;
+    event.preventDefault();
+    event.stopPropagation();
+  },
+  true,
+);
+
 const prefetched = new Map();
 
 function prefetchTicket(id) {
@@ -5236,6 +5332,10 @@ function fermerMessagePile({ parHistorique = false } = {}) {
   const vue = $('view-tickets');
   if (!vue?.classList.contains('pile-message')) return;
   vue.classList.remove('pile-message');
+  // Revenu à la liste, la ligne du message quitté n'a plus à porter le plein
+  // de l'accent : un gris discret la situe, comme une ouverture automatique.
+  state.ouvertureAuto = true;
+  document.querySelector('#queue .queue-item[aria-current="true"]')?.classList.add('q-auto');
   // L'entrée posée à l'ouverture s'en va avec le message : sinon le prochain
   // Retour d'Android ne ferait rien.
   if (!parHistorique && history.state?.csavMessage) history.back();

@@ -267,3 +267,14 @@ test('lu / non lu depuis le message ouvert : menu Actions, touche U, et l’actu
   assert.match(app, /prefetched\.delete\(state\.currentId\);\n\s+\/\/ Actualiser n'est pas lire[^\n]*\n\s+await selectTicket\(state\.currentId, \{ silent: true \}\);/);
   assert.match(lire('public/dashboard.html'), /<kbd>U<\/kbd> lu \/ non lu/);
 });
+
+test('au doigt, balayer vers la gauche passe lu / non lu ; plus de fond teinté', () => {
+  const css = lire('public/styles.css');
+  assert.doesNotMatch(css, /#view-tickets \.queue-item:not\(\.q-done\) \{\n\s+background:/);
+  assert.match(css, /#queue \.qrow \{ touch-action: pan-y; \}/);
+  assert.match(app, /if \(event\.pointerType !== 'touch' \|\| enSelection\(\)\) return;/);
+  assert.match(app, /finirBalayage\(fin === 'pointerup' && balayage\.arme\);/);
+  assert.match(app, /if \(declencher\) void basculerLecture\(b\.id\);/);
+  // Le clic qui suit un balayage n'ouvre pas le message.
+  assert.match(app, /if \(!balayageVientDeFinir\) return;\n\s+event\.preventDefault\(\);\n\s+event\.stopPropagation\(\);/);
+});

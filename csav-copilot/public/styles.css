@@ -17145,17 +17145,10 @@ button.stk-transp { cursor: pointer; }
 
    Seuls le point bleu et quelques points de graisse séparaient les deux :
    il fallait comparer deux lignes pour savoir laquelle attendait. Le non-lu
-   a maintenant un fond teinté, un nom et un motif en gras noir, et un point
-   plus gros ; le lu passe en gris, avatar estompé, sans fond. La ligne
-   ouverte (fond de l'accent) et la sélection gardent leurs propres règles,
-   plus précises.
+   a maintenant un nom et un motif en gras noir et un point plus gros ; le lu
+   passe en gris, avatar estompé. Sans fond teinté : retiré à la demande du
+   marchand, la couleur de l'accent sur une ligne sur deux chargeait la file.
    ------------------------------------------------------------------------ */
-#view-tickets .queue-item:not(.q-done) {
-  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
-}
-#view-tickets .queue-item:not(.q-done):hover {
-  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
-}
 #view-tickets .queue-item:not(.q-done) .queue-who { font-weight: 750; color: var(--ink); }
 #view-tickets .queue-item:not(.q-done) .queue-subject { font-weight: 650; color: var(--ink); }
 #view-tickets .queue-item:not(.q-done) .queue-prev { color: var(--ink-soft); }
@@ -17168,5 +17161,34 @@ button.stk-transp { cursor: pointer; }
 /* Le point des non-lus, plus gros : c'est lui que l'œil cherche en premier. */
 #view-tickets .qread:not(.lu)::before { width: 11px; height: 11px; }
 
-/* Deux lignes teintées qui se suivent restent deux lignes. */
-#view-tickets .qrow + .qrow { margin-top: 2px; }
+/* ------------------------------------------------------------------------
+   Au doigt : balayer un message vers la gauche le passe lu / non lu.
+
+   `pan-y` laisse le défilement vertical au navigateur et donne le geste
+   horizontal à la page. Pendant le geste, la ligne glisse au-dessus d'un
+   fond qui dit ce qui va se passer ; il prend la couleur de l'accent une
+   fois le seuil passé — lâcher alors fait le geste.
+   ------------------------------------------------------------------------ */
+#queue .qrow { touch-action: pan-y; }
+#view-tickets .qswipe {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 22px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ink) 40%, var(--surface));
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  transition: background 120ms var(--ease);
+}
+#view-tickets .qrow.glisse-arme .qswipe { background: var(--accent); color: var(--on-accent); }
+#view-tickets .qrow.en-glisse > :not(.qswipe) { transform: translateX(var(--glisse, 0px)); }
+#view-tickets .qrow.en-glisse .queue-item { position: relative; z-index: 1; }
+#view-tickets .qrow.en-glisse .queue-item:not([aria-current="true"]) { background: var(--surface); }
+#view-tickets .qrow.en-glisse .queue-item.q-auto { background: color-mix(in srgb, var(--ink) 8%, var(--surface)); }
+#view-tickets .qrow.glisse-retour > :not(.qswipe) { transition: transform 200ms var(--ease); }
+#view-tickets .qrow.en-glisse::before { opacity: 0; }
