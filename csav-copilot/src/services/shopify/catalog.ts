@@ -34,6 +34,7 @@ interface RawProduct {
   vendor: string | null;
   productType: string | null;
   totalInventory: number | null;
+  tracksInventory?: boolean | null;
   updatedAt: string;
   featuredMedia: { preview: { image: { url: string } | null } | null } | null;
   variantsCount: { count: number } | null;
@@ -52,6 +53,7 @@ const PRODUCT_FIELDS = /* GraphQL */ `
     vendor
     productType
     totalInventory
+    tracksInventory
     updatedAt
     featuredMedia {
       preview {
@@ -75,6 +77,18 @@ const PRODUCT_FIELDS = /* GraphQL */ `
   }
 `;
 
+/**
+ * Le stock, seulement quand Shopify le suit.
+ *
+ * Une boutique qui ne tient pas son stock dans Shopify (le fournisseur
+ * expédie, le stock est chez lui) reçoit « 0 » pour chaque article : ce zéro
+ * ne veut pas dire « épuisé », il veut dire « non suivi ». On rend alors
+ * `null`, et les écrans n'affichent ni chiffre ni « Épuisé ».
+ */
+export function stockSuivi(suivi: boolean | null | undefined, quantite: number | null): number | null {
+  return suivi === false ? null : quantite;
+}
+
 function toProduct(product: RawProduct): ProductSummary {
   return {
     id: product.id,
@@ -84,7 +98,7 @@ function toProduct(product: RawProduct): ProductSummary {
     vendor: product.vendor,
     productType: product.productType,
     image: product.featuredMedia?.preview?.image?.url ?? null,
-    totalInventory: product.totalInventory,
+    totalInventory: stockSuivi(product.tracksInventory, product.totalInventory),
     variantCount: product.variantsCount?.count ?? 0,
     priceMin: product.priceRangeV2?.minVariantPrice.amount ?? null,
     priceMax: product.priceRangeV2?.maxVariantPrice.amount ?? null,
@@ -480,6 +494,9 @@ export async function productWithVariants(
               price
               inventoryQuantity
               availableForSale
+              inventoryItem {
+                tracked
+              }
               image {
                 url
               }
@@ -505,7 +522,10 @@ export async function productWithVariants(
       sku: variant.sku,
       image: variant.image?.url ?? null,
       price: variant.price,
-      inventoryQuantity: variant.inventoryQuantity,
+      inventoryQuantity: stockSuivi(
+        (variant as RawVariant & { inventoryItem?: { tracked: boolean | null } | null }).inventoryItem?.tracked,
+        variant.inventoryQuantity,
+      ),
       availableForSale: variant.availableForSale,
     })),
   };

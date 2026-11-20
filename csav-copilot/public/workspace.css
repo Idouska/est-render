@@ -4105,3 +4105,6 @@ body.ws-simple .wsapp #ws-sort[aria-pressed='true'] { background: var(--brand-so
   .wsapp .wsnav > button { flex: 0 0 18.5%; min-width: 0; white-space: nowrap; font-size: 10.5px; padding-left: 2px; padding-right: 2px; overflow: hidden; text-overflow: ellipsis; }
   .wsapp .wsnav > button > span:not(.wsnav-tuile):not(.wsnav-badge):not(.wsnav-compte) { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 }
+
+/* Stock non suivi dans Shopify : les filtres de disponibilité se retirent. */
+.wsapp #catalog-dispo[hidden] { display: none !important; }
