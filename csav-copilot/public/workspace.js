@@ -4785,6 +4785,8 @@ function renderMesRuptures() {
 
 /* La photo de l'article, si la commande est dans la liste du jour. */
 function imageDeRupture(dossier) {
+  // La photo du modèle, envoyée avec la rupture ; à défaut, celle de la commande du jour.
+  if (dossier.image) return dossier.image;
   const commande = state.orders.find((order) => order.name === dossier.orderName);
   const ligne = commande?.lineItems?.find((item) => item.title === dossier.article?.produit) ?? commande?.lineItems?.[0];
   return ligne?.image ?? null;

@@ -4139,15 +4139,41 @@ body.ws-simple .wsapp #ws-sort[aria-pressed='true'] { background: var(--brand-so
   .wsapp .cs-envoyer:not(.pret) { background: var(--line-soft); color: var(--ink-mute); }
   .wsapp .cs-probleme { flex: 0 0 auto; padding: 0 14px; }
 
-  /* Out of stock : au clavier, un champ suffit — le pavé de chiffres disparaît. */
-  .wsapp .oos-cols { grid-template-columns: minmax(0, 400px) minmax(0, 1fr); }
-  .wsapp .oos-etape1 .oos-ecran { height: 52px; font-size: 26px; }
-  .wsapp .oos-etape1 .oos-pave { grid-template-columns: minmax(0, 1fr); }
+  /* Out of stock : une barre pour signaler, puis la liste de ses ruptures en
+     pleine largeur. Trois cartes étroites coupaient les noms sur deux lignes
+     sous des pastilles énormes ; une ligne par rupture se lit d'un trait. */
+  .wsapp .oos-cols { grid-template-columns: minmax(0, 1fr); gap: 22px; max-width: 1180px; }
+  .wsapp .oos-etape1 { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 12px; padding: 14px 18px; }
+  .wsapp .oos-etape1 .oos-h { margin: 0 6px 0 0; font-size: 15px; }
+  .wsapp .oos-etape1 .oos-ecran { flex: 0 1 220px; height: 40px; font-size: 18px; border-radius: 10px; }
+  .wsapp .oos-etape1 .oos-pave { display: flex; flex: none; }
   .wsapp .oos-etape1 .oos-pave > button:not(.oos-pave-ok) { display: none; }
-  .wsapp .oos-etape1 .oos-pave-ok { min-height: 0; height: 44px; font-size: 15px; }
-  /* Mes ruptures : la colonne large, en deux colonnes de cartes. */
-  .wsapp #oos-mes { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; align-items: start; }
-  .wsapp #oos-mes > .oos-ma { margin: 0; }
+  .wsapp .oos-etape1 .oos-pave-ok { min-height: 0; height: 40px; padding: 0 22px; font-size: 14px; border-radius: 10px; }
+  .wsapp .oos-etape1 .oos-resultats { flex: 1 1 100%; }
+  .wsapp .oos-etape1 .oos-resultats:empty { display: none; }
+  .wsapp .oos-cols > aside h2 { font-size: 17px; }
+
+  .wsapp #oos-mes { display: flex; flex-direction: column; gap: 0; background: var(--card); border-radius: 16px; box-shadow: 0 0 0 1px var(--line); overflow: hidden; }
+  .wsapp #oos-mes > .oos-ma {
+    display: grid; grid-template-columns: minmax(260px, 1.1fr) minmax(0, 1.6fr); align-items: center; gap: 10px 24px;
+    margin: 0; padding: 12px 18px 12px 20px; border-radius: 0; box-shadow: none; border-top: 1px solid var(--line-soft);
+  }
+  .wsapp #oos-mes > .oos-ma:first-child { border-top: 0; }
+  .wsapp #oos-mes .oos-ma-tete { gap: 14px; min-width: 0; }
+  .wsapp #oos-mes .oos-ma-tete img, .wsapp #oos-mes .oos-ma-tete > i { width: 52px; height: 52px; border-radius: 10px; flex: none; }
+  .wsapp #oos-mes .oos-ma-tete > span { min-width: 0; }
+  .wsapp #oos-mes .oos-ma-tete b { font-size: 16px; }
+  .wsapp #oos-mes .oos-ma-tete small { display: block; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* À droite de la ligne : l'état, ou la réponse du marchand et ses deux boutons. */
+  /* La paire occupe toute la hauteur de la ligne, quel que soit le nombre de blocs à droite. */
+  .wsapp #oos-mes .oos-ma-tete { grid-column: 1; grid-row: 1 / span 4; align-self: center; }
+  .wsapp #oos-mes .oos-ma > :not(.oos-ma-tete) { grid-column: 2; justify-self: start; align-self: center; }
+  .wsapp #oos-mes .oos-etat { padding: 5px 12px; font-size: 13px; border-radius: 999px; }
+  .wsapp #oos-mes .oos-rep { padding: 8px 12px; border-radius: 10px; }
+  .wsapp #oos-mes .oos-rep span { font-size: 11.5px; }
+  .wsapp #oos-mes .oos-rep b { font-size: 14px; }
+  .wsapp #oos-mes .oos-deux { display: flex; gap: 8px; }
+  .wsapp #oos-mes .oos-gros { min-height: 0; height: 36px; padding: 0 20px; font-size: 14px; border-radius: 10px; flex: none; width: auto; }
 }
 
 /* Une rupture sans photo : un carton dessiné, plutôt qu'un carré gris vide. */
