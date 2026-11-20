@@ -61,7 +61,7 @@
           <span class="wsnav-badge" id="ws-rupture-badge" hidden>0</span>
         </button>
 
-        <button type="button" data-view="catalog">
+        <button type="button" data-view="catalog" class="wsnav-second" style="--i:3">
           <span class="wsnav-tuile t-violet" aria-hidden="true"><svg viewBox="0 0 20 20">
             <rect x="3" y="3.5" width="6" height="6" rx="1.4" />
             <rect x="11" y="3.5" width="6" height="6" rx="1.4" />
@@ -83,13 +83,13 @@
           <span class="wsnav-badge" id="ws-fam-update" hidden>0</span>
         </button>
 
-        <button type="button" data-view="tickets" data-famille="modification">
+        <button type="button" data-view="tickets" data-famille="modification" class="wsnav-second" style="--i:0">
           <span class="wsnav-tuile t-bleu" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M4 16l1-4 8-8 3 3-8 8z" /><path d="M11.5 5.5l3 3" /></svg></span>
           <span data-t="nav.modification">Modification</span>
           <span class="wsnav-badge" id="ws-fam-modification" hidden>0</span>
         </button>
 
-        <button type="button" data-view="tickets" data-famille="annulation">
+        <button type="button" data-view="tickets" data-famille="annulation" class="wsnav-second" style="--i:1">
           <span class="wsnav-tuile t-gris" aria-hidden="true"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="6.5" /><path d="M5.5 14.5l9-9" /></svg></span>
           <span data-t="nav.annulation">Annulation</span>
           <span class="wsnav-badge" id="ws-fam-annulation" hidden>0</span>
@@ -98,12 +98,22 @@
         <!-- Les échanges : une paire à envoyer contre une paire retournée,
              contrôlée chez le marchand. Un tableau à part, comme la note le
              demande : la pointure se lit d'un coup d'œil. -->
-        <button type="button" data-view="echanges">
+        <button type="button" data-view="echanges" class="wsnav-second" style="--i:2">
           <span class="wsnav-tuile t-orange" aria-hidden="true"><svg viewBox="0 0 20 20">
             <path d="M4 7h10l-3-3M16 13H6l3 3" />
           </svg></span>
           <span data-t="nav.echanges">Échanges</span>
           <span class="wsnav-badge" id="ws-echanges-badge" hidden>0</span>
+        </button>
+
+        <!-- Au téléphone seulement : huit onglets ne tiennent pas dans la barre.
+             Les quatre du quotidien restent ; « Plus » ouvre les autres. -->
+        <button type="button" class="wsnav-plus" id="ws-nav-plus" aria-expanded="false">
+          <span class="wsnav-tuile t-gris" aria-hidden="true"><svg viewBox="0 0 20 20">
+            <circle cx="4.5" cy="10" r="1.3" /><circle cx="10" cy="10" r="1.3" /><circle cx="15.5" cy="10" r="1.3" />
+          </svg></span>
+          <span data-t="nav.more">Plus</span>
+          <span class="wsnav-badge" id="ws-plus-badge" hidden>0</span>
         </button>
 
         <!-- Réglages rarement touchés, donc rangés en bas : la langue se

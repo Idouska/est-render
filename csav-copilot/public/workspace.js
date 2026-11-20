@@ -1869,7 +1869,8 @@ function setView(view) {
     button.setAttribute('aria-current', String(button.dataset.view === view && memeFamille));
   });
   // Au téléphone la barre défile : l'onglet ouvert doit rester sous les yeux.
-  document.querySelector('#ws-nav [aria-current="true"]')?.scrollIntoView?.({ block: 'nearest', inline: 'center' });
+  // « Plus » s'allume quand l'écran ouvert est l'un de ceux qu'il range.
+  $('ws-nav-plus')?.classList.toggle('actif', Boolean(document.querySelector('#ws-nav .wsnav-second[aria-current="true"]')));
 
 
   // Chaque écran recharge à l'ouverture : le fournisseur laisse l'onglet
@@ -1888,8 +1889,39 @@ document.querySelectorAll('[data-sous]').forEach((bouton) =>
   }),
 );
 
+/*
+ * « Plus », au téléphone : les entrées secondaires s'ouvrent au-dessus de la
+ * barre. Sa pastille additionne les leurs — une demande à traiter ne doit pas
+ * rester cachée derrière un bouton sans le dire.
+ */
+function fermerPlus() {
+  $('ws-nav').classList.remove('plus-ouvert');
+  $('ws-nav-plus')?.setAttribute('aria-expanded', 'false');
+}
+function majPastillePlus() {
+  const badge = $('ws-plus-badge');
+  if (!badge) return;
+  const total = [...document.querySelectorAll('#ws-nav .wsnav-second .wsnav-badge')]
+    .filter((b) => !b.hidden)
+    .reduce((somme, b) => somme + (Number(b.textContent) || 0), 0);
+  // N'écrire que ce qui change : cette pastille est elle-même dans le menu
+  // observé, et une écriture inconditionnelle se redéclencherait sans fin.
+  if (badge.hidden !== (total === 0)) badge.hidden = total === 0;
+  if (badge.textContent !== String(total)) badge.textContent = String(total);
+}
+$('ws-nav-plus')?.addEventListener('click', (event) => {
+  event.stopPropagation();
+  const ouvert = $('ws-nav').classList.toggle('plus-ouvert');
+  $('ws-nav-plus').setAttribute('aria-expanded', String(ouvert));
+});
+document.addEventListener('click', (event) => {
+  if (!event.target.closest('#ws-nav')) fermerPlus();
+});
+new MutationObserver(majPastillePlus).observe($('ws-nav'), { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['hidden'] });
+
 document.querySelectorAll('#ws-nav [data-view]').forEach((button) =>
   button.addEventListener('click', () => {
+    fermerPlus();
     if (button.dataset.view === 'tickets' && state.tk) {
       // Changer de famille repart de « À répondre », sans le tri par type de l'autre.
       if (state.tk.famille !== button.dataset.famille) Object.assign(state.tk, { statut: 'A_REPONDRE', type: '' });
@@ -4032,6 +4064,22 @@ function renderTickets() {
     // répondre —, le suivant prend sa place, comme dans Mail.
     const choisi = visibles.find((item) => item.id === state.tk.choisi) ?? visibles[0];
     state.tk.choisi = choisi.id;
+    /*
+     * Dans une famille du menu (Update, Modification, Annulation) : une
+     * demande par bloc, l'une sous l'autre, chacune avec ses boutons. La liste
+     * à gauche et la fiche à droite obligeaient à cliquer chaque ligne pour
+     * lire deux phrases et répondre.
+     */
+    if (famille) {
+      // Ce qui attend une réponse d'abord, quel que soit le filtre.
+      const rangPile = { A_REPONDRE: 0, ATTENTE: 1, CLOS: 2 };
+      $('tk-rows').innerHTML = `${alerte}<div class="tk-pile">${[...visibles]
+        .sort((x, y) => (rangPile[x.statut] ?? 3) - (rangPile[y.statut] ?? 3))
+        .map((item) => `<article class="tk-detail tk-bloc">${enteteDeTicket(item)}${item.html}</article>`)
+        .join('')}</div>`;
+      cablerTickets();
+      return;
+    }
     $('tk-rows').innerHTML = `${alerte}<div class="tk-split">
       <div class="tk-file">${visibles.map((item) => ligneDeTicket(item, item.id === choisi.id)).join('')}</div>
       <div class="tk-detail">${enteteDeTicket(choisi)}${choisi.html}</div>
@@ -5100,7 +5148,7 @@ function carteCommande(order) {
       ? `<div class="cs-reglages cs-reglages-ligne">
            <input type="hidden" data-cs-carrier value="${esc(transporteur)}" />
            <input type="hidden" data-cs-total value="${total}" />
-           <span>${esc(transporteur)} · ${esc(t('cs.nParcels', { n: total }))} · <button type="button" class="cs-modif" data-cs-reglages="1">${esc(t('cs.change'))}</button></span>
+           <span><span data-cs-carrier-nom>${esc(transporteur)}</span> · ${esc(t('cs.nParcels', { n: total }))} · <button type="button" class="cs-modif" data-cs-reglages="1">${esc(t('cs.change'))}</button></span>
          </div>`
       : `<div class="cs-reglages">
            <label class="cs-mini"><span>${esc(t('cs.carrier'))}</span><input data-cs-carrier list="ws-carriers" value="${esc(transporteur)}" autocomplete="off" /></label>
@@ -5140,6 +5188,39 @@ function carteCommande(order) {
 }
 
 /* Le bouton vert : prêt quand chaque colis a son numéro. */
+/*
+ * Le transporteur, reconnu à la forme du numéro.
+ *
+ * Seulement les formes sans équivoque : un numéro de douze chiffres peut être
+ * de trois transporteurs, on ne devine pas. Reconnu, il remplace le dernier
+ * transporteur utilisé — taper un numéro UPS après une journée de Colissimo
+ * ne doit pas envoyer « Colissimo » à l'acheteur.
+ */
+const FORMES_SUIVI = [
+  [/^1Z[0-9A-Z]{16}$/, 'UPS'],
+  [/^\d[A-Z]\d{11}$/, 'Colissimo'],
+  [/^[A-Z]{2}\d{9}FR$/, 'La Poste'],
+  [/^YT\d{16}$/, 'YunExpress'],
+  [/^4PX\d{10,}[A-Z]{0,2}$/, '4PX'],
+  [/^LP\d{14,}$/, 'Cainiao'],
+  [/^SF\d{12,}$/, 'SF Express'],
+  [/^JJ?D\d{16,}$/, 'DHL'],
+];
+function devinerTransporteur(numero) {
+  const propre = String(numero ?? '').replace(/\s+/g, '').toUpperCase();
+  return FORMES_SUIVI.find(([forme]) => forme.test(propre))?.[1] ?? null;
+}
+
+/** Pose le transporteur reconnu sur la carte, champ visible ou ligne de rappel. */
+function poserTransporteurReconnu(carte, numero) {
+  const reconnu = devinerTransporteur(numero);
+  const champ = carte.querySelector('[data-cs-carrier]');
+  if (!reconnu || !champ || champ.value === reconnu) return;
+  champ.value = reconnu;
+  const nom = carte.querySelector('[data-cs-carrier-nom]');
+  if (nom) nom.textContent = reconnu;
+}
+
 function majBoutonCarte(carte) {
   const champs = [...carte.querySelectorAll('[data-cs-suivi]')];
   const bouton = carte.querySelector('[data-cs-envoyer]');
@@ -5203,6 +5284,11 @@ async function expedierCarte(carte, bouton) {
     bouton.disabled = false;
   }
   renderOrders();
+  // Au clavier, la commande suivante est prête à recevoir son numéro : Entrée,
+  // numéro, Entrée. Au doigt, ouvrir le clavier tout seul gênerait.
+  if (dernier && !auDoigt.matches) {
+    document.querySelector('#ws-orders [data-cs]:not(.cs-faite) [data-cs-suivi]')?.focus();
+  }
 }
 
 /* Redessine une carte en gardant ce qui est déjà tapé. */
@@ -5251,7 +5337,9 @@ $('ws-orders').addEventListener('click', (event) => {
 
 $('ws-orders').addEventListener('input', (event) => {
   const carte = state.simple && event.target.closest('[data-cs]');
-  if (carte) majBoutonCarte(carte);
+  if (!carte) return;
+  if (event.target.matches('[data-cs-suivi]')) poserTransporteurReconnu(carte, event.target.value);
+  majBoutonCarte(carte);
 });
 
 $('ws-orders').addEventListener('keydown', (event) => {

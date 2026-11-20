@@ -78,3 +78,30 @@ test('les phrases nomment la boutique, et disent « votre client » tant qu’on
   const routes = readFileSync(new URL('../src/routes/supplierWorkspace.ts', import.meta.url), 'utf8');
   assert.match(routes, /boutique: supplier\.merchant\?\.brandName\?\.trim\(\) \|\| supplier\.merchant\?\.name\?\.trim\(\) \|\| null,/);
 });
+
+test('le transporteur se reconnaît à la forme du numéro, sans deviner dans le doute', () => {
+  const bloc = js.slice(js.indexOf('const FORMES_SUIVI = ['), js.indexOf('/** Pose le transporteur reconnu'));
+  const deviner = new Function(`${bloc}; return devinerTransporteur;`)() as (n: string) => string | null;
+  assert.equal(deviner('1Z999AA10123456784'), 'UPS');
+  assert.equal(deviner('6a 12345678901'), 'Colissimo');
+  assert.equal(deviner('LA123456789FR'), 'La Poste');
+  assert.equal(deviner('YT2610272259305500'), 'YunExpress');
+  // Douze chiffres peuvent être de trois transporteurs : on ne devine pas.
+  assert.equal(deviner('123456789012'), null);
+  assert.equal(deviner(''), null);
+  // Après un envoi, au clavier, la commande suivante reçoit le curseur.
+  assert.match(js, /if \(dernier && !auDoigt\.matches\) \{\n\s+document\.querySelector\('#ws-orders \[data-cs\]:not\(\.cs-faite\) \[data-cs-suivi\]'\)\?\.focus\(\);/);
+});
+
+test('dans une famille, une demande par bloc, ce qui attend une réponse d’abord', () => {
+  assert.match(js, /const rangPile = \{ A_REPONDRE: 0, ATTENTE: 1, CLOS: 2 \};/);
+  assert.match(js, /<article class="tk-detail tk-bloc">\$\{enteteDeTicket\(item\)\}\$\{item\.html\}<\/article>/);
+});
+
+test('au téléphone, « Plus » range quatre entrées et additionne leurs pastilles sans boucler', () => {
+  assert.equal((html.match(/class="wsnav-second"/g) ?? []).length, 4);
+  assert.match(html, /id="ws-nav-plus"/);
+  assert.equal((i18n.match(/'nav\.more':/g) ?? []).length, 3);
+  // La pastille est dans le menu observé : elle ne s'écrit que si elle change.
+  assert.match(js, /if \(badge\.textContent !== String\(total\)\) badge\.textContent = String\(total\);/);
+});
