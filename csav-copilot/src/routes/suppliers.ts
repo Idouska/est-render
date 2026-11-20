@@ -1,3 +1,4 @@
+import { traduireDuFrancais } from '../services/ai/translate.ts';
 import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { env } from '../config/env.ts';
@@ -886,6 +887,14 @@ export async function supplierRoutes(app: FastifyInstance): Promise<void> {
           createdById: userId,
         },
       });
+
+      // La demande, traduite pour l'atelier — après coup, sans faire attendre
+      // le marchand : si la traduction échoue, l'atelier lit l'original.
+      void traduireDuFrancais(alert.message)
+        .then((traduit) =>
+          prisma.supplierAlert.update({ where: { id: alert.id }, data: { messageTraduit: { en: traduit.en, zh: traduit.zh } } }),
+        )
+        .catch((error) => request.log.warn({ err: error, alertId: alert.id }, 'Traduction de la demande en échec'));
 
       /*
        * Seules les demandes qui changent le colis partent sur-le-champ.

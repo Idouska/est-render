@@ -105,3 +105,18 @@ test('au téléphone, « Plus » range quatre entrées et additionne leurs pasti
   // La pastille est dans le menu observé : elle ne s'écrit que si elle change.
   assert.match(js, /if \(badge\.textContent !== String\(total\)\) badge\.textContent = String\(total\);/);
 });
+
+test('les demandes de la boutique sont traduites pour l’atelier, l’original restant lisible', () => {
+  const suppliers = readFileSync(new URL('../src/routes/suppliers.ts', import.meta.url), 'utf8');
+  // Après coup : la boutique n'attend pas la traduction, et un échec laisse l'original.
+  assert.match(suppliers, /void traduireDuFrancais\(alert\.message\)\s+\.then\(\(traduit\) =>\s+prisma\.supplierAlert\.update\(\{ where: \{ id: alert\.id \}, data: \{ messageTraduit: \{ en: traduit\.en, zh: traduit\.zh \} \} \}\),/);
+  assert.match(readFileSync(new URL('../prisma/schema.prisma', import.meta.url), 'utf8'), /\n  messageTraduit Json\?\n/);
+  const bloc = js.slice(js.indexOf('function messageTraduitDe('), js.indexOf('async function loadAlerts('));
+  assert.match(bloc, /state\.lang === 'fr' \? demande\.message : \(demande\.messageTraduit\?\.\[state\.lang\] \?\? demande\.message\)/);
+  assert.match(js, /class="upd-msg-vo"/);
+});
+
+test('« Touchez » au doigt, « Cliquez » à la souris', () => {
+  assert.match(js, /t\(auDoigt\.matches \? 'oos\.step2' : 'oos\.step2Mouse'\)/);
+  assert.equal((i18n.match(/'oos\.step2Mouse':/g) ?? []).length, 3);
+});
