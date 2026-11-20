@@ -17,7 +17,7 @@ import { ordersToCsv } from '../services/export/ordersCsv.ts';
 import { ordersToXlsx } from '../services/export/ordersXlsx.ts';
 import { getShopifyClient } from '../services/shopify/client.ts';
 import { getOrderById, listOrders, quoteSearchValue } from '../services/shopify/orders.ts';
-import { listProducts, productWithVariants } from '../services/shopify/catalog.ts';
+import { listProducts, listVariants, productWithVariants } from '../services/shopify/catalog.ts';
 import { corrigerSuivi, expeditionPortant, fulfillOrder } from '../services/shopify/fulfill.ts';
 import { draftChangeReply } from '../services/ai/changeReply.ts';
 import { decodePhoto, photoSchema, sendParcelPhoto, toParcelView } from './parcels.ts';
@@ -449,6 +449,41 @@ async function enregistrerColis(
  * une fois signalés, disparaissaient de l'écran de l'atelier, qui ne savait
  * plus si le marchand les avait vus.
  */
+/*
+ * La photo d'un modèle signalé, lue dans le catalogue Shopify par son nom.
+ *
+ * L'écran « Mes ruptures » la prenait dans les commandes du jour : une rupture
+ * sur une commande plus ancienne n'avait donc qu'un carré gris. Gardée une
+ * heure par boutique ; un modèle introuvable est retenu aussi, pour ne pas le
+ * redemander à chaque ouverture.
+ */
+const photosModeles = new Map<string, { expire: number; image: string | null }>();
+
+async function photosDesModeles(merchantId: string, titres: string[]): Promise<Map<string, string | null>> {
+  const trouvees = new Map<string, string | null>();
+  const maintenant = Date.now();
+  const aLire: string[] = [];
+  for (const titre of new Set(titres)) {
+    const connue = photosModeles.get(`${merchantId}|${titre}`);
+    if (connue && connue.expire > maintenant) trouvees.set(titre, connue.image);
+    else aLire.push(titre);
+  }
+  if (aLire.length === 0) return trouvees;
+  try {
+    const client = await getShopifyClient(merchantId);
+    for (const titre of aLire.slice(0, 20)) {
+      const variantes = await listVariants(client, { query: `product_title:${quoteSearchValue(titre)}`, limit: 10 }).catch(() => []);
+      const image = (variantes.find((v) => v.productTitle === titre && v.image) ?? variantes.find((v) => v.image))?.image ?? null;
+      photosModeles.set(`${merchantId}|${titre}`, { expire: maintenant + 60 * 60_000, image });
+      if (photosModeles.size > 3000) photosModeles.delete(photosModeles.keys().next().value!);
+      trouvees.set(titre, image);
+    }
+  } catch {
+    // Sans Shopify, l'écran garde son carton dessiné.
+  }
+  return trouvees;
+}
+
 async function signalementsDeLAtelier(
   workspace: { merchantId: string; supplierId: string },
   options: { seulementRuptures: boolean },
@@ -520,6 +555,12 @@ async function signalementsDeLAtelier(
     parTicket.set(proposition.ticketId, [...(parTicket.get(proposition.ticketId) ?? []), proposition]);
   }
 
+  const articles = new Map(tickets.map((ticket) => [ticket.id, lireArticle(ticket.messages[0]?.bodyText)]));
+  const photos = await photosDesModeles(
+    workspace.merchantId,
+    [...articles.values()].flatMap((article) => (article.produit ? [article.produit] : [])),
+  );
+
   return tickets.map((ticket) => {
     const clos = ticket.status === 'CLOSED' || ticket.status === 'AUTO_SENT';
     const repondu = reponduLe.get(ticket.id) ?? null;
@@ -535,7 +576,8 @@ async function signalementsDeLAtelier(
       traite: clos,
       phase: clos ? 'classe' : repondu !== null && repondu > ticket.createdAt ? 'traite' : 'cree',
       detail: ticket.messages[0]?.bodyText ?? null,
-      article: lireArticle(ticket.messages[0]?.bodyText),
+      article: articles.get(ticket.id)!,
+      image: photos.get(articles.get(ticket.id)?.produit ?? '') ?? null,
       substitutions: parTicket.get(ticket.id) ?? [],
       consignes: consignes.get(ticket.id) ?? [],
       signaleLe: ticket.createdAt,
