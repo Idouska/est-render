@@ -17576,3 +17576,13 @@ button.stk-transp { cursor: pointer; }
 .qchip.qchip-plus { border-style: dashed; color: var(--ink-soft); }
 .canned-q { padding: 0; background: none; }
 .canned-q svg { display: none; }
+
+/* Le logo du transporteur, sur une pastille blanche (jaune pour DHL, comme la marque). */
+.stk-transp-logo { padding: 3px 8px; background: #ffffff; box-shadow: 0 0 0 1px var(--line); height: 24px; box-sizing: border-box; }
+.stk-transp-logo img { display: block; height: 16px; width: auto; max-width: 92px; }
+.stk-logo-dhl { background: #ffcc00; box-shadow: none; }
+.stk-logo-dhl img { height: 20px; }
+.stk-logo-fedex img { height: 20px; }
+.stk-transp-logo { height: 28px; }
+.stk-logo-laposte img, .stk-logo-mondialrelay img, .stk-logo-fedex img { height: 22px; max-width: 110px; }
+.stk-logo-ups img, .stk-logo-dpd img, .stk-logo-usps img { height: 20px; }
