@@ -119,6 +119,30 @@ const alertKind = z.enum([
 export async function supplierRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', requireSession);
 
+  /**
+   * Ce que les ateliers déclarent indisponible chez eux. Lecture seule : c'est
+   * une information pour la boutique, Shopify n'est pas modifié.
+   */
+  app.get('/api/indisponibles', async (request, reply) => {
+    const { merchantId } = request.session;
+    const [lignes, ateliers] = await Promise.all([
+      prisma.supplierIndisponible.findMany({ where: { merchantId }, orderBy: { createdAt: 'desc' }, take: 2000 }),
+      prisma.supplier.findMany({ where: { merchantId }, select: { id: true, name: true } }),
+    ]);
+    const nom = new Map(ateliers.map((atelier) => [atelier.id, atelier.name]));
+    return reply.send({
+      indisponibles: lignes.map((ligne) => ({
+        variantId: ligne.variantId,
+        productId: ligne.productId,
+        productTitle: ligne.productTitle,
+        variantTitle: ligne.variantTitle,
+        sku: ligne.sku,
+        atelier: nom.get(ligne.supplierId) ?? null,
+        depuis: ligne.createdAt,
+      })),
+    });
+  });
+
   app.get('/api/suppliers', async (request, reply) => {
     const suppliers = await prisma.supplier.findMany({
       where: { merchantId: request.session.merchantId },

@@ -4248,3 +4248,12 @@ body.ws-simple .wsapp #ws-sort[aria-pressed='true'] { background: var(--brand-so
 
 /* Le message d'origine, sous sa traduction. */
 .wsapp .upd-msg-vo { margin: 4px 0 0; font-size: 12.5px; color: var(--ink-mute); font-style: italic; }
+
+/* Catalogue : déclarer une taille indisponible. */
+.wsapp .fiche-declarer { display: grid; gap: 6px; margin-top: 12px; }
+.wsapp .fiche-declarer .btn { justify-content: center; min-height: 42px; font-weight: 650; }
+.wsapp .fiche-declarer .fiche-declarer-non { color: #c5221f; border-color: color-mix(in srgb, #c5221f 35%, transparent); }
+.wsapp .fiche-declarer small { color: var(--ink-mute); font-size: 12.5px; text-align: center; }
+.wsapp .fiche-taille.fiche-indispo { border-color: #ff3b30; background: #fff1f0; }
+.wsapp .fiche-taille.fiche-indispo span { color: #c5221f; font-weight: 650; }
+.wsapp .varr-declarer { margin-left: auto; flex: none; }

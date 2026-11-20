@@ -17600,3 +17600,15 @@ button.stk-transp { cursor: pointer; }
 
 /* Suivi colis : la barre qui compte et filtre, et les lignes qu'elle cache. */
 #tracking-barre[hidden], #tracking-rows tr[hidden] { display: none !important; }
+
+/* Ce que le fournisseur déclare indisponible : dans le Catalogue, et sur les commandes concernées. */
+.cat-indispo { margin: 0 0 12px; border-radius: 12px; background: var(--crit-soft); color: var(--crit-ink); }
+.cat-indispo[hidden] { display: none; }
+.cat-indispo > summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 10px 14px; cursor: pointer; list-style: none; font-size: 13px; }
+.cat-indispo > summary::-webkit-details-marker { display: none; }
+.cat-indispo > summary span { font-size: 12.5px; opacity: 0.85; }
+.cat-indispo-liste { display: grid; gap: 6px; padding: 2px 14px 12px; }
+.cat-indispo-ligne { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: 13px; color: var(--ink); }
+.cat-indispo-ligne > span { display: flex; flex-wrap: wrap; gap: 4px; }
+.cat-indispo-taille { padding: 2px 8px; border-radius: 6px; background: var(--surface); box-shadow: 0 0 0 1px var(--line); font-size: 12px; font-weight: 600; }
+#view-envoi .el-indispo { flex: none; padding: 2px 8px; border-radius: 999px; background: var(--crit-soft); color: var(--crit-ink); font-size: 11.5px; font-weight: 600; white-space: nowrap; }

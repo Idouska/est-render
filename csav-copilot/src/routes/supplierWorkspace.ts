@@ -1617,6 +1617,57 @@ export async function supplierWorkspaceRoutes(app: FastifyInstance): Promise<voi
   );
 
   /**
+   * Ce que l'atelier déclare indisponible chez lui, déclinaison par
+   * déclinaison. Information pour la boutique : Shopify n'est pas touché.
+   */
+  app.get<{ Params: { id: string }; Querystring: { token?: string } }>(
+    '/api/workspace/:id/indisponibles',
+    async (request, reply) => {
+      const workspace = await authorize(request, reply);
+      if (!workspace) return;
+      const lignes = await prisma.supplierIndisponible.findMany({
+        where: { merchantId: workspace.merchantId, supplierId: workspace.supplierId },
+        select: { variantId: true },
+        take: 5000,
+      });
+      return reply.send({ variantes: lignes.map((ligne) => ligne.variantId) });
+    },
+  );
+
+  app.post<{ Params: { id: string }; Querystring: { token?: string } }>(
+    '/api/workspace/:id/indisponibles',
+    async (request, reply) => {
+      const workspace = await authorize(request, reply);
+      if (!workspace) return;
+      if (workspace.ordersAccess === 'NONE') return reply.code(403).send({ error: 'Catalogue non ouvert' });
+      const parsed = z
+        .object({
+          productId: z.string().min(1).max(120),
+          variantId: z.string().min(1).max(120),
+          productTitle: z.string().trim().min(1).max(300),
+          variantTitle: z.string().trim().max(200).nullish(),
+          sku: z.string().trim().max(120).nullish(),
+          indisponible: z.boolean(),
+        })
+        .safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Déclaration invalide' });
+      const { indisponible, ...article } = parsed.data;
+      const cle = { merchantId: workspace.merchantId, supplierId: workspace.supplierId, variantId: article.variantId };
+
+      if (indisponible) {
+        await prisma.supplierIndisponible.upsert({
+          where: { merchantId_supplierId_variantId: cle },
+          create: { ...cle, productId: article.productId, productTitle: article.productTitle, variantTitle: article.variantTitle || null, sku: article.sku || null },
+          update: {},
+        });
+      } else {
+        await prisma.supplierIndisponible.deleteMany({ where: cle });
+      }
+      return reply.send({ indisponible });
+    },
+  );
+
+  /**
    * La fiche d'un produit : ses déclinaisons, leurs SKU, leur stock.
    *
    * C'est la déclinaison qui s'emballe, pas le produit — « Blackened Blue en
