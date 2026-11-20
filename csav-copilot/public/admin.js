@@ -111,6 +111,18 @@ const GROUPS = [
       { key: 'TRACK17_API_KEY', label: 'Clé API 17TRACK' },
     ],
   },
+  {
+    id: 'legal',
+    title: 'Mentions légales',
+    help:
+      "Qui édite l'outil. Ces trois lignes remplissent les pages publiques « Confidentialité » (/privacy) et " +
+      "« Conditions d'utilisation » (/terms). Tant qu'il en manque une, ces pages affichent un bandeau « à compléter ».",
+    fields: [
+      { key: 'LEGAL_COMPANY', label: 'Nom de la société éditrice', placeholder: 'Ma Société SAS' },
+      { key: 'LEGAL_ADDRESS', label: 'Adresse du siège', placeholder: '12 rue …, 75000 Paris, France' },
+      { key: 'LEGAL_EMAIL', label: 'Email de contact', placeholder: 'contact@…' },
+    ],
+  },
 ];
 
 const SOURCE_LABELS = {

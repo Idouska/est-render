@@ -1,3 +1,4 @@
+import { pageLegale } from './services/platform/legal.ts';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import cookie from '@fastify/cookie';
@@ -163,8 +164,8 @@ export async function buildServer() {
   // n'est pas passé par l'installation Shopify.
   app.get('/login', async (request, reply) => reply.type('text/html').sendFile('login.html'));
 
-  app.get('/privacy', async (request, reply) => reply.type('text/html').sendFile('privacy.html'));
-  app.get('/terms', async (request, reply) => reply.type('text/html').sendFile('terms.html'));
+  app.get('/privacy', async (request, reply) => reply.type('text/html').send(await pageLegale('privacy.html')));
+  app.get('/terms', async (request, reply) => reply.type('text/html').send(await pageLegale('terms.html')));
 
   await app.register(shopifyAuthRoutes);
   await app.register(googleAuthRoutes);

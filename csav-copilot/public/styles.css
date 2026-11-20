@@ -17586,3 +17586,14 @@ button.stk-transp { cursor: pointer; }
 .stk-transp-logo { height: 28px; }
 .stk-logo-laposte img, .stk-logo-mondialrelay img, .stk-logo-fedex img { height: 22px; max-width: 110px; }
 .stk-logo-ups img, .stk-logo-dpd img, .stk-logo-usps img { height: 20px; }
+
+/* Colissimo : fourni en image, plus large que haut. */
+.stk-logo-colissimo img { height: 24px; max-width: 96px; margin: -2px -4px; }
+
+/* La commande choisie par défaut : dit, avec les deux gestes qui tranchent. */
+.cmd-defaut { display: grid; gap: 4px; margin: 0 0 10px; padding: 10px 12px; border-radius: 10px; background: var(--warn-soft); color: var(--warn-ink); font-size: 12.5px; }
+.cmd-defaut b { font-size: 13px; }
+.cmd-defaut-gestes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+
+.stk-raison { grid-column: 1 / -1; }
+.stk-raison b { font-weight: 500; color: var(--ink-soft); }

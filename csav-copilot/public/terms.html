@@ -8,21 +8,12 @@
   </head>
   <body>
     <div class="page">
-      <div class="draft-banner">
-        <b>⚠</b>
-        <div>
-          <b>Modèle de départ, pas un document validé.</b>
-          Ce texte décrit fidèlement le fonctionnement réel de l'application
-          (voir le code source), mais les champs entre crochets sont à
-          compléter et l'ensemble doit être relu par un juriste avant toute
-          publication ou usage réel. Retirez ce bandeau une fois le document
-          validé.
-        </div>
+      {{BANDEAU}}
       </div>
 
       <h1>Conditions générales d'utilisation</h1>
       <p class="meta">
-        cSAV Copilot — dernière mise à jour : <mark>[à compléter]</mark>
+        cSAV Copilot — dernière mise à jour : {{DATE}}
       </p>
 
       <h2>1. Objet</h2>
@@ -35,8 +26,7 @@
         automatiquement, que le marchand relit et envoie lui-même.
       </p>
       <p>
-        L'Application est actuellement en phase <mark>[bêta / pilote — à
-        préciser selon le stade réel du produit]</mark>. Certaines
+        L'Application est actuellement en phase pilote. Certaines
         fonctionnalités décrites dans la documentation peuvent ne pas encore
         être disponibles.
       </p>
@@ -93,12 +83,12 @@
         Le traitement des données personnelles des clients du marchand est
         décrit dans la <a href="/privacy">politique de confidentialité</a> et,
         le cas échéant, dans un contrat de sous-traitance distinct signé entre
-        le marchand et <mark>[Nom de la société éditrice]</mark>.
+        le marchand et {{SOCIETE}}.
       </p>
 
       <h2>6. Disponibilité</h2>
       <p>
-        <mark>[Nom de la société éditrice]</mark> s'efforce d'assurer la
+        {{SOCIETE}} s'efforce d'assurer la
         disponibilité de l'Application mais ne garantit pas une disponibilité
         continue. Des interruptions peuvent survenir pour maintenance ou en
         raison de la disponibilité des services tiers dont l'Application
@@ -108,8 +98,7 @@
 
       <h2>7. Tarification</h2>
       <p>
-        <mark>[À compléter : modalités de facturation, essai gratuit le cas
-        échéant, modalités de résiliation.]</mark>
+        Les conditions tarifaires (prix, essai éventuel, facturation) sont celles convenues par écrit entre le marchand et {{SOCIETE}} au moment de la souscription. Le marchand peut résilier à tout moment selon les modalités de l'article 8.
       </p>
 
       <h2>8. Résiliation</h2>
@@ -122,23 +111,19 @@
 
       <h2>9. Limitation de responsabilité</h2>
       <p>
-        <mark>[À compléter avec l'assistance d'un juriste : l'Application
-        propose des réponses générées automatiquement ; la clause de
-        responsabilité doit refléter le fait que le marchand valide ou envoie
-        ces réponses, et couvrir les cas d'indisponibilité des services
-        tiers.]</mark>
+        Les réponses proposées par l'Application sont générées automatiquement et peuvent contenir des erreurs. Le marchand reste responsable des messages envoyés à ses clients, qu'il les valide un par un ou qu'il ait activé l'envoi automatique, ainsi que des remboursements et des modifications de commande qu'il confirme. {{SOCIETE}} ne peut être tenue responsable de l'indisponibilité des services tiers dont l'Application dépend (Shopify, Gmail, fournisseur d'IA, transporteurs).
       </p>
 
       <h2>10. Droit applicable</h2>
       <p>
-        <mark>[À compléter.]</mark>
+        Les présentes conditions sont soumises au droit français. À défaut d'accord amiable, tout litige relève des tribunaux compétents du siège de {{SOCIETE}}.
       </p>
 
       <h2>Contact</h2>
       <p>
-        <mark>[Nom de la société éditrice]</mark><br />
-        <mark>[Adresse du siège]</mark><br />
-        <mark>[Email de contact]</mark>
+        {{SOCIETE}}<br />
+        {{ADRESSE}}<br />
+        {{EMAIL}}
       </p>
 
       <footer>

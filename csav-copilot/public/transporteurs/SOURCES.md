@@ -10,6 +10,4 @@ de leurs propriétaires respectifs.
 | gls.svg | Wikimedia Commons, « GLS Logo 2021.svg » | Domaine public |
 | laposte.svg | Wikimedia Commons, « La Poste (Frankreich) logo.svg » | Domaine public |
 | mondialrelay.svg | Wikimedia Commons, « Mondial Relay by InPost logo-03.svg » | CC BY 4.0 |
-
-Colissimo n'a pas de logo librement réutilisable trouvé : il reste affiché à
-ses couleurs, en toutes lettres.
+| colissimo.png | Fourni par le marchand | Marque de La Poste, usage d'identification |

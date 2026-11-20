@@ -2209,7 +2209,7 @@ async function openCustomerSheet(email, displayName) {
       <button class="linklike mono" data-track="${esc(shipment.trackingNumber)}">${esc(
         shipment.trackingNumber,
       )}</button>
-      ${shipment.carrier ? `<span class="tag tag-order">${esc(shipment.carrier)}</span>` : ''}
+      ${shipment.carrier ? marqueTransporteur(shipment.carrier, `<span class="tag tag-order">${esc(shipment.carrier)}</span>`) : ''}
       <span class="when">${esc(shipment.orderName ?? '')}</span>
       <span class="when">${relativeTime(shipment.updatedAt)}</span>
     </div>`,
@@ -2222,7 +2222,7 @@ async function openCustomerSheet(email, displayName) {
         (parcel) => `<div class="sheet-row">
           <b>${parcel.index}/${parcel.total}</b>
           <button class="linklike mono" data-track="${esc(parcel.trackingNumber)}">${esc(parcel.trackingNumber)}</button>
-          ${parcel.carrier ? `<span class="tag tag-order">${esc(parcel.carrier)}</span>` : ''}
+          ${parcel.carrier ? marqueTransporteur(parcel.carrier, `<span class="tag tag-order">${esc(parcel.carrier)}</span>`) : ''}
           ${
             parcel.hasPhoto
               ? `<a class="btn btn-small" href="/api/parcels/${esc(
@@ -6562,6 +6562,72 @@ function whatsappLink(number, { text = null } = {}) {
   return `https://web.whatsapp.com/send?${params.toString()}`;
 }
 
+/*
+ * La commande a été choisie par défaut : le client en a plusieurs, et rien
+ * dans le message ne désignait l'une d'elles. On le dit, avec les deux gestes
+ * qui tranchent — un rattachement silencieux ferait répondre sur la mauvaise.
+ */
+const COMMANDE_PAR_DEFAUT_MAX = 0.6;
+function commandeParDefaut(ticket) {
+  return (
+    Boolean(ticket?.shopifyOrderId) &&
+    ticket.orderMatchMethod !== 'MANUAL' &&
+    typeof ticket.orderMatchScore === 'number' &&
+    ticket.orderMatchScore <= COMMANDE_PAR_DEFAUT_MAX
+  );
+}
+
+function avisCommandeParDefaut(ticket) {
+  if (!commandeParDefaut(ticket)) return '';
+  return `<div class="cmd-defaut" role="note">
+    <b>Commande choisie par défaut</b>
+    <span>Ce client a plusieurs commandes et son message n’en désigne aucune : c’est la plus récente.</span>
+    <span class="cmd-defaut-gestes">
+      <button type="button" class="btn btn-small" data-cmd-confirmer="${esc(ticket.shopifyOrderId)}">C’est la bonne</button>
+      <button type="button" class="btn btn-small" data-cmd-changer>Ce n’est pas celle-ci</button>
+    </span>
+  </div>`;
+}
+
+async function rattacherCommande(ticketId, orderId) {
+  // L'avis s'efface au clic : le serveur reprend ensuite la réponse à partir
+  // de la commande choisie, ce qui peut prendre quelques secondes.
+  document.querySelector('#c-order .cmd-defaut')?.remove();
+  await api(`/api/tickets/${ticketId}/order`, { method: 'POST', body: JSON.stringify({ orderId }) });
+  const ticket = state.detail?.ticket;
+  if (ticket?.id === ticketId) Object.assign(ticket, { orderMatchMethod: 'MANUAL', orderMatchScore: 1 });
+  await selectTicket(ticketId, { silent: true });
+}
+
+$('c-order')?.addEventListener('click', async (event) => {
+  const ticket = state.detail?.ticket;
+  if (!ticket) return;
+  const confirmer = event.target.closest('[data-cmd-confirmer]');
+  const changer = event.target.closest('[data-cmd-changer]');
+  if (!confirmer && !changer) return;
+  try {
+    if (confirmer) {
+      await rattacherCommande(ticket.id, confirmer.dataset.cmdConfirmer);
+      return toast('Commande confirmée.');
+    }
+    const numero = await saisir({
+      titre: 'Quelle est la bonne commande ?',
+      texte: 'Son numéro, tel qu’il apparaît dans Shopify.',
+      action: 'Rattacher',
+      champ: { placeholder: '#18327', libelle: 'Numéro de commande' },
+    });
+    const cherche = String(numero ?? '').replace(/[^0-9A-Za-z-]/g, '');
+    if (!cherche) return;
+    const page = await api(`/api/orders?limit=10&q=${encodeURIComponent(cherche)}`);
+    const trouvee = (page.orders ?? []).find((commande) => String(commande.name).replace(/^#/, '') === cherche);
+    if (!trouvee) return toast(`Aucune commande ${cherche} dans la boutique.`, true);
+    await rattacherCommande(ticket.id, trouvee.id);
+    toast(`Message rattaché à ${trouvee.name}.`);
+  } catch (error) {
+    toast(error.message, true);
+  }
+});
+
 function renderOrder(ticket, order, orderError) {
   const container = $('c-order');
 
@@ -6582,6 +6648,7 @@ function renderOrder(ticket, order, orderError) {
     // Les états Shopify bruts — PAID, FULFILLED — se lisent en anglais
     // administratif ; traduits en pastilles, ils se voient sans se lire.
     container.innerHTML =
+      avisCommandeParDefaut(ticket) +
       `<div class="c-order-tags">
         ${statusTag(order.displayFinancialStatus, FINANCIAL_LABELS, ['PENDING', 'PARTIALLY_PAID', 'EXPIRED'])}
         ${statusTag(order.displayFulfillmentStatus, FULFILLMENT_LABELS, ['UNFULFILLED', 'ON_HOLD'])}
@@ -11431,7 +11498,7 @@ async function loadTracking() {
           }>
             <td class="mono lt-cmd"><b>${esc(shipment.orderName)}</b></td>
             <td class="lt-client">${esc(shipment.customer ?? '—')}</td>
-            <td class="lt-transp">${esc(shipment.carrier ?? '—')}</td>
+            <td class="lt-transp">${marqueTransporteur(shipment.carrier, esc(shipment.carrier ?? '—'))}</td>
             <td class="mono lt-num">${
               shipment.trackingNumber
                 ? `<button class="linklike" data-track="${esc(shipment.trackingNumber)}"${
@@ -13428,6 +13495,12 @@ function renderReturnStock(box) {
   if (!FILTRES_STOCK.some(([cle]) => cle === r.stockFiltre)) r.stockFiltre = 'tout';
   const { confiees, toutes } = lignesStock();
   const lignes = filtrerStock(toutes, r.stockFiltre);
+  // La pastille du menu : tout ce que cet écran affiche « À envoyer ».
+  const aEnvoyerMenu = toutes.filter(stockAEnvoyer).length;
+  if ((state.navCounts?.renvoi ?? 0) !== aEnvoyerMenu || (state.navCounts?.renvoiVu ?? 0) !== aEnvoyerMenu) {
+    state.navCounts = { ...state.navCounts, renvoi: aEnvoyerMenu, renvoiVu: aEnvoyerMenu };
+    renderNav();
+  }
   const images = r.stockImages ?? {};
   const joursDepuis = (date) => Math.max(0, Math.floor((Date.now() - new Date(date).getTime()) / 86_400_000));
   const initiales = (titre) =>
@@ -13453,6 +13526,19 @@ function renderReturnStock(box) {
     if (item.sku) lignesDetail.push(`<div><span>Référence</span><b class="mono">${esc(item.sku)}</b></div>`);
     // La ligne le dit déjà tant que la paire est là ; une fois partie, c'est ici qu'on le retrouve.
     if (item.restockedAt && l.etat === 'envoye') lignesDetail.push(`<div><span>Entrée en stock</span><b>${esc(fullDate(item.restockedAt))}</b></div>`);
+    if (l.etat === 'stock') {
+      // Pourquoi aucune commande : dit ce qui a été regardé, pour qu'un
+      // « aucune commande » ne se lise pas « on n'a pas cherché ».
+      const meta = r.matchMeta ?? {};
+      const raison = meta.error
+        ? `Les commandes Shopify n’ont pas pu être lues : ${meta.error}`
+        : !item.sku
+          ? 'Cette paire n’a pas de référence : elle ne peut être reconnue que par son nom et sa taille exacts.'
+          : `Aucune des ${meta.examinees ?? 0} commandes en attente ne demande ce modèle dans cette taille${
+              item.agency?.country || item.country ? ', dans son pays ou un pays voisin' : ''
+            }.${meta.tronque ? ' Seules les 1 000 plus récentes ont été regardées.' : ''}`;
+      lignesDetail.push(`<div class="stk-raison"><span>Pas de commande</span><b>${esc(raison)}</b></div>`);
+    }
     if (l.match) {
       lignesDetail.push(`<div><span>Client</span><b>${esc(l.match.client ?? '—')}</b></div>`);
       if (l.match.adresse) lignesDetail.push(`<div><span>Livrer à</span><b class="stk-adresse">${esc(adresseTexte(l.match.adresse))}</b></div>`);
@@ -13640,7 +13726,16 @@ const LOGOS_TRANSPORTEUR = {
   GLS: 'gls',
   'La Poste': 'laposte',
   'Mondial Relay': 'mondialrelay',
+  Colissimo: 'colissimo',
 };
+/* Ceux fournis en image et non en dessin vectoriel. */
+const LOGOS_EN_PNG = new Set(['colissimo']);
+
+/* Le transporteur, là où il n'était qu'un mot : son logo si on l'a, sinon
+   `repli` (le rendu d'avant), pour ne rien changer aux transporteurs inconnus. */
+function marqueTransporteur(nom, repli) {
+  return logoTransporteur(nom) ? pastilleTransporteur(nom) : repli;
+}
 
 function logoTransporteur(nom) {
   const cherche = sansAccents(nom ?? '').replace(/\s+/g, '');
@@ -13654,7 +13749,7 @@ function pastilleTransporteur(nom, attributs = '') {
   const fin = balise.split(' ')[0];
   const logo = logoTransporteur(nom);
   if (logo) {
-    return `<${balise} class="stk-transp stk-transp-logo stk-logo-${logo.fichier}" ${attributs}><img src="/static/transporteurs/${logo.fichier}.svg" alt="${esc(logo.nom)}" /></${fin}>`;
+    return `<${balise} class="stk-transp stk-transp-logo stk-logo-${logo.fichier}" ${attributs}><img src="/static/transporteurs/${logo.fichier}.${LOGOS_EN_PNG.has(logo.fichier) ? 'png' : 'svg'}" alt="${esc(logo.nom)}" /></${fin}>`;
   }
   const couleurs = couleursTransporteur(nom);
   const style = couleurs ? ` style="background:${couleurs[0]};color:${couleurs[1]}"` : '';
@@ -15634,6 +15729,9 @@ async function refreshChangesCount() {
        */
       suppliers: activity.total,
       returns: returns?.counts?.silent ?? state.navCounts?.returns ?? 0,
+      // Stock : les paires confiées à une commande et pas encore parties.
+      // L'écran Stock y ajoute les paires seulement proposées, dès qu'il les connaît.
+      renvoi: Math.max(returns?.counts?.aEnvoyer ?? 0, state.navCounts?.renvoiVu ?? 0),
       // En échec, la pastille garde sa valeur : un compteur qui rate un tour
       // ne doit ni s'éteindre ni retomber à zéro, ce qui dirait « plus rien ».
       ruptures: ruptures?.ouverts ?? state.navCounts?.ruptures ?? 0,
@@ -15692,7 +15790,7 @@ function renderNav() {
            */
           const mute = ['orders', 'customers', 'catalog'].includes(view);
           const dim = view === 'tracking';
-          const hot = ['changes', 'update', 'suppliers', 'retour', 'ruptures', 'envoi', 'refunds'].includes(view) && tally > 0;
+          const hot = ['changes', 'update', 'suppliers', 'retour', 'ruptures', 'envoi', 'refunds', 'renvoi'].includes(view) && tally > 0;
           const shown = tally > 9999 ? '9999+' : tally;
           const badge = tally && !mute;
           const courant = meta.alias
