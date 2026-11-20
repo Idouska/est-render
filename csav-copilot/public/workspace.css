@@ -4108,3 +4108,50 @@ body.ws-simple .wsapp #ws-sort[aria-pressed='true'] { background: var(--brand-so
 
 /* Stock non suivi dans Shopify : les filtres de disponibilité se retirent. */
 .wsapp #catalog-dispo[hidden] { display: none !important; }
+
+/* ========================================================================
+   ORDINATEUR — Commandes du jour et Out of stock, resserrés
+
+   Ces deux écrans sont dessinés pour le doigt : grosses touches, pavé de
+   chiffres, boutons de 48 px. À la souris et au clavier, ils gaspillaient
+   l'écran : trois cartes par rangée, un pavé numérique sur la moitié de la
+   page pour taper un numéro. Rien ne change au téléphone ni sur un écran
+   tactile (`hover: hover` et `pointer: fine` ne visent que la souris).
+   ======================================================================== */
+@media (min-width: 1100px) and (hover: hover) and (pointer: fine) {
+  /* Les outils : des raccourcis, pas des boutons d'action. */
+  .wsapp .cs-actions { gap: 6px; }
+  .wsapp .cs-action { min-height: 0; padding: 7px 12px; font-size: 13px; font-weight: 500; border-radius: 9px; box-shadow: 0 0 0 1px var(--line); }
+  .wsapp .cs-action svg { width: 15px; height: 15px; }
+
+  /* Les cartes : plus par rangée, moins hautes, le suivi et ses réglages sur une ligne. */
+  .wsapp .cs-grille { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+  .wsapp .cs-carte { gap: 9px; padding: 12px; }
+  .wsapp .cs-photo { width: 52px; height: 52px; }
+  .wsapp .cs-num { font-size: 17px; }
+  .wsapp .cs-art { font-size: 13.5px; }
+  .wsapp .cs-suivi > input { height: 38px; font-size: 14px; }
+  .wsapp .cs-suivi .cs-carre { width: 38px; height: 38px; }
+  .wsapp .cs-reglages { gap: 8px; }
+  .wsapp .cs-mini > input, .wsapp .cs-mini > select { height: 28px; }
+  .wsapp .cs-envoyer, .wsapp .cs-probleme { min-height: 0; height: 36px; font-size: 14px; border-radius: 10px; }
+  /* Tant que le numéro manque, « Expédié » se fait discret : ce n'est pas encore un geste possible. */
+  .wsapp .cs-envoyer:not(.pret) { background: var(--line-soft); color: var(--ink-mute); }
+  .wsapp .cs-probleme { flex: 0 0 auto; padding: 0 14px; }
+
+  /* Out of stock : au clavier, un champ suffit — le pavé de chiffres disparaît. */
+  .wsapp .oos-cols { grid-template-columns: minmax(0, 400px) minmax(0, 1fr); }
+  .wsapp .oos-etape1 .oos-ecran { height: 52px; font-size: 26px; }
+  .wsapp .oos-etape1 .oos-pave { grid-template-columns: minmax(0, 1fr); }
+  .wsapp .oos-etape1 .oos-pave > button:not(.oos-pave-ok) { display: none; }
+  .wsapp .oos-etape1 .oos-pave-ok { min-height: 0; height: 44px; font-size: 15px; }
+  /* Mes ruptures : la colonne large, en deux colonnes de cartes. */
+  .wsapp #oos-mes { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; align-items: start; }
+  .wsapp #oos-mes > .oos-ma { margin: 0; }
+}
+
+/* Une rupture sans photo : un carton dessiné, plutôt qu'un carré gris vide. */
+.wsapp .oos-ma-tete > i {
+  background: var(--line-soft) center / 46% no-repeat
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239a9aa3' stroke-width='1.6' stroke-linejoin='round'%3E%3Cpath d='M12 3l8 4.5v9L12 21l-8-4.5v-9zM4 7.5l8 4.5 8-4.5M12 12v9'/%3E%3C/svg%3E");
+}
