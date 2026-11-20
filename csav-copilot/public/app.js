@@ -12289,7 +12289,7 @@ function photosChip(item) {
   const n = item.photos ?? 0;
   return `<button class="ret-photos${n >= 3 ? ' ret-photos-ok' : ''}" type="button" data-ret-photos="${esc(item.id)}"
     title="${esc(n >= 3 ? 'Photos du retour' : `Photos du retour : ${3 - n} de plus avant de décider`)}" aria-label="Photos du retour (${n})">
-    <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="5.5" width="15" height="11" rx="2" /><circle cx="10" cy="11" r="3.2" /><path d="M7 5.5 8.2 3.5h3.6L13 5.5" /></svg>${n}/3
+    <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="5.5" width="15" height="11" rx="2" /><circle cx="10" cy="11" r="3.2" /><path d="M7 5.5 8.2 3.5h3.6L13 5.5" /></svg>${n >= 3 ? n : `${n}/3`}
   </button>`;
 }
 
@@ -12347,7 +12347,8 @@ function renderReturns() {
     .querySelectorAll('#ret-tabs [data-rtab]')
     .forEach((tab) => tab.setAttribute('aria-pressed', String(tab.dataset.rtab === r.tab)));
   // Stock a son propre en-tête : la barre de Retour n'y paraît pas.
-  $('ret-barre').hidden = r.tab === 'stock';
+  const ficheOuverte = TEL_RETOUR.matches && r.tab === 'cases' && r.cases.some((item) => item.id === r.ouvert);
+  $('ret-barre').hidden = r.tab === 'stock' || ficheOuverte;
 
   if (r.tab === 'echanges') return renderEchanges(box);
   if (r.tab === 'cases') return renderReturnCases(box);
@@ -12845,23 +12846,314 @@ $('ech-valider')?.addEventListener('click', async () => {
 /** Les statuts qui terminent un dossier : il quitte les dossiers en cours. */
 const RETOURS_FINIS = ['CLOSED', 'UNUSABLE'];
 
+/* ---------------------------------------------------------- dossiers ----
+ *
+ * Deux présentations, les mêmes gestes.
+ *
+ * Sur ordinateur, un tableau : une ligne par dossier, le statut en pastille
+ * de couleur, le bon et le colis chacun dans sa colonne. Au téléphone, ce
+ * tableau empilé donnait une fiche d'un demi-écran par dossier : c'est une
+ * liste de deux lignes par dossier, et l'appui ouvre la fiche en plein écran.
+ *
+ * Les briques ci-dessous servent aux deux : mêmes attributs `data-ret-…`,
+ * donc mêmes écouteurs, posés une fois sur `#ret-body`.
+ */
+const TEL_RETOUR = window.matchMedia('(max-width: 760px)');
+const TONS_STATUT_RETOUR = { OPEN: 'gris', LABEL_SENT: 'info', RESTOCKED: 'ok', UNUSABLE: 'bad', CLOSED: 'dim' };
+const TROIS_JOURS = 3 * 24 * 60 * 60 * 1000;
+
+/** Ouvert ou bon envoyé, et sans nouvelle du client depuis trois jours. */
+const retourSilencieux = (item) =>
+  ['OPEN', 'LABEL_SENT'].includes(item.status) && new Date(item.lastContactAt).getTime() < Date.now() - TROIS_JOURS;
+
+const retourFini = (item) => RETOURS_FINIS.includes(item.status);
+
+function retStatutPastille(item) {
+  return `<span class="ret-pastille ret-statut-${TONS_STATUT_RETOUR[item.status] ?? 'gris'}">${esc(
+    RETURN_STATUSES[item.status] ?? item.status,
+  )}</span>`;
+}
+
+function retEtiquettes(item) {
+  return `<span class="ret-tag ${item.reason === 'DEFECT' ? 'warn' : 'dim'}">${esc(RETURN_REASONS[item.reason] ?? item.reason)}</span>
+    <span class="ret-tag ${item.resolution === 'REFUND' ? 'warn' : 'ok'}">${esc(
+      RETURN_RESOLUTIONS[item.resolution] ?? item.resolution,
+    )}</span>
+    ${item.refuseLe ? '<span class="ret-tag bad">Refusé</span>' : ''}
+    ${nonValide(item) ? '<span class="ret-tag bad" title="Échange et remboursement bloqués">Non valide · bloqué</span>' : ''}`;
+}
+
+function retArticle(item) {
+  return `<span class="ret-art"><b>${esc(item.productTitle)}</b>${
+    item.variantTitle ? ` <small>${esc(item.variantTitle)}</small>` : ''
+  }</span>
+    ${
+      // Pour un échange, ce que le client attend en retour : sans lui,
+      // le dossier ne dit pas ce qu'il faut lui envoyer.
+      item.resolution === 'EXCHANGE' && item.wantedTitle
+        ? `<small class="ret-veut">veut : ${esc(item.wantedTitle)}${
+            item.wantedVariantTitle ? ` · ${esc(item.wantedVariantTitle)}` : ''
+          }</small>`
+        : ''
+    }
+    ${blocEchange(item)}
+    <div class="ret-tags">${retEtiquettes(item)}</div>
+    ${item.refuseLe && item.refusMotif ? `<small class="ret-refus">Refusé : ${esc(item.refusMotif)}</small>` : ''}`;
+}
+
+/** Le bon de retour : fourni ou non, et le fichier — l'importer, le voir, l'envoyer. */
+function retBon(item, fini = false) {
+  if (fini) {
+    return `<span class="ret-lecture">${item.labelSent ? 'Fourni' : '—'}</span>${
+      item.hasBon ? ` <a class="qlink" href="/api/returns/${esc(item.id)}/bon" target="_blank" rel="noopener">Voir le bon</a>` : ''
+    }`;
+  }
+  return `<label class="ret-interrupteur">
+      <input type="checkbox" class="reg-switch" role="switch" data-ret-label="${esc(item.id)}"${item.labelSent ? ' checked' : ''} />
+      <span>${item.labelSent ? 'Fourni' : 'À fournir'}</span>
+    </label>
+    <div class="ret-bon">${
+      item.hasBon
+        ? `<a class="qlink" href="/api/returns/${esc(item.id)}/bon" target="_blank" rel="noopener">Voir le bon</a>
+           <button type="button" class="btn btn-small" data-ret-bon-envoyer="${esc(item.id)}"${
+             item.customerEmail ? '' : ' disabled title="Pas d’adresse mail pour ce client"'
+           }>${item.bonEnvoyeLe ? 'Renvoyer au client' : 'Envoyer au client'}</button>
+           ${item.bonEnvoyeLe ? `<small class="ret-bon-envoye">envoyé ${esc(ilYa(item.bonEnvoyeLe))}</small>` : ''}`
+        : `<button type="button" class="qlink ret-bon-importer" data-ret-bon-importer="${esc(item.id)}">Importer le bon</button>`
+    }</div>`;
+}
+
+/** Le colis qui revient : son numéro, son transporteur, où il en est. */
+function retColis(item, fini = false) {
+  const suivre = item.trackingNumber
+    ? `<a class="qlink" href="${esc(trackUrl(item.trackingNumber))}" target="_blank" rel="noopener">Où est-il ?</a>`
+    : '';
+  const transporteur = item.trackingCarrier ? pastilleTransporteur(item.trackingCarrier) : '';
+  if (fini) {
+    return item.trackingNumber
+      ? `<span class="ret-suivi"><span class="mono ret-lecture">${esc(item.trackingNumber)}</span>${transporteur}${suivre}</span>`
+      : '<span class="ret-lecture">—</span>';
+  }
+  return `<div class="ret-suivi">
+      <input type="text" class="mono" data-ret-track="${esc(item.id)}" placeholder="N° de suivi"
+        aria-label="Numéro de suivi du colis retour" value="${esc(item.trackingNumber ?? '')}" />
+      ${transporteur}${suivre}
+    </div>`;
+}
+
+/** Le statut, en pastille de sa couleur — et ce qu'il appelle : contrôler, commenter. */
+function retStatut(item) {
+  // Un ancien statut (avant les cinq actuels) reste lisible tant qu'on ne l'a pas changé.
+  const connus = Object.entries(RETURN_STATUSES);
+  if (!RETURN_STATUSES[item.status]) connus.unshift([item.status, item.status]);
+  return `<select class="ret-statut ret-statut-${TONS_STATUT_RETOUR[item.status] ?? 'gris'}" data-ret-status="${esc(item.id)}" aria-label="Statut du dossier">
+      ${connus.map(([key, label]) => `<option value="${key}"${key === item.status ? ' selected' : ''}>${esc(label)}</option>`).join('')}
+    </select>
+    ${
+      item.status === 'CLOSED' && item.closeComment
+        ? `<small class="ret-close-comment" title="Commentaire de fermeture">${esc(item.closeComment)}</small>`
+        : ''
+    }
+    ${
+      // Le contrôle à la réception : un remboursement se décide sur les
+      // photos, dans la fenêtre de contrôle ; un échange a son bloc.
+      recuAControler(item) && !item.controleLe && item.resolution === 'REFUND'
+        ? `<div class="ret-controle">
+            <button class="btn btn-small btn-primary" data-ech-controler="${esc(item.id)}">Contrôler et décider</button>
+          </div>`
+        : recuAControler(item) && item.status !== 'RESTOCKED'
+          ? `<div class="ret-controle">
+              <button class="btn btn-small" data-ret-restock="${esc(item.id)}">Reçu et validé</button>
+              <button class="btn btn-small btn-danger" data-ret-defect="${esc(item.id)}">Défectueux</button>
+            </div>`
+          : ''
+    }`;
+}
+
+const ICONE_CORBEILLE =
+  '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 6h12M8.5 6V4.5h3V6M6 6l.8 10h6.4L14 6M8.4 9v4.6M11.6 9v4.6" /></svg>';
+
+function retGestes(item) {
+  return `<div class="ret-gestes">
+      ${
+        returnWaLink(item)
+          ? `<button class="ret-wa" data-ret-wa="${esc(item.id)}"
+              title="Relancer ce client sur WhatsApp" aria-label="Relancer sur WhatsApp">${ico('whatsapp')}</button>`
+          : ''
+      }
+      ${photosChip(item)}
+      <button class="ico ico-del" data-ret-del="${esc(item.id)}" title="Supprimer le dossier" aria-label="Supprimer le dossier">${ICONE_CORBEILLE}</button>
+    </div>`;
+}
+
+/* ------------------------------------------------------- ordinateur ---- */
+
+function tableauRetours(items, finis) {
+  const r = state.returns;
+  const finisAffiches = !r.closOuverts ? [] : r.voirClos ? finis : finis.slice(0, 10);
+
+  const ligne = (item) => {
+    const fini = retourFini(item);
+    const silent = retourSilencieux(item);
+    return `<tr data-ret="${esc(item.id)}"${silent ? ' class="ret-silent"' : fini ? ' class="ret-clos"' : ''}>
+        <td class="ret-dossier">
+          <b>${esc(item.orderName ?? '—')}</b>
+          <span>${esc(item.customerName ?? '—')}</span>
+          <small>${esc(RETURN_COUNTRIES[item.country] ?? item.country ?? '')}</small>
+          ${silent ? '<span class="ret-tag bad">3 j sans réponse</span>' : ''}
+        </td>
+        <td class="ret-c-article">${retArticle(item)}</td>
+        <td class="ret-c-bon">${retBon(item, fini)}</td>
+        <td class="ret-c-colis">${retColis(item, fini)}</td>
+        <td class="ret-c-statut">${retStatut(item)}</td>
+        <td>${retGestes(item)}</td>
+      </tr>`;
+  };
+
+  return `<div class="table-wrap"><table class="grid ret-table"><thead><tr>
+      <th>Dossier</th><th>Article</th><th>Bon de retour</th><th>Colis retour</th><th>Statut</th><th></th>
+    </tr></thead><tbody>
+    ${items.length ? items.map(ligne).join('') : '<tr class="ret-vide"><td colspan="6">Aucun dossier de retour en cours.</td></tr>'}
+    ${
+      // Les dossiers finis ne chargent plus le tableau : repliés sous leur
+      // compte, dépliés d'un clic — et d'office quand on vient d'en fermer un.
+      finis.length
+        ? `<tr class="ret-sep"><td colspan="6">
+            <button type="button" class="ret-sep-bascule" data-ret-clos-bascule aria-expanded="${Boolean(r.closOuverts)}">
+              <span class="ret-sep-fleche" aria-hidden="true"></span>Fermés et non valides · ${finis.length}
+            </button>
+          </td></tr>`
+        : ''
+    }
+    ${finisAffiches.map(ligne).join('')}
+    ${
+      r.closOuverts && finis.length > finisAffiches.length
+        ? `<tr class="ret-plus"><td colspan="6"><button class="btn btn-small" type="button" data-ret-clos-tous>Voir les ${
+            finis.length - finisAffiches.length
+          } autres dossiers fermés</button></td></tr>`
+        : ''
+    }
+    </tbody></table></div>`;
+}
+
+/* -------------------------------------------------------- téléphone ---- */
+
+function listeRetoursMobile(items, finis) {
+  const r = state.returns;
+  const finisAffiches = !r.closOuverts ? [] : r.voirClos ? finis : finis.slice(0, 10);
+
+  const ligne = (item) => {
+    const silent = retourSilencieux(item);
+    return `<button type="button" class="retm-ligne${retourFini(item) ? ' retm-fini' : ''}${silent ? ' retm-alerte' : ''}"
+        data-retm-ouvrir="${esc(item.id)}">
+        <span class="retm-haut"><b>${esc(item.orderName ?? '—')}</b><span>${esc(item.customerName ?? '—')}</span></span>
+        <span class="retm-article">${esc(item.productTitle)}${item.variantTitle ? ` · ${esc(item.variantTitle)}` : ''}</span>
+        <span class="retm-bas">
+          ${retStatutPastille(item)}
+          <span class="ret-tag ${item.resolution === 'REFUND' ? 'warn' : 'ok'}">${esc(
+            RETURN_RESOLUTIONS[item.resolution] ?? item.resolution,
+          )}</span>
+          ${silent ? '<span class="ret-tag bad">3 j sans réponse</span>' : ''}
+          ${recuAControler(item) && item.status !== 'RESTOCKED' ? '<span class="ret-tag warn">À contrôler</span>' : ''}
+        </span>
+        <span class="retm-chevron" aria-hidden="true"></span>
+      </button>`;
+  };
+
+  return `${
+    items.length
+      ? `<div class="retm-liste">${items.map(ligne).join('')}</div>`
+      : '<p class="empty" style="padding:20px">Aucun dossier de retour en cours.</p>'
+  }
+    ${
+      finis.length
+        ? `<button type="button" class="ret-sep-bascule retm-sep" data-ret-clos-bascule aria-expanded="${Boolean(r.closOuverts)}">
+            <span class="ret-sep-fleche" aria-hidden="true"></span>Fermés et non valides · ${finis.length}
+          </button>`
+        : ''
+    }
+    ${finisAffiches.length ? `<div class="retm-liste">${finisAffiches.map(ligne).join('')}</div>` : ''}
+    ${
+      r.closOuverts && finis.length > finisAffiches.length
+        ? `<button class="btn btn-small" type="button" data-ret-clos-tous>Voir les ${
+            finis.length - finisAffiches.length
+          } autres dossiers fermés</button>`
+        : ''
+    }`;
+}
+
+/** La fiche d'un dossier, en plein écran : tout ce que porte une ligne du tableau. */
+function ficheRetourMobile(item) {
+  const n = item.photos ?? 0;
+  return `<div class="retm-fiche" data-ret="${esc(item.id)}">
+      <button type="button" class="retm-retour" data-retm-fermer><span class="retm-chevron retm-chevron-retour" aria-hidden="true"></span>Dossiers</button>
+      <header class="retm-tete">
+        <h2>${esc(item.orderName ?? '—')}</h2>
+        <p>${esc([item.customerName, RETURN_COUNTRIES[item.country] ?? item.country].filter(Boolean).join(' · ') || '—')}</p>
+        ${retourSilencieux(item) ? '<span class="ret-tag bad">3 j sans réponse</span>' : ''}
+      </header>
+      <section class="retm-bloc"><h3>Statut</h3>${retStatut(item)}</section>
+      <section class="retm-bloc"><h3>Article</h3>${retArticle(item)}</section>
+      <section class="retm-bloc"><h3>Bon de retour</h3>${retBon(item)}</section>
+      <section class="retm-bloc"><h3>Colis retour</h3>${retColis(item)}</section>
+      <div class="retm-actions">
+        ${
+          returnWaLink(item)
+            ? `<button type="button" class="retm-action retm-action-wa" data-ret-wa="${esc(item.id)}">${ico('whatsapp')}<span>Relancer sur WhatsApp</span></button>`
+            : ''
+        }
+        <button type="button" class="retm-action" data-ret-photos="${esc(item.id)}">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="5.5" width="15" height="11" rx="2" /><circle cx="10" cy="11" r="3.2" /><path d="M7 5.5 8.2 3.5h3.6L13 5.5" /></svg>
+          <span>Photos du retour</span><b class="${n >= 3 ? 'retm-ok' : 'retm-manque'}">${n >= 3 ? n : `${n}/3`}</b>
+        </button>
+        <button type="button" class="retm-action retm-action-danger" data-ret-del="${esc(item.id)}">${ICONE_CORBEILLE}<span>Supprimer le dossier</span></button>
+      </div>
+    </div>`;
+}
+
+let defilementRetours = 0;
+
+function ouvrirFicheRetour(id) {
+  if (!TEL_RETOUR.matches) return;
+  if (!state.returns.ouvert) {
+    defilementRetours = scrollY;
+    history.pushState({ csavRetour: true }, '');
+  }
+  state.returns.ouvert = id;
+  renderReturns();
+  requestAnimationFrame(() => scrollTo(0, 0));
+}
+
+function fermerFicheRetour({ parHistorique = false } = {}) {
+  if (!state.returns.ouvert) return;
+  state.returns.ouvert = null;
+  // L'entrée posée à l'ouverture s'en va avec la fiche : sinon le prochain
+  // Retour d'Android ne ferait rien.
+  if (!parHistorique && history.state?.csavRetour) history.back();
+  if (state.view === 'returns') renderReturns();
+  requestAnimationFrame(() => scrollTo(0, defilementRetours));
+}
+
+addEventListener('popstate', () => fermerFicheRetour({ parHistorique: true }));
+// Tourner le téléphone, élargir la fenêtre : la présentation suit.
+TEL_RETOUR.addEventListener('change', () => {
+  if (state.view === 'returns') renderReturns();
+});
+
 function renderReturnCases(box) {
   // Une paire ajoutée à la main est du stock, pas un dossier de retour.
   const dossiers = state.returns.cases.filter((item) => item.origine !== 'MANUEL');
   /*
-   * Un dossier clos ne disparaît plus.
-   *
-   * Passer le statut à « Clos » le faisait sortir du tableau sur-le-champ :
-   * on croyait l'avoir supprimé, et on ne pouvait plus le rouvrir. Il descend
-   * maintenant sous les dossiers en cours, grisé, avec son statut toujours
-   * modifiable. Les dix plus récents d'abord ; le reste sur demande.
+   * Un dossier fermé ne disparaît pas : il descend sous les dossiers en
+   * cours, replié sous « Fermés et non valides », avec son statut toujours
+   * modifiable pour le rouvrir. Les dix plus récents d'abord ; le reste sur
+   * demande.
    */
-  const items = dossiers.filter((item) => !RETOURS_FINIS.includes(item.status));
-  const finis = dossiers.filter((item) => RETOURS_FINIS.includes(item.status));
-  const finisAffiches = state.returns.voirClos ? finis : finis.slice(0, 10);
-  const silentSince = Date.now() - 3 * 24 * 60 * 60 * 1000;
+  const items = dossiers.filter((item) => !retourFini(item));
+  const finis = dossiers.filter(retourFini);
 
   if (dossiers.length === 0) {
+    state.returns.ouvert = null;
     box.innerHTML = `<div class="empty-block">
       <b>Aucun dossier de retour en cours.</b>
       <p>Le circuit : le client renvoie → l'agence du pays réceptionne → la
@@ -12874,148 +13166,30 @@ function renderReturnCases(box) {
     return;
   }
 
-  box.innerHTML = `<div class="table-wrap"><table class="grid"><thead><tr>
-      <th>Commande</th><th>Client</th><th>Article</th>
-      <th>Bon de retour</th><th>Colis retour</th><th>Statut</th><th></th>
-    </tr></thead><tbody>
-    ${items.length ? '' : '<tr class="ret-vide"><td colspan="7">Aucun dossier de retour en cours.</td></tr>'}
-    ${[...items, ...finisAffiches]
-      .map((item, rang) => {
-        const silent =
-          ['OPEN', 'LABEL_SENT'].includes(item.status) &&
-          new Date(item.lastContactAt).getTime() < silentSince;
-        const wa = returnWaLink(item);
-        const fini = RETOURS_FINIS.includes(item.status);
-        // L'intertitre, avant le premier dossier clos.
-        const intertitre =
-          rang === items.length
-            ? `<tr class="ret-sep"><td colspan="7">Clos et inutilisables · ${finis.length}</td></tr>`
-            : '';
+  if (!TEL_RETOUR.matches) {
+    box.innerHTML = tableauRetours(items, finis);
+    return;
+  }
 
-        return `${intertitre}<tr data-ret="${esc(item.id)}"${
-          silent ? ' class="ret-silent"' : fini ? ' class="ret-clos"' : ''
-        }>
-          <td class="ret-c-cmd"><b>${esc(item.orderName ?? '—')}</b><br /><small>${esc(
-            RETURN_COUNTRIES[item.country] ?? item.country ?? '',
-          )}</small></td>
-          <td data-label="Client">${esc(item.customerName ?? '—')}${
-            silent
-              ? '<br /><span class="ret-tag bad">3 j sans réponse</span>'
-              : ''
-          }</td>
-          <td data-label="Article" class="ret-c-bloc">
-            <b>${esc(item.productTitle)}</b>${
-              item.variantTitle ? ` <small>${esc(item.variantTitle)}</small>` : ''
-            }
-            ${
-              // Pour un échange, ce que le client attend en retour : sans lui,
-              // le dossier ne dit pas ce qu'il faut lui envoyer.
-              item.resolution === 'EXCHANGE' && item.wantedTitle
-                ? `<small class="ret-veut">veut : ${esc(item.wantedTitle)}${
-                    item.wantedVariantTitle ? ` · ${esc(item.wantedVariantTitle)}` : ''
-                  }</small>`
-                : ''
-            }
-            ${blocEchange(item)}
-            <div class="ret-tags">
-              <span class="ret-tag ${item.reason === 'DEFECT' ? 'warn' : 'dim'}">${esc(
-                RETURN_REASONS[item.reason] ?? item.reason,
-              )}</span>
-              <span class="ret-tag ${item.resolution === 'REFUND' ? 'warn' : 'ok'}">${esc(
-                RETURN_RESOLUTIONS[item.resolution] ?? item.resolution,
-              )}</span>
-              ${item.refuseLe ? '<span class="ret-tag bad">Refusé</span>' : ''}
-              ${nonValide(item) ? '<span class="ret-tag bad" title="Échange et remboursement bloqués">Non valide · bloqué</span>' : ''}
-            </div>
-            ${item.refuseLe && item.refusMotif ? `<small class="ret-refus">Refusé : ${esc(item.refusMotif)}</small>` : ''}
-          </td>
-          <td data-label="Bon de retour">
-            <label class="switch" style="margin:0">
-              <input type="checkbox" data-ret-label="${esc(item.id)}"${
-                item.labelSent ? ' checked' : ''
-              } />
-              <span>${item.labelSent ? 'Fourni' : 'À fournir'}</span>
-            </label>
-          </td>
-          <td data-label="Colis retour" class="ret-c-bloc">
-            <div class="ret-track">
-              <input type="text" class="mono" data-ret-track="${esc(item.id)}"
-                placeholder="N° de suivi" value="${esc(item.trackingNumber ?? '')}" />
-              ${
-                item.trackingNumber
-                  ? `<a class="qlink" href="${esc(trackUrl(item.trackingNumber))}"
-                      target="_blank" rel="noopener">Où est-il ?</a>`
-                  : ''
-              }
-            </div>
-            ${item.trackingCarrier ? `<small class="ret-transp">${esc(item.trackingCarrier)}</small>` : ''}
-            <div class="ret-bon">${
-              item.hasBon
-                ? `<a class="qlink" href="/api/returns/${esc(item.id)}/bon" target="_blank" rel="noopener">Voir le bon</a>
-                   <button type="button" class="btn btn-small" data-ret-bon-envoyer="${esc(item.id)}"${
-                     item.customerEmail ? '' : ' disabled title="Pas d’adresse mail pour ce client"'
-                   }>${item.bonEnvoyeLe ? 'Renvoyer au client' : 'Envoyer au client'}</button>
-                   ${item.bonEnvoyeLe ? `<small class="ret-bon-envoye">envoyé ${esc(ilYa(item.bonEnvoyeLe))}</small>` : ''}`
-                : `<button type="button" class="qlink ret-bon-importer" data-ret-bon-importer="${esc(item.id)}">Importer le bon</button>`
-            }</div>
-          </td>
-          <td data-label="Statut" class="ret-c-bloc">
-            <select data-ret-status="${esc(item.id)}">
-              ${Object.entries(RETURN_STATUSES)
-                .map(
-                  ([key, label]) =>
-                    `<option value="${key}"${key === item.status ? ' selected' : ''}>${esc(
-                      label,
-                    )}</option>`,
-                )
-                .join('')}
-            </select>
-            ${
-              item.status === 'CLOSED' && item.closeComment
-                ? `<small class="ret-close-comment" title="Commentaire de fermeture">${esc(item.closeComment)}</small>`
-                : ''
-            }
-            ${
-              // Le contrôle à la réception : un remboursement se décide sur les
-              // photos, dans la fenêtre de contrôle ; un échange a son bloc.
-              recuAControler(item) && !item.controleLe && item.resolution === 'REFUND'
-                ? `<div class="ret-controle">
-                    <button class="btn btn-small btn-primary" data-ech-controler="${esc(item.id)}">Contrôler et décider</button>
-                  </div>`
-                : recuAControler(item) && item.status !== 'RESTOCKED'
-                  ? `<div class="ret-controle">
-                      <button class="btn btn-small" data-ret-restock="${esc(item.id)}">En stock</button>
-                      <button class="btn btn-small btn-danger" data-ret-defect="${esc(item.id)}">Défectueux</button>
-                    </div>`
-                  : ''
-            }
-          </td>
-          <td class="ret-c-gestes" style="white-space:nowrap">
-            ${
-              wa
-                ? `<button class="ret-wa" data-ret-wa="${esc(item.id)}"
-                    title="Relancer ce client sur WhatsApp" aria-label="Relancer sur WhatsApp">${ico('whatsapp')}</button>`
-                : ''
-            }
-            ${photosChip(item)}
-            <button class="ico ico-del" data-ret-del="${esc(item.id)}" title="Supprimer">
-              <svg viewBox="0 0 20 20" aria-hidden="true">
-                <path d="M4 6h12M8.5 6V4.5h3V6M6 6l.8 10h6.4L14 6M8.4 9v4.6M11.6 9v4.6" />
-              </svg>
-            </button>
-          </td>
-        </tr>`;
-      })
-      .join('')}
-    ${
-      finis.length > finisAffiches.length
-        ? `<tr class="ret-plus"><td colspan="7"><button class="btn btn-small" type="button" data-ret-clos-tous>Voir les ${
-            finis.length - finisAffiches.length
-          } autres dossiers clos</button></td></tr>`
-        : ''
-    }
-    </tbody></table></div>`;
+  const ouvert = dossiers.find((item) => item.id === state.returns.ouvert);
+  if (ouvert) {
+    box.innerHTML = ficheRetourMobile(ouvert);
+    return;
+  }
+  // Le dossier ouvert a été supprimé : retour à la liste.
+  state.returns.ouvert = null;
+  box.innerHTML = listeRetoursMobile(items, finis);
 }
+
+$('ret-body')?.addEventListener('click', (event) => {
+  const ouvrir = event.target.closest('[data-retm-ouvrir]');
+  if (ouvrir) return ouvrirFicheRetour(ouvrir.dataset.retmOuvrir);
+  if (event.target.closest('[data-retm-fermer]')) return fermerFicheRetour();
+  if (event.target.closest('[data-ret-clos-bascule]')) {
+    state.returns.closOuverts = !state.returns.closOuverts;
+    renderReturns();
+  }
+});
 
 $('ret-body')?.addEventListener('click', (event) => {
   if (!event.target.closest('[data-ret-clos-tous]')) return;
@@ -13912,6 +14086,7 @@ $('ret-tabs').addEventListener('click', (event) => {
   const tab = event.target.closest('[data-rtab]');
   if (!tab) return;
   state.returns.tab = tab.dataset.rtab;
+  state.returns.ouvert = null;
   renderReturns();
 });
 
@@ -14325,6 +14500,8 @@ $('ret-body').addEventListener('change', async (event) => {
   if (!track && !label && !status) return;
 
   const id = track?.dataset.retTrack ?? label?.dataset.retLabel ?? status?.dataset.retStatus;
+  // Un dossier qu'on ferme ne disparaît pas sous un repli : on déplie.
+  if (status && RETOURS_FINIS.includes(status.value)) state.returns.closOuverts = true;
   // Fermer : un commentaire facultatif, gardé au dossier.
   let commentaireFermeture = '';
   if (status?.value === 'CLOSED') {
@@ -15188,7 +15365,7 @@ const VIEW_META = {
   update: { icon: 'suivi', label: 'Update', group: 'Pilotage', title: 'Update', sous: 'Où en sont les colis qui ne bougent plus' },
   refunds: { icon: 'card', label: 'Annulation/\u200bRemboursement', group: 'Fournisseur', title: 'Annulations et remboursements' },
   renvoi: { icon: 'cycle', label: 'Stock', group: 'Pilotage', title: 'Stock', alias: 'returns', onglet: 'stock' },
-  retour: { icon: 'uturn', label: 'Retour', group: 'Fournisseur', title: 'Retours clients', alias: 'returns', onglet: 'cases' },
+  retour: { icon: 'uturn', label: 'Retour', group: 'Fournisseur', title: 'Retours', alias: 'returns', onglet: 'cases' },
   // Atelier : le travail avec le fournisseur au quotidien.
   envoi: {
     icon: 'truck',
@@ -16726,6 +16903,8 @@ function setView(view, { depuisHistorique = false } = {}) {
   ouvrirFiltres(false);
   modeSelection(false);
   if (view !== 'tickets') fermerMessagePile();
+  // La fiche d'un retour, au téléphone, ne survit pas à un changement d'écran.
+  if (view !== 'returns') state.returns.ouvert = null;
   if (view !== 'orders') fermerFichePile();
   if (view === 'orders') afficherSousCommandes();
   if (view === 'refunds') afficherSousRemboursements();
