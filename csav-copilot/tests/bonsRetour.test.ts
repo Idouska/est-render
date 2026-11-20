@@ -60,7 +60,7 @@ test('Stock : compteurs, filtre Tout/Match/Non envoyé/Envoyé, sans la barre de
   assert.match(app, /<option value="imprimer">Imprimer la liste<\/option>/);
   assert.match(app, /<option value="partager">Partager la liste<\/option>/);
   assert.match(app, /data-stk-voir=/);
-  assert.match(app, /\$\('ret-barre'\)\.hidden = r\.tab === 'stock';/);
+  assert.match(app, /\$\('ret-barre'\)\.hidden = r\.tab === 'stock' \|\| ficheOuverte;/);
   const html = lire('public/dashboard.html');
   assert.match(html, /data-rtab="matches" aria-pressed="false" hidden/);
   assert.match(html, /data-rtab="stock" aria-pressed="false" hidden/);

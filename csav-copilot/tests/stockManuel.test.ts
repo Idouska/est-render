@@ -44,7 +44,8 @@ test('ce n’est pas un retour : ni dans les dossiers, ni dans leur compte', () 
   // Les dossiers clos restent au tableau, sous leur intertitre ; la paire
   // ajoutée à la main n'y entre jamais, ni en cours ni close.
   assert.match(app, /const dossiers = state\.returns\.cases\.filter\(\(item\) => item\.origine !== 'MANUEL'\);/);
-  assert.match(app, /const items = dossiers\.filter\(\(item\) => !RETOURS_FINIS\.includes\(item\.status\)\);/);
+  assert.match(app, /const retourFini = \(item\) => RETOURS_FINIS\.includes\(item\.status\);/);
+  assert.match(app, /const items = dossiers\.filter\(\(item\) => !retourFini\(item\)\);/);
   // Mais bien dans le stock, présentée comme telle.
   assert.match(app, /`ajout manuel\$\{item\.note \? ` · \$\{esc\(item\.note\)\}` : ''\}`/);
 });

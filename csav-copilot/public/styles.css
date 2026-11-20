@@ -17100,27 +17100,11 @@ button.stk-transp { cursor: pointer; }
 /* ------------------------------------------------------------------------
    TÉLÉPHONE — Retour, Stock, Commandes du jour
 
-   Le tableau des dossiers devenait une pile de cases sans nom, alignées à
-   droite, le modèle coupé au milieu. Chaque dossier est une fiche : la
-   commande en titre, puis chaque case sous son intitulé, pleine largeur
-   quand elle porte un champ.
+   Les dossiers de Retour ont leur propre présentation au téléphone (liste
+   compacte et fiche, plus bas) ; ici, la barre de Retour, Stock et
+   Commandes du jour.
    ------------------------------------------------------------------------ */
 @media (max-width: 760px) {
-  #ret-body .grid td.ret-c-bloc { display: block; text-align: left; }
-  #ret-body .grid td.ret-c-bloc::before { display: block; margin-bottom: 6px; }
-  #ret-body .grid td.ret-c-cmd { display: flex; align-items: baseline; gap: 8px; }
-  #ret-body .grid td.ret-c-cmd br { display: none; }
-  #ret-body .grid td.ret-c-cmd small { font-weight: 400; color: var(--ink-mute); }
-  #ret-body .grid td.ret-c-gestes { justify-content: flex-start; gap: 8px; white-space: normal !important; }
-  #ret-body .ret-track { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px; }
-  #ret-body .ret-track input { flex: 1 1 0; width: auto; min-width: 140px; height: auto; }
-  #ret-body .grid select[data-ret-status] { width: 100%; }
-  #ret-body .ret-tags, #ret-body .ret-bon, #ret-body .ret-controle { display: flex; flex-wrap: wrap; gap: 6px; }
-  #ret-body .ret-close-comment { max-width: none; }
-  #ret-body .grid tr.ret-sep, #ret-body .grid tr.ret-plus, #ret-body .grid tr.ret-vide {
-    background: none; border: 0; box-shadow: none; padding: 0;
-  }
-  #ret-body .grid tr.ret-sep td, #ret-body .grid tr.ret-plus td { justify-content: flex-start; }
   #ret-barre { flex-wrap: wrap; gap: 8px; }
   #ret-barre #ret-bons { margin-left: 0 !important; }
   #ret-barre .btn { flex: 1 1 140px; }
@@ -17192,3 +17176,176 @@ button.stk-transp { cursor: pointer; }
 #view-tickets .qrow.en-glisse .queue-item.q-auto { background: color-mix(in srgb, var(--ink) 8%, var(--surface)); }
 #view-tickets .qrow.glisse-retour > :not(.qswipe) { transition: transform 200ms var(--ease); }
 #view-tickets .qrow.en-glisse::before { opacity: 0; }
+
+/* ========================================================================
+   RETOUR — les dossiers
+
+   Ordinateur : un tableau lisible d'abord. Le statut est une pastille de sa
+   couleur (et reste un menu), le bon et le colis ont chacun leur colonne, le
+   champ de suivi ne se dessine en champ qu'au survol, les gestes sont
+   alignés. Les dossiers fermés sont repliés sous leur compte.
+   ======================================================================== */
+#ret-body .ret-table td { white-space: normal; vertical-align: middle; padding: 13px 14px; }
+#ret-body .ret-table th { white-space: nowrap; }
+#ret-body .ret-table tbody tr:hover { background: color-mix(in srgb, var(--ink) 2.5%, transparent); }
+#ret-body .ret-table td:last-child { width: 1%; }
+
+.ret-dossier { min-width: 150px; }
+.ret-dossier b { display: block; font-size: 14px; letter-spacing: -0.01em; }
+.ret-dossier > span:not(.ret-tag) { display: block; margin-top: 1px; color: var(--ink-soft); }
+.ret-dossier small { display: block; font-size: 11.5px; color: var(--ink-mute); }
+.ret-dossier .ret-tag { display: inline-block; margin-top: 5px; }
+
+.ret-c-article { min-width: 220px; }
+.ret-art b { font-weight: 600; }
+.ret-art small { color: var(--ink-mute); font-size: 12px; }
+.ret-c-article .ret-tags { margin-top: 6px; }
+
+/* Le bon : un interrupteur, puis le fichier. */
+.ret-interrupteur { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer; }
+#ret-body input.reg-switch { width: 32px; height: 19px; }
+#ret-body input.reg-switch::after { width: 15px; height: 15px; }
+#ret-body input.reg-switch:checked::after { transform: translateX(13px); }
+.ret-c-bon { min-width: 132px; white-space: nowrap; }
+.ret-c-bon .ret-bon { margin-top: 7px; }
+.ret-bon .qlink, .ret-suivi .qlink { font-size: 12px; padding: 0; white-space: nowrap; }
+.ret-lecture { color: var(--ink-mute); font-size: 12.5px; }
+
+/* Le suivi : du texte tant qu'on n'y touche pas, un champ au survol. */
+.ret-suivi { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+#ret-body .ret-suivi input {
+  width: 158px; padding: 6px 9px; font-size: 12.5px;
+  border: 1px solid transparent; border-radius: 8px;
+  background: var(--inset); color: var(--ink);
+  transition: border-color 120ms var(--ease), background 120ms var(--ease);
+}
+#ret-body .ret-suivi input::placeholder { color: var(--ink-mute); }
+#ret-body .ret-suivi input:hover { border-color: var(--line); }
+#ret-body .ret-suivi input:focus { border-color: var(--accent); background: var(--surface); outline: none; }
+
+/* Le statut : une pastille de sa couleur, qui reste un menu. */
+.ret-pastille,
+#ret-body select.ret-statut {
+  font: inherit; font-size: 12.5px; font-weight: 600; line-height: 1.2;
+  border: 0; border-radius: 999px; white-space: nowrap;
+}
+.ret-pastille { display: inline-flex; align-items: center; padding: 4px 10px; font-size: 12px; }
+#ret-body select.ret-statut {
+  padding: 7px 30px 7px 13px; cursor: pointer;
+  appearance: none; -webkit-appearance: none;
+  background-repeat: no-repeat; background-position: right 11px center; background-size: 9px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23808590' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+#ret-body select.ret-statut:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ret-statut-gris, #ret-body select.ret-statut-gris { background-color: var(--inset); color: var(--ink); }
+.ret-statut-info, #ret-body select.ret-statut-info { background-color: var(--accent-soft); color: var(--accent-ink); }
+.ret-statut-ok, #ret-body select.ret-statut-ok { background-color: var(--ok-soft); color: var(--ok-ink); }
+.ret-statut-bad, #ret-body select.ret-statut-bad { background-color: var(--crit-soft); color: var(--crit-ink); }
+.ret-statut-dim, #ret-body select.ret-statut-dim { background-color: transparent; color: var(--ink-mute); box-shadow: inset 0 0 0 1px var(--line); }
+.ret-c-statut .ret-close-comment { display: block; margin-top: 6px; max-width: 220px; }
+
+/* Les gestes, sur une ligne, à la même hauteur. */
+.ret-gestes { display: flex !important; align-items: center; justify-content: flex-end; gap: 6px; }
+.ret-gestes .ret-photos { white-space: nowrap; height: 30px; }
+.ret-gestes .ret-wa { height: 30px; display: inline-grid; place-items: center; }
+
+/* Les dossiers fermés : repliés sous leur compte. */
+#ret-body .ret-sep td { padding: 6px 8px; border-bottom: 0; }
+#ret-body .ret-table tr.ret-sep:hover { background: none; }
+.ret-sep-bascule {
+  display: inline-flex !important; align-items: center; gap: 8px;
+  padding: 7px 10px; border: 0; border-radius: 8px; background: none; cursor: pointer;
+  font: inherit; font-size: 12.5px; font-weight: 650; color: var(--ink-mute);
+}
+.ret-sep-bascule:hover { background: var(--inset); color: var(--ink); }
+.ret-sep-fleche {
+  width: 6px; height: 6px; border-right: 1.7px solid currentColor; border-bottom: 1.7px solid currentColor;
+  transform: rotate(-45deg); transition: transform 140ms var(--ease);
+}
+.ret-sep-bascule[aria-expanded="true"] .ret-sep-fleche { transform: rotate(45deg) translate(-1px, -1px); }
+#ret-body .ret-clos .ret-dossier b, #ret-body .ret-clos .ret-art b { color: var(--ink-soft); }
+
+/* ------------------------------------------------------------------------
+   Téléphone : une liste de deux lignes par dossier ; l'appui ouvre la fiche.
+   ------------------------------------------------------------------------ */
+.retm-liste {
+  display: grid; overflow: hidden; margin-bottom: 12px;
+  background: var(--surface); border-radius: 14px; box-shadow: 0 0 0 1px var(--line);
+}
+.retm-ligne {
+  position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 14px; gap: 2px 10px;
+  width: 100%; padding: 13px 14px 13px 16px; border: 0; border-top: 1px solid var(--line-soft);
+  background: none; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.retm-ligne:first-child { border-top: 0; }
+.retm-ligne:active { background: var(--inset); }
+.retm-haut { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.retm-haut b { flex: none; font-size: 15px; letter-spacing: -0.01em; }
+.retm-haut span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; color: var(--ink-soft); }
+.retm-article { grid-column: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--ink-mute); }
+.retm-bas { grid-column: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 7px; }
+.retm-chevron {
+  grid-column: 2; grid-row: 1 / span 3; align-self: center; justify-self: end;
+  width: 8px; height: 8px; border-right: 2px solid var(--ink-mute); border-bottom: 2px solid var(--ink-mute);
+  transform: rotate(-45deg); opacity: 0.7;
+}
+.retm-alerte::before { content: ''; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 0 3px 3px 0; background: var(--crit); }
+.retm-fini .retm-haut b { color: var(--ink-soft); }
+.retm-sep { margin: 2px 0 8px; font-size: 13px; }
+
+.retm-fiche { display: grid; gap: 12px; }
+.retm-retour {
+  display: inline-flex; align-items: center; gap: 9px; justify-self: start;
+  padding: 8px 4px; border: 0; background: none; cursor: pointer;
+  font: inherit; font-size: 15px; font-weight: 600; color: var(--accent-ink);
+}
+.retm-chevron-retour { transform: rotate(135deg); border-color: currentColor; opacity: 1; }
+.retm-tete h2 { margin: 0; font-size: 24px; letter-spacing: -0.02em; }
+.retm-tete p { margin: 2px 0 0; color: var(--ink-soft); font-size: 14.5px; }
+.retm-tete .ret-tag { display: inline-block; margin-top: 8px; }
+.retm-bloc {
+  display: grid; gap: 10px; padding: 14px 16px;
+  background: var(--surface); border-radius: 14px; box-shadow: 0 0 0 1px var(--line);
+}
+.retm-bloc h3 { margin: 0; font-size: 11px; font-weight: 650; letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-mute); }
+.retm-bloc .ret-art b { font-size: 15px; }
+.retm-bloc .ret-tags { margin-top: 0; }
+/* 16 px au moins dans les champs : en dessous, iOS zoome sur la page à la saisie. */
+#ret-body .retm-fiche select.ret-statut { width: 100%; padding: 13px 38px 13px 16px; font-size: 16px; background-position: right 16px center; background-size: 11px; }
+#ret-body .retm-fiche .ret-suivi input { flex: 1 1 100%; width: 100%; padding: 12px 13px; font-size: 16px; }
+.retm-fiche .ret-interrupteur { font-size: 15px; gap: 11px; }
+#ret-body .retm-fiche input.reg-switch { width: 44px; height: 26px; }
+#ret-body .retm-fiche input.reg-switch::after { width: 22px; height: 22px; }
+#ret-body .retm-fiche input.reg-switch:checked::after { transform: translateX(18px); }
+.retm-fiche .ret-bon { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0; }
+.retm-fiche .ret-bon .qlink, .retm-fiche .ret-suivi .qlink { font-size: 14.5px; padding: 6px 0; }
+.retm-fiche .ret-bon .btn, .retm-fiche .ret-controle .btn { min-height: 40px; padding-inline: 14px; font-size: 14.5px; }
+.retm-fiche .ret-controle { margin: 0; }
+.retm-fiche .ret-close-comment { max-width: none; font-size: 13.5px; }
+.retm-actions { display: grid; overflow: hidden; background: var(--surface); border-radius: 14px; box-shadow: 0 0 0 1px var(--line); }
+.retm-action {
+  display: flex; align-items: center; gap: 12px; min-height: 50px; padding: 0 16px;
+  border: 0; border-top: 1px solid var(--line-soft); background: none; cursor: pointer;
+  font: inherit; font-size: 15px; color: var(--ink); text-align: left;
+}
+.retm-action:first-child { border-top: 0; }
+.retm-action:active { background: var(--inset); }
+.retm-action svg { flex: none; width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.retm-action span { flex: 1; }
+.retm-action b { font-size: 13px; font-weight: 600; padding: 3px 9px; border-radius: 999px; }
+.retm-ok { background: var(--ok-soft); color: var(--ok-ink); }
+.retm-manque { background: var(--warn-soft); color: var(--warn-ink); }
+.retm-action-wa { color: #12925c; }
+.retm-action-danger { color: var(--crit-ink); }
+
+/* Retour : finitions. La cellule du bon ne se coupe pas ; les étiquettes et
+   le bouton WhatsApp suivent le thème (leurs fonds clairs, écrits en dur,
+   éblouissaient en mode sombre). */
+#ret-body .ret-table td.ret-c-bon { white-space: nowrap; }
+.ret-tag.bad { background: var(--crit-soft); color: var(--crit-ink); }
+.ret-tag.ok { background: var(--ok-soft); color: var(--ok-ink); }
+.ret-tag.warn { background: var(--warn-soft); color: var(--warn-ink); }
+.ret-wa { background: var(--ok-soft); color: var(--ok-ink); border-color: transparent; }
+.ret-wa:hover { background: color-mix(in srgb, var(--ok) 22%, var(--surface)); }
+.retm-action-wa { color: var(--ok-ink); }
+.ret-refus { color: var(--crit-ink); }
