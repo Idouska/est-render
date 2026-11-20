@@ -3993,9 +3993,13 @@ function estLu(ticket) {
  * suivante prendrait sa place — on cliquerait sur une autre sans l'avoir
  * voulu. Seul le compteur de la pastille est ajusté.
  */
-async function basculerLecture(id, pastille) {
-  const enFile = state.tickets.find((ticket) => ticket.id === id);
-  if (!enFile) return;
+async function basculerLecture(id, pastille = document.querySelector(`[data-read="${CSS.escape(id)}"]`)) {
+  // Depuis le menu Actions, le message ouvert peut ne pas être dans la file
+  // affichée (filtre, recherche) : on bascule alors la fiche ouverte.
+  const enFile =
+    state.tickets.find((ticket) => ticket.id === id) ??
+    (state.detail?.ticket?.id === id ? state.detail.ticket : null);
+  if (!enFile) return null;
 
   const etait = estLu(enFile);
   const versLu = !etait;
@@ -4006,14 +4010,23 @@ async function basculerLecture(id, pastille) {
     // qu'on clique. C'est la règle du serveur, écrite à l'identique.
     enFile.openedAt = lu ? new Date().toISOString() : null;
     if (!lu) enFile.gmailUnread = true;
+    // La fiche ouverte suit, sinon le menu Actions proposerait le mauvais sens.
+    if (state.detail?.ticket?.id === id && state.detail.ticket !== enFile) {
+      state.detail.ticket.openedAt = enFile.openedAt;
+      if (!lu) state.detail.ticket.gmailUnread = true;
+    }
 
     const ligne = document.querySelector(`.queue-item[data-id="${CSS.escape(id)}"]`);
     ligne?.classList.toggle('q-done', lu);
-    pastille.classList.toggle('lu', lu);
-    pastille.setAttribute('aria-pressed', String(!lu));
     const intitule = lu ? 'Marquer comme non lu' : 'Marquer comme lu';
-    pastille.title = intitule;
-    pastille.setAttribute('aria-label', intitule);
+    if (pastille) {
+      pastille.classList.toggle('lu', lu);
+      pastille.setAttribute('aria-pressed', String(!lu));
+      pastille.title = intitule;
+      pastille.setAttribute('aria-label', intitule);
+    }
+    const dansMenu = document.querySelector('#d-more-menu [data-lecture]');
+    if (dansMenu && state.detail?.ticket?.id === id) dansMenu.textContent = intitule;
 
     if (state.queueCounts) {
       state.queueCounts.UNREAD = Math.max(0, (state.queueCounts.UNREAD ?? 0) + (lu ? -1 : 1));
@@ -4028,10 +4041,29 @@ async function basculerLecture(id, pastille) {
       method: 'POST',
       body: JSON.stringify({ ids: [id], action: versLu ? 'read' : 'unread' }),
     });
+    return versLu;
   } catch (error) {
     appliquer(etait);
     toast(error.message, true);
+    return null;
   }
+}
+
+/*
+ * Lu / non lu depuis le message ouvert (menu Actions, touche U).
+ *
+ * Au téléphone, la pastille d'un message lu est masquée — un seul rond par
+ * ligne, celui de la sélection. Le geste passe donc par le message lui-même :
+ * marqué non lu, il se referme et l'on retrouve la liste, comme dans Mail
+ * sur iPhone. Sur ordinateur, il reste ouvert.
+ */
+async function basculerLectureOuvert() {
+  const id = state.detail?.ticket?.id;
+  if (!id) return;
+  const versLu = await basculerLecture(id);
+  if (versLu === null) return;
+  toast(versLu ? 'Marqué comme lu.' : 'Marqué comme non lu.');
+  if (!versLu && PILE_TICKETS.matches) fermerMessagePile();
 }
 
 const prefetched = new Map();
@@ -5549,6 +5581,9 @@ function renderTicketLabels(ticket) {
     // Cinq gestes, dans l'ordre du métier. Rembourser reste dans le bloc
     // commande, à côté du montant.
     menu.innerHTML =
+      `<button type="button" class="more-item" role="menuitem" data-lecture>${
+        estLu(ticket) ? 'Marquer comme non lu' : 'Marquer comme lu'
+      }</button>` +
       actionButton('reshipment', 'Retour', ticket, 'more-item') +
       actionButton('modification', 'Modification', ticket, 'more-item') +
       actionButton('annulation', 'Annulation', ticket, 'more-item') +
@@ -5557,6 +5592,10 @@ function renderTicketLabels(ticket) {
       `<button type="button" class="more-item" role="menuitem" data-notif-bascule>${
         ticket.notification ? 'Ce n’est pas à classer' : 'À classer'
       }</button>`;
+    menu.querySelector('[data-lecture]')?.addEventListener('click', () => {
+      closeMoreMenu();
+      void basculerLectureOuvert();
+    });
     menu.querySelector('[data-notif-bascule]')?.addEventListener('click', () => {
       closeMoreMenu();
       void basculerNotification(ticket, !ticket.notification);
@@ -7792,7 +7831,8 @@ $('alert-send')?.addEventListener('click', async () => {
       await chargerDemandesFournisseur();
     } else if (state.currentId) {
       prefetched.delete(state.currentId);
-      await selectTicket(state.currentId);
+      // Actualiser n'est pas lire : un message remis « non lu » doit le rester.
+      await selectTicket(state.currentId, { silent: true });
     }
   } catch (error) {
     toast(error.message, true);
@@ -19970,6 +20010,10 @@ document.addEventListener('keydown', (event) => {
   } else if (key === '/') {
     event.preventDefault();
     openPalette();
+  } else if (key === 'u') {
+    // Comme dans Gmail : le message ouvert repasse non lu (ou lu).
+    event.preventDefault();
+    void basculerLectureOuvert();
   } else if (key === 'w') {
     event.preventDefault();
     state.queue.intent = state.queue.intent === 'WISMO' ? '' : 'WISMO';

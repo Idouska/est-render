@@ -256,3 +256,14 @@ test('une consultation en lecture seule n’éteint rien', () => {
   assert.ok(garde < marque.indexOf('openedAt ='), 'et avant que quoi que ce soit ne soit posé');
   assert.match(marque.slice(garde, garde + 60), /\) return;/, 'par un retour, pas par une branche');
 });
+
+test('lu / non lu depuis le message ouvert : menu Actions, touche U, et l’actualisation ne relit pas', () => {
+  // En tête du menu Actions, dans le sens qui convient.
+  assert.match(app, /data-lecture>\$\{\n\s+estLu\(ticket\) \? 'Marquer comme non lu' : 'Marquer comme lu'\n\s+\}<\/button>` \+\n\s+actionButton\('reshipment'/);
+  assert.match(app, /\} else if \(key === 'u'\) \{\n.*\n\s+event\.preventDefault\(\);\n\s+void basculerLectureOuvert\(\);/);
+  // Au téléphone, remis non lu, le message se referme sur la liste.
+  assert.match(app, /if \(!versLu && PILE_TICKETS\.matches\) fermerMessagePile\(\);/);
+  // Actualiser (bouton, touche R, rafraîchissement auto) ne remarque pas lu.
+  assert.match(app, /prefetched\.delete\(state\.currentId\);\n\s+\/\/ Actualiser n'est pas lire[^\n]*\n\s+await selectTicket\(state\.currentId, \{ silent: true \}\);/);
+  assert.match(lire('public/dashboard.html'), /<kbd>U<\/kbd> lu \/ non lu/);
+});

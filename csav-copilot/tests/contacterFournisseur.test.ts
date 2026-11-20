@@ -93,7 +93,8 @@ test('l’atelier ouvre un ticket depuis Tickets, commande retrouvée par son nu
 
 test('menu Actions et barre Fournisseur : les gestes demandés, dans cet ordre', () => {
   const brut = lire('public/app.js');
-  const menu = brut.slice(brut.indexOf("menu.innerHTML =\n      actionButton('reshipment'"), brut.indexOf('const quick = {'));
+  // « Marquer comme non lu » ouvre le menu ; les gestes métier suivent.
+  const menu = brut.slice(brut.indexOf("      actionButton('reshipment', 'Retour', ticket, 'more-item') +"), brut.indexOf('const quick = {'));
   const libelles = [...menu.matchAll(/actionButton\('\w+', '([^']+)'/g)].map((m) => m[1]);
   assert.deepEqual(libelles, ['Retour', 'Modification', 'Annulation', 'Update', 'Renvoi']);
   assert.doesNotMatch(menu.replace(/\/\/[^\n]*/g, ''), /Supprimer le message|WhatsApp|Gmail|Rembourser/);
