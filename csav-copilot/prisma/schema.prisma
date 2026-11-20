@@ -1092,6 +1092,9 @@ model SupplierAlert {
   orderName      String?
 
   message String @db.Text
+  /// Sa traduction pour l'atelier : { en, zh }. Nulle tant qu'elle n'est pas
+  /// faite, ou si elle a échoué — l'atelier lit alors l'original.
+  messageTraduit Json?
 
   /// Valeur actuelle et valeur demandée, pour une demande de changement.
   ///

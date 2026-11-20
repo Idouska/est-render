@@ -1691,6 +1691,11 @@ function alertTitle(kind) {
   return kindLabel(kind);
 }
 
+/** La demande dans la langue de l'atelier, quand sa traduction existe. */
+function messageTraduitDe(demande) {
+  return state.lang === 'fr' ? demande.message : (demande.messageTraduit?.[state.lang] ?? demande.message);
+}
+
 async function loadAlerts() {
   let alerts = [];
   try {
@@ -1716,7 +1721,7 @@ async function loadAlerts() {
               ? `<p class="alert-swap">${alert.beforeValue ? `${escapeHtml(alert.beforeValue)} → ` : ''}<b>${escapeHtml(alert.afterValue)}</b></p>`
               : ''
           }
-          ${alert.message ? `<p>${escapeHtml(alert.message)}</p>` : ''}
+          ${alert.message ? `<p>${escapeHtml(messageTraduitDe(alert))}</p>` : ''}
         </div>
         <div class="alert-acts">
           <button class="alert-ok" type="button" data-alert-ok="${alert.id}">${escapeHtml(t('cs.gotIt'))}</button>
@@ -2606,7 +2611,10 @@ function carteUpdate(update) {
           : ''
       }
 
-      ${update.message ? `<p class="upd-msg">${esc(update.message)}</p>` : ''}
+      ${update.message ? `<p class="upd-msg">${esc(messageTraduitDe(update))}</p>${
+        // L'original reste lisible sous la traduction : c'est lui qui fait foi.
+        messageTraduitDe(update) !== update.message ? `<p class="upd-msg-vo">${esc(update.message)}</p>` : ''
+      }` : ''}
       ${update.supplierNote ? `<p class="upd-note">« ${esc(update.supplierNote)} »</p>` : ''}
 
       ${
@@ -4704,7 +4712,7 @@ function oosCommande() {
       )}</span></span>
       <button type="button" class="oos-x" data-oos-retour="1" aria-label="${esc(t('oos.other'))}">${ICO_CROIX}</button>
     </section>
-    <h2 class="oos-h">${esc(t('oos.step2'))}</h2>
+    <h2 class="oos-h">${esc(t(auDoigt.matches ? 'oos.step2' : 'oos.step2Mouse'))}</h2>
     <div class="oos-articles">${
       articles.length
         ? articles
@@ -4726,7 +4734,8 @@ function oosCommande() {
     ).join('')}</div>
     <button type="button" class="oos-gros oos-envoyer" data-oos-envoyer="1" ${n ? '' : 'disabled'}>${esc(
       // « 1 article », « 2 articles » : pas de « (s) » à l'écran.
-      n ? t('oos.send', { n }).replace('(s)', n > 1 ? 's' : '') : t('oos.touchFirst'),
+      // « Touchez » au doigt, « Choisissez » à la souris.
+      n ? t('oos.send', { n }).replace('(s)', n > 1 ? 's' : '') : t(auDoigt.matches ? 'oos.touchFirst' : 'oos.touchFirstMouse'),
     )}</button>`;
 }
 
