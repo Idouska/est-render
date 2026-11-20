@@ -17024,36 +17024,59 @@ button.rup-chiffre:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--
 .stk-compteur b { font-size: 22px; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .stk-compteur span { font-size: 12px; color: var(--ink-mute); }
 .stk-compteur:hover { background: var(--inset); }
-.stk-compteur.actif { box-shadow: 0 0 0 2px var(--accent); }
+.stk-compteur.actif { box-shadow: 0 0 0 2px var(--accent); background: var(--surface); }
 .stk-compteur.stk-ok b { color: var(--accent-ink); }
 .stk-compteur.stk-warn b { color: var(--warn-ink); }
 .stk-export { margin-left: auto; align-self: center; }
 #stk-ouvrir { align-self: center; }
 .stk-note { color: var(--ink-mute); }
+/* La liste : quatre colonnes, les mêmes pour l'en-tête et pour chaque ligne —
+   la paire, sa commande, son envoi, « Voir ». Chaque chose a sa place : l'œil
+   descend une colonne sans chercher. */
 .stk-liste { display: grid; background: var(--surface); border-radius: 12px; box-shadow: 0 0 0 1px var(--line); overflow: hidden; }
-.stk-ligne { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--line-soft); }
-.stk-ligne:first-child { border-top: 0; }
-.stk-ligne.ouvert { background: var(--inset); }
-.stk-paire { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.stk-photo { flex: none; width: 44px; height: 44px; border-radius: 8px; object-fit: cover; background: var(--inset); }
+.stk-entete, .stk-ligne {
+  display: grid; align-items: center; column-gap: 20px;
+  grid-template-columns: minmax(0, 2.3fr) minmax(0, 1.1fr) minmax(0, 1.5fr) 72px;
+  padding: 0 16px;
+}
+.stk-entete { padding-top: 9px; padding-bottom: 9px; border-bottom: 1px solid var(--line-soft); font-size: 12px; font-weight: 500; color: var(--ink-mute); }
+.stk-ligne { padding-top: 11px; padding-bottom: 11px; border-top: 1px solid var(--line-soft); cursor: pointer; }
+.stk-entete + .stk-ligne, .stk-ligne:first-child { border-top: 0; }
+.stk-ligne:hover { background: color-mix(in srgb, var(--ink) 2.5%, transparent); }
+.stk-ligne.ouvert, .stk-ligne.ouvert:hover { background: var(--inset); }
+.stk-ligne.ouvert :is(.stk-taille, .stk-etat) { background: var(--surface); }
+.stk-paire { display: flex; align-items: center; gap: 13px; min-width: 0; }
+.stk-photo { flex: none; width: 48px; height: 48px; border-radius: 10px; object-fit: cover; background: var(--inset); }
 i.stk-photo { display: grid; place-items: center; font-style: normal; font-size: 13px; font-weight: 600; color: var(--ink-soft); }
-.stk-nom { display: grid; min-width: 0; }
-.stk-nom b, .stk-nom span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.stk-nom span { font-size: 12px; color: var(--ink-mute); }
-.stk-match { display: flex; align-items: center; gap: 10px; }
-.stk-cmd { display: grid; text-align: right; min-width: 90px; }
-.stk-cmd span { font-size: 12px; color: var(--ink-mute); }
-.stk-cmd.stk-vide { color: var(--ink-mute); font-size: 12px; }
-.stk-detail { grid-column: 1 / -1; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; padding-top: 6px; }
+.stk-nom { display: grid; gap: 4px; min-width: 0; }
+.stk-nom b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; letter-spacing: -0.01em; }
+.stk-sous { display: flex; align-items: center; gap: 8px; min-width: 0; }
+/* La taille : ce qui distingue deux paires du même modèle. */
+.stk-taille {
+  flex: none; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding: 2px 8px; border-radius: 6px; background: var(--inset);
+  font-size: 12px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums;
+}
+.stk-taille-vide { font-weight: 500; color: var(--ink-mute); }
+.stk-age { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--ink-mute); }
+.stk-cmd { display: grid; gap: 3px; min-width: 0; }
+.stk-cmd-num { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 14px; font-variant-numeric: tabular-nums; }
+.stk-cmd-pays { font-size: 12px; color: var(--ink-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stk-vide { font-size: 12.5px; color: var(--ink-mute); }
+.stk-envoi-col { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.stk-etat { display: inline-flex; align-items: center; padding: 5px 12px; border-radius: 999px; background: var(--inset); font-size: 12px; font-weight: 600; color: var(--ink-soft); white-space: nowrap; }
+.stk-date { font-size: 12px; color: var(--ink-mute); white-space: nowrap; }
+.stk-voir { justify-self: end; }
+/* Une paire partie est de l'histoire : elle se lit, sans tirer l'œil. */
+.stk-l-envoye .stk-nom b { font-weight: 500; color: var(--ink-soft); }
+.stk-l-envoye .stk-photo { opacity: 0.72; }
+.stk-detail { grid-column: 1 / -1; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; margin-top: 11px; padding: 12px 0 2px 61px; border-top: 1px solid var(--line); cursor: auto; }
 .stk-infos { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); align-items: start; gap: 10px 16px; flex: 1; }
 .stk-infos div { display: grid; gap: 2px; }
 .stk-infos span { font-size: 11px; color: var(--ink-mute); }
 .stk-adresse { white-space: pre-line; font-weight: 500; }
 .stk-gestes { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px; }
 @media (max-width: 640px) {
-  .stk-ligne { grid-template-columns: 1fr; }
-  .stk-match { justify-content: space-between; }
-  .stk-cmd { text-align: left; }
   .stk-export { margin-left: 0; flex: 1; }
   .stk-compteur { flex: 1 1 90px; min-width: 0; }
 }
@@ -17095,7 +17118,6 @@ button.stk-transp { cursor: pointer; }
 .envoi-lecture div { display: grid; gap: 4px; justify-items: start; }
 .envoi-lecture span:first-child { font-size: 11px; color: var(--ink-mute); }
 #stkenv-transp-autre { margin-top: 6px; }
-@media (max-width: 640px) { .stk-match { flex-wrap: wrap; } }
 
 /* ------------------------------------------------------------------------
    TÉLÉPHONE — Retour, Stock, Commandes du jour
@@ -17109,10 +17131,20 @@ button.stk-transp { cursor: pointer; }
   #ret-barre #ret-bons { margin-left: 0 !important; }
   #ret-barre .btn { flex: 1 1 140px; }
 
-  /* Stock : la paire, puis sa commande et ses gestes sur une ligne qui se replie. */
-  .stk-ligne { grid-template-columns: minmax(0, 1fr); }
-  .stk-match { flex-wrap: wrap; justify-content: flex-start; }
-  .stk-cmd { text-align: left; min-width: 0; margin-right: auto; }
+  /* Stock : la paire et « Voir » sur une ligne, sa commande et son envoi sur la suivante. */
+  .stk-entete { display: none; }
+  /* Trois colonnes pour deux lignes : l'envoi (menu + transporteur) peut être
+     large sans rétrécir le nom de la paire, qui est sur l'autre ligne. */
+  .stk-ligne {
+    grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px 12px; padding: 12px 14px;
+    grid-template-areas: "paire paire voir" "cmd envoi envoi";
+  }
+  .stk-paire { grid-area: paire; }
+  .stk-voir { grid-area: voir; }
+  .stk-cmd { grid-area: cmd; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; }
+  .stk-envoi-col { grid-area: envoi; justify-content: flex-end; }
+  .stk-age, .stk-date { display: none; }
+  .stk-detail { padding-left: 0; }
   .stk-tete { gap: 8px; }
   .stk-compteur { flex: 1 1 30%; min-width: 0; padding: 10px 12px; }
   .stk-export, #stk-ouvrir { flex: 1 1 140px; margin-left: 0; }

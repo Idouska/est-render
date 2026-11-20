@@ -1269,6 +1269,10 @@ model ReturnCase {
   /// ne doit plus expédier — une commande servie par le stock disparaît de sa
   /// liste. Posé et retiré avec `reusedOrderName`.
   reusedShopifyOrderId String?
+  /// Le pays où part cette commande : c'est lui que l'écran Stock affiche à
+  /// côté du numéro. Lu dans Shopify au moment où la paire est confiée ; une
+  /// paire « chez vous » n'a pas de pays à elle, et l'écran affichait « — ».
+  reusedCountry String?
 
   /// L'échange : qui l'envoie, et où il en est.
   ///

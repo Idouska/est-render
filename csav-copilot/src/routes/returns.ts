@@ -149,6 +149,37 @@ function decoderBon(dataUrl: string): { mime: TypeBon; data: Buffer } | null {
 
 const imagesStock = new Map<string, { cle: string; expire: number; images: Record<string, string> }>();
 
+/*
+ * Le pays où part une commande servie par le stock, lu dans Shopify et noté
+ * sur ses paires. Au plus PAYS_PAR_APPEL commandes à la fois ; une commande
+ * que Shopify ne connaît plus (supprimée, archivée hors de portée) n'est pas
+ * redemandée avant une demi-heure — sinon l'écran la relirait à chaque visite.
+ */
+const PAYS_PAR_APPEL = 25;
+const paysIntrouvable = new Map<string, number>();
+
+async function noterPaysServies(merchantId: string, commandes: string[]): Promise<Map<string, string>> {
+  const lus = new Map<string, string>();
+  const maintenant = Date.now();
+  const aLire = commandes.filter((id) => (paysIntrouvable.get(`${merchantId}|${id}`) ?? 0) < maintenant).slice(0, PAYS_PAR_APPEL);
+  if (aLire.length === 0) return lus;
+
+  const client = await getShopifyClient(merchantId);
+  for (const orderId of aLire) {
+    const pays = await getOrderById(client, orderId)
+      .then((commande) => commande?.shippingAddress?.country?.trim().toUpperCase() || null)
+      .catch(() => null);
+    if (!pays || !/^[A-Z]{2}$/.test(pays)) {
+      paysIntrouvable.set(`${merchantId}|${orderId}`, maintenant + 30 * 60_000);
+      if (paysIntrouvable.size > 2000) paysIntrouvable.delete(paysIntrouvable.keys().next().value!);
+      continue;
+    }
+    await prisma.returnCase.updateMany({ where: { merchantId, reusedShopifyOrderId: orderId }, data: { reusedCountry: pays } });
+    lus.set(orderId, pays);
+  }
+  return lus;
+}
+
 /** Une paire prise entre la proposition et le clic : la réservation entière est annulée. */
 class PairePlusDisponible extends Error {}
 
@@ -446,7 +477,7 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
               ? { reusedOrderName, reusedAt: new Date(), status: 'CLOSED' }
               : // Annuler un réemploi rend la paire au STOCK : elle restait
                 // « close », donc perdue pour les commandes suivantes.
-                { reusedOrderName: null, reusedShopifyOrderId: null, reusedAt: null, status: 'RESTOCKED' }
+                { reusedOrderName: null, reusedShopifyOrderId: null, reusedCountry: null, reusedAt: null, status: 'RESTOCKED' }
             : {}),
         },
       });
@@ -1616,6 +1647,31 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ images });
   });
 
+  /**
+   * Le pays de destination des paires confiées qui n'en ont pas encore : celles
+   * confiées avant qu'on le note, ou un jour où Shopify ne répondait pas.
+   * L'écran Stock ne l'appelle que s'il en voit une.
+   */
+  app.get('/api/returns/stock/pays', async (request, reply) => {
+    const { merchantId } = request.session;
+    const sansPays = await prisma.returnCase.findMany({
+      where: { merchantId, reusedShopifyOrderId: { not: null }, reusedCountry: null },
+      orderBy: { reusedAt: 'desc' },
+      take: 200,
+      select: { reusedShopifyOrderId: true },
+    });
+    const commandes = [...new Set(sansPays.map((paire) => paire.reusedShopifyOrderId!))];
+    const lus = await noterPaysServies(merchantId, commandes).catch(() => new Map<string, string>());
+
+    const paires = lus.size
+      ? await prisma.returnCase.findMany({
+          where: { merchantId, reusedShopifyOrderId: { in: [...lus.keys()] } },
+          select: { id: true, reusedCountry: true },
+        })
+      : [];
+    return reply.send({ pays: Object.fromEntries(paires.flatMap((p) => (p.reusedCountry ? [[p.id, p.reusedCountry]] : []))) });
+  });
+
   app.get('/api/returns/matches', async (request, reply) => {
     const { merchantId } = request.session;
 
@@ -1827,6 +1883,10 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
         metadata: { orderName, returnIds, renvoi: Boolean(renvoi) },
       });
 
+      // Où part la commande : l'écran Stock l'affiche à côté du numéro. Si
+      // Shopify ne répond pas, la paire reste confiée — le pays se relira.
+      await noterPaysServies(merchantId, [orderId]).catch(() => {});
+
       const agence = await prisma.returnCase.findFirst({
         where: { id: returnIds[0], merchantId },
         select: { agency: { select: { name: true, email: true, phone: true, address: true, country: true } } },
@@ -1970,7 +2030,7 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
 
       const liberees = await prisma.returnCase.updateMany({
         where: { merchantId, reusedShopifyOrderId: parsed.data.orderId },
-        data: { reusedOrderName: null, reusedShopifyOrderId: null, reusedAt: null, status: 'RESTOCKED' },
+        data: { reusedOrderName: null, reusedShopifyOrderId: null, reusedCountry: null, reusedAt: null, status: 'RESTOCKED' },
       });
       if (liberees.count === 0) return reply.code(404).send({ error: 'Aucune paire ne sert cette commande.' });
 
