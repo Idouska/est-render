@@ -163,7 +163,7 @@ test('confier une commande : tout revérifié, toutes les paires ou aucune', () 
 
 test('libérer rend les paires au stock, et la commande à l’atelier', () => {
   const route = corpsRoute("'/api/returns/reemploi/liberer',", "'/api/returns/:id/defectueux'");
-  assert.match(route, /reusedShopifyOrderId: null, reusedAt: null, status: 'RESTOCKED'/);
+  assert.match(route, /reusedShopifyOrderId: null, reusedCountry: null, reusedAt: null, status: 'RESTOCKED'/);
 });
 
 test('une paire confiée à une commande ne sort pas du stock sans qu’on la libère', () => {
@@ -179,7 +179,7 @@ test('une paire confiée à une commande ne sort pas du stock sans qu’on la li
 
 test('l’entrée au stock est datée, et annuler un réemploi rend vraiment la paire', () => {
   assert.match(retours, /fields\.status === 'RESTOCKED' \? \{ restockedAt: new Date\(\) \}/);
-  assert.match(retours, /\{ reusedOrderName: null, reusedShopifyOrderId: null, reusedAt: null, status: 'RESTOCKED' \}/);
+  assert.match(retours, /\{ reusedOrderName: null, reusedShopifyOrderId: null, reusedCountry: null, reusedAt: null, status: 'RESTOCKED' \}/);
 });
 
 /* ---- l'atelier n'expédie pas ce que le stock sert ---- */

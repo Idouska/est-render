@@ -13363,12 +13363,31 @@ function lignesStock() {
       item,
       etat: item.reshippedAt ? 'envoye' : 'aexpedier',
       commande: item.reusedOrderName ?? null,
-      pays: item.agency?.country ?? item.country ?? null,
+      // Où PART la commande, comme pour un match — pas où dort la paire : une
+      // paire « chez vous » n'a pas de pays, et la ligne affichait « — ».
+      pays: item.reusedCountry ?? null,
       rang: null,
       match: null,
     }));
-  return { dispo, confiees, toutes: [...dispo, ...confiees] };
+  // Ce qui attend un geste en haut, ce qui est parti en bas (le plus récent
+  // d'abord). Le tri est stable : dans un même groupe, l'ordre ne bouge pas.
+  const toutes = [...dispo, ...confiees].sort(
+    (a, b) =>
+      RANG_ETAT_STOCK[a.etat] - RANG_ETAT_STOCK[b.etat] ||
+      (a.etat === 'envoye' ? new Date(b.item.reshippedAt) - new Date(a.item.reshippedAt) : 0),
+  );
+  return { dispo, confiees, toutes };
 }
+
+const RANG_ETAT_STOCK = { match: 0, aexpedier: 0, stock: 1, envoye: 2 };
+
+/* « À envoyer » : la paire a une commande et n'est pas partie — qu'elle soit
+   seulement proposée (match) ou déjà confiée. C'est ce que dit le sélecteur de
+   la ligne ; le compteur et le filtre doivent compter la même chose. */
+const stockAEnvoyer = (l) => l.etat === 'match' || l.etat === 'aexpedier';
+
+/* Une déclinaison qui n'est qu'une pointure (« 42.5 ») se lit mal toute seule. */
+const libelleDeclinaison = (v) => (/^\d{2}(?:[.,]5)?$/.test(String(v ?? '').trim()) ? `Taille ${String(v).trim()}` : v);
 
 /* Le filtre demandé par le marchand : Tout, Match, Non envoyé, Envoyé. Les
    compteurs du dessus y mènent aussi, mais c'est lui qui dit où l'on est. */
@@ -13381,16 +13400,17 @@ const FILTRES_STOCK = [
 
 function filtrerStock(lignes, filtre) {
   if (filtre === 'match') return lignes.filter((l) => l.etat === 'match');
-  if (filtre === 'nonenvoye') return lignes.filter((l) => l.etat === 'aexpedier');
+  if (filtre === 'nonenvoye') return lignes.filter(stockAEnvoyer);
   if (filtre === 'envoye') return lignes.filter((l) => l.etat === 'envoye');
   return lignes;
 }
 
+/* L'état, en toutes lettres : pour la liste imprimée ou partagée. */
 const ETATS_STOCK = {
-  stock: ['En stock', 'dim'],
-  match: ['Match', 'ok'],
-  aexpedier: ['À expédier', 'warn'],
-  envoye: ['Envoyé', 'ok'],
+  stock: 'En stock',
+  match: 'À envoyer (match)',
+  aexpedier: 'À envoyer',
+  envoye: 'Envoyé',
 };
 
 /*
@@ -13402,16 +13422,21 @@ const ETATS_STOCK = {
 function renderReturnStock(box) {
   const r = state.returns;
   if (!FILTRES_STOCK.some(([cle]) => cle === r.stockFiltre)) r.stockFiltre = 'tout';
-  const { dispo, toutes } = lignesStock();
+  const { dispo, confiees, toutes } = lignesStock();
   const nMatch = dispo.filter((l) => l.etat === 'match').length;
-  const nAExpedier = toutes.filter((l) => l.etat === 'aexpedier').length;
+  const nAExpedier = toutes.filter(stockAEnvoyer).length;
   const lignes = filtrerStock(toutes, r.stockFiltre);
   const images = r.stockImages ?? {};
   const joursDepuis = (date) => Math.max(0, Math.floor((Date.now() - new Date(date).getTime()) / 86_400_000));
   const initiales = (titre) =>
     String(titre ?? '').split(/\s+/).filter((mot) => /^[\p{L}\d]/u.test(mot)).slice(0, 2).map((mot) => mot[0].toUpperCase()).join('') || '·';
 
-  const compteur = (filtre, n, libelle, ton) => `<button type="button" class="stk-compteur${ton ? ` stk-${ton}` : ''}" data-stk-filtre="${filtre}"><b>${n}</b><span>${esc(libelle)}</span></button>`;
+  // Un compteur mène à son filtre, et le montre quand on y est.
+  const compteur = (filtre, n, libelle, ton) => {
+    const actif = filtre !== 'tout' && r.stockFiltre === filtre;
+    return `<button type="button" class="stk-compteur${ton ? ` stk-${ton}` : ''}${actif ? ' actif' : ''}" data-stk-filtre="${filtre}" aria-pressed="${actif}"><b>${n}</b><span>${esc(libelle)}</span></button>`;
+  };
+  const jourCourt = (date) => new Date(date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 
   const detail = (l) => {
     const { item } = l;
@@ -13423,7 +13448,8 @@ function renderReturnStock(box) {
       item.origine === 'MANUEL' ? `ajout manuel${item.note ? ` · ${esc(item.note)}` : ''}` : `retour ${esc(item.orderName ?? '—')}`
     }</b></div>`);
     if (item.sku) lignesDetail.push(`<div><span>Référence</span><b class="mono">${esc(item.sku)}</b></div>`);
-    if (item.restockedAt) lignesDetail.push(`<div><span>En stock depuis</span><b>${joursDepuis(item.restockedAt)} j</b></div>`);
+    // La ligne le dit déjà tant que la paire est là ; une fois partie, c'est ici qu'on le retrouve.
+    if (item.restockedAt && l.etat === 'envoye') lignesDetail.push(`<div><span>Entrée en stock</span><b>${esc(fullDate(item.restockedAt))}</b></div>`);
     if (l.match) {
       lignesDetail.push(`<div><span>Client</span><b>${esc(l.match.client ?? '—')}</b></div>`);
       if (l.match.adresse) lignesDetail.push(`<div><span>Livrer à</span><b class="stk-adresse">${esc(adresseTexte(l.match.adresse))}</b></div>`);
@@ -13453,42 +13479,61 @@ function renderReturnStock(box) {
     return `<div class="stk-detail"><div class="stk-infos">${lignesDetail.join('')}</div><div class="stk-gestes">${gestes}${sortir}</div></div>`;
   };
 
+  /*
+   * Une ligne, quatre colonnes toujours à la même place : la paire, sa
+   * commande, son envoi, « Voir ». Avant, les étiquettes et les boutons se
+   * suivaient dans un ordre qui changeait d'une ligne à l'autre, et « Voir »
+   * n'était jamais au même endroit.
+   */
   const ligne = (l) => {
     const { item } = l;
-    const [mot, ton] = ETATS_STOCK[l.etat];
     const ouvert = r.stockOuvert === item.id;
-    return `<div class="stk-ligne${ouvert ? ' ouvert' : ''}">
+    const envoye = l.etat === 'envoye';
+    const depuis = !envoye && item.restockedAt ? joursDepuis(item.restockedAt) : null;
+    return `<div class="stk-ligne stk-l-${l.etat}${ouvert ? ' ouvert' : ''}" data-stk-ligne="${esc(item.id)}">
       <div class="stk-paire">
         ${
           images[item.id]
             ? `<img class="stk-photo" src="${esc(images[item.id])}" alt="" loading="lazy" data-initiales="${esc(initiales(item.productTitle))}" />`
             : `<i class="stk-photo sta-initiales" aria-hidden="true">${esc(initiales(item.productTitle))}</i>`
         }
-        <span class="stk-nom"><b>${esc(item.productTitle)}</b><span>${esc(item.variantTitle ?? 'Taille non précisée')}</span></span>
+        <span class="stk-nom"><b>${esc(item.productTitle)}</b><span class="stk-sous">${
+          // La taille est ce qui distingue deux paires du même modèle : elle se lit d'abord.
+          item.variantTitle
+            ? `<span class="stk-taille">${esc(libelleDeclinaison(item.variantTitle))}</span>`
+            : '<span class="stk-taille stk-taille-vide">Taille non précisée</span>'
+        }${depuis === null ? '' : `<span class="stk-age">${depuis === 0 ? 'en stock depuis aujourd’hui' : `en stock depuis ${depuis} j`}</span>`}</span></span>
       </div>
-      <div class="stk-match">
+      <div class="stk-cmd">
         ${
           l.commande
-            ? `<span class="stk-cmd"><b>${esc(l.commande)}</b><span>${esc(nomPays(l.pays) || '—')}</span></span>`
-            : '<span class="stk-cmd stk-vide">Aucune commande</span>'
-        }
-        ${
-          // Confiée à une commande, c'est le sélecteur qui dit l'état : pas deux fois.
-          l.etat === 'stock' || l.etat === 'match' ? `<span class="ret-tag ${ton}">${esc(mot)}</span>` : ''
-        }
-        <button type="button" class="btn btn-small" data-stk-voir="${esc(item.id)}" aria-expanded="${ouvert}">${ouvert ? 'Fermer' : 'Voir'}</button>
-        ${
-          // Une paire qui a une commande : à envoyer, ou envoyée. Le
-          // transporteur d'une paire partie rouvre le détail de l'envoi.
-          l.commande
-            ? `${l.etat === 'envoye' ? pastilleTransporteur(item.reshipCarrier, `data-stk-envoi-voir="${esc(item.id)}" title="Voir l’envoi"`) : ''}
-               <select class="stk-envoi ${l.etat === 'envoye' ? 'stk-envoi-ok' : 'stk-envoi-attente'}" data-stk-envoi="${esc(item.id)}" aria-label="État de l’envoi">
-                 <option value="aenvoyer"${l.etat === 'envoye' ? '' : ' selected'}>À envoyer</option>
-                 <option value="envoye"${l.etat === 'envoye' ? ' selected' : ''}>Envoyé</option>
-               </select>`
-            : ''
+            ? `<span class="stk-cmd-num"><b>${esc(l.commande)}</b>${l.etat === 'match' ? '<span class="ret-tag ok">Match</span>' : ''}</span>${
+                nomPays(l.pays) ? `<span class="stk-cmd-pays">${esc(nomPays(l.pays))}</span>` : ''
+              }`
+            : '<span class="stk-vide">Aucune commande</span>'
         }
       </div>
+      <div class="stk-envoi-col">
+        ${
+          // Un seul état par ligne, toujours ici : en stock, à envoyer, envoyé.
+          // Une paire qui a une commande le porte en menu — « Envoyé » ouvre
+          // la fenêtre de l'envoi, « À envoyer » l'annule.
+          l.commande
+            ? `<select class="stk-envoi ${envoye ? 'stk-envoi-ok' : 'stk-envoi-attente'}" data-stk-envoi="${esc(item.id)}" aria-label="État de l’envoi">
+                 <option value="aenvoyer"${envoye ? '' : ' selected'}>À envoyer</option>
+                 <option value="envoye"${envoye ? ' selected' : ''}>Envoyé</option>
+               </select>${
+                 // Le transporteur d'une paire partie rouvre le détail de l'envoi.
+                 envoye
+                   ? `${pastilleTransporteur(item.reshipCarrier, `data-stk-envoi-voir="${esc(item.id)}" title="Voir l’envoi"`)}${
+                       item.reshippedAt ? `<span class="stk-date">${esc(jourCourt(item.reshippedAt))}</span>` : ''
+                     }`
+                   : ''
+               }`
+            : '<span class="stk-etat">En stock</span>'
+        }
+      </div>
+      <button type="button" class="btn btn-small stk-voir" data-stk-voir="${esc(item.id)}" aria-expanded="${ouvert}">${ouvert ? 'Fermer' : 'Voir'}</button>
       ${ouvert ? detail(l) : ''}
     </div>`;
   };
@@ -13512,7 +13557,10 @@ function renderReturnStock(box) {
     ${r.matchMeta?.error ? `<p class="stk-note">Matching indisponible : ${esc(r.matchMeta.error)}</p>` : ''}
     ${
       lignes.length
-        ? `<div class="stk-liste">${lignes.map(ligne).join('')}</div>`
+        ? `<div class="stk-liste">
+            <div class="stk-entete" aria-hidden="true"><span>Paire</span><span>Commande</span><span>Envoi</span><span></span></div>
+            ${lignes.map(ligne).join('')}
+          </div>`
         : toutes.length
           ? '<p class="empty" style="padding:20px">Aucune paire ici pour le moment.</p>'
           : `<div class="stk-vide-ecran">
@@ -13534,6 +13582,25 @@ function renderReturnStock(box) {
       .then((data) => {
         r.stockImages = { ...(r.stockImages ?? {}), ...(data.images ?? {}) };
         if (r.tab === 'stock') renderReturns();
+      })
+      .catch(() => {});
+  }
+  // Le pays d'une commande servie : noté quand la paire est confiée. Pour
+  // celles confiées avant, il se lit une fois dans Shopify, puis reste.
+  const sansPays = confiees.filter((l) => !l.item.reusedCountry).map((l) => l.item.id).sort().join(',');
+  if (sansPays && r.stockPaysCle !== sansPays) {
+    r.stockPaysCle = sansPays;
+    void api('/api/returns/stock/pays')
+      .then((data) => {
+        const pays = data.pays ?? {};
+        let change = false;
+        for (const item of state.returns.cases) {
+          if (pays[item.id] && !item.reusedCountry) {
+            item.reusedCountry = pays[item.id];
+            change = true;
+          }
+        }
+        if (change && r.tab === 'stock') renderReturns();
       })
       .catch(() => {});
   }
@@ -13790,7 +13857,7 @@ function texteStock() {
   return lignes.map((l) => {
     const paire = `${l.item.productTitle}${l.item.variantTitle ? ` — ${l.item.variantTitle}` : ''}`;
     const cmd = l.commande ? `${l.commande} (${nomPays(l.pays) || '—'})` : '';
-    return { paire, cmd, etat: ETATS_STOCK[l.etat][0] };
+    return { paire, cmd, etat: ETATS_STOCK[l.etat] };
   });
 }
 
@@ -13839,9 +13906,14 @@ $('ret-body')?.addEventListener('click', (event) => {
   if (envoiOuvrir) return ouvrirEnvoiStock(envoiOuvrir.dataset.stkEnvoiOuvrir, 'saisie');
   const envoiVoir = event.target.closest('[data-stk-envoi-voir]');
   if (envoiVoir) return ouvrirEnvoiStock(envoiVoir.dataset.stkEnvoiVoir, 'lecture');
+  // « Voir », ou la ligne elle-même : pas besoin de viser le bouton. Les
+  // menus, les liens et le détail déplié gardent leurs propres gestes.
   const voir = event.target.closest('[data-stk-voir]');
-  if (voir) {
-    state.returns.stockOuvert = state.returns.stockOuvert === voir.dataset.stkVoir ? null : voir.dataset.stkVoir;
+  const ligneStock = voir ? null : event.target.closest('[data-stk-ligne]');
+  if (ligneStock && event.target.closest('button, select, a, input, label, .stk-detail')) return;
+  const id = voir?.dataset.stkVoir ?? ligneStock?.dataset.stkLigne;
+  if (id) {
+    state.returns.stockOuvert = state.returns.stockOuvert === id ? null : id;
     renderReturns();
   }
 });
