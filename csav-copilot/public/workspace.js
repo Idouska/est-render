@@ -2196,7 +2196,15 @@ function renderCatalog(error) {
 
   // Le résumé, les filtres et la recherche n'ont de sens qu'avec des modèles.
   const paires = tout.reduce((somme, item) => somme + Math.max(0, item.totalInventory ?? 0), 0);
-  $('catalog-resume').textContent = tout.length ? t('catalog.summary', { n: tout.length, p: paires }) : '';
+  // Sans stock suivi dans Shopify, « 0 paires en stock » serait faux : on ne dit que le nombre de modèles.
+  const stockConnu = tout.some((item) => item.totalInventory !== null && item.totalInventory !== undefined);
+  $('catalog-resume').textContent = !tout.length
+    ? ''
+    : stockConnu
+      ? t('catalog.summary', { n: tout.length, p: paires })
+      : t('catalog.summary', { n: tout.length, p: paires }).split(' · ')[0];
+  // Les filtres « En stock / Épuisés » n'ont de sens que si le stock est suivi.
+  $('catalog-dispo').hidden = !stockConnu;
   $('catalog-search').hidden = tout.length === 0;
   $('catalog-outils').hidden = tout.length === 0;
 
@@ -2373,7 +2381,12 @@ function ficheMarkup(product) {
   return `<div class="sheet fiche">
     <div class="sheet-head">${tete(
       deLaCouleur.find((variant) => variant.image)?.image ?? product.image,
-      [t(couleurs.length > 1 ? 'catalog.colors' : 'catalog.colorsOne', { n: couleurs.length }), etendue, t('catalog.stock', { n: total })]
+      [
+        t(couleurs.length > 1 ? 'catalog.colors' : 'catalog.colorsOne', { n: couleurs.length }),
+        etendue,
+        // Stock non suivi dans Shopify : pas de « 0 en stock ».
+        variantes.some((variant) => stockDe(variant) !== null && stockDe(variant) !== undefined) ? t('catalog.stock', { n: total }) : '',
+      ]
         .filter(Boolean)
         .join(' · '),
     )}</div>
