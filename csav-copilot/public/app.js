@@ -807,23 +807,43 @@ const RETOURS_GMAIL = {
       '(Sécurité › Applications tierces), puis reconnectez Gmail.',
     true,
   ],
+  acces: [
+    'Google n’a pas donné l’accès aux mails : sur sa page, cochez toutes les cases d’autorisation ' +
+      '(ou « Tout sélectionner ») avant de continuer. Recommencez la connexion de la boîte.',
+    true,
+  ],
+  code: [
+    'La connexion a expiré en route (page de Google rechargée ou retour arrière). ' +
+      'Recommencez la connexion de la boîte, d’une traite.',
+    true,
+  ],
   echec: ['La connexion à Gmail a échoué. Réessayez dans un instant.', true],
 };
+
+/* Au-delà, le message vient d'une adresse gardée — un raccourci sur l'écran
+   d'accueil du téléphone, un favori — et non d'un retour de Google. */
+const RETOUR_GMAIL_FRAIS_MS = 10 * 60_000;
 
 function retourGmail() {
   const adresse = new URL(location.href);
   const raison = adresse.searchParams.get('gmail');
   if (!raison) return;
+  const quand = Number(adresse.searchParams.get('t'));
+  const detail = adresse.searchParams.get('detail');
 
-  adresse.searchParams.delete('gmail');
+  for (const cle of ['gmail', 't', 'detail']) adresse.searchParams.delete(cle);
   history.replaceState(history.state, '', `${adresse.pathname}${adresse.search}${adresse.hash}`);
+
+  // Un message rejoué n'apprend rien : il faisait croire, à chaque ouverture
+  // de l'outil, que la connexion venait d'échouer.
+  if (!quand || Math.abs(Date.now() - quand) > RETOUR_GMAIL_FRAIS_MS) return;
 
   const [message, echec] = RETOURS_GMAIL[raison] ?? RETOURS_GMAIL.echec;
   if (echec) {
     setView('settings');
     document.querySelector('[data-reg="connexions"]')?.click();
   }
-  toast(message, echec, echec ? 10_000 : 4000);
+  toast(echec && detail ? `${message} (${detail})` : message, echec, echec ? 10_000 : 4000);
 }
 
 $('cc-envoi')?.addEventListener('click', async () => {
