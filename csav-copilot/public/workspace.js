@@ -4768,6 +4768,35 @@ async function chargerMesRuptures() {
   renderMesRuptures();
 }
 
+/*
+ * Dans Commandes du jour : les ruptures auxquelles le client a répondu.
+ *
+ * L'atelier travaille dans cet écran. Une réponse qui l'attendait dans « Out
+ * of stock » pouvait y rester sans être vue ; elle s'affiche maintenant ici,
+ * en bande, avec le bouton qui y mène.
+ */
+function bandeRupturesARepondre(mes) {
+  const boite = $('ws-ruptures-rep');
+  if (!boite) return;
+  const aRepondre = mes.filter((dossier) => statutRupture(dossier, false) === 'A_REPONDRE');
+  boite.hidden = aRepondre.length === 0;
+  boite.innerHTML = aRepondre.length
+    ? `<div class="alert alert-bleu">
+        <div class="alert-txt">
+          <b>${esc(t('oos.toAnswer', { n: aRepondre.length }).replace('(s)', aRepondre.length > 1 ? 's' : ''))}</b>
+          <p>${esc(aRepondre.map((dossier) => [dossier.orderName, dossier.article?.produit].filter(Boolean).join(' · ')).slice(0, 4).join('  —  '))}</p>
+        </div>
+        <div class="alert-acts">
+          <button class="alert-ok" type="button" data-voir-ruptures="1">${esc(t('oos.reply'))}</button>
+        </div>
+      </div>`
+    : '';
+}
+
+document.addEventListener('click', (event) => {
+  if (event.target.closest('[data-voir-ruptures]')) setView('rupture');
+});
+
 function renderMesRuptures() {
   const mes = state.oos.mes;
   const aFaire = (mes ?? []).filter((dossier) => statutRupture(dossier, false) === 'A_REPONDRE').length;
@@ -4775,6 +4804,7 @@ function renderMesRuptures() {
     $(id).hidden = !aFaire;
     $(id).textContent = String(aFaire);
   }
+  bandeRupturesARepondre(mes ?? []);
   if (state.view !== 'rupture') return;
   $('oos-mes').innerHTML =
     mes === null

@@ -4206,3 +4206,19 @@ body.ws-simple .wsapp #ws-sort[aria-pressed='true'] { background: var(--brand-so
   background: var(--line-soft) center / 46% no-repeat
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239a9aa3' stroke-width='1.6' stroke-linejoin='round'%3E%3Cpath d='M12 3l8 4.5v9L12 21l-8-4.5v-9zM4 7.5l8 4.5 8-4.5M12 12v9'/%3E%3C/svg%3E");
 }
+
+/* Les ruptures auxquelles le client a répondu, en bande dans Commandes du jour. */
+.wsapp .alert-bleu { --c: #0a84ff; }
+.wsapp #ws-ruptures-rep[hidden] { display: none; }
+.wsapp #ws-ruptures-rep { margin-bottom: 10px; }
+
+/* Out of stock, à la souris : d'abord le suivi (ce qui attend une réponse est
+   en tête), puis le signalement d'une commande sortie de la liste du jour. */
+@media (min-width: 1100px) and (hover: hover) and (pointer: fine) {
+  .wsapp .oos-cols > aside { order: -1; }
+}
+.wsapp .oos-autre { display: none; }
+@media (min-width: 1100px) and (hover: hover) and (pointer: fine) {
+  .wsapp .oos-autre { display: block; margin: 8px 0 -12px; font-size: 15px; font-weight: 650; color: var(--ink); }
+  .wsapp .oos-etape1 .oos-h { display: none; }
+}
