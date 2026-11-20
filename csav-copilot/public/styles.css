@@ -17597,3 +17597,6 @@ button.stk-transp { cursor: pointer; }
 
 .stk-raison { grid-column: 1 / -1; }
 .stk-raison b { font-weight: 500; color: var(--ink-soft); }
+
+/* Suivi colis : la barre qui compte et filtre, et les lignes qu'elle cache. */
+#tracking-barre[hidden], #tracking-rows tr[hidden] { display: none !important; }
