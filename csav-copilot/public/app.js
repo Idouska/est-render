@@ -11480,6 +11480,58 @@ $('catalog-q').addEventListener('input', (event) => {
 
 /* ------------------------------------------------------------ suivi colis */
 
+/*
+ * Le suivi, en cinq familles : ce qui avance, ce qui attend le client, ce
+ * qui est livré, ce qui est bloqué, et ce dont le transporteur ne dit rien. Une barre comme
+ * celle du Stock : chaque case compte et filtre.
+ */
+const GROUPES_SUIVI = [
+  ['tout', 'Tout'],
+  ['transit', 'En transit'],
+  ['retirer', 'À retirer'],
+  ['livre', 'Livrés'],
+  ['bloque', 'Bloqués'],
+  ['muet', 'Sans nouvelles'],
+];
+const ETATS_BLOQUES = new Set(['Exception', 'DeliveryFailure', 'NotFound', 'Expired']);
+
+function groupeSuivi(shipment) {
+  const etat = shipment.liveStatus;
+  if (!etat) return 'muet';
+  if (ETATS_BLOQUES.has(etat)) return 'bloque';
+  if (etat === 'AvailableForPickup') return 'retirer';
+  if (etat === 'Delivered') return 'livre';
+  return 'transit';
+}
+
+function renderBarreSuivi() {
+  const colis = state.suiviColis ?? [];
+  const filtre = GROUPES_SUIVI.some(([cle]) => cle === state.suiviFiltre) ? state.suiviFiltre : 'tout';
+  const compte = (cle) => (cle === 'tout' ? colis.length : colis.filter((c) => groupeSuivi(c) === cle).length);
+  $('tracking-barre').hidden = colis.length === 0;
+  $('tracking-barre').innerHTML = GROUPES_SUIVI.map(([cle, libelle]) => {
+    const n = compte(cle);
+    const ton = n && cle === 'bloque' ? ' stk-warn' : '';
+    return `<button type="button" class="stk-compteur${ton}${filtre === cle ? ' actif' : ''}" data-suivi-filtre="${cle}" aria-pressed="${filtre === cle}"><b>${n}</b><span>${esc(libelle)}</span></button>`;
+  }).join('');
+  let vus = 0;
+  $('tracking-rows').querySelectorAll('tr[data-etat]').forEach((ligne) => {
+    ligne.hidden = filtre !== 'tout' && ligne.dataset.etat !== filtre;
+    if (!ligne.hidden) vus += 1;
+  });
+  $('tracking-rows').querySelector('.suivi-vide')?.remove();
+  if (colis.length && !vus) {
+    $('tracking-rows').insertAdjacentHTML('beforeend', '<tr class="suivi-vide"><td colspan="6" class="empty">Aucun colis dans cette case.</td></tr>');
+  }
+}
+
+$('tracking-barre')?.addEventListener('click', (event) => {
+  const bouton = event.target.closest('[data-suivi-filtre]');
+  if (!bouton) return;
+  state.suiviFiltre = bouton.dataset.suiviFiltre;
+  renderBarreSuivi();
+});
+
 async function loadTracking() {
   const body = $('tracking-rows');
   body.innerHTML = '<tr><td colspan="6" class="empty">Chargement…</td></tr>';
@@ -11493,7 +11545,7 @@ async function loadTracking() {
         .map(
           // Au téléphone, la ligne entière ouvre le suivi : `data-suivi` porte
           // le numéro, et le chevron (`lt-clic`) le dit.
-          (shipment) => `<tr${
+          (shipment) => `<tr data-etat="${groupeSuivi(shipment)}"${
             shipment.trackingNumber ? ` class="lt-clic" data-suivi="${esc(shipment.trackingNumber)}"` : ''
           }>
             <td class="mono lt-cmd"><b>${esc(shipment.orderName)}</b></td>
@@ -11546,9 +11598,9 @@ async function loadTracking() {
       }),
     );
 
-    $('tracking-count').textContent = shipments.length
-      ? `${shipments.length} colis en transit`
-      : '';
+    $('tracking-count').textContent = '';
+    state.suiviColis = shipments;
+    renderBarreSuivi();
   } catch (error) {
     body.innerHTML = `<tr><td colspan="7" class="empty">${esc(error.message)}</td></tr>`;
   }
