@@ -74,3 +74,11 @@ test('un échec Google dit sa cause : code rejoué, cases non cochées, ou code 
   // Seul l'envoi coché : la boîte ne pourrait rien lire.
   assert.equal(lectureAccordee('https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.compose'), false);
 });
+
+test('boîte de réception : un non-lu se voit d’un coup d’œil', () => {
+  // Fond teinté, nom et motif en gras noir pour le non-lu ; gris et avatar estompé pour le lu.
+  assert.match(css, /#view-tickets \.queue-item:not\(\.q-done\) \{\n\s+background: color-mix\(in srgb, var\(--accent\) 7%, var\(--surface\)\);/);
+  assert.match(css, /#view-tickets \.queue-item:not\(\.q-done\) \.queue-who \{ font-weight: 750; color: var\(--ink\); \}/);
+  assert.match(css, /#view-tickets \.queue-item\.q-done \.queue-who \{ font-weight: 450; color: var\(--ink-mute\); \}/);
+  assert.match(css, /#view-tickets \.queue-item\.q-done \.qav \{ opacity: 0\.5; filter: grayscale\(0\.6\); \}/);
+});
