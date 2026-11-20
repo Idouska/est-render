@@ -17139,3 +17139,34 @@ button.stk-transp { cursor: pointer; }
   #view-envoi .eh-tete { flex-wrap: wrap; }
   #view-envoi .eh-detail, #view-envoi .el-resume { overflow-wrap: anywhere; white-space: normal; }
 }
+
+/* ------------------------------------------------------------------------
+   Boîte de réception : lu / non lu, d'un coup d'œil
+
+   Seuls le point bleu et quelques points de graisse séparaient les deux :
+   il fallait comparer deux lignes pour savoir laquelle attendait. Le non-lu
+   a maintenant un fond teinté, un nom et un motif en gras noir, et un point
+   plus gros ; le lu passe en gris, avatar estompé, sans fond. La ligne
+   ouverte (fond de l'accent) et la sélection gardent leurs propres règles,
+   plus précises.
+   ------------------------------------------------------------------------ */
+#view-tickets .queue-item:not(.q-done) {
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+}
+#view-tickets .queue-item:not(.q-done):hover {
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+}
+#view-tickets .queue-item:not(.q-done) .queue-who { font-weight: 750; color: var(--ink); }
+#view-tickets .queue-item:not(.q-done) .queue-subject { font-weight: 650; color: var(--ink); }
+#view-tickets .queue-item:not(.q-done) .queue-prev { color: var(--ink-soft); }
+
+#view-tickets .queue-item.q-done .queue-who { font-weight: 450; color: var(--ink-mute); }
+#view-tickets .queue-item.q-done .queue-subject { font-weight: 400; color: var(--ink-mute); }
+#view-tickets .queue-item.q-done .queue-prev { color: var(--ink-mute); opacity: 0.85; }
+#view-tickets .queue-item.q-done .qav { opacity: 0.5; filter: grayscale(0.6); }
+
+/* Le point des non-lus, plus gros : c'est lui que l'œil cherche en premier. */
+#view-tickets .qread:not(.lu)::before { width: 11px; height: 11px; }
+
+/* Deux lignes teintées qui se suivent restent deux lignes. */
+#view-tickets .qrow + .qrow { margin-top: 2px; }
