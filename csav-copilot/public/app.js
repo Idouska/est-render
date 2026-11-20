@@ -13629,11 +13629,36 @@ function couleursTransporteur(nom) {
   return cle ? TRANSPORTEURS[cle] : null;
 }
 
+/* Le vrai logo quand on l'a (public/transporteurs) ; sinon le nom, aux couleurs de la marque. */
+const LOGOS_TRANSPORTEUR = {
+  UPS: 'ups',
+  DHL: 'dhl',
+  FedEx: 'fedex',
+  DPD: 'dpd',
+  USPS: 'usps',
+  Chronopost: 'chronopost',
+  GLS: 'gls',
+  'La Poste': 'laposte',
+  'Mondial Relay': 'mondialrelay',
+};
+
+function logoTransporteur(nom) {
+  const cherche = sansAccents(nom ?? '').replace(/\s+/g, '');
+  if (!cherche) return null;
+  const cle = Object.keys(LOGOS_TRANSPORTEUR).find((t) => cherche.includes(sansAccents(t).replace(/\s+/g, '')));
+  return cle ? { nom: cle, fichier: LOGOS_TRANSPORTEUR[cle] } : null;
+}
+
 function pastilleTransporteur(nom, attributs = '') {
+  const balise = attributs ? 'button type="button"' : 'span';
+  const fin = balise.split(' ')[0];
+  const logo = logoTransporteur(nom);
+  if (logo) {
+    return `<${balise} class="stk-transp stk-transp-logo stk-logo-${logo.fichier}" ${attributs}><img src="/static/transporteurs/${logo.fichier}.svg" alt="${esc(logo.nom)}" /></${fin}>`;
+  }
   const couleurs = couleursTransporteur(nom);
   const style = couleurs ? ` style="background:${couleurs[0]};color:${couleurs[1]}"` : '';
-  const balise = attributs ? 'button type="button"' : 'span';
-  return `<${balise} class="stk-transp${couleurs ? '' : ' stk-transp-neutre'}"${style} ${attributs}>${esc(nom || 'Transporteur ?')}</${balise.split(' ')[0]}>`;
+  return `<${balise} class="stk-transp${couleurs ? '' : ' stk-transp-neutre'}"${style} ${attributs}>${esc(nom || 'Transporteur ?')}</${fin}>`;
 }
 
 const envoiStock = { ligne: null, bon: null, lecture: false };
@@ -24981,3 +25006,4 @@ $('releve-close')?.addEventListener('click', fermerReleve);
 $('releve-modal')?.addEventListener('click', (event) => {
   if (event.target === event.currentTarget) fermerReleve();
 });
+
