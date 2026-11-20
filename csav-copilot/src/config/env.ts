@@ -54,6 +54,10 @@ const schema = z.object({
   // console : sans ces lignes, une clé posée dans Render était ignorée.
   TRACK17_API_KEY: z.string().optional(),
   PARCELSAPP_API_KEY: z.string().optional(),
+  // Mentions légales de l'éditeur (pages /privacy et /terms).
+  LEGAL_COMPANY: z.string().optional(),
+  LEGAL_ADDRESS: z.string().optional(),
+  LEGAL_EMAIL: z.string().optional(),
   DEEPSEEK_MODEL: z.string().optional(),
   DEEPSEEK_BASE_URL: z.string().optional(),
 

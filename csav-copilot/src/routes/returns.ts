@@ -257,6 +257,8 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
         silent,
         stock: stock.length,
         reserved: cases.filter((item) => item.reusedShopifyOrderId).length,
+        // Confiées à une commande et pas encore parties : la pastille de « Stock ».
+        aEnvoyer: cases.filter((item) => item.reusedShopifyOrderId && !item.reshippedAt).length,
         // Les échanges promis dont l'envoi n'est pas encore organisé.
         echanges: cases.filter(
           (item) =>

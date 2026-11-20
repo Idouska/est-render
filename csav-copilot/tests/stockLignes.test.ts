@@ -135,3 +135,10 @@ test('les paires confiées avant : leur pays se lit une fois dans Shopify, puis 
     /const sansPays = confiees\.filter\(\(l\) => !l\.item\.reusedCountry\)[\s\S]{0,80}\n\s+if \(sansPays && r\.stockPaysCle !== sansPays\) \{\n\s+r\.stockPaysCle = sansPays;\n\s+void api\('\/api\/returns\/stock\/pays'\)/,
   );
 });
+
+test('le menu porte le compte des paires à envoyer, et « Voir » dit pourquoi il n’y a pas de commande', () => {
+  assert.match(routes, /aEnvoyer: cases\.filter\(\(item\) => item\.reusedShopifyOrderId && !item\.reshippedAt\)\.length,/);
+  assert.match(app, /renvoi: Math\.max\(returns\?\.counts\?\.aEnvoyer \?\? 0, state\.navCounts\?\.renvoiVu \?\? 0\),/);
+  assert.match(app, /'refunds', 'renvoi'\]\.includes\(view\) && tally > 0/);
+  assert.match(fonction('function renderReturnStock('), /<div class="stk-raison"><span>Pas de commande<\/span>/);
+});

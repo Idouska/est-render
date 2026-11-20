@@ -8,22 +8,12 @@
   </head>
   <body>
     <div class="page">
-      <div class="draft-banner">
-        <b>⚠</b>
-        <div>
-          <b>Modèle de départ, pas un document validé.</b>
-          Ce texte décrit fidèlement ce que l'application fait techniquement des
-          données (voir le code source), mais les champs entre crochets sont à
-          compléter et l'ensemble doit être relu par un juriste avant toute
-          publication ou usage réel — notamment pour confirmer la base légale
-          retenue et les obligations propres à votre structure. Retirez ce
-          bandeau une fois le document validé.
-        </div>
+      {{BANDEAU}}
       </div>
 
       <h1>Politique de confidentialité</h1>
       <p class="meta">
-        cSAV Copilot — dernière mise à jour : <mark>[à compléter]</mark>
+        cSAV Copilot — dernière mise à jour : {{DATE}}
       </p>
 
       <p>
@@ -39,7 +29,7 @@
         Le marchand qui connecte sa boutique et sa boîte mail est
         <strong>responsable du traitement</strong> des données de ses propres
         clients, au sens du Règlement Général sur la Protection des Données
-        (RGPD). <mark>[Nom de la société éditrice]</mark> agit comme
+        (RGPD). {{SOCIETE}} agit comme
         <strong>sous-traitant</strong> au sens de l'article 28 du RGPD, dans le
         cadre défini par le contrat de sous-traitance signé avec chaque
         marchand.
@@ -94,8 +84,7 @@
       <p>
         Le traitement des messages entrants repose sur l'intérêt légitime du
         marchand à répondre aux demandes de ses clients (article 6.1.f du
-        RGPD). <mark>[Compléter avec l'analyse de balance des intérêts propre à
-        votre structure, ou la base légale retenue après conseil juridique.]</mark>
+        RGPD). Les messages ne sont traités que pour répondre à la demande du client, par le marchand auquel il a lui-même écrit.
       </p>
 
       <h2>Accès à Gmail</h2>
@@ -105,14 +94,14 @@
         explicitement :
       </p>
       <ul>
-        <li><code>gmail.readonly</code> — lire les messages entrants, pour les classer et y répondre ;</li>
-        <li><code>gmail.compose</code> — préparer des brouillons de réponse ;</li>
-        <li><code>gmail.send</code> — envoyer une réponse, uniquement après validation explicite du marchand dans son tableau de bord.</li>
+        {{PORTEES_GMAIL}}
       </ul>
       <p>
-        L'Application n'envoie jamais de message sans une action explicite du
-        marchand. Aucun message n'est lu à des fins autres que le traitement du
-        service après-vente.
+        Par défaut, aucun message ne part sans une action du marchand dans son
+        tableau de bord. S'il active l'envoi automatique, l'Application envoie
+        elle-même les réponses aux catégories de messages qu'il a choisies ; il
+        peut le désactiver à tout moment. Aucun message n'est lu à des fins
+        autres que le traitement du service après-vente.
       </p>
 
       <h3>Conformité à la politique Google relative aux données utilisateur</h3>
@@ -145,14 +134,14 @@
         </thead>
         <tbody>
           <tr>
-            <td>Anthropic (ou le fournisseur d'IA actif — voir <mark>[compléter selon configuration]</mark>)</td>
+            <td>{{IA}} (fournisseur d'IA actif)</td>
             <td>Classification et rédaction des propositions de réponse</td>
-            <td><mark>[États-Unis, ou autre selon le fournisseur retenu]</mark></td>
+            <td>{{IA_PAYS}}</td>
           </tr>
           <tr>
-            <td><mark>[Hébergeur retenu]</mark></td>
+            <td>Render (Render Services, Inc.)</td>
             <td>Hébergement de l'application et de la base de données</td>
-            <td><mark>[région d'hébergement]</mark></td>
+            <td>Communiquée sur demande à {{EMAIL}}</td>
           </tr>
           <tr>
             <td>Google LLC</td>
@@ -162,7 +151,7 @@
           <tr>
             <td>Shopify Inc.</td>
             <td>Accès aux données de commande de la boutique connectée</td>
-            <td><mark>[selon la région de la boutique]</mark></td>
+            <td>Selon la région de la boutique (Shopify)</td>
           </tr>
         </tbody>
       </table>
@@ -203,14 +192,14 @@
       </p>
       <p>
         Pour toute question relative au traitement réalisé par l'Application
-        elle-même, contactez <mark>[adresse email de contact]</mark>.
+        elle-même, contactez {{EMAIL}}.
       </p>
 
       <h2>Contact</h2>
       <p>
-        <mark>[Nom de la société éditrice]</mark><br />
-        <mark>[Adresse du siège]</mark><br />
-        <mark>[Email de contact]</mark>
+        {{SOCIETE}}<br />
+        {{ADRESSE}}<br />
+        {{EMAIL}}
       </p>
 
       <footer>

@@ -11,6 +11,12 @@ test('chaque logo annoncé existe, est un SVG, et sa provenance est notée', () 
   assert.ok(fichiers.length >= 9);
   const sources = readFileSync(new URL('../public/transporteurs/SOURCES.md', import.meta.url), 'utf8');
   for (const f of fichiers) {
+    // Colissimo est fourni en image ; les autres en dessin vectoriel.
+    if (f === 'colissimo') {
+      assert.ok(existsSync(new URL('../public/transporteurs/colissimo.png', import.meta.url)));
+      assert.ok(sources.includes('colissimo.png'));
+      continue;
+    }
     const url = new URL(`../public/transporteurs/${f}.svg`, import.meta.url);
     assert.ok(existsSync(url), `${f}.svg manque`);
     const svg = readFileSync(url, 'utf8');

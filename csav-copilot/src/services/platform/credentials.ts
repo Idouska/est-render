@@ -37,6 +37,10 @@ export const CREDENTIAL_KEYS = [
   'GOOGLE_PUBSUB_SERVICE_ACCOUNT',
   'TRACK17_API_KEY',
   'PARCELSAPP_API_KEY',
+  // Mentions légales : qui édite l'outil. Affichées sur /privacy et /terms.
+  'LEGAL_COMPANY',
+  'LEGAL_ADDRESS',
+  'LEGAL_EMAIL',
 ] as const;
 
 export type CredentialKey = (typeof CREDENTIAL_KEYS)[number];
