@@ -4098,12 +4098,25 @@ body.ws-simple .wsapp #ws-sort[aria-pressed='true'] { background: var(--brand-so
    défile, et chaque libellé reste sur une ligne.
    ======================================================================== */
 .wsapp #ws-tickets-badge { display: none !important; }
+/* « Plus » n'existe qu'au téléphone. */
+.wsapp .wsnav-plus { display: none; }
 @media (max-width: 880px) {
-  .wsapp .wsnav { overflow-x: auto; scrollbar-width: none; justify-content: flex-start; }
-  .wsapp .wsnav::-webkit-scrollbar { display: none; }
-  /* Un peu plus de cinq onglets visibles : le sixième, coupé, dit que la barre défile. */
-  .wsapp .wsnav > button { flex: 0 0 18.5%; min-width: 0; white-space: nowrap; font-size: 10.5px; padding-left: 2px; padding-right: 2px; overflow: hidden; text-overflow: ellipsis; }
+  /* Cinq onglets : Aujourd'hui, Commandes du jour, Out of stock, Update, Plus. */
+  .wsapp .wsnav > button { flex: 1 1 0; min-width: 0; font-size: 10.5px; white-space: nowrap; }
   .wsapp .wsnav > button > span:not(.wsnav-tuile):not(.wsnav-badge):not(.wsnav-compte) { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  .wsapp .wsnav > .wsnav-plus { display: flex; }
+  .wsapp .wsnav > .wsnav-plus.actif { color: var(--brand); }
+  .wsapp .wsnav > .wsnav-second { display: none; }
+  /* Ouvert : les entrées rangées s'empilent au-dessus de la barre, à droite. */
+  .wsapp .wsnav.plus-ouvert > .wsnav-second {
+    display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: 12px;
+    position: fixed; right: 8px; z-index: 30;
+    bottom: calc(70px + env(safe-area-inset-bottom) + var(--i) * 54px);
+    width: 216px; min-height: 48px; padding: 0 14px; font-size: 15px;
+    border-radius: 14px; background: var(--card); box-shadow: 0 6px 24px rgb(0 0 0 / 16%), 0 0 0 1px var(--line);
+  }
+  .wsapp .wsnav.plus-ouvert > .wsnav-second .wsnav-badge { position: static; margin-left: auto; }
+}
 }
 
 /* Stock non suivi dans Shopify : les filtres de disponibilité se retirent. */
@@ -4222,3 +4235,13 @@ body.ws-simple .wsapp #ws-sort[aria-pressed='true'] { background: var(--brand-so
   .wsapp .oos-autre { display: block; margin: 8px 0 -12px; font-size: 15px; font-weight: 650; color: var(--ink); }
   .wsapp .oos-etape1 .oos-h { display: none; }
 }
+
+/* Update, Modification, Annulation : une demande par bloc, l'une sous l'autre. */
+.wsapp .tk-pile { display: flex; flex-direction: column; gap: 12px; max-width: 940px; }
+.wsapp .tk-pile > .tk-bloc { margin: 0; }
+.wsapp .tk-pile > .tk-bloc { padding: 14px 16px 16px; border-radius: 16px; background: var(--card); box-shadow: 0 0 0 1px var(--line); }
+.wsapp .tk-pile .tk-entete { margin: 0 0 10px; }
+.wsapp .tk-pile .tk-entete .home-ico { width: 32px; height: 32px; }
+.wsapp .tk-pile .tk-entete b { font-size: 16px; }
+/* La carte intérieure se fond dans le bloc : un seul cadre par demande. */
+.wsapp .tk-pile .tk-bloc > .upd, .wsapp .tk-pile .tk-bloc > .tk-entete + * { margin: 0; padding: 0; border: 0; box-shadow: none; background: none; }
