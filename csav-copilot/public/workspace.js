@@ -4671,7 +4671,8 @@ function oosCommande() {
         style="--c: ${couleur}">${esc(t(`issue.info.${cle}`))}</button>`,
     ).join('')}</div>
     <button type="button" class="oos-gros oos-envoyer" data-oos-envoyer="1" ${n ? '' : 'disabled'}>${esc(
-      n ? t('oos.send', { n }) : t('oos.touchFirst'),
+      // « 1 article », « 2 articles » : pas de « (s) » à l'écran.
+      n ? t('oos.send', { n }).replace('(s)', n > 1 ? 's' : '') : t('oos.touchFirst'),
     )}</button>`;
 }
 
