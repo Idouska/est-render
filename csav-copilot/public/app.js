@@ -2154,6 +2154,12 @@ async function openCustomerSheet(email, displayName) {
 
   const sections = [];
 
+  // Écrire à ce client depuis sa fiche : au téléphone, la ligne de la liste
+  // n'a plus la place de porter le bouton.
+  sections.push(`<div class="sheet-ecrire"><button type="button" class="btn btn-primary" data-sheet-mail="${esc(
+    email,
+  )}">Écrire à ce client</button></div>`);
+
   sections.push(`<div class="sheet-stats">
     <div class="sheet-stat"><b>${totals.orders}</b><span>Commandes</span></div>
     <div class="sheet-stat"><b>${esc(money(totals.spent))}</b><span>Dépensé</span></div>
@@ -2446,6 +2452,12 @@ $('read-only-switch').addEventListener('click', (event) => {
 });
 
 $('sheet-close').addEventListener('click', closeCustomerSheet);
+$('sheet-body')?.addEventListener('click', (event) => {
+  const ecrire = event.target.closest('[data-sheet-mail]');
+  if (!ecrire) return;
+  closeCustomerSheet();
+  openMail(ecrire.dataset.sheetMail);
+});
 
 $('sheet-wrap').addEventListener('click', (event) => {
   if (event.target === $('sheet-wrap')) closeCustomerSheet();
@@ -8124,8 +8136,10 @@ function renderTeam() {
   $('team-rows').innerHTML = users
     .map((user) => {
       const self = user.id === state.team.me?.id;
-      return `<tr class="grid-row${user.active ? '' : ' muted'}${user.agence ? ' grid-row-lock' : ''}" data-user="${esc(user.id)}">
-        <td>
+      return `<tr class="grid-row${user.active ? '' : ' muted'}${user.agence ? ' grid-row-lock' : ''}${
+        owner && !user.agence ? ' lt-clic' : ''
+      }" data-user="${esc(user.id)}">
+        <td class="lt-qui">
           <b>${esc(user.name ?? user.email)}</b>${self ? ' <span class="sub">(vous)</span>' : ''}${
             // Posé par l'agence, pas par la boutique : un propriétaire ne peut
             // ni le rétrograder ni le désactiver (voir la route PATCH).
@@ -8133,16 +8147,16 @@ function renderTeam() {
           }
           <br /><span class="sub mono">${esc(user.email)}</span>
         </td>
-        <td>${esc(ROLE_LABELS[user.role] ?? user.role)}</td>
-        <td class="sub">${esc(ROLE_ABILITIES[user.role] ?? '')}</td>
-        <td>${
+        <td class="lt-role">${esc(ROLE_LABELS[user.role] ?? user.role)}</td>
+        <td class="sub lt-cache">${esc(ROLE_ABILITIES[user.role] ?? '')}</td>
+        <td class="lt-cache">${
           user.lastLoginAt
             ? relativeTime(user.lastLoginAt)
             : user.invitedAt
               ? `<span class="sub">invité ${relativeTime(user.invitedAt)}</span>`
               : '<span class="sub">jamais</span>'
         }</td>
-        <td>${
+        <td class="lt-etat">${
           // « Actif » se lit comme « utilise l'outil » alors qu'il ne veut dire
           // que « pas désactivé ». Une invitation jamais honorée doit se voir :
           // c'est le symptôme d'un mail qui n'est pas arrivé.
@@ -8155,7 +8169,7 @@ function renderTeam() {
               // n'est pas arrivé.
               : '<span class="tag tone-wait">Invité</span>'
         }</td>
-        <td>${owner && !user.agence ? '<button class="btn btn-small">Modifier</button>' : ''}</td>
+        <td class="lt-cache">${owner && !user.agence ? '<button class="btn btn-small">Modifier</button>' : ''}</td>
       </tr>`;
     })
     .join('');
@@ -11262,17 +11276,19 @@ function renderCatalog() {
     store.kind === 'products'
       ? store.items.map(
           (product) => `<tr>
-            <td>${thumb(product.image)}</td>
-            <td><b>${esc(product.title)}</b></td>
-            <td><span class="tag tag-status ${
+            <td class="lt-img">${thumb(product.image)}</td>
+            <td class="lt-titre"><b>${esc(product.title)}</b></td>
+            <td class="lt-statut"><span class="tag tag-status ${
               product.status === 'ACTIVE' ? 'st-CLOSED' : 'st-NEW'
             }">${esc(PRODUCT_STATUS[product.status] ?? product.status)}</span></td>
-            <td>${esc(product.vendor ?? '—')}</td>
-            <td class="num mono ${
+            <td class="lt-vendeur${product.vendor ? '' : ' lt-vide'}">${esc(product.vendor ?? '—')}</td>
+            <td class="num mono lt-stock ${
               (product.totalInventory ?? 0) <= 0 ? 'set-alert' : ''
-            }">${product.totalInventory ?? '—'}</td>
-            <td class="num mono">${product.variantCount}</td>
-            <td class="num mono">${
+            }">${product.totalInventory ?? '—'}<span class="lt-unite"> en stock</span></td>
+            <td class="num mono lt-var">${product.variantCount}<span class="lt-unite"> variante${
+              product.variantCount > 1 ? 's' : ''
+            }</span></td>
+            <td class="num mono lt-prix">${
               product.priceMin === null
                 ? '—'
                 : product.priceMin === product.priceMax
@@ -11285,13 +11301,15 @@ function renderCatalog() {
           </tr>`,
         )
       : store.items.map(
-          (collection) => `<tr>
-            <td>${thumb(collection.image)}</td>
-            <td><b>${esc(collection.title)}</b><br /><span class="sub mono">${esc(
+          (collection) => `<tr class="lt-collection">
+            <td class="lt-img">${thumb(collection.image)}</td>
+            <td class="lt-titre"><b>${esc(collection.title)}</b><br /><span class="sub mono">${esc(
               collection.handle,
             )}</span></td>
-            <td class="num mono">${collection.productsCount}</td>
-            <td>${fullDate(collection.updatedAt)}</td>
+            <td class="num mono lt-prix">${collection.productsCount}<span class="lt-unite"> produit${
+              collection.productsCount > 1 ? 's' : ''
+            }</span></td>
+            <td class="lt-cache">${fullDate(collection.updatedAt)}</td>
           </tr>`,
         );
 
@@ -11406,18 +11424,22 @@ async function loadTracking() {
     body.innerHTML =
       shipments
         .map(
-          (shipment) => `<tr>
-            <td class="mono"><b>${esc(shipment.orderName)}</b></td>
-            <td>${esc(shipment.customer ?? '—')}</td>
-            <td>${esc(shipment.carrier ?? '—')}</td>
-            <td class="mono">${
+          // Au téléphone, la ligne entière ouvre le suivi : `data-suivi` porte
+          // le numéro, et le chevron (`lt-clic`) le dit.
+          (shipment) => `<tr${
+            shipment.trackingNumber ? ` class="lt-clic" data-suivi="${esc(shipment.trackingNumber)}"` : ''
+          }>
+            <td class="mono lt-cmd"><b>${esc(shipment.orderName)}</b></td>
+            <td class="lt-client">${esc(shipment.customer ?? '—')}</td>
+            <td class="lt-transp">${esc(shipment.carrier ?? '—')}</td>
+            <td class="mono lt-num">${
               shipment.trackingNumber
                 ? `<button class="linklike" data-track="${esc(shipment.trackingNumber)}"${
                     shipment.trackingUrl ? ` data-track-url="${esc(shipment.trackingUrl)}"` : ''
                   }>${esc(shipment.trackingNumber)}</button>`
                 : '—'
             }</td>
-            <td>${
+            <td class="lt-etat">${
               shipment.liveStatus
                 ? `<span class="tag ${trackTone(shipment.liveStatus)}">${esc(
                     TRACK_LABELS[shipment.liveStatus] ?? shipment.liveStatus,
@@ -11430,11 +11452,12 @@ async function loadTracking() {
                   }`
                 : esc([shipment.city, shipment.country].filter(Boolean).join(', ') || '—')
             }</td>
-            <td>${
+            <td class="lt-cache">${
+              // Le bouton ouvre 17TRACK, comme le numéro : il le dit.
               shipment.trackingNumber
                 ? `<button class="btn btn-small" data-track="${esc(shipment.trackingNumber)}"${
                     shipment.trackingUrl ? ` data-track-url="${esc(shipment.trackingUrl)}"` : ''
-                  }>Chronologie</button>`
+                  }>Suivre</button>`
                 : '—'
             }</td>
           </tr>`,
@@ -11446,6 +11469,14 @@ async function loadTracking() {
       button.addEventListener('click', () =>
         openTracking(button.dataset.track),
       ),
+    );
+    // Au téléphone, pas besoin de viser le numéro : toute la ligne répond.
+    // Sur ordinateur, le numéro et « Suivre » restent les seuls à ouvrir.
+    body.querySelectorAll('[data-suivi]').forEach((ligne) =>
+      ligne.addEventListener('click', (event) => {
+        if (!TEL_RETOUR.matches || event.target.closest('[data-track]')) return;
+        openTracking(ligne.dataset.suivi);
+      }),
     );
 
     $('tracking-count').textContent = shipments.length
@@ -18083,21 +18114,25 @@ function renderCustomers() {
   $('customers-rows').innerHTML =
     store.items
       .map(
-        (customer) => `<tr class="grid-row" data-email="${esc(customer.email ?? '')}">
-          <td><b>${esc(customer.displayName ?? '—')}</b></td>
-          <td class="mono">${esc(customer.email ?? '—')}</td>
-          <td>${esc([customer.city, customer.country].filter(Boolean).join(', ') || '—')}</td>
-          <td>${fullDate(customer.createdAt)}</td>
-          <td class="num mono">${customer.numberOfOrders}</td>
-          <td class="num mono">${euro(customer.amountSpent, customer.currency)}</td>
-          <td>${
+        // Les classes `lt-…` placent chaque case dans la ligne compacte du
+        // téléphone ; sur ordinateur, elles ne changent rien au tableau.
+        (customer) => `<tr class="grid-row lt-clic" data-email="${esc(customer.email ?? '')}">
+          <td class="lt-nom"><b>${esc(customer.displayName ?? '—')}</b></td>
+          <td class="mono lt-mail">${esc(customer.email ?? '—')}</td>
+          <td class="lt-cache">${esc([customer.city, customer.country].filter(Boolean).join(', ') || '—')}</td>
+          <td class="lt-cache">${fullDate(customer.createdAt)}</td>
+          <td class="num mono lt-cmd">${customer.numberOfOrders}<span class="lt-unite"> commande${
+            customer.numberOfOrders > 1 ? 's' : ''
+          }</span></td>
+          <td class="num mono lt-total">${euro(customer.amountSpent, customer.currency)}</td>
+          <td class="lt-cache">${
             customer.lastOrder
               ? `<span class="mono">${esc(customer.lastOrder.name)}</span> · ${relativeTime(
                   customer.lastOrder.createdAt,
                 )}`
               : '—'
           }</td>
-          <td>${
+          <td class="lt-cache">${
             customer.email
               ? `<button class="btn btn-small" data-mail="${esc(customer.email)}">Écrire</button>`
               : ''
