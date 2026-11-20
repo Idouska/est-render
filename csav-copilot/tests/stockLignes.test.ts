@@ -54,8 +54,8 @@ test('« À envoyer » compte la paire proposée comme la paire confiée', () =>
   assert.deepEqual(filtrerStock(lignes, 'match').map((l) => l.etat), ['match']);
   assert.deepEqual(filtrerStock(lignes, 'envoye').map((l) => l.etat), ['envoye', 'envoye']);
   assert.equal(filtrerStock(lignes, 'tout').length, 5);
-  // Et le compteur du haut compte la même chose que le filtre.
-  assert.match(fonction('function renderReturnStock('), /const nAExpedier = toutes\.filter\(stockAEnvoyer\)\.length;/);
+  // « En stock » : les paires encore là, proposées ou non.
+  assert.deepEqual(filtrerStock(lignes, 'stock').map((l) => l.etat), ['stock', 'match']);
 });
 
 test('ce qui attend un geste est en haut, ce qui est parti en bas', () => {

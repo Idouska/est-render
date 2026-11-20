@@ -125,6 +125,14 @@ export async function processTicket(merchantId: string, ticketId: string): Promi
           customerName: ticket.customerName,
           bodyText: lastInbound.bodyText,
           receivedAt: lastInbound.receivedAt,
+          // L'objet et les messages précédents du client : le numéro de
+          // commande est souvent donné une fois, au début, ou dans l'objet.
+          subject: lastInbound.subject ?? ticket.subject,
+          earlierText: ticket.messages
+            .filter((message) => message.direction === 'INBOUND' && message.id !== lastInbound.id)
+            .map((message) => message.bodyText)
+            .join('\n')
+            .slice(0, 20_000),
         });
 
     let order: OrderSummary | null = attached;

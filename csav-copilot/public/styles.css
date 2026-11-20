@@ -17014,19 +17014,20 @@ button.rup-chiffre:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--
 @media (max-width: 560px) { .bons-ligne { grid-template-columns: 1fr; } }
 
 /* ------------------------------------------------------- Stock (retours) */
-.stk-tete { display: flex; flex-wrap: wrap; align-items: stretch; gap: 10px; margin-bottom: 12px; }
+.stk-tete { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 12px; }
+/* Une seule barre : chaque case compte et filtre. */
+.stk-barre { display: flex; padding: 3px; gap: 2px; border-radius: 12px; background: var(--surface); box-shadow: 0 0 0 1px var(--line); }
 .stk-compteur {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
-  min-width: 130px; padding: 10px 14px; border: 0; border-radius: 12px;
-  background: var(--surface); box-shadow: 0 0 0 1px var(--line);
-  font: inherit; color: var(--ink); cursor: pointer; text-align: left;
+  display: flex; align-items: baseline; gap: 7px; padding: 8px 14px; border: 0; border-radius: 9px;
+  background: none; font: inherit; color: var(--ink-soft); cursor: pointer; white-space: nowrap;
 }
-.stk-compteur b { font-size: 22px; line-height: 1.1; font-variant-numeric: tabular-nums; }
-.stk-compteur span { font-size: 12px; color: var(--ink-mute); }
+.stk-compteur b { font-size: 17px; line-height: 1.1; color: var(--ink); font-variant-numeric: tabular-nums; }
+.stk-compteur span { font-size: 12.5px; }
 .stk-compteur:hover { background: var(--inset); }
-.stk-compteur.actif { box-shadow: 0 0 0 2px var(--accent); background: var(--surface); }
-.stk-compteur.stk-ok b { color: var(--accent-ink); }
-.stk-compteur.stk-warn b { color: var(--warn-ink); }
+.stk-compteur.actif { background: var(--accent); color: var(--on-accent, #fff); }
+.stk-compteur.actif b { color: inherit; }
+.stk-compteur.stk-ok:not(.actif) b { color: var(--ok-ink); }
+.stk-compteur.stk-warn:not(.actif) b { color: var(--warn-ink); }
 .stk-export { margin-left: auto; align-self: center; }
 #stk-ouvrir { align-self: center; }
 .stk-note { color: var(--ink-mute); }
@@ -17078,7 +17079,6 @@ i.stk-photo { display: grid; place-items: center; font-style: normal; font-size:
 .stk-gestes { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px; }
 @media (max-width: 640px) {
   .stk-export { margin-left: 0; flex: 1; }
-  .stk-compteur { flex: 1 1 90px; min-width: 0; }
 }
 
 .stk-note { margin: 0 0 12px; font-size: 12px; }
@@ -17146,7 +17146,9 @@ button.stk-transp { cursor: pointer; }
   .stk-age, .stk-date { display: none; }
   .stk-detail { padding-left: 0; }
   .stk-tete { gap: 8px; }
-  .stk-compteur { flex: 1 1 30%; min-width: 0; padding: 10px 12px; }
+  .stk-barre { flex: 1 1 100%; overflow-x: auto; scrollbar-width: none; }
+  .stk-compteur { flex: 1 0 auto; flex-direction: column; align-items: center; gap: 1px; padding: 7px 10px; }
+  .stk-compteur span { font-size: 11.5px; }
   .stk-export, #stk-ouvrir { flex: 1 1 140px; margin-left: 0; }
   .stk-gestes .btn { flex: 1 1 auto; }
 
