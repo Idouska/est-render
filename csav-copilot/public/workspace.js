@@ -2215,7 +2215,12 @@ async function loadCatalog() {
   rows.innerHTML = '<p class="empty">…</p>';
 
   try {
-    const data = await api(`/api/workspace/${supplierId}/catalog`);
+    // Ce que l'atelier a déjà déclaré indisponible, lu avec le catalogue.
+    const [data, declare] = await Promise.all([
+      api(`/api/workspace/${supplierId}/catalog`),
+      api(`/api/workspace/${supplierId}/indisponibles`).catch(() => ({ variantes: [] })),
+    ]);
+    state.indispo = new Set(declare.variantes ?? []);
     state.catalog = data.items ?? [];
     renderCatalog(data.error);
   } catch (error) {
@@ -2396,6 +2401,15 @@ function ficheMarkup(product) {
                     : ''
                   : `<span class="varr-out">${esc(t('catalog.out'))}</span>`
               }
+              ${
+                // Chaque déclinaison se déclare indisponible d'un geste, ici aussi.
+                state.indispo?.has(variant.id) ? `<span class="varr-out">${esc(t('catalog.unavailable'))}</span>` : ''
+              }
+              <button type="button" class="btn btn-small varr-declarer" data-cat-indispo="${esc(variant.id)}"
+                data-produit="${esc(product.id)}" data-titre="${esc(product.title)}" data-variante="${esc(variant.title ?? '')}" data-sku="${esc(variant.sku ?? '')}"
+                data-etat="${state.indispo?.has(variant.id) ? 'oui' : 'non'}">${esc(
+                  t(state.indispo?.has(variant.id) ? 'catalog.markIn' : 'catalog.markOut'),
+                )}</button>
             </div>`,
           )
           .join('')}
@@ -2451,10 +2465,12 @@ function ficheMarkup(product) {
       <div class="fiche-tailles" role="group" aria-label="${esc(t('catalog.sizes'))}">${deLaCouleur
         .map((variant) => {
           const stock = stockDe(variant);
-          const etat = stock === 0 ? ' fiche-vide' : stock !== null && stock <= 2 ? ' fiche-peu' : '';
-          return `<button type="button" class="fiche-taille${etat}" data-cat-taille="${esc(variant.taille)}" aria-pressed="${String(
+          // Déclarée indisponible par l'atelier : elle le dit, quel que soit le stock de Shopify.
+          const declaree = state.indispo?.has(variant.id);
+          const etat = declaree || stock === 0 ? ' fiche-vide' : stock !== null && stock <= 2 ? ' fiche-peu' : '';
+          return `<button type="button" class="fiche-taille${etat}${declaree ? ' fiche-indispo' : ''}" data-cat-taille="${esc(variant.taille)}" aria-pressed="${String(
             variant === choisie,
-          )}"><b>${esc(variant.taille)}</b><span>${esc(stockTexte(stock))}</span></button>`;
+          )}"><b>${esc(variant.taille)}</b><span>${esc(declaree ? t('catalog.unavailable') : stockTexte(stock))}</span></button>`;
         })
         .join('')}</div>
     </div>
@@ -2464,6 +2480,14 @@ function ficheMarkup(product) {
         stockTexte(stockDe(choisie)) || '—',
       )}</dd></div>
     </dl>
+    <div class="fiche-declarer">
+      <button type="button" class="btn ${state.indispo?.has(choisie.id) ? '' : 'fiche-declarer-non'}" data-cat-indispo="${esc(choisie.id)}"
+        data-produit="${esc(product.id)}" data-titre="${esc(product.title)}" data-variante="${esc(choisie.title ?? '')}" data-sku="${esc(choisie.sku ?? '')}"
+        data-etat="${state.indispo?.has(choisie.id) ? 'oui' : 'non'}">${esc(
+          t(state.indispo?.has(choisie.id) ? 'catalog.markIn' : 'catalog.markOut'),
+        )} · ${esc(choisie.taille)}</button>
+      <small>${esc(t('catalog.markHint'))}</small>
+    </div>
   </div>`;
 }
 
@@ -2501,6 +2525,34 @@ $('catalog-rows').addEventListener('click', (event) => {
     state.catalogCouleur = couleur.dataset.catCouleur;
     state.catalogTaille = null;
     renderCatalog();
+    return;
+  }
+  const declarer = event.target.closest('[data-cat-indispo]');
+  if (declarer) {
+    const indisponible = declarer.dataset.etat !== 'oui';
+    declarer.disabled = true;
+    api(`/api/workspace/${supplierId}/indisponibles`, {
+      method: 'POST',
+      body: {
+        productId: declarer.dataset.produit,
+        variantId: declarer.dataset.catIndispo,
+        productTitle: declarer.dataset.titre,
+        variantTitle: declarer.dataset.variante || null,
+        sku: declarer.dataset.sku || null,
+        indisponible,
+      },
+    })
+      .then(() => {
+        state.indispo = state.indispo ?? new Set();
+        if (indisponible) state.indispo.add(declarer.dataset.catIndispo);
+        else state.indispo.delete(declarer.dataset.catIndispo);
+        toast(t(indisponible ? 'catalog.markedOut' : 'catalog.markedIn'));
+        renderCatalog();
+      })
+      .catch((error) => {
+        declarer.disabled = false;
+        toast(messageServeur(error, 'orders.err'), true);
+      });
     return;
   }
   const taille = event.target.closest('[data-cat-taille]');

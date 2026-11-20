@@ -11290,9 +11290,60 @@ const CATALOG_HEADS = {
   collections: '<tr><th></th><th>Collection</th><th class="num">Produits</th><th>Modifiée</th></tr>',
 };
 
+/*
+ * Ce que le fournisseur déclare indisponible chez lui.
+ *
+ * La boutique ne tient pas son stock dans Shopify : c'est lui qui sait ce
+ * qu'il a. Il le dit depuis son catalogue ; on l'affiche ici et sur les
+ * commandes concernées. Information seulement — rien n'est retiré de la vente.
+ */
+async function chargerIndisponibles() {
+  try {
+    state.indisponibles = (await api('/api/indisponibles')).indisponibles ?? [];
+  } catch {
+    state.indisponibles = state.indisponibles ?? [];
+  }
+  return state.indisponibles;
+}
+
+/** La ligne de commande porte-t-elle une déclinaison déclarée indisponible ? */
+function ligneIndisponible(ligne, indisponibles = state.indisponibles ?? []) {
+  const sku = (ligne.sku ?? '').trim();
+  const titre = sansAccents(ligne.titre ?? ligne.title ?? '');
+  const declinaison = sansAccents(ligne.declinaison ?? ligne.variantTitle ?? '');
+  return indisponibles.some((item) =>
+    // La référence quand les deux en ont une ET qu'elle distingue la taille ;
+    // sinon le modèle et la déclinaison, mot pour mot.
+    sku && item.sku && sku === item.sku && sansAccents(item.variantTitle ?? '') === declinaison
+      ? true
+      : sansAccents(item.productTitle) === titre && sansAccents(item.variantTitle ?? '') === declinaison,
+  );
+}
+
+function renderIndisponibles() {
+  const boite = $('catalog-indispo');
+  if (!boite) return;
+  const liste = state.indisponibles ?? [];
+  boite.hidden = liste.length === 0;
+  if (!liste.length) return;
+  const parProduit = new Map();
+  for (const item of liste) parProduit.set(item.productTitle, [...(parProduit.get(item.productTitle) ?? []), item]);
+  boite.innerHTML = `<summary><b>${liste.length} taille${liste.length > 1 ? 's' : ''} indisponible${
+    liste.length > 1 ? 's' : ''
+  } chez le fournisseur</b><span>Déclaré par lui. Rien n’est modifié dans Shopify : ces tailles restent en vente.</span></summary>
+    <div class="cat-indispo-liste">${[...parProduit]
+      .map(
+        ([titre, items]) => `<div class="cat-indispo-ligne"><b>${esc(titre)}</b><span>${items
+          .map((item) => `<span class="cat-indispo-taille" title="${esc(`${item.atelier ?? 'Fournisseur'} · depuis le ${fullDate(item.depuis)}`)}">${esc(item.variantTitle ?? '—')}</span>`)
+          .join('')}</span></div>`,
+      )
+      .join('')}</div>`;
+}
+
 async function loadCatalog({ reset = false } = {}) {
   const store = state.catalog;
   if (store.loading) return;
+  void chargerIndisponibles().then(renderIndisponibles);
 
   store.loading = true;
   $('catalog-head').innerHTML = CATALOG_HEADS[store.kind];
@@ -24450,7 +24501,7 @@ $('envoi-q')?.addEventListener('input', (event) => {
 async function loadEnvoi() {
   $('envoi-list').innerHTML = '<p class="empty">Lecture des commandes…</p>';
   try {
-    state.envoi.donnees = await api('/api/envoi-du-jour');
+    [state.envoi.donnees] = await Promise.all([api('/api/envoi-du-jour'), chargerIndisponibles()]);
   } catch (error) {
     state.envoi.donnees = null;
     $('envoi-list').innerHTML = `<p class="empty">${esc(error.message)}</p>`;
@@ -24601,6 +24652,11 @@ function renderEnvoi() {
                   ${
                     enStock.has(commande.id)
                       ? `<span class="el-stock">${ico('box')}${auto ? 'en stock · attend votre choix' : 'aussi en stock'}</span>`
+                      : ''
+                  }
+${
+                    commande.lignes.some((ligne) => ligneIndisponible(ligne))
+                      ? '<span class="el-indispo" title="Le fournisseur a déclaré cette taille indisponible chez lui.">indisponible chez le fournisseur</span>'
                       : ''
                   }
                   <span class="el-age" title="${esc(fullDate(commande.createdAt))}">${esc(ageCommande(commande.createdAt))}</span>
