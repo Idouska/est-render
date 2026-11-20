@@ -4089,3 +4089,19 @@ body.ws-simple .wsapp #ws-sort[aria-pressed='true'] { background: var(--brand-so
   .wsapp ~ .pb-wrap .pb-ico { width: 34px; height: 34px; }
   .wsapp ~ .pb-wrap .pb-pied { position: sticky; bottom: calc(-16px - env(safe-area-inset-bottom)); padding: 10px 0 0; background: var(--card); }
 }
+
+/* ========================================================================
+   MENU — Update, Modification, Annulation
+
+   La pastille d'ensemble des tickets ne s'affiche plus : chaque famille a la
+   sienne. Au téléphone, huit onglets ne tiennent pas côte à côte : la barre
+   défile, et chaque libellé reste sur une ligne.
+   ======================================================================== */
+.wsapp #ws-tickets-badge { display: none !important; }
+@media (max-width: 880px) {
+  .wsapp .wsnav { overflow-x: auto; scrollbar-width: none; justify-content: flex-start; }
+  .wsapp .wsnav::-webkit-scrollbar { display: none; }
+  /* Un peu plus de cinq onglets visibles : le sixième, coupé, dit que la barre défile. */
+  .wsapp .wsnav > button { flex: 0 0 18.5%; min-width: 0; white-space: nowrap; font-size: 10.5px; padding-left: 2px; padding-right: 2px; overflow: hidden; text-overflow: ellipsis; }
+  .wsapp .wsnav > button > span:not(.wsnav-tuile):not(.wsnav-badge):not(.wsnav-compte) { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+}

@@ -168,7 +168,9 @@ test('cinq entrées de menu, et l’accueil d’abord', () => {
   const entrees = [...html.matchAll(/data-view="(\w+)"/g)].map((m) => m[1]!);
   // Les échanges ont retrouvé leur onglet : un tableau, demandé par la note Retour/Échange.
   // « 缺货 » juste après les commandes : une rupture se découvre en emballant.
-  assert.deepEqual(entrees, ['home', 'orders', 'rupture', 'catalog', 'tickets', 'echanges']);
+  // « Tickets » est devenu trois entrées — Update, Modification, Annulation —
+  // qui ouvrent le même écran, chacune sur sa famille.
+  assert.deepEqual(entrees, ['home', 'orders', 'rupture', 'catalog', 'tickets', 'tickets', 'tickets', 'echanges']);
   assert.match(workspace, /view: 'home',/);
 });
 
