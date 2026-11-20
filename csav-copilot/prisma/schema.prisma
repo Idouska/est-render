@@ -437,6 +437,9 @@ model CannedReply {
   body       String  @db.Text
   /// Motif auquel la réponse se rattache, pour la proposer en tête.
   intent     Intent?
+  /// Le cas de figure, en mots du marchand (« Douane », « Colis perdu »…) :
+  /// les sept motifs ne couvrent pas tout ce qu'un SAV répond.
+  category   String?
   /// Nombre d'insertions : les plus utilisées remontent d'elles-mêmes.
   useCount   Int     @default(0)
 

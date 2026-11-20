@@ -19556,46 +19556,114 @@ async function loadCanned() {
   renderCannedChips();
 }
 
-function renderCanned() {
-  $('canned-count').textContent = state.canned.length
-    ? `${state.canned.length} réponse${state.canned.length > 1 ? 's' : ''} type${
-        state.canned.length > 1 ? 's' : ''
-      }`
-    : '';
+/*
+ * Les modèles courants : les cas de figure qu'un SAV de boutique rencontre
+ * chaque semaine. Un clic les ajoute (ceux dont le titre existe déjà sont
+ * laissés tels quels) ; chacun se modifie ensuite comme une réponse à soi.
+ */
+const MODELES_REPONSES = [
+  ['Où est ma commande', 'Livraison', 'WISMO', 'Bonjour {{prenom}},\n\nVotre commande {{commande}} est en cours d’acheminement. Voici son numéro de suivi : {{suivi}}.\n\nLe suivi peut rester sans mouvement quelques jours entre deux étapes : c’est normal. Je reste disponible si besoin.'],
+  ['Commande pas encore expédiée', 'Livraison', 'WISMO', 'Bonjour {{prenom}},\n\nVotre commande {{commande}} est en préparation. Vous recevrez un mail avec le numéro de suivi dès son expédition.\n\nMerci de votre patience.'],
+  ['Retard de livraison', 'Livraison', 'WISMO', 'Bonjour {{prenom}},\n\nJe suis désolé pour ce retard sur votre commande {{commande}}. J’ai relancé le transporteur et je reviens vers vous dès que j’ai sa réponse.'],
+  ['Suivi bloqué', 'Livraison', 'WISMO', 'Bonjour {{prenom}},\n\nLe suivi de votre colis ({{suivi}}) n’a pas bougé depuis plusieurs jours. J’ai ouvert une enquête auprès du transporteur ; je vous tiens informé sous 72 h.'],
+  ['Colis marqué livré mais non reçu', 'Colis perdu', 'DISPUTE', 'Bonjour {{prenom}},\n\nLe transporteur indique votre colis comme livré. Pouvez-vous vérifier auprès de vos voisins, de votre gardien ou dans votre boîte aux lettres ? Sans nouvelle sous 48 h, j’ouvre une réclamation.'],
+  ['Colis perdu', 'Colis perdu', 'DISPUTE', 'Bonjour {{prenom}},\n\nLe transporteur confirme la perte de votre colis, j’en suis désolé. Préférez-vous un renvoi de votre commande {{commande}} ou un remboursement ?'],
+  ['Frais de douane', 'Douane', 'OTHER', 'Bonjour {{prenom}},\n\nDes frais de douane peuvent être demandés à la livraison selon votre pays ; ils sont fixés par les autorités locales et restent à la charge du destinataire.'],
+  ['Changement d’adresse', 'Modification', 'OTHER', 'Bonjour {{prenom}},\n\nMerci de m’indiquer la nouvelle adresse complète (rue, code postal, ville, pays, téléphone). Je la modifie tant que la commande {{commande}} n’est pas expédiée.'],
+  ['Changement de taille avant expédition', 'Modification', 'OTHER', 'Bonjour {{prenom}},\n\nC’est noté : indiquez-moi la taille souhaitée et je modifie votre commande {{commande}} si elle n’est pas encore partie.'],
+  ['Annulation de commande', 'Annulation', 'REFUND', 'Bonjour {{prenom}},\n\nVotre commande {{commande}} est annulée. Le remboursement est émis aujourd’hui et apparaît sous 3 à 10 jours ouvrés selon votre banque.'],
+  ['Annulation impossible, déjà expédiée', 'Annulation', 'REFUND', 'Bonjour {{prenom}},\n\nVotre commande {{commande}} est déjà partie, je ne peux plus l’annuler. À réception, vous pourrez la retourner ; je vous envoie la marche à suivre sur simple demande.'],
+  ['Procédure de retour', 'Retour', 'RETURN', 'Bonjour {{prenom}},\n\nVous pouvez retourner votre article sous 14 jours après réception, non porté et dans sa boîte d’origine. Je vous envoie l’étiquette de retour par mail.'],
+  ['Échange de taille', 'Retour', 'RETURN', 'Bonjour {{prenom}},\n\nPour un échange de taille : renvoyez-nous la paire avec l’étiquette jointe, et la nouvelle taille part dès réception. Quelle taille souhaitez-vous ?'],
+  ['Retour reçu', 'Retour', 'RETURN', 'Bonjour {{prenom}},\n\nNous avons bien reçu votre retour. Il est en cours de contrôle ; je reviens vers vous sous 48 h.'],
+  ['Remboursement émis', 'Remboursement', 'REFUND', 'Bonjour {{prenom}},\n\nVotre remboursement pour la commande {{commande}} a été émis aujourd’hui. Il apparaît sur votre compte sous 3 à 10 jours ouvrés selon votre banque.'],
+  ['Article défectueux : demande de photos', 'Défaut', 'DISPUTE', 'Bonjour {{prenom}},\n\nJe suis désolé pour ce défaut. Pouvez-vous m’envoyer trois photos (le défaut, la paire entière, l’étiquette de la boîte) ? Je vous propose une solution dès réception.'],
+  ['Mauvais article reçu', 'Défaut', 'DISPUTE', 'Bonjour {{prenom}},\n\nToutes mes excuses pour cette erreur. Envoyez-moi une photo de l’article reçu et de son étiquette : je fais partir le bon article et vous envoie une étiquette de retour.'],
+  ['Rupture de stock', 'Rupture', 'OTHER', 'Bonjour {{prenom}},\n\nL’article de votre commande {{commande}} est momentanément indisponible. Souhaitez-vous attendre le réassort, choisir un autre modèle ou être remboursé ?'],
+  ['Guide des tailles', 'Produit', 'PRODUCT_QUESTION', 'Bonjour {{prenom}},\n\nNos modèles taillent normalement. Entre deux tailles, je vous conseille la plus grande.'],
+  ['Authenticité des produits', 'Produit', 'PRODUCT_QUESTION', 'Bonjour {{prenom}},\n\nTous nos articles sont authentiques, neufs et livrés dans leur boîte d’origine.'],
+  ['Demande de facture', 'Facture', 'OTHER', 'Bonjour {{prenom}},\n\nVous trouverez ci-joint la facture de votre commande {{commande}}.'],
+  ['Code promo', 'Commercial', 'OTHER', 'Bonjour {{prenom}},\n\nLes codes promo ne sont pas cumulables et s’appliquent avant le paiement ; je ne peux pas les ajouter après coup.'],
+  ['Remerciement et avis', 'Avis client', 'POSITIVE', 'Bonjour {{prenom}},\n\nMerci beaucoup pour votre message ! Si vous avez une minute, un avis sur {{boutique}} nous aiderait énormément.'],
+  ['Relance sans réponse du client', 'Relance', 'OTHER', 'Bonjour {{prenom}},\n\nJe reviens vers vous au sujet de votre commande {{commande}} : sans réponse de votre part sous 5 jours, je clôturerai votre demande. Je reste à votre disposition.'],
+];
 
-  $('canned-list').innerHTML = state.canned.length
-    ? state.canned
-        .map(
-          (item) => `<article class="dsp" data-canned="${esc(item.id)}" style="cursor:pointer">
+/** Les cas de figure déjà utilisés, pour les proposer à la saisie. */
+const categoriesCanned = () => [...new Set(state.canned.flatMap((item) => (item.category ? [item.category] : [])))].sort((a, b) => a.localeCompare(b, 'fr'));
+
+function renderCanned() {
+  const cherche = sansAccents($('canned-q')?.value ?? '').trim();
+  const vues = state.canned.filter(
+    (item) => !cherche || sansAccents(`${item.title} ${item.category ?? ''} ${item.body}`).includes(cherche),
+  );
+  $('canned-count').textContent = state.canned.length
+    ? cherche
+      ? `${vues.length} sur ${state.canned.length}`
+      : `${state.canned.length} réponse${state.canned.length > 1 ? 's' : ''} type${state.canned.length > 1 ? 's' : ''}`
+    : '';
+  const manquants = MODELES_REPONSES.filter(([titre]) => !state.canned.some((item) => item.title === titre)).length;
+  $('canned-pack').hidden = manquants === 0 || !canI('configure');
+  $('canned-pack').textContent = `Ajouter les modèles courants (${manquants})`;
+
+  // Rangées par cas de figure : celles sans cas viennent à la fin.
+  const groupes = new Map();
+  for (const item of vues) {
+    const cle = item.category || 'Sans cas de figure';
+    groupes.set(cle, [...(groupes.get(cle) ?? []), item]);
+  }
+  const ordre = [...groupes.keys()].sort((a, b) => (a === 'Sans cas de figure') - (b === 'Sans cas de figure') || a.localeCompare(b, 'fr'));
+
+  $('canned-list').innerHTML = !state.canned.length
+    ? `<p class="empty">Aucune réponse type. « Ajouter les modèles courants » en pose une vingtaine d’un coup, que vous adaptez ensuite.</p>`
+    : !vues.length
+      ? '<p class="empty">Aucune réponse ne correspond à cette recherche.</p>'
+      : ordre
+          .map(
+            (cle) => `<h3 class="canned-cat">${esc(cle)} <small>${groupes.get(cle).length}</small></h3>${groupes
+              .get(cle)
+              .map(
+                (item) => `<article class="dsp" data-canned="${esc(item.id)}" style="cursor:pointer">
             <div class="dsp-head">
               <b>${esc(item.title)}</b>
               ${
                 item.intent
-                  ? `<span class="tag in-${item.intent}">${esc(
-                      INTENT_LABELS[item.intent] ?? item.intent,
-                    )}</span>`
+                  ? `<span class="tag in-${item.intent}">${esc(INTENT_LABELS[item.intent] ?? item.intent)}</span>`
                   : '<span class="tag tag-order">tous motifs</span>'
               }
               <span class="dsp-amount mono">${item.useCount} ×</span>
             </div>
-            <div class="dsp-reason">${esc(item.body.slice(0, 220))}${
-              item.body.length > 220 ? '…' : ''
-            }</div>
+            <div class="dsp-reason">${esc(item.body.slice(0, 220))}${item.body.length > 220 ? '…' : ''}</div>
           </article>`,
-        )
-        .join('')
-    : `<p class="empty">
-         Aucune réponse type. Commencez par les cinq questions qui reviennent :
-         où est ma commande, mauvaise taille, frais de douane, changement
-         d'adresse, retour.
-       </p>`;
+              )
+              .join('')}`,
+          )
+          .join('');
 
   $('canned-list')
     .querySelectorAll('[data-canned]')
-    .forEach((card) =>
-      card.addEventListener('click', () => openCannedForm(card.dataset.canned)),
-    );
+    .forEach((card) => card.addEventListener('click', () => openCannedForm(card.dataset.canned)));
 }
+
+$('canned-q')?.addEventListener('input', renderCanned);
+
+$('canned-pack')?.addEventListener('click', async () => {
+  const aAjouter = MODELES_REPONSES.filter(([titre]) => !state.canned.some((item) => item.title === titre));
+  if (!aAjouter.length) return;
+  if (!(await confirmer(`Ajouter ${aAjouter.length} modèles de réponse ?\n\nIls se rangent par cas de figure. Vous pourrez les modifier ou les supprimer un par un.`, { action: 'Ajouter' }))) return;
+  $('canned-pack').disabled = true;
+  let ajoutes = 0;
+  for (const [title, category, intent, body] of aAjouter) {
+    try {
+      await api('/api/canned-replies', { method: 'POST', body: JSON.stringify({ title, category, intent, body }) });
+      ajoutes += 1;
+    } catch {
+      // Un titre déjà pris entre-temps : on passe au suivant.
+    }
+  }
+  $('canned-pack').disabled = false;
+  toast(`${ajoutes} modèle${ajoutes > 1 ? 's ajoutés' : ' ajouté'}.`);
+  await loadCanned();
+});
 
 function openCannedForm(id) {
   const item = id ? state.canned.find((candidate) => candidate.id === id) : null;
@@ -19604,6 +19672,10 @@ function openCannedForm(id) {
   $('canned-title').textContent = item ? item.title : 'Nouvelle réponse type';
   $('canned-f-title').value = item?.title ?? '';
   $('canned-f-body').value = item?.body ?? '';
+  $('canned-f-cat').value = item?.category ?? '';
+  $('canned-cats').innerHTML = [...new Set([...categoriesCanned(), ...MODELES_REPONSES.map((m) => m[1])])]
+    .map((nom) => `<option value="${esc(nom)}"></option>`)
+    .join('');
 
   $('canned-f-intent').innerHTML =
     '<option value="">Tous les motifs</option>' +
@@ -19641,6 +19713,7 @@ $('canned-f-save').addEventListener('click', async () => {
     title: $('canned-f-title').value.trim(),
     body: $('canned-f-body').value.trim(),
     intent: $('canned-f-intent').value || null,
+    category: $('canned-f-cat').value.trim() || null,
   };
 
   if (!payload.title || !payload.body) {
@@ -19693,17 +19766,36 @@ function renderCannedChips() {
   const sorted = cannedForTicket(ticket);
 
   bar.hidden = false;
-  $('canned-chips').innerHTML = sorted
-    .slice(0, 6)
-    .map(
-      (item) => `<button class="qchip" data-insert="${esc(item.id)}"${
-        item.intent === ticket.intent ? ' aria-pressed="true"' : ''
-      }>${esc(item.title)}</button>`,
-    )
-    .join('');
+  // Six d'office ; « Toutes » déplie le reste, avec une recherche. Avant, la
+  // septième réponse et les suivantes n'étaient atteignables de nulle part.
+  const tout = Boolean(state.cannedTout);
+  const champ = $('canned-chips-q');
+  champ.hidden = !tout;
+  const cherche = tout ? sansAccents(champ.value).trim() : '';
+  const vues = sorted.filter((item) => !cherche || sansAccents(`${item.title} ${item.category ?? ''} ${item.body}`).includes(cherche));
+  $('canned-chips').innerHTML =
+    (tout ? vues : vues.slice(0, 6))
+      .map(
+        (item) => `<button class="qchip" data-insert="${esc(item.id)}" title="${esc(item.category ?? '')}"${
+          item.intent === ticket.intent ? ' aria-pressed="true"' : ''
+        }>${esc(item.title)}</button>`,
+      )
+      .join('') +
+    (sorted.length > 6
+      ? `<button class="qchip qchip-plus" type="button" data-canned-tout>${tout ? 'Réduire' : `Toutes (${sorted.length})`}</button>`
+      : '');
 }
 
+$('canned-chips-q')?.addEventListener('input', renderCannedChips);
+
 $('canned-chips').addEventListener('click', async (event) => {
+  if (event.target.closest('[data-canned-tout]')) {
+    state.cannedTout = !state.cannedTout;
+    $('canned-chips-q').value = '';
+    renderCannedChips();
+    if (state.cannedTout) $('canned-chips-q').focus();
+    return;
+  }
   const button = event.target.closest('[data-insert]');
   if (!button) return;
 

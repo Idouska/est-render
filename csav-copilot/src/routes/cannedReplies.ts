@@ -27,6 +27,8 @@ const body = z.object({
   title: z.string().min(1).max(120),
   body: z.string().min(1).max(8000),
   intent: z.enum(INTENTS).nullish(),
+  /** Le cas de figure, libre : « Douane », « Colis perdu », « Avis client »… */
+  category: z.string().trim().max(60).nullish(),
 });
 
 export async function cannedReplyRoutes(app: FastifyInstance): Promise<void> {
@@ -66,6 +68,7 @@ export async function cannedReplyRoutes(app: FastifyInstance): Promise<void> {
           title: parsed.data.title,
           body: parsed.data.body,
           intent: parsed.data.intent ?? null,
+          category: parsed.data.category || null,
         },
       });
 
@@ -101,7 +104,7 @@ export async function cannedReplyRoutes(app: FastifyInstance): Promise<void> {
 
       const updated = await prisma.cannedReply.update({
         where: { id: target.id },
-        data: parsed.data,
+        data: { ...parsed.data, category: parsed.data.category || null },
       });
 
       return reply.send({ reply: updated });
