@@ -13389,16 +13389,20 @@ const stockAEnvoyer = (l) => l.etat === 'match' || l.etat === 'aexpedier';
 /* Une déclinaison qui n'est qu'une pointure (« 42.5 ») se lit mal toute seule. */
 const libelleDeclinaison = (v) => (/^\d{2}(?:[.,]5)?$/.test(String(v ?? '').trim()) ? `Taille ${String(v).trim()}` : v);
 
-/* Le filtre demandé par le marchand : Tout, Match, Non envoyé, Envoyé. Les
-   compteurs du dessus y mènent aussi, mais c'est lui qui dit où l'on est. */
+/* Une seule barre : chaque case est à la fois le compte et le filtre. Avant,
+   trois compteurs et quatre filtres disaient deux fois la même chose, sur deux
+   lignes — et « En stock » menait à « Tout », qui n'affichait pas le même nombre. */
 const FILTRES_STOCK = [
   ['tout', 'Tout'],
+  ['stock', 'En stock'],
   ['match', 'Match'],
-  ['nonenvoye', 'Non envoyé'],
+  ['nonenvoye', 'À expédier'],
   ['envoye', 'Envoyé'],
 ];
 
 function filtrerStock(lignes, filtre) {
+  // En stock : la paire est encore là, sans commande ou seulement proposée.
+  if (filtre === 'stock') return lignes.filter((l) => l.etat === 'stock' || l.etat === 'match');
   if (filtre === 'match') return lignes.filter((l) => l.etat === 'match');
   if (filtre === 'nonenvoye') return lignes.filter(stockAEnvoyer);
   if (filtre === 'envoye') return lignes.filter((l) => l.etat === 'envoye');
@@ -13422,19 +13426,18 @@ const ETATS_STOCK = {
 function renderReturnStock(box) {
   const r = state.returns;
   if (!FILTRES_STOCK.some(([cle]) => cle === r.stockFiltre)) r.stockFiltre = 'tout';
-  const { dispo, confiees, toutes } = lignesStock();
-  const nMatch = dispo.filter((l) => l.etat === 'match').length;
-  const nAExpedier = toutes.filter(stockAEnvoyer).length;
+  const { confiees, toutes } = lignesStock();
   const lignes = filtrerStock(toutes, r.stockFiltre);
   const images = r.stockImages ?? {};
   const joursDepuis = (date) => Math.max(0, Math.floor((Date.now() - new Date(date).getTime()) / 86_400_000));
   const initiales = (titre) =>
     String(titre ?? '').split(/\s+/).filter((mot) => /^[\p{L}\d]/u.test(mot)).slice(0, 2).map((mot) => mot[0].toUpperCase()).join('') || '·';
-
-  // Un compteur mène à son filtre, et le montre quand on y est.
-  const compteur = (filtre, n, libelle, ton) => {
-    const actif = filtre !== 'tout' && r.stockFiltre === filtre;
-    return `<button type="button" class="stk-compteur${ton ? ` stk-${ton}` : ''}${actif ? ' actif' : ''}" data-stk-filtre="${filtre}" aria-pressed="${actif}"><b>${n}</b><span>${esc(libelle)}</span></button>`;
+  const TONS = { match: 'ok', nonenvoye: 'warn' };
+  // La case : son compte, son nom, et l'état « on y est ».
+  const compteur = ([filtre, libelle]) => {
+    const n = filtrerStock(toutes, filtre).length;
+    const actif = r.stockFiltre === filtre;
+    return `<button type="button" class="stk-compteur${n && TONS[filtre] ? ` stk-${TONS[filtre]}` : ''}${actif ? ' actif' : ''}" data-stk-filtre="${filtre}" aria-pressed="${actif}"><b>${n}</b><span>${esc(libelle)}</span></button>`;
   };
   const jourCourt = (date) => new Date(date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 
@@ -13539,20 +13542,13 @@ function renderReturnStock(box) {
   };
 
   box.innerHTML = `${noticeConfiee(r.derniere)}<div class="stk-tete">
-      ${compteur('tout', dispo.length, 'En stock')}
-      ${compteur('match', nMatch, 'Matching', 'ok')}
-      ${compteur('nonenvoye', nAExpedier, 'À expédier', nAExpedier ? 'warn' : '')}
+      <div class="stk-barre" role="group" aria-label="Filtrer le stock">${FILTRES_STOCK.map(compteur).join('')}</div>
       <select class="stk-export" id="stk-export" aria-label="Imprimer ou partager">
         <option value="">Imprimer / partager</option>
         <option value="imprimer">Imprimer la liste</option>
         <option value="partager">Partager la liste</option>
       </select>
       <button class="btn btn-primary" type="button" id="stk-ouvrir">Ajouter au stock</button>
-    </div>
-    <div class="stk-filtres" role="group" aria-label="Filtrer">
-      ${FILTRES_STOCK.map(
-        ([cle, libelle]) => `<button type="button" class="chip" data-stk-filtre="${cle}" aria-pressed="${r.stockFiltre === cle}">${esc(libelle)} <span class="count">${filtrerStock(toutes, cle).length}</span></button>`,
-      ).join('')}
     </div>
     ${r.matchMeta?.error ? `<p class="stk-note">Matching indisponible : ${esc(r.matchMeta.error)}</p>` : ''}
     ${

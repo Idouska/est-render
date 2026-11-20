@@ -29,6 +29,9 @@ export function extractOrderNumbers(text: string): string[] {
   const patterns = [
     /#\s?(\d{3,10})\b/g,
     /\b(?:commande|cmd|order|bestellung|pedido)\s*(?:n[°ºo]?\s*|number\s*|no\.?\s*|#\s*)?(\d{3,10})\b/gi,
+    // « numéro de commande : 18327 », « commande numéro 18327 », « order number is 18327 »,
+    // « n° 18327 », « ref. 18327 » : le mot qui précède dit que c'est un numéro.
+    /\b(?:num[ée]ro(?:\s+de\s+(?:la\s+)?commande)?|commande\s+num[ée]ro|order\s+(?:number|no\.?|id)(?:\s+is)?|n[°º]|r[ée]f(?:[ée]rence)?\.?)\s*[:#-]?\s*#?(\d{3,10})\b/gi,
   ];
 
   for (const pattern of patterns) {
@@ -40,7 +43,51 @@ export function extractOrderNumbers(text: string): string[] {
   return [...found];
 }
 
-const MAX_DAYS_FOR_NAME_FALLBACK = 60;
+const MAX_DAYS_FOR_NAME_FALLBACK = 180;
+
+/**
+ * Les nombres nus du message qui POURRAIENT être un numéro de commande
+ * (4 à 7 chiffres, ni année, ni code postal collé à une ville, ni téléphone).
+ * Ils ne valent rien seuls : `matchOrder` ne les retient que si la commande
+ * existe ET appartient à l'expéditeur — par son email ou par son nom.
+ */
+export function extractBareNumbers(text: string): string[] {
+  const found = new Set<string>();
+  for (const match of text.matchAll(/(?<![\d.,/+-])(\d{4,7})(?![\d.,/-]|\s?(?:€|eur|\$|kg|g|cm|mm)\b)/gi)) {
+    const n = match[1]!;
+    if (/^(?:19|20)\d{2}$/.test(n)) continue;
+    found.add(n);
+  }
+  return [...found].slice(0, 6);
+}
+
+const sansAccents = (texte: string) =>
+  texte.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+/** Le nom de la commande et celui de l'expéditeur désignent-ils la même personne ? */
+function memeNom(order: OrderSummary, nom: string | null | undefined): boolean {
+  const mots = sansAccents(nom ?? '').split(' ').filter((m) => m.length > 1);
+  if (mots.length < 2) return false;
+  const client = sansAccents(
+    [order.customer?.displayName, order.shippingAddress?.name].filter(Boolean).join(' '),
+  ).split(' ');
+  return mots.every((m) => client.includes(m));
+}
+
+/**
+ * Le nom tel que le client le signe : la dernière ligne courte du message,
+ * deux ou trois mots commençant par une majuscule. Sert quand il écrit depuis
+ * une autre adresse que celle de sa commande.
+ */
+export function extractSignatureName(text: string): string | null {
+  const lignes = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).slice(-6).reverse();
+  for (const ligne of lignes) {
+    if (/^(?:\p{Lu}[\p{L}'’-]+)(?:\s+\p{Lu}[\p{L}'’-]+){1,2}$/u.test(ligne) && !/^(?:Bonjour|Bonsoir|Cordialement|Merci|Bien|Hello|Best|Kind|Regards|Sent|Envoy)/i.test(ligne)) {
+      return ligne;
+    }
+  }
+  return null;
+}
 
 /**
  * Associe un mail à une commande Shopify.
@@ -58,10 +105,19 @@ export async function matchOrder(
     customerName?: string | null;
     bodyText: string;
     receivedAt: Date;
+    /** L'objet du mail : le numéro y est souvent, et nulle part ailleurs. */
+    subject?: string | null;
+    /** Les messages précédents du client dans la même conversation. */
+    earlierText?: string | null;
   },
 ): Promise<OrderMatch> {
+  // Tout ce que le client a écrit : l'objet, ce message, puis les précédents.
+  const texte = [input.subject, input.bodyText, input.earlierText].filter(Boolean).join('\n');
+  const signature = extractSignatureName(input.bodyText);
+  const noms = [...new Set([input.customerName, signature].flatMap((n) => (n && n.trim().length >= 3 ? [n.trim()] : [])))];
+
   // 1. Numéro de commande cité explicitement, recoupé avec l'email expéditeur.
-  const numbers = extractOrderNumbers(input.bodyText);
+  const numbers = extractOrderNumbers(texte);
 
   for (const number of numbers) {
     const orders = await searchOrders(client, `name:${quoteSearchValue(`#${number}`)}`, 5);
@@ -83,6 +139,21 @@ export async function matchOrder(
 
     if (exact.length > 1) {
       return { status: 'AMBIGUOUS', candidates: exact, method: 'ORDER_NUMBER_IN_BODY' };
+    }
+  }
+
+  // 1 bis. Un nombre nu (« ma commande 18327 est… » écrit autrement, ou le
+  //        numéro seul dans l'objet) : retenu seulement si la commande existe
+  //        et qu'elle est bien à l'expéditeur, par son email ou par son nom.
+  for (const number of extractBareNumbers(texte).filter((n) => !numbers.includes(n))) {
+    const orders = await searchOrders(client, `name:${quoteSearchValue(`#${number}`)}`, 5);
+    const siennes = orders.filter(
+      (order) =>
+        order.name.replace(/^#/, '') === number &&
+        (order.customer?.email?.toLowerCase() === input.customerEmail.toLowerCase() || noms.some((nom) => memeNom(order, nom))),
+    );
+    if (siennes.length === 1) {
+      return { status: 'MATCHED', order: siennes[0]!, method: 'ORDER_NUMBER_IN_BODY', score: 0.9 };
     }
   }
 
@@ -108,29 +179,29 @@ export async function matchOrder(
       return { status: 'MATCHED', order: open[0]!, method: 'CUSTOMER_EMAIL', score: 0.85 };
     }
 
-    return { status: 'AMBIGUOUS', candidates: byEmail.slice(0, 5), method: 'CUSTOMER_EMAIL' };
+    // Plusieurs commandes, aucune désignée : la plus récente (elles arrivent
+    // triées), avec un score bas qui dit que c'est un choix par défaut.
+    // L'agent voit ainsi la fiche et les autres commandes du client, au lieu
+    // d'une colonne vide ; il change de commande d'un clic si ce n'est pas elle.
+    return { status: 'MATCHED', order: (open[0] ?? byEmail[0])!, method: 'CUSTOMER_EMAIL', score: 0.6 };
   }
 
   // 3. Repli sur nom + fenêtre temporelle récente. Score volontairement bas :
   //    ce chemin ne doit jamais autoriser un envoi automatique.
-  if (input.customerName && input.customerName.trim().length >= 3) {
-    const since = new Date(
-      input.receivedAt.getTime() - MAX_DAYS_FOR_NAME_FALLBACK * 24 * 60 * 60 * 1000,
-    );
-    const query = `${quoteSearchValue(input.customerName)} AND created_at:>${since
-      .toISOString()
-      .slice(0, 10)}`;
-    const byName = await searchOrders(client, query, 5);
+  //    Le nom de l'expéditeur, puis celui qu'il signe : un client écrit
+  //    souvent depuis une autre adresse que celle de sa commande.
+  const since = new Date(input.receivedAt.getTime() - MAX_DAYS_FOR_NAME_FALLBACK * 24 * 60 * 60 * 1000);
+  for (const nom of noms) {
+    const query = `${quoteSearchValue(nom)} AND created_at:>${since.toISOString().slice(0, 10)}`;
+    const byName = (await searchOrders(client, query, 5)).filter((order) => memeNom(order, nom));
 
     if (byName.length === 1) {
-      return {
-        status: 'MATCHED',
-        order: byName[0]!,
-        method: 'NAME_AND_RECENT_DATE',
-        score: 0.5,
-      };
+      return { status: 'MATCHED', order: byName[0]!, method: 'NAME_AND_RECENT_DATE', score: 0.5 };
     }
     if (byName.length > 1) {
+      // Même personne, plusieurs commandes : la plus récente par défaut.
+      const memeClient = new Set(byName.map((order) => order.customer?.email?.toLowerCase() ?? order.id)).size === 1;
+      if (memeClient) return { status: 'MATCHED', order: byName[0]!, method: 'NAME_AND_RECENT_DATE', score: 0.4 };
       return { status: 'AMBIGUOUS', candidates: byName, method: 'NAME_AND_RECENT_DATE' };
     }
   }

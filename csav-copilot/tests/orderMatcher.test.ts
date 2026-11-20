@@ -133,3 +133,92 @@ test('une hésitation garde la méthode mais refuse de noter un choix non fait',
     },
   );
 });
+
+/* ---- Trouver la commande à tout prix : objet, anciens messages, nom ---- */
+
+import { extractBareNumbers, extractSignatureName, matchOrder } from '../src/services/matching/orderMatcher.ts';
+
+const commande = (name: string, email: string, displayName: string, statut = 'FULFILLED') =>
+  ({
+    id: `gid://shopify/Order/${name.slice(1)}`,
+    name,
+    createdAt: '2026-11-01T10:00:00Z',
+    displayFinancialStatus: 'PAID',
+    displayFulfillmentStatus: statut,
+    totalPriceSet: { shopMoney: { amount: '139.00', currencyCode: 'EUR' } },
+    tags: [],
+    sourceName: 'web',
+    subtotalLineItemsQuantity: 1,
+    shippingLine: null,
+    app: null,
+    customer: { id: 'c', email, displayName, numberOfOrders: 1, createdAt: null, amountSpent: null, defaultAddress: null },
+    lineItems: { nodes: [] },
+    fulfillments: [],
+    shippingAddress: null,
+    billingAddress: null,
+  }) as never;
+
+/** Un Shopify de poche : répond aux recherches `name:`, `email:` et par nom. */
+const boutique = (commandes: Array<ReturnType<typeof commande>>) =>
+  ({
+    request: async (_q: string, { query }: { query: string }) => {
+      const toutes = commandes as Array<{ name: string; customer: { email: string; displayName: string } }>;
+      const parNom = /^name:"(#\d+)"$/.exec(query)?.[1];
+      const parMail = /^email:"(.+)"$/.exec(query)?.[1];
+      const libre = /^"(.+)" AND created_at/.exec(query)?.[1];
+      const nodes = toutes.filter((c) =>
+        parNom ? c.name === parNom : parMail ? c.customer.email === parMail : libre ? c.customer.displayName.includes(libre) : false,
+      );
+      return { orders: { nodes } };
+    },
+  }) as never;
+
+test('« numéro de commande : 18327 » et « n° 18327 » sont des numéros explicites', () => {
+  assert.deepEqual(extractOrderNumbers('Mon numéro de commande : 18327 merci'), ['18327']);
+  assert.deepEqual(extractOrderNumbers('order number is 18266'), ['18266']);
+  assert.deepEqual(extractOrderNumbers('Réf. 18221 toujours pas reçue'), ['18221']);
+});
+
+test('un nombre nu est un candidat, pas une année ni un prix', () => {
+  assert.deepEqual(extractBareNumbers('18327 toujours rien depuis 2026, payé 139,00 € et 1200 g'), ['18327']);
+});
+
+test('la signature donne le nom quand l’adresse n’est pas celle de la commande', () => {
+  assert.equal(extractSignatureName('Bonjour,\nOù est mon colis ?\nCordialement\nAlecia Hitchcox'), 'Alecia Hitchcox');
+  assert.equal(extractSignatureName('Bonjour\nMerci Beaucoup'), null);
+});
+
+test('le numéro donné dans l’objet suffit', async () => {
+  const shop = boutique([commande('#18327', 'a@x.fr', 'Alecia Hitchcox')]);
+  const trouve = await matchOrder(shop, { customerEmail: 'a@x.fr', bodyText: 'Toujours rien.', subject: 'Commande 18327', receivedAt: new Date() });
+  assert.equal(trouve.status, 'MATCHED');
+  assert.equal(trouve.status === 'MATCHED' && trouve.order.name, '#18327');
+});
+
+test('le numéro donné dans un message précédent suffit', async () => {
+  const shop = boutique([commande('#18327', 'a@x.fr', 'Alecia Hitchcox')]);
+  const trouve = await matchOrder(shop, { customerEmail: 'autre@x.fr', bodyText: 'Des nouvelles ?', earlierText: 'Ma commande #18327', receivedAt: new Date() });
+  assert.equal(trouve.status === 'MATCHED' && trouve.order.name, '#18327');
+});
+
+test('un nombre nu n’est retenu que si la commande est à l’expéditeur', async () => {
+  const shop = boutique([commande('#18327', 'a@x.fr', 'Alecia Hitchcox')]);
+  const base = { bodyText: '18327 svp', receivedAt: new Date() };
+  const sienne = await matchOrder(shop, { ...base, customerEmail: 'perso@y.fr', customerName: 'Alecia Hitchcox' });
+  assert.equal(sienne.status === 'MATCHED' && sienne.order.name, '#18327');
+  const pasSienne = await matchOrder(shop, { ...base, customerEmail: 'z@y.fr', customerName: 'Jean Martin' });
+  assert.equal(pasSienne.status, 'NOT_FOUND');
+});
+
+test('plusieurs commandes au même email : la plus récente, plutôt qu’une fiche vide', async () => {
+  const shop = boutique([commande('#18400', 'a@x.fr', 'Alecia Hitchcox'), commande('#18327', 'a@x.fr', 'Alecia Hitchcox')]);
+  const trouve = await matchOrder(shop, { customerEmail: 'a@x.fr', bodyText: 'Bonjour', receivedAt: new Date() });
+  assert.equal(trouve.status === 'MATCHED' && trouve.order.name, '#18400');
+  assert.equal(trouve.status === 'MATCHED' && trouve.score, 0.6);
+});
+
+test('autre adresse, mais le client signe de son nom', async () => {
+  const shop = boutique([commande('#18327', 'a@x.fr', 'Alecia Hitchcox')]);
+  const trouve = await matchOrder(shop, { customerEmail: 'travail@corp.com', customerName: 'ahitch', bodyText: 'Où est mon colis ?\nAlecia Hitchcox', receivedAt: new Date() });
+  assert.equal(trouve.status === 'MATCHED' && trouve.order.name, '#18327');
+});

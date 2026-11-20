@@ -49,12 +49,12 @@ test('« Renvoi » devient « Stock », dans Pilotage', () => {
   assert.match(lire('public/app.js'), /renvoi: \{ icon: 'cycle', label: 'Stock', group: 'Pilotage'/);
 });
 
-test('Stock : compteurs, filtre Tout/Match/Non envoyé/Envoyé, sans la barre de Retour', () => {
+test('Stock : une barre qui compte et filtre, sans la barre de Retour', () => {
   const app = lire('public/app.js');
-  assert.match(app, /compteur\('tout', dispo\.length, 'En stock'\)/);
-  assert.match(app, /compteur\('match', nMatch, 'Matching', 'ok'\)/);
-  assert.match(app, /compteur\('nonenvoye', nAExpedier, 'À expédier'/);
-  assert.match(app, /\['tout', 'Tout'\],\s*\['match', 'Match'\],\s*\['nonenvoye', 'Non envoyé'\],\s*\['envoye', 'Envoyé'\],/);
+  // Une seule barre : chaque case compte et filtre.
+  assert.match(app, /\['tout', 'Tout'\],\s*\['stock', 'En stock'\],\s*\['match', 'Match'\],\s*\['nonenvoye', 'À expédier'\],\s*\['envoye', 'Envoyé'\],/);
+  assert.match(app, /<div class="stk-barre" role="group" aria-label="Filtrer le stock">\$\{FILTRES_STOCK\.map\(compteur\)\.join\(''\)\}<\/div>/);
+  assert.doesNotMatch(app, /class="stk-filtres"/);
   // Les photos se redemandent quand les paires changent.
   assert.match(app, /r\.stockImagesCle !== clePhotos/);
   assert.match(app, /<option value="imprimer">Imprimer la liste<\/option>/);
