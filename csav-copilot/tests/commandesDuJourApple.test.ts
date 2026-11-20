@@ -76,3 +76,15 @@ test('la journée en quatre chiffres, zéro en gris', () => {
   assert.match(corps('renderEnvoi'), /<b class="ek-v\$\{n \? '' : ' ek-nul'\}">\$\{n\}<\/b>/);
   assert.match(css, /#view-envoi \.ek-v\.ek-nul\s*\{[^}]*font-weight:\s*400/);
 });
+
+test('la page allégée : chiffres sur une ligne, liste qui se cherche, derniers envois repliables', () => {
+  const html = readFileSync(new URL('../public/dashboard.html', import.meta.url), 'utf8');
+  const app = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../public/styles.css', import.meta.url), 'utf8');
+  assert.match(html, /<input type="search" id="envoi-q"/);
+  assert.match(html, /<details class="envoi-bloc envoi-droite" id="envoi-hist-bloc">/);
+  // La recherche porte sur le numéro, le client et les articles.
+  assert.match(app, /sansAccents\(`\$\{commande\.name\} \$\{commande\.client \?\? ''\} \$\{lignesTexte\(commande\.lignes\)\}`\)\.includes\(cherche\)/);
+  assert.match(app, /<span class="el-age" title=/);
+  assert.match(css, /#view-envoi \.envoi-cols \{ flex-direction: column; align-items: stretch; \}/);
+});

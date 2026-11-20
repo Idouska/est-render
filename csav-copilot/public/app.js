@@ -15465,11 +15465,12 @@ const VIEW_META = {
   refunds: { icon: 'card', label: 'Annulation/\u200bRemboursement', group: 'Fournisseur', title: 'Annulations et remboursements' },
   renvoi: { icon: 'cycle', label: 'Stock', group: 'Pilotage', title: 'Stock', alias: 'returns', onglet: 'stock' },
   retour: { icon: 'uturn', label: 'Retour', group: 'Fournisseur', title: 'Retours', alias: 'returns', onglet: 'cases' },
-  // Atelier : le travail avec le fournisseur au quotidien.
+  // Fournisseur : le travail avec l'atelier au quotidien. « Atelier » et
+  // « Fournisseur » désignaient le même acteur : un seul groupe.
   envoi: {
     icon: 'truck',
     label: 'Commandes du jour',
-    group: 'Atelier',
+    group: 'Fournisseur',
     title: 'Commandes du jour',
     sous: 'Stock retours d’abord, fournisseur ensuite',
   },
@@ -15480,7 +15481,7 @@ const VIEW_META = {
     title: 'Out of stock',
     sous: 'Commandes nécessitant une action suite à une indisponibilité produit',
   },
-  tracking: { icon: 'pin', label: 'Suivi colis', group: 'Atelier', title: 'Suivi des colis' },
+  tracking: { icon: 'pin', label: 'Suivi colis', group: 'Fournisseur', title: 'Suivi des colis' },
   // Hors navigation : on y entre par Renvoi ou Retour.
   returns: { icon: 'box', label: 'Reshipment', group: 'Fournisseur', title: 'Reshipment — retours clients', hidden: true },
   disputes: { icon: 'shield', label: 'Litiges Shopify', group: 'Finance', title: 'Litiges Shopify' },
@@ -15489,10 +15490,10 @@ const VIEW_META = {
   settings: { icon: 'gear', label: 'Réglages', group: 'Plateforme', title: 'Réglages' },
 };
 
-const NAV_GROUPS = ['Admin', 'Pilotage', 'Commerce', 'Fournisseur', 'Atelier', 'Finance', 'Plateforme'];
+const NAV_GROUPS = ['Admin', 'Pilotage', 'Commerce', 'Fournisseur', 'Finance', 'Plateforme'];
 
 /* L'ordre voulu dans la navigation, quand il diffère de celui des écrans. */
-const NAV_ORDRE = ['overview', 'suppliers', 'couts', 'stats', 'tickets', 'changes', 'update', 'ruptures', 'renvoi'];
+const NAV_ORDRE = ['overview', 'suppliers', 'couts', 'stats', 'tickets', 'changes', 'update', 'ruptures', 'renvoi', 'orders', 'customers', 'catalog', 'envoi', 'tracking', 'refunds', 'retour'];
 const rangNav = (view) => {
   const i = NAV_ORDRE.indexOf(view);
   return i === -1 ? NAV_ORDRE.length + VIEWS.indexOf(view) : i;
@@ -24174,6 +24175,11 @@ function commandesParFournisseur(commandes) {
   });
 }
 
+$('envoi-q')?.addEventListener('input', (event) => {
+  state.envoi.q = event.target.value;
+  renderEnvoi();
+});
+
 async function loadEnvoi() {
   $('envoi-list').innerHTML = '<p class="empty">Lecture des commandes…</p>';
   try {
@@ -24237,12 +24243,15 @@ function renderEnvoi() {
     ['En retard chez l’atelier', retards, `toujours à préparer après ${delaiJours} j`, 'rouge', 'clock'],
   ]
     .map(
-      ([label, n, note, teinte, icone]) => `<div class="ek">
+      // Une bande d'une ligne : le chiffre, son nom, et la précision seulement
+      // quand il y a quelque chose à préciser. Quatre grandes cases dont deux à
+      // zéro prenaient un tiers de l'écran.
+      ([label, n, note, teinte, icone]) => `<div class="ek${n ? '' : ' ek-zero'}" title="${esc(note)}">
         <span class="kpi-ico c-${teinte}" aria-hidden="true">${ico(icone)}</span>
+        <b class="ek-v${n ? '' : ' ek-nul'}">${n}</b>
         <span class="ek-txt">
           <span class="ek-label">${esc(label)}</span>
-          <b class="ek-v${n ? '' : ' ek-nul'}">${n}</b>
-          <span class="ek-note">${esc(note)}</span>
+          ${n ? `<span class="ek-note">${esc(note)}</span>` : ''}
         </span>
       </div>`,
     )
@@ -24290,13 +24299,30 @@ function renderEnvoi() {
   // Ce qui partira, atelier par atelier. Une commande que le stock pourrait
   // servir le dit : non tranchée, elle part avec les autres.
   $('envoi-n-list').textContent = partiront.length ? `${partiront.length}` : '';
-  $('envoi-list').innerHTML = partiront.length
-    ? groupes
+  // La recherche : numéro, client ou article. Au-delà de quelques dizaines de
+  // commandes, la liste ne se lit plus, elle se cherche.
+  const cherche = sansAccents(state.envoi.q ?? '').trim();
+  $('envoi-q-wrap').hidden = partiront.length < 8;
+  const garde = (commande) =>
+    !cherche || sansAccents(`${commande.name} ${commande.client ?? ''} ${lignesTexte(commande.lignes)}`).includes(cherche);
+  const groupesVus = groupes
+    .map((groupe) => ({ ...groupe, total: groupe.commandes.length, commandes: groupe.commandes.filter(garde) }))
+    .filter((groupe) => groupe.commandes.length);
+  const ageCommande = (date) => {
+    const jours = Math.floor((Date.now() - new Date(date).getTime()) / 86_400_000);
+    return jours <= 0 ? 'aujourd’hui' : jours === 1 ? 'hier' : `${jours} j`;
+  };
+  $('envoi-list').innerHTML = partiront.length && !groupesVus.length
+    ? '<p class="empty">Aucune commande ne correspond à cette recherche.</p>'
+    : partiront.length
+    ? groupesVus
         .map(
           (groupe) => `<div class="envoi-groupe${groupe.fournisseur ? '' : ' envoi-sans'}">
             <div class="eg-tete">${groupe.fournisseur ? '' : ico('alerte')}<b>${esc(
               groupe.fournisseur?.name ?? 'Sans fournisseur, ne partira pas',
-            )}</b><span>${esc(nombreDe(groupe.commandes.length, 'commande', 'commandes'))}</span>${
+            )}</b><span>${esc(
+              cherche ? `${groupe.commandes.length} sur ${groupe.total}` : nombreDe(groupe.total, 'commande', 'commandes'),
+            )}</span>${
               groupe.fournisseur ? '' : '<button class="envoi-lien" type="button" data-envoi-fournisseurs>Régler dans Fournisseurs</button>'
             }</div>
             <div class="eg-lignes">${groupe.commandes
@@ -24310,6 +24336,7 @@ function renderEnvoi() {
                       ? `<span class="el-stock">${ico('box')}${auto ? 'en stock · attend votre choix' : 'aussi en stock'}</span>`
                       : ''
                   }
+                  <span class="el-age" title="${esc(fullDate(commande.createdAt))}">${esc(ageCommande(commande.createdAt))}</span>
                 </div>`,
               )
               .join('')}</div>
@@ -24354,6 +24381,12 @@ function renderEnvoi() {
         })
         .join('')}</div>`
     : '<p class="empty">Aucun envoi pour l’instant.</p>';
+  $('envoi-n-hist').textContent = d.envois?.length ? `${d.envois.length}` : '';
+  // Replié tant qu'il n'y a rien à lire ; ouvert une fois, puis au choix.
+  if (!state.envoi.histVu) {
+    state.envoi.histVu = true;
+    $('envoi-hist-bloc').open = Boolean(d.envois?.length);
+  }
   $('envoi-pied').textContent = `« Expédiée » vient des numéros de suivi que l’atelier saisit. Une commande encore à préparer ${nombreDe(
     delaiJours,
     'jour',
