@@ -100,10 +100,62 @@ async function connexionGoogle(
  * la sécurité » sur l'écran de Google. Le marchand retrouve maintenant ses
  * Réglages et une phrase qui dit quoi faire (`retourGmail` dans app.js).
  */
-type RaisonGmail = 'refuse' | 'etat' | 'jeton' | 'echec';
+type RaisonGmail = 'connecte' | 'refuse' | 'etat' | 'jeton' | 'acces' | 'code' | 'echec';
 
-const retourGmail = (reply: FastifyReply, raison: RaisonGmail) =>
-  reply.redirect(`/dashboard?gmail=${raison}`);
+/*
+ * L'heure du retour voyage avec la raison : l'écran n'affiche le message que
+ * s'il est frais. Une adresse gardée telle quelle — raccourci sur l'écran
+ * d'accueil du téléphone, favori — rejouait sinon « La connexion à Gmail a
+ * échoué » à chaque ouverture de l'outil, longtemps après l'échec.
+ *
+ * Le détail est le code court renvoyé par Google (« invalid_grant »,
+ * « HTTP 403 »…) : de quoi savoir quoi corriger sans fouiller les journaux.
+ */
+export function adresseRetourGmail(raison: RaisonGmail, detail?: string | null, maintenant = Date.now()): string {
+  const params = new URLSearchParams({ gmail: raison, t: String(maintenant) });
+  const propre = (detail ?? '').replace(/[^\w .:-]/g, '').trim().slice(0, 60);
+  if (propre) params.set('detail', propre);
+  return `/dashboard?${params}`;
+}
+
+const retourGmail = (reply: FastifyReply, raison: RaisonGmail, detail?: string | null) =>
+  reply.redirect(adresseRetourGmail(raison, detail));
+
+/** L'accès aux mails eux-mêmes : sans lui, la boîte ne sert à rien. */
+const LECTURE = /(?:gmail\.readonly|gmail\.modify|mail\.google\.com\/?)$/;
+export const lectureAccordee = (scopes: string) => scopes.split(/[\s,]+/).some((scope) => LECTURE.test(scope));
+
+/**
+ * Ce que dit Google d'un échec, réduit à une raison et un code court.
+ *
+ * Deux échecs ont un remède précis et revenaient sous « Réessayez dans un
+ * instant », qui ne servait à rien :
+ *  - `invalid_grant` : le code de Google a déjà servi ou a expiré (page
+ *    rechargée, retour arrière, lien ouvert deux fois) — il faut recommencer ;
+ *  - 403 : les cases d'accès aux mails n'ont pas été cochées sur la page de
+ *    Google — elle les propose une à une, décochées.
+ */
+export function raisonEchecGoogle(err: unknown): { raison: RaisonGmail; detail: string | null } {
+  const e = (err ?? {}) as {
+    response?: { status?: number; data?: { error?: unknown; error_description?: unknown } };
+    status?: unknown;
+    code?: unknown;
+    message?: unknown;
+  };
+  const data = e.response?.data;
+  const codeOAuth = typeof data?.error === 'string' ? data.error : null;
+  const statut = e.response?.status ?? (typeof e.status === 'number' ? e.status : Number(e.code) || null);
+  const message = typeof e.message === 'string' ? e.message : '';
+
+  if (codeOAuth === 'invalid_grant' || /invalid_grant/.test(message)) return { raison: 'code', detail: 'invalid_grant' };
+  if (statut === 403 || /insufficient (?:authentication )?(?:scopes|permission)/i.test(message)) {
+    return { raison: 'acces', detail: 'HTTP 403' };
+  }
+  return {
+    raison: 'echec',
+    detail: codeOAuth ?? (statut ? `HTTP ${statut}` : typeof e.code === 'string' ? e.code : null),
+  };
+}
 
 /* Sans session — expirée pendant qu'on était chez Google, ou perdue avec une
    fenêtre de navigation privée — le retour renvoie à la connexion plutôt qu'à
@@ -202,15 +254,21 @@ export async function googleAuthRoutes(app: FastifyInstance): Promise<void> {
         // l'heure : Google n'en redonne qu'après qu'on lui a retiré l'accès.
         if (!tokens.refresh_token) return retourGmail(reply, 'jeton');
 
+        // La page de Google propose chaque accès dans une case à cocher, et
+        // on peut continuer sans en cocher aucune : on le dit, plutôt qu'un
+        // échec sans raison à la lecture du profil.
+        if (tokens.scope && !lectureAccordee(tokens.scope)) return retourGmail(reply, 'acces');
+
         auth.setCredentials(tokens);
         ({ data: profile } = await google.gmail({ version: 'v1', auth }).users.getProfile({ userId: 'me' }));
       } catch (err) {
-        logger.error({ merchantId, err }, 'Échange du code Google en échec');
-        return retourGmail(reply, 'echec');
+        const { raison, detail } = raisonEchecGoogle(err);
+        logger.error({ merchantId, err, raison, detail }, 'Échange du code Google en échec');
+        return retourGmail(reply, raison, detail);
       }
 
       if (!profile.emailAddress) {
-        return retourGmail(reply, 'echec');
+        return retourGmail(reply, 'echec', 'profil sans adresse');
       }
 
       // La première boîte connectée devient celle par défaut : sans elle, un
@@ -258,7 +316,7 @@ export async function googleAuthRoutes(app: FastifyInstance): Promise<void> {
         ipAddress: request.ip,
       });
 
-      return reply.redirect('/dashboard?gmail=connecte');
+      return retourGmail(reply, 'connecte');
     },
   );
 
