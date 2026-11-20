@@ -735,6 +735,7 @@
             </div>
             <div class="canned-bar" id="canned-bar" hidden>
               <span class="panel-title">Réponses types</span>
+              <input type="search" id="canned-chips-q" placeholder="Chercher une réponse" aria-label="Chercher une réponse type" hidden />
               <div id="canned-chips"></div>
             </div>
             <textarea id="d-body" aria-label="Corps du brouillon"></textarea>
@@ -1768,7 +1769,13 @@
 
       <section class="browse" id="view-canned" hidden aria-label="Réponses types">
         <div class="browse-bar">
+          <label class="canned-q">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"
+              aria-hidden="true"><path d="M10.5 17a6.5 6.5 0 1 0 0-13a6.5 6.5 0 1 0 0 13M15.5 15.5 20 20" /></svg>
+            <input type="search" id="canned-q" placeholder="Titre, cas de figure, texte" aria-label="Chercher une réponse type" />
+          </label>
           <span class="browse-count" id="canned-count"></span>
+          <button class="btn btn-small" id="canned-pack" type="button">Ajouter les modèles courants</button>
           <button class="btn btn-small btn-primary" id="canned-new">Nouvelle réponse type</button>
         </div>
         <div id="canned-list"></div>
@@ -2618,6 +2625,12 @@ Remboursement : sous 5 jours ouvrés après réception du retour."></textarea>
           <div class="field">
             <label for="canned-f-title">Titre</label>
             <input type="text" id="canned-f-title" placeholder="Où est ma commande" />
+          </div>
+          <div class="field">
+            <label for="canned-f-cat">Cas de figure</label>
+            <input type="text" id="canned-f-cat" list="canned-cats" maxlength="60" placeholder="Douane, colis perdu, avis client…" />
+            <datalist id="canned-cats"></datalist>
+            <small>Libre : c'est sous ce nom que la réponse est rangée et se retrouve.</small>
           </div>
           <div class="field">
             <label for="canned-f-intent">Motif associé</label>
