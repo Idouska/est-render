@@ -34,7 +34,7 @@ test('la bande compte les non-expédiées et mesure les deux délais', async () 
 test('la sidebar suit la nouvelle organisation', () => {
   const app = lire('public/app.js');
   assert.match(app, /const NAV_GROUPS = \['Admin', 'Pilotage'/);
-  assert.match(app, /NAV_ORDRE = \['overview', 'suppliers', 'couts', 'stats', 'tickets', 'changes', 'update', 'ruptures', 'renvoi'\]/);
+  assert.match(app, /NAV_ORDRE = \['overview', 'suppliers', 'couts', 'stats', 'tickets', 'changes', 'update', 'ruptures', 'renvoi', 'orders', 'customers', 'catalog', 'envoi', 'tracking', 'refunds', 'retour'\]/);
   assert.match(app, /tickets: \{ icon: 'inbox', label: 'Boîte de réception', group: 'Pilotage'/);
   assert.match(app, /label: 'Update', group: 'Pilotage'/);
   assert.match(app, /label: 'Out of stock',\s*group: 'Pilotage'/);

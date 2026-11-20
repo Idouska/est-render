@@ -1347,7 +1347,14 @@
             </div>
 
             <div class="envoi-bloc">
-              <h3 class="envoi-h">Partiront au fournisseur <small id="envoi-n-list"></small></h3>
+              <div class="envoi-h-ligne">
+                <h3 class="envoi-h">Partiront au fournisseur <small id="envoi-n-list"></small></h3>
+                <label class="envoi-q" id="envoi-q-wrap" hidden>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"
+                    aria-hidden="true"><path d="M10.5 17a6.5 6.5 0 1 0 0-13a6.5 6.5 0 1 0 0 13M15.5 15.5 20 20" /></svg>
+                  <input type="search" id="envoi-q" placeholder="N°, client, modèle" aria-label="Chercher dans les commandes à envoyer" />
+                </label>
+              </div>
               <div id="envoi-list"></div>
             </div>
 
@@ -1358,11 +1365,11 @@
           </div>
 
           <!-- Ce que l'atelier a fait des envois passés. -->
-          <div class="envoi-bloc envoi-droite">
-            <h3 class="envoi-h">Derniers envois</h3>
+          <details class="envoi-bloc envoi-droite" id="envoi-hist-bloc">
+            <summary class="envoi-h">Derniers envois <small id="envoi-n-hist"></small></summary>
             <div id="envoi-hist"></div>
             <p class="envoi-aide envoi-pied" id="envoi-pied"></p>
-          </div>
+          </details>
         </div>
       </section>
 

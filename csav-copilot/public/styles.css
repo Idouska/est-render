@@ -17491,3 +17491,45 @@ button.stk-transp { cursor: pointer; }
 /* « Écrire à ce client », en tête de sa fiche. */
 .sheet-ecrire { display: flex; margin-bottom: 12px; }
 @media (max-width: 760px) { .sheet-ecrire .btn { flex: 1; justify-content: center; min-height: 40px; } }
+
+/* ========================================================================
+   COMMANDES DU JOUR — allégée
+
+   Les quatre chiffres tiennent sur une ligne, la liste prend toute la largeur
+   et se cherche, les derniers envois se replient sous elle : ils occupaient
+   40 % de l'écran pour dire « aucun envoi ».
+   ======================================================================== */
+#view-envoi .envoi-kpis { display: flex; flex-wrap: wrap; }
+#view-envoi .ek { flex: 1 1 200px; align-items: center; gap: 10px; padding: 10px 14px; }
+#view-envoi .ek .kpi-ico { width: 24px; height: 24px; border-radius: 7px; }
+#view-envoi .ek .kpi-ico svg { width: 13px; height: 13px; }
+#view-envoi .ek-v { font-size: 19px; }
+#view-envoi .ek-label { font-size: 12.5px; color: var(--ink-soft); }
+#view-envoi .ek-note { font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#view-envoi .ek-zero .kpi-ico { filter: grayscale(1); opacity: 0.45; }
+#view-envoi .envoi-cols { flex-direction: column; align-items: stretch; }
+#view-envoi .envoi-gauche, #view-envoi .envoi-droite { flex: none; width: 100%; }
+#view-envoi .envoi-h-ligne { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+#view-envoi .envoi-q {
+  display: flex; align-items: center; gap: 8px; width: min(320px, 100%); padding: 0 11px;
+  border-radius: 9px; background: var(--surface); box-shadow: 0 0 0 1px var(--line);
+}
+#view-envoi .envoi-q[hidden] { display: none; }
+#view-envoi .envoi-q svg { flex: none; width: 14px; height: 14px; color: var(--ink-mute); }
+#view-envoi .envoi-q input { flex: 1; min-width: 0; padding: 8px 0; border: 0; background: none; font: inherit; font-size: 13px; color: var(--ink); outline: none; }
+#view-envoi .envoi-ligne .el-age { margin-left: auto; flex: none; font-size: 12px; color: var(--ink-mute); white-space: nowrap; }
+#view-envoi details.envoi-droite > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px; }
+#view-envoi details.envoi-droite > summary::-webkit-details-marker { display: none; }
+#view-envoi details.envoi-droite > summary::before {
+  content: ''; width: 6px; height: 6px; margin-right: 4px; border-right: 2px solid var(--ink-mute); border-bottom: 2px solid var(--ink-mute);
+  transform: rotate(-45deg); transition: transform 120ms var(--ease);
+}
+#view-envoi details.envoi-droite[open] > summary::before { transform: rotate(45deg); }
+#view-envoi details.envoi-droite[open] > summary { margin-bottom: 8px; }
+@media (max-width: 760px) {
+  #view-envoi .envoi-kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #view-envoi .ek { flex-direction: row; align-items: center; justify-content: flex-start; text-align: left; gap: 8px; padding: 10px 12px; }
+  #view-envoi .ek-txt { align-items: flex-start; }
+  #view-envoi .ek-note { display: none; }
+  #view-envoi .envoi-q { width: 100%; }
+}
