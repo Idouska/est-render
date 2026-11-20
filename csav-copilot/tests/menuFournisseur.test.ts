@@ -48,3 +48,12 @@ test('les pastilles se relèvent sans toucher à l’écran ouvert', () => {
   assert.match(releve, /\/updates`\)\.catch\(\(\) => null\)/);
   assert.doesNotMatch(releve, /hidden = true|innerHTML/);
 });
+
+test('les ruptures auxquelles le client a répondu s’affichent dans Commandes du jour', () => {
+  assert.match(html, /<div id="ws-ruptures-rep" hidden><\/div>/);
+  assert.match(js, /bandeRupturesARepondre\(mes \?\? \[\]\);\n\s+if \(state\.view !== 'rupture'\) return;/);
+  assert.match(js, /if \(event\.target\.closest\('\[data-voir-ruptures\]'\)\) setView\('rupture'\);/);
+  // Le bouton d'envoi dit à qui cela part : au client de l'atelier.
+  assert.match(i18n, /'oos\.send': 'Envoyer au client',/);
+  assert.equal((i18n.match(/'oos\.toAnswer':/g) ?? []).length, 3);
+});

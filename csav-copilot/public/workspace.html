@@ -272,6 +272,9 @@
           <!-- Alertes urgentes du marchand. Après la période, avant les
                commandes : elles existent pour interrompre le travail en cours. -->
           <div id="ws-alerts"></div>
+          <!-- Les ruptures auxquelles le client a répondu : à traiter ici même,
+               sans aller les chercher dans un autre écran. -->
+          <div id="ws-ruptures-rep" hidden></div>
 
 
           <!-- En tête de la file, comme dans Mail : chercher, masquer ce qui
@@ -393,6 +396,7 @@
             <button type="button" role="tab" data-oos-onglet="mes" aria-selected="false"><span data-t="oos.mine">Mes ruptures</span><b class="oos-pastille" id="oos-n" hidden></b></button>
           </div>
           <div class="oos-cols" id="oos-cols" data-onglet="signaler">
+            <p class="oos-autre" data-t="oos.reportOther">Signaler une commande qui n’est plus dans la liste du jour</p>
             <div class="oos-form" id="oos-form"></div>
             <aside class="oos-mes" aria-labelledby="oos-mes-t">
               <h2 id="oos-mes-t" data-t="oos.mine">Mes ruptures</h2>
