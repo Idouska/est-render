@@ -224,6 +224,9 @@ model ShopifyConnection {
   scopes         String
   installedAt    DateTime  @default(now())
   uninstalledAt  DateTime?
+  /// Shopify a répondu 401 : la clé n'est plus acceptée (application
+  /// désinstallée, clé révoquée). Remis à vide à la reconnexion.
+  accesRefuseLe  DateTime?
 
   merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
 }

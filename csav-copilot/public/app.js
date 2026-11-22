@@ -1136,6 +1136,11 @@ function renderMe() {
   $('demo-notice').hidden = !demo;
   $('mock-notice').hidden = demo || !me.shopify.simulated;
   $('test-notice').hidden = demo || !me.merchant.testMode;
+  const refus = $('shopify-refus-notice');
+  if (refus) {
+    refus.hidden = demo || !me.shopify?.accesRefuse;
+    $('shopify-reconnecter').href = `/auth/shopify?shop=${encodeURIComponent(me.merchant.shopDomain ?? '')}`;
+  }
 }
 
 /* ------------------------------------------------------- sélecteur boutique */

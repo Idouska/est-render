@@ -641,6 +641,11 @@ body {
    fond : 4,68:1 en clair, 7,18:1 en sombre. */
 .notice-warn { background: var(--warn-soft); color: var(--warn-ink); }
 
+/* Reconnecter Shopify : le bouton au bout de la ligne, pas sous le texte. */
+.notice-shopify { align-items: center; }
+.notice-shopify > div { flex: 1; }
+.notice-shopify .btn { flex: none; }
+
 /* La démonstration : une ligne discrète, pas une alerte — on la montre à
    quelqu'un, le bandeau ne doit pas voler la vedette à l'écran. */
 .notice-demo { padding: 8px 14px; align-items: baseline; }

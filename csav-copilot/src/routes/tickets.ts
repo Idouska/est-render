@@ -270,7 +270,7 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
     const merchant = await prisma.merchant.findUnique({
       where: { id: merchantId },
       include: {
-        shopify: { select: { installedAt: true, uninstalledAt: true, scopes: true } },
+        shopify: { select: { installedAt: true, uninstalledAt: true, scopes: true, accesRefuseLe: true } },
         mailboxes: {
           orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
           select: { id: true, emailAddress: true, label: true, isDefault: true, watchExpiration: true },
@@ -313,6 +313,8 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
       shopify: {
         connected: Boolean(merchant.shopify && !merchant.shopify.uninstalledAt),
         simulated: env.SHOPIFY_MOCK || merchant.demo,
+        // Shopify refuse la clé enregistrée : il faut reconnecter.
+        accesRefuse: Boolean(merchant.shopify?.accesRefuseLe && !merchant.shopify.uninstalledAt && !merchant.demo),
       },
       gmail: {
         // La démo n'a pas de boîte, mais ses mails sont là : rien à brancher.
