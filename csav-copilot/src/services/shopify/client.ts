@@ -98,6 +98,14 @@ export async function getShopifyClient(merchantId: string): Promise<ShopifyClien
       });
 
       if (!response.ok) {
+        // 401 : la clé n'est plus acceptée. Noté une fois, pour que le
+        // tableau de bord demande de reconnecter Shopify au lieu de laisser
+        // chaque écran échouer de son côté.
+        if (response.status === 401 && !connection.accesRefuseLe) {
+          void prisma.shopifyConnection
+            .update({ where: { merchantId }, data: { accesRefuseLe: new Date() } })
+            .catch(() => {});
+        }
         throw new ShopifyError(
           `Appel Shopify en échec (${response.status})`,
           response.status,

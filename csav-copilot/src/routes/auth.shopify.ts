@@ -201,6 +201,7 @@ export async function shopifyAuthRoutes(app: FastifyInstance): Promise<void> {
           accessTokenEnc: encryptSecret(accessToken),
           scopes: scope,
           uninstalledAt: null,
+          accesRefuseLe: null,
         },
       });
 
