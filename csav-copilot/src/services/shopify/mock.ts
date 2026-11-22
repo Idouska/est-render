@@ -636,6 +636,18 @@ export function createMockShopifyClient(shopDomain: string, jeu: JeuFictif = JEU
         } as T;
       }
 
+      // La photo d'un modèle, par son nom exact.
+      if (query.includes('query PhotosParTitre')) {
+        const titre = String(variables?.query ?? '').replace(/^title:"|"$/g, '').replace(/\\(["\\])/g, '$1');
+        const nodes = produits
+          .filter((produit) => produit.titre === titre)
+          .map((produit) => ({
+            title: produit.titre,
+            featuredMedia: produit.image ? { preview: { image: { url: produit.image } } } : null,
+          }));
+        return { products: { nodes } } as T;
+      }
+
       // Les déclinaisons du catalogue fictif : celles des commandes ci-dessus,
       // pour qu'une paire ajoutée au stock corresponde à ce qui se commande.
       if (query.includes('query ListVariants') && jeu.produits) {

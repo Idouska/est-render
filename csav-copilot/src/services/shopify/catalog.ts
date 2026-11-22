@@ -530,3 +530,41 @@ export async function productWithVariants(
     })),
   };
 }
+
+/**
+ * La photo principale de chaque modèle, lue par son nom sur la fiche produit.
+ *
+ * Requête volontairement minimale (titre et photo, rien d'autre) : la lecture
+ * par déclinaison demande aussi stock et prix, et quand elle échouait la
+ * photo disparaissait avec elle. Un nom introuvable vaut `null`.
+ */
+export async function photosParTitre(client: ShopifyClient, titres: string[]): Promise<Map<string, string | null>> {
+  const photos = new Map<string, string | null>();
+  for (const titre of [...new Set(titres)].slice(0, 30)) {
+    const data = await client.request<{
+      products: { nodes: Array<{ title: string; featuredMedia: { preview: { image: { url: string } | null } | null } | null }> };
+    }>(
+      /* GraphQL */ `
+        query PhotosParTitre($query: String) {
+          products(first: 5, query: $query) {
+            nodes {
+              title
+              featuredMedia {
+                preview {
+                  image {
+                    url
+                  }
+                }
+              }
+            }
+          }
+        }
+      `,
+      { query: `title:"${titre.replace(/["\\]/g, '\\$&')}"` },
+    );
+    const nodes = data.products.nodes;
+    const bon = nodes.find((p) => p.title === titre && p.featuredMedia?.preview?.image) ?? nodes.find((p) => p.featuredMedia?.preview?.image);
+    photos.set(titre, bon?.featuredMedia?.preview?.image?.url ?? null);
+  }
+  return photos;
+}

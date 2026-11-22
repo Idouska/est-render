@@ -14,7 +14,8 @@ const js = readFileSync(new URL('../public/workspace.js', import.meta.url), 'utf
 test('le serveur joint la photo du modèle, lue dans le catalogue', () => {
   assert.match(routes, /image: photos\.get\(articles\.get\(ticket\.id\)\?\.produit \?\? ''\) \?\? null,/);
   const aide = routes.slice(routes.indexOf('async function photosDesModeles('), routes.indexOf('async function signalementsDeLAtelier('));
-  assert.match(aide, /product_title:\$\{quoteSearchValue\(titre\)\}/);
+  // Lue sur la fiche produit, par une requête qui ne demande que titre et photo.
+  assert.match(aide, /await photosParTitre\(client, aLire\.slice\(0, 20\)\)/);
   // Gardée une heure, introuvable compris ; Shopify en panne ne casse pas la liste.
   assert.match(aide, /photosModeles\.set\(`\$\{merchantId\}\|\$\{titre\}`, \{ expire: maintenant \+ 60 \* 60_000, image \}\);/);
   assert.match(aide, /\} catch \{/);
