@@ -17,7 +17,7 @@ import { ordersToCsv } from '../services/export/ordersCsv.ts';
 import { ordersToXlsx } from '../services/export/ordersXlsx.ts';
 import { getShopifyClient } from '../services/shopify/client.ts';
 import { getOrderById, listOrders, quoteSearchValue } from '../services/shopify/orders.ts';
-import { listProducts, listVariants, productWithVariants } from '../services/shopify/catalog.ts';
+import { listProducts, listVariants, photosParTitre, productWithVariants } from '../services/shopify/catalog.ts';
 import { corrigerSuivi, expeditionPortant, fulfillOrder } from '../services/shopify/fulfill.ts';
 import { draftChangeReply } from '../services/ai/changeReply.ts';
 import { decodePhoto, photoSchema, sendParcelPhoto, toParcelView } from './parcels.ts';
@@ -476,9 +476,8 @@ async function photosDesModeles(merchantId: string, titres: string[]): Promise<M
   if (aLire.length === 0) return trouvees;
   try {
     const client = await getShopifyClient(merchantId);
-    for (const titre of aLire.slice(0, 20)) {
-      const variantes = await listVariants(client, { query: `product_title:${quoteSearchValue(titre)}`, limit: 10 }).catch(() => []);
-      const image = (variantes.find((v) => v.productTitle === titre && v.image) ?? variantes.find((v) => v.image))?.image ?? null;
+    const lues = await photosParTitre(client, aLire.slice(0, 20));
+    for (const [titre, image] of lues) {
       photosModeles.set(`${merchantId}|${titre}`, { expire: maintenant + 60 * 60_000, image });
       if (photosModeles.size > 3000) photosModeles.delete(photosModeles.keys().next().value!);
       trouvees.set(titre, image);

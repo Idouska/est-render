@@ -8,7 +8,7 @@ import { decodePhoto, photoSchema } from './parcels.ts';
 import { getShopifyClient } from '../services/shopify/client.ts';
 import { fulfillOrder } from '../services/shopify/fulfill.ts';
 import { listOrders, quoteSearchValue, type OrderSummary } from '../services/shopify/orders.ts';
-import { listVariants } from '../services/shopify/catalog.ts';
+import { listVariants, photosParTitre } from '../services/shopify/catalog.ts';
 import {
   PAYS_RETOUR,
   VOISINS,
@@ -1623,23 +1623,27 @@ export async function returnRoutes(app: FastifyInstance): Promise<void> {
       for (let i = 0; i < skus.length && i < 200; i += 20) {
         const lot = skus.slice(i, i + 20);
         // Un lot qui échoue ne prive pas les autres paires de leur photo : le nom du modèle prend le relais.
-        const variantes = await listVariants(client, { query: lot.map((sku) => `sku:${quoteSearchValue(sku)}`).join(' OR '), limit: 50 }).catch(() => []);
+        const variantes = await listVariants(client, { query: lot.map((sku) => `sku:${quoteSearchValue(sku)}`).join(' OR '), limit: 50 }).catch((erreur) => {
+          request.log.warn({ err: erreur }, 'Stock : photos par référence illisibles');
+          return [];
+        });
         for (const v of variantes) if (v.sku && v.image) parSku.set(v.sku, v.image);
       }
-      const parTitre = new Map<string, string | null>();
+      // Ce que la référence n'a pas trouvé se lit sur la fiche du modèle.
+      const manquants = paires.filter((p) => !(p.sku && parSku.get(p.sku))).map((p) => p.productTitle);
+      const parTitre = manquants.length
+        ? await photosParTitre(client, manquants).catch((erreur) => {
+            request.log.warn({ err: erreur }, 'Stock : photos par modèle illisibles');
+            return new Map<string, string | null>();
+          })
+        : new Map<string, string | null>();
       for (const paire of paires) {
-        let image = paire.sku ? parSku.get(paire.sku) : undefined;
-        if (!image) {
-          if (!parTitre.has(paire.productTitle) && parTitre.size < 30) {
-            const v = await listVariants(client, { query: `product_title:${quoteSearchValue(paire.productTitle)}`, limit: 10 }).catch(() => []);
-            parTitre.set(paire.productTitle, (v.find((x) => x.productTitle === paire.productTitle && x.image) ?? v.find((x) => x.image))?.image ?? null);
-          }
-          image = parTitre.get(paire.productTitle) ?? undefined;
-        }
+        const image = (paire.sku ? parSku.get(paire.sku) : undefined) ?? parTitre.get(paire.productTitle) ?? undefined;
         if (image) images[paire.id] = image;
       }
-    } catch {
+    } catch (erreur) {
       // Sans Shopify, l'écran montre les initiales du modèle.
+      request.log.warn({ err: erreur }, 'Stock : photos illisibles');
     }
     // Une réponse incomplète (Shopify lent, catalogue pas encore lu) ne se
     // garde que deux minutes : la photo doit pouvoir arriver à la visite suivante.
