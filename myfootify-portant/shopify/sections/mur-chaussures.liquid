@@ -9,7 +9,15 @@
   if source == blank
     assign source = section.settings.collection.products
   endif
+  if source == blank and collection
+    assign source = collection.products
+  endif
+  assign show = true
+  if section.settings.only_handle != blank and collection.handle != section.settings.only_handle
+    assign show = false
+  endif
 -%}
+{%- if show -%}
 <section class="mfw" data-mfw style="--mfw-accent: {{ section.settings.accent }};">
   {%- if source == blank -%}
     <p class="mfw__empty">Choisissez des chaussures dans les réglages de la section.</p>
@@ -105,6 +113,7 @@
   {%- endif -%}
 </section>
 <script src="{{ 'mur-chaussures.js' | asset_url }}" defer></script>
+{%- endif -%}
 
 {% schema %}
 {
@@ -121,6 +130,7 @@
     { "type": "collection", "id": "collection", "label": "Ou une collection" },
     { "type": "range", "id": "limit", "label": "Nombre de paires", "min": 4, "max": 18, "step": 1, "default": 18, "info": "Pour un mur symétrique : 10, 12, 15 ou 18." },
     { "type": "text", "id": "strip", "label": "Texte retiré des noms", "default": "Nike Mind 001", "info": "« Nike Mind 001 Solar Red » s'affiche « Solar Red »." },
+    { "type": "text", "id": "only_handle", "label": "Afficher seulement sur cette collection", "info": "Identifiant de la collection (ex. nike-mind-001). Vide : la section s'affiche partout où elle est placée." },
     { "type": "color", "id": "accent", "label": "Couleur d'accent", "default": "#ff6a00" },
     { "type": "paragraph", "content": "Image : le métachamp custom.portant_face_det (image détourée) passe avant la photo principale." }
   ],

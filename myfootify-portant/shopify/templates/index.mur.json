@@ -1423,9 +1423,9 @@
     }
   },
   "order": [
-    "mur_chaussures",
     "hero_studio",
     "club_carousel",
+    "mur_chaussures",
     "new_2627",
     "collections_tiles",
     "nos_equipes",
