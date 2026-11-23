@@ -3,6 +3,7 @@ import { prisma } from '../../lib/prisma.ts';
 import { enqueueTicket } from '../../queue/index.ts';
 import { getGmailClient } from './client.ts';
 import { loadLabelNames, resolveLabels, syncTicketLabels } from './labels.ts';
+import { apercuDuMessage, vraiClient } from '../tickets/formulaireContact.ts';
 import { motifNotification, reglagesNotif } from '../tickets/notification.ts';
 import { parseMessage } from './messages.ts';
 
@@ -121,7 +122,10 @@ export async function backfillMailbox(params: {
         if (message.fromEmail === address) continue;
         if (message.labelIds.includes('DRAFT') || message.labelIds.includes('SENT')) continue;
 
-        const motif = motifNotification({ ...message, ...message.entetes }, reglages);
+        // Le client d'un formulaire de contact est celui qui l'a rempli, pas
+        // `mailer@shopify.com` : voir `tickets/formulaireContact.ts`.
+        const client = vraiClient({ ...message, ...message.entetes });
+        const motif = client?.formulaire ? null : motifNotification({ ...message, ...message.entetes }, reglages);
         const ticket = await prisma.ticket.upsert({
           where: {
             merchantId_gmailThreadId: { merchantId, gmailThreadId: message.gmailThreadId },
@@ -130,8 +134,8 @@ export async function backfillMailbox(params: {
             merchantId,
             gmailThreadId: message.gmailThreadId,
             subject: message.subject,
-            customerEmail: message.fromEmail,
-            customerName: message.fromName,
+            customerEmail: client?.email ?? message.fromEmail,
+            customerName: client?.nom ?? message.fromName,
             status: 'NEW',
             // Les notifications d'applis entrent rangées à part.
             notification: motif !== null,
@@ -157,7 +161,7 @@ export async function backfillMailbox(params: {
               toEmail: message.toEmail,
               subject: message.subject,
               bodyText: message.bodyText,
-              snippet: message.snippet,
+              snippet: client?.message ? apercuDuMessage(client.message) : message.snippet,
               receivedAt: message.receivedAt,
               attachments: {
                 create: message.attachments.map((file) => ({

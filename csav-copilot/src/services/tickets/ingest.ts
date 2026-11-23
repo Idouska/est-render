@@ -4,6 +4,7 @@ import { enqueueTicket } from '../../queue/index.ts';
 import { getGmailClient } from '../gmail/client.ts';
 import { loadLabelNames, resolveLabels } from '../gmail/labels.ts';
 import { fetchNewMessages, fetchRecentMessages } from '../gmail/sync.ts';
+import { apercuDuMessage, vraiClient } from './formulaireContact.ts';
 import { motifNotification, reglagesNotif } from './notification.ts';
 
 /**
@@ -54,9 +55,15 @@ export async function ingestMerchantInbox(
   for (const message of messages) {
     if (!message.fromEmail) continue;
 
+    // Un formulaire de contact arrive d'un robot (`mailer@shopify.com`) : le
+    // client est celui qui l'a rempli. Voir `formulaireContact.ts`.
+    const client = vraiClient({ ...message, ...message.entetes });
+
     // Une notification d'appli entre rangée à part : hors de la file, et
-    // sans passer par l'IA (voir `processTicket`).
-    const motif = motifNotification({ ...message, ...message.entetes }, reglages);
+    // sans passer par l'IA (voir `processTicket`). Un formulaire de contact
+    // n'en est jamais une, même si l'expéditeur a été rangé dans les
+    // notifications pour les autres mails de Shopify.
+    const motif = client?.formulaire ? null : motifNotification({ ...message, ...message.entetes }, reglages);
 
     const ticket = await prisma.ticket.upsert({
       where: {
@@ -66,8 +73,8 @@ export async function ingestMerchantInbox(
         merchantId,
         gmailThreadId: message.gmailThreadId,
         subject: message.subject,
-        customerEmail: message.fromEmail,
-        customerName: message.fromName,
+        customerEmail: client?.email ?? message.fromEmail,
+        customerName: client?.nom ?? message.fromName,
         status: 'NEW',
         notification: motif !== null,
         notificationMotif: motif,
@@ -108,7 +115,9 @@ export async function ingestMerchantInbox(
           toEmail: message.toEmail,
           subject: message.subject,
           bodyText: message.bodyText,
-          snippet: message.snippet,
+          // L'aperçu de la file : les mots du client, pas « Vous avez reçu un
+          // nouveau message du formulaire de contact… ».
+          snippet: client?.message ? apercuDuMessage(client.message) : message.snippet,
           receivedAt: message.receivedAt,
           // Un client qui signale une semelle décollée joint une photo. Sans
           // elle, l'agent répond à l'aveugle et redemande ce qui est déjà là.

@@ -15,6 +15,7 @@ import {
 } from './queue/index.ts';
 import { ingestMerchantInbox } from './services/tickets/ingest.ts';
 import { processTicket } from './services/tickets/process.ts';
+import { reparerFormulairesDeContact } from './services/tickets/reparerFormulaires.ts';
 import { passageAutomatique } from './services/envoi/quotidien.ts';
 import { relancerLotsEnRetard } from './services/envoi/relances.ts';
 import { envoyerRecapitulatifs } from './services/suppliers/recap.ts';
@@ -99,6 +100,15 @@ const envoiWorker = new Worker(
   { connection, concurrency: 1 },
 );
 await planifierEnvoiDuJour();
+
+// Les formulaires de contact entrés au nom de `mailer@shopify.com` : rendus à
+// leur vrai client. Sans attendre ni bloquer le démarrage — et sans danger à
+// rejouer, un ticket corrigé sort de la recherche.
+void reparerFormulairesDeContact()
+  .then((bilan) => {
+    if (bilan.repares > 0) logger.info(bilan, 'Formulaires de contact rendus à leur client');
+  })
+  .catch((error: unknown) => logger.warn({ err: error }, 'Correction des formulaires de contact en échec'));
 
 for (const worker of [ingestWorker, ticketWorker, envoiWorker]) {
   worker.on('failed', (job, error) => {

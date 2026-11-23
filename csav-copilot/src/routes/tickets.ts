@@ -22,6 +22,7 @@ import { discardPendingDrafts } from '../services/tickets/discardDrafts.ts';
 import { recordOutbound } from '../services/tickets/outbound.ts';
 import { envoyerBrouillon } from '../services/tickets/envoyerBrouillon.ts';
 import { MESSAGES_ENVOI } from '../services/envoi/uneSeuleFois.ts';
+import { destinataireRobot } from '../services/tickets/formulaireContact.ts';
 import { translateToFrench } from '../services/ai/translate.ts';
 import { retardFournisseurs } from '../services/suppliers/retard.ts';
 import { fenetresJour } from '../services/tickets/fenetresJour.ts';
@@ -2047,6 +2048,7 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
     });
 
     if (issue === 'introuvable') return reply.code(404).send({ error: 'Brouillon introuvable' });
+    if (issue === 'destinataire-robot') return reply.code(422).send({ error: MESSAGES_ENVOI[issue] });
     if (issue !== 'envoye') return reply.code(409).send({ error: MESSAGES_ENVOI[issue] });
 
     return reply.send({ ok: true });
@@ -2085,6 +2087,11 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
 
       const { merchantId, userId } = request.session;
       const { ticketId, ...email } = parsed.data;
+
+      // Même garde que pour un brouillon : une adresse de robot ne lit rien.
+      if (destinataireRobot(email.to)) {
+        return reply.code(422).send({ error: MESSAGES_ENVOI['destinataire-robot'] });
+      }
 
       // La boîte d'envoi est celle qui a reçu le message : répondre depuis une
       // autre adresse que celle à laquelle le client a écrit le désoriente.
