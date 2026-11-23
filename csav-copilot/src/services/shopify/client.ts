@@ -1,6 +1,7 @@
 import { env } from '../../config/env.ts';
 import { decryptSecret } from '../../lib/crypto.ts';
 import { prisma } from '../../lib/prisma.ts';
+import { signalerPanneShopify } from '../platform/alertesConnexion.ts';
 import { ecritureSimulee } from '../modeTest.ts';
 
 export class ShopifyError extends Error {
@@ -119,10 +120,10 @@ export async function getShopifyClient(merchantId: string): Promise<ShopifyClien
         // 401 : la clé n'est plus acceptée. Noté une fois, pour que le
         // tableau de bord demande de reconnecter Shopify au lieu de laisser
         // chaque écran échouer de son côté.
+        // L'équipe est aussi prévenue par e-mail, une fois : voir
+        // services/platform/alertesConnexion.ts.
         if (response.status === 401 && !connection.accesRefuseLe) {
-          void prisma.shopifyConnection
-            .update({ where: { merchantId }, data: { accesRefuseLe: new Date() } })
-            .catch(() => {});
+          void signalerPanneShopify(merchantId).catch(() => {});
         }
         throw new ShopifyError(
           `Appel Shopify en échec (${response.status})`,

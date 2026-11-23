@@ -18585,8 +18585,15 @@ function renderSettings() {
     label: 'Shopify',
     connected: connections.shopify.connected,
     simulated: connections.shopify.simulated,
+    status: connections.shopify.accesRefuseLe ? 'accès refusé' : undefined,
     detail: connections.shopify.connected
-      ? `Boutique <code>${esc(merchant.shopDomain)}</code> · autorisations : ${
+      ? `${
+          connections.shopify.accesRefuseLe
+            ? `<b class="set-alert">Shopify refuse l’accès depuis le ${esc(
+                fullDate(connections.shopify.accesRefuseLe),
+              )}</b> — réautorisez pour tout relancer.<br />`
+            : ''
+        }Boutique <code>${esc(merchant.shopDomain)}</code> · autorisations : ${
           connections.shopify.scopes.map(esc).join(', ') || '—'
         }${
           missingScopes.length
@@ -18600,7 +18607,7 @@ function renderSettings() {
     // faire depuis ici laisserait les deux côtés en désaccord.
     actions: connections.shopify.connected
       ? `<a class="btn btn-small${
-          missingScopes.length ? ' btn-primary' : ''
+          missingScopes.length || connections.shopify.accesRefuseLe ? ' btn-primary' : ''
         }" href="/auth/shopify?shop=${encodeURIComponent(
           merchant.shopDomain,
         )}">Réautoriser</a>
@@ -18625,6 +18632,15 @@ function renderSettings() {
               <code>${esc(mailbox.emailAddress)}</code>
               ${mailbox.isDefault ? '<span class="tag tag-intent">par défaut</span>' : ''}
             </div>
+            ${
+              // Google refuse l'accès : rien n'entre ni ne part tant qu'on ne
+              // la reconnecte pas. L'équipe a été prévenue par e-mail.
+              mailbox.panneLe
+                ? `<div class="mbx-state"><b class="set-alert">Google refuse l’accès depuis le ${esc(
+                    fullDate(mailbox.panneLe),
+                  )}</b> — <a class="btn btn-small btn-primary" href="/auth/google">Reconnecter</a></div>`
+                : ''
+            }
             <div class="mbx-state">${
               mailbox.watchActive
                 ? `écoute active jusqu’au ${fullDate(mailbox.watchExpiration)}`
@@ -18987,7 +19003,79 @@ async function openSettings() {
   state.settings = await api('/api/settings');
   renderSettings();
   renderBuildInfo();
+  void chargerMiseEnService();
 }
+
+/*
+ * Prêt à passer en réel ?
+ *
+ * Six points calculés par le serveur sur l'état réel — Shopify, boîte mail,
+ * signature, règles de la boutique, réponses types, mentions légales —, chacun
+ * avec le geste qui le règle. Affichés au-dessus de l'interrupteur du mode
+ * test, puisque c'est là qu'on décide de passer en réel.
+ */
+async function chargerMiseEnService() {
+  try {
+    state.miseEnService = await api('/api/mise-en-service');
+  } catch {
+    state.miseEnService = null;
+  }
+  renderMiseEnService();
+}
+
+const PASTILLE_ETAPE = {
+  ok: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>',
+  manque: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v6"></path><path d="M12 17h.01"></path></svg>',
+};
+
+function renderMiseEnService() {
+  const section = $('mes-section');
+  if (!section) return;
+  const donnees = state.miseEnService;
+  section.hidden = !donnees || donnees.demo || !donnees.etapes?.length;
+  if (section.hidden) return;
+
+  const etapes = donnees.etapes;
+  const prets = etapes.filter((etape) => etape.ok).length;
+  $('mes-compte').textContent = `${prets} / ${etapes.length}`;
+  $('mes-compte').classList.toggle('mes-complet', prets === etapes.length);
+
+  $('mes-liste').innerHTML = etapes
+    .map((etape, rang) => {
+      const geste = etape.geste;
+      const bouton = !geste
+        ? ''
+        : geste.vers.lien
+          ? `<a class="reg-bouton" href="${esc(geste.vers.lien)}">${esc(geste.libelle)}</a>`
+          : `<button type="button" class="reg-bouton" data-mes-geste="${rang}">${esc(geste.libelle)}</button>`;
+      return `<div class="reg-ligne mes-etape${etape.ok ? ' mes-ok' : ''}">
+        <span class="mes-quoi">
+          <span class="mes-pastille" aria-hidden="true">${etape.ok ? PASTILLE_ETAPE.ok : PASTILLE_ETAPE.manque}</span>
+          <span>${esc(etape.titre)}<small>${esc(etape.detail)}</small></span>
+          <span class="sr-only">${etape.ok ? 'prêt' : 'à régler'}</span>
+        </span>
+        ${bouton}
+      </div>`;
+    })
+    .join('');
+
+  const enTest = $('set-testmode').checked;
+  $('mes-note').textContent =
+    prets === etapes.length
+      ? enTest
+        ? 'Tout est prêt : vous pouvez couper le mode test ci-dessous.'
+        : 'Tout est prêt, et le mode test est coupé : l’outil travaille en réel.'
+      : `Encore ${etapes.length - prets} point${etapes.length - prets > 1 ? 's' : ''} à régler avant de couper le mode test.`;
+}
+
+$('mes-liste')?.addEventListener('click', (event) => {
+  const bouton = event.target.closest('[data-mes-geste]');
+  const etape = state.miseEnService?.etapes?.[Number(bouton?.dataset.mesGeste)];
+  if (!bouton || !etape?.geste) return;
+  const { vers } = etape.geste;
+  if (vers.volet) montrerVoletReglages(vers.volet);
+  else if (vers.vue) setView(vers.vue);
+});
 
 /*
  * Les catégories des Réglages, une seule visible à la fois.
@@ -19061,11 +19149,26 @@ const SETTINGS_FIELDS = [
  */
 $('set-testmode').addEventListener('change', async (event) => {
   const actif = event.target.checked;
+  // Couper le mode test avec des points encore à régler : on le dit, et on
+  // laisse décider.
+  const manquent = (state.miseEnService?.etapes ?? []).filter((etape) => !etape.ok);
+  if (!actif && manquent.length > 0) {
+    const liste = manquent.map((etape) => `• ${etape.titre} : ${etape.detail}`).join('\n');
+    const ok = await confirmer(
+      `Passer en réel avec ${manquent.length} point${manquent.length > 1 ? 's' : ''} à régler ?\n\n${liste}\n\nLes réponses, remboursements et mails aux ateliers partiront pour de vrai.`,
+      { action: 'Passer en réel', danger: true, icone: 'test' },
+    );
+    if (!ok) {
+      event.target.checked = true;
+      return;
+    }
+  }
   try {
     await api('/api/settings', { method: 'PATCH', body: JSON.stringify({ testMode: actif }) });
     $('test-notice').hidden = !actif;
     $('reg-test-pastille').hidden = !actif;
     toast(actif ? 'Mode test activé : rien ne sortira.' : 'Mode test désactivé : les actions sont de nouveau réelles.');
+    renderMiseEnService();
   } catch (error) {
     event.target.checked = !actif;
     toast(error.message, true);

@@ -293,6 +293,9 @@ export async function googleAuthRoutes(app: FastifyInstance): Promise<void> {
         },
         update: {
           scopes: tokens.scope ?? null,
+          // Reconnectée : la panne signalée est terminée.
+          panneLe: null,
+          panneMotif: null,
           refreshTokenEnc: encryptSecret(tokens.refresh_token),
           accessTokenEnc: tokens.access_token ? encryptSecret(tokens.access_token) : null,
           accessTokenExpiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : null,

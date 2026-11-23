@@ -18,7 +18,9 @@ const lire = (chemin: string) => readFileSync(fileURLToPath(new URL(chemin, impo
 test('un 401 de Shopify est noté sur la connexion', () => {
   const client = lire('../src/services/shopify/client.ts');
   assert.match(client, /response\.status === 401 && !connection\.accesRefuseLe/);
-  assert.match(client, /data: \{ accesRefuseLe: new Date\(\) \}/);
+  // Noté par l'alerte, qui pose la marque une seule fois et prévient l'équipe.
+  assert.match(client, /void signalerPanneShopify\(merchantId\)/);
+  assert.match(lire('../src/services/platform/alertesConnexion.ts'), /where: \{ merchantId, accesRefuseLe: null \},\s+data: \{ accesRefuseLe: deps\.maintenant\(\) \}/);
   assert.match(lire('../prisma/schema.prisma'), /accesRefuseLe  DateTime\?/);
 });
 

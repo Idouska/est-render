@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { couvre, etapesMiseEnService } from "../services/platform/miseEnService.ts";
 import { z } from "zod";
 import { env } from "../config/env.ts";
 import { recordAudit } from "../lib/audit.ts";
@@ -86,22 +87,9 @@ const patchBody = z
     message: "Aucun champ à mettre à jour",
   });
 
-/**
- * Une autorisation accordée en couvre-t-elle une autre ?
- *
- * Shopify n'énumère pas `read_orders` quand `write_orders` est accordé — la
- * lecture est incluse. Sans cette règle, l'écran réclame en permanence une
- * autorisation déjà obtenue, et le marchand réinstalle son application pour
- * rien.
- */
-function covers(granted: string[], required: string): boolean {
-  if (granted.includes(required)) return true;
-
-  const readable = required.startsWith("read_")
-    ? `write_${required.slice(5)}`
-    : null;
-  return readable !== null && granted.includes(readable);
-}
+// Une autorisation accordée en couvre-t-elle une autre ? Partagée avec la
+// liste « Prêt à passer en réel », qui doit dire la même chose que cet écran.
+const covers = couvre;
 
 export async function settingsRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", requireSession);
@@ -128,6 +116,14 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
       .send(Buffer.from(merchant.logoData));
   });
 
+  /**
+   * Prêt à passer en réel ? Six points calculés sur l'état réel, chacun avec
+   * le geste qui le règle. Voir services/platform/miseEnService.ts.
+   */
+  app.get("/api/mise-en-service", async (request, reply) => {
+    return reply.send(await etapesMiseEnService(request.session.merchantId));
+  });
+
   app.get("/api/settings", async (request, reply) => {
     const { merchantId } = request.session;
 
@@ -135,7 +131,7 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
       where: { id: merchantId },
       include: {
         shopify: {
-          select: { installedAt: true, uninstalledAt: true, scopes: true },
+          select: { installedAt: true, uninstalledAt: true, scopes: true, accesRefuseLe: true },
         },
         mailboxes: {
           orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
@@ -147,6 +143,7 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
             watchExpiration: true,
             scopes: true,
             createdAt: true,
+            panneLe: true,
             // Débrancher emporte les conversations de la boîte. L'écran ne
             // peut pas le dire honnêtement sans savoir combien.
             _count: { select: { tickets: true } },
@@ -202,6 +199,8 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
               (scope) => !covers(granted, scope),
             ),
             installedAt: merchant.shopify?.installedAt ?? null,
+            // Shopify refuse la clé enregistrée depuis cette date.
+            accesRefuseLe: merchant.shopify?.accesRefuseLe ?? null,
           };
         })(),
         gmail: {
@@ -223,6 +222,8 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
             ticketCount: mailbox._count.tickets,
             // Corbeille et libellés reportés dans Gmail : seulement avec gmail.modify.
             gmailModifie: peutModifier(mailbox.scopes),
+            // Google refuse l'accès depuis cette date : à reconnecter.
+            panneLe: mailbox.panneLe,
           })),
         },
       },
