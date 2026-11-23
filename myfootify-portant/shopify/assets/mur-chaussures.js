@@ -84,6 +84,7 @@
       name.append(first, words.length ? ' ' + words.join(' ') : '');
       q('[data-kicker]').textContent = s.kicker || '';
       q('[data-price]').textContent = s.price;
+      const which = q('[data-which]'); if (which) which.textContent = s.short;
       q('[data-size-label]').textContent = s.option || 'Pointure';
       q('[data-more]').href = s.url;
       note.textContent = '';
@@ -118,7 +119,7 @@
           body: JSON.stringify({ items: [{ id: v.id, quantity: 1 }] }),
         });
         if (!res.ok) throw new Error((await res.json().catch(() => ({}))).description || '');
-        note.textContent = s.short + ', ' + label(v.label) + ' : ajouté. ';
+        note.textContent = s.short + ', ' + label(v.label) + ' : ajouté au panier.';
         const a = document.createElement('a'); a.href = rootUrl + 'cart'; a.textContent = 'Voir le panier';
         note.appendChild(a);
         document.dispatchEvent(new CustomEvent('cart:refresh', { bubbles: true }));

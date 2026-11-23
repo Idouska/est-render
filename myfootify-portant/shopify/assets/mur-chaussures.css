@@ -30,6 +30,10 @@
 .mfw__slot:hover .mfw__tag, .mfw__slot:focus-visible .mfw__tag { opacity: 1; }
 .mfw__stage.is-zoom .mfw__tag, .mfw__stage.is-zoom .mfw__intro, .mfw__stage.is-zoom .mfw__hint { opacity: 0; }
 
+/* Au zoom, seule la paire choisie reste éclairée ; les voisines passent en silhouette. */
+.mfw__slot { transition: opacity .5s, filter .5s; }
+.mfw__stage.is-zoom .mfw__slot:not(.is-on) { opacity: .16; filter: brightness(.45) saturate(.5); }
+.mfw__stage.is-zoom .mfw__slot:not(.is-on):hover { opacity: .5; }
 .mfw__sheet { position: absolute; inset: 0; z-index: 5; pointer-events: none; opacity: 0; visibility: hidden; transition: opacity .35s, visibility 0s .35s; }
 .mfw__stage.is-zoom .mfw__sheet { opacity: 1; visibility: visible; transition: opacity .35s .55s, visibility 0s .55s; }
 .mfw__stage.is-zoom .mfw__sheet > * { pointer-events: auto; }
@@ -51,7 +55,9 @@
 .mfw__add:active { transform: scale(.98); }
 .mfw__add[disabled] { background: rgba(240, 237, 232, .14); color: var(--mfw-muted); cursor: not-allowed; filter: none; }
 .mfw__note { margin: 0; min-height: 1.3em; font-size: 12.5px; color: var(--mfw-ink); }
-.mfw__note a { color: var(--mfw-accent); text-decoration: underline; }
+.mfw__note a { display: block; width: fit-content; margin-top: 8px; padding: 7px 14px; border: 1px solid var(--mfw-line); border-radius: 999px; color: var(--mfw-ink); text-decoration: none; white-space: nowrap; }
+.mfw__note a:hover { border-color: var(--mfw-ink); }
+.mfw__which { margin: 0; font-weight: 700; font-size: 15px; color: var(--mfw-ink); }
 .mfw__more { font-size: 12.5px; color: var(--mfw-muted); text-decoration: underline; text-underline-offset: 3px; }
 .mfw__more:hover { color: var(--mfw-ink); }
 .mfw__nav { position: absolute; left: 50%; bottom: 5%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; }
