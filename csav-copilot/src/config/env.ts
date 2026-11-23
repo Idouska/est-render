@@ -30,7 +30,10 @@ const schema = z.object({
   SHOPIFY_API_KEY: z.string().optional(),
   SHOPIFY_API_SECRET: z.string().optional(),
   SHOPIFY_SCOPES: z.string().transform(csv),
-  SHOPIFY_API_VERSION: z.string().default('2025-01'),
+  // La version que les requêtes du code ont été vérifiées contre : voir
+  // `versionShopify` dans services/shopify/client.ts, qui l'emporte sur une
+  // valeur plus ancienne restée chez l'hébergeur.
+  SHOPIFY_API_VERSION: z.string().default('2026-10'),
 
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),

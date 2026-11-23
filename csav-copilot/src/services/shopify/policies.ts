@@ -10,22 +10,30 @@ import { getShopifyClient } from './client.ts';
  * la politique de retour changera.
  */
 
+/*
+ * Une liste, plus un champ par politique.
+ *
+ * `refundPolicy`, `shippingPolicy`, `termsOfService`… ont été retirés de
+ * l'API : la requête échouait en entier, et l'import des politiques avec elle.
+ * Elles se lisent désormais dans `shopPolicies`, chacune avec son type.
+ */
 const QUERY = `
   query ShopPolicies {
     shop {
       name
       contactEmail
       shipsToCountries
-      refundPolicy { title body }
-      shippingPolicy { title body }
-      privacyPolicy { title body }
-      termsOfService { title body }
-      subscriptionPolicy { title body }
+      shopPolicies {
+        type
+        title
+        body
+      }
     }
   }
 `;
 
 interface PolicyNode {
+  type: string;
   title: string | null;
   body: string | null;
 }
@@ -35,11 +43,7 @@ interface PoliciesResponse {
     name: string | null;
     contactEmail: string | null;
     shipsToCountries: string[] | null;
-    refundPolicy: PolicyNode | null;
-    shippingPolicy: PolicyNode | null;
-    privacyPolicy: PolicyNode | null;
-    termsOfService: PolicyNode | null;
-    subscriptionPolicy: PolicyNode | null;
+    shopPolicies: PolicyNode[] | null;
   } | null;
 }
 
@@ -74,15 +78,19 @@ export async function fetchShopPolicies(merchantId: string): Promise<ShopPolicie
   const client = await getShopifyClient(merchantId);
   const data = await client.request<PoliciesResponse>(QUERY);
   const shop = data.shop;
+  const politique = (type: string) => shop?.shopPolicies?.find((node) => node.type === type);
 
   const raw: Array<[string, PolicyNode | null | undefined]> = [
-    ['Livraison', shop?.shippingPolicy],
-    ['Retours et remboursements', shop?.refundPolicy],
-    ['Conditions générales de vente', shop?.termsOfService],
-    ['Abonnements', shop?.subscriptionPolicy],
-    // La politique de confidentialité est délibérément écartée : elle parle au
-    // régulateur, pas au client qui demande où est son colis, et elle
-    // occuperait le tiers du prompt sans rien lui apprendre.
+    ['Livraison', politique('SHIPPING_POLICY')],
+    ['Retours et remboursements', politique('REFUND_POLICY')],
+    // Les conditions de vente : celles de la boutique en a, sinon les
+    // conditions d'utilisation, qui les contiennent souvent.
+    ['Conditions générales de vente', politique('TERMS_OF_SALE') ?? politique('TERMS_OF_SERVICE')],
+    ['Abonnements', politique('SUBSCRIPTION_POLICY')],
+    // La politique de confidentialité et les mentions légales sont
+    // délibérément écartées : elles parlent au régulateur, pas au client qui
+    // demande où est son colis, et occuperaient le tiers du prompt sans rien
+    // lui apprendre.
   ];
 
   const sections = raw

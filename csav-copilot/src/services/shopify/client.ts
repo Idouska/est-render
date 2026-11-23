@@ -44,6 +44,24 @@ export interface ShopifyClient {
 }
 
 /**
+ * La version de l'API Admin contre laquelle toutes les requêtes du code sont
+ * vérifiées (`tests/versionShopify.test.ts`, schéma officiel à l'appui).
+ *
+ * Shopify retire une version un an après sa sortie, sans erreur : une version
+ * retirée est servie par la plus ancienne encore en service, qui avance seule.
+ * Un champ retiré casse alors un écran du jour au lendemain — c'est arrivé :
+ * restée sur `2025-01`, la configuration a rendu illisibles les politiques de
+ * la boutique. Une variable plus ancienne que celle-ci est donc ignorée ; une
+ * plus récente est un choix délibéré, et passe.
+ */
+export const VERSION_API_SHOPIFY = '2026-10';
+
+export function versionShopify(configuree: string | null | undefined): string {
+  const valeur = configuree?.trim() ?? '';
+  return /^\d{4}-\d{2}$/.test(valeur) && valeur > VERSION_API_SHOPIFY ? valeur : VERSION_API_SHOPIFY;
+}
+
+/**
  * Construit un client Admin GraphQL scopé à un marchand.
  * Le token est déchiffré à l'usage et ne quitte jamais ce module.
  */
@@ -76,7 +94,7 @@ export async function getShopifyClient(merchantId: string): Promise<ShopifyClien
   const grantedScopes = connection.scopes.split(',').map((scope) => scope.trim()).filter(Boolean);
   const shopDomain = connection.merchant.shopDomain;
   const modeTest = connection.merchant.testMode;
-  const endpoint = `https://${shopDomain}/admin/api/${env.SHOPIFY_API_VERSION}/graphql.json`;
+  const endpoint = `https://${shopDomain}/admin/api/${versionShopify(env.SHOPIFY_API_VERSION)}/graphql.json`;
 
   return {
     shopDomain,

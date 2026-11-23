@@ -81,7 +81,7 @@ services:
       - key: SHOPIFY_SCOPES
         value: read_orders,read_customers,read_fulfillments,write_fulfillments,write_orders,read_products,read_inventory,write_draft_orders
       - key: SHOPIFY_API_VERSION
-        value: '2025-01'
+        value: '2026-10'
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET
@@ -168,7 +168,7 @@ services:
       - key: SHOPIFY_SCOPES
         value: read_orders,read_customers,read_fulfillments,write_fulfillments,write_orders,read_products,read_inventory,write_draft_orders
       - key: SHOPIFY_API_VERSION
-        value: '2025-01'
+        value: '2026-10'
       - key: GOOGLE_CLIENT_ID
         fromService:
           name: csav-api
@@ -260,7 +260,7 @@ services:
       - key: SHOPIFY_SCOPES
         value: read_orders,read_customers,read_fulfillments,write_fulfillments,write_orders,read_products,read_inventory,write_draft_orders
       - key: SHOPIFY_API_VERSION
-        value: '2025-01'
+        value: '2026-10'
       - key: GOOGLE_CLIENT_ID
         fromService:
           name: csav-api
