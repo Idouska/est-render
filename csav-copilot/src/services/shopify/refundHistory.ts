@@ -22,7 +22,7 @@ interface RawOrder {
   id: string;
   name: string;
   totalPriceSet: { shopMoney: { amount: string } };
-  customer: { displayName: string | null; email: string | null } | null;
+  customer: { displayName: string | null; defaultEmailAddress: { emailAddress: string | null } | null } | null;
   refunds: RawRefund[];
 }
 
@@ -61,7 +61,10 @@ const QUERY = /* GraphQL */ `
         }
         customer {
           displayName
-          email
+          # Customer.email est déprécié : l'adresse vit dans defaultEmailAddress.
+          defaultEmailAddress {
+            emailAddress
+          }
         }
         refunds(first: 10) {
           id
@@ -119,7 +122,7 @@ export async function fetchShopRefunds(
           // apprendre. Mieux vaut avouer l'absence.
           reason: refund.note?.trim() || '—',
           customerName: order.customer?.displayName ?? null,
-          customerEmail: order.customer?.email ?? null,
+          customerEmail: order.customer?.defaultEmailAddress?.emailAddress ?? null,
           status: 'COMPLETED',
           // Total ou partiel se déduit du montant, il ne se devine pas. Annoncer
           // « Partiel » sur un remboursement intégral est un mensonge, et c'est

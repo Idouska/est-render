@@ -123,7 +123,10 @@ const ORDER_FIELDS = /* GraphQL */ `
     }
     customer {
       id
-      email
+      # Customer.email est déprécié : l'adresse vit dans defaultEmailAddress.
+      defaultEmailAddress {
+        emailAddress
+      }
       displayName
       numberOfOrders
       createdAt
@@ -249,7 +252,7 @@ interface RawOrder {
   app: { name: string | null } | null;
   customer: {
     id: string;
-    email: string | null;
+    defaultEmailAddress: { emailAddress: string | null } | null;
     displayName: string | null;
     numberOfOrders: string | number | null;
     createdAt: string | null;
@@ -319,7 +322,7 @@ function toSummary(order: RawOrder): OrderSummary {
     customer: order.customer
       ? {
           id: order.customer.id,
-          email: order.customer.email,
+          email: order.customer.defaultEmailAddress?.emailAddress ?? null,
           displayName: order.customer.displayName,
           numberOfOrders:
             order.customer.numberOfOrders === null

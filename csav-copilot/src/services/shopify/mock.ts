@@ -345,7 +345,7 @@ function toGraphQL(order: MockOrder) {
     totalPriceSet: { shopMoney: { amount: order.total, currencyCode: order.currency } },
     customer: {
       id: `gid://shopify/Customer/${order.customerEmail}`,
-      email: order.customerEmail,
+      defaultEmailAddress: order.customerEmail ? { emailAddress: order.customerEmail } : null,
       displayName: order.customerName,
       numberOfOrders: order.customerOrders,
       createdAt: order.customerSince,
@@ -695,7 +695,7 @@ export function createMockShopifyClient(shopDomain: string, jeu: JeuFictif = JEU
             price: prixFictif(index + 1),
             inventoryQuantity: 6,
             availableForSale: true,
-            image: null,
+            media: { nodes: [] },
             product: { id: `gid://shopify/Product/${item.title}`, title: item.title, featuredMedia: null },
           }));
         return { productVariants: { nodes } } as T;
@@ -806,7 +806,10 @@ export function createMockShopifyClient(shopDomain: string, jeu: JeuFictif = JEU
               id: recent.commande.id,
               name: recent.commande.name,
               totalPriceSet: { shopMoney: { amount: recent.commande.total } },
-              customer: { displayName: recent.commande.customerName, email: recent.commande.customerEmail },
+              customer: {
+                displayName: recent.commande.customerName,
+                defaultEmailAddress: recent.commande.customerEmail ? { emailAddress: recent.commande.customerEmail } : null,
+              },
               refunds: [
                 {
                   id: `gid://shopify/Refund/${9001 + rang}`,
@@ -1071,7 +1074,7 @@ function varianteGraphQL(produit: ProduitFictif, variante: ProduitFictif['varian
     price: variante.prix.toFixed(2),
     inventoryQuantity: variante.stock,
     availableForSale: variante.stock > 0,
-    image: variante.image ? { url: variante.image } : null,
+    media: { nodes: variante.image ? [{ preview: { image: { url: variante.image } } }] : [] },
     product: {
       id: produit.id,
       title: produit.titre,

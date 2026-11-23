@@ -327,6 +327,11 @@ export interface VariantOption {
   availableForSale: boolean;
 }
 
+/** La photo d'une déclinaison : son premier média, quand elle en a un. */
+function photoDeDeclinaison(variant: { media?: RawVariant['media'] }): string | null {
+  return variant.media?.nodes?.[0]?.preview?.image?.url ?? null;
+}
+
 interface RawVariant {
   id: string;
   title: string | null;
@@ -334,7 +339,7 @@ interface RawVariant {
   price: string | null;
   inventoryQuantity: number | null;
   availableForSale: boolean;
-  image: { url: string } | null;
+  media: { nodes: Array<{ preview: { image: { url: string } | null } | null }> } | null;
   product: {
     id: string;
     title: string;
@@ -400,8 +405,16 @@ export async function listVariants(
             price
             inventoryQuantity
             availableForSale
-            image {
-              url
+            # ProductVariant.image est déprécié : la photo d'une déclinaison
+            # est son premier média.
+            media(first: 1) {
+              nodes {
+                preview {
+                  image {
+                    url
+                  }
+                }
+              }
             }
             product {
               id
@@ -428,7 +441,7 @@ export async function listVariants(
       productTitle: variant.product.title,
       variantTitle: variant.title,
       sku: variant.sku,
-      image: variant.image?.url ?? variant.product.featuredMedia?.preview?.image?.url ?? null,
+      image: photoDeDeclinaison(variant) ?? variant.product.featuredMedia?.preview?.image?.url ?? null,
       price: variant.price,
       currency: null,
       inventoryQuantity: variant.inventoryQuantity,
@@ -497,8 +510,16 @@ export async function productWithVariants(
               inventoryItem {
                 tracked
               }
-              image {
-                url
+              # ProductVariant.image est déprécié : la photo d'une déclinaison
+              # est son premier média.
+              media(first: 1) {
+                nodes {
+                  preview {
+                    image {
+                      url
+                    }
+                  }
+                }
               }
             }
           }
@@ -520,7 +541,7 @@ export async function productWithVariants(
       id: variant.id,
       title: variant.title,
       sku: variant.sku,
-      image: variant.image?.url ?? null,
+      image: photoDeDeclinaison(variant),
       price: variant.price,
       inventoryQuantity: stockSuivi(
         (variant as RawVariant & { inventoryItem?: { tracked: boolean | null } | null }).inventoryItem?.tracked,
