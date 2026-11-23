@@ -3,6 +3,7 @@ import { logger } from '../../lib/logger.ts';
 import { prisma } from '../../lib/prisma.ts';
 import { personneNEnvoie, type IssueEnvoi } from '../envoi/uneSeuleFois.ts';
 import { sendDraft, sendReplyInThread } from '../gmail/drafts.ts';
+import { destinataireRobot } from './formulaireContact.ts';
 import { recordOutbound } from './outbound.ts';
 
 /**
@@ -32,6 +33,10 @@ export async function envoyerBrouillon(
 
   if (!draft) return 'introuvable';
   if (draft.status === 'SENT') return 'deja-envoye';
+  // Un robot ne lira jamais la réponse : `mailer@shopify.com` pour un
+  // formulaire de contact dont l'adresse n'a pas pu être lue. Partir quand
+  // même, c'était croire le client prévenu alors que rien ne lui arrivait.
+  if (destinataireRobot(draft.ticket.customerEmail)) return 'destinataire-robot';
 
   // La prise. La lecture ci-dessus ne protège de rien : deux requêtes la
   // passent ensemble. Seule cette écriture, conditionnelle, départage — une

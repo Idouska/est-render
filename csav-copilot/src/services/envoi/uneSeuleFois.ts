@@ -36,7 +36,7 @@
 export const BAIL_ENVOI_MS = 2 * 60_000;
 
 /** Ce qu'il est advenu d'une demande d'envoi. */
-export type IssueEnvoi = 'envoye' | 'deja-envoye' | 'en-cours';
+export type IssueEnvoi = 'envoye' | 'deja-envoye' | 'en-cours' | 'destinataire-robot';
 
 /**
  * La condition « personne n'est en train d'envoyer ceci » : aucune place
@@ -55,4 +55,6 @@ export function personneNEnvoie(maintenant: Date) {
 export const MESSAGES_ENVOI: Record<Exclude<IssueEnvoi, 'envoye'>, string> = {
   'deja-envoye': 'Déjà envoyé',
   'en-cours': 'Envoi déjà en cours — patientez quelques secondes.',
+  'destinataire-robot':
+    'Adresse du client introuvable : ce message vient d’un robot (formulaire de contact, « ne pas répondre »). Rien n’est parti — écrivez au client depuis sa commande.',
 };

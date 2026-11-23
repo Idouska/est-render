@@ -37,7 +37,7 @@ export interface ReglagesNotif {
 }
 
 /** Toujours dans la file, d'où que le mail vienne. */
-const SUJETS_PROTEGES = /formulaire de contact|contact form|customer message|message (?:d'un |du )?client|litige|dispute|chargeback|rétrofacturation|opposition/i;
+const SUJETS_PROTEGES = /formulaire de contact|contact form|customer message|message (?:d'un |du |de )?client|litige|dispute|chargeback|rétrofacturation|opposition/i;
 
 /** Une adresse de robot, quel que soit le domaine. */
 const ADRESSES_AUTOMATIQUES =
@@ -87,6 +87,27 @@ const relevesDe = (email: string, liste: string[]) => {
   });
 };
 
+/** Une adresse de robot ou d'appli : `mailer@shopify.com`, `no-reply@…`, Judge.me… */
+export function adresseAutomatique(email: string): boolean {
+  const adresse = email.toLowerCase();
+  return ADRESSES_AUTOMATIQUES.test(adresse) || relevesDe(adresse, DOMAINES_APPLIS);
+}
+
+/**
+ * L'adresse humaine que le mail demande d'utiliser pour répondre, ou `null`.
+ *
+ * Un formulaire de contact (Shopify, un module de formulaire) envoie depuis sa
+ * propre adresse et met celle du client dans « Répondre à ». Une adresse de
+ * robot, d'appli, ou du même domaine que l'expéditeur n'en est pas une.
+ */
+export function repondreAHumain(mail: { fromEmail: string; replyTo?: string | null }): string | null {
+  const repondreA = mail.replyTo?.trim().toLowerCase();
+  if (!repondreA || !repondreA.includes('@')) return null;
+  if (domaine(repondreA) === domaine(mail.fromEmail)) return null;
+  if (ADRESSES_AUTOMATIQUES.test(repondreA) || relevesDe(repondreA, DOMAINES_APPLIS)) return null;
+  return repondreA;
+}
+
 /** La raison pour laquelle ce mail est une notification, ou `null` si c'est peut-être un client. */
 export function motifNotification(mail: IndicesMail, reglages?: ReglagesNotif): string | null {
   const email = mail.fromEmail.toLowerCase();
@@ -99,15 +120,7 @@ export function motifNotification(mail: IndicesMail, reglages?: ReglagesNotif): 
   if (SUJETS_PROTEGES.test(mail.subject ?? '')) return null;
   // Un « répondre à » humain derrière une adresse d'appli : un client qui
   // écrit par un formulaire. On lui répond, on ne le range pas.
-  const repondreA = mail.replyTo?.toLowerCase();
-  if (
-    repondreA &&
-    domaine(repondreA) !== domaine(email) &&
-    !ADRESSES_AUTOMATIQUES.test(repondreA) &&
-    !relevesDe(repondreA, DOMAINES_APPLIS)
-  ) {
-    return null;
-  }
+  if (repondreAHumain(mail)) return null;
 
   const auto = mail.autoSubmitted?.trim().toLowerCase();
   if (auto && auto !== 'no') return 'Réponse automatique';

@@ -30,6 +30,8 @@ export interface ParsedMessage {
   /** Ce que le mail dit de lui-même : sert à reconnaître une notification d'appli. */
   entetes: {
     replyTo: string | null;
+    /** Le nom affiché dans « Répondre à », quand il y en a un. */
+    replyToName?: string | null;
     listUnsubscribe: boolean;
     precedence: string | null;
     autoSubmitted: string | null;
@@ -172,6 +174,7 @@ export function parseMessage(message: gmail_v1.Schema$Message): ParsedMessage | 
 
   const from = parseAddress(header(message, 'From'));
   const to = parseAddress(header(message, 'To'));
+  const repondreA = parseAddress(header(message, 'Reply-To'));
   const internalDate = message.internalDate ? Number(message.internalDate) : Date.now();
 
   return {
@@ -187,7 +190,8 @@ export function parseMessage(message: gmail_v1.Schema$Message): ParsedMessage | 
     labelIds: message.labelIds ?? [],
     attachments: extractAttachments(message.payload ?? undefined),
     entetes: {
-      replyTo: parseAddress(header(message, 'Reply-To')).email || null,
+      replyTo: repondreA.email || null,
+      replyToName: repondreA.name,
       listUnsubscribe: Boolean(header(message, 'List-Unsubscribe')),
       precedence: header(message, 'Precedence'),
       autoSubmitted: header(message, 'Auto-Submitted'),

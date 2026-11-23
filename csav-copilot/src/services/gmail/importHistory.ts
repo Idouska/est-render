@@ -1,6 +1,7 @@
 import { logger } from '../../lib/logger.ts';
 import { prisma } from '../../lib/prisma.ts';
 import { getGmailClient } from './client.ts';
+import { vraiClient } from '../tickets/formulaireContact.ts';
 import { parseMessage } from './messages.ts';
 
 /**
@@ -141,7 +142,12 @@ export async function importMailboxHistory(params: {
       continue;
     }
 
-    if (isAutomated(firstInbound.message.fromEmail)) {
+    // Un formulaire de contact vient d'un robot, mais c'est bien un client
+    // qui a écrit — et l'équipe lui a répondu : l'échange a sa place dans
+    // l'historique, sous le nom de ce client.
+    const client = vraiClient({ ...firstInbound.message, ...firstInbound.message.entetes });
+
+    if (!client && isAutomated(firstInbound.message.fromEmail)) {
       result.skippedAutomated += 1;
       continue;
     }
@@ -153,8 +159,8 @@ export async function importMailboxHistory(params: {
         merchantId,
         gmailThreadId: threadId,
         subject: firstInbound.message.subject,
-        customerEmail: firstInbound.message.fromEmail,
-        customerName: firstInbound.message.fromName,
+        customerEmail: client?.email ?? firstInbound.message.fromEmail,
+        customerName: client?.nom ?? firstInbound.message.fromName,
         // Clos d'emblée : l'échange a eu lieu, il est fini, personne n'attend.
         status: 'CLOSED',
         isHistorical: true,

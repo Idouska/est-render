@@ -2247,7 +2247,7 @@ async function openCustomerSheet(email, displayName) {
     'Messages',
     tickets.map(
       (ticket) => `<div class="sheet-row clickable" data-ticket="${esc(ticket.id)}">
-        <b>${esc(ticket.subject ?? '(sans objet)')}</b>
+        <b>${esc(objetLisible(ticket.subject) || '(sans objet)')}</b>
         <span class="tag st-${ticket.status}">${esc(
           STATUS_LABELS[ticket.status] ?? ticket.status,
         )}</span>
@@ -4344,6 +4344,24 @@ async function marqueOuvert(detail, id, { automatique = false } = {}) {
  * Trois cas se replient : pas encore d'intention (l'analyse tourne, et elle se
  * déclenche à l'ouverture), pas de commande rattachée, et un ticket sans objet.
  */
+/**
+ * L'objet d'un message, tel qu'on l'affiche.
+ *
+ * Un formulaire de contact arrive sous un objet que Shopify date à la minute
+ * — « Nouveau message de client le 22 novembre 2026 à 11:57 » — et qui
+ * n'apprend rien, sinon d'où vient le message : on l'écrit « Formulaire de
+ * contact », et les mots du client sont dans l'aperçu. L'objet réel reste
+ * celui de la réponse : changé, il sortirait la réponse du fil Gmail.
+ */
+const OBJET_FORMULAIRE =
+  /^(?:nouveau message (?:de )?client|new customer message|nuevo mensaje (?:de |del )?cliente|neue kundennachricht|nuovo messaggio (?:del |di )?cliente|nieuw klantbericht)\b/i;
+
+function objetLisible(objet) {
+  const brut = String(objet ?? '').trim();
+  if (!brut) return '';
+  return OBJET_FORMULAIRE.test(brut) ? 'Formulaire de contact' : brut;
+}
+
 function ticketTitle(ticket) {
   const order = ticket.orderName ? ` · ${ticket.orderName}` : '';
   // Un atelier qui signale n'est pas un client : son motif dit ce qu'il y a à
@@ -4354,7 +4372,7 @@ function ticketTitle(ticket) {
   if (intent) return `${intent}${order}`;
   // Sans intention, l'objet reste le seul repère — et dire « analyse en
   // cours » vaut mieux qu'un titre vide pendant la seconde que ça prend.
-  return ticket.subject?.trim() || 'Analyse en cours…';
+  return objetLisible(ticket.subject) || 'Analyse en cours…';
 }
 
 /**
@@ -4536,7 +4554,8 @@ function renderDetail() {
   $('d-subject').textContent = ticketTitle(ticket);
   $('d-when').textContent = dayOrDateTime(ticket.lastMessageAt);
   // L'objet du client, entre guillemets, quand il dit autre chose que le titre.
-  const objet = ticket.subject?.trim() ?? '';
+  // Pas celui qu'écrit Shopify pour un formulaire : ce n'est pas le client.
+  const objet = OBJET_FORMULAIRE.test(ticket.subject?.trim() ?? '') ? '' : (ticket.subject?.trim() ?? '');
   $('d-objet').hidden = !objet || objet === ticketTitle(ticket);
   $('d-objet').textContent = objet ? `« ${objet} »` : '';
 
@@ -4909,7 +4928,7 @@ function renderSiblings(siblings, ticket) {
       .map(
         (sib) => `<button class="sib" data-sib="${esc(sib.id)}">
           <span class="sib-when">${esc(dateTime(sib.lastMessageAt))}</span>
-          <b>${esc(sib.subject ?? '(sans objet)')}</b>
+          <b>${esc(objetLisible(sib.subject) || '(sans objet)')}</b>
           <span class="sib-tags">
             <span class="tag tag-status st-${esc(sib.status)}">${esc(
               STATUS_LABELS[sib.status] ?? sib.status,
@@ -5125,7 +5144,7 @@ function renderQueueTable(multiMailbox, shopById) {
           </td>
 
           <td class="qt-subject">
-            <b>${esc(ticket.subject ?? '(sans objet)')}</b>
+            <b>${esc(objetLisible(ticket.subject) || '(sans objet)')}</b>
             <span class="qt-when"> — ${esc(shortMoment(ticket.lastMessageAt))}${
               (ticket.threads ?? 1) > 1 ? ` · ${ticket.threads} échanges` : ''
             }</span>
@@ -8807,7 +8826,7 @@ function renderOvPriorite() {
                 ${t.orderName ? `<span class="ov-cmd">${esc(t.orderName)}</span>` : ''}
               </span>
               <span class="ov-subj" title="${esc(t.subject ?? '(sans objet)')}">${esc(
-                t.subject ?? '(sans objet)',
+                objetLisible(t.subject) || '(sans objet)',
               )}</span>
             </span>
             <span class="tag tag-status st-${esc(t.status)}">${esc(
@@ -17988,7 +18007,7 @@ function ficheCommandeMarkup({ order, tickets = [], parcels = [], changes = [], 
   const messages = tickets
     .map(
       (ticket) => `<button class="fc-ligne fc-ligne-lien" type="button" data-ticket="${esc(ticket.id)}">
-        <span class="fc-ligne-txt"><b>${esc(ticket.subject ?? '(sans objet)')}</b><span>${esc(
+        <span class="fc-ligne-txt"><b>${esc(objetLisible(ticket.subject) || '(sans objet)')}</b><span>${esc(
           dateTime(ticket.lastMessageAt),
         )}</span></span>
         <span class="tag tag-status st-${esc(ticket.status)}">${esc(STATUS_LABELS[ticket.status] ?? ticket.status)}</span>
