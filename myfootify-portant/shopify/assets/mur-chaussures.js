@@ -35,7 +35,7 @@
     function place() {
       const cols = narrow() ? 2 : Math.min(5, Math.ceil(shoes.length / 2));
       const rows = Math.ceil(shoes.length / cols);
-      const padX = narrow() ? 7 : 5, top = narrow() ? 13 : 20, bottom = narrow() ? 9 : 13;
+      const padX = narrow() ? 7 : 5, top = narrow() ? 14 : 22, bottom = narrow() ? 8 : 12;
       const cellW = (100 - 2 * padX) / cols, cellH = (100 - top - bottom) / rows;
       const W = stage.clientWidth, H = stage.clientHeight;
       slots.forEach((el, i) => {
