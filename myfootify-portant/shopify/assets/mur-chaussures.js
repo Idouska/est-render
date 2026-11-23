@@ -13,7 +13,7 @@
     const wall = q('[data-wall]'), sizes = q('[data-sizes]'), add = q('[data-add]'), note = q('[data-note]');
     const narrow = () => stage.clientWidth < 760;
     const label = (v) => String(v).replace('.', ',');
-    let current = -1, variant = null;
+    let current = -1, variant = null, wanted = null;
 
     const slots = shoes.map((s, i) => {
       const b = document.createElement('button');
@@ -31,12 +31,32 @@
       return b;
     });
 
+    // Filtre par pointure : n'éclaire que les paires disponibles dans la pointure choisie.
+    const filter = q('[data-filter]'), pills = q('[data-pills]');
+    if (filter && pills) {
+      const all = [];
+      shoes.forEach((s) => s.variants.forEach((v) => { if (!all.includes(v.label)) all.push(v.label); }));
+      if (all.length > 1) {
+        all.forEach((v) => {
+          const b = document.createElement('button');
+          b.type = 'button'; b.textContent = label(v); b.setAttribute('aria-pressed', 'false');
+          b.addEventListener('click', () => {
+            wanted = wanted === v ? null : v;
+            [...pills.children].forEach((o) => o.setAttribute('aria-pressed', String(o === b && wanted !== null)));
+            slots.forEach((el, i) => el.classList.toggle('is-out', wanted !== null && !shoes[i].variants.some((x) => x.label === wanted && x.ok)));
+          });
+          pills.appendChild(b);
+        });
+        filter.hidden = false;
+      }
+    }
+
     // Emplacements : 5 colonnes sur grand écran, 2 sur téléphone.
     function place() {
       const n = shoes.length;
       const cols = narrow() ? (n > 12 ? 3 : 2) : Math.ceil(n / (n > 12 ? 3 : 2));
       const rows = Math.ceil(n / cols);
-      const padX = narrow() ? 7 : 5, top = narrow() ? 14 : 22, bottom = narrow() ? 8 : 12;
+      const padX = narrow() ? 7 : 5, top = narrow() ? 24 : 22, bottom = narrow() ? 8 : 12;
       const cellW = (100 - 2 * padX) / cols, cellH = (100 - top - bottom) / rows;
       const W = stage.clientWidth, H = stage.clientHeight;
       slots.forEach((el, i) => {
@@ -105,6 +125,7 @@
       q('[data-size-label]').hidden = single;
       if (single && s.variants[0].ok) { variant = s.variants[0]; add.disabled = false; add.textContent = 'Ajouter au panier'; }
       else { add.disabled = true; add.textContent = s.variants.some((v) => v.ok) ? 'Choisis ta pointure' : 'Épuisé'; }
+      if (wanted !== null) { const k = s.variants.findIndex((v) => v.label === wanted && v.ok); if (k >= 0) sizes.children[k].click(); }
     }
 
     add.addEventListener('click', async () => {
