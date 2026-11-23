@@ -56,7 +56,7 @@
       const n = shoes.length;
       const cols = narrow() ? (n > 12 ? 3 : 2) : Math.ceil(n / (n > 12 ? 3 : 2));
       const rows = Math.ceil(n / cols);
-      const padX = narrow() ? 7 : 5, top = narrow() ? 24 : 22, bottom = narrow() ? 8 : 12;
+      const padX = narrow() ? 7 : 5, top = narrow() ? 20 : 22, bottom = narrow() ? 8 : 12;
       const cellW = (100 - 2 * padX) / cols, cellH = (100 - top - bottom) / rows;
       const W = stage.clientWidth, H = stage.clientHeight;
       slots.forEach((el, i) => {

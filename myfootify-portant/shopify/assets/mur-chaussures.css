@@ -84,8 +84,11 @@
   .mfw__stage { height: clamp(640px, 175vw, 780px); }
   .mfw__tag { font-size: 9px; letter-spacing: .6px; }
   .mfw__top { left: 5%; right: 5%; top: 2%; flex-direction: column; align-items: stretch; gap: 8px; }
-  .mfw__perks { flex-direction: row; flex-wrap: wrap; margin: 0; gap: 6px; }
-  .mfw__perks li { font-size: 11.5px; padding: 4px 10px; }
+  /* Les mentions montent sur la ligne du sur-titre, à droite. */
+  .mfw__perks { position: absolute; right: 0; top: 0; flex-direction: row; margin: 0; padding: 0; gap: 10px; }
+  .mfw__perks li { font-size: 10.5px; padding: 0; gap: 4px; background: none; border: 0; }
+  .mfw__perks svg { width: 14px; height: 14px; }
+  .mfw__intro p { font-size: 10.5px; letter-spacing: 1.4px; line-height: 14px; }
   .mfw__pills button { font-size: 12px; padding: 5px 8px; }
   .mfw__name { left: 5%; top: 3%; max-width: 90%; }
   .mfw__name h3 { font-size: 24px; }
