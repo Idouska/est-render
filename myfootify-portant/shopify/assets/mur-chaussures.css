@@ -9,11 +9,10 @@
 .mfw__wall::before { content: ''; position: absolute; inset: 0; background: radial-gradient(120% 60% at 50% 0%, rgba(255, 255, 255, .13), transparent 62%), radial-gradient(circle, #000 0 1.6px, transparent 2.1px) 0 0 / 20px 20px, radial-gradient(circle, rgba(255, 255, 255, .07) 0 2.4px, transparent 2.9px) 0 1px / 20px 20px, #17171a; }
 .mfw__wall { position: absolute; inset: 0; transform-origin: 0 0; transition: transform .95s cubic-bezier(.65, 0, .2, 1); }
 
-/* Le bandeau de couleur, comme le fronton du rayon. */
-.mfw__intro { position: absolute; left: 0; right: 0; top: 0; height: 15%; min-height: 64px; padding: 0 4%; z-index: 2; display: flex; flex-direction: column; justify-content: center; background: linear-gradient(180deg, var(--mfw-accent), color-mix(in srgb, var(--mfw-accent) 82%, #000)); box-shadow: 0 10px 22px rgba(0, 0, 0, .55), inset 0 -3px 0 rgba(0, 0, 0, .18); transition: opacity .3s; }
-.mfw__intro p { margin: 0; color: rgba(17, 17, 19, .78); font-weight: 700; font-size: 12px; letter-spacing: 2.4px; text-transform: uppercase; }
-.mfw__intro h2 { margin: 4px 0 0; color: #111113; font-family: var(--font-heading-family, inherit); font-weight: 800; text-transform: uppercase; font-size: clamp(22px, 2.8vw, 40px); line-height: 1.02; letter-spacing: -.3px; }
-.mfw__intro h2 em { font-style: normal; color: #fff; }
+.mfw__intro { position: absolute; left: 4%; top: 5%; z-index: 2; transition: opacity .3s; }
+.mfw__intro p { margin: 0; color: var(--mfw-muted); font-size: 12px; letter-spacing: 2.4px; text-transform: uppercase; }
+.mfw__intro h2 { margin: 6px 0 0; color: var(--mfw-ink); font-family: var(--font-heading-family, inherit); font-weight: 800; text-transform: uppercase; font-size: clamp(22px, 2.8vw, 40px); line-height: 1.02; letter-spacing: -.3px; text-shadow: 0 2px 10px rgba(0, 0, 0, .6); }
+.mfw__intro h2 em { font-style: normal; color: var(--mfw-accent); }
 
 .mfw__slot { position: absolute; padding: 0; margin: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; display: block; -webkit-tap-highlight-color: transparent; }
 .mfw__slot::before { content: ''; position: absolute; inset: -18% -8% 0; background: radial-gradient(50% 55% at 50% 62%, rgba(255, 255, 255, .11), transparent 72%); pointer-events: none; }
@@ -70,7 +69,7 @@
 @media (max-width: 760px) {
   .mfw__stage { height: clamp(640px, 175vw, 780px); }
   .mfw__tag { font-size: 9px; letter-spacing: .6px; }
-  .mfw__intro { height: 11%; padding: 0 5%; }
+  .mfw__intro { left: 5%; top: 2.5%; }
   .mfw__name { left: 5%; top: 3%; max-width: 90%; }
   .mfw__name h3 { font-size: 24px; }
   .mfw__buy { left: 5%; right: 5%; top: auto; bottom: 70px; width: auto; gap: 9px; padding: 14px; }
