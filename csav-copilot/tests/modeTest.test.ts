@@ -171,9 +171,11 @@ test('les trois envois Gmail consultent le mode test avant d’écrire', () => {
   }
 });
 
-test('seuls les liens de connexion et invitations passent outre le mode test', () => {
-  // Les bloquer empêcherait l'équipe de se connecter. Tout autre usage de
-  // l'exception serait une fuite.
+test('seuls les liens de connexion, invitations et alertes de panne passent outre le mode test', () => {
+  // Les bloquer empêcherait l'équipe de se connecter, ou d'apprendre que
+  // Shopify ou Gmail est tombé — ce qui arrive aussi pendant les essais. Tous
+  // vont à l'équipe de la boutique, jamais à un client ni à un atelier. Tout
+  // autre usage de l'exception serait une fuite.
   const dossier = fileURLToPath(new URL('../src/', import.meta.url)).replace(/\/$/, '');
   const utilisateurs: string[] = [];
   const parcourir = (chemin: string) => {
@@ -186,8 +188,12 @@ test('seuls les liens de connexion et invitations passent outre le mode test', (
     }
   };
   parcourir(dossier);
-  assert.deepEqual(utilisateurs, ['routes/team.ts']);
+  assert.deepEqual(utilisateurs.sort(), ['routes/team.ts', 'services/platform/alertesConnexion.ts']);
   assert.match(corps(sansCommentaires(lire('src/routes/team.ts')), 'async function deliverLink'), /memeEnModeTest: true/);
+  // L'alerte ne s'adresse qu'aux propriétaires et superviseurs de la boutique.
+  const alerte = sansCommentaires(lire('src/services/platform/alertesConnexion.ts'));
+  assert.match(alerte, /deps\.prisma\.user\.findMany\(\{\s+where: \{ merchantId, active: true, role: \{ in: \['OWNER', 'SUPERVISOR'\] \} \}/);
+  assert.match(alerte, /for \(const destinataire of a\) \{\s+await deps\.envoyer\(\{[\s\S]*?to: destinataire,/);
 });
 
 /* ---- les données de test ---- */

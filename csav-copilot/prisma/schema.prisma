@@ -265,6 +265,13 @@ model GmailConnection {
   /// ce n'est pas terminé. Voir `services/gmail/envoyes.ts`.
   envoyesRattrapesAt DateTime?
 
+  /// Google refuse l'accès à la boîte (autorisation retirée, mot de passe
+  /// changé) : posé une fois, ce qui déclenche une seule alerte par e-mail.
+  /// Remis à vide quand la boîte répond de nouveau. Voir
+  /// `services/platform/alertesConnexion.ts`.
+  panneLe    DateTime?
+  panneMotif String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

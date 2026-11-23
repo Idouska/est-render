@@ -16,6 +16,7 @@ import {
 import { ingestMerchantInbox } from './services/tickets/ingest.ts';
 import { processTicket } from './services/tickets/process.ts';
 import { reparerFormulairesDeContact } from './services/tickets/reparerFormulaires.ts';
+import { autorisationGoogleRetiree, signalerPanneGmail } from './services/platform/alertesConnexion.ts';
 import { passageAutomatique } from './services/envoi/quotidien.ts';
 import { relancerLotsEnRetard } from './services/envoi/relances.ts';
 import { envoyerRecapitulatifs } from './services/suppliers/recap.ts';
@@ -41,7 +42,16 @@ const RELANCE_APRES_MS = 15_000;
 const ingestWorker = new Worker<IngestJob>(
   QUEUE_INGEST,
   async (job) => {
-    const { ingested } = await ingestMerchantInbox(job.data.merchantId, job.data.mailboxId);
+    const { ingested } = await ingestMerchantInbox(job.data.merchantId, job.data.mailboxId).catch(
+      async (error: unknown) => {
+        // Google refuse l'accès : chaque mail qui arrive échouerait ici en
+        // silence. L'équipe est prévenue par e-mail, une fois par panne.
+        if (autorisationGoogleRetiree(error)) {
+          await signalerPanneGmail(job.data.merchantId, job.data.mailboxId, 'Google a retiré l’autorisation');
+        }
+        throw error;
+      },
+    );
     // Un mail est entré : l'écran l'affiche maintenant, pas à son prochain tour.
     if (ingested > 0) await annoncer(job.data.merchantId, 'tickets');
 

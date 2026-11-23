@@ -1,5 +1,6 @@
 import { logger } from '../../lib/logger.ts';
 import { prisma } from '../../lib/prisma.ts';
+import { autorisationGoogleRetiree, signalerPanneGmail } from '../platform/alertesConnexion.ts';
 import { requireCredential } from '../platform/credentials.ts';
 import { getGmailClient } from './client.ts';
 
@@ -54,6 +55,10 @@ export async function startWatch(merchantId: string, mailboxId?: string | null):
       watchExpiration: response.data.expiration
         ? new Date(Number(response.data.expiration))
         : null,
+      // La boîte répond : une panne signalée est terminée, la suivante le
+      // sera de nouveau.
+      panneLe: null,
+      panneMotif: null,
     },
   });
 
@@ -89,6 +94,11 @@ export async function renewExpiringWatches(): Promise<number> {
         { merchantId: connection.merchantId, mailbox: connection.emailAddress, err: error },
         'Échec du renouvellement du watch Gmail',
       );
+      // Autorisation retirée : sans reconnexion, plus rien n'entre. L'équipe
+      // est prévenue par e-mail, une fois.
+      if (autorisationGoogleRetiree(error)) {
+        await signalerPanneGmail(connection.merchantId, connection.id, 'Google a retiré l’autorisation');
+      }
     }
   }
   return renewed;
