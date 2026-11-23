@@ -1,0 +1,507 @@
+/*
+ * ------------------------------------------------------------
+ * IMPORTANT: The contents of this file are auto-generated.
+ *
+ * This file may be updated by the Shopify admin theme editor
+ * or related systems. Please exercise caution as any changes
+ * made to this file may be overwritten.
+ * ------------------------------------------------------------
+ */
+{
+  "sections": {
+    "mur_chaussures": {
+      "type": "mur-chaussures",
+      "settings": {
+        "eyebrow": "Nike Mind 001",
+        "heading": "Choisis ta",
+        "heading_accent": "paire.",
+        "limit": 18,
+        "strip": "Nike Mind 001",
+        "accent": "#ff6a00",
+        "only_handle": "nike-mind-001",
+        "products": [
+          "nike-mind-001-barely-green",
+          "nike-mind-001-triple-black",
+          "nike-mind-001-solar-red",
+          "nike-mind-001-blackened-blue",
+          "nike-mind-001-pearl-pink",
+          "nike-mind-001-flyknit-hyper-royal",
+          "nike-mind-001-light-smoke-grey",
+          "nike-mind-001-geode-teal-light-menta",
+          "nike-mind-001-black-hyper-crimson",
+          "nike-mind-001-white-speed-red",
+          "nike-mind-001-hemp",
+          "nike-mind-001-mineral-slate",
+          "nike-mind-001-cucumber-calm",
+          "nike-mind-001-flyknit-bronze-eclipse",
+          "nike-mind-001-slide-light-bone",
+          "nike-mind-001-work-blue-light-lemon-twist",
+          "nike-mind-001-pink-smoke-metallic-silver",
+          "fragment-design-x-nike-mind-001"
+        ]
+      }
+    },
+    "mf_explorer": {
+      "type": "mf-collection-explorer",
+      "settings": {}
+    },
+    "mf_texte": {
+      "type": "mf-collection-texte",
+      "settings": {}
+    },
+    "banner": {
+      "type": "main-collection-banner",
+      "settings": {
+        "show_collection_description": true,
+        "show_collection_image": false,
+        "color_scheme": "scheme-1"
+      }
+    },
+    "mf_facettes": {
+      "type": "mf-facettes",
+      "blocks": {
+        "g_couleur": {
+          "type": "groupe",
+          "settings": {
+            "titre": "Couleur",
+            "tags": "Couleur Noir, Couleur Blanc, Couleur Gris, Couleur Beige, Couleur Marron, Couleur Rouge, Couleur Rose, Couleur Bleu, Couleur Vert",
+            "auto_partage": "aucun"
+          }
+        },
+        "g_version": {
+          "type": "groupe",
+          "settings": {
+            "titre": "Version",
+            "tags": "Mind 001 Classique, Mind 001 Flyknit",
+            "auto_partage": "aucun"
+          }
+        }
+      },
+      "block_order": [
+        "g_couleur",
+        "g_version"
+      ],
+      "settings": {
+        "show_filters": true,
+        "handle_selections": "selections-nationales",
+        "show_sort": true,
+        "show_density": true,
+        "show_prix": false,
+        "show_dispo": false,
+        "seuil_facettes": 8,
+        "max_valeurs": 12,
+        "lot_cartes": 24,
+        "seuil_nouveau": 30,
+        "sort_options": "manual,created-descending,price-ascending,price-descending",
+        "padding_top": 8,
+        "padding_bottom": 4
+      }
+    },
+    "product-grid": {
+      "type": "main-collection-product-grid",
+      "settings": {
+        "products_per_page": 24,
+        "columns_desktop": 4,
+        "color_scheme": "scheme-1",
+        "image_ratio": "square",
+        "image_shape": "default",
+        "show_secondary_image": true,
+        "show_vendor": false,
+        "show_rating": false,
+        "quick_add": "none",
+        "enable_filtering": false,
+        "filter_type": "horizontal",
+        "enable_sorting": false,
+        "columns_mobile": "2",
+        "padding_top": 0,
+        "padding_bottom": 36
+      }
+    },
+    "mf_mind_photos": {
+      "type": "mf-mind-photo-gallery",
+      "blocks": {
+        "photo_30": {
+          "type": "photo",
+          "settings": {
+            "asset": "mf-mind-photo-30",
+            "alt": "Mind 001 blanche portée avec un jean gris",
+            "position": "50% 50%",
+            "first_name": "",
+            "review": ""
+          }
+        },
+        "photo_23": {
+          "type": "photo",
+          "settings": {
+            "asset": "mf-mind-photo-23",
+            "alt": "Mind 001 bleues portées avec des chaussettes blanches",
+            "position": "50% 50%",
+            "first_name": "",
+            "review": ""
+          }
+        },
+        "photo_4": {
+          "type": "photo",
+          "settings": {
+            "asset": "mf-mind-photo-04",
+            "alt": "Mind 001 roses portées avec un jean clair",
+            "position": "50% 50%",
+            "first_name": "",
+            "review": ""
+          }
+        },
+        "photo_32": {
+          "type": "photo",
+          "settings": {
+            "asset": "mf-mind-photo-32",
+            "alt": "Mind 001 noires portées dans un salon devant la télévision",
+            "position": "50% 50%",
+            "first_name": "",
+            "review": ""
+          }
+        },
+        "photo_1": {
+          "type": "photo",
+          "settings": {
+            "asset": "mf-mind-photo-01",
+            "alt": "Mind 001 noires et bleues portées avec des chaussettes noires",
+            "position": "50% 50%",
+            "first_name": "",
+            "review": ""
+          }
+        },
+        "photo_2": {
+          "type": "photo",
+          "settings": {
+            "asset": "mf-mind-photo-02",
+            "alt": "Mind 001 noires et bleues avec des chaussettes colorées",
+            "position": "50% 50%",
+            "first_name": "",
+            "review": ""
+          }
+        },
+        "photo_3": {
+          "type": "photo",
+          "settings": {
+            "asset": "mf-mind-photo-03",
+            "alt": "Mind 001 roses, semelle orange et boîte",
+            "position": "50% 50%",
+            "first_name": "",
+            "review": ""
+          }
+        },
+        "photo_5": {
+          "type": "photo",
+          "settings": {
+            "asset": "mf-mind-photo-05",
+            "alt": "Mind 001 noire sur sa boîte ouverte",
+            "position": "50% 50%",
+            "first_name": "",
+            "review": ""
+          }
+        },
+        "photo_6": {
+          "type": "photo",
+          "settings": {
+            "asset": "mf-mind-photo-06",
+            "alt": "Mind 001 verte tenue près d’une fenêtre",
+            "position": "50% 50%",
+            "first_name": "",
+            "review": ""
+          }
+        },
+        "photo_7": {
+          "type": "photo",
+          "settings": {
+            "asset": "mf-mind-photo-07",
+            "alt": "Semelles noires et orange des Mind 001",
+            "position": "50% 50%",
+            "first_name": "",
+            "review": ""
+          }
+        },
+        "photo_8": {
+          "type": "photo",
+          "settings": {
+            "asset": "mf-mind-photo-08",
+            "alt": "Mind 001 blanche portée, vue de la semelle",
+            "position": "50% 50%",
+            "first_name": "",
+            "review": ""
+          }
+        },
+        "photo_9": {
+          "type": "photo",
+          "settings": {
+            "asset": "mf-mind-photo-09",
+            "alt": "Paire de Mind 001 noires, vue latérale sur un tapis",
+            "position": "50% 50%",
+            "first_name": "",
+            "review": ""
+          }
+        },
+        "photo_10": {
+          "type": "photo",
+          "settings": {
+            "asset": "mf-mind-photo-10",
+            "alt": "Mind 001 blanches portées avec des chaussettes à motif",
+            "position": "50% 50%",
+            "first_name": "",
+            "review": ""
+          }
+        },
+        "photo_11": {
+          "type": "photo",
+          "settings": {
+            "asset": "mf-mind-photo-11",
+            "alt": "Mind 001 crème portées avec des chaussettes blanches",
+            "position": "50% 50%",
+            "first_name": "",
+            "review": ""
+          }
+        },
+        "photo_12": {
+          "type": "photo",
+          "settings": {
+            "asset": "mf-mind-photo-12",
+            "alt": "Mind 001 noires portées sur un parquet",
+            "position": "50% 50%",
+            "first_name": "",
+            "review": ""
+          }
+        },
+        "photo_13": {
+          "type": "photo",
+          "settings": {
+            "asset": "mf-mind-photo-13",
+            "alt": "Mind 001 rouge tenue à la main avec son étiquette",
+            "position": "50% 50%",
+            "first_name": "",
+            "review": ""
+          }
+        },
+        "photo_14": {
+          "type": "photo",
+          "settings": {
+            "asset": "mf-mind-photo-14",
+            "alt": "Mind 001 noire vue de côté dans une voiture",
+            "position": "50% 50%",
+            "first_name": "",
+            "review": ""
+          }
+        },
+        "photo_15": {
+          "type": "photo",
+          "settings": {
+            "asset": "mf-mind-photo-15",
+            "alt": "Mind 001 noires et orange près d’une boîte ouverte",
+            "position": "50% 50%",
+            "first_name": "",
+            "review": ""
+          }
+        },
+        "photo_16": {
+          "type": "photo",
+          "settings": {
+            "asset": "mf-mind-photo-16",
+            "alt": "Mind 001 noires portées sur un tapis gris",
+            "position": "50% 50%",
+            "first_name": "",
+            "review": ""
+          }
+        },
+        "photo_17": {
+          "type": "photo",
+          "settings": {
+            "asset": "mf-mind-photo-17",
+            "alt": "Paire de Mind 001 noires avec semelle orange sur une boîte",
+            "position": "50% 50%",
+            "first_name": "",
+            "review": ""
+          }
+        },
+        "photo_18": {
+          "type": "photo",
+          "settings": {
+            "asset": "mf-mind-photo-18",
+            "alt": "Semelle grise et orange des Mind 001 près d’une fenêtre",
+            "position": "50% 50%",
+            "first_name": "",
+            "review": ""
+          }
+        },
+        "photo_19": {
+          "type": "photo",
+          "settings": {
+            "asset": "mf-mind-photo-19",
+            "alt": "Mind 001 bordeaux portées avec des chaussettes blanches",
+            "position": "50% 50%",
+            "first_name": "",
+            "review": ""
+          }
+        },
+        "photo_20": {
+          "type": "photo",
+          "settings": {
+            "asset": "mf-mind-photo-20",
+            "alt": "Paire de Mind 001 bordeaux sur une boîte",
+            "position": "50% 50%",
+            "first_name": "",
+            "review": ""
+          }
+        },
+        "photo_21": {
+          "type": "photo",
+          "settings": {
+            "asset": "mf-mind-photo-21",
+            "alt": "Mind 001 noire tenue à la main, vue de côté",
+            "position": "50% 50%",
+            "first_name": "",
+            "review": ""
+          }
+        },
+        "photo_22": {
+          "type": "photo",
+          "settings": {
+            "asset": "mf-mind-photo-22",
+            "alt": "Mind 001 noire portée, vue rapprochée du talon",
+            "position": "50% 50%",
+            "first_name": "",
+            "review": ""
+          }
+        },
+        "photo_24": {
+          "type": "photo",
+          "settings": {
+            "asset": "mf-mind-photo-24",
+            "alt": "Mind 001 crème portées dans un salon",
+            "position": "50% 50%",
+            "first_name": "",
+            "review": ""
+          }
+        },
+        "photo_25": {
+          "type": "photo",
+          "settings": {
+            "asset": "mf-mind-photo-25",
+            "alt": "Mind 001 bordeaux portée avec un pantalon noir",
+            "position": "50% 50%",
+            "first_name": "",
+            "review": ""
+          }
+        },
+        "photo_26": {
+          "type": "photo",
+          "settings": {
+            "asset": "mf-mind-photo-26",
+            "alt": "Mind 001 noire et bleue tenue à la main",
+            "position": "50% 50%",
+            "first_name": "",
+            "review": ""
+          }
+        },
+        "photo_27": {
+          "type": "photo",
+          "settings": {
+            "asset": "mf-mind-photo-27",
+            "alt": "Mind 001 crème tenue à la main, vue de dessus",
+            "position": "50% 50%",
+            "first_name": "",
+            "review": ""
+          }
+        },
+        "photo_28": {
+          "type": "photo",
+          "settings": {
+            "asset": "mf-mind-photo-28",
+            "alt": "Mind 001 crème et orange tenue au-dessus d’une boîte",
+            "position": "50% 50%",
+            "first_name": "",
+            "review": ""
+          }
+        },
+        "photo_29": {
+          "type": "photo",
+          "settings": {
+            "asset": "mf-mind-photo-29",
+            "alt": "Intérieur d’une Mind 001 bordeaux",
+            "position": "50% 50%",
+            "first_name": "",
+            "review": ""
+          }
+        },
+        "photo_31": {
+          "type": "photo",
+          "settings": {
+            "asset": "mf-mind-photo-31",
+            "alt": "Mind 001 crème tenue à la main près de sa boîte",
+            "position": "50% 50%",
+            "first_name": "",
+            "review": ""
+          }
+        }
+      },
+      "block_order": [
+        "photo_30",
+        "photo_23",
+        "photo_4",
+        "photo_32",
+        "photo_1",
+        "photo_2",
+        "photo_3",
+        "photo_5",
+        "photo_6",
+        "photo_7",
+        "photo_8",
+        "photo_9",
+        "photo_10",
+        "photo_11",
+        "photo_12",
+        "photo_13",
+        "photo_14",
+        "photo_15",
+        "photo_16",
+        "photo_17",
+        "photo_18",
+        "photo_19",
+        "photo_20",
+        "photo_21",
+        "photo_22",
+        "photo_24",
+        "photo_25",
+        "photo_26",
+        "photo_27",
+        "photo_28",
+        "photo_29",
+        "photo_31"
+      ],
+      "settings": {
+        "collection_handle": "nike-mind-001",
+        "title": "Leurs avis en images",
+        "description": "Les Mind 001 au quotidien. Découvrez les avis en photos.",
+        "button_label": "Voir les avis photo",
+        "heading_font": "heading",
+        "heading_size": 40,
+        "mobile_heading_size": 32,
+        "body_size": 20,
+        "image_ratio": "4 / 5",
+        "radius": 4,
+        "padding": 40,
+        "background": "#ffffff",
+        "text_color": "#111111",
+        "muted_color": "#5d5d5d",
+        "border_color": "#e7e7e7"
+      },
+      "disabled": true
+    }
+  },
+  "order": [
+    "mur_chaussures",
+    "banner",
+    "mf_facettes",
+    "product-grid",
+    "mf_mind_photos",
+    "mf_explorer",
+    "mf_texte"
+  ]
+}

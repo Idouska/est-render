@@ -1,0 +1,1408 @@
+/*
+ * ------------------------------------------------------------
+ * IMPORTANT: The contents of this file are auto-generated.
+ *
+ * This file may be updated by the Shopify admin theme editor
+ * or related systems. Please exercise caution as any changes
+ * made to this file may be overwritten.
+ * ------------------------------------------------------------
+ */
+{
+  "sections": {
+    "hero_studio": {
+      "type": "mf-studio-hero",
+      "blocks": {
+        "season": {
+          "type": "slide",
+          "settings": {
+            "navigation_label": "Nouveautés 26/27",
+            "eyebrow": "MAILLOTS 2026/27",
+            "heading": "Les couleurs\nqui nous\nrassemblent.",
+            "description": "Choisis ton équipe. Personnalise ton maillot.",
+            "asset": "mf-studio-season-v1.webp",
+            "image_alt": "Maillots PSG, Real Madrid et France photographiés de face",
+            "caption": "LA NOUVELLE SAISON EST LÀ.",
+            "cta_label": "CHOISIR MON MAILLOT",
+            "cta_link": "shopify://collections/maillots-2026-2027"
+          }
+        },
+        "retro": {
+          "type": "slide",
+          "settings": {
+            "navigation_label": "Icônes rétro",
+            "eyebrow": "LES ICÔNES DU FOOT",
+            "heading": "Les maillots.\nLa passion.\nLes souvenirs.",
+            "description": "Redécouvre les maillots qui ont marqué le jeu.",
+            "asset": "mf-studio-retro-v1.webp",
+            "image_alt": "Maillots France 1998 domicile et extérieur et Napoli 1986/87 photographiés de face",
+            "caption": "LA PASSION NE PREND PAS UNE RIDE.",
+            "cta_label": "CHOISIR MON MAILLOT RÉTRO",
+            "cta_link": "shopify://collections/maillots-retro"
+          }
+        }
+      },
+      "block_order": [
+        "season",
+        "retro"
+      ],
+      "settings": {
+        "heading_font": "oswald_n7",
+        "body_font": "assistant_n4",
+        "title_size": 68,
+        "title_size_mobile": 40,
+        "copy_size": 20,
+        "hero_height": 490,
+        "content_width": 1440,
+        "background": "#17181b",
+        "text_color": "#faf9f7",
+        "muted_color": "#c7c8cb",
+        "accent": "#ff6600",
+        "button_text_color": "#111111",
+        "button_hover_color": "#111111",
+        "button_hover_text": "#ffffff",
+        "button_radius": 8,
+        "show_badges": true,
+        "badge_1_text": "Retours sous 30 jours",
+        "badge_1_icon": "truck",
+        "badge_2_text": "Photo avant l'envoi",
+        "badge_2_icon": "shirt",
+        "badge_3_text": "Livraison France, Belgique, Luxembourg",
+        "badge_3_icon": "truck",
+        "badge_background": "#212226",
+        "badge_text_color": "#ededee",
+        "badge_border_color": "#3b3c40",
+        "badge_size": 14,
+        "badge_speed": 40,
+        "badge_fade": 52,
+        "autoplay": true,
+        "interval": 8,
+        "accessible_label": "Collections MyFootify"
+      }
+    },
+    "club_carousel": {
+      "type": "logo-carousel",
+      "blocks": {
+        "c1": {
+          "type": "logo",
+          "settings": {
+            "image": "shopify://shop_images/Logo_Ligue_1_512.png",
+            "image_alt": "",
+            "link": "shopify://collections/ligue-1",
+            "new_tab": false,
+            "label": "Ligue 1",
+            "logo_scale": 150,
+            "use_custom_colors": false,
+            "custom_bg": "#f3f3f3",
+            "custom_bg_hover": "#ffffff",
+            "custom_border_color": "#e6e6e6",
+            "custom_label_color": "#191919"
+          }
+        },
+        "c2": {
+          "type": "logo",
+          "settings": {
+            "image": "shopify://shop_images/Logo_PL_512.png",
+            "image_alt": "",
+            "link": "shopify://collections/premier-league",
+            "new_tab": false,
+            "label": "Premier League",
+            "logo_scale": 150,
+            "use_custom_colors": false,
+            "custom_bg": "#f3f3f3",
+            "custom_bg_hover": "#ffffff",
+            "custom_border_color": "#e6e6e6",
+            "custom_label_color": "#191919"
+          }
+        },
+        "c3": {
+          "type": "logo",
+          "settings": {
+            "image": "shopify://shop_images/Logo_Liga_512.png",
+            "image_alt": "",
+            "link": "shopify://collections/liga",
+            "new_tab": false,
+            "label": "Liga",
+            "logo_scale": 150,
+            "use_custom_colors": false,
+            "custom_bg": "#f3f3f3",
+            "custom_bg_hover": "#ffffff",
+            "custom_border_color": "#e6e6e6",
+            "custom_label_color": "#191919"
+          }
+        },
+        "c4": {
+          "type": "logo",
+          "settings": {
+            "image": "shopify://shop_images/Logo_Serie_A_512.png",
+            "image_alt": "",
+            "link": "shopify://collections/serie-a",
+            "new_tab": false,
+            "label": "Serie A",
+            "logo_scale": 150,
+            "use_custom_colors": false,
+            "custom_bg": "#f3f3f3",
+            "custom_bg_hover": "#ffffff",
+            "custom_border_color": "#e6e6e6",
+            "custom_label_color": "#191919"
+          }
+        },
+        "c5": {
+          "type": "logo",
+          "settings": {
+            "image": "shopify://shop_images/Logo_Bundesliga_512.png",
+            "image_alt": "",
+            "link": "shopify://collections/bundesliga",
+            "new_tab": false,
+            "label": "Bundesliga",
+            "logo_scale": 150,
+            "use_custom_colors": false,
+            "custom_bg": "#f3f3f3",
+            "custom_bg_hover": "#ffffff",
+            "custom_border_color": "#e6e6e6",
+            "custom_label_color": "#191919"
+          }
+        },
+        "c6": {
+          "type": "logo",
+          "settings": {
+            "image": "shopify://shop_images/clubs_du_monde_512.png",
+            "image_alt": "",
+            "link": "shopify://collections/autres-clubs",
+            "new_tab": false,
+            "label": "Autres clubs",
+            "logo_scale": 150,
+            "use_custom_colors": false,
+            "custom_bg": "#f3f3f3",
+            "custom_bg_hover": "#ffffff",
+            "custom_border_color": "#e6e6e6",
+            "custom_label_color": "#191919"
+          }
+        },
+        "c7": {
+          "type": "logo",
+          "settings": {
+            "image": "shopify://shop_images/logo_selections_512.png",
+            "image_alt": "",
+            "link": "shopify://collections/selections-nationales",
+            "new_tab": false,
+            "label": "Sélections",
+            "logo_scale": 120,
+            "use_custom_colors": false,
+            "custom_bg": "#f3f3f3",
+            "custom_bg_hover": "#ffffff",
+            "custom_border_color": "#e6e6e6",
+            "custom_label_color": "#191919"
+          }
+        },
+        "c8": {
+          "type": "logo",
+          "settings": {
+            "image": "shopify://shop_images/logo_retro_512.png",
+            "image_alt": "",
+            "link": "shopify://collections/maillots-retro",
+            "new_tab": false,
+            "label": "Rétro",
+            "logo_scale": 125,
+            "use_custom_colors": false,
+            "custom_bg": "#f3f3f3",
+            "custom_bg_hover": "#ffffff",
+            "custom_border_color": "#e6e6e6",
+            "custom_label_color": "#191919"
+          }
+        }
+      },
+      "block_order": [
+        "c1",
+        "c2",
+        "c3",
+        "c4",
+        "c5",
+        "c6",
+        "c7",
+        "c8"
+      ],
+      "settings": {
+        "title": "Le club que tu portes dans le cœur",
+        "subtitle": "<p>Retrouve ses couleurs, championnat par championnat.</p>",
+        "heading_align": "center",
+        "heading_align_mobile": "center",
+        "heading_size": 28,
+        "heading_size_mobile": 22,
+        "heading_font_style": "body",
+        "heading_weight": "600",
+        "heading_uppercase": false,
+        "heading_color": "#191919",
+        "subtitle_size": 16,
+        "subtitle_size_mobile": 14,
+        "subtitle_color": "#5c5c5c",
+        "header_gap": 16,
+        "header_gap_mobile": 12,
+        "per_view_desktop": 6,
+        "per_view_tablet": 4,
+        "per_view_mobile": 2,
+        "mobile_peek": true,
+        "gap": 20,
+        "gap_mobile": 10,
+        "logo_height": 76,
+        "logo_height_mobile": 56,
+        "image_fit": "contain",
+        "logo_opacity": 100,
+        "shape": "circle",
+        "box_size": 100,
+        "box_size_mobile": 80,
+        "box_radius": 24,
+        "box_padding": 16,
+        "box_padding_mobile": 10,
+        "box_bg": "#ffffff",
+        "box_bg_opacity": 100,
+        "box_bg_hover": "#ffffff",
+        "box_border": 1,
+        "box_border_color": "#ffffff",
+        "box_border_color_hover": "#ff6600",
+        "box_shadow": false,
+        "glass_blur": 0,
+        "show_label": true,
+        "show_label_mobile": true,
+        "label_size": 13,
+        "label_size_mobile": 11,
+        "label_weight": "600",
+        "label_uppercase": true,
+        "label_color": "#191919",
+        "label_hover_color": "#b34700",
+        "label_gap": 10,
+        "hover_effect": "zoom",
+        "hover_zoom": 108,
+        "grayscale_amount": 100,
+        "hover_lift": true,
+        "autoplay": true,
+        "autoplay_mode": "continuous",
+        "autoplay_speed": 45,
+        "autoplay_direction": "left",
+        "autoplay_interval": 4,
+        "loop": true,
+        "pause_on_hover": true,
+        "enable_drag": true,
+        "accessibility_label": "Carrousel des clubs",
+        "show_arrows": true,
+        "show_arrows_mobile": false,
+        "arrow_position": "sides_out",
+        "arrow_shape": "circle",
+        "arrow_radius": 12,
+        "arrow_size": 44,
+        "arrow_offset": 8,
+        "arrow_background": "#ffffff",
+        "arrow_bg_opacity": 100,
+        "arrow_color": "#191919",
+        "arrow_border_thickness": 1,
+        "arrow_border_color": "#e6e6e6",
+        "arrow_prev_label": "Logos précédents",
+        "arrow_next_label": "Logos suivants",
+        "show_pagination": false,
+        "show_pagination_mobile": true,
+        "dot_style": "dots",
+        "dot_size": 8,
+        "dot_color": "#191919",
+        "dot_active_color": "#ff6600",
+        "section_bg": "#f5f3ef",
+        "section_width": "page",
+        "section_radius": 0,
+        "padding_top": 24,
+        "padding_bottom": 20,
+        "padding_horizontal": 24,
+        "padding_top_mobile": 18,
+        "padding_bottom_mobile": 18,
+        "padding_horizontal_mobile": 14,
+        "margin_top": 0,
+        "margin_bottom": 0,
+        "margin_top_mobile": 0,
+        "margin_bottom_mobile": 0
+      }
+    },
+    "new_2627": {
+      "type": "product-carousel",
+      "blocks": {
+        "featured_psg": {
+          "type": "product",
+          "settings": {
+            "product": "maillot-psg-2026-27-domicile"
+          }
+        },
+        "featured_real": {
+          "type": "product",
+          "settings": {
+            "product": "maillot-real-madrid-2026-27-domicile"
+          }
+        },
+        "featured_barca": {
+          "type": "product",
+          "settings": {
+            "product": "maillot-fc-barcelone-2026-27-domicile"
+          }
+        },
+        "featured_milan": {
+          "type": "product",
+          "settings": {
+            "product": "maillot-milan-ac-2026-27-domicile"
+          }
+        }
+      },
+      "block_order": [
+        "featured_psg",
+        "featured_real",
+        "featured_barca",
+        "featured_milan"
+      ],
+      "settings": {
+        "collection": "maillots-2026-2027",
+        "products_to_show": 8,
+        "heading": "À la une",
+        "subheading": "Notre sélection de maillots 2026/27",
+        "header_alignment": "left",
+        "heading_size": 36,
+        "heading_size_mobile": 24,
+        "heading_color": "#191919",
+        "subheading_color": "#505050",
+        "header_gap": 20,
+        "show_view_all": true,
+        "view_all_label": "Voir tout le 26/27",
+        "view_all_link": "shopify://collections/maillots-2026-2027",
+        "view_all_bg": "#191919",
+        "view_all_color": "#ffffff",
+        "per_view_desktop": 5,
+        "per_view_tablet": 3.5,
+        "per_view_mobile": 1.8,
+        "card_gap": 16,
+        "card_gap_mobile": 10,
+        "autoplay": false,
+        "autoplay_interval": 5,
+        "pause_on_hover": true,
+        "loop": true,
+        "enable_drag": true,
+        "show_arrows": true,
+        "show_arrows_mobile": false,
+        "arrow_position": "sides",
+        "arrow_vertical": 40,
+        "arrow_offset": 8,
+        "arrow_size": 44,
+        "arrow_radius": 40,
+        "arrow_bg": "#ffffff",
+        "arrow_bg_opacity": 95,
+        "arrow_color": "#191919",
+        "arrow_border_color": "#f3f3f3",
+        "show_dots": false,
+        "show_dots_mobile": true,
+        "dot_size": 8,
+        "dot_color": "#d9d9d9",
+        "dot_active_color": "#ff6600",
+        "card_bg": "#ffffff",
+        "card_radius": 0,
+        "card_padding": 0,
+        "card_border_thickness": 0,
+        "card_border_color": "#f3f3f3",
+        "card_hover": "lift",
+        "text_alignment": "left",
+        "image_ratio": "square",
+        "image_fit": "contain",
+        "media_bg": "#ffffff",
+        "media_padding": 8,
+        "image_radius": 12,
+        "show_secondary_image": true,
+        "show_vendor": false,
+        "overline_tags": "Ligue 1, Premier League, Primeira Liga, Liga, Serie A, Bundesliga, Eredivisie, Süper Lig, Saudi Pro League, MLS, Sélections",
+        "vendor_color": "#6b6b6b",
+        "title_strip": "Maillot",
+        "title_size": 15,
+        "title_color": "#191919",
+        "show_rating": false,
+        "rating_color": "#ff6600",
+        "price_size": 18,
+        "price_color": "#191919",
+        "show_compare_price": true,
+        "sale_price_color": "#c94d00",
+        "compare_price_color": "#767676",
+        "show_cta": false,
+        "cta_label": "Voir le produit",
+        "cta_bg": "#191919",
+        "cta_color": "#ffffff",
+        "show_sale_badge": true,
+        "sale_badge_style": "percent",
+        "sale_badge_text": "Promo",
+        "sale_badge_bg": "#ff6600",
+        "sale_badge_text_color": "#1a1a1a",
+        "show_sold_out_badge": true,
+        "sold_out_text": "Rupture de stock",
+        "sold_out_bg": "#191919",
+        "sold_out_text_color": "#ffffff",
+        "badge_radius": 40,
+        "badge_position": "left",
+        "section_bg": "#ffffff",
+        "accent_color": "#ff6600",
+        "glass_blur": 10,
+        "compact_width": true,
+        "section_width": "page",
+        "margin_top": 0,
+        "margin_bottom": 0,
+        "padding_top": 32,
+        "padding_bottom": 28,
+        "padding_horizontal": 40,
+        "padding_top_mobile": 24,
+        "padding_bottom_mobile": 20,
+        "padding_horizontal_mobile": 16,
+        "section_radius": 0,
+        "section_radius_mobile": 0
+      }
+    },
+    "collections_tiles": {
+      "type": "mf-collection-studio",
+      "blocks": {
+        "t1": {
+          "type": "tile",
+          "settings": {
+            "category": "season",
+            "collection": "maillots-2026-2027",
+            "link": "",
+            "asset_name": "mf-collection-studio-season.jpg",
+            "image_alt": "Maillots PSG et Real Madrid de la nouvelle saison",
+            "title": "Maillots 26/27",
+            "caption": "Les couleurs de la nouvelle saison.",
+            "link_label": "Voir le 26/27"
+          }
+        },
+        "t2": {
+          "type": "tile",
+          "settings": {
+            "category": "retro",
+            "collection": "maillots-retro",
+            "link": "",
+            "asset_name": "mf-collection-studio-retro.jpg",
+            "image_alt": "Maillot rétro du FC Barcelone à rayures rouges et bleues",
+            "title": "Maillots rétro",
+            "caption": "Les maillots qui ont marqué le foot.",
+            "link_label": "Trouver mon rétro"
+          }
+        },
+        "t4": {
+          "type": "tile",
+          "settings": {
+            "category": "children",
+            "collection": "enfants",
+            "link": "",
+            "asset_name": "mf-collection-studio-children.jpg",
+            "image_alt": "Ensemble enfant FC Barcelone avec maillot et short",
+            "title": "Ensembles enfants",
+            "caption": "Le maillot et le short, ensemble.",
+            "link_label": "Voir les ensembles"
+          }
+        },
+        "mind001": {
+          "type": "tile",
+          "settings": {
+            "category": "mind",
+            "collection": "nike-mind-001",
+            "link": "",
+            "asset_name": "mf-collection-studio-mind.jpg",
+            "image_alt": "Nike Mind 001 Black Hyper Crimson, Barely Green et Pearl Pink",
+            "title": "Nike Mind 001",
+            "caption": "Choisis ton coloris.",
+            "link_label": "Voir les coloris"
+          }
+        }
+      },
+      "block_order": [
+        "t1",
+        "t2",
+        "t4",
+        "mind001"
+      ],
+      "settings": {
+        "localized_copy": true,
+        "heading": "Trouve ce que tu veux porter",
+        "subheading": "Nouvelle saison, maillots rétro, ensembles enfants et Nike Mind 001."
+      }
+    },
+    "nos_equipes": {
+      "type": "logo-carousel",
+      "blocks": {
+        "e1": {
+          "type": "logo",
+          "settings": {
+            "image": "shopify://shop_images/ecusson_psg.png",
+            "image_alt": "Écusson PSG",
+            "link": "shopify://collections/psg",
+            "new_tab": false,
+            "label": "PSG",
+            "logo_scale": 100,
+            "use_custom_colors": false,
+            "custom_bg": "#f3f3f3",
+            "custom_bg_hover": "#ffffff",
+            "custom_border_color": "#e6e6e6",
+            "custom_label_color": "#191919"
+          }
+        },
+        "e2": {
+          "type": "logo",
+          "settings": {
+            "image": "shopify://shop_images/ecusson_real_madrid.png",
+            "image_alt": "Écusson Real Madrid",
+            "link": "shopify://collections/real-madrid",
+            "new_tab": false,
+            "label": "Real Madrid",
+            "logo_scale": 100,
+            "use_custom_colors": false,
+            "custom_bg": "#f3f3f3",
+            "custom_bg_hover": "#ffffff",
+            "custom_border_color": "#e6e6e6",
+            "custom_label_color": "#191919"
+          }
+        },
+        "e3": {
+          "type": "logo",
+          "settings": {
+            "image": "shopify://shop_images/ecusson_liverpool.png",
+            "image_alt": "Écusson Liverpool",
+            "link": "shopify://collections/liverpool",
+            "new_tab": false,
+            "label": "Liverpool",
+            "logo_scale": 100,
+            "use_custom_colors": false,
+            "custom_bg": "#f3f3f3",
+            "custom_bg_hover": "#ffffff",
+            "custom_border_color": "#e6e6e6",
+            "custom_label_color": "#191919"
+          }
+        },
+        "e4": {
+          "type": "logo",
+          "settings": {
+            "image": "shopify://shop_images/ecusson_manchester_city.png",
+            "image_alt": "Écusson Manchester City",
+            "link": "shopify://collections/manchester-city",
+            "new_tab": false,
+            "label": "Manchester City",
+            "logo_scale": 100,
+            "use_custom_colors": false,
+            "custom_bg": "#f3f3f3",
+            "custom_bg_hover": "#ffffff",
+            "custom_border_color": "#e6e6e6",
+            "custom_label_color": "#191919"
+          }
+        },
+        "e5": {
+          "type": "logo",
+          "settings": {
+            "image": "shopify://shop_images/ecusson_arsenal.png",
+            "image_alt": "Écusson Arsenal",
+            "link": "shopify://collections/arsenal",
+            "new_tab": false,
+            "label": "Arsenal",
+            "logo_scale": 100,
+            "use_custom_colors": false,
+            "custom_bg": "#f3f3f3",
+            "custom_bg_hover": "#ffffff",
+            "custom_border_color": "#e6e6e6",
+            "custom_label_color": "#191919"
+          }
+        },
+        "e6": {
+          "type": "logo",
+          "settings": {
+            "image": "shopify://shop_images/ecusson_fc_barcelone.png",
+            "image_alt": "Écusson FC Barcelone",
+            "link": "shopify://collections/fc-barcelone",
+            "new_tab": false,
+            "label": "FC Barcelone",
+            "logo_scale": 100,
+            "use_custom_colors": false,
+            "custom_bg": "#f3f3f3",
+            "custom_bg_hover": "#ffffff",
+            "custom_border_color": "#e6e6e6",
+            "custom_label_color": "#191919"
+          }
+        },
+        "e7": {
+          "type": "logo",
+          "settings": {
+            "image": "shopify://shop_images/ecusson_om.png",
+            "image_alt": "Écusson OM",
+            "link": "shopify://collections/om",
+            "new_tab": false,
+            "label": "OM",
+            "logo_scale": 100,
+            "use_custom_colors": false,
+            "custom_bg": "#f3f3f3",
+            "custom_bg_hover": "#ffffff",
+            "custom_border_color": "#e6e6e6",
+            "custom_label_color": "#191919"
+          }
+        },
+        "e8": {
+          "type": "logo",
+          "settings": {
+            "image": "shopify://shop_images/ecusson_manchester_united.png",
+            "image_alt": "Écusson Manchester United",
+            "link": "shopify://collections/manchester-united",
+            "new_tab": false,
+            "label": "Manchester United",
+            "logo_scale": 100,
+            "use_custom_colors": false,
+            "custom_bg": "#f3f3f3",
+            "custom_bg_hover": "#ffffff",
+            "custom_border_color": "#e6e6e6",
+            "custom_label_color": "#191919"
+          }
+        },
+        "e9": {
+          "type": "logo",
+          "settings": {
+            "image": "shopify://shop_images/ecusson_juventus.png",
+            "image_alt": "Écusson Juventus",
+            "link": "shopify://collections/juventus",
+            "new_tab": false,
+            "label": "Juventus",
+            "logo_scale": 100,
+            "use_custom_colors": false,
+            "custom_bg": "#f3f3f3",
+            "custom_bg_hover": "#ffffff",
+            "custom_border_color": "#e6e6e6",
+            "custom_label_color": "#191919"
+          }
+        },
+        "e10": {
+          "type": "logo",
+          "settings": {
+            "image": "shopify://shop_images/ecusson_bayern_munich.png",
+            "image_alt": "Écusson Bayern Munich",
+            "link": "shopify://collections/bayern-munich",
+            "new_tab": false,
+            "label": "Bayern Munich",
+            "logo_scale": 100,
+            "use_custom_colors": false,
+            "custom_bg": "#f3f3f3",
+            "custom_bg_hover": "#ffffff",
+            "custom_border_color": "#e6e6e6",
+            "custom_label_color": "#191919"
+          }
+        },
+        "e11": {
+          "type": "logo",
+          "settings": {
+            "image": "shopify://shop_images/ecusson_borussia_dortmund.png",
+            "image_alt": "Écusson Borussia Dortmund",
+            "link": "shopify://collections/borussia-dortmund",
+            "new_tab": false,
+            "label": "Dortmund",
+            "logo_scale": 100,
+            "use_custom_colors": false,
+            "custom_bg": "#f3f3f3",
+            "custom_bg_hover": "#ffffff",
+            "custom_border_color": "#e6e6e6",
+            "custom_label_color": "#191919"
+          }
+        },
+        "e12": {
+          "type": "logo",
+          "settings": {
+            "image": "shopify://shop_images/ecusson_inter_milan.png",
+            "image_alt": "Écusson Inter Milan",
+            "link": "shopify://collections/inter-milan",
+            "new_tab": false,
+            "label": "Inter Milan",
+            "logo_scale": 100,
+            "use_custom_colors": false,
+            "custom_bg": "#f3f3f3",
+            "custom_bg_hover": "#ffffff",
+            "custom_border_color": "#e6e6e6",
+            "custom_label_color": "#191919"
+          }
+        }
+      },
+      "block_order": [
+        "e1",
+        "e2",
+        "e3",
+        "e4",
+        "e5",
+        "e6",
+        "e7",
+        "e8",
+        "e9",
+        "e10",
+        "e11",
+        "e12"
+      ],
+      "settings": {
+        "title": "Nos équipes",
+        "subtitle": "",
+        "heading_align": "left",
+        "heading_align_mobile": "left",
+        "heading_size": 34,
+        "heading_size_mobile": 24,
+        "heading_font_style": "heading",
+        "heading_weight": "800",
+        "heading_uppercase": true,
+        "heading_color": "#191919",
+        "subtitle_size": 16,
+        "subtitle_size_mobile": 14,
+        "subtitle_color": "#5c5c5c",
+        "header_gap": 20,
+        "header_gap_mobile": 16,
+        "per_view_desktop": 8,
+        "per_view_tablet": 5,
+        "per_view_mobile": 2,
+        "mobile_peek": true,
+        "gap": 18,
+        "gap_mobile": 10,
+        "logo_height": 64,
+        "logo_height_mobile": 48,
+        "image_fit": "contain",
+        "logo_opacity": 100,
+        "shape": "circle",
+        "box_size": 104,
+        "box_size_mobile": 88,
+        "box_radius": 24,
+        "box_padding": 14,
+        "box_padding_mobile": 10,
+        "box_bg": "#f3f3f3",
+        "box_bg_opacity": 100,
+        "box_bg_hover": "#ffffff",
+        "box_border": 0,
+        "box_border_color": "#e6e6e6",
+        "box_border_color_hover": "#ff6600",
+        "box_shadow": false,
+        "glass_blur": 0,
+        "show_label": true,
+        "show_label_mobile": true,
+        "label_size": 12,
+        "label_size_mobile": 11,
+        "label_weight": "600",
+        "label_uppercase": true,
+        "label_color": "#191919",
+        "label_hover_color": "#b34700",
+        "label_gap": 10,
+        "hover_effect": "zoom",
+        "hover_zoom": 108,
+        "grayscale_amount": 100,
+        "hover_lift": true,
+        "autoplay": true,
+        "autoplay_mode": "continuous",
+        "autoplay_speed": 40,
+        "autoplay_direction": "left",
+        "autoplay_interval": 4,
+        "loop": true,
+        "pause_on_hover": true,
+        "enable_drag": true,
+        "accessibility_label": "Carrousel des équipes",
+        "show_arrows": true,
+        "show_arrows_mobile": false,
+        "arrow_position": "sides_out",
+        "arrow_shape": "circle",
+        "arrow_radius": 12,
+        "arrow_size": 44,
+        "arrow_offset": 8,
+        "arrow_background": "#ffffff",
+        "arrow_bg_opacity": 100,
+        "arrow_color": "#191919",
+        "arrow_border_thickness": 1,
+        "arrow_border_color": "#e6e6e6",
+        "arrow_prev_label": "Équipes précédentes",
+        "arrow_next_label": "Équipes suivantes",
+        "show_pagination": false,
+        "show_pagination_mobile": true,
+        "dot_style": "dots",
+        "dot_size": 8,
+        "dot_color": "#191919",
+        "dot_active_color": "#ff6600",
+        "section_bg": "#f5f3ef",
+        "section_width": "page",
+        "section_radius": 0,
+        "padding_top": 24,
+        "padding_bottom": 40,
+        "padding_horizontal": 24,
+        "padding_top_mobile": 20,
+        "padding_bottom_mobile": 28,
+        "padding_horizontal_mobile": 14,
+        "margin_top": 0,
+        "margin_bottom": 0,
+        "margin_top_mobile": 0,
+        "margin_bottom_mobile": 0
+      }
+    },
+    "banner_retro": {
+      "type": "promo-banner",
+      "disabled": true,
+      "settings": {
+        "image": "shopify://shop_images/Banniere_MF_3.png",
+        "focal_point": "center-center",
+        "focal_point_mobile": "center-center",
+        "background_color": "#191919",
+        "overlay_style": "gradient_side",
+        "overlay_color": "#191919",
+        "overlay_opacity": 35,
+        "overlay_opacity_mobile": 45,
+        "height_type": "image",
+        "height_desktop": 435,
+        "height_type_mobile": "image",
+        "height_mobile": 320,
+        "align_h": "center",
+        "align_v": "center",
+        "align_h_mobile": "center",
+        "align_v_mobile": "center",
+        "content_width": 640,
+        "content_gap": 18,
+        "content_gap_mobile": 14,
+        "badge_text": "",
+        "badge_bg": "#ff6600",
+        "badge_bg_opacity": 20,
+        "badge_color": "#ffffff",
+        "badge_blur": 8,
+        "heading": "",
+        "heading_color": "#ffffff",
+        "heading_weight": "800",
+        "heading_uppercase": true,
+        "heading_size": 44,
+        "heading_size_mobile": 28,
+        "subheading": "",
+        "subheading_color": "#f3f3f3",
+        "subheading_size": 17,
+        "subheading_size_mobile": 14,
+        "button_label": "",
+        "button_link": "shopify://collections/maillots-retro",
+        "button_style": "solid",
+        "button_bg": "#ff6600",
+        "button_color": "#ffffff",
+        "button_radius": 40,
+        "button_full_width_mobile": true,
+        "enable_full_link": true,
+        "banner_link": "",
+        "link_text": "",
+        "hover_zoom": false,
+        "section_width": "full",
+        "corner_radius": 0,
+        "corner_radius_mobile": 0,
+        "margin_top": 0,
+        "margin_bottom": 0,
+        "padding_top": 48,
+        "padding_bottom": 48,
+        "padding_horizontal": 64,
+        "margin_top_mobile": 0,
+        "margin_bottom_mobile": 0,
+        "padding_top_mobile": 32,
+        "padding_bottom_mobile": 32,
+        "padding_horizontal_mobile": 24
+      }
+    },
+    "ballons_frise": {
+      "type": "mf-ballons-frise",
+      "blocks": {
+        "ballon_1990": {
+          "type": "ball",
+          "settings": {
+            "year": "1990",
+            "ball_name": "Etrusco Unico",
+            "host": "Italie"
+          }
+        },
+        "ballon_1994": {
+          "type": "ball",
+          "settings": {
+            "year": "1994",
+            "ball_name": "Questra",
+            "host": "États-Unis"
+          }
+        },
+        "ballon_1998": {
+          "type": "ball",
+          "settings": {
+            "year": "1998",
+            "ball_name": "Tricolore",
+            "host": "France"
+          }
+        },
+        "ballon_2002": {
+          "type": "ball",
+          "settings": {
+            "year": "2002",
+            "ball_name": "Fevernova",
+            "host": "Corée du Sud / Japon"
+          }
+        },
+        "ballon_2010": {
+          "type": "ball",
+          "settings": {
+            "year": "2010",
+            "ball_name": "Jabulani",
+            "host": "Afrique du Sud"
+          }
+        },
+        "ballon_2014": {
+          "type": "ball",
+          "settings": {
+            "year": "2014",
+            "ball_name": "Brazuca",
+            "host": "Brésil"
+          }
+        },
+        "ballon_2018": {
+          "type": "ball",
+          "settings": {
+            "year": "2018",
+            "ball_name": "Telstar 18",
+            "host": "Russie"
+          }
+        },
+        "ballon_2022": {
+          "type": "ball",
+          "settings": {
+            "year": "2022",
+            "ball_name": "Al Rihla",
+            "host": "Qatar"
+          }
+        },
+        "ballon_2026": {
+          "type": "ball",
+          "settings": {
+            "year": "2026",
+            "ball_name": "Trionda",
+            "host": "États-Unis / Canada / Mexique"
+          }
+        }
+      },
+      "block_order": [
+        "ballon_1990",
+        "ballon_1994",
+        "ballon_1998",
+        "ballon_2002",
+        "ballon_2010",
+        "ballon_2014",
+        "ballon_2018",
+        "ballon_2022",
+        "ballon_2026"
+      ],
+      "settings": {
+        "eyebrow": "Coupe du monde · 1990–2026",
+        "heading": "Les ballons qui ont fait l’histoire",
+        "intro_text": "Explore les éditions en faisant glisser la frise.",
+        "initial_year": "1994",
+        "end_label": "2026",
+        "background_color": "#171717",
+        "text_color": "#ffffff",
+        "muted_color": "#b7b7b7",
+        "accent_color": "#ff6600",
+        "padding_top": 40,
+        "padding_bottom": 48,
+        "link_text": "Explorer les maillots rétro",
+        "show_cta_arrow": false,
+        "link_url": "shopify://collections/maillots-retro"
+      }
+    },
+    "retro_picks": {
+      "type": "product-carousel",
+      "settings": {
+        "collection": "maillots-retro",
+        "products_to_show": 9,
+        "heading": "Sélection rétro",
+        "subheading": "Les maillots qui ont marqué l’histoire",
+        "header_alignment": "left",
+        "heading_size": 36,
+        "heading_size_mobile": 24,
+        "heading_color": "#191919",
+        "subheading_color": "#505050",
+        "header_gap": 20,
+        "show_view_all": true,
+        "view_all_label": "Tout le rétro",
+        "view_all_link": "shopify://collections/maillots-retro",
+        "view_all_bg": "#191919",
+        "view_all_color": "#ffffff",
+        "per_view_desktop": 5,
+        "per_view_tablet": 3.5,
+        "per_view_mobile": 1.8,
+        "card_gap": 16,
+        "card_gap_mobile": 10,
+        "autoplay": false,
+        "autoplay_interval": 5,
+        "pause_on_hover": true,
+        "loop": true,
+        "enable_drag": true,
+        "show_arrows": true,
+        "show_arrows_mobile": false,
+        "arrow_position": "sides",
+        "arrow_vertical": 40,
+        "arrow_offset": 8,
+        "arrow_size": 44,
+        "arrow_radius": 40,
+        "arrow_bg": "#ffffff",
+        "arrow_bg_opacity": 95,
+        "arrow_color": "#191919",
+        "arrow_border_color": "#f3f3f3",
+        "show_dots": false,
+        "show_dots_mobile": true,
+        "dot_size": 8,
+        "dot_color": "#d9d9d9",
+        "dot_active_color": "#ff6600",
+        "card_bg": "#ffffff",
+        "card_radius": 0,
+        "card_padding": 0,
+        "card_border_thickness": 0,
+        "card_border_color": "#f3f3f3",
+        "card_hover": "lift",
+        "text_alignment": "left",
+        "image_ratio": "square",
+        "image_fit": "contain",
+        "media_bg": "#ffffff",
+        "media_padding": 8,
+        "image_radius": 12,
+        "show_secondary_image": true,
+        "show_vendor": false,
+        "overline_tags": "Ligue 1, Premier League, Primeira Liga, Liga, Serie A, Bundesliga, Eredivisie, Süper Lig, Saudi Pro League, MLS, Sélections",
+        "vendor_color": "#6b6b6b",
+        "title_strip": "Maillot",
+        "title_size": 14,
+        "title_color": "#191919",
+        "show_rating": false,
+        "rating_color": "#ff6600",
+        "price_size": 15,
+        "price_color": "#191919",
+        "show_compare_price": true,
+        "sale_price_color": "#c94d00",
+        "compare_price_color": "#767676",
+        "show_cta": false,
+        "cta_label": "Voir le produit",
+        "cta_bg": "#191919",
+        "cta_color": "#ffffff",
+        "show_sale_badge": true,
+        "sale_badge_style": "percent",
+        "sale_badge_text": "Promo",
+        "sale_badge_bg": "#ff6600",
+        "sale_badge_text_color": "#1a1a1a",
+        "show_sold_out_badge": true,
+        "sold_out_text": "Rupture de stock",
+        "sold_out_bg": "#191919",
+        "sold_out_text_color": "#ffffff",
+        "badge_radius": 40,
+        "badge_position": "left",
+        "section_bg": "#ffffff",
+        "accent_color": "#ff6600",
+        "glass_blur": 10,
+        "compact_width": true,
+        "section_width": "page",
+        "margin_top": 0,
+        "margin_bottom": 0,
+        "padding_top": 32,
+        "padding_bottom": 28,
+        "padding_horizontal": 40,
+        "padding_top_mobile": 24,
+        "padding_bottom_mobile": 20,
+        "padding_horizontal_mobile": 16,
+        "section_radius": 0,
+        "section_radius_mobile": 0
+      }
+    },
+    "banner_promo": {
+      "type": "mf-mind-colour-banner",
+      "blocks": {
+        "solar_red": {
+          "type": "colour",
+          "settings": {
+            "product": "nike-mind-001-solar-red",
+            "label": "Solar Red",
+            "asset_name": "mf-mind-hero-solar-red.png"
+          }
+        },
+        "blackened_blue": {
+          "type": "colour",
+          "settings": {
+            "product": "nike-mind-001-blackened-blue",
+            "label": "Blackened Blue",
+            "asset_name": "mf-mind-hero-blackened-blue.png"
+          }
+        },
+        "barely_green": {
+          "type": "colour",
+          "settings": {
+            "product": "nike-mind-001-barely-green",
+            "label": "Barely Green",
+            "asset_name": "mf-mind-hero-barely-green.png"
+          }
+        },
+        "light_bone": {
+          "type": "colour",
+          "settings": {
+            "product": "nike-mind-001-slide-light-bone",
+            "label": "Light Bone",
+            "asset_name": "mf-mind-hero-slide-light-bone.png"
+          }
+        },
+        "triple_black": {
+          "type": "colour",
+          "settings": {
+            "product": "nike-mind-001-triple-black",
+            "label": "Triple Black",
+            "asset_name": "mf-mind-hero-triple-black.png"
+          }
+        }
+      },
+      "block_order": [
+        "solar_red",
+        "blackened_blue",
+        "barely_green",
+        "light_bone",
+        "triple_black"
+      ],
+      "settings": {
+        "heading": "TA MIND.\nTON COLORIS.",
+        "subtitle": "La claquette d’avant-match mise au point par Nike avec des neuroscientifiques.",
+        "benefit_1": "22 points articulés sous le pied, qui bougent à chaque pas",
+        "benefit_2": "Pensée pour t’aider à te recentrer avant le match",
+        "benefit_3": "Mousse souple et réactive, facile à enfiler",
+        "selector_label": "Choisir un coloris Nike Mind 001",
+        "button_label": "VOIR CE COLORIS",
+        "show_cta_arrow": false,
+        "collection": "nike-mind-001",
+        "collection_label": "Tous les coloris",
+        "heading_font": "oswald_n7",
+        "body_font": "assistant_n6",
+        "heading_size": 60,
+        "heading_size_mobile": 40,
+        "copy_size": 18,
+        "button_size": 16,
+        "background": "#111111",
+        "text_colour": "#ffffff",
+        "muted_colour": "#cccccc",
+        "accent": "#ff6600",
+        "button_colour": "#111111",
+        "content_width": 1300,
+        "padding": 48,
+        "padding_mobile": 32,
+        "button_radius": 8,
+        "enable_motion": true,
+        "motion_strength": 3,
+        "mouse_hint": "",
+        "touch_hint": "",
+        "pause_label": "",
+        "resume_label": ""
+      }
+    },
+    "reassurance": {
+      "type": "reassurance-bar",
+      "blocks": {
+        "r1": {
+          "type": "item",
+          "settings": {
+            "icon": "truck",
+            "icon_color": "",
+            "title": "Livraison suivie",
+            "title_color": "",
+            "text": "<p>Offerte actuellement en France, Belgique et Luxembourg : 7 à 12 jours ouvrés.</p>",
+            "text_color": "",
+            "link": "",
+            "link_label": ""
+          }
+        },
+        "r2": {
+          "type": "item",
+          "disabled": true,
+          "settings": {
+            "icon": "lock",
+            "icon_color": "",
+            "title": "Paiement sécurisé",
+            "title_color": "",
+            "text": "<p>Tes données sont chiffrées de bout en bout.</p>",
+            "text_color": "",
+            "link": "",
+            "link_label": ""
+          }
+        },
+        "r3": {
+          "type": "item",
+          "settings": {
+            "icon": "return",
+            "icon_color": "",
+            "title": "Retours sous 30 jours",
+            "title_color": "",
+            "text": "<p>Échange de taille sous 30 jours, hors maillots floqués.</p>",
+            "text_color": "",
+            "link": "",
+            "link_label": ""
+          }
+        },
+        "r4": {
+          "type": "item",
+          "settings": {
+            "icon": "headset",
+            "icon_color": "",
+            "title": "Conseil taille",
+            "title_color": "",
+            "text": "<p>Un doute sur ta taille ? On te répond sous 48 h ouvrées.</p>",
+            "text_color": "",
+            "link": "",
+            "link_label": ""
+          }
+        }
+      },
+      "block_order": [
+        "r1",
+        "r2",
+        "r3",
+        "r4"
+      ],
+      "settings": {
+        "layout_desktop": "stacked",
+        "layout_mobile": "inline",
+        "columns_desktop": 3,
+        "columns_mobile": 2,
+        "mobile_behavior": "grid",
+        "card_width_mobile": 65,
+        "carousel_snap": false,
+        "hide_scrollbar": true,
+        "text_align": "center",
+        "text_align_mobile": "left",
+        "icon_valign": "center",
+        "section_width": "full",
+        "content_width": 1200,
+        "min_height": 145,
+        "min_height_mobile": 110,
+        "column_gap": 24,
+        "column_gap_mobile": 12,
+        "row_gap": 24,
+        "row_gap_mobile": 16,
+        "icon_gap": 14,
+        "icon_gap_mobile": 10,
+        "title_gap": 4,
+        "icon_size": 32,
+        "icon_size_mobile": 26,
+        "icon_stroke": 2,
+        "icon_color": "#ff6600",
+        "icon_shape": "none",
+        "icon_padding": 14,
+        "icon_padding_mobile": 10,
+        "icon_radius": 40,
+        "icon_bg_color": "#f3f3f3",
+        "icon_bg_opacity": 100,
+        "icon_blur": 0,
+        "icon_border_thickness": 0,
+        "icon_border_color": "#191919",
+        "title_tag": "h3",
+        "title_size": 15,
+        "title_size_mobile": 13,
+        "title_weight": "700",
+        "title_uppercase": true,
+        "title_letter_spacing": 6,
+        "title_color": "#191919",
+        "text_size": 13,
+        "text_size_mobile": 12,
+        "text_color": "#191919",
+        "text_opacity": 70,
+        "show_text_mobile": true,
+        "show_dividers": true,
+        "show_dividers_mobile": false,
+        "divider_color": "#e5e5e5",
+        "divider_thickness": 1,
+        "divider_height": 60,
+        "item_bg_color": "#ffffff",
+        "item_bg_opacity": 0,
+        "item_radius": 0,
+        "item_padding": 12,
+        "item_padding_mobile": 10,
+        "hover_effect": "none",
+        "background_color": "#ffffff",
+        "background_gradient": "",
+        "corner_radius": 0,
+        "corner_radius_mobile": 0,
+        "border_top_thickness": 1,
+        "border_bottom_thickness": 1,
+        "border_color": "#e5e5e5",
+        "padding_top": 20,
+        "padding_bottom": 20,
+        "padding_horizontal": 40,
+        "margin_top": 0,
+        "margin_bottom": 0,
+        "padding_top_mobile": 20,
+        "padding_bottom_mobile": 20,
+        "padding_horizontal_mobile": 16,
+        "margin_top_mobile": 0,
+        "margin_bottom_mobile": 0
+      }
+    },
+    "hero_portant": {
+      "type": "maillots-portant",
+      "disabled": true,
+      "settings": {
+        "hero": true,
+        "eyebrow": "Nouveautés 2026/2027",
+        "heading_accent": "",
+        "room_photo_on": true,
+        "wall_text": "MyFootify",
+        "heading": "La saison 2026/2027 est arrivée",
+        "subheading": "Les maillots domicile, extérieur et third des plus grands clubs européens, livrés en France, Belgique et Luxembourg.",
+        "button_1_label": "Voir les maillots 26/27",
+        "button_1_link": "shopify://collections/maillots-2026-2027",
+        "button_2_label": "Collection rétro",
+        "button_2_link": "shopify://collections/maillots-retro",
+        "edition_top": "Le portant",
+        "edition_bottom": "Saison 2026/27",
+        "collection": "maillots-2026-2027",
+        "products": [
+          "maillot-real-madrid-2026-27-domicile",
+          "maillot-liverpool-2026-27-domicile",
+          "maillot-om-2026-27-domicile",
+          "maillot-france-2026-domicile",
+          "maillot-psg-2026-27-domicile",
+          "maillot-maroc-2026-domicile",
+          "maillot-fc-barcelone-2026-27-domicile",
+          "maillot-manchester-united-2026-27-domicile",
+          "maillot-milan-ac-2026-27-domicile"
+        ],
+        "shoes_collection": "nike-mind-001",
+        "shoes_products": [],
+        "shoes_limit": 5,
+        "limit": 9,
+        "ambiance": "vestiaire",
+        "background": "#0e0e0f",
+        "text": "#f0ede8",
+        "accent": "#ff6600"
+      }
+    },
+    "seo_text": {
+      "type": "mf-deux-univers",
+      "disabled": true,
+      "settings": {
+        "eyebrow": "L'esprit MyFootify",
+        "title": "Maillots de foot : la saison qui commence, et celles qu'on n'oublie pas",
+        "intro": "Un maillot n'est jamais qu'un morceau de tissu. C'est une saison, un stade, un numéro dans le dos.",
+        "label_1": "Saison 2026/27",
+        "text_1": "<p>Les nouveaux maillots domicile, extérieur et third des grands championnats européens et des sélections. Ceux que tu porteras cette saison, en tribune comme au five.</p>",
+        "cta_1": "Voir les maillots 2026/27",
+        "link_1": "shopify://collections/maillots-2026-2027",
+        "label_2": "Rétro · 80's · 90's · 2000's",
+        "text_2": "<p>Platini en 82, Ronaldo à l'Inter, le Real d'avant les Galactiques. Les maillots qui ont fait l'histoire du football.</p>",
+        "cta_2": "Explorer la collection rétro",
+        "link_2": "shopify://collections/maillots-retro",
+        "bg": "#f5f3ef",
+        "ink": "#121212",
+        "muted": "#4a4a4a",
+        "accent": "#ff6600",
+        "eyebrow_color": "#b34700",
+        "pad_top": 48,
+        "pad_bottom": 48,
+        "intro_gap": 28,
+        "intro_gap_mobile": 24,
+        "column_space": 24,
+        "column_space_mobile": 20
+      }
+    }
+  },
+  "order": [
+    "hero_studio",
+    "club_carousel",
+    "new_2627",
+    "collections_tiles",
+    "nos_equipes",
+    "banner_retro",
+    "ballons_frise",
+    "retro_picks",
+    "banner_promo",
+    "reassurance",
+    "hero_portant",
+    "seo_text"
+  ]
+}
