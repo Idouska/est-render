@@ -1,0 +1,109 @@
+{%- comment -%}
+  Mur de chaussures : les paires posées sur des tablettes ; survol = la tablette
+  s'allume, clic = la caméra avance vers la paire, fiche avec pointure et ajout
+  au panier. Image : custom.portant_face_det (détourée) sinon la photo principale.
+{%- endcomment -%}
+{{ 'mur-chaussures.css' | asset_url | stylesheet_tag }}
+{%- liquid
+  assign source = section.settings.products
+  if source == blank
+    assign source = section.settings.collection.products
+  endif
+-%}
+<section class="mfw" data-mfw style="--mfw-accent: {{ section.settings.accent }};">
+  {%- if source == blank -%}
+    <p class="mfw__empty">Choisissez des chaussures dans les réglages de la section.</p>
+  {%- else -%}
+    <div class="mfw__stage" data-stage>
+      <div class="mfw__wall" data-wall>
+        <div class="mfw__intro">
+          {%- if section.settings.eyebrow != blank -%}<p>{{ section.settings.eyebrow | escape }}</p>{%- endif -%}
+          <h2>{{ section.settings.heading | escape }}{% if section.settings.heading_accent != blank %} <em>{{ section.settings.heading_accent | escape }}</em>{% endif %}</h2>
+        </div>
+      </div>
+      <div class="mfw__sheet" aria-live="polite">
+        <div class="mfw__name">
+          <small data-kicker></small>
+          <h3 data-name></h3>
+        </div>
+        <div class="mfw__buy">
+          <div class="mfw__price"><span>Prix</span><strong data-price></strong></div>
+          <span class="mfw__label" data-size-label>Pointure</span>
+          <div class="mfw__sizes" data-sizes role="group"></div>
+          <button class="mfw__add" data-add type="button" disabled>Choisis ta pointure</button>
+          <p class="mfw__note" data-note></p>
+          <a class="mfw__more" data-more href="#">Voir la fiche complète</a>
+        </div>
+        <div class="mfw__nav">
+          <button class="mfw__arrow" data-prev type="button" aria-label="Paire précédente">‹</button>
+          <button data-close type="button">Retour au mur</button>
+          <button class="mfw__arrow" data-next type="button" aria-label="Paire suivante">›</button>
+        </div>
+      </div>
+      <div class="mfw__hint" data-hint>Clique sur une paire</div>
+    </div>
+    <script type="application/json" data-mfw-data>
+      [
+      {%- for product in source limit: section.settings.limit -%}
+        {%- liquid
+          assign img = product.featured_media
+          assign cut = false
+          if product.metafields.custom.portant_face_det != blank
+            assign img = product.metafields.custom.portant_face_det.value
+            assign cut = true
+          endif
+          assign ratio = img.aspect_ratio | default: img.preview_image.aspect_ratio | default: 1.0
+          assign short = product.title | remove: section.settings.strip | strip
+          if short == blank
+            assign short = product.title
+          endif
+        -%}
+        {
+          "title": {{ product.title | json }},
+          "short": {{ short | json }},
+          "kicker": {{ section.settings.strip | default: product.vendor | json }},
+          "url": {{ product.url | json }},
+          "price": {{ product.price | money | json }},
+          "img": {{ img | image_url: width: 1400 | json }},
+          "thumb": {{ img | image_url: width: 600 | json }},
+          "ratio": {{ ratio | json }},
+          "cut": {{ cut | json }},
+          "option": {{ product.options.first | json }},
+          "variants": [
+            {%- for v in product.variants -%}
+              { "id": {{ v.id }}, "label": {{ v.option1 | json }}, "ok": {{ v.available | json }} }{% unless forloop.last %},{% endunless %}
+            {%- endfor -%}
+          ]
+        }{% unless forloop.last %},{% endunless %}
+      {%- endfor -%}
+      ]
+    </script>
+    <noscript>
+      <ul class="mfw__list">
+        {%- for product in source limit: section.settings.limit -%}
+          <li><a href="{{ product.url }}">{{ product.title | escape }} — {{ product.price | money }}</a></li>
+        {%- endfor -%}
+      </ul>
+    </noscript>
+  {%- endif -%}
+</section>
+<script src="{{ 'mur-chaussures.js' | asset_url }}" defer></script>
+
+{% schema %}
+{
+  "name": "Mur de chaussures",
+  "tag": "div",
+  "settings": [
+    { "type": "text", "id": "eyebrow", "label": "Sur-titre", "default": "Nike Mind 001" },
+    { "type": "text", "id": "heading", "label": "Titre", "default": "Choisis ta" },
+    { "type": "text", "id": "heading_accent", "label": "Fin du titre (en couleur)", "default": "paire." },
+    { "type": "product_list", "id": "products", "label": "Les paires, une par une", "limit": 12, "info": "Si la liste est remplie, elle passe avant la collection." },
+    { "type": "collection", "id": "collection", "label": "Ou une collection" },
+    { "type": "range", "id": "limit", "label": "Nombre de paires", "min": 4, "max": 12, "step": 2, "default": 10 },
+    { "type": "text", "id": "strip", "label": "Texte retiré des noms", "default": "Nike Mind 001", "info": "« Nike Mind 001 Solar Red » s'affiche « Solar Red »." },
+    { "type": "color", "id": "accent", "label": "Couleur d'accent", "default": "#ff6a00" },
+    { "type": "paragraph", "content": "Image : le métachamp custom.portant_face_det (image détourée) passe avant la photo principale." }
+  ],
+  "presets": [{ "name": "Mur de chaussures" }]
+}
+{% endschema %}
