@@ -33,14 +33,15 @@
 
     // Emplacements : 5 colonnes sur grand écran, 2 sur téléphone.
     function place() {
-      const cols = narrow() ? 2 : Math.min(5, Math.ceil(shoes.length / 2));
-      const rows = Math.ceil(shoes.length / cols);
+      const n = shoes.length;
+      const cols = narrow() ? (n > 12 ? 3 : 2) : Math.ceil(n / (n > 12 ? 3 : 2));
+      const rows = Math.ceil(n / cols);
       const padX = narrow() ? 7 : 5, top = narrow() ? 14 : 22, bottom = narrow() ? 8 : 12;
       const cellW = (100 - 2 * padX) / cols, cellH = (100 - top - bottom) / rows;
       const W = stage.clientWidth, H = stage.clientHeight;
       slots.forEach((el, i) => {
         const c = i % cols, r = Math.floor(i / cols), ratio = shoes[i].ratio || 1;
-        const w = cellW * (narrow() ? 0.78 : 0.9);
+        const w = cellW * (narrow() ? (cols > 2 ? 0.86 : 0.78) : 0.88);
         const hPx = Math.min(((w / 100) * W) / ratio * 1.12, (cellH / 100) * H * 0.82);
         const wPx = Math.min((w / 100) * W, (hPx / 1.12) * ratio);
         el.style.width = wPx + 'px';
