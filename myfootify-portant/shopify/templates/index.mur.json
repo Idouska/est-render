@@ -9,37 +9,6 @@
  */
 {
   "sections": {
-    "mur_chaussures": {
-      "type": "mur-chaussures",
-      "settings": {
-        "eyebrow": "Nike Mind 001",
-        "heading": "Choisis ta",
-        "heading_accent": "paire.",
-        "products": [
-          "nike-mind-001-barely-green",
-          "nike-mind-001-triple-black",
-          "nike-mind-001-solar-red",
-          "nike-mind-001-blackened-blue",
-          "nike-mind-001-pearl-pink",
-          "nike-mind-001-flyknit-hyper-royal",
-          "nike-mind-001-light-smoke-grey",
-          "nike-mind-001-geode-teal-light-menta",
-          "nike-mind-001-black-hyper-crimson",
-          "nike-mind-001-white-speed-red",
-          "nike-mind-001-hemp",
-          "nike-mind-001-mineral-slate",
-          "nike-mind-001-cucumber-calm",
-          "nike-mind-001-flyknit-bronze-eclipse",
-          "nike-mind-001-slide-light-bone",
-          "nike-mind-001-work-blue-light-lemon-twist",
-          "nike-mind-001-pink-smoke-metallic-silver",
-          "fragment-design-x-nike-mind-001"
-        ],
-        "limit": 18,
-        "strip": "Nike Mind 001",
-        "accent": "#ff6a00"
-      }
-    },
     "hero_studio": {
       "type": "mf-studio-hero",
       "blocks": {
@@ -1425,7 +1394,6 @@
   "order": [
     "hero_studio",
     "club_carousel",
-    "mur_chaussures",
     "new_2627",
     "collections_tiles",
     "nos_equipes",
